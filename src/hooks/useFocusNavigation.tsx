@@ -428,6 +428,11 @@ export const FocusNavigationProvider = ({
     }
   }, [controller]);
 
+  // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
+  // handler below already knows how to read. Its own effect, because registering with the native
+  // bridge is asynchronous and the handler's effect re-runs whenever the keymap or controller does.
+  useEffect(() => (enabled ? installDeviceBackButton() : undefined), [enabled]);
+
   useEffect(() => {
     if (!enabled) {
       // Flag turned off: drop any lingering highlight / scope outline and reset
@@ -640,14 +645,10 @@ export const FocusNavigationProvider = ({
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pointerdown", handlePointer, true);
     window.addEventListener("touchstart", handlePointer, true);
-    // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
-    // handler above already knows how to read.
-    const uninstallBackButton = installDeviceBackButton();
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
-      uninstallBackButton();
     };
   }, [adoptActiveElement, controller, enabled, keymap, notifyRing, startEngine]);
 
