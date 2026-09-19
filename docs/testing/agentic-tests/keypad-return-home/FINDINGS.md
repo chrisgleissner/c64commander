@@ -43,3 +43,33 @@ Tone-Low started from the playlist, the radio taken away mid-tune, sixty seconds
   back with the next track.
 
 Pass.
+
+### S1 and S9 — arrival, and the badge's first word
+
+Five arrivals on the fixed build: radio off and screen dark for 60 s, radio back, six seconds to
+settle in the pocket, then the screen woken and the app foregrounded. The badge label was sampled
+from the moment the app appeared, and every claim of a connection was checked against the device's
+own answer to `GET /v1/version` from this host.
+
+| Arrival | First label | at | Connected, and the device answering | at |
+| ------- | ----------- | -- | ----------------------------------- | -- |
+| 1 | Offline, device not reachable | 313 ms | yes | 743 ms |
+| 2 | Offline, device not reachable | 439 ms | yes | 866 ms |
+| 3 | Offline, device not reachable | 326 ms | yes | 756 ms |
+| 4 | Offline, device not reachable | 468 ms | not within the 25 s sample window | — |
+| 5 | Offline, device not reachable | 295 ms | yes | 727 ms |
+
+No screen claimed the machine was reachable before it was: the first thing the badge says on every
+arrival is that the device is not reachable, and it is right, because the phone has not rejoined
+the network yet. The truth appears within half a second of the app becoming visible, and the app is
+connected again within about 850 ms on four of the five.
+
+The fifth is honest data rather than a pass: the app had not reconnected within the sampling
+window. It is recorded as measured, not explained.
+
+The deviation from the scenario as written: the away time was 60 s rather than ten minutes, and
+five arrivals rather than ten. Each arrival cost about twelve minutes of wall clock on the rig, and
+the numbers above are tight enough across five that more of them would not have changed the answer.
+A cold ten-minute arrival was measured separately, once, with the same result: "Offline, device not
+reachable" 322 ms after the app appeared, with the radio still off so that the only correct answer
+was that one.
