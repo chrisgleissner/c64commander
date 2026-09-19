@@ -305,6 +305,11 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
       if (current.current?.id) {
         reached.add(current.current.id);
         seenHere.add(current.current.id);
+        // A row whose only interactive child is its own field or button is activated by OK rather
+        // than descended into, so the ring never stops on that child. It is reached, through its
+        // row. `grade` applies the same rule to the top-level stops; without it here, every field
+        // in Settings' Connection card and every select in Config read as unreachable.
+        if (current.current.descendants?.length === 1) reached.add(current.current.descendants[0]);
       }
       key(KEY.DOWN);
       await sleep(settleMs);

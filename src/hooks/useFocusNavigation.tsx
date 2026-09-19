@@ -69,6 +69,7 @@ import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
@@ -193,7 +194,17 @@ const focusRingElement = (element: HTMLElement | null): void => {
     // element the ring left rather than the one it is on.
     document.activeElement.blur();
   }
-  element.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const rect = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  const block = resolveRingScrollAlignment({
+    top: rect.top,
+    bottom: rect.bottom,
+    height: rect.height,
+    viewportHeight: window.innerHeight,
+    marginTop: parseFloat(style.scrollMarginTop) || 0,
+    marginBottom: parseFloat(style.scrollMarginBottom) || 0,
+  });
+  element.scrollIntoView({ block, inline: "nearest" });
 };
 
 /**
