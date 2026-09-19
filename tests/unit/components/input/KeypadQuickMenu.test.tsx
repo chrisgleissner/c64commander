@@ -15,7 +15,7 @@ vi.mock("@/lib/input/keypadCommands", async (importOriginal) => ({
 vi.mock("@/hooks/useSavedDevices", () => ({ useSavedDevices: () => devices() }));
 
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
-import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
+import { requestQuickMenuOpen, subscribeMachineCommand, type MachineCommand } from "@/lib/input/keypadCommands";
 
 const renderMenu = () =>
   render(
@@ -57,6 +57,37 @@ describe("KeypadQuickMenu", () => {
     // A page jump closes the menu without throwing.
     fireEvent.click(screen.getByTestId("keypad-quick-menu-tab-play"));
     await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+  });
+
+  it("carries the two machine actions, and names the key that reaches each without the menu", async () => {
+    const seen: MachineCommand[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => seen.push(command));
+    renderMenu();
+
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+    expect(screen.getByTestId("keypad-quick-menu-machine-pause").textContent).toContain("8");
+    expect(screen.getByTestId("keypad-quick-menu-machine-reset").textContent).toContain("9");
+
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-machine-pause"));
+    await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-machine-reset"));
+    await waitFor(() => expect(seen).toEqual(["pauseResume", "reset"]));
+
+    unsubscribe();
+  });
+
+  it("leaves the machine actions out of the menu a pointer user opens, who has the grid in front of them", async () => {
+    renderMenu();
+
+    requestQuickMenuOpen("pointer");
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+
+    expect(screen.queryByTestId("keypad-quick-menu-machine-pause")).toBeNull();
+    expect(screen.queryByTestId("keypad-quick-menu-machine-reset")).toBeNull();
   });
 
   it("hides Switch device when only one device is saved", async () => {
