@@ -515,7 +515,12 @@ export const FocusNavigationProvider = ({
         // the reader means "close this". Consuming it there left the dialog open with nothing but
         // a blurred field to show for the press.
         if (isWithinOpenOverlay(event.target)) return;
-        if (event.target instanceof HTMLElement) event.target.blur();
+        // Back out of the field to the ring stop that owns it, rather than to nothing. A bare blur
+        // left DOM focus on the body, which is where a keypad user has no row to carry on from;
+        // the field's own row is what they came from and what Down should move on from.
+        const ringElement = engineRef.current?.elementForId(controller.focus.current()?.id ?? "") ?? null;
+        if (ringElement && ringElement !== event.target) focusRingElement(ringElement);
+        else if (event.target instanceof HTMLElement) event.target.blur();
         event.preventDefault();
         return;
       }

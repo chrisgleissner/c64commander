@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
+import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { reportUserError } from "@/lib/uiErrors";
 import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
@@ -210,7 +211,21 @@ const expandDiagnosticsHeader = () => {
   fireEvent.click(screen.getByTestId("diagnostics-header-toggle"));
 };
 
+/*
+ * Android's Back key reaches Capacitor, not the WebView. One listener is registered for the whole
+ * app, by the keypad provider, and it dispatches the Escape keydown every dismissable surface
+ * already answers to. These tests used to get that listener from InterstitialStateProvider, which
+ * registered its own; two listeners dispatched two Escapes and dismissed one layer too many, so
+ * only the global one is left. The provider is not mounted here, so the tests install it.
+ */
+let uninstallDeviceBackButton: (() => void) | null = null;
+
 describe("GlobalDiagnosticsOverlay", () => {
+  afterEach(() => {
+    uninstallDeviceBackButton?.();
+    uninstallDeviceBackButton = null;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     buildActionSummariesMock.mockClear();
@@ -230,6 +245,7 @@ describe("GlobalDiagnosticsOverlay", () => {
         __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
       }
     ).__c64uDiagnosticsTestBridge;
+    uninstallDeviceBackButton = installDeviceBackButton();
   });
 
   it("opens from a pending diagnostics request and shares all diagnostics", async () => {

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MachineControls } from "@/pages/home/components/MachineControls";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
+import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import type { DisplayProfile } from "@/lib/displayProfiles";
 
@@ -98,6 +99,19 @@ const renderAtProfile = (profile: DisplayProfile) =>
   );
 
 describe("MachineControls", () => {
+  /*
+   * Android's Back key reaches Capacitor, not the WebView, and one listener is registered for the
+   * whole app rather than per surface: two listeners dispatched two Escapes and dismissed one layer
+   * too many. The provider that used to register it does not any more, so this installs the global
+   * one the app installs.
+   */
+  let uninstallDeviceBackButton: (() => void) | null = null;
+
+  afterEach(() => {
+    uninstallDeviceBackButton?.();
+    uninstallDeviceBackButton = null;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     appListenerState.backButtonListener = null;
@@ -107,6 +121,7 @@ describe("MachineControls", () => {
       }
       return { remove: appListenerState.remove };
     });
+    uninstallDeviceBackButton = installDeviceBackButton();
   });
 
   it("keeps the canonical primary quick actions in a two-column compact grid", () => {
