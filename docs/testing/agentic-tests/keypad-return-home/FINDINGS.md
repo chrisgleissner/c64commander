@@ -199,6 +199,7 @@ playback regression is exactly what this gate exists to catch. Re-run on the bra
 | ---------- | ------ |
 | 1 | pass — tone present 100.0%, -21.9 cents, longest gap **0 ms** |
 | 2 | pass — tone present 100.0%, -5.1 cents, longest gap **0 ms** |
+| 3 | pass — tone present 100.0%, -2.5 cents, longest gap **0 ms** |
 
-Both are better than the `main` run they were compared against, so the 150 ms dropout was the rig
+All three are better than the `main` run they were compared against, so the 150 ms dropout was the rig
 under a full back-to-back audio gate, not the branch.
