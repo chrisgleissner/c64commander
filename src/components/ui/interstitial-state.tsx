@@ -1,12 +1,10 @@
 import * as React from "react";
-import { App } from "@capacitor/app";
 
 import {
   resolveInterstitialBackdropOpacity,
   resolveInterstitialBackdropZIndex,
   resolveInterstitialSurfaceZIndex,
 } from "@/components/ui/interstitialStyles";
-import { addLog } from "@/lib/logging";
 
 export type InterstitialSurfaceKind = "modal" | "sheet" | "progress";
 
@@ -115,15 +113,6 @@ export function InterstitialStateProvider({ children }: { children: React.ReactN
     };
   }, [popoverBackDismissCount, register, registerPopoverBackDismiss, stack, unregister, unregisterPopoverBackDismiss]);
 
-  const activeInterstitialRef = React.useRef({
-    depth: value.depth,
-    topKind: value.topKind,
-  });
-  activeInterstitialRef.current = {
-    depth: value.depth,
-    topKind: value.topKind,
-  };
-
   React.useEffect(() => {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
@@ -143,46 +132,11 @@ export function InterstitialStateProvider({ children }: { children: React.ReactN
     };
   }, [value.active, value.depth, value.topKind]);
 
-  React.useEffect(() => {
-    if (!value.backDismissActive || typeof document === "undefined") {
-      return undefined;
-    }
-
-    let removed = false;
-    let removeListener: (() => Promise<void>) | null = null;
-
-    void App.addListener("backButton", () => {
-      const activeInterstitial = activeInterstitialRef.current;
-      addLog("debug", "Android Back dismissed topmost interstitial", {
-        depth: activeInterstitial.depth,
-        topKind: activeInterstitial.topKind,
-      });
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "Escape",
-        }),
-      );
-    })
-      .then((handle) => {
-        if (removed) {
-          void handle.remove();
-          return;
-        }
-        removeListener = () => handle.remove();
-      })
-      .catch((error) => {
-        addLog("warn", "Failed to register Android Back interstitial handler", {
-          error: error instanceof Error ? error.message : String(error ?? "Unknown listener failure"),
-        });
-      });
-
-    return () => {
-      removed = true;
-      void removeListener?.();
-    };
-  }, [value.backDismissActive]);
+  /*
+   * Android's Back key is turned into an Escape keydown for the whole app by
+   * installDeviceBackButton, so this surface needs no listener of its own: a second one dispatched
+   * a second Escape, which dismissed one layer too many.
+   */
 
   return <InterstitialStateContext.Provider value={value}>{children}</InterstitialStateContext.Provider>;
 }

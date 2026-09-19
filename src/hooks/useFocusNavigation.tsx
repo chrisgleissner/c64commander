@@ -68,6 +68,7 @@ import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
@@ -444,7 +445,11 @@ export const FocusNavigationProvider = ({
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       const normalized = normalizeKeyEvent(event, keymap);
-      const { action } = normalized;
+      // Android's hardware Back carries no key code, so it matches no keymap binding and used to
+      // fall through the `action === null` return below without ascending. It means what Escape
+      // means here: dismiss, disengage, come back out of the card.
+      const isDeviceBackButton = isDeviceBackKey(event);
+      const action = normalized.action ?? (isDeviceBackButton ? "escape" : null);
       // Before any branch below reads the ring, so the first key navigates.
       if (action !== null) startEngine();
       // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
@@ -452,7 +457,6 @@ export const FocusNavigationProvider = ({
       // an error toast covered the screen with no key able to dismiss it. Reuse the toast's own
       // tap handler (dismiss + open Diagnostics), but let an open dialog win. The Pixel 4 hardware
       // Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no declared "back" binding.
-      const isDeviceBackButton = isDeviceBackKey(event);
       if ((action === "back" || isDeviceBackButton) && !document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) {
         const toast = document.querySelector<HTMLElement>('[data-testid="app-toast"]');
         if (toast) {
@@ -636,10 +640,14 @@ export const FocusNavigationProvider = ({
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pointerdown", handlePointer, true);
     window.addEventListener("touchstart", handlePointer, true);
+    // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
+    // handler above already knows how to read.
+    const uninstallBackButton = installDeviceBackButton();
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
+      uninstallBackButton();
     };
   }, [adoptActiveElement, controller, enabled, keymap, notifyRing, startEngine]);
 

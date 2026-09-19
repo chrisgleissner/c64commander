@@ -379,6 +379,28 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(document.activeElement).toBe(button("After"));
   });
 
+  /*
+   * The device's own Back key carries no key code, so it matches none of the keymap's back
+   * bindings and used to fall through the "no binding" return without ascending. On the handset
+   * that meant a user who pressed OK into a card could not get out of it again: the rest of the
+   * page stayed out of reach until they left the route with a digit.
+   */
+  it("climbs out of a card on the device's own Back key, which matches no keymap binding", () => {
+    render(
+      <FocusNavigationProvider>
+        <NestedToolbar />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(document.activeElement).toBe(button("Primary"));
+
+    fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(document.activeElement).toBe(button("Card"));
+    expect(button("Card")).toHaveAttribute(SELECTED, "true");
+  });
+
   it("exposes the controller via useFocusNavigation (null outside a provider)", () => {
     let insideResult: NavigationController | null | undefined;
     let outsideResult: NavigationController | null | undefined;
