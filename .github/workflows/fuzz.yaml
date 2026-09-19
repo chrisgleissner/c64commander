@@ -2,7 +2,9 @@ name: fuzz
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    # Weekly, not nightly: a 2h fuzz run every night costs more runner time than the findings
+    # justify, and the same seed space is covered by running it once a week.
+    - cron: "0 3 * * 0"
   workflow_dispatch:
     inputs:
       time_budget:
