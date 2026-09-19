@@ -72,6 +72,15 @@ They were exercised end to end instead: `PLAYWRIGHT_SKIP_BUILD=1 node scripts/ru
 `fuzz-issue-report.json`, `fuzz-run-metrics.json` and `visual-stagnation-report.json`, then fails
 with `The run was stopped before these were produced: run time budget exhausted`.
 
+## One claim narrowed
+
+The change routes `SIGINT` and `SIGTERM` to the same shard-stopping path, and the commit describes
+a cancelled run as still writing its reports. That holds for a run the deadline stops, because the
+reserve is still ahead of it. It does not hold in general for a job cancelled from GitHub: the
+runner allows a short grace period before it kills the process, and a merge over a full night's
+sessions does not fit in it. The reliable guarantee is the deadline-stopped one; a cancellation
+that arrives early enough is a bonus, not a property to depend on.
+
 ## Items noted and deliberately not changed
 
 `actions/checkout@v4`, `actions/setup-node@v4`, `actions/cache@v4` and `actions/upload-artifact@v4`
