@@ -177,10 +177,12 @@ const PROBLEM_WINDOW_RECHECK_MS = 10_000;
 
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
+  // The same getter serves the server snapshot: the flag starts false and only a resume probe sets
+  // it, so there is nothing a second reader could say differently.
   const revalidatingConnection = useSyncExternalStore(
     subscribeConnectionRevalidation,
     isRevalidatingConnection,
-    () => false,
+    isRevalidatingConnection,
   );
   const healthCheckState = useHealthCheckState();
   const savedDevices = useSavedDevices();

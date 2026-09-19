@@ -20,7 +20,6 @@ import { addLog } from "@/lib/logging";
  * The event carries no key code, which is what `isDeviceBackKey` recognises it by.
  */
 export const installDeviceBackButton = (): (() => void) => {
-  if (typeof document === "undefined") return () => undefined;
   let removed = false;
   let remove: (() => Promise<void>) | null = null;
 

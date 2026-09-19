@@ -171,10 +171,9 @@ export const revalidateConnectionOnResume = async () => {
   if (getConnectionSnapshot().state !== "REAL_CONNECTED") return;
   if (!beginConnectionRevalidation()) return;
   try {
-    if (isNetworkKnownOffline()) {
-      await showDeviceOffline("network-lost");
-      return;
-    }
+    // No separate branch for a radio that is already off: reaching here at all means the state
+    // still reads connected, which the network edge would have cleared, and confirmDeviceUnreachable
+    // asks that question itself before it probes anything.
     if (await probeOnce()) return;
     await confirmDeviceUnreachable();
   } finally {

@@ -254,6 +254,29 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(document.activeElement).toBe(note);
   });
 
+  /*
+   * Escape and the device's Back key have to be able to leave a field, and where they leave it to
+   * matters: a bare blur put DOM focus on the body, which is nowhere for a keypad user. When the
+   * ring has a stop it goes back to it; with nothing selected there is nothing to go back to, and
+   * blurring is all that is left.
+   */
+  it("blurs a field on Escape when the ring has no stop to go back to", () => {
+    const LoneField = () => <input aria-label="host" />;
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <LoneField />
+      </FocusNavigationProvider>,
+    );
+
+    const input = getByLabelText("host") as HTMLInputElement;
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.keyDown(input, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(document.activeElement).not.toBe(input);
+  });
+
   it("prevents default only for actions it consumes", () => {
     const Custom = () => {
       const ref = useFocusItem<HTMLButtonElement>({ id: "x", order: 10 });

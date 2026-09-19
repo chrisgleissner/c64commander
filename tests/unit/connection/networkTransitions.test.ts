@@ -364,6 +364,33 @@ describe("following the phone on and off its network", () => {
     visibility.mockRestore();
   });
 
+  it("checks nothing on return when the app is not connected in the first place", async () => {
+    const { manager, transitions } = await connect();
+    const flag = await import("../../../src/lib/connection/connectionRevalidation");
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    const requestsBefore = server.requests.length;
+
+    await transitions.revalidateConnectionOnResume();
+
+    expect(flag.isRevalidatingConnection()).toBe(false);
+    expect(server.requests.length).toBe(requestsBefore);
+  });
+
+  it("runs one check at a time, not one per return", async () => {
+    const { transitions } = await connect();
+    server.setFaultMode("refused");
+    const requestsBefore = server.requests.length;
+
+    const first = transitions.revalidateConnectionOnResume();
+    await transitions.revalidateConnectionOnResume();
+    const requestsAfterSecond = server.requests.length;
+    await first;
+
+    // The second call found one already in flight and sent nothing of its own.
+    expect(requestsAfterSecond).toBeLessThanOrEqual(requestsBefore + 1);
+  });
+
   it("says it is checking rather than connected while the returning probe is in flight", async () => {
     const { manager } = await connect();
     const health = await import("../../../src/lib/diagnostics/healthModel");
