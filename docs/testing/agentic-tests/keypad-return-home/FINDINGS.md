@@ -208,15 +208,26 @@ and then "Connected to c64u, system healthy".
 Not covered here: that the playlist and the config choices belonging to a device come back with it.
 Only the streaming half of S4 was measured.
 
-### S7 — not measured
+### S7 — attempted, and the apply could not be staged
 
-**S7, a settings file in a hurry.** Not run. It needs a playlist item with a `.cfg` beside it on
-the Ultimate, which this rig does not have, and staging one means writing to a shared device's
-filesystem. What can be said from the code without the rig: the apply shows a toast naming the file
-it is applying, and the only way to decline it is the dialog raised when the file is *unavailable*
-(`resolveUnavailableConfigDecision`). There is no control that declines an apply which is merely
-slow, so the user waits out the eighteen seconds or the ninety-second deadline. That is a gap, and
-it is recorded as read rather than measured.
+A copy of the Ultimate's own `Default.cfg` was put beside the tune as `tone-low.cfg`, which is the
+association rule the firmware uses and the app agrees with: same directory, same name, `.cfg`
+extension. Launching Tone-Low from the playlist then applied **nothing**. The tune started at once
+— elapsed ran 0:00, 0:01, 0:03 and on — with one control disabled on the page throughout and no
+toast naming a file. There was no eighteen-second wait to watch.
+
+The reason is that a playlist item carries its settings file as a stored reference resolved when the
+item is added, and these items were added before the `.cfg` existed. Making the app resolve it
+would mean removing and re-adding the tune, which reorders the playlist the merge gate needs
+(Tone-Low then Tone-High, and nothing else). The file was removed again afterwards, so the rig is
+as it was found.
+
+So the timing, the wording on the page and the ability to decline a slow apply are **not measured**.
+What can be said from the code is unchanged: the apply raises a toast naming the file, and the only
+control that declines one belongs to the dialog raised when the file is *unavailable*
+(`resolveUnavailableConfigDecision`). Nothing declines an apply that is merely slow, so the user
+waits out the eighteen seconds or the ninety-second deadline. That is a gap, read rather than
+measured.
 
 ## The hardware merge gate
 
