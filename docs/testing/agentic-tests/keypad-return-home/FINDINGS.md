@@ -231,38 +231,31 @@ measured.
 
 ## The hardware merge gate
 
-Run on `c64u` with the branch's APK, at native geometry, phone volume 3 of 25.
+Run on `c64u` at native geometry (1080x2280, density 440), phone volume 3 of 25.
 
-| Stage | Branch | Same stage on `main` |
-| ----- | ------ | -------------------- |
-| preflight | pass — device 1, route /, mirror off | pass |
-| input | pass — held direction moved 9 cells, 20 rotation checks | not re-run |
-| search-latency | pass — 120 samples, p50 20.1 ms, p95 32.8 ms | not re-run |
-| wire | pass — sender loss 0%, inter-arrival p99 4.11 ms | not re-run |
-| av-clarity | fail — 0 tone bursts found | **fail, identically** — 0 tone bursts found |
-| av-latency | fail — microphone and wire correlate 0 | not re-run; see below |
-| sid-remote | fail — tone in 3.5% of windows, "an empty room" | **fail, identically** — 2.5% of windows |
-| sid-local | fail — longest dropout 150 ms | **pass** — 99.5% present, longest gap 50 ms |
-| crossfade | pass — join graded "SEAMLESS CROSSFADE" | not re-run |
+The gate drives `uk.gleissner.c64commander`. The copy of that package installed on the Pixel was
+`1.0.4-2487f`, a build from `main`, so the earlier runs recorded in this document measured `main`
+under a branch label. Those numbers are removed rather than reinterpreted. The branch APK
+(`1.0.5-rc1-e85ba`) was built and installed, and the gate was re-run against it.
 
-`crossfade` passing and `sid-local` producing a measurement at all are what rule out a dead
-microphone or a silent phone: both grade sound in the room. The three stages that fail are the
-three that need the **Ultimate's mirror** to reach the phone's speaker, and two of them fail exactly
-the same way on `main`, so they are not this branch. `av-latency` was not re-run on `main`; its
-failure is "the microphone and the wire barely correlate (0)", which is the same condition as the
-other two — no mirror audio at the speaker — and that is an inference rather than a measurement.
+| Stage | Result on the branch APK |
+| ----- | ------------------------ |
+| preflight | pass — device 1, route /, speaker volume 0, mirror audio=false video=false |
+| input | pass — held direction moved 10 cells; 20 rotation checks passed |
+| search-latency | pass — 120 samples, p50 19.8 ms, p90 29.5 ms, p95 32.5 ms, max 50.7 ms |
+| wire | pass — sender loss 0%, inter-arrival p99 4.11 ms |
+| av-clarity | pass — 82 tones, 5 defective, 0.13% dropout |
+| av-latency | pass — 262 ms wire to speaker, correlation 0.897 |
+| sid-remote | pass — tone present 100.0%, -20.4 cents, longest gap 0 ms |
+| sid-local | pass — tone present 100.0%, -1.6 cents, longest gap 0 ms |
+| crossfade | pass — join graded "SEAMLESS CROSSFADE" |
 
-`sid-local` needed settling, because it passed on `main` and failed on the branch, and a local
-playback regression is exactly what this gate exists to catch. Re-run on the branch alone it passes:
+Audible time about 62 seconds. All nine stages pass.
 
-| Branch run | Result |
-| ---------- | ------ |
-| 1 | pass — tone present 100.0%, -21.9 cents, longest gap **0 ms** |
-| 2 | pass — tone present 100.0%, -5.1 cents, longest gap **0 ms** |
-| 3 | pass — tone present 100.0%, -2.5 cents, longest gap **0 ms** |
-
-All three are better than the `main` run they were compared against, so the 150 ms dropout was the rig
-under a full back-to-back audio gate, not the branch.
+The first attempt at this run failed at preflight with a CDP call that never returned. The cause was
+the `adb forward` entry: it still pointed at `webview_devtools_remote_32202`, the WebView socket of
+the process that existed before the reinstall. Re-pointing the forward at the new pid fixed it. This
+is a rig condition, not a product fault, and it produces a preflight failure with no other symptom.
 
 ### S5 — the landscape half
 
