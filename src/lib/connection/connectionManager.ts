@@ -107,13 +107,6 @@ export type ConnectionSnapshot = Readonly<{
   deviceInfo: DeviceInfo | null;
   demoInterstitialVisible: boolean;
   demoInterstitialReason: DemoInterstitialReason | null;
-  /**
-   * Set while the app re-checks a connection it has just come back to. Nothing probes the device
-   * while the state reads REAL_CONNECTED, so on return that state is only as good as the last time
-   * the app spoke to the device: the badge claimed "system healthy" about a device that had been
-   * out of reach for an hour. The badge reports that it is checking while this is set.
-   */
-  revalidating: boolean;
 }>;
 
 const STARTUP_PROBE_INTERVAL_MS = 700;
@@ -349,18 +342,6 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
   return outcome.result.ok;
 }
 
-/** Mark the connection as being checked again; see `ConnectionSnapshot.revalidating`. */
-export const beginConnectionRevalidation = (): boolean => {
-  if (snapshot.state !== "REAL_CONNECTED" || snapshot.revalidating) return false;
-  setSnapshot({ revalidating: true });
-  return true;
-};
-
-export const endConnectionRevalidation = (): void => {
-  if (!snapshot.revalidating) return;
-  setSnapshot({ revalidating: false });
-};
-
 /**
  * Read-only reachability probe of an ARBITRARY host, without committing it as the
  * active device or mutating connection state. Used to validate a device before it is
@@ -451,7 +432,6 @@ let snapshot: ConnectionSnapshot = {
   deviceInfo: null,
   demoInterstitialVisible: false,
   demoInterstitialReason: null,
-  revalidating: false,
 };
 
 const listeners = new Set<() => void>();
@@ -1487,7 +1467,6 @@ export async function initializeConnectionManager() {
   activeManualDiscovery = null;
   lastManualDiscoveryFallbackAtMs = 0;
   backgroundProbeSuppressedWhileOffline = false;
-  endConnectionRevalidation();
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();

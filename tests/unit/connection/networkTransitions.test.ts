@@ -343,9 +343,10 @@ describe("following the phone on and off its network", () => {
     visibility.mockReturnValue("visible");
     document.dispatchEvent(new Event("visibilitychange"));
 
+    const revalidation = await import("../../../src/lib/connection/connectionRevalidation");
     await vi.waitFor(() => expect(server.requests.length).toBeGreaterThan(requestsBefore), { timeout: 3000 });
     expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
-    await vi.waitFor(() => expect(manager.getConnectionSnapshot().revalidating).toBe(false));
+    await vi.waitFor(() => expect(revalidation.isRevalidatingConnection()).toBe(false));
     visibility.mockRestore();
   });
 
@@ -367,17 +368,18 @@ describe("following the phone on and off its network", () => {
     const { manager } = await connect();
     const health = await import("../../../src/lib/diagnostics/healthModel");
     const transitions = await import("../../../src/lib/connection/networkTransitions");
+    const flag = await import("../../../src/lib/connection/connectionRevalidation");
 
     server.setFaultMode("refused");
-    const revalidation = transitions.revalidateConnectionOnResume();
-    const duringProbe = manager.getConnectionSnapshot();
+    const inFlight = transitions.revalidateConnectionOnResume();
+    const state = manager.getConnectionSnapshot().state;
 
-    expect(duringProbe.revalidating).toBe(true);
-    expect(health.deriveConnectivityState(duringProbe.state, false, duringProbe.revalidating)).toBe("Checking");
+    expect(flag.isRevalidatingConnection()).toBe(true);
+    expect(health.deriveConnectivityState(state, false, flag.isRevalidatingConnection())).toBe("Checking");
     expect(health.getBadgeAriaLabel("Healthy", "Checking", 0, "C64 Ultimate", "c64u")).toBe("Connecting to c64u");
 
-    await revalidation;
-    expect(manager.getConnectionSnapshot().revalidating).toBe(false);
+    await inFlight;
+    expect(flag.isRevalidatingConnection()).toBe(false);
   });
 
   it("stops reconnecting once the device is connected again", async () => {

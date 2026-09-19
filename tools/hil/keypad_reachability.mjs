@@ -235,25 +235,32 @@ async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}
  * Navigation here is "OK to go in, Back to go out": the top-level ring traverses cards, and a
  * card's own controls only join the ring once it has been descended into. A sweep that never
  * pressed OK would report every one of those controls as unreachable.
+ *
+ * This makes ONE forward pass over the ring and descends into each card as it arrives at it. An
+ * earlier version searched for each card from wherever the ring had stopped, pressing Down up to
+ * MAX_STEPS times per card with a settle and a CDP read on every press. That re-walked the whole
+ * ring once per card — quadratic in the number of cards, and on Home it visibly scrolled the same
+ * Quick Actions grid over and over for tens of minutes without finishing a single route.
  */
 async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
   const reached = new Set();
-  for (const stop of stops) {
-    if (!stop.isGroup || !stop.id) continue;
-    // Re-select this card: the ring has moved on since it was recorded.
-    let landed = false;
-    for (let attempt = 0; attempt < MAX_STEPS && !landed; attempt += 1) {
-      const state = await evaluate(STATE_EXPR);
-      if (state.current?.id === stop.id) {
-        landed = true;
-        break;
-      }
+  const pending = new Set(stops.filter((stop) => stop.isGroup && stop.id).map((stop) => stop.id));
+  if (pending.size === 0) return reached;
+
+  // One lap plus a margin: the ring may have moved on since walkScope recorded it, and a descend
+  // and Back can land a stop away from where it started.
+  const budget = stops.length * 2 + 8;
+  for (let step = 0; step < budget && pending.size > 0; step += 1) {
+    const state = await evaluate(STATE_EXPR);
+    const id = state.current?.id;
+    if (!id || !pending.has(id)) {
       key(KEY.DOWN);
       await sleep(settleMs);
+      continue;
     }
-    if (!landed) continue;
+    pending.delete(id);
 
-    const before = await evaluate(STATE_EXPR);
+    const before = state;
     key(KEY.CENTER);
     await sleep(settleMs + 240);
     const inside = await evaluate(STATE_EXPR);
@@ -267,13 +274,19 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
       await sleep(settleMs + 200);
       continue;
     }
-    for (let step = 0; step < 40; step += 1) {
-      const state = await evaluate(STATE_EXPR);
-      if (state.current?.id) reached.add(state.current.id);
+    // Per card, so a child this sweep already saw under a different card does not end the descent
+    // before it has started.
+    const seenHere = new Set();
+    for (let child = 0; child < 40; child += 1) {
+      const current = await evaluate(STATE_EXPR);
+      if (current.current?.id) {
+        reached.add(current.current.id);
+        seenHere.add(current.current.id);
+      }
       key(KEY.DOWN);
       await sleep(settleMs);
       const next = await evaluate(STATE_EXPR);
-      if (!next.current?.id || reached.has(next.current.id)) break;
+      if (!next.current?.id || seenHere.has(next.current.id)) break;
     }
     key(KEY.BACK);
     await sleep(settleMs + 200);

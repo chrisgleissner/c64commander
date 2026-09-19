@@ -7,9 +7,7 @@
  */
 
 import {
-  beginConnectionRevalidation,
   discoverConnection,
-  endConnectionRevalidation,
   getConnectionSnapshot,
   noteDeviceUnreachable,
   probeOnce,
@@ -17,6 +15,7 @@ import {
   subscribeConnection,
   type ConnectionState,
 } from "@/lib/connection/connectionManager";
+import { beginConnectionRevalidation, endConnectionRevalidation } from "@/lib/connection/connectionRevalidation";
 import {
   hasLiveAvMirror,
   readAvMirrorRetargetState,
@@ -169,6 +168,7 @@ const handleNetworkEdge = (edge: "online" | "offline") => {
  * claiming the machine was reachable, and stayed wrong until the user pressed something that failed.
  */
 export const revalidateConnectionOnResume = async () => {
+  if (getConnectionSnapshot().state !== "REAL_CONNECTED") return;
   if (!beginConnectionRevalidation()) return;
   try {
     if (isNetworkKnownOffline()) {
@@ -196,6 +196,7 @@ const handleVisibilityChange = () => {
 };
 
 export const installNetworkTransitions = () => {
+  endConnectionRevalidation();
   lastConnectionState = getConnectionSnapshot().state;
   const unsubscribeEdges = subscribeNetworkEdges(handleNetworkEdge);
   const unsubscribeConnection = subscribeConnection(resumeMirrorAfterOutage);
