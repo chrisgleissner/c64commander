@@ -154,12 +154,30 @@ on, and saved with **Save & Connect**.
 The second half of the scenario — the Ultimate genuinely moving to a different address — was not
 staged. It needs the device's DHCP lease changed, and the Ultimate is shared with other work.
 
-### S4 and S7 — not measured
+### S4 — two Ultimates, one user
 
-**S4, two Ultimates, one user.** Not run. The rig time went on S1, S2, S5, S6 and S8, and the parts
-of S4 that matter most — that the mirror stops on the device being left before the new one is
-targeted, and that no device keeps sending after it is deselected — are the subject of an existing
-harness (`device-switch-soak`) rather than something to re-derive by hand here.
+Live View's video was started on `c64u`, then the selected device was changed to `u2` through
+Settings, then back to `c64u`. The senders on each multicast group were read off the wire at every
+step, from this host, rather than taken from the app's own record.
+
+| Step | Selected host | `c64u_device_streams_running` | Senders on 239.0.1.64 |
+| ---- | ------------- | ----------------------------- | --------------------- |
+| On `c64u`, mirror off | `192.168.1.146` | absent | none |
+| On `c64u`, video on | `192.168.1.146` | `{"video":"192.168.1.146"}` | `192.168.1.146`, 10219 packets in 3 s |
+| Switched to `u2` | `192.168.1.97` | absent | **none** |
+| Switched back to `c64u` | `192.168.1.146` | absent | none |
+
+Every clause of the scenario holds. The mirror stopped on the device being left: `c64u` was sending
+over ten thousand packets in three seconds, and after the switch it sent nothing. No device kept
+sending after it was deselected, on either group. The record never named a device the app was not
+on — it was cleared with the stream rather than left behind, which is the failure the scenario
+warns about. The badge followed the selection both ways, reading "Connected to u2, system healthy"
+and then "Connected to c64u, system healthy".
+
+Not covered here: that the playlist and the config choices belonging to a device come back with it.
+Only the streaming half of S4 was measured.
+
+### S7 — not measured
 
 **S7, a settings file in a hurry.** Not run. It needs a playlist item with a `.cfg` beside it on
 the Ultimate, which this rig does not have, and staging one means writing to a shared device's
