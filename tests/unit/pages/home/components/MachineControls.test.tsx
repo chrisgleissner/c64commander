@@ -373,6 +373,25 @@ describe("MachineControls", () => {
     expect(defaultProps.controls.reset.mutateAsync).not.toHaveBeenCalled();
   });
 
+  /*
+   * The dialog opens on the action it is asking about. Radix otherwise focuses the content
+   * wrapper, which is not a control, and a keypad user pressed Down three times — past the close
+   * button and Cancel — to reach the one thing the dialog exists to offer.
+   */
+  it("opens the destructive confirmation on its confirm button", async () => {
+    render(
+      <InterstitialStateProvider>
+        <MachineControls {...defaultProps} />
+      </InterstitialStateProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("action-Reset"));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm" }));
+    });
+  });
+
   it("renders every enabled quick action even in the two-column compact grid", () => {
     render(
       <MachineControls
