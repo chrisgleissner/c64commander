@@ -655,6 +655,45 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(openDeviceSwitcher).toHaveBeenCalledTimes(1);
   });
 
+  /*
+   * 8 and 9 exist because the same two actions cost ten and eight presses through Home's Quick
+   * Actions grid from a cold arrival, measured on the handset. The grid is not moving; these are a
+   * shorter way to it. 7 is search and 0 is Game Mode, so these were the digits going spare.
+   */
+  it("fires the machine controls on 8 and 9", () => {
+    const machinePauseResume = vi.fn();
+    const machineReset = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ machinePauseResume, machineReset }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit8" });
+    expect(machinePauseResume).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document.body, { code: "Digit9" });
+    expect(machineReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the machine keys to T9 while editing a text field", () => {
+    const machinePauseResume = vi.fn();
+    const machineReset = vi.fn();
+    const { getByLabelText } = render(
+      <FocusNavigationProvider shortcuts={{ machinePauseResume, machineReset }}>
+        <input aria-label="host" />
+      </FocusNavigationProvider>,
+    );
+
+    const input = getByLabelText("host") as HTMLInputElement;
+    input.focus();
+    fireEvent.keyDown(input, { code: "Digit8" });
+    fireEvent.keyDown(input, { code: "Digit9" });
+
+    expect(machinePauseResume).not.toHaveBeenCalled();
+    expect(machineReset).not.toHaveBeenCalled();
+  });
+
   it("leaves digits/star/hash to T9 while editing a text field (no shortcut hijack)", () => {
     const jumpToTab = vi.fn();
     const openDiagnostics = vi.fn();

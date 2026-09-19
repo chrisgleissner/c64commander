@@ -17,6 +17,7 @@
 
 const DEVICE_SWITCHER_OPEN_EVENT = "c64u-device-switcher-open-request";
 const QUICK_MENU_OPEN_EVENT = "c64u-quick-menu-open-request";
+const MACHINE_COMMAND_EVENT = "c64u-machine-command-request";
 
 const emit = <T>(name: string, detail?: T): void => {
   if (typeof window === "undefined") return;
@@ -53,3 +54,19 @@ export const requestQuickMenuOpen = (source: QuickMenuSource = "keypad"): void =
 /** Subscribe the Quick Menu to open requests. Returns an unsubscribe. */
 export const subscribeQuickMenuOpen = (handler: (source: QuickMenuSource) => void): (() => void) =>
   subscribe(QUICK_MENU_OPEN_EVENT, handler);
+
+/**
+ * The two machine controls a keypad user reaches for most, on their own keys.
+ *
+ * They were eight and ten presses away through Home's Quick Actions grid — three Down to the card,
+ * OK into it, then along the tiles, and Reset's confirmation on top. The grid is where they belong
+ * on screen and it is not moving; these are a way to the same actions that does not walk there.
+ */
+export type MachineCommand = "pauseResume" | "reset";
+
+/** Ask whichever surface owns the machine controls to run one (keypad `8` and `9`). */
+export const requestMachineCommand = (command: MachineCommand): void => emit(MACHINE_COMMAND_EVENT, command);
+
+/** Subscribe to machine-command requests. Returns an unsubscribe. */
+export const subscribeMachineCommand = (handler: (command: MachineCommand) => void): (() => void) =>
+  subscribe(MACHINE_COMMAND_EVENT, handler);

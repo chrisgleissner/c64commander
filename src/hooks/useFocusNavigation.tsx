@@ -229,6 +229,10 @@ export interface KeypadShortcutHandlers {
   readonly mediaPlayPause?: () => void;
   /** Next tune (F3). Same latch. */
   readonly mediaNext?: () => void;
+  /** Pause or resume the machine (8) — ten presses away through Home's grid. */
+  readonly machinePauseResume?: () => void;
+  /** Reset the machine (9), which still asks before it runs. */
+  readonly machineReset?: () => void;
 }
 
 export interface FocusNavigationProviderProps {
@@ -587,6 +591,21 @@ export const FocusNavigationProvider = ({
       // comes out" rule; a key that did both would be ambiguous the moment the
       // sheet has focus — and inside the sheet `0` is a joystick direction, which
       // the open-overlay exclusion above already keeps this handler away from.
+      // 8 and 9: the two machine controls this user opens the app for. They sit in Home's Quick
+      // Actions grid, which is where they read best and is not moving; these are a shorter way to
+      // the same actions. 7 is search and 0 is Game Mode, so these were the digits going spare.
+      if (action === "digit8" && shortcuts.machinePauseResume) {
+        shortcuts.machinePauseResume();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      if (action === "digit9" && shortcuts.machineReset) {
+        shortcuts.machineReset();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
       if (action === "digit0" && shortcuts.openGameMode) {
         shortcuts.openGameMode();
         setInputModality("key-navigation");

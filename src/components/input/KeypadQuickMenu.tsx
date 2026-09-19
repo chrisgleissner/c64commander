@@ -12,7 +12,12 @@ import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
-import { requestDeviceSwitcherOpen, subscribeQuickMenuOpen, type QuickMenuSource } from "@/lib/input/keypadCommands";
+import {
+  requestDeviceSwitcherOpen,
+  requestMachineCommand,
+  subscribeQuickMenuOpen,
+  type QuickMenuSource,
+} from "@/lib/input/keypadCommands";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
@@ -154,6 +159,31 @@ export function KeypadQuickMenu() {
                 </Button>
               ))
             : null}
+          {/* The machine controls carry their own keys too. They live in Home's Quick Actions grid,
+              which is where they read best, but that is ten presses from a cold arrival; naming the
+              key here is how a keypad user finds the short way without reading the manual. */}
+          {fromKeypad ? (
+            <>
+              <Button
+                variant="ghost"
+                className="justify-start gap-3"
+                data-testid="keypad-quick-menu-machine-pause"
+                onClick={() => run(() => requestMachineCommand("pauseResume"))}
+              >
+                <ShortcutKey>8</ShortcutKey>
+                Pause / Resume machine
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start gap-3"
+                data-testid="keypad-quick-menu-machine-reset"
+                onClick={() => run(() => requestMachineCommand("reset"))}
+              >
+                <ShortcutKey>9</ShortcutKey>
+                Reset machine
+              </Button>
+            </>
+          ) : null}
           {/* Carried here as well as on `0`, so the shortcut is discoverable without
               reading the manual — in the same place the page jumps already are. */}
           {remoteInputEnabled ? (
