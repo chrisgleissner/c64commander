@@ -99,3 +99,36 @@ replaying a path, so its press count is the cost of a search and not the cost of
 it reported 19 and then 22 presses for Pause, against the 10 a user takes, and failed to find it at
 all on two of five arrivals. It is useful as an upper bound and as a way to prove the press reached
 the machine, and it is not the instrument for the press counts above.
+
+### S8 — the phone goes into a pocket
+
+Tone-Low started, the app backgrounded and the screen put out, 110 s in a pocket, then woken and
+foregrounded.
+
+- The page was live 1.29 s after the app was foregrounded, inside the 2 s the scenario allows.
+- The clock had kept correct time: 0:10 when the phone went away, 2:14 on return against about
+  125 s of wall clock, and it went on advancing, 2:15, 2:16. Nothing was frozen and no route
+  needed a re-navigation.
+- Whether the speaker was actually producing sound while the screen was off is **not
+  established**. `dumpsys audio` reported no started `AudioTrack` while the phone was dozing and
+  one again on return. The clock keeping correct time says the page was not frozen, and on this
+  platform only audible audio exempts a hidden page from being frozen, so the likely reading is
+  that audio continued and `dumpsys` does not list the track in that state. That is an inference,
+  not a measurement, and settling it needs the microphone.
+
+A first attempt at this scenario proved nothing and is recorded so it is not repeated: the wait was
+five minutes and the tune is three, so it ended naturally while the phone was away.
+
+### S10 — ten arrivals, one leak check
+
+After ten arrival cycles the phone held **no** TCP sockets to the Ultimate's telnet port
+(`/proc/net/tcp` on the handset, filtered to `192.168.1.146:23`), and `GET /v1/configs` answered
+normally afterwards. Arrivals open no telnet session, so this measures that they leak none.
+
+The leak the scenario is aimed at is not reachable this way and was not staged. A session is torn
+down in a `finally`, so a completed workflow always closes it; the path that can leak is an apply
+that hits its 90 s deadline, which is deliberately left to the session's own five-minute idle
+timeout. That timeout is a `setTimeout` in the WebView, and a hidden page does not run it — so an
+apply that times out just before the phone goes into a pocket would hold its session until the
+process dies. That is read off the code, not measured, and no change was made on the strength of
+it.
