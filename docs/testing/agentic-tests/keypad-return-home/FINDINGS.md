@@ -203,3 +203,23 @@ playback regression is exactly what this gate exists to catch. Re-run on the bra
 
 All three are better than the `main` run they were compared against, so the 150 ms dropout was the rig
 under a full back-to-back audio gate, not the branch.
+
+### S5 — the landscape half
+
+Reached through Settings → Appearance → Screen orientation → Landscape, as the scenario says, because
+the app locks orientation and a storage write does not move it.
+
+In landscape the handset gives the app **427 x 320 CSS px**, and the app selects the **medium**
+display profile rather than compact. `keypad_reachability.mjs` refuses to grade anything but
+compact — deliberately, because its 44 x 44 hit areas, its 14 px text floor and its overflow check
+are all scoped to that panel — so the automated sweep has no landscape result and is not forced to
+produce one.
+
+What the scenario actually asks about in landscape was checked directly. The destructive-action
+dialog is the surface at risk, because 320 px of height is the tightest thing the app has to fit a
+header, a body and a footer into. With Reset's confirmation open at 427 x 320, every button is
+inside the viewport: Close at 96–141, Confirm at 205–249, Cancel at 258–302, against a viewport
+height of 320. Nothing the user must press sits below the fold.
+
+One difference from portrait, noted and not pursued: in portrait the dialog autofocuses **Confirm**,
+so confirming costs one press; in landscape focus lands on the dialog wrapper and Down walks to it.
