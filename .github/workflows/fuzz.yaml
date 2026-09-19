@@ -89,7 +89,10 @@ jobs:
           FUZZ_RUN_MODE: ci
           VITE_FUZZ_MODE: "1"
         run: |
-          node scripts/run-fuzz.mjs --fuzz-seed 4242 --fuzz-time-budget 5m --fuzz-concurrency 1 --fuzz-platform android-phone
+          # 7m, not 5m: the budget now covers the build (~25s here) and a reserve for merging, so
+          # 5m would leave the shards about 200s where they used to get the whole 300s. The step
+          # still finishes far inside the 30 minute job cap.
+          node scripts/run-fuzz.mjs --fuzz-seed 4242 --fuzz-time-budget 7m --fuzz-concurrency 1 --fuzz-platform android-phone
 
       - name: Stop telemetry monitor
         if: always()
