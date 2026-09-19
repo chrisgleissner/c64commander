@@ -132,3 +132,39 @@ timeout. That timeout is a `setTimeout` in the WebView, and a hidden page does n
 apply that times out just before the phone goes into a pocket would hold its session until the
 process dies. That is read off the code, not measured, and no change was made on the strength of
 it.
+
+### S3 — the address moved while they were out
+
+The saved device's host was changed through Settings to `192.168.1.231`, an address nothing answers
+on, and saved with **Save & Connect**.
+
+- The app said what was wrong in the words the scenario asks for: *"We couldn't reach
+  '192.168.1.231'. Make sure it's powered on and on the same Wi-Fi."* That distinguishes an address
+  that answers nothing from a device that is off, and it names the address it tried.
+- It did not strand itself on the bad address. The saved entry went back to `192.168.1.146` and the
+  app stayed on the working connection, which is why the badge went on reading "Connected to c64u,
+  system healthy" while the message was on screen: the badge is about the connection the app has,
+  not the one it just failed to make. A control pressed afterwards still reached the machine — a
+  sentinel written to `$0400` was still there and the app was still talking to `192.168.1.146`.
+- The host field and its ports are reachable and editable with the keypad: OK on
+  `settings-device-host-field` focuses the input with its value in it. The destructive-action
+  dialog autofocuses its **primary** action, so confirming costs one press and nothing renders
+  below the viewport on the way.
+
+The second half of the scenario — the Ultimate genuinely moving to a different address — was not
+staged. It needs the device's DHCP lease changed, and the Ultimate is shared with other work.
+
+### S4 and S7 — not measured
+
+**S4, two Ultimates, one user.** Not run. The rig time went on S1, S2, S5, S6 and S8, and the parts
+of S4 that matter most — that the mirror stops on the device being left before the new one is
+targeted, and that no device keeps sending after it is deselected — are the subject of an existing
+harness (`device-switch-soak`) rather than something to re-derive by hand here.
+
+**S7, a settings file in a hurry.** Not run. It needs a playlist item with a `.cfg` beside it on
+the Ultimate, which this rig does not have, and staging one means writing to a shared device's
+filesystem. What can be said from the code without the rig: the apply shows a toast naming the file
+it is applying, and the only way to decline it is the dialog raised when the file is *unavailable*
+(`resolveUnavailableConfigDecision`). There is no control that declines an apply which is merely
+slow, so the user waits out the eighteen seconds or the ninety-second deadline. That is a gap, and
+it is recorded as read rather than measured.
