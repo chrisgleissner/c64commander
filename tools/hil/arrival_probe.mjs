@@ -145,17 +145,39 @@ const main = async () => {
   const selection = () => cdp.evaluate(SELECTION).catch(() => ({ id: null }));
 
   /**
-   * Walk to a stop whose test id or label matches, descending into a card when the ring passes one.
-   * Returns the presses it took, or null when a full lap does not find it.
+   * Walk to a stop whose test id or label matches, the way the app's own navigation works: Down
+   * moves along the current ring, OK descends into a card, Back climbs out of one.
+   *
+   * A card's ring wraps inside the card, so a walk that only pressed Down went round the first
+   * card it entered until it ran out of budget. This leaves a card once its own stops start
+   * repeating, and counts every press it made, including the ones it spent looking.
    */
   const walkTo = async (wanted, budget) => {
     let presses = 0;
+    const matches = (current) => current.id === wanted || current.text === wanted;
     const entered = new Set();
+    let insideCard = null;
+    let seenInCard = new Set();
     for (let step = 0; step < budget; step += 1) {
       const current = await selection();
-      if (current.id === wanted || current.text === wanted) return presses;
+      if (matches(current)) return presses;
+      if (insideCard !== null) {
+        if (current.id && seenInCard.has(current.id)) {
+          await press(KEY.BACK);
+          presses += 1;
+          insideCard = null;
+          seenInCard = new Set();
+          continue;
+        }
+        if (current.id) seenInCard.add(current.id);
+        await press(KEY.DOWN);
+        presses += 1;
+        continue;
+      }
       if (current.hasChildren && current.id && !entered.has(current.id)) {
         entered.add(current.id);
+        insideCard = current.id;
+        seenInCard = new Set();
         await press(KEY.CENTER);
         presses += 1;
         continue;

@@ -57,8 +57,31 @@ describe("what a transport command does on the Play page", () => {
     expect(handlers.play).not.toHaveBeenCalled();
   });
 
-  it("toggles on playPause, which is what a headset play/pause button sends", () => {
+  /*
+   * This asserted that playPause toggles whatever the session is doing, including when it is doing
+   * nothing — and with the defaults above, nothing is exactly the case it was asserting. On an idle
+   * session pauseResume does nothing at all, so pressing the handset's F1 key on Home navigated to
+   * Play and left a stopped transport. Starting is what a media play/pause key has always done
+   * with nothing playing, so the expectation changed rather than the reading of it.
+   */
+  it("starts on playPause when nothing is playing", () => {
+    runTransportCommand("playPause", handlers);
+    expect(handlers.play).toHaveBeenCalledTimes(1);
+    expect(handlers.pauseResume).not.toHaveBeenCalled();
+  });
+
+  it("toggles on playPause while a tune is playing", () => {
+    handlers.isPlaying = true;
     runTransportCommand("playPause", handlers);
     expect(handlers.pauseResume).toHaveBeenCalledTimes(1);
+    expect(handlers.play).not.toHaveBeenCalled();
+  });
+
+  it("toggles on playPause while a tune is paused", () => {
+    handlers.isPlaying = true;
+    handlers.isPaused = true;
+    runTransportCommand("playPause", handlers);
+    expect(handlers.pauseResume).toHaveBeenCalledTimes(1);
+    expect(handlers.play).not.toHaveBeenCalled();
   });
 });

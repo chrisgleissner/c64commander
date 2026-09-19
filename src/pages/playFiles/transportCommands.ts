@@ -29,5 +29,10 @@ export const runTransportCommand = (command: TransportCommand, handlers: Transpo
     // playing" rule made a headset or lock-screen Play a no-op exactly when the user meant resume.
     if (handlers.isPaused) handlers.pauseResume();
     else if (!handlers.isPlaying) handlers.play();
+  } else if (!handlers.isPlaying && !handlers.isPaused) {
+    // Play/Pause with nothing playing means start, the way a media key always has. It fell straight
+    // through to pauseResume, which on an idle session does nothing: pressing the handset's F1 key
+    // on Home navigated to Play and left the user looking at a stopped transport.
+    handlers.play();
   } else handlers.pauseResume();
 };

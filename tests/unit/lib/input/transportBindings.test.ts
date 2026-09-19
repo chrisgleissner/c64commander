@@ -26,6 +26,26 @@ describe("transport bindings", () => {
   });
 
   /*
+   * How the handset actually sends these. Measured on the rig: F1, F2 and F3 reach the WebView as
+   * `{key:"F1", code:"", keyCode:112}` and so on. The helper above sets `key` and `code` to the
+   * same string, so it matched a `code` binding and a `key` binding alike and could not tell that
+   * neither transport shortcut fired on the device.
+   */
+  it("resolves the transport keys as the handset sends them, with no code", () => {
+    const fromHandset = (key: string, keyCode: number) => ({
+      key,
+      code: "",
+      keyCode,
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+    });
+
+    expect(findBinding(keypadProfile, fromHandset("F1", 112))?.action).toBe("mediaPlayPause");
+    expect(findBinding(keypadProfile, fromHandset("F3", 114))?.action).toBe("mediaNext");
+  });
+
+  /*
    * The desktop profile still declares its own F1 and F3, but nothing selects it: the app mounts
    * FocusNavigationProvider once with profileId="keypad" and has no runtime selector, so the
    * keypad profile shadows both everywhere. This asserted the declaration and was read as proving
