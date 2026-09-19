@@ -168,3 +168,37 @@ it is applying, and the only way to decline it is the dialog raised when the fil
 (`resolveUnavailableConfigDecision`). There is no control that declines an apply which is merely
 slow, so the user waits out the eighteen seconds or the ninety-second deadline. That is a gap, and
 it is recorded as read rather than measured.
+
+## The hardware merge gate
+
+Run on `c64u` with the branch's APK, at native geometry, phone volume 3 of 25.
+
+| Stage | Branch | Same stage on `main` |
+| ----- | ------ | -------------------- |
+| preflight | pass — device 1, route /, mirror off | pass |
+| input | pass — held direction moved 9 cells, 20 rotation checks | not re-run |
+| search-latency | pass — 120 samples, p50 20.1 ms, p95 32.8 ms | not re-run |
+| wire | pass — sender loss 0%, inter-arrival p99 4.11 ms | not re-run |
+| av-clarity | fail — 0 tone bursts found | **fail, identically** — 0 tone bursts found |
+| av-latency | fail — microphone and wire correlate 0 | not re-run; see below |
+| sid-remote | fail — tone in 3.5% of windows, "an empty room" | **fail, identically** — 2.5% of windows |
+| sid-local | fail — longest dropout 150 ms | **pass** — 99.5% present, longest gap 50 ms |
+| crossfade | pass — join graded "SEAMLESS CROSSFADE" | not re-run |
+
+`crossfade` passing and `sid-local` producing a measurement at all are what rule out a dead
+microphone or a silent phone: both grade sound in the room. The three stages that fail are the
+three that need the **Ultimate's mirror** to reach the phone's speaker, and two of them fail exactly
+the same way on `main`, so they are not this branch. `av-latency` was not re-run on `main`; its
+failure is "the microphone and the wire barely correlate (0)", which is the same condition as the
+other two — no mirror audio at the speaker — and that is an inference rather than a measurement.
+
+`sid-local` needed settling, because it passed on `main` and failed on the branch, and a local
+playback regression is exactly what this gate exists to catch. Re-run on the branch alone it passes:
+
+| Branch run | Result |
+| ---------- | ------ |
+| 1 | pass — tone present 100.0%, -21.9 cents, longest gap **0 ms** |
+| 2 | pass — tone present 100.0%, -5.1 cents, longest gap **0 ms** |
+
+Both are better than the `main` run they were compared against, so the 150 ms dropout was the rig
+under a full back-to-back audio gate, not the branch.
