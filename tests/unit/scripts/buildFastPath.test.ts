@@ -70,38 +70,49 @@ afterEach(() => {
 });
 
 describe("build fast path helper", () => {
-  it("returns the debug saved device bootstrap json in the requested order", () => {
-    const rawBootstrap = execFileSync(
-      "bash",
-      ["-lc", `source ${JSON.stringify(helperPath)}\nbuild_debug_saved_devices_bootstrap_json`],
-      {
-        cwd: path.resolve("."),
-        encoding: "utf8",
-      },
+  const bootstrap = (env: NodeJS.ProcessEnv = {}) =>
+    execFileSync("bash", ["-lc", `source ${JSON.stringify(helperPath)}\nbuild_debug_saved_devices_bootstrap_json`], {
+      cwd: path.resolve("."),
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+    });
+
+  it("resolves each debug saved device name through the host database", () => {
+    const devices = JSON.parse(bootstrap({ BUILD_DEBUG_SAVED_DEVICE_NAMES: "localhost" }));
+
+    expect(devices).toHaveLength(1);
+    expect(devices[0]).toMatchObject({
+      id: "debug-localhost",
+      name: "localhost",
+      nameSource: "USER",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    const resolved = execFileSync("bash", ["-lc", "getent hosts localhost | head -n 1 | awk '{print $1}'"], {
+      encoding: "utf8",
+    }).trim();
+    expect(devices[0].host).toBe(resolved);
+  });
+
+  it("leaves out a name the host database does not answer for", () => {
+    const devices = JSON.parse(
+      bootstrap({ BUILD_DEBUG_SAVED_DEVICE_NAMES: "localhost build-fast-path-no-such-host.invalid" }),
     );
 
-    expect(JSON.parse(rawBootstrap)).toEqual([
-      {
-        id: "debug-u64",
-        name: "u64",
-        nameSource: "USER",
-        host: "192.168.1.13",
-        httpPort: 80,
-        ftpPort: 21,
-        telnetPort: 23,
-        hasPassword: false,
-      },
-      {
-        id: "debug-c64u",
-        name: "c64u",
-        nameSource: "USER",
-        host: "192.168.1.167",
-        httpPort: 80,
-        ftpPort: 21,
-        telnetPort: 23,
-        hasPassword: false,
-      },
-    ]);
+    expect(devices.map((device: { name: string }) => device.name)).toEqual(["localhost"]);
+  });
+
+  it("injects nothing when the name list is empty", () => {
+    expect(JSON.parse(bootstrap({ BUILD_DEBUG_SAVED_DEVICE_NAMES: "" }))).toEqual([]);
+  });
+
+  it("bakes in no fixed device address", () => {
+    const raw = bootstrap();
+
+    expect(raw).not.toContain("192.168.1.13");
+    expect(raw).not.toContain("192.168.1.167");
   });
 
   it("marks only helper-injected debug saved devices for test cleanup", () => {

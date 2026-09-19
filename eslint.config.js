@@ -18,6 +18,10 @@ export default tseslint.config(
       "coverage/**",
       "playwright-report/**",
       ".worktrees/**",
+      // Agent worktrees live here and carry their own node_modules, build output and
+      // vendored engine. Linting them reports on another checkout, and it does: 17 errors
+      // from vendored .d.ts files failed `npx eslint .` with nothing wrong in this tree.
+      ".claude/worktrees/**",
       // The libsidplayfp engine synced out of the npm package by
       // scripts/sync-libsidplayfp-wasm.mjs. Vendored build output, gitignored and never written by
       // hand, so linting it only reports on someone else's code — and it does: the package's

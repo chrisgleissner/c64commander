@@ -438,6 +438,22 @@ resolve_apk_gradle_task() {
   esac
 }
 
+# The APK's basename and the package to launch both come from the variant that was generated for
+# this build. Hardcoding "c64commander" made --install-apk fail with "APK not found" after a full
+# build of any other variant, and made it launch the wrong edition when an APK happened to match.
+read_variant_field() {
+  node -e 'const v=require(process.argv[1]);const p=process.argv[2].split(".");let c=v.variant;for(const k of p)c=c&&c[k];if(!c){process.exit(1)}process.stdout.write(String(c))' \
+    "$ROOT_DIR/src/generated/variant.json" "$1" 2>/dev/null
+}
+
+resolve_apk_basename() {
+  read_variant_field "exportedFileBasename" || echo "c64commander"
+}
+
+resolve_android_application_id() {
+  read_variant_field "platform.android.applicationId" || echo "uk.gleissner.c64commander"
+}
+
 resolve_apk_default_path() {
   local variant="$1"
   local suffix=""
@@ -454,7 +470,7 @@ resolve_apk_default_path() {
       ;;
   esac
 
-  echo "$ROOT_DIR/android/app/build/outputs/apk/${variant}/c64commander-${VITE_APP_VERSION:-unknown}${suffix}.apk"
+  echo "$ROOT_DIR/android/app/build/outputs/apk/${variant}/$(resolve_apk_basename)-${VITE_APP_VERSION:-unknown}${suffix}.apk"
 }
 
 is_local_port_in_use() {
@@ -1738,9 +1754,6 @@ fi
 if [[ -n "${VITE_APP_VERSION:-}" && -z "${VERSION_NAME:-}" ]]; then
   export VERSION_NAME="$VITE_APP_VERSION"
 fi
-if [[ -z "$APK_DEFAULT" ]]; then
-  APK_DEFAULT="$(resolve_apk_default_path "$APK_VARIANT")"
-fi
 
 if [[ "$RECORD_TRACES" == "true" ]]; then
   export RECORD_TRACES=1
@@ -1963,6 +1976,9 @@ if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "
   else
     MAESTRO_MODE="tags"
   fi
+  if [[ -z "$APK_DEFAULT" ]]; then
+    APK_DEFAULT="$(resolve_apk_default_path "$APK_VARIANT")"
+  fi
   MAESTRO_APK_PATH="${TEST_APK_PATH:-$APK_DEFAULT}"
   MAESTRO_ARGS=(--mode "$MAESTRO_MODE" --apk-path "$MAESTRO_APK_PATH" --c64u-target "$C64U_TARGET" --c64u-host "$C64U_HOST")
   if [[ -n "$TEST_DEVICE_ID" ]]; then
@@ -2000,6 +2016,11 @@ fi
 
 if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   require_cmd adb
+  # Resolved here rather than before the build: `variant:generate` runs as part of the build, so
+  # the variant metadata the name comes from is only correct once the build has finished.
+  if [[ -z "$APK_DEFAULT" ]]; then
+    APK_DEFAULT="$(resolve_apk_default_path "$APK_VARIANT")"
+  fi
   APK_PATH="${APK_PATH:-$APK_DEFAULT}"
 
   if [[ ! -f "$APK_PATH" ]]; then
@@ -2013,7 +2034,7 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   adb -s "$DEVICE_ID" install -r "$APK_PATH"
 
   log "Launching app"
-  adb -s "$DEVICE_ID" shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
+  adb -s "$DEVICE_ID" shell monkey -p "$(resolve_android_application_id)" -c android.intent.category.LAUNCHER 1
 fi
 
 # Mandatory Pixel-4 -> Ultimate-64 Live View HIL gate (spec §14.5), run on the LOCAL build (this

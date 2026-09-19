@@ -8,10 +8,28 @@ build_fast_local_apk_install_enabled() {
   [[ "$primary_action" == "build" && "$skip_tests" == "true" && "$install_apk" == "true" ]]
 }
 
+# The devices a fresh debug install starts with.
+#
+# These were two hardcoded addresses. Both went wrong on this bench: one of them named a machine
+# another agent had reserved, so every debug install pointed the app at it, and the other had not
+# been the C64 Ultimate's address for weeks, so the app started on a host that answers nothing.
+# The names are resolved through /etc/hosts at build time instead, and a name that does not resolve
+# is left out rather than baked in as a stale address. BUILD_DEBUG_SAVED_DEVICE_NAMES overrides the
+# list; an empty value injects nothing at all.
 build_debug_saved_devices_bootstrap_json() {
-  cat <<'EOF'
-[{"id":"debug-u64","name":"u64","nameSource":"USER","host":"192.168.1.13","httpPort":80,"ftpPort":21,"telnetPort":23,"hasPassword":false},{"id":"debug-c64u","name":"c64u","nameSource":"USER","host":"192.168.1.167","httpPort":80,"ftpPort":21,"telnetPort":23,"hasPassword":false}]
-EOF
+  local names="${BUILD_DEBUG_SAVED_DEVICE_NAMES-c64u u2}"
+  local entries=()
+  local name address
+  for name in $names; do
+    # IPv4 first: the app builds "http://<host>/" by concatenation, and a bare IPv6 address is not
+    # a valid host there. Falls back to whatever resolved when there is no IPv4 answer.
+    address="$(getent hosts "$name" 2>/dev/null | awk '$1 ~ /^[0-9]+(\.[0-9]+){3}$/ {print $1; exit}')"
+    [[ -n "$address" ]] || address="$(getent hosts "$name" 2>/dev/null | awk 'NR==1{print $1}')"
+    [[ -n "$address" ]] || continue
+    entries+=("{\"id\":\"debug-${name}\",\"name\":\"${name}\",\"nameSource\":\"USER\",\"host\":\"${address}\",\"httpPort\":80,\"ftpPort\":21,\"telnetPort\":23,\"hasPassword\":false}")
+  done
+  local IFS=,
+  echo "[${entries[*]}]"
 }
 
 should_unset_helper_debug_saved_devices_for_tests() {
