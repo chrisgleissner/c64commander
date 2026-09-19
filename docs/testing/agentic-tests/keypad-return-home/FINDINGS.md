@@ -73,3 +73,29 @@ the numbers above are tight enough across five that more of them would not have 
 A cold ten-minute arrival was measured separately, once, with the same result: "Offline, device not
 reachable" 322 ms after the app appeared, with the radio still off so that the only correct answer
 was that one.
+
+### S6 — what each control costs from an arrival
+
+Measured by walking the ring on the handset and counting presses, with the machine's own memory as
+the witness for the ones that reach it.
+
+| Control | Shortest keypad path | Presses | Proof |
+| ------- | -------------------- | ------- | ----- |
+| Reset the machine | Down x3, OK, Left x2, OK, OK on the dialog's Confirm | 8 | A sentinel written into screen RAM at `$0400` was gone 537 ms after the final press, with `READY.` back at `$042A` |
+| Pause the machine | Down x3, OK, Left x5, OK | 10 | — |
+| Start the current tune | F1 | 1 | After the fix below; before it, the key did nothing |
+
+The arrival criterion is three presses to the first control that reaches the machine, and the S6
+criterion is five for any of them. Reset at eight and Pause at ten are both over. The transport key
+is the one that meets it, and it did not work at all until this branch: see
+`defects/S6-TRANSPORT-SHORTCUT-NEVER-FIRES.md`.
+
+Two of the four controls the scenario names were not measured. "Type a line on the C64 keyboard"
+and "change the volume" need their own ring walks on the Remote Input and Play pages, and the
+session ran out of rig time before them. They are not asserted either way here.
+
+The probe written for this, `tools/hil/arrival_probe.mjs`, searches for the control rather than
+replaying a path, so its press count is the cost of a search and not the cost of the shortest path:
+it reported 19 and then 22 presses for Pause, against the 10 a user takes, and failed to find it at
+all on two of five arrivals. It is useful as an upper bound and as a way to prove the press reached
+the machine, and it is not the instrument for the press counts above.
