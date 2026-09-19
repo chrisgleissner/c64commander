@@ -21,3 +21,25 @@ been pointing debug installs at it.
 | 7 | Delegated | The scheduled fuzz overran its job cap on five consecutive nights. The budget bounded only the shard loop; the overrun was in the report merge, which the first fix left unbounded | Run 35418281403: 8905 s against a 7200 s budget, with the sibling job's build measured at 25 s | Fixed; see `fuzz-deadline-review.md` |
 | 8 | Harness | `keypad_reachability.mjs` searched for each card from wherever the ring had stopped, re-walking the whole ring per card. Home never finished in 30 minutes | Visible on the handset as the same Quick Actions grid scrolling repeatedly; one forward pass finishes Home in about 90 s | Fixed |
 | 9 | Harness | The sweep reported five cards on Home as not scrolled into view, and counted three buttons as both reached and unreachable | It graded against the raw viewport rather than the 231 px the app leaves between its bars, and identified id-less controls by their viewport top | Fixed; none of the five is a product defect |
+
+## Scenario results
+
+### S2 — departure with playback running
+
+Tone-Low started from the playlist, the radio taken away mid-tune, sixty seconds, radio back.
+
+- The badge read "Offline, device not reachable" within 10 s of the radio going, in the words a
+  non-expert reads as an answer.
+- The Play page was not disabled: of every transport, playlist and volume control on it, only
+  `playlist-reshuffle` was disabled, and that is a two-item playlist with shuffle off, not the
+  outage.
+- Playback continued throughout — elapsed 0:46 at the moment the radio went and 1:46 a minute
+  later. `dumpsys audio` shows the app's own `AudioTrack` `state:started` at 48 kHz, so the tune
+  was being rendered on the phone, which is why it survived.
+- The badge read "Connected to c64u, system healthy" again 8 s after the radio returned.
+- Nothing was left sending: `239.0.1.65` carried 1000 packets from `192.168.1.146` in 4 s while
+  the mirror was up before the outage, and none at all after the reconnection. The audio mirror is
+  deliberately not restored while the phone is playing the tune itself; the machine's audio comes
+  back with the next track.
+
+Pass.
