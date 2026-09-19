@@ -16,7 +16,13 @@ import {
   resolveMergedSessionArtifactPath,
   resolveMergedShardArtifactPath,
 } from './fuzzArtifactMergeUtils.mjs';
+import {
+  planFuzzDeadline,
+  formatRemaining,
+  shouldStartWork,
+} from './fuzzDeadline.mjs';
 
+const runStartedAtMs = Date.now();
 const args = process.argv.slice(2);
 
 const parseArg = (name) => {
@@ -76,7 +82,8 @@ const progressTimeoutMs = parseDurationMs(progressTimeout);
 if (progressTimeoutMs) env.FUZZ_PROGRESS_TIMEOUT_MS = String(progressTimeoutMs);
 
 const budgetMs = parseDurationMs(timeBudget) ?? 5 * 60 * 1000;
-if (budgetMs) env.FUZZ_TIME_BUDGET_MS = String(budgetMs);
+// FUZZ_TIME_BUDGET_MS is the shard budget, not the run budget: it is set below,
+// once the build has been charged against the run deadline.
 
 const isCiRun = (env.FUZZ_RUN_MODE || runMode || '').toLowerCase() === 'ci';
 const isFiveMinuteOrLessBudget = budgetMs <= 5 * 60 * 1000;
@@ -640,11 +647,12 @@ const mergeReports = async () => {
         }
       }
     } catch (error) {
-      if (isMissingFileError(error)) {
-        continue;
+      // A shard stopped at the deadline never writes its own report. Keep going
+      // so its completed sessions and videos still reach the merged output.
+      if (!isMissingFileError(error)) {
+        console.error(`Failed to read fuzz report for shard ${shard}:`, error);
+        parseErrors += 1;
       }
-      console.error(`Failed to read fuzz report for shard ${shard}:`, error);
-      parseErrors += 1;
     }
 
     try {
@@ -729,11 +737,15 @@ const mergeReports = async () => {
           `shard-${shard}-`,
         );
       } catch (error) {
-        console.error(
-          `Failed to copy session/video artifacts for shard ${shard}:`,
-          error,
-        );
-        parseErrors += 1;
+        // A shard that never started leaves no directories to copy; that is
+        // already reported through its missing report and metrics.
+        if (!isMissingFileError(error)) {
+          console.error(
+            `Failed to copy session/video artifacts for shard ${shard}:`,
+            error,
+          );
+          parseErrors += 1;
+        }
       }
     }
   }
@@ -1453,6 +1465,31 @@ if (process.env.PLAYWRIGHT_SKIP_BUILD !== '1') {
   env.PLAYWRIGHT_SKIP_BUILD = '1';
 }
 
+const deadlinePlan = planFuzzDeadline({
+  budgetMs,
+  startedAtMs: runStartedAtMs,
+  nowMs: Date.now(),
+});
+env.FUZZ_TIME_BUDGET_MS = String(deadlinePlan.shardBudgetMs);
+console.log(
+  `[fuzz] run budget ${budgetMs}ms; setup took ${deadlinePlan.elapsedMs}ms; ` +
+    `shards get ${deadlinePlan.shardBudgetMs}ms; ${deadlinePlan.reserveMs}ms ` +
+    'reserved for teardown and artifact validation.',
+);
+
+const runningShards = new Set();
+let stopReason = null;
+
+const stopAllShards = (reason) => {
+  if (stopReason) return;
+  stopReason = reason;
+  console.error(`[fuzz] stopping shards: ${reason}`);
+  for (const child of runningShards) child.kill('SIGTERM');
+  setTimeout(() => {
+    for (const child of runningShards) child.kill('SIGKILL');
+  }, 20_000).unref();
+};
+
 const runShard = (index) =>
   new Promise((resolve) => {
     const shardEnv = {
@@ -1490,10 +1527,13 @@ const runShard = (index) =>
       stdio: 'inherit',
       env: shardEnv,
     });
+    runningShards.add(child);
+    if (stopReason) child.kill('SIGTERM');
     let settled = false;
     const finish = (code) => {
       if (settled) return;
       settled = true;
+      runningShards.delete(child);
       resolve(code ?? 1);
     };
     child.on('error', (error) => {
@@ -1503,9 +1543,35 @@ const runShard = (index) =>
     child.on('exit', (code) => finish(code));
   });
 
-const exitCodes = await Promise.all(
-  Array.from({ length: concurrency }, (_, index) => runShard(index)),
+const watchdog = setTimeout(
+  () => stopAllShards('run time budget exhausted'),
+  Math.max(0, deadlinePlan.shardHardStopMs - Date.now()),
 );
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => stopAllShards(`received ${signal}`));
+}
+
+// An exhausted budget starts no shards at all, and the run goes straight to
+// merging so the report still covers whatever earlier work completed.
+if (deadlinePlan.expired) {
+  console.error('[fuzz] time budget exhausted before any shard could start');
+  stopReason = 'run time budget exhausted';
+}
+const exitCodes = deadlinePlan.expired
+  ? []
+  : await Promise.all(
+      Array.from({ length: concurrency }, (_, index) => runShard(index)),
+    );
+clearTimeout(watchdog);
+
+if (shouldStartWork(deadlinePlan.deadlineMs, Date.now())) {
+  console.log(
+    `[fuzz] shards finished with ${formatRemaining(deadlinePlan.deadlineMs, Date.now())} left for reporting`,
+  );
+} else {
+  console.error('[fuzz] deadline reached; reporting on completed sessions only');
+}
+
 const { parseErrors } = await mergeReports();
-const failed = exitCodes.find((code) => code !== 0);
+const failed = stopReason ? 1 : exitCodes.find((code) => code !== 0);
 process.exit(failed ?? (parseErrors > 0 ? 1 : 0));

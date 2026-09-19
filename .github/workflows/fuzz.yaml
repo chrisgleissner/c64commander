@@ -277,6 +277,9 @@ jobs:
           VITE_FUZZ_MODE: "1"
         run: |
           SEED=${{ inputs.seed || github.run_id }}
+          # The budget is a deadline for the whole run: fuzzing, teardown, merge
+          # and report writing. 2h + ~106s setup + ~20s upload leaves ~28min
+          # under the 150min job cap.
           if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
             TIME_BUDGET="2h"
           else
