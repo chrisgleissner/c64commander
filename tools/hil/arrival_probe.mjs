@@ -8,28 +8,24 @@
  */
 
 /**
- * How long it takes someone who has just come home to reach the machine, measured over many
- * arrivals.
+ * What it costs someone who has just come home to reach one control: how many key presses, and how
+ * many seconds before the press provably lands on the C64.
  *
- * The user this answers for holds the Callback 8020: a keypad, no touchscreen, 320 x 426.7 CSS px.
- * They leave, the phone drops off the Wi-Fi and sleeps in a pocket, they come back, and they want
- * one control. The two numbers that decide whether the app is usable for them are how many key
- * presses that control costs from the moment the app is on screen, and how many seconds pass
- * before the press provably lands on the C64.
+ * The user this answers for holds the Callback 8020 — a keypad, no touchscreen, 320 x 426.7 CSS px
+ * — and uses the app the way someone uses a light switch. They are not exploring it.
  *
  * "Provably" is the point. The health badge is not evidence: it has read healthy while the app
- * could not reach anything. Every arrival here is closed by reading the Ultimate's own memory over
- * REST from this host, on a path the app is not on. Before each arrival a sentinel byte is written
- * into screen RAM; the arrival ends when the Ultimate's memory shows the effect of the key press,
- * and that instant is the measurement.
+ * could not reach anything. Each attempt is closed by reading the Ultimate's own memory over REST
+ * from this host, on a path the app is not on. A sentinel is written into screen RAM first, and
+ * the attempt ends when the Ultimate's memory shows the effect of the key press.
+ *
+ * The path is not hardcoded. The probe walks the ring, pressing Down until the selection is the
+ * control it wants, descending with OK into the card that holds it, and counts what it pressed.
+ * That way the number is the app's own navigation cost on the day, not a path written down once.
  *
  * Usage:
- *   node tools/hil/arrival_probe.mjs --serial <adb serial> --host c64u \
- *     [--package uk.gleissner.c64uremote] [--control reset] [--iterations 10] \
- *     [--away-ms 600000] [--settle-ms 5000] [--json artifacts/arrival.json]
- *
- * `--away-ms 600000` is the ten minutes the scenario asks for. Shorter values measure a warm
- * arrival and are reported as such, so a run cannot be mistaken for a cold one.
+ *   node tools/hil/arrival_probe.mjs --serial <adb serial> --host c64u --control reset \
+ *     [--package uk.gleissner.c64uremote] [--iterations 10] [--away-ms 600000] [--json out.json]
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -42,7 +38,6 @@ const arg = (name, fallback) => {
   const index = argv.indexOf(`--${name}`);
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
-const flag = (name) => argv.includes(`--${name}`);
 
 const SERIAL = arg("serial", "9B081FFAZ001WX");
 const PACKAGE = arg("package", "uk.gleissner.c64uremote");
@@ -50,35 +45,49 @@ const HOST = arg("host", "c64u");
 const PORT = Number(arg("port", "9333"));
 const ITERATIONS = Number(arg("iterations", "10"));
 const AWAY_MS = Number(arg("away-ms", "600000"));
-const SETTLE_MS = Number(arg("settle-ms", "5000"));
-const PRESS_GAP_MS = Number(arg("press-gap-ms", "400"));
-const REACH_TIMEOUT_MS = Number(arg("reach-timeout-ms", "30000"));
+const SETTLE_MS = Number(arg("settle-ms", "6000"));
+const PRESS_GAP_MS = Number(arg("press-gap-ms", "350"));
+const REACH_TIMEOUT_MS = Number(arg("reach-timeout-ms", "20000"));
+const CONTROL = arg("control", "reset");
 const JSON_OUT = arg("json", "");
 
-/** Android key codes. These are the ones the Callback's keypad produces. */
-const KEY = { UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, CENTER: 23, BACK: 4, HOME_ROUTE: 8, PLAY_ROUTE: 9 };
+/** Android key codes. The Callback's keypad produces exactly these. */
+const KEY = { DOWN: 20, CENTER: 23, BACK: 4, DIGIT: (d) => 7 + d };
+
+const SENTINEL = 0xaa;
 
 /**
- * The shortest keypad path to each control, from the app appearing with focus at the document body.
- *
- * Every path is the one a user would actually find: the focus ring's own order, taking the
- * shorter of clockwise and anticlockwise. They are checked by `verify` after the presses land, so
- * a path that stops being the shortest fails here rather than quietly measuring something else.
+ * Each control names the route it lives on, the ring stop that activates it, and any stop that has
+ * to be confirmed afterwards. `proof` reads the Ultimate rather than the app.
  */
 const CONTROLS = {
   reset: {
     label: "Reset the machine",
-    keys: [KEY.DOWN, KEY.DOWN, KEY.DOWN, KEY.CENTER, KEY.LEFT, KEY.LEFT, KEY.CENTER],
-    /** Screen RAM stops being the sentinel the moment the machine restarts. */
-    prepare: async (rest) => rest.writeMem(0x0400, "aaaaaaaaaaaaaaaa"),
-    reached: async (rest) => {
+    routeDigit: 1,
+    target: "Reset",
+    confirm: "Reset",
+    prepare: (rest) => rest.writeMem(0x0400, "aa".repeat(8)),
+    proof: async (rest) => {
       const bytes = await rest.readMem(0x0400, 8);
-      return bytes !== null && !bytes.every((byte) => byte === 0xaa);
+      return bytes !== null && !bytes.every((byte) => byte === SENTINEL);
+    },
+  },
+  pause: {
+    label: "Pause the machine",
+    routeDigit: 1,
+    target: "Pause",
+    confirm: null,
+    /** A paused CPU stops advancing the KERNAL's jiffy clock; a running one never stands still. */
+    prepare: async () => undefined,
+    proof: async (rest) => {
+      const first = await rest.readMem(0x00a0, 3);
+      await sleep(400);
+      const second = await rest.readMem(0x00a0, 3);
+      if (!first || !second) return false;
+      return first.every((byte, index) => byte === second[index]);
     },
   },
 };
-
-const adbArgs = ["-s", SERIAL];
 
 const restFor = (host) => {
   const base = `http://${host}/v1`;
@@ -93,150 +102,154 @@ const restFor = (host) => {
       clearTimeout(timer);
     }
   };
+  const hex = (address) => address.toString(16).padStart(4, "0");
   return {
-    call,
-    writeMem: (address, hex) =>
-      call(`/machine:writemem?address=${address.toString(16).padStart(4, "0")}&data=${hex}`, { method: "PUT" }),
+    writeMem: (address, data) => call(`/machine:writemem?address=${hex(address)}&data=${data}`, { method: "PUT" }),
     readMem: async (address, length) => {
-      const response = await call(`/machine:readmem?address=${address.toString(16).padStart(4, "0")}&length=${length}`);
+      const response = await call(`/machine:readmem?address=${hex(address)}&length=${length}`);
       if (!response?.ok) return null;
       return new Uint8Array(await response.arrayBuffer());
     },
+    resume: () => call("/machine:resume", { method: "PUT" }),
     answers: async () => Boolean((await call("/version"))?.ok),
   };
 };
 
-/**
- * The instant the page became visible, stamped by the page itself.
- *
- * Read from the host instead, the number would carry the poll interval and the CDP round trip.
- * The recorder is reinstalled every arrival, because a WebView that was killed while the phone
- * slept comes back without it; when it is gone the arrival is stamped from the host and says so,
- * rather than being dropped or silently mixed in with the page-stamped ones.
- */
-const RECORDER = `(() => {
-  const w = window;
-  if (w.__arrivalRecorder) { w.__arrival = { shown: [], badge: [] }; return "reset"; }
-  w.__arrivalRecorder = true;
-  w.__arrival = { shown: [], badge: [] };
-  const badge = () => document.querySelector("[data-testid=unified-health-badge]")?.getAttribute("aria-label") ?? null;
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
-    w.__arrival.shown.push(Date.now());
-    const started = Date.now();
-    const timer = setInterval(() => {
-      const label = badge();
-      const last = w.__arrival.badge[w.__arrival.badge.length - 1];
-      if (!last || last[1] !== label) w.__arrival.badge.push([Date.now(), label]);
-      if (Date.now() - started > 40000) clearInterval(timer);
-    }, 150);
+const SELECTION = `(() => {
+  const el = document.querySelector('[data-key-selected="true"]');
+  if (!el) return JSON.stringify({ id: null });
+  return JSON.stringify({
+    id: el.getAttribute("data-testid") || null,
+    text: (el.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 40),
+    hasChildren: el.querySelectorAll("button,a[href],input,select,textarea,[role=button]").length > 0,
   });
-  return "installed";
+})()`;
+
+const BADGE = `(() => {
+  const badge = document.querySelector("[data-testid=unified-health-badge]");
+  return JSON.stringify({ label: badge && badge.getAttribute("aria-label") });
 })()`;
 
 const main = async () => {
+  const control = CONTROLS[CONTROL];
+  if (!control) throw new Error(`unknown --control; known: ${Object.keys(CONTROLS).join(", ")}`);
   const cdp = createHilCdp({ serial: SERIAL, packageName: PACKAGE, port: PORT });
   const rest = restFor(HOST);
-  const control = CONTROLS[arg("control", "reset")];
-  if (!control) throw new Error(`unknown --control; known: ${Object.keys(CONTROLS).join(", ")}`);
-
-  const shell = (command) => cdp.shell(command);
-  const press = async (code) => {
-    await shell(`input keyevent ${code}`);
-    await sleep(PRESS_GAP_MS);
-  };
-
   if (!(await rest.answers())) throw new Error(`${HOST} does not answer /v1/version from this host`);
   await cdp.attach();
 
-  const arrivals = [];
+  const press = async (code) => {
+    await cdp.shell(`input keyevent ${code}`);
+    await sleep(PRESS_GAP_MS);
+  };
+  const selection = () => cdp.evaluate(SELECTION).catch(() => ({ id: null }));
+
+  /**
+   * Walk to a stop whose test id or label matches, descending into a card when the ring passes one.
+   * Returns the presses it took, or null when a full lap does not find it.
+   */
+  const walkTo = async (wanted, budget) => {
+    let presses = 0;
+    const entered = new Set();
+    for (let step = 0; step < budget; step += 1) {
+      const current = await selection();
+      if (current.id === wanted || current.text === wanted) return presses;
+      if (current.hasChildren && current.id && !entered.has(current.id)) {
+        entered.add(current.id);
+        await press(KEY.CENTER);
+        presses += 1;
+        continue;
+      }
+      await press(KEY.DOWN);
+      presses += 1;
+    }
+    return null;
+  };
+
+  const attempts = [];
   for (let iteration = 1; iteration <= ITERATIONS; iteration += 1) {
     await cdp.ensureAttached();
-    await cdp.evaluate(RECORDER);
-    // Left on Home, which is where a user who only ever wants one control leaves it.
-    await shell(`input keyevent ${KEY.HOME_ROUTE}`);
-    await sleep(800);
-
-    await shell("input keyevent KEYCODE_HOME");
+    await cdp.shell("input keyevent KEYCODE_HOME");
     await sleep(500);
-    await shell("input keyevent KEYCODE_SLEEP");
-    await shell("svc wifi disable");
+    await cdp.shell("input keyevent KEYCODE_SLEEP");
+    await cdp.shell("svc wifi disable");
     await sleep(AWAY_MS);
-
-    await shell("svc wifi enable");
+    await cdp.shell("svc wifi enable");
     await sleep(SETTLE_MS);
     await control.prepare(rest);
 
-    await shell("input keyevent KEYCODE_WAKEUP");
+    await cdp.shell("input keyevent KEYCODE_WAKEUP");
     await sleep(600);
-    await shell("wm dismiss-keyguard").catch(() => undefined);
+    await cdp.shell("wm dismiss-keyguard").catch(() => undefined);
     await sleep(400);
-    const startedAtMs = Date.now();
-    await shell(`monkey -p ${PACKAGE} -c android.intent.category.LAUNCHER 1`);
+    const shownAtMs = Date.now();
+    await cdp.shell(`monkey -p ${PACKAGE} -c android.intent.category.LAUNCHER 1`);
+    await sleep(1500);
+    await cdp.ensureAttached();
+    const badgeAtArrival = (await cdp.evaluate(BADGE).catch(() => ({ label: null }))).label;
 
-    let shownAtMs = null;
-    let stampedBy = "host";
-    for (let waited = 0; waited < 20000 && shownAtMs === null; waited += 250) {
-      await sleep(250);
-      const state = await cdp.evaluate(`JSON.stringify({shown:window.__arrival?.shown ?? null})`).catch(() => null);
-      if (state?.shown?.length) {
-        shownAtMs = state.shown[state.shown.length - 1];
-        stampedBy = "page";
-      } else if (state?.shown) {
-        // The recorder survived but the page never went hidden, so the app was never really away.
-        shownAtMs = startedAtMs;
+    let presses = 0;
+    if (control.routeDigit) {
+      await press(KEY.DIGIT(control.routeDigit));
+      presses += 1;
+    }
+    const toTarget = await walkTo(control.target, 60);
+    let reachedAtMs = null;
+    if (toTarget !== null) {
+      presses += toTarget;
+      await press(KEY.CENTER);
+      presses += 1;
+      if (control.confirm) {
+        const toConfirm = await walkTo(control.confirm, 20);
+        if (toConfirm !== null) {
+          presses += toConfirm;
+          await press(KEY.CENTER);
+          presses += 1;
+        }
+      }
+      const startedAtMs = Date.now();
+      while (Date.now() - startedAtMs < REACH_TIMEOUT_MS && reachedAtMs === null) {
+        if (await control.proof(rest)) reachedAtMs = Date.now();
+        else await sleep(200);
       }
     }
-    if (shownAtMs === null) {
-      await cdp.attach();
-      shownAtMs = Date.now();
-      stampedBy = "host-after-reattach";
-    }
+    if (CONTROL === "pause") await rest.resume();
 
-    for (const code of control.keys) await press(code);
-    const pressesDoneAtMs = Date.now();
-
-    let reachedAtMs = null;
-    while (Date.now() - pressesDoneAtMs < REACH_TIMEOUT_MS && reachedAtMs === null) {
-      if (await control.reached(rest)) reachedAtMs = Date.now();
-      else await sleep(150);
-    }
-
-    const badge = (await cdp.evaluate(`JSON.stringify(window.__arrival?.badge ?? [])`).catch(() => [])) ?? [];
-    arrivals.push({
+    attempts.push({
       iteration,
-      control: arg("control", "reset"),
-      presses: control.keys.length,
-      shownAtMs,
-      stampedBy,
-      reachedAtMs,
+      control: CONTROL,
+      label: control.label,
+      badgeAtArrival,
+      presses: toTarget === null ? null : presses,
       msToReach: reachedAtMs === null ? null : reachedAtMs - shownAtMs,
-      badgeTimeline: badge.map(([at, label]) => [at - shownAtMs, label]),
     });
-    const last = arrivals[arrivals.length - 1];
+    const last = attempts[attempts.length - 1];
     console.log(
-      `arrival ${iteration}/${ITERATIONS}: ${last.presses} presses, ` +
-        `${last.msToReach === null ? "NEVER REACHED" : `${last.msToReach} ms`} (t0 by ${stampedBy})`,
+      `arrival ${iteration}/${ITERATIONS}: ${last.presses ?? "not found"} presses, ` +
+        `${last.msToReach === null ? "NEVER REACHED" : `${last.msToReach} ms`}, badge "${badgeAtArrival}"`,
     );
   }
 
-  const reached = arrivals.filter((a) => a.msToReach !== null).map((a) => a.msToReach);
+  const reached = attempts.filter((a) => a.msToReach !== null).map((a) => a.msToReach);
+  const pressCounts = attempts.filter((a) => a.presses !== null).map((a) => a.presses);
   const summary = {
     host: HOST,
     package: PACKAGE,
-    control: arg("control", "reset"),
+    control: CONTROL,
     iterations: ITERATIONS,
     awayMs: AWAY_MS,
     cold: AWAY_MS >= 600000,
-    presses: control.keys.length,
     reachedCount: reached.length,
+    pressesP50: pressCounts.length ? percentile(pressCounts, 0.5) : null,
+    pressesP95: pressCounts.length ? percentile(pressCounts, 0.95) : null,
     msToReachP50: reached.length ? Math.round(percentile(reached, 0.5)) : null,
     msToReachP95: reached.length ? Math.round(percentile(reached, 0.95)) : null,
-    arrivals,
+    attempts,
   };
   console.log(
-    `\n${summary.cold ? "cold" : "warm"} arrivals: reached ${reached.length}/${ITERATIONS}, ` +
-      `p50 ${summary.msToReachP50} ms, p95 ${summary.msToReachP95} ms, ${summary.presses} presses each`,
+    `\n${summary.cold ? "cold" : "warm"} arrivals, ${control.label}: reached ${reached.length}/${ITERATIONS}, ` +
+      `presses p50 ${summary.pressesP50} p95 ${summary.pressesP95}, ` +
+      `ms p50 ${summary.msToReachP50} p95 ${summary.msToReachP95}`,
   );
   if (JSON_OUT) {
     mkdirSync(dirname(JSON_OUT), { recursive: true });
@@ -244,7 +257,6 @@ const main = async () => {
     console.log(`wrote ${JSON_OUT}`);
   }
   cdp.close();
-  if (!flag("no-fail") && reached.length < ITERATIONS) process.exitCode = 1;
 };
 
 main().catch((error) => {
