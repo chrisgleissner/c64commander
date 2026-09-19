@@ -325,7 +325,15 @@ describe("following the phone on and off its network", () => {
     expect(server.requests.length).toBe(requestsAfter);
   });
 
-  it("does nothing on return to the foreground while still connected, or while hidden", async () => {
+  /*
+   * This used to assert the opposite: that returning to the foreground while connected did
+   * nothing, and sent no request. Nothing probes the device while the state reads REAL_CONNECTED,
+   * so "does nothing" meant the app came back asserting a connection it had not checked since
+   * before the phone went into a pocket, and the badge said the machine was reachable when it was
+   * not. Coming back and checking is what the user needs, so the expectation changed, not the
+   * reading of it.
+   */
+  it("checks the connection again on return to the foreground, and stays connected when the device answers", async () => {
     const { manager } = await connect();
     const requestsBefore = server.requests.length;
     const visibility = vi.spyOn(document, "visibilityState", "get");
@@ -334,11 +342,42 @@ describe("following the phone on and off its network", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     visibility.mockReturnValue("visible");
     document.dispatchEvent(new Event("visibilitychange"));
-    await new Promise((resolve) => setTimeout(resolve, 100));
 
+    await vi.waitFor(() => expect(server.requests.length).toBeGreaterThan(requestsBefore), { timeout: 3000 });
     expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
-    expect(server.requests.length).toBe(requestsBefore);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().revalidating).toBe(false));
     visibility.mockRestore();
+  });
+
+  it("shows the device offline when it has stopped answering while the app was away", async () => {
+    const { manager } = await connect();
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+
+    visibility.mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    server.setFaultMode("refused");
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"), { timeout: 8000 });
+    visibility.mockRestore();
+  });
+
+  it("says it is checking rather than connected while the returning probe is in flight", async () => {
+    const { manager } = await connect();
+    const health = await import("../../../src/lib/diagnostics/healthModel");
+    const transitions = await import("../../../src/lib/connection/networkTransitions");
+
+    server.setFaultMode("refused");
+    const revalidation = transitions.revalidateConnectionOnResume();
+    const duringProbe = manager.getConnectionSnapshot();
+
+    expect(duringProbe.revalidating).toBe(true);
+    expect(health.deriveConnectivityState(duringProbe.state, false, duringProbe.revalidating)).toBe("Checking");
+    expect(health.getBadgeAriaLabel("Healthy", "Checking", 0, "C64 Ultimate", "c64u")).toBe("Connecting to c64u");
+
+    await revalidation;
+    expect(manager.getConnectionSnapshot().revalidating).toBe(false);
   });
 
   it("stops reconnecting once the device is connected again", async () => {

@@ -7,7 +7,9 @@
  */
 
 import {
+  beginConnectionRevalidation,
   discoverConnection,
+  endConnectionRevalidation,
   getConnectionSnapshot,
   noteDeviceUnreachable,
   probeOnce,
@@ -160,6 +162,26 @@ const handleNetworkEdge = (edge: "online" | "offline") => {
   void reconnectWhenNetworkReturns();
 };
 
+/**
+ * Check a connection the app has come back to, rather than carrying on asserting it. Nothing
+ * probes the device while the state reads REAL_CONNECTED — the background schedule stops there and
+ * only a failing request corrects it — so a phone that spent an hour in a pocket came back
+ * claiming the machine was reachable, and stayed wrong until the user pressed something that failed.
+ */
+export const revalidateConnectionOnResume = async () => {
+  if (!beginConnectionRevalidation()) return;
+  try {
+    if (isNetworkKnownOffline()) {
+      await showDeviceOffline("network-lost");
+      return;
+    }
+    if (await probeOnce()) return;
+    await confirmDeviceUnreachable();
+  } finally {
+    endConnectionRevalidation();
+  }
+};
+
 // A hidden WebView may not run the listener when the network changes, so the answer is read again on return.
 const handleVisibilityChange = () => {
   if (document.visibilityState !== "visible") return;
@@ -167,7 +189,9 @@ const handleVisibilityChange = () => {
     const { state } = getConnectionSnapshot();
     if (!isNetworkKnownOffline() && (state === "OFFLINE_NO_DEMO" || state === "DEMO_ACTIVE")) {
       void reconnectWhenNetworkReturns();
+      return;
     }
+    if (state === "REAL_CONNECTED") void revalidateConnectionOnResume();
   });
 };
 

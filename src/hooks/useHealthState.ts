@@ -194,6 +194,7 @@ export function useHealthState(): OverallHealthState {
     const connectivity = deriveConnectivityState(
       connectionSnapshot.state,
       connectionSnapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR,
+      connectionSnapshot.revalidating,
     );
     const host = getConfiguredHost();
     const hostScopedTraceEvents = filterTraceEventsForConfiguredHost(traceEvents, host);
