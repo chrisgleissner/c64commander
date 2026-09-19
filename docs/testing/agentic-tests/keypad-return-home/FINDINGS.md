@@ -92,9 +92,28 @@ criterion is five for any of them. Reset at eight and Pause at ten are both over
 is the one that meets it, and it did not work at all until this branch: see
 `defects/S6-TRANSPORT-SHORTCUT-NEVER-FIRES.md`.
 
-All four controls the scenario names are now measured, and every one of them is over the five-press
-bar: one at 1, then 8, 10 and 17. The transport key is the only one that meets it, and it did not
-work at all until this branch.
+All four were measured first on the branch as it stood, and every one but the transport key was
+over the five-press bar: 1, then 8, 10 and 17. That is the finding, and it was fixed rather than
+recorded: Home's Quick Actions grid stays exactly where it is, and the two machine controls this
+user comes home for now have a key of their own.
+
+| Control | Before | After | Proven at the machine |
+| ------- | ------ | ----- | --------------------- |
+| Start the current tune | never worked | **1** — F1 | elapsed ran 0:05 then 0:13, one AudioTrack started |
+| Pause / resume the machine | 10 | **1** — `8` | the C64's jiffy clock at `$00A0` stopped advancing, and a second press restarted it |
+| Reset the machine | 8 | **2** — `9`, then OK on the confirmation | a sentinel written to `$0400` was gone 718 ms after the second press, with the banner back |
+| Type a line on the C64 keyboard | 10 | 10 | pressing "2" wrote screen code `$32` at offset 241 |
+| Change the volume | 17 | 17 | the slider moved 24 to 21, `0 dB` to `-3 dB` |
+
+The reset takes two presses rather than three because the confirmation now opens on the action it
+is asking about. Radix focuses the dialog's content wrapper, which is not a control, so a keypad
+user pressed Down three times — past the close button and past Cancel — to reach the one thing the
+dialog exists to offer. Cancel is still one Down away and Back still closes it without running
+anything.
+
+Typing and the volume are still where they were. Both are further inside their pages than a single
+shortcut can reasonably reach, and neither is what this user opens the app for as often as the
+three above.
 
 The volume measured here is the app's own playback volume, which is what the Play page carries. The
 Ultimate's master volume is a Config item and was not walked; it is further away, not nearer.
