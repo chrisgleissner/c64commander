@@ -19,6 +19,7 @@ import {
 import {
   planFuzzDeadline,
   formatRemaining,
+  hasDeadlinePassed,
   shouldStartWork,
 } from './fuzzDeadline.mjs';
 
@@ -571,6 +572,16 @@ const mergeReports = async () => {
   const stagnationSessions = [];
   const stagnationViolations = [];
   const missingArtifacts = [];
+  // Per-session media analysis is what actually overran the budget: ffprobe, one extracted PNG per
+  // second of video, and a raw decode of every sampled frame. Once the run deadline has passed it
+  // is skipped for the remaining sessions and counted, so the reports are still written inside the
+  // budget rather than after it.
+  const mediaAnalysisSkipped = new Set();
+  const mediaAnalysisAllowed = (sessionId) => {
+    if (!hasDeadlinePassed(deadlinePlan.deadlineMs, Date.now())) return true;
+    mediaAnalysisSkipped.add(sessionId);
+    return false;
+  };
   const frameValidationViolations = [];
   const activityViolations = [];
   const screenshotQualityViolations = [];
@@ -1051,7 +1062,7 @@ const mergeReports = async () => {
         maxVisualStagnationMs: Number(parsed?.maxVisualStagnationMs || 0),
       });
 
-      if (finalScreenshotPath) {
+      if (finalScreenshotPath && mediaAnalysisAllowed(sessionId)) {
         const screenshotAbsolutePath = path.join(
           outputRoot,
           mergedScreenshotPath,
@@ -1176,6 +1187,8 @@ const mergeReports = async () => {
         });
       }
 
+      if (!mediaAnalysisAllowed(sessionId)) continue;
+
       const frameDir = path.join(outputRoot, '.frame-analysis', sessionId);
       await fs.rm(frameDir, { recursive: true, force: true });
       await fs.mkdir(frameDir, { recursive: true });
@@ -1285,8 +1298,14 @@ const mergeReports = async () => {
   }
 
   if (missingArtifacts.length > 0) {
+    // Name the deadline when that is why the artifacts are not there. Reporting a missing
+    // sessions directory sends the reader looking for a broken recorder instead of a run that
+    // was stopped.
+    const stoppedNote = stopReason
+      ? `The run was stopped before these were produced: ${stopReason}. `
+      : '';
     throw new Error(
-      `Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`,
+      `${stoppedNote}Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`,
     );
   }
   if (frameValidationViolations.length > 0) {
@@ -1304,6 +1323,12 @@ const mergeReports = async () => {
       `[fuzz] Video validation: excluded ${frameViolatedSessionIds.size} session(s) with frame violations.` +
         ` Continuing with ${qualifiedSessions.length} session(s) remaining.` +
         ` Violations: ${JSON.stringify(frameValidationViolations, null, 2)}`,
+    );
+  }
+  if (mediaAnalysisSkipped.size > 0) {
+    console.warn(
+      `[fuzz] Deadline reached during merge: skipped media analysis for ${mediaAnalysisSkipped.size} session(s).` +
+        ' Their sessions and videos are still in the report; their frames were not graded.',
     );
   }
   if (screenshotQualityViolations.length > 0) {
