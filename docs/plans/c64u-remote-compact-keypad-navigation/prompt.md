@@ -3,7 +3,8 @@
 ## Objective
 
 Fully implement the product interaction specification in
-`c64u-remote-compact-keypad-navigation.md` for the C64U Remote variant of C64 Commander.
+`docs/plans/c64u-remote-compact-keypad-navigation/spec.md` for the C64U Remote
+variant of C64 Commander.
 Treat that document as the target user-facing contract. Deliver the complete code,
 tests, documentation, generated artifacts, and focused device validation needed to
 make the specified keypad model real without weakening touchscreen operation.
@@ -29,7 +30,7 @@ Read these files completely, in this order:
 3. `AGENTS.md`
 4. `README.md`
 5. `docs/ux-guidelines.md`
-6. `c64u-remote-compact-keypad-navigation.md`
+6. `docs/plans/c64u-remote-compact-keypad-navigation/spec.md`
 7. `docs/keyboard-input.md`
 8. `docs/cta-inventory.md`
 9. `docs/manual/c64u-remote/c64u-remote-manual.md`
@@ -91,9 +92,9 @@ checks passed before they completed.
 ## Required implementation
 
 Implement the definitive mapping and behavior in
-`c64u-remote-compact-keypad-navigation.md`, including all deliberate unassigned and
-OS-reserved decisions. The following requirements are acceptance constraints, not
-optional suggestions.
+`docs/plans/c64u-remote-compact-keypad-navigation/spec.md`, including all deliberate
+unassigned and OS-reserved decisions. The following requirements are acceptance
+constraints, not optional suggestions.
 
 ### Central event ownership
 
