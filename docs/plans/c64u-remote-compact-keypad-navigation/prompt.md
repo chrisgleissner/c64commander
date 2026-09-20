@@ -117,7 +117,7 @@ not duplicate raw platform-key knowledge.
 
 Define repeat policy centrally:
 
-- ignore repeat for activation, Back, Menu, global shortcuts, playback commands,
+- ignore repeat for activation, Back, Menu, global shortcuts, one-shot app commands,
   mode changes, reset, and other one-shot actions;
 - allow repeat only for D-pad movement, list/slider adjustment, View panning or
   zooming, and text deletion where the specification permits it;
@@ -129,8 +129,10 @@ Implement the specified behavior for every D-pad direction, D-pad Centre/OK, bot
 soft keys, Send/Call, End Call, F1, Commodore C=, F3, digits `0`-`9`, Star, and
 Pound. In particular:
 
-- Left Soft Key is the semantic Back action and Right Soft Key is the semantic Menu
-  action when their emitted events can be mapped safely.
+- F1 and Left Soft Key invoke the labelled left action in app-owned contexts; F3
+  and Right Soft Key invoke the labelled right action. In normal navigation these
+  are Back and Menu. Preserve separate physical identities internally so blue
+  C64-control mode can relay physical F1/F3 without also relaying the soft keys.
 - D-pad Centre/OK and Send/Call share the semantic OK action; D-pad Centre/OK remains
   the tested fallback.
 - End Call has no application binding. Lifecycle/background handling must still
@@ -138,9 +140,9 @@ Pound. In particular:
 - normal-context shortcuts include `1`-`7`, `0`, Star, and Pound as documented in
   the specification, plus `8` for C64 pause/resume and `9` for a confirmation dialog
   before reset. A single press must never execute a destructive device action.
-- F1 and F3 are playback controls only where Playback is allowed by the context
-  stack. Commodore C= is Search only after its actual event identity is known; `7`
-  remains the unconditional Search fallback. Do not guess a raw binding.
+- F1 and F3 are not playback shortcuts. Commodore C= is Search only after its
+  actual event identity is known; `7` remains the unconditional Search fallback.
+  Do not guess a raw binding.
 
 Focus must enter, move within, and leave groups predictably. If lateral movement
 cannot continue inside a group, it moves to the adjacent group; Up and Down move
@@ -149,10 +151,11 @@ touchable targets must satisfy the repository's compact-screen size and text flo
 
 ### Dialogs, sheets, menus, and overlays
 
-The topmost surface exclusively owns input. Back closes only that surface. OK
-activates its focused primary control. Menu performs only a surface-specific action
-explicitly shown in the guidance bar; otherwise it does nothing. Digits must not run
-page or device shortcuts while a surface is open.
+The topmost surface exclusively owns input. F1, Left Soft Key, or Back closes only
+that surface. OK activates its focused primary control. F3, Right Soft Key, or Menu
+performs only a surface-specific action explicitly shown in the guidance bar;
+otherwise it does nothing. Digits must not run page or device shortcuts while a
+surface is open.
 
 Right Soft Key/Menu opens an item menu when the focused item has one, otherwise the
 Quick menu. In Remote Input, Game Mode, and View adjustment it opens the Controls
@@ -168,9 +171,9 @@ Preserve text-entry integrity:
   by the field;
 - D-pad Centre/OK and Send/Call commit the current T9 candidate and submit only when
   that field exposes an explicit submit action;
-- Right Soft Key deletes one character and may repeat; Left Soft Key commits the
-  candidate and leaves the field;
-- F1, Commodore C=, and F3 do nothing in text entry;
+- F3 or Right Soft Key deletes one character and may repeat; F1 or Left Soft Key
+  commits the candidate and leaves the field;
+- Commodore C= does nothing in text entry;
 - leaving the field must not leak the same press into navigation or a global
   shortcut.
 
@@ -178,10 +181,11 @@ Keep touch editing fully functional.
 
 ### Playback
 
-F1 toggles play/pause and F3 advances only in the normal app context, including the
-Playback page. Suppress both in text entry, any modal surface, Remote Input, Game
-Mode, and View adjustment. Playback controls in the UI remain focusable and
-touchable.
+Remove the physical F1/F3 transport bindings and the app-shell shortcut path that
+navigates to Playback or latches a command for them. On Playback, F1 and F3 retain
+their labelled app actions; the transport controls remain focusable and touchable.
+Keep dedicated Android media-button transport behavior intact. Remove dead
+F1/F3-only transport wiring only where it has no other caller.
 
 ### Remote Input and Game Mode
 
@@ -195,6 +199,13 @@ In Remote Input keys-surface mode, D-pad navigates the on-screen keys and OK or
 Send/Call activates the focused key. Back returns to Controls; Menu returns to
 Controls when it does not expose an item action. App navigation and global shortcuts
 must not leak into C64 input.
+
+While the blue C64-control state owns input, physical F1 and F3 send the identically
+labelled C64 F1 and F3 keys. Treat them as held C64 inputs: non-repeat keydown asserts
+and the matching keyup releases. Do not relay Left Soft Key or Right Soft Key; they
+remain the app recovery and Controls actions. In any app-owned overlay or amber View
+state, F1/F3 immediately return to their labelled app actions. Keep Commodore C=
+suppressed in C64 control until its event identity is known.
 
 For Game Mode:
 
@@ -213,17 +224,20 @@ For Game Mode:
 
 Star is the only keypad toggle between C64 control and View adjustment. Remove any
 ambiguous dependency on a generic Menu event for that transition. In View adjustment,
-implement the specified numeric pan/zoom/fit mapping, OK/Send tracking lock, Back to
-C64 control, Menu to Controls, and Pound fallback to Controls. `Watch: Off` must
-return immediately to C64 control. If Watch is unavailable, attempting to enter View
-adjustment must open Controls with Watch focused instead of entering a dead mode.
+implement the specified numeric pan/zoom/fit mapping, OK/Send tracking lock,
+F1/Left Soft Key/Back to C64 control, F3/Right Soft Key/Menu to Controls, and Pound
+fallback to Controls. `Watch: Off` must return immediately to C64 control. If Watch
+is unavailable, attempting to enter View adjustment must open Controls with Watch
+focused instead of entering a dead mode.
 
 ### Guidance and touch parity
 
-Make the compact guidance bar accurately describe the current Back, OK, and Menu
-semantics using the physical names `Left Soft Key`, `D-pad Centre/OK`, and
-`Right Soft Key` where space permits, with an accessible compact presentation where
-it does not. Update it immediately when focus, mode, or topmost surface changes.
+Make the compact guidance bar accurately describe the current left, OK, and right
+actions using `F1 / Left Soft Key`, `D-pad Centre/OK`, and
+`F3 / Right Soft Key` where space permits, with an accessible compact presentation
+where it does not. In blue C64 control, show that F1/F3 go to the C64 while the soft
+keys remain Back and Controls. Update the bar immediately when focus, mode, or the
+topmost surface changes.
 
 Touch must continue to perform every existing task and should remain a convenient
 alternative, but every frequent action and every action needed to recover or leave a
@@ -261,7 +275,10 @@ must have a test that fails without the fix. Cover at least:
 - normal shortcuts, reset confirmation, and suppression in higher contexts;
 - dialogs, sheets, item menus, Quick menu, and Controls overlay ownership;
 - T9 digits, Star, Pound, deletion, commit, submit, exit, and global suppression;
-- F1/F3 playback behavior and suppression in every forbidden context;
+- F1/F3 app-action aliases, text Done/Delete behavior, and removal of physical-key
+  transport shortcuts without regressing Android media buttons;
+- physical F1/F3 C64 keydown/key-up relay only in blue C64 control, with soft keys
+  retained by the app and app semantics restored in overlays and View adjustment;
 - Remote Input keys-surface navigation and recovery;
 - Game Mode simultaneous holds, rotation, overlay transitions, session failure, and
   release-all boundaries;
