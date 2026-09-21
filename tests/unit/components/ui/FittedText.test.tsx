@@ -140,4 +140,15 @@ describe("FittedText", () => {
 
     expect(drawnWording("Soft IEC Drive")).toHaveTextContent(/^Soft IEC Drive$/);
   });
+
+  it("does not create a measuring canvas while the element has no width", async () => {
+    // jsdom has no canvas and reports zero width for every element. Every section header in the
+    // unit suite renders one of these, and each canvas request logged a "Not implemented" error.
+    vi.resetModules();
+    const { FittedText: FreshFittedText } = await import("@/components/ui/FittedText");
+    setAvailableWidth(0);
+    render(<FreshFittedText variants={VARIANTS} />);
+
+    expect(HTMLCanvasElement.prototype.getContext).not.toHaveBeenCalled();
+  });
 });

@@ -50,12 +50,13 @@ export const FittedText = ({ variants, label, className }: FittedTextProps) => {
 
   const fit = useCallback(() => {
     const host = hostRef.current;
-    const context = getMeasureContext();
-    if (!host || !context || variants.length === 0) return;
+    if (!host || variants.length === 0) return;
     const available = host.clientWidth;
     // Zero while the element is not laid out yet (a closed card, a hidden tab). Choosing on a zero
     // width would latch the shortest wording and never revisit it, so leave the choice alone.
     if (available <= 0) return;
+    const context = getMeasureContext();
+    if (!context) return;
     const style = getComputedStyle(host);
     context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     const firstFitting = variants.findIndex((variant) => context.measureText(variant).width <= available);
