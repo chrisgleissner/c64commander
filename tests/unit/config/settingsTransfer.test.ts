@@ -20,6 +20,8 @@ import {
   loadScreenOrientationMode,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
+  loadRemoteFunction1Action,
+  loadRemoteFunction3Action,
 } from "@/lib/config/appSettings";
 import {
   loadDeviceSafetyConfig,
@@ -46,6 +48,8 @@ const buildImportPayload = (featureFlags: Record<string, boolean>) => ({
     archiveHostOverride: "archive.local:3002",
     archiveClientIdOverride: "Custom",
     archiveUserAgentOverride: "Custom Agent",
+    remoteFunction1Action: "search",
+    remoteFunction3Action: "nextTune",
   },
   featureFlags,
   deviceSafety: {
@@ -83,6 +87,7 @@ describe("settingsTransfer", () => {
     expect(snapshot.appSettings).toHaveProperty("volumeSliderPreviewIntervalMs");
     expect(snapshot.appSettings).toHaveProperty("screenOrientationMode");
     expect(snapshot.appSettings).toHaveProperty("archiveHostOverride");
+    expect(snapshot.appSettings).toHaveProperty("remoteFunction1Action");
     expect(snapshot).toHaveProperty("featureFlags");
     expect(snapshot.deviceSafety).toHaveProperty("mode");
     expect(JSON.stringify(snapshot)).not.toMatch(/password/i);
@@ -147,6 +152,8 @@ describe("settingsTransfer", () => {
         archiveHostOverride: "archive.local:3002",
         archiveClientIdOverride: "Custom",
         archiveUserAgentOverride: "Custom Agent",
+        remoteFunction1Action: "search",
+        remoteFunction3Action: "nextTune",
       },
       featureFlags: {
         commoserve_enabled: false,
@@ -186,6 +193,8 @@ describe("settingsTransfer", () => {
     expect(loadArchiveHostOverride()).toBe("archive.local:3002");
     expect(loadArchiveClientIdOverride()).toBe("Custom");
     expect(loadArchiveUserAgentOverride()).toBe("Custom Agent");
+    expect(loadRemoteFunction1Action()).toBe("search");
+    expect(loadRemoteFunction3Action()).toBe("nextTune");
 
     const safety = loadDeviceSafetyConfig();
     expect(safety.mode).toBe("TROUBLESHOOTING");

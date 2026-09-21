@@ -44,7 +44,7 @@ describe("Key Explorer", () => {
   it("shows what a key resolves to, and says so when it resolves to nothing", () => {
     render(<KeyExplorerPopup open onClose={() => undefined} />);
     press({ code: "F1", key: "F1", keyCode: 112 });
-    expect(screen.getByTestId("key-explorer-list").textContent).toContain("resolves to mediaPlayPause");
+    expect(screen.getByTestId("key-explorer-list").textContent).toContain("resolves to function1");
 
     press({ code: "F9", key: "F9", keyCode: 120 });
     expect(screen.getAllByTestId("key-explorer-action")[0].textContent).toBe("resolves to nothing");
@@ -117,7 +117,7 @@ describe("Key Explorer", () => {
     it("names the code, the keyCode and what it resolved to", () => {
       const observation = observeKey(new KeyboardEvent("keydown", { code: "F1", key: "F1" }), keypadProfile);
       expect(formatObservations([observation])).toContain("code=F1");
-      expect(formatObservations([observation])).toContain("action=mediaPlayPause");
+      expect(formatObservations([observation])).toContain("action=function1");
     });
 
     it("says so plainly when a key resolved to nothing", () => {

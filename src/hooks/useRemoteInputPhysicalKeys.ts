@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 
-import type { JoystickInputName } from "@/lib/c64api";
+import type { JoystickInputName, KeyboardInputName } from "@/lib/c64api";
 import { resolveInputProfile } from "@/lib/input/profiles";
 import { resolveSemanticAction } from "@/lib/input/keyEvent";
 import { setInputModality } from "@/lib/input/inputModality";
@@ -19,6 +19,7 @@ import {
   type JoystickKeyBinding,
 } from "@/lib/remoteInput/joystickKeyBindings";
 import type { RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
+import type { RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import type { AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
 
 // Matches the profile the app applies globally (App.tsx's FocusNavigationProvider
@@ -35,6 +36,10 @@ export interface RemoteInputPhysicalKeysOptions {
   rotation: DeviceRotation;
   /** Called when `#` is pressed, where that key has a role — Game Mode's overlay row. */
   onHashKey?: () => void;
+  tier: RemoteInputTier;
+  heldKeyboardInputs: ReadonlySet<KeyboardInputName>;
+  setHeldKeyboardInputs: (next: ReadonlySet<KeyboardInputName>) => void;
+  sendSpecialKey: (key: "f1" | "f3") => void;
   /**
    * Called when a physical key is relayed to the C64 as a joystick input.
    *
@@ -71,14 +76,28 @@ export const useRemoteInputPhysicalKeys = ({
   binding,
   rotation,
   onHashKey,
+  tier,
+  heldKeyboardInputs,
+  setHeldKeyboardInputs,
+  sendSpecialKey,
   onJoystickKeyRelayed,
 }: RemoteInputPhysicalKeysOptions): RemoteInputPhysicalKeys => {
   const heldPhysicalKeysRef = useRef<Set<SemanticAction>>(new Set());
   const previousPhysicalInputsRef = useRef<Set<JoystickInputName>>(new Set());
+  const heldFunctionKeysRef = useRef<Set<"f1" | "f3">>(new Set());
+  // React state updates from two physical keydown events can be batched. Keep a
+  // local snapshot as well, so pressing F1 and F3 in one event turn cannot make
+  // the second update accidentally drop the first key from the machine-held set.
+  const latestKeyboardInputsRef = useRef<Set<KeyboardInputName>>(new Set(heldKeyboardInputs));
+
+  useEffect(() => {
+    latestKeyboardInputsRef.current = new Set(heldKeyboardInputs);
+  }, [heldKeyboardInputs]);
 
   const clearHeldKeys = useCallback(() => {
     heldPhysicalKeysRef.current.clear();
     previousPhysicalInputsRef.current.clear();
+    heldFunctionKeysRef.current.clear();
   }, []);
 
   // Merge with the session's current held set instead of replacing it wholesale: a
@@ -182,6 +201,28 @@ export const useRemoteInputPhysicalKeys = ({
         return;
       }
 
+      // F1/F3 are literal C64 keys while the Remote Input sheet owns the
+      // keypad. Full machine-input keeps an explicit held set; the KERNAL
+      // fallback injects exactly one PETSCII special key and ignores repeat/up.
+      if (action === "function1" || action === "function3") {
+        const key = action === "function1" ? "f1" : "f3";
+        event.preventDefault();
+        // View adjustment owns every handset control, including function keys.
+        // Never leak a C64 key while the user is positioning the mirror.
+        if (mirrorRef.current?.getMode() === "adjust") return;
+        if (event.repeat || heldFunctionKeysRef.current.has(key)) return;
+        heldFunctionKeysRef.current.add(key);
+        if (tier === "full") {
+          const next = new Set(latestKeyboardInputsRef.current);
+          next.add(key);
+          latestKeyboardInputsRef.current = next;
+          setHeldKeyboardInputs(next);
+        } else if (tier === "kernal-fallback") {
+          sendSpecialKey(key);
+        }
+        return;
+      }
+
       if (outputMode !== "joystick" || !action) return;
       const inputs = resolveJoystickInputs(action, binding, rotation);
       if (!inputs.length) return;
@@ -197,17 +238,41 @@ export const useRemoteInputPhysicalKeys = ({
       heldPhysicalKeysRef.current.add(action);
       recomputePhysicalHeldSet();
     },
-    [outputMode, binding, rotation, recomputePhysicalHeldSet, handleMirrorKey, onHashKey, onJoystickKeyRelayed],
+    [
+      outputMode,
+      binding,
+      rotation,
+      recomputePhysicalHeldSet,
+      handleMirrorKey,
+      onHashKey,
+      onJoystickKeyRelayed,
+      tier,
+      heldKeyboardInputs,
+      setHeldKeyboardInputs,
+      sendSpecialKey,
+    ],
   );
 
   const handleKeyUp = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       const action = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
+      if (action === "function1" || action === "function3") {
+        const key = action === "function1" ? "f1" : "f3";
+        if (!heldFunctionKeysRef.current.delete(key)) return;
+        event.preventDefault();
+        if (tier === "full") {
+          const next = new Set(latestKeyboardInputsRef.current);
+          next.delete(key);
+          latestKeyboardInputsRef.current = next;
+          setHeldKeyboardInputs(next);
+        }
+        return;
+      }
       if (!action || !heldPhysicalKeysRef.current.has(action)) return;
       heldPhysicalKeysRef.current.delete(action);
       recomputePhysicalHeldSet();
     },
-    [recomputePhysicalHeldSet],
+    [recomputePhysicalHeldSet, tier, heldKeyboardInputs, setHeldKeyboardInputs],
   );
 
   // Clear tracked physical keys (and what they last contributed) on every

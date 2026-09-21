@@ -35,6 +35,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveHostOverride: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(),
   loadArchiveUserAgentOverride: vi.fn(),
+  loadRemoteFunction1Action: vi.fn(() => "playPause"),
+  loadRemoteFunction3Action: vi.fn(() => "nextTune"),
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveArchiveHostOverride: vi.fn(),
   saveArchiveClientIdOverride: vi.fn(),
   saveArchiveUserAgentOverride: vi.fn(),
+  saveRemoteFunctionActions: vi.fn(),
 
   clampConfigWriteIntervalMs: (v: number) => v,
   clampStartupDiscoveryWindowMs: (v: number) => v,

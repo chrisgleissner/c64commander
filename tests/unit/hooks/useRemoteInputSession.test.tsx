@@ -427,6 +427,20 @@ describe("useRemoteInputSession", () => {
     expect(result.current.heldJoystickInputs.size).toBe(0);
   });
 
+  it("releases held inputs when the Remote Input sheet loses window focus", async () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    act(() => result.current.setHeldKeyboardInputs(new Set(["f1"])));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    sendMachineInputBatchMock.mockClear();
+
+    act(() => window.dispatchEvent(new Event("blur")));
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(result.current.heldKeyboardInputs.size).toBe(0);
+  });
+
   it("releases all held inputs when switching output mode", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldJoystickInputs(new Set(["up"])));

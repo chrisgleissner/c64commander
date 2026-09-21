@@ -542,6 +542,11 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadPersistConfigToFlash: vi.fn(() => false),
   savePersistConfigToFlash: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
+  REMOTE_FUNCTION_ACTIONS: ["unassigned", "search", "quickMenu", "gameMode", "playPause", "nextTune"],
+  loadRemoteFunction1Action: vi.fn(() => "playPause"),
+  loadRemoteFunction3Action: vi.fn(() => "nextTune"),
+  saveRemoteFunctionActions: vi.fn(() => true),
+  restoreRemoteFunctionActionDefaults: vi.fn(),
   loadSearchInsideDisks: vi.fn(() => false),
   saveSearchInsideDisks: vi.fn(),
   loadFriendlySidNames: vi.fn(() => true),
@@ -640,6 +645,8 @@ vi.mock("@/lib/config/appSettings", () => ({
     ARCHIVE_HOST_OVERRIDE_KEY: "c64u_archive_host_override",
     ARCHIVE_CLIENT_ID_OVERRIDE_KEY: "c64u_archive_client_id_override",
     ARCHIVE_USER_AGENT_OVERRIDE_KEY: "c64u_archive_user_agent_override",
+    REMOTE_FUNCTION_1_ACTION_KEY: "c64u_remote_function_1_action",
+    REMOTE_FUNCTION_3_ACTION_KEY: "c64u_remote_function_3_action",
   },
 }));
 

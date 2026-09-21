@@ -56,6 +56,8 @@ export type SemanticAction =
      served by the dedicated search listener, outside the keypad provider, so the search key does
      not disappear when keypad navigation is switched off. */
   | "openSearch"
+  | "function1"
+  | "function3"
   | "mediaPlayPause"
   | "mediaNext";
 
@@ -91,6 +93,8 @@ export const SEMANTIC_ACTIONS: readonly SemanticAction[] = [
   "closeMenu",
   "toggleInputMode",
   "openSearch",
+  "function1",
+  "function3",
   "mediaPlayPause",
   "mediaNext",
 ];

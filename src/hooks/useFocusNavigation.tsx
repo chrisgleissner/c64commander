@@ -225,10 +225,8 @@ export interface KeypadShortcutHandlers {
   readonly openQuickMenu?: () => void;
   /** Enter Game Mode (0) — one keystroke from anywhere to the playing state. */
   readonly openGameMode?: () => void;
-  /** Play / pause the transport (F1). Delivered through the latch, so Play need not be mounted. */
-  readonly mediaPlayPause?: () => void;
-  /** Next tune (F3). Same latch. */
-  readonly mediaNext?: () => void;
+  /** Run a persisted normal-navigation F1/F3 assignment. */
+  readonly runFunctionShortcut?: (key: 1 | 3) => void;
   /** Pause or resume the machine (8) — ten presses away through Home's grid. */
   readonly machinePauseResume?: () => void;
   /** Reset the machine (9), which still asks before it runs. */
@@ -624,18 +622,16 @@ export const FocusNavigationProvider = ({
         event.preventDefault();
         return;
       }
-      // Transport, from any page. Declared only in the keypad profile — which is the only profile
-      // this provider is ever mounted with, so F1 and F3 reach here on a desktop keyboard too.
-      // defaultKeyboard's softLeft and toggleInputMode are dormant until a selector exists.
-      if (action === "mediaPlayPause" && shortcuts.mediaPlayPause) {
-        shortcuts.mediaPlayPause();
+      // F1/F3 are neutral semantic actions. They are intentionally only routed
+      // here, after editable/overlay exclusion and before global navigation.
+      // Repeats never turn into repeated one-shot app commands.
+      if ((action === "function1" || action === "function3") && !event.repeat && shortcuts.runFunctionShortcut) {
+        shortcuts.runFunctionShortcut(action === "function1" ? 1 : 3);
         setInputModality("key-navigation");
         event.preventDefault();
         return;
       }
-      if (action === "mediaNext" && shortcuts.mediaNext) {
-        shortcuts.mediaNext();
-        setInputModality("key-navigation");
+      if ((action === "function1" || action === "function3") && event.repeat) {
         event.preventDefault();
         return;
       }

@@ -32,7 +32,10 @@ import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/u
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
-import { createTransportShortcut } from "@/lib/input/transportShortcuts";
+import { transportCommandBus } from "@/lib/input/latchedCommandBus";
+import { createNormalNavigationFunctionShortcut } from "@/lib/input/functionKeyShortcuts";
+import { loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
+import { requestSearchOpen } from "@/lib/search/overlayState";
 import { installNativeMediaButtons } from "@/lib/input/nativeMediaButtons";
 import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
@@ -57,6 +60,7 @@ import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
+import { variant } from "@/generated/variant";
 
 const isAbortLikeError = (error: unknown) => {
   return classifyError(error).failureClass === "user-cancellation";
@@ -266,15 +270,35 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   // Another app taking the speaker has to reach whichever source is playing, so this is installed
   // app-wide rather than by the Play page (HARD27-006).
   useEffect(() => installAudioFocusPolicy(), []);
+  const runNormalNavigationFunctionShortcut = useMemo(
+    () =>
+      createNormalNavigationFunctionShortcut({
+        variantId: String(variant.id),
+        loadAssignment: (key) => (key === 1 ? loadRemoteFunction1Action() : loadRemoteFunction3Action()),
+        remoteHandlers: {
+          search: () => requestSearchOpen({ source: "key" }),
+          quickMenu: () => requestQuickMenuOpen(),
+          gameMode: () => {
+            if (!flags.remote_input_enabled) return;
+            if (!GAME_MODE_HOST_PATHS.has(window.location.pathname)) navigate(TAB_ROUTES[0].path);
+            void startGameMode();
+          },
+          playPause: () => transportCommandBus.publish("playPause"),
+          nextTune: () => transportCommandBus.publish("next"),
+        },
+        transportOptions: transportShortcutOptions,
+      }),
+    [navigate, flags.remote_input_enabled, transportShortcutOptions],
+  );
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: createTabJumpShortcut(guardedNavigate),
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
-      // F1 and F3, built by the shared factory so the test drives this wiring and not a copy.
-      mediaPlayPause: createTransportShortcut("playPause", transportShortcutOptions),
-      mediaNext: createTransportShortcut("next", transportShortcutOptions),
+      // C64U Remote assignments are live-read so Settings changes take effect
+      // immediately. The standard variant retains its existing transport keys.
+      runFunctionShortcut: runNormalNavigationFunctionShortcut,
       machinePauseResume: () => requestMachineCommand("pauseResume"),
       machineReset: () => requestMachineCommand("reset"),
       openGameMode: flags.remote_input_enabled
@@ -287,7 +311,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
           }
         : undefined,
     }),
-    [navigate, guardedNavigate, flags.remote_input_enabled, transportShortcutOptions],
+    [guardedNavigate, flags.remote_input_enabled, runNormalNavigationFunctionShortcut],
   );
   return (
     <FocusNavigationProvider

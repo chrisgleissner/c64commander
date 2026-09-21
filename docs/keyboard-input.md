@@ -61,7 +61,7 @@ Physical keys are normalized to **semantic actions**; the authoritative list is
 `digit0`–`digit9`, `star`, `hash`, `dpadUp/Down/Left/Right`, `center`,
 `softLeft/Right`, `back`, `delete`, `enter`, `escape`, `nextField`,
 `previousField`, `activate`, `openMenu`, `closeMenu`, `toggleInputMode`,
-`openSearch`, `mediaPlayPause`, `mediaNext`.
+`openSearch`, `function1`, `function3`, `mediaPlayPause`, `mediaNext`.
 
 ### 3.1 Search: `7`, on its own listener
 
@@ -82,20 +82,16 @@ while an overlay owns the keys — which now live in one place,
 `TAB_ROUTES.length < 7`, so a seventh tab fails the build rather than silently
 stealing the search key.
 
-### 3.2 Transport: F1 and F3, keypad profile only
+### 3.2 Function keys: neutral first, then context-owned
 
-`F1 → mediaPlayPause` and `F3 → mediaNext` are declared in
-`profiles/keypad.ts` and nowhere else. That profile prepends over
-`defaultKeyboard`, so on a handset F1 and F3 are the transport, while a desktop
-keyboard keeps `F1 → softLeft` and `F3 → toggleInputMode`. Both are speculative
-in the sense that no handset has been measured, but the codes themselves are
-real and standard, and a keypad handset has separate hardware soft keys.
-
-`usePlaybackController` is mounted only by `PlayFilesPage`, so the keys publish
-onto the **latched** bus in `src/lib/input/latchedCommandBus.ts` rather than the
-transient `keypadCommands` pattern: the app navigates to Play, and a plain
-`window.dispatchEvent` would be gone before Play subscribed. The latch expires
-after 5 s so a press cannot fire later on an unrelated navigation.
+The keypad profile normalizes F1 and F3 to neutral `function1` and `function3`
+actions. It never assigns them directly to Back, Menu, transport, or C64 input.
+The active owner decides: normal C64U Remote navigation runs the persisted app
+assignment (defaults: F1 Play/Pause and F3 Next tune), while C64 Commander keeps
+its route-changing transport shortcuts. A Remote Input C64 surface sends literal
+C64 F1/F3. Dialogs, text entry, capture, and View consume them without an app or
+C64 action. Non-repeat presses only run one app command; C64U Remote assignments
+do not navigate to Play.
 
 ### 3.3 The Commodore key is not bound
 

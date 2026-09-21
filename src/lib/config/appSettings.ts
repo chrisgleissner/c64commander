@@ -58,6 +58,8 @@ const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
 const VIC_PALETTE_KEY = "c64u_vic_palette";
 const PALETTE_TARGET_KEY = "c64u_palette_target";
 const PERSIST_CONFIG_TO_FLASH_KEY = "c64u_persist_config_to_flash";
+const REMOTE_FUNCTION_1_ACTION_KEY = "c64u_remote_function_1_action";
+const REMOTE_FUNCTION_3_ACTION_KEY = "c64u_remote_function_3_action";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -73,6 +75,18 @@ export const DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS = 2500;
 export type DiskAutostartMode = "kernal" | "dma";
 export const DEFAULT_DISK_AUTOSTART_MODE: DiskAutostartMode = "kernal";
 export const DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS = 200;
+export type RemoteFunctionAction = "unassigned" | "search" | "quickMenu" | "gameMode" | "playPause" | "nextTune";
+export const REMOTE_FUNCTION_ACTIONS: readonly RemoteFunctionAction[] = [
+  "unassigned",
+  "search",
+  "quickMenu",
+  "gameMode",
+  "playPause",
+  "nextTune",
+];
+/** High-value defaults preserve the familiar compact-player controls. */
+export const DEFAULT_REMOTE_FUNCTION_1_ACTION: RemoteFunctionAction = "playPause";
+export const DEFAULT_REMOTE_FUNCTION_3_ACTION: RemoteFunctionAction = "nextTune";
 
 const clampInterval = (value: number) => {
   if (Number.isNaN(value)) return DEFAULT_CONFIG_WRITE_INTERVAL_MS;
@@ -853,6 +867,29 @@ export const loadArchiveUserAgentOverride = () => loadString(ARCHIVE_USER_AGENT_
 
 export const saveArchiveUserAgentOverride = (value: string) => writeString(ARCHIVE_USER_AGENT_OVERRIDE_KEY, value);
 
+const normalizeRemoteFunctionAction = (value: unknown): RemoteFunctionAction =>
+  REMOTE_FUNCTION_ACTIONS.includes(value as RemoteFunctionAction) ? (value as RemoteFunctionAction) : "unassigned";
+
+export const loadRemoteFunction1Action = (): RemoteFunctionAction =>
+  normalizeRemoteFunctionAction(readRawString(REMOTE_FUNCTION_1_ACTION_KEY) ?? DEFAULT_REMOTE_FUNCTION_1_ACTION);
+
+export const loadRemoteFunction3Action = (): RemoteFunctionAction =>
+  normalizeRemoteFunctionAction(readRawString(REMOTE_FUNCTION_3_ACTION_KEY) ?? DEFAULT_REMOTE_FUNCTION_3_ACTION);
+
+/** Save both assignments atomically at the settings layer, rejecting duplicate non-empty actions. */
+export const saveRemoteFunctionActions = (function1: unknown, function3: unknown): boolean => {
+  const next1 = normalizeRemoteFunctionAction(function1);
+  const next3 = normalizeRemoteFunctionAction(function3);
+  if (next1 !== "unassigned" && next1 === next3) return false;
+  writeString(REMOTE_FUNCTION_1_ACTION_KEY, next1);
+  writeString(REMOTE_FUNCTION_3_ACTION_KEY, next3);
+  return true;
+};
+
+export const restoreRemoteFunctionActionDefaults = (): void => {
+  saveRemoteFunctionActions(DEFAULT_REMOTE_FUNCTION_1_ACTION, DEFAULT_REMOTE_FUNCTION_3_ACTION);
+};
+
 export const APP_SETTINGS_KEYS = {
   DEBUG_LOGGING_KEY,
   CONFIG_WRITE_INTERVAL_KEY,
@@ -885,6 +922,8 @@ export const APP_SETTINGS_KEYS = {
   VIC_PALETTE_KEY,
   PALETTE_TARGET_KEY,
   PERSIST_CONFIG_TO_FLASH_KEY,
+  REMOTE_FUNCTION_1_ACTION_KEY,
+  REMOTE_FUNCTION_3_ACTION_KEY,
 };
 
 /**

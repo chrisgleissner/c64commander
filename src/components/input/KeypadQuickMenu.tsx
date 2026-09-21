@@ -23,6 +23,13 @@ import { requestSearchOpen } from "@/lib/search/overlayState";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { variant } from "@/generated/variant";
+import {
+  APP_SETTINGS_KEYS,
+  loadRemoteFunction1Action,
+  loadRemoteFunction3Action,
+  type RemoteFunctionAction,
+} from "@/lib/config/appSettings";
 import {
   loadShowSectionDescriptions,
   requestSectionsBulk,
@@ -51,6 +58,9 @@ export function KeypadQuickMenu() {
   const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
+  const [functionActions, setFunctionActions] = useState(
+    () => [loadRemoteFunction1Action(), loadRemoteFunction3Action()] as const,
+  );
   /** Set while this menu is closing in order to hand over to the search overlay. */
   const handingOverToSearchRef = useRef(false);
   // Only a keypad user needs the page jumps and the key names. Someone who tapped the app bar has
@@ -65,6 +75,20 @@ export function KeypadQuickMenu() {
       }),
     [],
   );
+
+  useEffect(() => {
+    const sync = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (
+        key !== APP_SETTINGS_KEYS.REMOTE_FUNCTION_1_ACTION_KEY &&
+        key !== APP_SETTINGS_KEYS.REMOTE_FUNCTION_3_ACTION_KEY
+      )
+        return;
+      setFunctionActions([loadRemoteFunction1Action(), loadRemoteFunction3Action()]);
+    };
+    window.addEventListener("c64u-app-settings-updated", sync);
+    return () => window.removeEventListener("c64u-app-settings-updated", sync);
+  }, []);
 
   const run = useCallback((action: () => void) => {
     setOpen(false);
@@ -124,6 +148,18 @@ export function KeypadQuickMenu() {
             {fromKeypad ? "Jump to a page or open a high-value action." : "Actions for this page."}
           </DialogDescription>
         </DialogHeader>
+        {String(variant.id) === "c64u-remote" ? (
+          <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
+            F1: {functionActionLabel(functionActions[0])} · F3: {functionActionLabel(functionActions[1])}
+            <Button
+              variant="link"
+              className="ml-1 h-auto min-h-11 px-1"
+              onClick={() => run(() => navigate("/settings"))}
+            >
+              Configure
+            </Button>
+          </div>
+        ) : null}
         <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
           {/*
             The top entry, on both sources: search is the way around the app for someone who does
@@ -253,3 +289,13 @@ export function KeypadQuickMenu() {
     </Dialog>
   );
 }
+
+const functionActionLabel = (action: RemoteFunctionAction): string =>
+  ({
+    unassigned: "Unassigned",
+    search: "Search",
+    quickMenu: "Quick menu",
+    gameMode: "Game Mode",
+    playPause: "Play/Pause",
+    nextTune: "Next tune",
+  })[action];

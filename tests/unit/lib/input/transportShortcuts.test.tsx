@@ -11,27 +11,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
-import { createTransportShortcut } from "@/lib/input/transportShortcuts";
+import { createNormalNavigationFunctionShortcut, runFunctionShortcut } from "@/lib/input/functionKeyShortcuts";
 
 /*
- * The whole F1/F3 chain, end to end: the key press, the keypad profile's binding, the shortcut
- * dispatch inside FocusNavigationProvider, and the production factory App builds the two handlers
- * with. The binding test next door asserts the profile alone, which stayed green while nothing
- * downstream of it was wired.
+ * The normal-navigation function-key chain: neutral normalization, a single
+ * owner in FocusNavigationProvider, and no route-changing transport fallback.
  */
-describe("the transport shortcuts", () => {
-  let path = "/";
-  const navigate = vi.fn((next: string) => {
-    path = next;
-  });
+describe("configured function shortcuts", () => {
+  const calls = { playPause: vi.fn(), nextTune: vi.fn(), search: vi.fn(), quickMenu: vi.fn(), gameMode: vi.fn() };
 
   const renderApp = () =>
     render(
       <FocusNavigationProvider
         profileId="keypad"
         shortcuts={{
-          mediaPlayPause: createTransportShortcut("playPause", { navigate, currentPath: () => path }),
-          mediaNext: createTransportShortcut("next", { navigate, currentPath: () => path }),
+          runFunctionShortcut: (key) => runFunctionShortcut(key === 1 ? "playPause" : "nextTune", calls),
         }}
       >
         <button type="button">anything focusable</button>
@@ -39,50 +33,70 @@ describe("the transport shortcuts", () => {
     );
 
   beforeEach(() => {
-    path = "/";
-    navigate.mockClear();
+    Object.values(calls).forEach((call) => call.mockClear());
     transportCommandBus.reset();
   });
   afterEach(() => transportCommandBus.reset());
 
-  it("carries F1 from the key press to the transport bus", () => {
-    const heard: string[] = [];
-    const stop = transportCommandBus.subscribe((command) => heard.push(command));
+  it("runs the F1 assignment once without navigating", () => {
     renderApp();
 
     fireEvent.keyDown(document.body, { code: "F1", key: "F1" });
 
-    expect(heard).toEqual(["playPause"]);
-    stop();
+    expect(calls.playPause).toHaveBeenCalledOnce();
   });
 
-  it("carries F3 as next", () => {
-    const heard: string[] = [];
-    const stop = transportCommandBus.subscribe((command) => heard.push(command));
+  it("runs the F3 assignment once", () => {
     renderApp();
 
     fireEvent.keyDown(document.body, { code: "F3", key: "F3" });
 
-    expect(heard).toEqual(["next"]);
-    stop();
+    expect(calls.nextTune).toHaveBeenCalledOnce();
   });
 
-  it("goes to Play from a page that has no transport, and latches the command for it", () => {
+  it("suppresses OS repeat for one-shot function assignments", () => {
     renderApp();
 
-    fireEvent.keyDown(document.body, { code: "F1", key: "F1" });
+    fireEvent.keyDown(document.body, { code: "F1", key: "F1", repeat: true });
+    expect(calls.playPause).not.toHaveBeenCalled();
+  });
+
+  it("consumes an Unassigned assignment without calling another action", () => {
+    expect(runFunctionShortcut("unassigned", calls)).toBe(true);
+    expect(calls.playPause).not.toHaveBeenCalled();
+  });
+
+  it("keeps C64 Commander F1/F3 as route-changing transport shortcuts", () => {
+    let path = "/";
+    const navigate = vi.fn((next: string) => {
+      path = next;
+    });
+    const shortcut = createNormalNavigationFunctionShortcut({
+      variantId: "c64commander",
+      loadAssignment: () => "unassigned",
+      remoteHandlers: calls,
+      transportOptions: { navigate, currentPath: () => path },
+    });
+
+    shortcut(1);
 
     expect(navigate).toHaveBeenCalledWith("/play");
-    // Play mounts after the navigation, so the press has to survive it (spec.md section 9.5).
     expect(transportCommandBus.takePending()).toBe("playPause");
   });
 
-  it("stays where it is when the transport is already on screen", () => {
-    path = "/play";
-    renderApp();
+  it("uses persisted assignments without navigation in the C64U Remote variant", () => {
+    const navigate = vi.fn();
+    const shortcut = createNormalNavigationFunctionShortcut({
+      variantId: "c64u-remote",
+      loadAssignment: () => "search",
+      remoteHandlers: calls,
+      transportOptions: { navigate, currentPath: () => "/" },
+    });
 
-    fireEvent.keyDown(document.body, { code: "F1", key: "F1" });
+    shortcut(1);
 
+    expect(calls.search).toHaveBeenCalledOnce();
     expect(navigate).not.toHaveBeenCalled();
+    expect(transportCommandBus.takePending()).toBeNull();
   });
 });

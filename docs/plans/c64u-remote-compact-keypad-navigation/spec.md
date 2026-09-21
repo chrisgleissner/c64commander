@@ -6,7 +6,7 @@ C64U Remote is the keypad-focused Android build variant of C64 Commander and sha
 
 - One press has one owner. The highest active context consumes it before lower contexts can see it.
 - **D-pad Centre/OK goes in; Left Soft Key comes out; Right Soft Key opens choices.** F1 and F3 are not another navigation system.
-- Input has two explicit domains. In normal app navigation, F1/F3 run their optional user-assigned app shortcuts; both default to Unassigned. Wherever the UI explicitly sends keys to the C64, they always send literal C64 F1/F3 instead. There are no per-page mappings or implicit fallbacks.
+- Input has two explicit domains. In normal app navigation, F1/F3 run their user-assigned app shortcuts; the high-value defaults are F1 Play/Pause and F3 Next tune. Wherever the UI explicitly sends keys to the C64, they always send literal C64 F1/F3 instead. There are no per-page mappings or implicit fallbacks.
 - Short press is the default. No command requires a long press or chord. D-pad repeat may move focus, adjust a value, or pan; command keys ignore OS auto-repeat.
 - A visible ring identifies focus and scrolls with it. A compact hint bar names the current Left Soft Key, D-pad Centre/OK, and Right Soft Key actions; C64 input surfaces additionally state `F1/F3: C64`. Touch hides app-navigation hints until the next physical-key action.
 - Destructive actions always open a confirmation. Touch remains equivalent and convenient, never required for recovery.
@@ -41,7 +41,7 @@ The mappings below are the product contract. Where delivery through the target O
 | Right Soft Key     | Open the focused item's menu; if it has none, open the Quick menu. The visible item-menu or app-bar Quick menu button is the fallback. |
 | Send/Call          | Same as D-pad Centre/OK; D-pad Centre/OK is the fallback.                                                                              |
 | End Call           | Reserved to the OS. It has no app command; if it backgrounds the app, all held C64 input is released.                                  |
-| F1 / F3            | Run the configured app shortcut below. Both default to Unassigned.                                                                     |
+| F1 / F3            | Run the configured app shortcut below. Defaults: F1 Play/Pause; F3 Next tune.                                                         |
 | Commodore C=       | Open Search. `7` is the tested-key fallback until its event is verified.                                                               |
 | 1–6                | Open Home, Play, Disks, Config, Settings, and Docs respectively.                                                                       |
 | 7                  | Open Search.                                                                                                                           |
@@ -51,7 +51,7 @@ The mappings below are the product contract. Where delivery through the target O
 | Star (`*`)         | Open Diagnostics.                                                                                                                      |
 | Pound (`#`)        | Open Switch device; if only one device exists, show that state rather than doing nothing.                                              |
 
-Each function key has one independently persisted **app shortcut**: Unassigned, Search, Quick menu, Game Mode, Play/Pause, or Next tune. A non-Unassigned action may be assigned to only one key. Assignments apply immediately and appear under Settings > Remote Input and in the Quick menu; Restore defaults sets both to Unassigned. No Back, OK, page jump, destructive action, macro, long press, or per-page assignment is offered. Playback shortcuts act without navigating to Play. If a configured action is unavailable, the app stays put and explains why.
+Each function key has one independently persisted **app shortcut**: Unassigned, Search, Quick menu, Game Mode, Play/Pause, or Next tune. A non-Unassigned action may be assigned to only one key. Assignments apply immediately and appear under Settings > Remote Input and in the Quick menu; Restore defaults sets F1 to Play/Pause and F3 to Next tune. No Back, OK, page jump, destructive action, macro, long press, or per-page assignment is offered. Playback shortcuts act without navigating to Play. If a configured action is unavailable, the app stays put and explains why.
 
 Up or Down selects a group; D-pad Centre/OK enters at its first enabled child. Left Soft Key returns to the group header without leaving the page. At root it navigates back. F1/F3 app shortcuts act once on non-repeat key-down; key-up has no app action. An Unassigned press is consumed but does nothing.
 
@@ -133,7 +133,7 @@ Every transition clears held state before the new owner starts. A key-up is rout
 
 | Current user-visible behaviour                                                   | Recommended behaviour                                                                                                                 |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| F1 globally plays/pauses and F3 skips, even away from Playback.                  | Both app shortcuts default to Unassigned and are user-selectable; every C64 input surface sends literal C64 F1/F3 instead.            |
+| F1 globally plays/pauses and F3 skips, even away from Playback.                  | F1 defaults to Play/Pause and F3 to Next tune; both are user-selectable, and every C64 input surface sends literal C64 F1/F3 instead. |
 | Manual says F2 is Menu; the handset has Commodore C= instead, and C= is unbound. | Remove F2 from the handset model. Right Soft Key is Menu; once its event is verified, C= opens Search, with `7` retained as fallback. |
 | “Back” and “menu key” do not identify pictured keys.                             | Left Soft Key is Back; Right Soft Key is Menu; Star alone toggles C64/View.                                                           |
 | `8` and `9` app commands exist but are absent from the manual shortcut table.    | Document `8` C64 pause/resume and confirmed-only `9` reset.                                                                           |

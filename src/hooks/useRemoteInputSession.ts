@@ -654,8 +654,13 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") releaseAll();
     };
+    const handleWindowBlur = () => releaseAll();
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
   }, [releaseAll]);
 
   useEffect(() => {

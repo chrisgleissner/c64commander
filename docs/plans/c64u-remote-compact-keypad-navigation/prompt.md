@@ -147,8 +147,8 @@ Pound. In particular:
 - normal-context shortcuts include `1`-`7`, `0`, Star, and Pound as documented in
   the specification, plus `8` for C64 pause/resume and `9` for a confirmation dialog
   before reset. A single press must never execute a destructive device action.
-- In normal app navigation only, F1/F3 run their persisted app assignments. Each
-  defaults to Unassigned; the allowlist is exactly Unassigned, Search, Quick menu,
+- In normal app navigation only, F1/F3 run their persisted app assignments. The
+  defaults are F1 Play/Pause and F3 Next tune; the allowlist is exactly Unassigned, Search, Quick menu,
   Game Mode, Play/Pause, and Next tune. Reject assigning the same non-Unassigned
   action to both keys. Apply changes immediately, provide Restore defaults, and
   expose the current pair under Settings > Remote Input and in the Quick menu.
@@ -291,7 +291,7 @@ mode must be possible with physical-key semantics alone.
 - Persist the two app assignments through the existing app-settings primitives,
   validate unknown stored values back to Unassigned, broadcast changes for live
   consumers, and include them in settings export/import. Bump that schema and keep
-  prior schema versions importable with Unassigned defaults. Do not create a second
+  prior schema versions importable with F1 Play/Pause and F3 Next tune defaults. Do not create a second
   settings store.
 - Preserve browser/web keyboard operation and Android behavior unless the target
   specification intentionally changes them.

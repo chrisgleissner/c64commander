@@ -186,6 +186,41 @@ describe("RemoteInputSheet", () => {
     expect(setHeldJoystickInputsMock).toHaveBeenCalledWith(new Set());
   });
 
+  it("relays physical F1 as a held literal C64 key on the full input tier", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const sheet = screen.getByTestId("remote-input-sheet");
+
+    fireEvent.keyDown(sheet, { code: "F1", key: "F1" });
+    expect(setHeldKeyboardInputsMock).toHaveBeenCalledWith(new Set(["f1"]));
+    fireEvent.keyUp(sheet, { code: "F1", key: "F1" });
+    expect(setHeldKeyboardInputsMock).toHaveBeenLastCalledWith(new Set());
+    expect(sendSpecialKeyMock).not.toHaveBeenCalled();
+  });
+
+  it("injects physical F3 once through the KERNAL fallback and ignores its key-up and repeat", () => {
+    tierState.tier = "kernal-fallback";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const sheet = screen.getByTestId("remote-input-sheet");
+
+    fireEvent.keyDown(sheet, { code: "F3", key: "F3" });
+    fireEvent.keyDown(sheet, { code: "F3", key: "F3", repeat: true });
+    fireEvent.keyUp(sheet, { code: "F3", key: "F3" });
+
+    expect(sendSpecialKeyMock).toHaveBeenCalledTimes(1);
+    expect(sendSpecialKeyMock).toHaveBeenCalledWith("f3");
+    expect(setHeldKeyboardInputsMock).not.toHaveBeenCalled();
+  });
+
+  it("does not relay physical function keys while authentication is required", () => {
+    tierState.tier = "auth-required";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    fireEvent.keyDown(screen.getByTestId("remote-input-sheet"), { code: "F1", key: "F1" });
+
+    expect(sendSpecialKeyMock).not.toHaveBeenCalled();
+    expect(setHeldKeyboardInputsMock).not.toHaveBeenCalled();
+  });
+
   it("ignores physical direction keys while in Type mode (no joystick relay)", () => {
     initialSessionOutputMode = "type";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);

@@ -249,6 +249,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     binding: joystickBinding,
     rotation: deviceRotation,
     onHashKey: gameMode ? quickKeysOverlay.toggle : undefined,
+    tier,
+    heldKeyboardInputs: session.heldKeyboardInputs,
+    setHeldKeyboardInputs: session.setHeldKeyboardInputs,
+    sendSpecialKey: session.sendSpecialKey,
     // The one observation `auto` is allowed to act on: a key that reached the C64 as a
     // joystick input, which nothing but a player driving the game does.
     onJoystickKeyRelayed: () => setKeyDriven(true),

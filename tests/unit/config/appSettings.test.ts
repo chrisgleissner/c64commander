@@ -52,6 +52,11 @@ import {
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
   saveVicPaletteId,
+  DEFAULT_REMOTE_FUNCTION_1_ACTION,
+  DEFAULT_REMOTE_FUNCTION_3_ACTION,
+  loadRemoteFunction1Action,
+  loadRemoteFunction3Action,
+  saveRemoteFunctionActions,
 } from "@/lib/config/appSettings";
 
 const collectSettingEvents = () => {
@@ -98,6 +103,8 @@ describe("appSettings", () => {
     expect(loadLocalEngineEnabled()).toBe(DEFAULT_LOCAL_ENGINE_ENABLED);
     expect(DEFAULT_LOCAL_ENGINE_ENABLED).toBe(true); // GA: the on-device engine choice is offered
     expect(loadVicPaletteId()).toBe("device");
+    expect(loadRemoteFunction1Action()).toBe(DEFAULT_REMOTE_FUNCTION_1_ACTION);
+    expect(loadRemoteFunction3Action()).toBe(DEFAULT_REMOTE_FUNCTION_3_ACTION);
   });
 
   it("uses device palette when storage is unavailable during server rendering", () => {
@@ -138,6 +145,19 @@ describe("appSettings", () => {
     localStorage.setItem(APP_SETTINGS_KEYS.PLAYBACK_ENGINE_KEY, "bogus");
     expect(loadPlaybackEngine()).toBe("c64");
     dispose();
+  });
+
+  it("keeps high-value function defaults, rejects duplicate assignments, and falls back invalid storage to Unassigned", () => {
+    expect(saveRemoteFunctionActions("search", "search")).toBe(false);
+    expect(loadRemoteFunction1Action()).toBe("playPause");
+    expect(loadRemoteFunction3Action()).toBe("nextTune");
+
+    expect(saveRemoteFunctionActions("search", "nextTune")).toBe(true);
+    expect(loadRemoteFunction1Action()).toBe("search");
+    expect(loadRemoteFunction3Action()).toBe("nextTune");
+
+    localStorage.setItem(APP_SETTINGS_KEYS.REMOTE_FUNCTION_1_ACTION_KEY, "not-an-action");
+    expect(loadRemoteFunction1Action()).toBe("unassigned");
   });
 
   it("saves values and emits setting events", () => {

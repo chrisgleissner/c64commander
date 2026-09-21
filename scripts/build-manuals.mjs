@@ -684,7 +684,9 @@ const renderKeyboardReference = ({ features, variant }) => {
       ],
     ),
     "",
-    "Two keys carry most of it: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
+    isC64uRemoteVariant(variant)
+      ? "Two keys carry most of it: **D-pad Centre/OK goes in, Left Soft Key comes out**, and **Right Soft Key opens choices**. F1 and F3 are separate, configurable shortcuts; they are never aliases for the soft keys."
+      : "Two keys carry most of it: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
     "",
     "#### Number Keys",
     "",
@@ -706,17 +708,19 @@ const renderKeyboardReference = ({ features, variant }) => {
     "",
     "`7` opens search, and keeps working even with directional navigation switched off.",
     "",
-    "#### Transport Keys",
+    isC64uRemoteVariant(variant) ? "#### Function Keys" : "#### Transport Keys",
     "",
     table(
       ["Key", "What it does"],
       [
-        ["F1", "Play or pause, from any page"],
-        ["F3", "Next tune, from any page"],
+        ["F1", isC64uRemoteVariant(variant) ? "Run its normal-navigation assignment (default: Play/Pause)" : "Play or pause, from any page"],
+        ["F3", isC64uRemoteVariant(variant) ? "Run its normal-navigation assignment (default: Next tune)" : "Next tune, from any page"],
       ],
     ),
     "",
-    "Press either from any page and the app takes you to Play and does it there. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key Explorer** and press one.",
+    isC64uRemoteVariant(variant)
+      ? "Change either assignment in **Settings → Play and Disk → Remote function keys**. A function-key shortcut acts without changing page; while an intentional C64 input surface owns the keypad it sends the identically labelled C64 key instead. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key Explorer** and press one."
+      : "Press either from any page and the app takes you to Play and does it there. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key Explorer** and press one.",
     "",
     "#### Star and Pound",
     "",
