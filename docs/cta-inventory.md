@@ -971,6 +971,12 @@ would do nothing is disabled) and
 `keypad-quick-menu-section-descriptions` (show or hide the one-line description
 under each card title).
 
+C64U Remote only: above the list, a summary of the current F1 and F3 assignments
+with a **Configure** link (`keypad-quick-menu-configure-function-keys`). It opens
+Settings, expands Play and Disk, and focuses the F1 assignment inside the Remote
+function keys card (`settings-remote-function-actions`) through the same resolver
+search results use.
+
 Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`,
 `keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,

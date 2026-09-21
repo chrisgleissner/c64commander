@@ -160,22 +160,37 @@ describe("KeypadQuickMenu function-key summary", () => {
     expect(screen.getByTestId("keypad-quick-menu-function-summary")).toHaveTextContent("F1: Unassigned");
   });
 
-  it("opens Settings from Configure and closes the menu", async () => {
+  it("lands Configure on the F1 assignment in the function-key card, not the top of Settings", async () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
           <Route path="/" element={<div data-testid="home-route" />} />
-          <Route path="/settings" element={<div data-testid="settings-route" />} />
+          <Route
+            path="/settings"
+            element={
+              <div data-testid="settings-route">
+                <button type="button">Unrelated first control</button>
+                <section data-section-scope="settings" data-section-id="play-and-disk">
+                  <div data-testid="settings-remote-function-actions">
+                    <button type="button" data-testid="settings-remote-function-1">
+                      F1 assignment
+                    </button>
+                  </div>
+                </section>
+              </div>
+            }
+          />
         </Routes>
         <KeypadQuickMenu />
       </MemoryRouter>,
     );
     await openMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: "Configure" }));
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-configure-function-keys"));
 
     await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
-    expect(screen.getByTestId("settings-route")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("settings-remote-function-1")).toHaveFocus());
+    expect(screen.getByTestId("settings-remote-function-actions")).toHaveAttribute("data-search-landed", "true");
   });
 
   it("has no function-key summary in C64 Commander", async () => {
