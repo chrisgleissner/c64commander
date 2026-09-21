@@ -20,23 +20,7 @@ import {
   saveRemoteFunctionActions,
   type RemoteFunctionAction,
 } from "@/lib/config/appSettings";
-
-const functionActionLabel = (action: RemoteFunctionAction): string => {
-  switch (action) {
-    case "unassigned":
-      return "Unassigned";
-    case "quickMenu":
-      return "Quick menu";
-    case "gameMode":
-      return "Game Mode";
-    case "playPause":
-      return "Play/Pause";
-    case "nextTune":
-      return "Next tune";
-    case "search":
-      return "Search";
-  }
-};
+import { REMOTE_FUNCTION_ACTION_LABELS } from "@/lib/input/functionKeyShortcuts";
 
 /** C64U Remote-only assignments for neutral handset F1/F3 events. */
 export const RemoteFunctionSettingsSection = () => {
@@ -85,9 +69,7 @@ export const RemoteFunctionSettingsSection = () => {
                 const next3 = key === 3 ? next : other;
                 if (!saveRemoteFunctionActions(next1, next3)) {
                   setError("F1 and F3 cannot use the same assigned action.");
-                  return;
                 }
-                setError(null);
               }}
             >
               <SelectTrigger id={`settings-remote-function-${key}`} data-testid={`settings-remote-function-${key}`}>
@@ -96,7 +78,7 @@ export const RemoteFunctionSettingsSection = () => {
               <SelectContent>
                 {REMOTE_FUNCTION_ACTIONS.map((action) => (
                   <SelectItem key={action} value={action} disabled={action !== "unassigned" && action === other}>
-                    {functionActionLabel(action)}
+                    {REMOTE_FUNCTION_ACTION_LABELS[action]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -108,10 +90,7 @@ export const RemoteFunctionSettingsSection = () => {
       <Button
         type="button"
         variant="outline"
-        onClick={() => {
-          restoreRemoteFunctionActionDefaults();
-          setError(null);
-        }}
+        onClick={restoreRemoteFunctionActionDefaults}
       >
         Restore defaults
       </Button>

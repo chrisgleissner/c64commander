@@ -61,6 +61,29 @@ describe("configured function shortcuts", () => {
     expect(calls.playPause).not.toHaveBeenCalled();
   });
 
+  it("swallows an OS repeat of F3 too, so a held key cannot run a second one-shot command", () => {
+    renderApp();
+
+    const event = new KeyboardEvent("keydown", { code: "F3", key: "F3", repeat: true, cancelable: true });
+    document.body.dispatchEvent(event);
+
+    expect(calls.nextTune).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("leaves F1 alone when no function shortcut handler is wired", () => {
+    render(
+      <FocusNavigationProvider profileId="keypad" shortcuts={{}}>
+        <button type="button">anything focusable</button>
+      </FocusNavigationProvider>,
+    );
+
+    const event = new KeyboardEvent("keydown", { code: "F1", key: "F1", bubbles: true, cancelable: true });
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("consumes an Unassigned assignment without calling another action", () => {
     expect(runFunctionShortcut("unassigned", calls)).toBe(true);
     expect(calls.playPause).not.toHaveBeenCalled();

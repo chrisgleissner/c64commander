@@ -23,12 +23,15 @@ export interface LatchedCommandBus<T> {
   /** Take the latched command if there is one and it has not expired. Claimed exactly once. */
   takePending: () => T | null;
   subscribe: (handler: (command: T) => void) => () => void;
+  /** Whether a consumer is mounted right now, so a caller that must not defer can tell. */
+  hasSubscribers: () => boolean;
   /** Test seam: drops any latched command without delivering it. */
   reset: () => void;
 }
 
 export const createLatchedCommandBus = <T>(eventName: string, ttlMs: number): LatchedCommandBus<T> => {
   let pending: { command: T; atMs: number } | null = null;
+  let subscriberCount = 0;
 
   return {
     publish: (command) => {
@@ -46,8 +49,16 @@ export const createLatchedCommandBus = <T>(eventName: string, ttlMs: number): La
       if (typeof window === "undefined") return () => undefined;
       const listener = (event: Event) => handler((event as CustomEvent<T>).detail);
       window.addEventListener(eventName, listener);
-      return () => window.removeEventListener(eventName, listener);
+      subscriberCount += 1;
+      let subscribed = true;
+      return () => {
+        if (!subscribed) return;
+        subscribed = false;
+        subscriberCount -= 1;
+        window.removeEventListener(eventName, listener);
+      };
     },
+    hasSubscribers: () => subscriberCount > 0,
     reset: () => {
       pending = null;
     },

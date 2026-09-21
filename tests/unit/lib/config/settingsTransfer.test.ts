@@ -37,6 +37,10 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadArchiveUserAgentOverride: vi.fn(),
   loadRemoteFunction1Action: vi.fn(() => "playPause"),
   loadRemoteFunction3Action: vi.fn(() => "nextTune"),
+  DEFAULT_REMOTE_FUNCTION_1_ACTION: "playPause",
+  DEFAULT_REMOTE_FUNCTION_3_ACTION: "nextTune",
+  isRemoteFunctionAction: (value: unknown) =>
+    ["unassigned", "search", "quickMenu", "gameMode", "playPause", "nextTune"].includes(value as string),
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),

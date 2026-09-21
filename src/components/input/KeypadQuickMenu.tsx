@@ -24,12 +24,8 @@ import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { variant } from "@/generated/variant";
-import {
-  APP_SETTINGS_KEYS,
-  loadRemoteFunction1Action,
-  loadRemoteFunction3Action,
-  type RemoteFunctionAction,
-} from "@/lib/config/appSettings";
+import { APP_SETTINGS_KEYS, loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
+import { REMOTE_FUNCTION_ACTION_LABELS } from "@/lib/input/functionKeyShortcuts";
 import {
   loadShowSectionDescriptions,
   requestSectionsBulk,
@@ -150,7 +146,8 @@ export function KeypadQuickMenu() {
         </DialogHeader>
         {String(variant.id) === "c64u-remote" ? (
           <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
-            F1: {functionActionLabel(functionActions[0])} · F3: {functionActionLabel(functionActions[1])}
+            F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
+            {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
             <Button
               variant="link"
               className="ml-1 h-auto min-h-11 px-1"
@@ -289,13 +286,3 @@ export function KeypadQuickMenu() {
     </Dialog>
   );
 }
-
-const functionActionLabel = (action: RemoteFunctionAction): string =>
-  ({
-    unassigned: "Unassigned",
-    search: "Search",
-    quickMenu: "Quick menu",
-    gameMode: "Game Mode",
-    playPause: "Play/Pause",
-    nextTune: "Next tune",
-  })[action];

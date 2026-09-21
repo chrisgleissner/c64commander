@@ -22,6 +22,9 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
   loadScreenOrientationMode,
+  DEFAULT_REMOTE_FUNCTION_1_ACTION,
+  DEFAULT_REMOTE_FUNCTION_3_ACTION,
+  isRemoteFunctionAction,
   loadRemoteFunction1Action,
   loadRemoteFunction3Action,
   loadStartupDiscoveryWindowMs,
@@ -189,13 +192,16 @@ const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => valu
 const isScreenOrientationMode = (value: unknown): value is ScreenOrientationMode =>
   value === "portrait" || value === "landscape" || value === "auto";
 
-const isRemoteFunctionAction = (value: unknown): value is RemoteFunctionAction =>
-  value === "unassigned" ||
-  value === "search" ||
-  value === "quickMenu" ||
-  value === "gameMode" ||
-  value === "playPause" ||
-  value === "nextTune";
+/** Exports older than v3 carry no assignments; a missing one takes its default. */
+const resolveImportedFunctionActions = (record: Record<string, unknown>) =>
+  [
+    isRemoteFunctionAction(record.remoteFunction1Action)
+      ? record.remoteFunction1Action
+      : DEFAULT_REMOTE_FUNCTION_1_ACTION,
+    isRemoteFunctionAction(record.remoteFunction3Action)
+      ? record.remoteFunction3Action
+      : DEFAULT_REMOTE_FUNCTION_3_ACTION,
+  ] as const;
 
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "AUTO" ||
@@ -275,6 +281,9 @@ const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = [
     return "remoteFunction1Action is invalid.";
   if ("remoteFunction3Action" in record && !isRemoteFunctionAction(record.remoteFunction3Action))
     return "remoteFunction3Action is invalid.";
+  const [function1, function3] = resolveImportedFunctionActions(record);
+  if (function1 !== "unassigned" && function1 === function3)
+    return "remoteFunction1Action and remoteFunction3Action cannot use the same action.";
   if ("commoserveEnabled" in record && typeof record.commoserveEnabled !== "boolean")
     return "commoserveEnabled must be boolean.";
   return null;
@@ -347,9 +356,8 @@ export const importSettingsJson = async (
   const deviceSafety = payload.deviceSafety as Record<string, unknown> | undefined;
   const version = payload.version;
 
-  // Function assignments were added in v3. Treat their absence as defaults even
-  // when a hand-authored current-version export omits them; existing exported
-  // settings remain importable and unknown values still fail validation.
+  // Function assignments were added in v3 and are optional in every version; see
+  // resolveImportedFunctionActions for what an absent one becomes.
   const appError = validateAppSettings(appSettings, [
     ...(version < SETTINGS_EXPORT_VERSION ? LEGACY_OPTIONAL_APP_SETTINGS_KEYS : []),
     "remoteFunction1Action",
@@ -393,9 +401,7 @@ export const importSettingsJson = async (
   saveArchiveHostOverride(safeApp.archiveHostOverride);
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
-  if (isRemoteFunctionAction(safeApp.remoteFunction1Action) && isRemoteFunctionAction(safeApp.remoteFunction3Action)) {
-    saveRemoteFunctionActions(safeApp.remoteFunction1Action, safeApp.remoteFunction3Action);
-  }
+  saveRemoteFunctionActions(...resolveImportedFunctionActions(appSettings as Record<string, unknown>));
 
   saveDeviceSafetyMode(safeSafety.mode);
   const safetyDefaults = loadDeviceSafetyConfig();

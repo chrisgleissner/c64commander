@@ -57,6 +57,9 @@ import {
   loadRemoteFunction1Action,
   loadRemoteFunction3Action,
   saveRemoteFunctionActions,
+  restoreRemoteFunctionActionDefaults,
+  REMOTE_FUNCTION_ACTIONS,
+  isRemoteFunctionAction,
 } from "@/lib/config/appSettings";
 
 const collectSettingEvents = () => {
@@ -147,7 +150,7 @@ describe("appSettings", () => {
     dispose();
   });
 
-  it("keeps high-value function defaults, rejects duplicate assignments, and falls back invalid storage to Unassigned", () => {
+  it("keeps high-value function defaults, rejects duplicate assignments, and falls back unrecognised storage to the default", () => {
     expect(saveRemoteFunctionActions("search", "search")).toBe(false);
     expect(loadRemoteFunction1Action()).toBe("playPause");
     expect(loadRemoteFunction3Action()).toBe("nextTune");
@@ -157,7 +160,28 @@ describe("appSettings", () => {
     expect(loadRemoteFunction3Action()).toBe("nextTune");
 
     localStorage.setItem(APP_SETTINGS_KEYS.REMOTE_FUNCTION_1_ACTION_KEY, "not-an-action");
+    expect(loadRemoteFunction1Action()).toBe(DEFAULT_REMOTE_FUNCTION_1_ACTION);
+    localStorage.setItem(APP_SETTINGS_KEYS.REMOTE_FUNCTION_3_ACTION_KEY, "not-an-action");
+    expect(loadRemoteFunction3Action()).toBe(DEFAULT_REMOTE_FUNCTION_3_ACTION);
+  });
+
+  it("stores an unrecognised function assignment as Unassigned and lets both keys be Unassigned", () => {
+    expect(saveRemoteFunctionActions("not-an-action", "unassigned")).toBe(true);
     expect(loadRemoteFunction1Action()).toBe("unassigned");
+    expect(loadRemoteFunction3Action()).toBe("unassigned");
+  });
+
+  it("restores the F1 Play/Pause and F3 Next tune defaults", () => {
+    saveRemoteFunctionActions("search", "gameMode");
+    restoreRemoteFunctionActionDefaults();
+    expect(loadRemoteFunction1Action()).toBe("playPause");
+    expect(loadRemoteFunction3Action()).toBe("nextTune");
+  });
+
+  it("recognises exactly the offered function actions", () => {
+    for (const action of REMOTE_FUNCTION_ACTIONS) expect(isRemoteFunctionAction(action)).toBe(true);
+    expect(isRemoteFunctionAction("back")).toBe(false);
+    expect(isRemoteFunctionAction(undefined)).toBe(false);
   });
 
   it("saves values and emits setting events", () => {

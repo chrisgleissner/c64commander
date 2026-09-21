@@ -867,14 +867,17 @@ export const loadArchiveUserAgentOverride = () => loadString(ARCHIVE_USER_AGENT_
 
 export const saveArchiveUserAgentOverride = (value: string) => writeString(ARCHIVE_USER_AGENT_OVERRIDE_KEY, value);
 
+export const isRemoteFunctionAction = (value: unknown): value is RemoteFunctionAction =>
+  REMOTE_FUNCTION_ACTIONS.includes(value as RemoteFunctionAction);
+
 const normalizeRemoteFunctionAction = (value: unknown): RemoteFunctionAction =>
-  REMOTE_FUNCTION_ACTIONS.includes(value as RemoteFunctionAction) ? (value as RemoteFunctionAction) : "unassigned";
+  isRemoteFunctionAction(value) ? value : "unassigned";
 
 export const loadRemoteFunction1Action = (): RemoteFunctionAction =>
-  normalizeRemoteFunctionAction(readRawString(REMOTE_FUNCTION_1_ACTION_KEY) ?? DEFAULT_REMOTE_FUNCTION_1_ACTION);
+  readEnum(REMOTE_FUNCTION_1_ACTION_KEY, REMOTE_FUNCTION_ACTIONS, DEFAULT_REMOTE_FUNCTION_1_ACTION);
 
 export const loadRemoteFunction3Action = (): RemoteFunctionAction =>
-  normalizeRemoteFunctionAction(readRawString(REMOTE_FUNCTION_3_ACTION_KEY) ?? DEFAULT_REMOTE_FUNCTION_3_ACTION);
+  readEnum(REMOTE_FUNCTION_3_ACTION_KEY, REMOTE_FUNCTION_ACTIONS, DEFAULT_REMOTE_FUNCTION_3_ACTION);
 
 /** Save both assignments atomically at the settings layer, rejecting duplicate non-empty actions. */
 export const saveRemoteFunctionActions = (function1: unknown, function3: unknown): boolean => {

@@ -66,6 +66,17 @@ const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 const TEXT_SCALE_KEY = "c64u_text_scale";
 const HVSC_UPDATE_CHECK_INTERVAL_DAYS_KEY = "c64u_hvsc_update_check_interval_days";
 
+const variantIdOverride = vi.hoisted(() => ({ current: null as string | null }));
+vi.mock("@/generated/variant", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/generated/variant")>();
+  return {
+    ...actual,
+    get variant() {
+      return variantIdOverride.current ? { ...actual.variant, id: variantIdOverride.current } : actual.variant;
+    },
+  };
+});
+
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
@@ -2980,6 +2991,26 @@ describe("SettingsPage autofire rate slider (Issue 3b)", () => {
 
     fireEvent.mouseUp(slider);
     expect(localStorage.getItem("c64u_remote_input_autofire_rate_hz")).toBe("8");
+  });
+});
+
+describe("SettingsPage remote function key assignments", () => {
+  afterEach(() => {
+    variantIdOverride.current = null;
+  });
+
+  it("shows the F1/F3 assignments on C64U Remote", () => {
+    variantIdOverride.current = "c64u-remote";
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-remote-function-actions")).toBeInTheDocument();
+  });
+
+  it("leaves the F1/F3 assignments out of C64 Commander", () => {
+    variantIdOverride.current = "c64commander";
+    renderSettingsPage();
+
+    expect(screen.queryByTestId("settings-remote-function-actions")).toBeNull();
   });
 });
 
