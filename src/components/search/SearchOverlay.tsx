@@ -80,9 +80,6 @@ const recentQueryId = (query: string) => `search-recent-${query.replace(/[^a-zA-
 const moreStopId = (group: SearchGroup) => `search-more-${group}`;
 const EMPTY_PLAY_STOP_ID = "search-empty-play";
 
-/** Keypad bindings prepended to the keyboard ones, so a D-pad and a keyboard both resolve here. */
-const OVERLAY_KEYMAP = resolveInputProfile("keypad");
-
 interface GroupedResults {
   readonly group: SearchGroup;
   readonly rows: readonly ScoredEntry[];
@@ -323,7 +320,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
    */
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      const action = resolveSemanticAction(OVERLAY_KEYMAP, event);
+      const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
       // The device Back key resolves to no action at all, so it is asked for by name. Without this
       // the hardware Back button could not close the overlay on the handset.
       if (action === "escape" || action === "back" || isDeviceBackKey(event)) {

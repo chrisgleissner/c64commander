@@ -56,7 +56,6 @@ import {
   isFocusVisible,
   isHorizontalKeyOwner,
   normalizeKeyEvent,
-  resolveInputProfile,
   SKIP_ATTR,
   setInputModality,
   subscribeInputModality,
@@ -64,6 +63,7 @@ import {
   type FocusDescriptor,
   type Keymap,
 } from "@/lib/input";
+import { useInputProfile } from "@/hooks/useInputProfile";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
@@ -392,7 +392,7 @@ export const FocusNavigationProvider = ({
     };
   }, []);
 
-  const keymap = useMemo(() => resolveInputProfile(profileId), [profileId]);
+  const keymap = useInputProfile(profileId);
 
   /*
    * HARD27-039: the engine observes the whole body, so with the flag on - the

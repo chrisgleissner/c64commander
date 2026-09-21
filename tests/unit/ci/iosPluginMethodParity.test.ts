@@ -87,7 +87,13 @@ export const KNOWN_IOS_METHOD_GAPS = new Map<string, Map<string, string>>([
       ["requestPermissions", "iOS needs no runtime notification permission for background audio"],
     ]),
   ],
-  ["DiagnosticsBridge", new Map([["emitLog", "iOS logs through IOSDiagnostics directly rather than over the bridge"]])],
+  [
+    "DiagnosticsBridge",
+    new Map([
+      ["emitLog", "iOS logs through IOSDiagnostics directly rather than over the bridge"],
+      ["getDeviceIdentity", "keymap override files, its only caller, are read on Android only"],
+    ]),
+  ],
   [
     "FolderPicker",
     new Map([["releasePersistedUris", "iOS security-scoped bookmarks are released when they go out of scope"]]),

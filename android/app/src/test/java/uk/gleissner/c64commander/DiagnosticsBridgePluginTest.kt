@@ -230,6 +230,19 @@ class DiagnosticsBridgePluginTest {
     }
 
     @Test
+    fun getDeviceIdentityResolvesBuildManufacturerModelAndDevice() {
+        val call = mock(PluginCall::class.java)
+        val captor = org.mockito.ArgumentCaptor.forClass(JSObject::class.java)
+
+        plugin.getDeviceIdentity(call)
+
+        verify(call).resolve(captor.capture())
+        assertEquals(Build.MANUFACTURER, captor.value.getString("manufacturer"))
+        assertEquals(Build.MODEL, captor.value.getString("model"))
+        assertEquals(Build.DEVICE, captor.value.getString("device"))
+    }
+
+    @Test
     fun emitLogWritesSwitchResultToLogcatAndBroadcastsDiagnosticsIntent() {
         ShadowLog.clear()
         val call = mock(PluginCall::class.java)

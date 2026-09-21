@@ -34,7 +34,6 @@ import {
   getInputModality,
   normalizeKeyEvent,
   pendingCandidateCount,
-  resolveInputProfile,
   resolveT9Config,
   setInputModality,
   setText,
@@ -43,6 +42,7 @@ import {
   type T9Mode,
   type T9State,
 } from "@/lib/input";
+import { useInputProfile } from "@/hooks/useInputProfile";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 
 /**
@@ -101,7 +101,7 @@ export const useT9Input = ({
   now = defaultNow,
 }: UseT9InputOptions): UseT9Input => {
   const resolvedConfig = useMemo(() => resolveT9Config(config), [config]);
-  const keymap = useMemo(() => resolveInputProfile(profileId), [profileId]);
+  const keymap = useInputProfile(profileId);
   const stateRef = useRef<T9State>(createT9State({ text: value, mode: initialMode }));
   const lastEmittedRef = useRef<string>(value);
   const previousValueRef = useRef<string>(value);

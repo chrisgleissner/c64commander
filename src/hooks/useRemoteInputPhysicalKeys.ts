@@ -22,10 +22,6 @@ import type { RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 import type { RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import type { AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
 
-// Matches the profile the app applies globally (App.tsx's FocusNavigationProvider
-// profileId) so physical-key resolution is consistent with the rest of the UI.
-const PHYSICAL_INPUT_KEYMAP = resolveInputProfile("keypad");
-
 export interface RemoteInputPhysicalKeysOptions {
   outputMode: RemoteInputOutputMode;
   heldJoystickInputs: ReadonlySet<JoystickInputName>;
@@ -193,7 +189,7 @@ export const useRemoteInputPhysicalKeys = ({
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      const action = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
+      const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
       if (handleMirrorKey(event, action)) return;
       if (action === "hash" && onHashKey) {
         event.preventDefault();
@@ -247,7 +243,6 @@ export const useRemoteInputPhysicalKeys = ({
       onHashKey,
       onJoystickKeyRelayed,
       tier,
-      heldKeyboardInputs,
       setHeldKeyboardInputs,
       sendSpecialKey,
     ],
@@ -255,7 +250,7 @@ export const useRemoteInputPhysicalKeys = ({
 
   const handleKeyUp = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      const action = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
+      const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
       if (action === "function1" || action === "function3") {
         const key = action === "function1" ? "f1" : "f3";
         if (!heldFunctionKeysRef.current.delete(key)) return;
@@ -272,7 +267,7 @@ export const useRemoteInputPhysicalKeys = ({
       heldPhysicalKeysRef.current.delete(action);
       recomputePhysicalHeldSet();
     },
-    [recomputePhysicalHeldSet, tier, heldKeyboardInputs, setHeldKeyboardInputs],
+    [recomputePhysicalHeldSet, tier, setHeldKeyboardInputs],
   );
 
   // Clear tracked physical keys (and what they last contributed) on every

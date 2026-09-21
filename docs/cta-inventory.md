@@ -652,7 +652,9 @@ Opened by three doors — the Home field, the Quick Menu's top entry
 ### 5.0.2 Key Explorer (`key-explorer-popup`)
 
 Under Diagnostics (`open-key-explorer-screen`). Copy as text — `key-explorer-copy` — R✅ I✅ ;
-Clear — `key-explorer-clear` — R✅ I✅. Records key identity only, never a typed character.
+Clear — `key-explorer-clear` — R✅ I✅; Reload keymap files — `key-explorer-reload-keymaps` — R✅ I✅
+(re-reads the keymap override files and lists which were applied or skipped). Records key identity
+only, never a typed character.
 
 When an app dialog / sheet / Radix menu opens, it becomes the active scope and
 its controls are discovered the same way (Up/Down within, OK activates, Back/Esc

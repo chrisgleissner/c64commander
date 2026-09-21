@@ -101,12 +101,66 @@ right value, and binding a **guessed** real code is worse than binding nothing:
 a wrong guess shadows a key that already works. The intended action is recorded
 — the Commodore key opens search, a second door beside `7` — so once someone
 reads its real code off hardware with the Key Explorer (§5.1), binding it is one
-row in `profiles/keypad.ts`.
+row in a keymap override file (§3.4), and later in `profiles/keypad.ts` once it
+is confirmed.
 
 **Nothing may be bound to `keyCode: 0`.** `useFocusNavigation` recognises the
 Android hardware Back button as `key === "Escape" && code === "" && keyCode === 0`,
 so such a binding would silently steal Back on every handset.
-`transportBindings.test.ts` asserts no profile has one.
+`transportBindings.test.ts` asserts no profile has one, and the override file
+schema rejects one.
+
+### 3.4 Keymap override files: per-handset bindings without a rebuild
+
+The built-in profiles are TypeScript and stay the tested defaults. On Android,
+the app also reads every `*.json` file in `keymaps/` inside its private files
+directory (`/data/data/<package>/files/keymaps/`, Capacitor `Directory.Data`)
+at startup, and again when **Reload keymap files** is pressed in the Key
+Explorer. No rebuild or reinstall is needed. The loader is
+`src/lib/input/keymapOverrideFiles.ts`; the schema is
+`src/lib/input/keymapOverrides.ts`.
+
+```json
+{
+  "schema": 1,
+  "match": { "manufacturer": "Acme", "model": "K100" },
+  "extends": "keypad",
+  "bindings": [
+    { "keyCode": 142, "action": "openSearch" },
+    { "key": "F1", "action": "function1" }
+  ],
+  "timing": { "multiTapTimeoutMs": 1000 }
+}
+```
+
+- `match` is optional. Without it the file applies to every handset. With it,
+  each named field must equal the handset's Android `Build.MANUFACTURER` /
+  `Build.MODEL`, compared case-insensitively. The Key Explorer shows both values
+  for the handset in hand.
+- `extends` names the built-in profile the bindings go in front of: `keypad`
+  (the default, and the only profile the app mounts) or `defaultKeyboard`.
+- Each binding needs at least one of `code`, `key` or a positive `keyCode`, plus
+  one of the semantic actions listed above. `shift`, `alt` and `ctrl` are
+  optional modifiers. Matching is first-match-wins, so a file binding shadows a
+  built-in binding for the same key.
+- Files without `match` are applied first and device-specific files after them,
+  each group in file-name order, so a device file shadows a generic one.
+- A file that is not valid JSON, fails the schema, or cannot be read is skipped
+  as a whole, logged at WARN, and listed with its reason in the Key Explorer. A
+  file for another handset is listed as skipped for that reason.
+
+To try a binding on a handset, write the file with droidctl's
+`droid_app.write_app_file` (`relativePath: "keymaps/acme-k100.json"`). Without
+droidctl, the equivalent is:
+
+```bash
+adb push acme-k100.json /data/local/tmp/
+adb shell run-as uk.gleissner.c64commander mkdir -p files/keymaps
+adb shell run-as uk.gleissner.c64commander cp /data/local/tmp/acme-k100.json files/keymaps/
+```
+
+Both need a debuggable build, because they go through `run-as`. Then open
+**Diagnostics → Key Explorer**, press **Reload keymap files**, and press the key to see what it now resolves to.
 
 ## 4. Key-only operation
 
@@ -185,7 +239,9 @@ T9 — `t9State` with **lengths/indices only**.
 **Diagnostics → Key Explorer** answers "what does this key actually send?" For
 each key pressed it reports the `key`, `code` and `keyCode` the WebView
 delivered, and the semantic action the keypad profile resolves it to — or that it
-resolves to nothing. The last ten are kept and can be copied as text.
+resolves to nothing. The last ten are kept and can be copied as text. It also
+shows the handset's manufacturer and model, which keymap override files were
+applied or skipped and why, and a **Reload keymap files** button (§3.4).
 
 It cannot reuse the diagnostics above, for three reasons that all apply at once:
 they emit only when debug logging is on; events on editable targets are

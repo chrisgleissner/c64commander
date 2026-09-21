@@ -12,6 +12,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -127,6 +128,16 @@ open class DiagnosticsBridgePlugin : Plugin() {
     }
 
     call.resolve()
+  }
+
+  /** The handset's make and model, which select its keymap override files. */
+  @PluginMethod
+  fun getDeviceIdentity(call: PluginCall) {
+    val identity = JSObject()
+    identity.put("manufacturer", Build.MANUFACTURER ?: "")
+    identity.put("model", Build.MODEL ?: "")
+    identity.put("device", Build.DEVICE ?: "")
+    call.resolve(identity)
   }
 
   override fun handleOnDestroy() {
