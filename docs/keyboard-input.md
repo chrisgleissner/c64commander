@@ -118,7 +118,7 @@ directory (`/data/data/<package>/files/keymaps/`, Capacitor `Directory.Data`)
 at startup, and again when **Reload keymap files** is pressed in the Key
 Explorer. No rebuild or reinstall is needed. The loader is
 `src/lib/input/keymapOverrideFiles.ts`; the schema is
-`src/lib/input/keymapOverrides.ts`.
+`src/lib/input/keymapOverrideSchema.ts`.
 
 ```json
 {

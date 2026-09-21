@@ -9,13 +9,8 @@
 import { addLog } from "@/lib/logging";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 
-import {
-  installKeymapOverrides,
-  matchesDevice,
-  parseKeymapOverride,
-  type DeviceIdentity,
-  type KeymapOverrideFile,
-} from "./keymapOverrides";
+import { installKeymapOverrides, matchesDevice, type DeviceIdentity, type KeymapOverrideFile } from "./keymapOverrides";
+import { parseKeymapOverride } from "./keymapOverrideSchema";
 
 /** Relative to the app's private files directory (Capacitor `Directory.Data`, Android `filesDir`). */
 export const KEYMAP_OVERRIDE_DIRECTORY = "keymaps";

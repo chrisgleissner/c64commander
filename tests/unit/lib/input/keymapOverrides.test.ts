@@ -16,10 +16,10 @@ import {
   getKeymapOverridesVersion,
   installKeymapOverrides,
   matchesDevice,
-  parseKeymapOverride,
   subscribeKeymapOverrides,
   type KeymapOverrideFile,
 } from "@/lib/input/keymapOverrides";
+import { parseKeymapOverride } from "@/lib/input/keymapOverrideSchema";
 import {
   getKeymapOverrideReport,
   loadKeymapOverrides,

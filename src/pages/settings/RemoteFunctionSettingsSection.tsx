@@ -87,11 +87,7 @@ export const RemoteFunctionSettingsSection = () => {
         );
       })}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button
-        type="button"
-        variant="outline"
-        onClick={restoreRemoteFunctionActionDefaults}
-      >
+      <Button type="button" variant="outline" onClick={restoreRemoteFunctionActionDefaults}>
         Restore defaults
       </Button>
     </div>

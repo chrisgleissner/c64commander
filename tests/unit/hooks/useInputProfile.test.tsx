@@ -10,7 +10,8 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
-import { installKeymapOverrides, parseKeymapOverride } from "@/lib/input/keymapOverrides";
+import { installKeymapOverrides } from "@/lib/input/keymapOverrides";
+import { parseKeymapOverride } from "@/lib/input/keymapOverrideSchema";
 
 const overrideFile = (bindings: unknown[]) => {
   const parsed = parseKeymapOverride(JSON.stringify({ schema: 1, bindings }));

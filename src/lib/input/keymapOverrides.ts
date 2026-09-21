@@ -6,73 +6,29 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { z } from "zod";
-
-import { mergeKeymaps, type Keymap } from "./keymap";
-import { SEMANTIC_ACTIONS, type SemanticAction } from "./keyEvent";
+import { mergeKeymaps, type Keymap, type KeyBinding } from "./keymap";
 
 /**
  * Keymap override files: JSON a handset owner can edit without rebuilding the app. Each file adds
  * bindings in front of a built-in profile, so the built-in TypeScript profiles stay the tested
- * defaults and a file only has to name what differs on its handset.
+ * defaults and a file only has to name what differs on its handset. Parsing lives in
+ * keymapOverrideSchema.ts so the startup bundle carries only this installed-state half.
  */
 
-export const KEYMAP_OVERRIDE_SCHEMA_VERSION = 1;
+export type OverridableProfileId = "keypad" | "defaultKeyboard";
 
-const OVERRIDABLE_PROFILE_IDS = ["keypad", "defaultKeyboard"] as const;
-export type OverridableProfileId = (typeof OVERRIDABLE_PROFILE_IDS)[number];
-
-const bindingSchema = z
-  .object({
-    code: z.string().min(1).optional(),
-    key: z.string().min(1).optional(),
-    keyCode: z.number().int().positive().optional(),
-    shift: z.boolean().optional(),
-    alt: z.boolean().optional(),
-    ctrl: z.boolean().optional(),
-    action: z.enum(SEMANTIC_ACTIONS as [SemanticAction, ...SemanticAction[]]),
-  })
-  .strict()
-  .refine((binding) => binding.code !== undefined || binding.key !== undefined || binding.keyCode !== undefined, {
-    message: "a binding needs a code, key or keyCode to match",
-  });
-
-const deviceMatchSchema = z
-  .object({ manufacturer: z.string().min(1).optional(), model: z.string().min(1).optional() })
-  .strict();
-
-const keymapOverrideFileSchema = z
-  .object({
-    schema: z.literal(KEYMAP_OVERRIDE_SCHEMA_VERSION),
-    match: deviceMatchSchema.optional(),
-    extends: z.enum(OVERRIDABLE_PROFILE_IDS).default("keypad"),
-    bindings: z.array(bindingSchema),
-    timing: z.object({ multiTapTimeoutMs: z.number().int().positive() }).strict().optional(),
-  })
-  .strict();
-
-export type KeymapOverrideFile = z.infer<typeof keymapOverrideFileSchema>;
+export interface KeymapOverrideFile {
+  readonly schema: 1;
+  readonly match?: { readonly manufacturer?: string; readonly model?: string };
+  readonly extends: OverridableProfileId;
+  readonly bindings: readonly KeyBinding[];
+  readonly timing?: { readonly multiTapTimeoutMs: number };
+}
 
 export interface DeviceIdentity {
   readonly manufacturer: string;
   readonly model: string;
 }
-
-export type ParsedKeymapOverride = { ok: true; file: KeymapOverrideFile } | { ok: false; reason: string };
-
-export const parseKeymapOverride = (text: string): ParsedKeymapOverride => {
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch (error) {
-    return { ok: false, reason: `not valid JSON: ${(error as Error).message}` };
-  }
-  const parsed = keymapOverrideFileSchema.safeParse(json);
-  if (parsed.success) return { ok: true, file: parsed.data };
-  const issue = parsed.error.issues[0];
-  const where = issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
-  return { ok: false, reason: `${where}${issue.message}` };
-};
 
 const sameName = (expected: string | undefined, actual: string) =>
   expected === undefined || expected.trim().toLowerCase() === actual.trim().toLowerCase();

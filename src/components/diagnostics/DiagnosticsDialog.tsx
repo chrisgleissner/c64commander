@@ -110,11 +110,13 @@ import { ConfigDriftView } from "./ConfigDriftView";
 import { DecisionStateView } from "./DecisionStateView";
 import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
-import { KeyExplorerPopup } from "./KeyExplorerPopup";
 
 // Opened from the overflow menu only, so loaded then rather than with the startup bundle, which was over budget.
 const LatencyAnalysisPopup = lazy(() =>
   import("./LatencyAnalysisPopup").then((module) => ({ default: module.LatencyAnalysisPopup })),
+);
+const KeyExplorerPopup = lazy(() =>
+  import("./KeyExplorerPopup").then((module) => ({ default: module.KeyExplorerPopup })),
 );
 const HealthHistoryPopup = lazy(() =>
   import("./HealthHistoryPopup").then((module) => ({ default: module.HealthHistoryPopup })),
@@ -1996,8 +1998,8 @@ export function DiagnosticsDialog({
         {open && historyOpen ? (
           <HealthHistoryPopup open onClose={() => setHistoryOpen(false)} history={healthHistory} />
         ) : null}
+        {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       </Suspense>
-      {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       <HeatMapPopup
         open={open && heatMapVariant !== null}
         onClose={() => setHeatMapVariant(null)}
