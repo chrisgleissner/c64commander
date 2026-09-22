@@ -42,8 +42,6 @@ import {
 import { loadGameModeOnLaunch, saveGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
 import { loadFollowReticle, saveFollowReticle } from "@/lib/streams/followReticle";
 
-const KEYPAD_KEYMAP = resolveInputProfile("keypad");
-
 const LAYOUT_ORDER: readonly JoystickLayoutId[] = ["diamond8", "classicT9", "custom"];
 
 /** How a captured action reads back to the user, without exposing the internal name. */
@@ -100,7 +98,7 @@ export const GameModeSettingsSection = () => {
     const onKeyDown = (event: KeyboardEvent) => {
       const slot = capturingSlotRef.current;
       if (slot === null) return;
-      const action = resolveSemanticAction(KEYPAD_KEYMAP, event);
+      const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
       if (!action) return;
       event.preventDefault();
       if (action === "back" || action === "escape") {

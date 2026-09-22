@@ -57,8 +57,8 @@ fallback, and the legacy Android key code).
 | **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise **open Diagnostics**.                                                                                                                                                                                |
 | **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise **open the Device Switcher** (= badge long-press).                                                                                                                                                                     |
 | (desktop equiv.)      | `ESCAPE` 111 / `Esc` | `escape`          | Dismiss overlay / ascend — **never navigates the route** (only Back/soft-left do).                                                                                                                                                                                |
-| **F1**                | —                    | `mediaPlayPause`  | Play / pause the transport, from any page. Bound in the **keypad profile only**, so a desktop keyboard keeps `F1 → softLeft`. Latched across the navigation to Play.                                                                                             |
-| **F3**                | —                    | `mediaNext`       | Next tune, from any page. Keypad profile only, so a desktop keyboard keeps `F3 → toggleInputMode`.                                                                                                                                                                |
+| **F1**                | verified WebView key | `function1`       | Neutral function action. In C64U Remote normal navigation it runs the persisted F1 assignment (default **Play/Pause**); C64 Commander retains its transport shortcut. On an intentional C64 input surface it sends literal C64 F1. Dialogs, capture, text entry, and View consume it. |
+| **F3**                | verified WebView key | `function3`       | Neutral function action. In C64U Remote normal navigation it runs the persisted F3 assignment (default **Next tune**); C64 Commander retains its transport shortcut. On an intentional C64 input surface it sends literal C64 F3. Dialogs, capture, text entry, and View consume it. |
 | **Commodore**         | unknown              | —                 | **Not bound.** Its emitted code is unknown, and a guessed real code would shadow a key that already works. Intended action once known: open Search. See Diagnostics → Key Explorer.                                                                                |
 
 Desktop/Bluetooth-keyboard equivalents (`defaultKeyboard` profile): Arrows =
@@ -561,7 +561,12 @@ settings-joystick-bind-rejection naming what the key already does]` ;
   R✅ I✅ _(per-variant default from `variant.runtime.defaultGameModeOnLaunch`)_ ;
   Show Autofire button — checkbox — `settings-show-autofire` — R✅ I✅ ; Autofire
   rate — slider — `settings-autofire-rate-slider` — R✅ I✅ `[disabled while the
-Autofire button is hidden]`
+Autofire button is hidden]`; **C64U Remote only:** F1 assignment — select —
+`settings-remote-function-1` — R✅ I✅; F3 assignment — select —
+`settings-remote-function-3` — R✅ I✅; Restore defaults — button in
+`settings-remote-function-actions` — R✅ I✅. The allowlist is Unassigned, Search,
+Quick menu, Game Mode, Play/Pause, and Next tune; duplicate non-Unassigned
+assignments are refused. Defaults are F1 Play/Pause and F3 Next tune.
 - **SID Radio** (`settings-sid-radio`): Shortest tune to play — number input —
   `settings-sid-radio-min-seconds-input` (`settings-sid-radio-min-seconds`) — R✅ I✅
   _(always shown: SID Radio reached GA, so what a station will offer is a listener's
@@ -647,7 +652,9 @@ Opened by three doors — the Home field, the Quick Menu's top entry
 ### 5.0.2 Key Explorer (`key-explorer-popup`)
 
 Under Diagnostics (`open-key-explorer-screen`). Copy as text — `key-explorer-copy` — R✅ I✅ ;
-Clear — `key-explorer-clear` — R✅ I✅. Records key identity only, never a typed character.
+Clear — `key-explorer-clear` — R✅ I✅; Reload keymap files — `key-explorer-reload-keymaps` — R✅ I✅
+(re-reads the keymap override files and lists which were applied or skipped). Records key identity
+only, never a typed character.
 
 When an app dialog / sheet / Radix menu opens, it becomes the active scope and
 its controls are discovered the same way (Up/Down within, OK activates, Back/Esc
@@ -963,6 +970,12 @@ device (when >1 saved device), and — on a page that has collapsible cards —
 would do nothing is disabled) and
 `keypad-quick-menu-section-descriptions` (show or hide the one-line description
 under each card title).
+
+C64U Remote only: above the list, a summary of the current F1 and F3 assignments
+with a **Configure** link (`keypad-quick-menu-configure-function-keys`). It opens
+Settings, expands Play and Disk, and focuses the F1 assignment inside the Remote
+function keys card (`settings-remote-function-actions`) through the same resolver
+search results use.
 
 Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`,
 `keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,

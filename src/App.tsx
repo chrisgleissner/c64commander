@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import React, { Suspense, lazy, useEffect, useMemo } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppStyleProvider } from "@/components/AppStyleProvider";
 import { TabBar } from "@/components/TabBar";
@@ -32,7 +32,8 @@ import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/u
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
-import { createTransportShortcut } from "@/lib/input/transportShortcuts";
+import { createNormalNavigationFunctionShortcut, createRemoteFunctionHandlers } from "@/lib/input/functionKeyShortcuts";
+import { loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
 import { installNativeMediaButtons } from "@/lib/input/nativeMediaButtons";
 import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
@@ -57,6 +58,7 @@ import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
+import { variant } from "@/generated/variant";
 
 const isAbortLikeError = (error: unknown) => {
   return classifyError(error).failureClass === "user-cancellation";
@@ -266,28 +268,41 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   // Another app taking the speaker has to reach whichever source is playing, so this is installed
   // app-wide rather than by the Play page (HARD27-006).
   useEffect(() => installAudioFocusPolicy(), []);
+  // The sheet is mounted by Home and Play, so a request raised anywhere else needs a page that can
+  // answer it. The request itself is claimed by whichever sheet mounts next, so the navigation
+  // cannot outrun it.
+  const launchGameMode = useCallback(() => {
+    if (!GAME_MODE_HOST_PATHS.has(window.location.pathname)) navigate(TAB_ROUTES[0].path);
+    void startGameMode();
+  }, [navigate]);
+  const runNormalNavigationFunctionShortcut = useMemo(
+    () =>
+      createNormalNavigationFunctionShortcut({
+        variantId: String(variant.id),
+        loadAssignment: (key) => (key === 1 ? loadRemoteFunction1Action() : loadRemoteFunction3Action()),
+        remoteHandlers: createRemoteFunctionHandlers({
+          remoteInputEnabled: flags.remote_input_enabled,
+          launchGameMode,
+          currentPath: () => window.location.pathname,
+        }),
+        transportOptions: transportShortcutOptions,
+      }),
+    [flags.remote_input_enabled, launchGameMode, transportShortcutOptions],
+  );
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: createTabJumpShortcut(guardedNavigate),
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
-      // F1 and F3, built by the shared factory so the test drives this wiring and not a copy.
-      mediaPlayPause: createTransportShortcut("playPause", transportShortcutOptions),
-      mediaNext: createTransportShortcut("next", transportShortcutOptions),
+      // C64U Remote assignments are live-read so Settings changes take effect
+      // immediately. The standard variant retains its existing transport keys.
+      runFunctionShortcut: runNormalNavigationFunctionShortcut,
       machinePauseResume: () => requestMachineCommand("pauseResume"),
       machineReset: () => requestMachineCommand("reset"),
-      openGameMode: flags.remote_input_enabled
-        ? () => {
-            // The sheet is mounted by Home and Play, so a request raised anywhere
-            // else needs a page that can answer it. The request itself is claimed
-            // by whichever sheet mounts next, so the navigation cannot outrun it.
-            if (!GAME_MODE_HOST_PATHS.has(window.location.pathname)) navigate(TAB_ROUTES[0].path);
-            void startGameMode();
-          }
-        : undefined,
+      openGameMode: flags.remote_input_enabled ? launchGameMode : undefined,
     }),
-    [navigate, guardedNavigate, flags.remote_input_enabled, transportShortcutOptions],
+    [guardedNavigate, flags.remote_input_enabled, launchGameMode, runNormalNavigationFunctionShortcut],
   );
   return (
     <FocusNavigationProvider

@@ -22,6 +22,11 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
   loadScreenOrientationMode,
+  DEFAULT_REMOTE_FUNCTION_1_ACTION,
+  DEFAULT_REMOTE_FUNCTION_3_ACTION,
+  isRemoteFunctionAction,
+  loadRemoteFunction1Action,
+  loadRemoteFunction3Action,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
@@ -34,10 +39,12 @@ import {
   saveDiscoveryProbeTimeoutMs,
   saveDiskAutostartMode,
   saveScreenOrientationMode,
+  saveRemoteFunctionActions,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
   type DiskAutostartMode,
   type ScreenOrientationMode,
+  type RemoteFunctionAction,
 } from "@/lib/config/appSettings";
 import {
   featureFlagManager,
@@ -69,7 +76,7 @@ import {
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
 
-export const SETTINGS_EXPORT_VERSION = 2 as const;
+export const SETTINGS_EXPORT_VERSION = 3 as const;
 
 type SettingsAppSettingsPayload = {
   debugLoggingEnabled: boolean;
@@ -84,6 +91,8 @@ type SettingsAppSettingsPayload = {
   archiveHostOverride: string;
   archiveClientIdOverride: string;
   archiveUserAgentOverride: string;
+  remoteFunction1Action: RemoteFunctionAction;
+  remoteFunction3Action: RemoteFunctionAction;
 };
 
 type LegacySettingsAppSettingsPayload = SettingsAppSettingsPayload & {
@@ -138,6 +147,8 @@ const REQUIRED_APP_SETTINGS_KEYS = [
   "archiveHostOverride",
   "archiveClientIdOverride",
   "archiveUserAgentOverride",
+  "remoteFunction1Action",
+  "remoteFunction3Action",
 ] as const;
 
 const LEGACY_OPTIONAL_APP_SETTINGS_KEYS = ["commoserveEnabled", "screenOrientationMode"] as const;
@@ -181,6 +192,17 @@ const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => valu
 const isScreenOrientationMode = (value: unknown): value is ScreenOrientationMode =>
   value === "portrait" || value === "landscape" || value === "auto";
 
+/** Exports older than v3 carry no assignments; a missing one takes its default. */
+const resolveImportedFunctionActions = (record: Record<string, unknown>) =>
+  [
+    isRemoteFunctionAction(record.remoteFunction1Action)
+      ? record.remoteFunction1Action
+      : DEFAULT_REMOTE_FUNCTION_1_ACTION,
+    isRemoteFunctionAction(record.remoteFunction3Action)
+      ? record.remoteFunction3Action
+      : DEFAULT_REMOTE_FUNCTION_3_ACTION,
+  ] as const;
+
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "AUTO" ||
   value === "RELAXED" ||
@@ -207,6 +229,8 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
       archiveHostOverride: loadArchiveHostOverride(),
       archiveClientIdOverride: loadArchiveClientIdOverride(),
       archiveUserAgentOverride: loadArchiveUserAgentOverride(),
+      remoteFunction1Action: loadRemoteFunction1Action(),
+      remoteFunction3Action: loadRemoteFunction3Action(),
     },
     featureFlags: featureFlagManager.getExplicitOverrides(),
     deviceSafety: {
@@ -253,6 +277,13 @@ const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = [
   if (typeof record.archiveHostOverride !== "string") return "archiveHostOverride must be a string.";
   if (typeof record.archiveClientIdOverride !== "string") return "archiveClientIdOverride must be a string.";
   if (typeof record.archiveUserAgentOverride !== "string") return "archiveUserAgentOverride must be a string.";
+  if ("remoteFunction1Action" in record && !isRemoteFunctionAction(record.remoteFunction1Action))
+    return "remoteFunction1Action is invalid.";
+  if ("remoteFunction3Action" in record && !isRemoteFunctionAction(record.remoteFunction3Action))
+    return "remoteFunction3Action is invalid.";
+  const [function1, function3] = resolveImportedFunctionActions(record);
+  if (function1 !== "unassigned" && function1 === function3)
+    return "remoteFunction1Action and remoteFunction3Action cannot use the same action.";
   if ("commoserveEnabled" in record && typeof record.commoserveEnabled !== "boolean")
     return "commoserveEnabled must be boolean.";
   return null;
@@ -315,14 +346,23 @@ export const importSettingsJson = async (
   }
   if (!parsed || typeof parsed !== "object") return { ok: false, error: "Payload must be a JSON object." };
   const payload = parsed as Record<string, unknown>;
-  if (!("version" in payload) || (payload.version !== 1 && payload.version !== SETTINGS_EXPORT_VERSION)) {
+  if (
+    !("version" in payload) ||
+    (payload.version !== 1 && payload.version !== 2 && payload.version !== SETTINGS_EXPORT_VERSION)
+  ) {
     return { ok: false, error: "Unsupported settings export version." };
   }
   const appSettings = payload.appSettings as Record<string, unknown> | undefined;
   const deviceSafety = payload.deviceSafety as Record<string, unknown> | undefined;
   const version = payload.version;
 
-  const appError = validateAppSettings(appSettings, version === 1 ? LEGACY_OPTIONAL_APP_SETTINGS_KEYS : []);
+  // Function assignments were added in v3 and are optional in every version; see
+  // resolveImportedFunctionActions for what an absent one becomes.
+  const appError = validateAppSettings(appSettings, [
+    ...(version < SETTINGS_EXPORT_VERSION ? LEGACY_OPTIONAL_APP_SETTINGS_KEYS : []),
+    "remoteFunction1Action",
+    "remoteFunction3Action",
+  ]);
   if (appError) return { ok: false, error: appError };
   const safetyError = validateDeviceSafety(deviceSafety);
   if (safetyError) return { ok: false, error: safetyError };
@@ -361,6 +401,7 @@ export const importSettingsJson = async (
   saveArchiveHostOverride(safeApp.archiveHostOverride);
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
+  saveRemoteFunctionActions(...resolveImportedFunctionActions(appSettings as Record<string, unknown>));
 
   saveDeviceSafetyMode(safeSafety.mode);
   const safetyDefaults = loadDeviceSafetyConfig();

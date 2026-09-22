@@ -42,6 +42,27 @@ const mocks = vi.hoisted(() => ({
   webServerLogCleanup: vi.fn(),
   traceContextBridge: vi.fn(() => <div data-testid="trace-context-bridge" />),
   shouldThrowDocsPageRef: { current: false },
+  extraFlags: {} as Record<string, boolean>,
+  variantId: { current: null as string | null },
+  function1Action: { current: "playPause" },
+  startGameMode: vi.fn().mockResolvedValue({ startedVideo: false, startedAudio: false }),
+  toast: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast, useToast: () => ({ toasts: [], toast: mocks.toast }) }));
+
+vi.mock("@/generated/variant", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/generated/variant")>();
+  return {
+    ...actual,
+    get variant() {
+      return { ...actual.variant, id: mocks.variantId.current ?? actual.variant.id };
+    },
+  };
+});
+vi.mock("@/lib/remoteInput/gameModeLaunch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/remoteInput/gameModeLaunch")>()),
+  startGameMode: mocks.startGameMode,
 }));
 
 vi.mock("@/components/ui/toaster", () => ({ Toaster: () => <div data-testid="toaster" /> }));
@@ -93,6 +114,7 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
       commoserve_enabled: true,
       lighting_studio_enabled: false,
       home_telnet_reu_snapshot_enabled: false,
+      ...mocks.extraFlags,
     },
     resolved: {
       hvsc_enabled: { id: "hvsc_enabled", value: true },
@@ -199,6 +221,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   },
   loadDebugLoggingEnabled: mocks.loadDebugLoggingEnabled,
   loadEnableSwipeNavigation: mocks.loadEnableSwipeNavigation,
+  loadRemoteFunction1Action: vi.fn(() => mocks.function1Action.current),
+  loadRemoteFunction3Action: vi.fn(() => "nextTune"),
   loadVicPaletteId: vi.fn(() => "default"),
   saveVicPaletteId: vi.fn(),
   // Read by the app-root LocalSidModelDriver, which learns the connected machine's SID chip.
@@ -272,6 +296,11 @@ describe("App runtime wiring", () => {
     mocks.webServerLogCleanup.mockReset();
     mocks.traceContextBridge.mockReset();
     mocks.shouldThrowDocsPageRef.current = false;
+    mocks.extraFlags = {};
+    mocks.variantId.current = null;
+    mocks.function1Action.current = "playPause";
+    mocks.startGameMode.mockClear();
+    mocks.toast.mockClear();
 
     Object.defineProperty(window, "__c64uTestProbeEnabled", {
       configurable: true,
@@ -293,6 +322,47 @@ describe("App runtime wiring", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  describe("C64U Remote function keys", () => {
+    beforeEach(() => {
+      mocks.variantId.current = "c64u-remote";
+      mocks.function1Action.current = "gameMode";
+    });
+
+    it("launches Game Mode from F1 when it is assigned there, moving to Home from a page with no sheet", async () => {
+      mocks.extraFlags = { keypad_input_enabled: true, remote_input_enabled: true };
+      window.history.pushState({}, "", "/settings");
+      render(<App />);
+      await screen.findByText("Settings Page");
+
+      fireEvent.keyDown(document.body, { key: "F1", code: "F1" });
+
+      await waitFor(() => expect(mocks.startGameMode).toHaveBeenCalledOnce());
+      expect(window.location.pathname).toBe("/");
+    });
+
+    it("launches Game Mode from 0 without leaving a page that hosts the sheet", async () => {
+      mocks.extraFlags = { keypad_input_enabled: true, remote_input_enabled: true };
+      render(<App />);
+      await screen.findByText("Home Page");
+
+      fireEvent.keyDown(document.body, { key: "0", code: "Digit0" });
+
+      await waitFor(() => expect(mocks.startGameMode).toHaveBeenCalledOnce());
+      expect(window.location.pathname).toBe("/");
+    });
+
+    it("does not launch Game Mode from F1 while Remote Input is off", async () => {
+      mocks.extraFlags = { keypad_input_enabled: true, remote_input_enabled: false };
+      render(<App />);
+      await screen.findByText("Home Page");
+
+      fireEvent.keyDown(document.body, { key: "F1", code: "F1" });
+
+      expect(mocks.startGameMode).not.toHaveBeenCalled();
+      expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Game Mode is not available" }));
+    });
   });
 
   it("renders the coverage probe route and heartbeat when the runtime probe flag is enabled", async () => {

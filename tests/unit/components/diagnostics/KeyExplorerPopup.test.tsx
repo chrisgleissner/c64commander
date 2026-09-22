@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const emitKeyInputDiagnostics = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/diagnostics/keyInputDiagnostics", () => ({ emitKeyInputDiagnostics }));
@@ -17,10 +17,42 @@ vi.mock("@/hooks/use-toast", () => ({
   toast: (input: { title?: string; description?: string }) => toasts.push(input),
 }));
 
+const keymapFiles = vi.hoisted(() => ({ files: {} as Record<string, string>, listError: null as Error | null }));
+vi.mock("@/lib/native/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/native/platform")>()),
+  isNativePlatform: () => true,
+  getPlatform: () => "android",
+}));
+const reloadFailure = vi.hoisted(() => ({ current: null as Error | null }));
+vi.mock("@/lib/input/keymapOverrideFiles", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/input/keymapOverrideFiles")>();
+  return {
+    ...actual,
+    loadKeymapOverrides: (...args: Parameters<typeof actual.loadKeymapOverrides>) =>
+      reloadFailure.current ? Promise.reject(reloadFailure.current) : actual.loadKeymapOverrides(...args),
+  };
+});
+vi.mock("@/lib/native/diagnosticsBridge", () => ({
+  getNativeDeviceIdentity: async () => ({ manufacturer: "Acme", model: "K100", device: "k100" }),
+}));
+vi.mock("@capacitor/filesystem", () => ({
+  Directory: { Data: "DATA" },
+  Encoding: { UTF8: "utf8" },
+  Filesystem: {
+    readdir: async () => {
+      if (keymapFiles.listError) throw keymapFiles.listError;
+      return { files: Object.keys(keymapFiles.files).map((name) => ({ name, type: "file" })) };
+    },
+    readFile: async ({ path }: { path: string }) => ({ data: keymapFiles.files[path.replace("keymaps/", "")] }),
+  },
+}));
+
 import { KeyExplorerPopup } from "@/components/diagnostics/KeyExplorerPopup";
 import { formatObservations, observeKey, redactKey } from "@/lib/diagnostics/keyExplorer";
 import { keypadProfile } from "@/lib/input/profiles/keypad";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { installKeymapOverrides } from "@/lib/input/keymapOverrides";
+import { loadKeymapOverrides } from "@/lib/input/keymapOverrideFiles";
 
 const press = (init: KeyboardEventInit) => fireEvent.keyDown(window, init);
 
@@ -44,7 +76,7 @@ describe("Key Explorer", () => {
   it("shows what a key resolves to, and says so when it resolves to nothing", () => {
     render(<KeyExplorerPopup open onClose={() => undefined} />);
     press({ code: "F1", key: "F1", keyCode: 112 });
-    expect(screen.getByTestId("key-explorer-list").textContent).toContain("resolves to mediaPlayPause");
+    expect(screen.getByTestId("key-explorer-list").textContent).toContain("resolves to function1");
 
     press({ code: "F9", key: "F9", keyCode: 120 });
     expect(screen.getAllByTestId("key-explorer-action")[0].textContent).toBe("resolves to nothing");
@@ -55,6 +87,74 @@ describe("Key Explorer", () => {
     press({ code: "", key: "7", keyCode: 55 });
     expect(screen.getByTestId("key-explorer-list").textContent).toContain("code=<empty>");
     expect(screen.getByTestId("key-explorer-list").textContent).toContain("keyCode=55");
+  });
+
+  describe("keymap override files", () => {
+    beforeEach(() => {
+      keymapFiles.files = {};
+      keymapFiles.listError = null;
+      toasts.length = 0;
+    });
+    afterEach(() => installKeymapOverrides([]));
+
+    it("reloads the files on demand, lists them, and resolves keys through the new binding", async () => {
+      await act(() => loadKeymapOverrides());
+      render(<KeyExplorerPopup open onClose={() => undefined} />);
+      expect(screen.getByTestId("key-explorer-device").textContent).toContain('model "K100"');
+      expect(screen.getByTestId("key-explorer-overrides-list").textContent).toContain("No keymap files found.");
+
+      keymapFiles.files = {
+        "acme.json": JSON.stringify({
+          schema: 1,
+          match: { model: "K100" },
+          bindings: [{ keyCode: 142, action: "openSearch" }],
+        }),
+        "pixel.json": JSON.stringify({ schema: 1, match: { model: "Pixel 4" }, bindings: [] }),
+      };
+      fireEvent.click(screen.getByTestId("key-explorer-reload-keymaps"));
+
+      await waitFor(() =>
+        expect(toasts).toContainEqual({ title: "Keymap files reloaded", description: "1 applied, 1 skipped." }),
+      );
+      const list = screen.getByTestId("key-explorer-overrides-list").textContent;
+      expect(list).toContain("acme.json — applied");
+      expect(list).toContain("pixel.json — skipped: for another device");
+
+      press({ code: "", key: "Unidentified", keyCode: 142 });
+      expect(screen.getAllByTestId("key-explorer-action")[0].textContent).toBe("resolves to openSearch");
+    });
+
+    it("says so, and re-enables the button, when a reload fails", async () => {
+      await act(() => loadKeymapOverrides());
+      render(<KeyExplorerPopup open onClose={() => undefined} />);
+      reloadFailure.current = new Error("bridge gone");
+
+      fireEvent.click(screen.getByTestId("key-explorer-reload-keymaps"));
+
+      await waitFor(() =>
+        expect(toasts).toContainEqual({ title: "Could not reload keymap files", description: "bridge gone" }),
+      );
+      expect(screen.getByTestId("key-explorer-reload-keymaps")).not.toBeDisabled();
+      reloadFailure.current = null;
+    });
+
+    it("says why nothing was read when the folder cannot be listed", async () => {
+      keymapFiles.listError = new Error("I/O error");
+      await act(() => loadKeymapOverrides());
+      render(<KeyExplorerPopup open onClose={() => undefined} />);
+
+      expect(screen.getByTestId("key-explorer-overrides-unavailable").textContent).toBe(
+        "Not read: could not list files: I/O error.",
+      );
+    });
+
+    it("treats a missing folder as no files", async () => {
+      keymapFiles.listError = new Error("Folder does not exist.");
+      await act(() => loadKeymapOverrides());
+      render(<KeyExplorerPopup open onClose={() => undefined} />);
+
+      expect(screen.getByTestId("key-explorer-overrides-list").textContent).toContain("No keymap files found.");
+    });
   });
 
   describe("privacy", () => {
@@ -117,7 +217,7 @@ describe("Key Explorer", () => {
     it("names the code, the keyCode and what it resolved to", () => {
       const observation = observeKey(new KeyboardEvent("keydown", { code: "F1", key: "F1" }), keypadProfile);
       expect(formatObservations([observation])).toContain("code=F1");
-      expect(formatObservations([observation])).toContain("action=mediaPlayPause");
+      expect(formatObservations([observation])).toContain("action=function1");
     });
 
     it("says so plainly when a key resolved to nothing", () => {

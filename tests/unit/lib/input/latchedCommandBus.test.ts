@@ -84,4 +84,16 @@ describe("latched command bus", () => {
     expect(bus.takePending()).toBe("next");
     expect(bus.takePending()).toBeNull();
   });
+
+  it("reports whether a consumer is mounted, and counts a repeated release once", () => {
+    const bus = createLatchedCommandBus<TransportCommand>("test-transport-count", LATCHED_COMMAND_TTL_MS);
+    expect(bus.hasSubscribers()).toBe(false);
+    const releaseFirst = bus.subscribe(() => undefined);
+    const releaseSecond = bus.subscribe(() => undefined);
+    releaseFirst();
+    releaseFirst();
+    expect(bus.hasSubscribers()).toBe(true);
+    releaseSecond();
+    expect(bus.hasSubscribers()).toBe(false);
+  });
 });

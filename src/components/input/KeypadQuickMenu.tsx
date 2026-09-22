@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,29 @@ import {
 } from "@/lib/input/keypadCommands";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestSearchOpen } from "@/lib/search/overlayState";
+import { navigateToSearchTarget } from "@/lib/search/navigate";
+import { toast } from "@/hooks/use-toast";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { variant } from "@/generated/variant";
+import { APP_SETTINGS_KEYS, loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
+import { REMOTE_FUNCTION_ACTION_LABELS } from "@/lib/input/functionKeyShortcuts";
 import {
   loadShowSectionDescriptions,
   requestSectionsBulk,
   saveShowSectionDescriptions,
   subscribeShowSectionDescriptions,
 } from "@/lib/ui/collapsibleSectionStore";
+
+/** Lands on the F1/F3 card in Settings, the same way a search result for it would. */
+const REMOTE_FUNCTION_SETTINGS_TARGET = {
+  kind: "control",
+  path: "/settings",
+  scope: "settings",
+  sectionId: "play-and-disk",
+  testId: "settings-remote-function-actions",
+} as const;
 
 /** The physical key that reaches this entry directly, drawn as the keycap it is. */
 const ShortcutKey = ({ children }: { children: ReactNode }) => (
@@ -47,12 +61,16 @@ const ShortcutKey = ({ children }: { children: ReactNode }) => (
  */
 export function KeypadQuickMenu() {
   const navigate = useNavigate();
+  const location = useLocation();
   const savedDevices = useSavedDevices();
   const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
-  /** Set while this menu is closing in order to hand over to the search overlay. */
-  const handingOverToSearchRef = useRef(false);
+  const [functionActions, setFunctionActions] = useState(
+    () => [loadRemoteFunction1Action(), loadRemoteFunction3Action()] as const,
+  );
+  /** Set while this menu is closing in order to hand focus to something else it opened. */
+  const handingOverFocusRef = useRef(false);
   // Only a keypad user needs the page jumps and the key names. Someone who tapped the app bar has
   // the tab bar in front of them, and a key legend names keys their device may not have.
   const fromKeypad = source === "keypad";
@@ -65,6 +83,20 @@ export function KeypadQuickMenu() {
       }),
     [],
   );
+
+  useEffect(() => {
+    const sync = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (
+        key !== APP_SETTINGS_KEYS.REMOTE_FUNCTION_1_ACTION_KEY &&
+        key !== APP_SETTINGS_KEYS.REMOTE_FUNCTION_3_ACTION_KEY
+      )
+        return;
+      setFunctionActions([loadRemoteFunction1Action(), loadRemoteFunction3Action()]);
+    };
+    window.addEventListener("c64u-app-settings-updated", sync);
+    return () => window.removeEventListener("c64u-app-settings-updated", sync);
+  }, []);
 
   const run = useCallback((action: () => void) => {
     setOpen(false);
@@ -107,14 +139,14 @@ export function KeypadQuickMenu() {
         data-testid="keypad-quick-menu"
         /*
          * Focus is normally restored to whatever opened this menu. Not when the menu is closing in
-         * order to open the search overlay: this dialog animates out over 200 ms, Radix keeps it
-         * mounted until that finishes, and its focus scope then pulled focus off the search field
-         * the overlay had already taken — closing the soft keyboard a fifth of a second after it
-         * appeared.
+         * order to open the search overlay or land on a Settings control: this dialog animates out
+         * over 200 ms, Radix keeps it mounted until that finishes, and its focus scope then pulled
+         * focus off the search field the overlay had already taken — closing the soft keyboard a
+         * fifth of a second after it appeared.
          */
         onCloseAutoFocus={(event) => {
-          if (!handingOverToSearchRef.current) return;
-          handingOverToSearchRef.current = false;
+          if (!handingOverFocusRef.current) return;
+          handingOverFocusRef.current = false;
           event.preventDefault();
         }}
       >
@@ -124,6 +156,31 @@ export function KeypadQuickMenu() {
             {fromKeypad ? "Jump to a page or open a high-value action." : "Actions for this page."}
           </DialogDescription>
         </DialogHeader>
+        {String(variant.id) === "c64u-remote" ? (
+          <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
+            F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
+            {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
+            <Button
+              variant="link"
+              className="ml-1 h-auto min-h-11 px-1"
+              data-testid="keypad-quick-menu-configure-function-keys"
+              onClick={() => {
+                handingOverFocusRef.current = true;
+                run(
+                  () =>
+                    void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
+                      navigate,
+                      currentPath: location.pathname,
+                      label: "Remote function keys",
+                      onToast: (message) => toast({ title: message, variant: "destructive" }),
+                    }),
+                );
+              }}
+            >
+              Configure
+            </Button>
+          </div>
+        ) : null}
         <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
           {/*
             The top entry, on both sources: search is the way around the app for someone who does
@@ -137,7 +194,7 @@ export function KeypadQuickMenu() {
             className="justify-start gap-3"
             data-testid="keypad-quick-menu-search"
             onClick={() => {
-              handingOverToSearchRef.current = true;
+              handingOverFocusRef.current = true;
               setOpen(false);
               setTimeout(() => requestSearchOpen({ source: "quick-menu" }), 0);
             }}

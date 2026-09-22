@@ -13,6 +13,7 @@
  */
 
 import type { Keymap } from "../keymap";
+import { applyKeymapOverrides, getKeymapOverridesVersion } from "../keymapOverrides";
 import { defaultKeyboardProfile } from "./defaultKeyboard";
 import { keypadProfile } from "./keypad";
 
@@ -30,12 +31,26 @@ export const INPUT_PROFILE_IDS: readonly InputProfileId[] = Object.keys(INPUT_PR
 const isInputProfileId = (value: string): value is InputProfileId =>
   Object.prototype.hasOwnProperty.call(INPUT_PROFILES, value);
 
-/** Resolves a profile id (possibly unknown/undefined) to a keymap. */
+const resolvedProfiles = new Map<InputProfileId, Keymap>();
+let resolvedAtVersion = -1;
+
+/**
+ * Resolves a profile id (possibly unknown/undefined) to a keymap, with any installed keymap
+ * override files applied. Resolve at the time of use rather than at module load: override files
+ * are read after startup, so a keymap captured at import time would never see them.
+ */
 export const resolveInputProfile = (id?: string | null): Keymap => {
-  if (id && isInputProfileId(id)) {
-    return INPUT_PROFILES[id];
+  const profileId = id && isInputProfileId(id) ? id : DEFAULT_INPUT_PROFILE_ID;
+  if (resolvedAtVersion !== getKeymapOverridesVersion()) {
+    resolvedProfiles.clear();
+    resolvedAtVersion = getKeymapOverridesVersion();
   }
-  return INPUT_PROFILES[DEFAULT_INPUT_PROFILE_ID];
+  let keymap = resolvedProfiles.get(profileId);
+  if (!keymap) {
+    keymap = applyKeymapOverrides(INPUT_PROFILES[profileId], profileId);
+    resolvedProfiles.set(profileId, keymap);
+  }
+  return keymap;
 };
 
 export { defaultKeyboardProfile, keypadProfile };

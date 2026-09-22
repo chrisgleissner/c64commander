@@ -108,6 +108,22 @@ const authHeaders = PASSWORD ? { "X-Password": PASSWORD } : {};
 /** Forwarded to every child that talks to the Ultimate, so one `--password` covers the whole run. */
 const passwordArgs = PASSWORD ? ["--password", PASSWORD] : [];
 
+/**
+ * Arguments shared by the two input harnesses.
+ *
+ * The parent gate and its harnesses must inspect the same foreground WebView.  In
+ * particular, a caller using a non-default CDP forward (as droidctl does) must
+ * not leave a child connected to the legacy default port 9333.
+ */
+export const inputHarnessArgs = (script, host, password, cdpPort) => [
+  path.join("tools", "hil", script),
+  "--host",
+  host,
+  ...password,
+  "--cdp-port",
+  cdpPort,
+];
+
 const MIC_DEVICE = arg("device", "plughw:CARD=SF558,DEV=0");
 const TMP = arg("tmp", "/tmp");
 
@@ -970,18 +986,10 @@ const main = async () => {
   }
 
   await stage("input", false, async () => {
-    const hold = await run("node", [
-      path.join("tools", "hil", "joystick_hold_hil.mjs"),
-      "--host",
-      HOST,
-      ...passwordArgs,
-    ]);
+    const hold = await run("node", inputHarnessArgs("joystick_hold_hil.mjs", HOST, passwordArgs, CDP_PORT));
     if (!hold.ok) throw new Error(`held direction: ${hold.out.trim().split("\n").slice(-3).join(" | ")}`);
     const rotation = await run("node", [
-      path.join("tools", "hil", "joystick_rotation_hil.mjs"),
-      "--host",
-      HOST,
-      ...passwordArgs,
+      ...inputHarnessArgs("joystick_rotation_hil.mjs", HOST, passwordArgs, CDP_PORT),
       "--layouts",
       "classicT9",
       "--rotations",

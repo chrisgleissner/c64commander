@@ -110,5 +110,12 @@ void silenceLeftoverNativeAudio();
 registerServiceWorker();
 applyFullScreenFromSettings();
 applyScreenOrientationFromSettings();
+// Not awaited: the built-in keymaps serve until the handset's override files are read.
+void import("./lib/input/keymapOverrideFiles")
+  .then(({ loadKeymapOverrides }) => loadKeymapOverrides())
+  .catch((error: unknown) => {
+    const err = error as Error;
+    addErrorLog("Keymap override files could not be loaded", { error: { message: err.message, stack: err.stack } });
+  });
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

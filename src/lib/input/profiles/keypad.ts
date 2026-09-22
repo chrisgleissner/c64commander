@@ -23,7 +23,7 @@
  *   Back / Clear             → back          (KEYCODE_BACK = 4 / GoBack / Escape)
  *   Call / Send              → activate      (KEYCODE_CALL = 5)
  *   Menu                     → openMenu      (KEYCODE_MENU / ContextMenu)
- *   F1 / F3                  → mediaPlayPause / mediaNext (speculative; keypad profile only)
+ *   F1 / F3                  → function1 / function3 (neutral; routed by context)
  *
  * A slightly longer multi-tap window suits a physical keypad.
  */
@@ -69,33 +69,12 @@ const keypadBindings: KeyBinding[] = [
   { code: "ContextMenu", action: "openMenu" },
   { keyCode: 82, action: "openMenu" },
 
-  /*
-   * Transport, speculative (spec.md section 9.2).
-   *
-   * F1 and F3 are real, standard codes, and a keypad handset has separate hardware soft keys, so
-   * shadowing this profile's own inherited F1 -> softLeft and F3 -> toggleInputMode is safe ON THE
-   * DEVICE. They are declared here and NOT in defaultKeyboard.
-   *
-   * That placement does NOT currently spare a desktop keyboard, and this comment used to claim it
-   * did. `FocusNavigationProvider` is mounted once, with `profileId="keypad"` and no runtime
-   * selector, so this profile is the only one any code path resolves — F1 is mediaPlayPause
-   * everywhere. defaultKeyboard's own F1 and F3 are dormant until a selector exists. The cost is
-   * one of several ways to go back on a desktop; Escape and the Back key are unaffected.
-   *
-   * The Commodore key stays unbound. keymap.ts requires an exact code, key or keyCode and keyEvent
-   * matches exactly: there is no wildcard and no placeholder that later becomes the right value,
-   * and binding a GUESSED real code is worse than binding nothing, because a wrong guess shadows a
-   * key that already works. The Key Explorer under Diagnostics exists to read the real code off
-   * hardware; once someone has, `{ code: "<that>", action: "openSearch" }` here is the whole change.
-   */
-  /*
-   * Matched on `key`, not `code`. Measured on the rig: F1, F2 and F3 reach the WebView as
-   * `{key:"F1", code:"", keyCode:112}` and so on, so a `code` discriminator never matched and
-   * neither shortcut fired on the handset. `key` carries the same name and is populated, so this
-   * is what the device sends rather than a guess at what it might send.
-   */
-  { key: "F1", action: "mediaPlayPause" },
-  { key: "F3", action: "mediaNext" },
+  // Function keys are deliberately neutral here. Their meaning belongs to the
+  // owning context: normal navigation may run a persisted app assignment, while
+  // C64 input surfaces relay literal F1/F3. Never make a raw mapping a transport
+  // command, Back, or a soft key.
+  { key: "F1", action: "function1" },
+  { key: "F3", action: "function3" },
 ];
 
 export const keypadProfile = mergeKeymaps(defaultKeyboardProfile, {

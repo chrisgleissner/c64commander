@@ -10,6 +10,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addListenerMock = vi.hoisted(() => vi.fn());
 const removeMock = vi.hoisted(() => vi.fn(async () => undefined));
+const getDeviceIdentityMock = vi.hoisted(() =>
+  vi.fn(async () => ({ manufacturer: "Google", model: "Pixel 4", device: "flame" })),
+);
 const loggerMocks = vi.hoisted(() => ({
   debug: vi.fn(),
   info: vi.fn(),
@@ -20,6 +23,7 @@ const loggerMocks = vi.hoisted(() => ({
 vi.mock("@capacitor/core", () => ({
   registerPlugin: vi.fn(() => ({
     addListener: addListenerMock,
+    getDeviceIdentity: getDeviceIdentityMock,
   })),
 }));
 
@@ -230,5 +234,14 @@ describe("native diagnostics bridge", () => {
         }),
       }),
     );
+  });
+
+  it("reads the handset's make and model from the native plugin", async () => {
+    const { getNativeDeviceIdentity } = await import("@/lib/native/diagnosticsBridge");
+    await expect(getNativeDeviceIdentity()).resolves.toEqual({
+      manufacturer: "Google",
+      model: "Pixel 4",
+      device: "flame",
+    });
   });
 });

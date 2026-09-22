@@ -63,6 +63,7 @@ import {
   MAX_AUTOFIRE_RATE_HZ,
 } from "@/lib/remoteInput/autofire";
 import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
+import { RemoteFunctionSettingsSection } from "@/pages/settings/RemoteFunctionSettingsSection";
 import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
@@ -2547,6 +2548,8 @@ export default function SettingsPage() {
                 )}
 
                 <GameModeSettingsSection />
+
+                {String(variant.id) === "c64u-remote" ? <RemoteFunctionSettingsSection /> : null}
 
                 <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
                   <div className="min-w-[9rem] flex-1">

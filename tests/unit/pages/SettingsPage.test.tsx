@@ -66,6 +66,17 @@ const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 const TEXT_SCALE_KEY = "c64u_text_scale";
 const HVSC_UPDATE_CHECK_INTERVAL_DAYS_KEY = "c64u_hvsc_update_check_interval_days";
 
+const variantIdOverride = vi.hoisted(() => ({ current: null as string | null }));
+vi.mock("@/generated/variant", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/generated/variant")>();
+  return {
+    ...actual,
+    get variant() {
+      return variantIdOverride.current ? { ...actual.variant, id: variantIdOverride.current } : actual.variant;
+    },
+  };
+});
+
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
@@ -542,6 +553,11 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadPersistConfigToFlash: vi.fn(() => false),
   savePersistConfigToFlash: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
+  REMOTE_FUNCTION_ACTIONS: ["unassigned", "search", "quickMenu", "gameMode", "playPause", "nextTune"],
+  loadRemoteFunction1Action: vi.fn(() => "playPause"),
+  loadRemoteFunction3Action: vi.fn(() => "nextTune"),
+  saveRemoteFunctionActions: vi.fn(() => true),
+  restoreRemoteFunctionActionDefaults: vi.fn(),
   loadSearchInsideDisks: vi.fn(() => false),
   saveSearchInsideDisks: vi.fn(),
   loadFriendlySidNames: vi.fn(() => true),
@@ -640,6 +656,8 @@ vi.mock("@/lib/config/appSettings", () => ({
     ARCHIVE_HOST_OVERRIDE_KEY: "c64u_archive_host_override",
     ARCHIVE_CLIENT_ID_OVERRIDE_KEY: "c64u_archive_client_id_override",
     ARCHIVE_USER_AGENT_OVERRIDE_KEY: "c64u_archive_user_agent_override",
+    REMOTE_FUNCTION_1_ACTION_KEY: "c64u_remote_function_1_action",
+    REMOTE_FUNCTION_3_ACTION_KEY: "c64u_remote_function_3_action",
   },
 }));
 
@@ -2973,6 +2991,26 @@ describe("SettingsPage autofire rate slider (Issue 3b)", () => {
 
     fireEvent.mouseUp(slider);
     expect(localStorage.getItem("c64u_remote_input_autofire_rate_hz")).toBe("8");
+  });
+});
+
+describe("SettingsPage remote function key assignments", () => {
+  afterEach(() => {
+    variantIdOverride.current = null;
+  });
+
+  it("shows the F1/F3 assignments on C64U Remote", () => {
+    variantIdOverride.current = "c64u-remote";
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-remote-function-actions")).toBeInTheDocument();
+  });
+
+  it("leaves the F1/F3 assignments out of C64 Commander", () => {
+    variantIdOverride.current = "c64commander";
+    renderSettingsPage();
+
+    expect(screen.queryByTestId("settings-remote-function-actions")).toBeNull();
   });
 });
 

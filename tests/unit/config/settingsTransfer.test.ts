@@ -20,6 +20,8 @@ import {
   loadScreenOrientationMode,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
+  loadRemoteFunction1Action,
+  loadRemoteFunction3Action,
 } from "@/lib/config/appSettings";
 import {
   loadDeviceSafetyConfig,
@@ -46,6 +48,8 @@ const buildImportPayload = (featureFlags: Record<string, boolean>) => ({
     archiveHostOverride: "archive.local:3002",
     archiveClientIdOverride: "Custom",
     archiveUserAgentOverride: "Custom Agent",
+    remoteFunction1Action: "search",
+    remoteFunction3Action: "nextTune",
   },
   featureFlags,
   deviceSafety: {
@@ -83,6 +87,7 @@ describe("settingsTransfer", () => {
     expect(snapshot.appSettings).toHaveProperty("volumeSliderPreviewIntervalMs");
     expect(snapshot.appSettings).toHaveProperty("screenOrientationMode");
     expect(snapshot.appSettings).toHaveProperty("archiveHostOverride");
+    expect(snapshot.appSettings).toHaveProperty("remoteFunction1Action");
     expect(snapshot).toHaveProperty("featureFlags");
     expect(snapshot.deviceSafety).toHaveProperty("mode");
     expect(JSON.stringify(snapshot)).not.toMatch(/password/i);
@@ -147,6 +152,8 @@ describe("settingsTransfer", () => {
         archiveHostOverride: "archive.local:3002",
         archiveClientIdOverride: "Custom",
         archiveUserAgentOverride: "Custom Agent",
+        remoteFunction1Action: "search",
+        remoteFunction3Action: "nextTune",
       },
       featureFlags: {
         commoserve_enabled: false,
@@ -186,6 +193,8 @@ describe("settingsTransfer", () => {
     expect(loadArchiveHostOverride()).toBe("archive.local:3002");
     expect(loadArchiveClientIdOverride()).toBe("Custom");
     expect(loadArchiveUserAgentOverride()).toBe("Custom Agent");
+    expect(loadRemoteFunction1Action()).toBe("search");
+    expect(loadRemoteFunction3Action()).toBe("nextTune");
 
     const safety = loadDeviceSafetyConfig();
     expect(safety.mode).toBe("TROUBLESHOOTING");
@@ -269,6 +278,69 @@ describe("settingsTransfer", () => {
     const result = await importSettingsJson(JSON.stringify(payload));
     expect(result.ok).toBe(true);
     expect(loadDeviceSafetyConfig().machineInputCooldownMs).toBe(150);
+  });
+
+  describe("remote function-key assignments", () => {
+    const withAssignments = (assignments: Record<string, unknown>, version: number = SETTINGS_EXPORT_VERSION) => {
+      const payload = buildImportPayload({});
+      const appSettings: Record<string, unknown> = { ...payload.appSettings };
+      delete appSettings.remoteFunction1Action;
+      delete appSettings.remoteFunction3Action;
+      return JSON.stringify({ ...payload, version, appSettings: { ...appSettings, ...assignments } });
+    };
+
+    it("refuses a file that assigns the same action to F1 and F3 instead of reporting success", async () => {
+      localStorage.setItem("c64u_remote_function_1_action", "gameMode");
+      const result = await importSettingsJson(
+        withAssignments({ remoteFunction1Action: "search", remoteFunction3Action: "search" }),
+      );
+      expect(result).toEqual({
+        ok: false,
+        error: "remoteFunction1Action and remoteFunction3Action cannot use the same action.",
+      });
+      expect(loadRemoteFunction1Action()).toBe("gameMode");
+    });
+
+    it("lets both keys be Unassigned", async () => {
+      const result = await importSettingsJson(
+        withAssignments({ remoteFunction1Action: "unassigned", remoteFunction3Action: "unassigned" }),
+      );
+      expect(result.ok).toBe(true);
+      expect(loadRemoteFunction1Action()).toBe("unassigned");
+      expect(loadRemoteFunction3Action()).toBe("unassigned");
+    });
+
+    it("gives a v2 export without assignments the F1 Play/Pause and F3 Next tune defaults", async () => {
+      localStorage.setItem("c64u_remote_function_1_action", "search");
+      localStorage.setItem("c64u_remote_function_3_action", "gameMode");
+      const result = await importSettingsJson(withAssignments({}, 2));
+      expect(result.ok).toBe(true);
+      expect(loadRemoteFunction1Action()).toBe("playPause");
+      expect(loadRemoteFunction3Action()).toBe("nextTune");
+    });
+
+    it("defaults only the missing key, and refuses when that default collides with the given one", async () => {
+      expect((await importSettingsJson(withAssignments({ remoteFunction3Action: "search" }))).ok).toBe(true);
+      expect(loadRemoteFunction1Action()).toBe("playPause");
+      expect(loadRemoteFunction3Action()).toBe("search");
+
+      const collision = await importSettingsJson(withAssignments({ remoteFunction3Action: "playPause" }));
+      expect(collision.ok).toBe(false);
+    });
+
+    it("rejects an unknown F1 action", async () => {
+      const result = await importSettingsJson(
+        withAssignments({ remoteFunction1Action: "back", remoteFunction3Action: "search" }),
+      );
+      expect(result).toEqual({ ok: false, error: "remoteFunction1Action is invalid." });
+    });
+
+    it("rejects an unknown F3 action", async () => {
+      const result = await importSettingsJson(
+        withAssignments({ remoteFunction1Action: "search", remoteFunction3Action: "back" }),
+      );
+      expect(result).toEqual({ ok: false, error: "remoteFunction3Action is invalid." });
+    });
   });
 
   it("rejects invalid JSON payloads", async () => {

@@ -43,6 +43,7 @@ type DiagnosticsBridgePlugin = {
     network: string;
   }) => Promise<void>;
   emitLog: (payload: NativeDiagnosticsLogPayload) => Promise<void>;
+  getDeviceIdentity: () => Promise<{ manufacturer: string; model: string; device: string }>;
 };
 
 const DiagnosticsBridge = registerPlugin<DiagnosticsBridgePlugin>("DiagnosticsBridge");
@@ -148,3 +149,6 @@ export const emitNativeDiagnosticsLog = async (payload: NativeDiagnosticsLogPayl
     return false;
   }
 };
+
+/** The handset's make and model (Android `Build.MANUFACTURER` / `Build.MODEL`). Android only. */
+export const getNativeDeviceIdentity = () => DiagnosticsBridge.getDeviceIdentity();

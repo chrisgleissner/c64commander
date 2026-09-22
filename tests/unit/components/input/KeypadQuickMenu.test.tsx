@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 const { requestDiagnosticsOpen, requestDeviceSwitcherOpen, devices } = vi.hoisted(() => ({
   requestDiagnosticsOpen: vi.fn(),
@@ -13,6 +13,17 @@ vi.mock("@/lib/input/keypadCommands", async (importOriginal) => ({
   requestDeviceSwitcherOpen,
 }));
 vi.mock("@/hooks/useSavedDevices", () => ({ useSavedDevices: () => devices() }));
+
+const variantId = vi.hoisted(() => ({ current: "c64commander" }));
+vi.mock("@/generated/variant", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/generated/variant")>();
+  return {
+    ...actual,
+    get variant() {
+      return { ...actual.variant, id: variantId.current };
+    },
+  };
+});
 
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { requestQuickMenuOpen, subscribeMachineCommand, type MachineCommand } from "@/lib/input/keypadCommands";
@@ -96,5 +107,97 @@ describe("KeypadQuickMenu", () => {
     requestQuickMenuOpen();
     await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
     expect(screen.queryByTestId("keypad-quick-menu-switch-device")).toBeNull();
+  });
+});
+
+describe("KeypadQuickMenu function-key summary", () => {
+  const F1_KEY = "c64u_remote_function_1_action";
+  const F3_KEY = "c64u_remote_function_3_action";
+
+  const announce = (key: string) =>
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key } }));
+    });
+
+  const openMenu = async () => {
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    variantId.current = "c64u-remote";
+    devices.mockReturnValue({ devices: [{ id: "a" }] });
+  });
+  afterEach(() => {
+    variantId.current = "c64commander";
+    vi.clearAllMocks();
+  });
+
+  it("names the default F1 and F3 assignments on C64U Remote", async () => {
+    renderMenu();
+    await openMenu();
+
+    expect(screen.getByTestId("keypad-quick-menu-function-summary")).toHaveTextContent(
+      "F1: Play/Pause · F3: Next tune",
+    );
+  });
+
+  it("follows a change to either function-key assignment and ignores unrelated settings", async () => {
+    renderMenu();
+
+    localStorage.setItem(F1_KEY, "search");
+    announce("c64u_debug_logging_enabled");
+    await openMenu();
+    expect(screen.getByTestId("keypad-quick-menu-function-summary")).toHaveTextContent("F1: Play/Pause");
+
+    localStorage.setItem(F3_KEY, "gameMode");
+    announce(F3_KEY);
+    expect(screen.getByTestId("keypad-quick-menu-function-summary")).toHaveTextContent("F1: Search · F3: Game Mode");
+
+    localStorage.setItem(F1_KEY, "unassigned");
+    announce(F1_KEY);
+    expect(screen.getByTestId("keypad-quick-menu-function-summary")).toHaveTextContent("F1: Unassigned");
+  });
+
+  it("lands Configure on the F1 assignment in the function-key card, not the top of Settings", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<div data-testid="home-route" />} />
+          <Route
+            path="/settings"
+            element={
+              <div data-testid="settings-route">
+                <button type="button">Unrelated first control</button>
+                <section data-section-scope="settings" data-section-id="play-and-disk">
+                  <div data-testid="settings-remote-function-actions">
+                    <button type="button" data-testid="settings-remote-function-1">
+                      F1 assignment
+                    </button>
+                  </div>
+                </section>
+              </div>
+            }
+          />
+        </Routes>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+    await openMenu();
+
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-configure-function-keys"));
+
+    await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("settings-remote-function-1")).toHaveFocus());
+    expect(screen.getByTestId("settings-remote-function-actions")).toHaveAttribute("data-search-landed", "true");
+  });
+
+  it("has no function-key summary in C64 Commander", async () => {
+    variantId.current = "c64commander";
+    renderMenu();
+    await openMenu();
+
+    expect(screen.queryByTestId("keypad-quick-menu-function-summary")).toBeNull();
   });
 });

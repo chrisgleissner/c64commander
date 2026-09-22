@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { STAGE_NAMES, gateVerdict, unknownOnlyStages } from "../../../tools/hil/merge_gate.mjs";
+import { STAGE_NAMES, gateVerdict, inputHarnessArgs, unknownOnlyStages } from "../../../tools/hil/merge_gate.mjs";
 
 const pass = (name: string) => ({ name, status: "pass", detail: "" });
 
@@ -36,6 +36,22 @@ describe("unknownOnlyStages", () => {
 
   it("passes an empty list, which means every stage", () => {
     expect(unknownOnlyStages([])).toEqual([]);
+  });
+});
+
+describe("inputHarnessArgs", () => {
+  it("passes the gate's non-default CDP port to both joystick harnesses", () => {
+    for (const script of ["joystick_hold_hil.mjs", "joystick_rotation_hil.mjs"]) {
+      expect(inputHarnessArgs(script, "c64u", ["--password", "pwd"], "9222")).toEqual([
+        `tools/hil/${script}`,
+        "--host",
+        "c64u",
+        "--password",
+        "pwd",
+        "--cdp-port",
+        "9222",
+      ]);
+    }
   });
 });
 

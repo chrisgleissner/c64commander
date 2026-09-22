@@ -9,7 +9,7 @@
 import { useEffect } from "react";
 import { isAnyOverlayOpen, isEditableTarget } from "@/lib/input/eventTargets";
 import { isCapturingKeyBinding } from "@/lib/input/keyCaptureState";
-import { keypadProfile } from "@/lib/input/profiles/keypad";
+import { resolveInputProfile } from "@/lib/input/profiles";
 import { findBinding } from "@/lib/input/keyEvent";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 
@@ -46,7 +46,7 @@ export const SearchKeyListener = () => {
       if (isAnyOverlayOpen()) return;
       if (isCapturingKeyBinding()) return;
 
-      const binding = findBinding(keypadProfile, event);
+      const binding = findBinding(resolveInputProfile("keypad"), event);
       // `openSearch` is what the Commodore key will resolve to once its emitted code is known; it
       // is unbound today, and binding it is then a single row in profiles/keypad.ts.
       if (binding?.action !== SEARCH_DIGIT_ACTION && binding?.action !== "openSearch") return;

@@ -48,9 +48,6 @@ export interface TourDriverProps {
   readonly onFinished: () => void;
 }
 
-/** Keypad bindings prepended to the keyboard ones, so a D-pad and a keyboard both resolve here. */
-const TOUR_KEYMAP = resolveInputProfile("keypad");
-
 export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -213,7 +210,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
        * undrivable on the one kind of hardware that has no pointer to fall back on. The device
        * Back button resolves to no action at all and is asked for by name.
        */
-      const semantic = resolveSemanticAction(TOUR_KEYMAP, event);
+      const semantic = resolveSemanticAction(resolveInputProfile("keypad"), event);
       const handled: Partial<Record<string, () => void>> = {
         dpadLeft: back,
         dpadRight: next,

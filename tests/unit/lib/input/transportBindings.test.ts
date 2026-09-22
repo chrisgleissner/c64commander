@@ -13,16 +13,18 @@ import { keypadProfile } from "@/lib/input/profiles/keypad";
 
 const press = (code: string) => ({ key: code, code, keyCode: 0, shiftKey: false, altKey: false, ctrlKey: false });
 
-describe("transport bindings", () => {
-  it("declares the three new semantic actions", () => {
+describe("function-key bindings", () => {
+  it("declares neutral function actions without inheriting transport semantics", () => {
     expect(SEMANTIC_ACTIONS).toContain("openSearch");
     expect(SEMANTIC_ACTIONS).toContain("mediaPlayPause");
     expect(SEMANTIC_ACTIONS).toContain("mediaNext");
+    expect(SEMANTIC_ACTIONS).toContain("function1");
+    expect(SEMANTIC_ACTIONS).toContain("function3");
   });
 
-  it("resolves F1 and F3 to the transport in the keypad profile", () => {
-    expect(findBinding(keypadProfile, press("F1"))?.action).toBe("mediaPlayPause");
-    expect(findBinding(keypadProfile, press("F3"))?.action).toBe("mediaNext");
+  it("resolves F1 and F3 to neutral function actions in the keypad profile", () => {
+    expect(findBinding(keypadProfile, press("F1"))?.action).toBe("function1");
+    expect(findBinding(keypadProfile, press("F3"))?.action).toBe("function3");
   });
 
   /*
@@ -31,7 +33,7 @@ describe("transport bindings", () => {
    * same string, so it matched a `code` binding and a `key` binding alike and could not tell that
    * neither transport shortcut fired on the device.
    */
-  it("resolves the transport keys as the handset sends them, with no code", () => {
+  it("resolves function keys as the handset sends them, with no code", () => {
     const fromHandset = (key: string, keyCode: number) => ({
       key,
       code: "",
@@ -41,8 +43,8 @@ describe("transport bindings", () => {
       ctrlKey: false,
     });
 
-    expect(findBinding(keypadProfile, fromHandset("F1", 112))?.action).toBe("mediaPlayPause");
-    expect(findBinding(keypadProfile, fromHandset("F3", 114))?.action).toBe("mediaNext");
+    expect(findBinding(keypadProfile, fromHandset("F1", 112))?.action).toBe("function1");
+    expect(findBinding(keypadProfile, fromHandset("F3", 114))?.action).toBe("function3");
   });
 
   /*
@@ -56,8 +58,8 @@ describe("transport bindings", () => {
     expect(findBinding(defaultKeyboardProfile, press("F1"))?.action).toBe("softLeft");
     expect(findBinding(defaultKeyboardProfile, press("F3"))?.action).toBe("toggleInputMode");
     // What actually resolves today, on every platform.
-    expect(findBinding(keypadProfile, press("F1"))?.action).toBe("mediaPlayPause");
-    expect(findBinding(keypadProfile, press("F3"))?.action).toBe("mediaNext");
+    expect(findBinding(keypadProfile, press("F1"))?.action).toBe("function1");
+    expect(findBinding(keypadProfile, press("F3"))?.action).toBe("function3");
   });
 
   it("leaves the Commodore key unbound rather than guessing at a code", () => {
