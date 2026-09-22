@@ -65,14 +65,27 @@ test.describe("Network transitions", () => {
       { baseUrl: server.baseUrl, host },
     );
 
+    // Record, in the page, every fetch started after the browser announced the network loss. The browser clears
+    // navigator.onLine tens of milliseconds before it fires "offline", and a request started in that gap, or already
+    // in flight, fails whatever the app does. This listener is registered before the app's, so the flag is set
+    // before the app hears of the loss.
+    await page.addInitScript(() => {
+      const win = window as Window & { __fetchesAfterOffline?: string[] };
+      win.__fetchesAfterOffline = [];
+      let told = false;
+      window.addEventListener("offline", () => (told = true));
+      window.addEventListener("online", () => (told = false));
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        if (told) win.__fetchesAfterOffline!.push(String(input instanceof Request ? input.url : input));
+        return originalFetch(input, init);
+      };
+    });
+
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(badge).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
-    // Home's first reads finish before the network goes, so any request that fails below was made offline.
     await page.waitForLoadState("networkidle");
-
-    const failedWhileOffline: string[] = [];
-    page.on("requestfailed", (request) => failedWhileOffline.push(request.url()));
     await page.context().setOffline(true);
 
     // Driven by the offline event itself: a device probe timing out would take several seconds.
@@ -83,7 +96,10 @@ test.describe("Network transitions", () => {
     await expect(badge).not.toHaveAttribute("aria-label", /problem/i);
     await expect(badge).not.toHaveText(/\d/);
     await expect(page.locator('[data-state="open"].destructive')).toHaveCount(0);
-    expect(failedWhileOffline).toEqual([]);
+    const fetchesAfterOffline = await page.evaluate(
+      () => (window as Window & { __fetchesAfterOffline?: string[] }).__fetchesAfterOffline,
+    );
+    expect(fetchesAfterOffline).toEqual([]);
     await snap(page, testInfo, "offline-calm");
 
     const requestsBeforeReturn = server.requests.length;
