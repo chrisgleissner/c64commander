@@ -123,6 +123,9 @@ const OBSERVED_ATTRIBUTES = [
  */
 const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 
+/** How long a return to an overlay's opener may wait for the opener to become enabled again. */
+const RETURN_TO_OPENER_WINDOW_MS = 5000;
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -138,6 +141,14 @@ export class FocusDiscoveryEngine {
   private scopeChain: FocusItem[] = [];
   /** The scope the last scan resolved, so the observer can tell which skipped subtrees matter. */
   private lastScope: Element | null = null;
+  /** Where the ring stood in each scope it left, so closing an overlay returns to its opener. */
+  private currentWhenLeft = new WeakMap<Element, string>();
+  /**
+   * A return that could not land yet: the opener is disabled while the write it started is pending, so it is
+   * missing from the ring when the overlay closes. Retried on later scans while the ring still stands on the
+   * fallback it was given, and dropped after {@link RETURN_TO_OPENER_WINDOW_MS}.
+   */
+  private pendingReturn: { scope: Element; id: string; fallbackId: string | null; until: number } | null = null;
 
   constructor(options: FocusDiscoveryEngineOptions) {
     this.controller = options.controller;
@@ -182,6 +193,7 @@ export class FocusDiscoveryEngine {
     this.observer?.disconnect();
     this.observer = null;
     this.lastScope = null;
+    this.pendingReturn = null;
     this.removeAllShims();
     this.resolvers.clear();
     this.sources.clear();
@@ -241,6 +253,10 @@ export class FocusDiscoveryEngine {
       return;
     }
     const scope = resolveActiveScope(this.doc);
+    const previousScope = this.lastScope;
+    const scopeChanged = previousScope !== scope.element;
+    const leavingId = this.controller.current()?.id;
+    if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
     const nodes = this.collectRingNodes(scope);
     const items = this.assemble(nodes, scope.element);
@@ -249,12 +265,38 @@ export class FocusDiscoveryEngine {
     this.resolvers = items.resolvers;
     this.sources = items.sources;
     this.controller.setItems(items.focusItems);
+    // Closing a dropdown or dialog used to drop the ring on the page's first item, because the item it
+    // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad
+    // user where they were.
+    const returningTo = scopeChanged ? this.currentWhenLeft.get(scope.element) : undefined;
+    if (returningTo && !this.controller.setCurrent(returningTo)) {
+      this.pendingReturn = {
+        scope: scope.element,
+        id: returningTo,
+        fallbackId: this.controller.current()?.id ?? null,
+        until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
+      };
+    } else if (!scopeChanged) {
+      this.retryPendingReturn(scope.element);
+    }
     this.scopeChain = this.computeScopeChain();
 
     // Drop the mutation records our own tabindex writes just queued — the DOM is
     // already reflected in this scan, so reacting to them would loop.
     this.observer?.takeRecords();
     this.onAfterAssemble?.();
+  }
+
+  private retryPendingReturn(scope: Element): void {
+    const pending = this.pendingReturn;
+    if (!pending) return;
+    const stillApplies =
+      pending.scope === scope && Date.now() <= pending.until && this.controller.current()?.id === pending.fallbackId;
+    if (!stillApplies) {
+      this.pendingReturn = null;
+      return;
+    }
+    if (this.controller.setCurrent(pending.id)) this.pendingReturn = null;
   }
 
   private collectRingNodes(scope: ActiveScope): RingNode[] {
