@@ -73,11 +73,17 @@ export type CaptureOptions = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-/** Thrown when capture cannot complete (no interrupt fired; the caller may try ISN or RAM-only). */
+/** Why a capture did not complete: no hooked interrupt fired, or the stored registers did not read back stable. */
+export type CpuCaptureFailure = "no-interrupt" | "unstable-registers";
+
+/** Thrown when capture cannot complete; the caller may fall back to a RAM-only snapshot. */
 export class CpuCaptureFailedError extends Error {
-  constructor(message: string) {
+  readonly failure: CpuCaptureFailure;
+
+  constructor(message: string, failure: CpuCaptureFailure) {
     super(message);
     this.name = "CpuCaptureFailedError";
+    this.failure = failure;
   }
 }
 
@@ -203,7 +209,7 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
         // Capture fired but the registers were not stable; release the program
         // before surfacing the failure so the machine is not left frozen.
         await restorePatch(api, rollback, "register block was not stable across reads");
-        throw new CpuCaptureFailedError("captured register block was not stable across reads");
+        throw new CpuCaptureFailedError("captured register block was not stable across reads", "unstable-registers");
       }
       assertValidCpuState(cpu);
 
@@ -217,9 +223,7 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
 
     // Neither vector's interrupt fired (SEI tight loop / vector-protected program).
     await api.machineResume();
-    throw new CpuCaptureFailedError(
-      "no interrupt entered the capture handler (program runs with interrupts disabled or protects its vectors)",
-    );
+    throw new CpuCaptureFailedError("no interrupt entered the capture handler through $0314 or $FFFE", "no-interrupt");
   } catch (error) {
     // CpuCaptureFailedError paths (timeout / no interrupt / unstable read) have
     // already restored the machine; only recover from mid-patch transport errors

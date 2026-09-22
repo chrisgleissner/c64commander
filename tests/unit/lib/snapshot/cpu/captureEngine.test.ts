@@ -121,9 +121,10 @@ describe("captureCpuState (RLI)", () => {
     const fw = new CaptureMock();
     fw.fireOnResume = false;
 
-    await expect(captureCpuState(fw.api, { ...clock(), captureTimeoutMs: 300 })).rejects.toBeInstanceOf(
-      CpuCaptureFailedError,
-    );
+    await expect(captureCpuState(fw.api, { ...clock(), captureTimeoutMs: 300 })).rejects.toMatchObject({
+      name: "CpuCaptureFailedError",
+      failure: "no-interrupt",
+    });
     // The original IRQ vector and safe region were restored.
     expect(fw.mem.get(0x0314)).toBe(ORIG_IRQ[0]);
     expect(fw.mem.get(0x0315)).toBe(ORIG_IRQ[1]);
@@ -176,7 +177,10 @@ describe("captureCpuState — error recovery", () => {
       return bytes;
     };
 
-    await expect(captureCpuState(fw.api, clock())).rejects.toThrow(/not stable/);
+    await expect(captureCpuState(fw.api, clock())).rejects.toMatchObject({
+      message: expect.stringMatching(/not stable/),
+      failure: "unstable-registers",
+    });
     // restorePatch put the original IRQ vector + safe region back.
     expect(fw.mem.get(0x0314)).toBe(ORIG_IRQ[0]);
     expect(fw.mem.get(0x0315)).toBe(ORIG_IRQ[1]);

@@ -293,6 +293,99 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("returns the ring to the item that opened an overlay once the overlay closes", () => {
+    mount(`<button id="first">first</button><button id="opener">opener</button><button id="last">last</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+    controller.setCurrent(idOf("opener"));
+
+    const listbox = mount(
+      `<div role="listbox" id="menu"><button id="option-a">A</button><button id="option-b">B</button></div>`,
+    );
+    engine.refresh();
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("option-a");
+    controller.focusNext();
+
+    listbox.remove();
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
+  describe("an opener that is disabled while the overlay closes", () => {
+    const openAndCloseOverDisabledOpener = () => {
+      mount(`<button id="first">first</button><button id="opener">opener</button><button id="last">last</button>`);
+      const { controller, engine } = makeEngine();
+      engine.start();
+      const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+      controller.setCurrent(idOf("opener"));
+      const listbox = mount(`<div role="listbox"><button id="option">A</button></div>`);
+      engine.refresh();
+      // The write the choice started is pending, and the opener is disabled until it settles.
+      el("opener").setAttribute("disabled", "");
+      listbox.remove();
+      engine.refresh();
+      return { controller, engine, idOf };
+    };
+
+    afterEach(() => vi.useRealTimers());
+
+    it("returns to the opener once it is enabled again", () => {
+      const { controller, engine } = openAndCloseOverDisabledOpener();
+      expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
+      engine.refresh();
+      expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
+
+      el("opener").removeAttribute("disabled");
+      engine.refresh();
+
+      expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+      engine.stop();
+    });
+
+    it("stays where the user moved in the meantime", () => {
+      const { controller, engine, idOf } = openAndCloseOverDisabledOpener();
+      controller.setCurrent(idOf("last"));
+
+      el("opener").removeAttribute("disabled");
+      engine.refresh();
+
+      expect(engine.elementForId(controller.current()!.id)?.id).toBe("last");
+      engine.stop();
+    });
+
+    it("gives up when the opener stays disabled past the window", () => {
+      vi.useFakeTimers();
+      const { controller, engine } = openAndCloseOverDisabledOpener();
+      vi.advanceTimersByTime(5001);
+
+      el("opener").removeAttribute("disabled");
+      engine.refresh();
+
+      expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
+      engine.stop();
+    });
+  });
+
+  it("does not restore a remembered item that the page no longer has", () => {
+    const page = mount(`<button id="first">first</button><button id="opener">opener</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const dialog = mount(`<div role="dialog"><button id="ok">OK</button></div>`);
+    engine.refresh();
+    page.querySelector("#opener")!.remove();
+    dialog.remove();
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
+    engine.stop();
+  });
+
   it("freezes discovery while a transient popup layer owns option navigation", () => {
     let freeze = false;
     mount(`<button id="trigger">Pick</button>`);

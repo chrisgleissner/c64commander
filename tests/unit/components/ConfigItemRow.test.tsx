@@ -328,6 +328,71 @@ describe("ConfigItemRow slider and input behaviors", () => {
     expect(screen.getByTestId("volume-value")).toHaveTextContent("0 dB");
   });
 
+  it("keeps a focused slider enabled and focused while its write is pending", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const row = (isLoading: boolean) => (
+      <QueryClientProvider client={client}>
+        <ConfigItemRow
+          category="Audio Mixer"
+          name="Vol UltiSid 1"
+          value="0 dB"
+          options={["-6 dB", "0 dB", "+6 dB"]}
+          onValueChange={() => {}}
+          isLoading={isLoading}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(row(false));
+    const thumb = screen.getByRole("slider");
+    thumb.focus();
+
+    rerender(row(true));
+
+    expect(screen.getByRole("slider")).not.toHaveAttribute("data-disabled");
+    expect(document.activeElement).toBe(screen.getByRole("slider"));
+  });
+
+  it("keeps a checkbox and a select enabled while their writes are pending", () => {
+    renderWithQuery(
+      <>
+        <ConfigItemRow
+          category="Test Category"
+          name="Drive"
+          value="Enabled"
+          options={["Enabled", "Disabled"]}
+          onValueChange={() => {}}
+          isLoading
+        />
+        <ConfigItemRow
+          category="Test Category"
+          name="Video Mode"
+          value="PAL"
+          options={["PAL", "NTSC", "PAL-N"]}
+          onValueChange={() => {}}
+          isLoading
+        />
+      </>,
+    );
+
+    expect(screen.getByLabelText("Drive checkbox")).not.toBeDisabled();
+    expect(screen.getByLabelText("Video Mode select")).not.toBeDisabled();
+  });
+
+  it("disables the control for a read-only item regardless of pending state", () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Drive"
+        value="Enabled"
+        options={["Enabled", "Disabled"]}
+        onValueChange={() => {}}
+        readOnly
+      />,
+    );
+
+    expect(screen.getByLabelText("Drive checkbox")).toBeDisabled();
+  });
+
   it("orders off/low/medium/high slider options", () => {
     renderWithQuery(
       <ConfigItemRow

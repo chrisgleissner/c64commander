@@ -271,6 +271,33 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "dropdown-keypad-back-closed");
   });
 
+  test("choosing a dropdown value by key leaves the ring on that dropdown", async ({ page }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/");
+    await expect(page.getByTestId("tab-home")).toBeVisible();
+    await page.getByTestId("tab-config").click();
+    await expect(page).toHaveURL(/\/config/);
+    await page.getByTestId("config-menu-page-video-setup").click();
+
+    const trigger = page.locator('[data-testid^="config-select-trigger:"]').first();
+    await expect(trigger).toBeVisible();
+    expect(await ringFocus(page, trigger, 90)).toBe(true);
+    const before = await trigger.innerText();
+
+    await page.keyboard.press("Enter");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(trigger).not.toHaveText(before);
+
+    await expect(trigger).toHaveAttribute(SELECTED, "true");
+    await snap(page, testInfo, "dropdown-value-chosen");
+    await page.keyboard.press("ArrowDown");
+    await expect(trigger).not.toHaveAttribute(SELECTED, "true");
+    await expect(page.getByTestId("app-bar-quick-menu")).not.toHaveAttribute(SELECTED, "true");
+  });
+
   test("Literal typing: focused host field accepts hardware letters and digits directly", async ({
     page,
   }, testInfo) => {
@@ -329,10 +356,12 @@ test.describe("Keypad / T9 input", () => {
     await expect(page.getByTestId("tab-home")).toBeVisible();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("KeyQ");
-    await expect.poll(async () => (await readKeyInputLogs(page)).length).toBeGreaterThan(0);
-    const entries = (await readKeyInputLogs(page)) as Array<{ details?: Record<string, unknown> }>;
-    const actions = entries.map((entry) => entry.details?.normalizedAction);
-    expect(actions).toContain("dpadDown");
-    expect(entries.some((entry) => entry.details?.normalizedAction === null)).toBe(true);
+    // Both presses have to be logged before reading; polling for the first entry alone raced the second.
+    const loggedActions = async () =>
+      ((await readKeyInputLogs(page)) as Array<{ details?: Record<string, unknown> }>).map(
+        (entry) => entry.details?.normalizedAction,
+      );
+    await expect.poll(loggedActions).toContain("dpadDown");
+    await expect.poll(loggedActions).toContain(null);
   });
 });

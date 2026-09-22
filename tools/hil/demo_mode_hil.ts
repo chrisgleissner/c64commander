@@ -187,7 +187,13 @@ const relaunchFresh = async () => {
  */
 const enterStockDemoMode = async () => {
   await relaunchFresh();
-  const offer = await readOffer();
+  // The offer follows the first screen by about 2.6 s, so a single read right after the relaunch
+  // sees DISCOVERING with no dialog yet.
+  let offer = await readOffer();
+  for (let attempt = 0; attempt < 40 && !offer.dialogOpen && offer.state !== "DEMO_ACTIVE"; attempt += 1) {
+    await sleep(250);
+    offer = await readOffer();
+  }
   if (offer.dialogOpen) {
     await clickTestId("demo-interstitial-continue");
     await sleep(4000);
@@ -850,6 +856,9 @@ const library = async () => {
 const music = async () => {
   await enterStockDemoMode();
   await quietenSpeaker();
+  // The first tune after a fresh install asks for the notification permission, and the system
+  // prompt pauses the activity while it is up. This stage measures playback, not that prompt.
+  await shell(`pm grant ${PACKAGE} android.permission.POST_NOTIFICATIONS`);
   await addFromSimulatedDevice(["Usb0", "Music"], "Commander March.sid");
 
   const started = await js(`(async () => {
@@ -857,9 +866,12 @@ const music = async () => {
       .find((node) => (node.getAttribute("aria-label") || "") === "Play Commander March");
     if (!button) return { ok: false };
     button.click();
-    await new Promise((resolve) => setTimeout(resolve, 6000));
-    const track = document.querySelector('[data-testid="playback-current-track"]');
-    return { ok: true, track: track ? track.innerText.split(String.fromCharCode(10)).join(" | ") : null };
+    let text = "";
+    for (let attempt = 0; attempt < 40 && !/6581|8580/.test(text); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      text = document.querySelector('[data-testid="playback-current-track"]')?.innerText ?? "";
+    }
+    return { ok: true, track: text.split(String.fromCharCode(10)).join(" | ") };
   })()`);
   expect(started.ok, "the playlist row had no play control");
   // The metadata comes out of the SID header the generator wrote, so this is also a check that the
@@ -874,10 +886,12 @@ const music = async () => {
     const matches = [...dump.matchAll(/framesWritten=(\d+)/g)].map((match) => Number(match[1]));
     return matches.length > 0 ? Math.max(...matches) : NaN;
   };
+  // The demo tunes are one pass of a short phrase, and the demo songlengths database gives each its
+  // real length of about three seconds, so the window has to sit inside the tune.
   const first = await framesOf();
-  await sleep(5000);
+  await sleep(1500);
   const second = await framesOf();
-  const framesPerSecond = (second - first) / 5;
+  const framesPerSecond = (second - first) / 1.5;
   expect(
     framesPerSecond > 40000 && framesPerSecond < 60000,
     `the speaker was fed ${Math.round(framesPerSecond)} frames/s, which is not a tune playing`,

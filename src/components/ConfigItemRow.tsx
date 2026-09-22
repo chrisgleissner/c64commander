@@ -274,6 +274,9 @@ export function ConfigItemRow({
   const displayValue = inputValue;
   const isCpuSpeedWriteGuarded = category === "U64 Specific Settings" && name === "CPU Speed";
   const isReadOnly = readOnly || name.startsWith("SID Detected Socket") || isCpuSpeedWriteGuarded;
+  // A write in flight shows a spinner but keeps the control enabled: disabling it moved focus to the page body,
+  // so a keypad user stepping a slider or toggling a checkbox was thrown to the top of the page after one step.
+  const controlDisabled = isItemLoading || isReadOnly;
   const normalizeOption = (option: string) => option.trim().replace(/\s+/g, " ").toLowerCase();
   const parseNumeric = (option: string) => {
     const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
@@ -406,7 +409,7 @@ export function ConfigItemRow({
     id: controlKind === "select" ? `config-select:${keypadControlKey}` : "",
     order: 100,
     group: category ?? "config",
-    disabled: isLoading || isItemLoading || isReadOnly,
+    disabled: controlDisabled,
     // center/enter OPENS the dropdown (idempotent: avoids a toggle race with
     // Radix's own native Enter-to-open, and works for keypad center/keyCode 23
     // which Radix does not recognize). Radix then moves focus into the listbox.
@@ -419,7 +422,7 @@ export function ConfigItemRow({
     id: controlKind === "text" || controlKind === "password" ? `config-input:${keypadControlKey}` : "",
     order: 100,
     group: category ?? "config",
-    disabled: isLoading || isItemLoading || isReadOnly,
+    disabled: controlDisabled,
     onActivate: () => textInputRef.current?.focus(),
   });
   const setTextContainerRef = useCallback(
@@ -464,13 +467,13 @@ export function ConfigItemRow({
             layout !== "horizontal" && "self-start",
           )}
           onClick={(event) => {
-            if ((event.target as HTMLElement).closest('[role="checkbox"]') || isLoading || isItemLoading) return;
+            if ((event.target as HTMLElement).closest('[role="checkbox"]') || controlDisabled) return;
             commitChecked(!checked);
           }}
         >
           <Checkbox
             checked={checked}
-            disabled={isLoading || isItemLoading || isReadOnly}
+            disabled={controlDisabled}
             onCheckedChange={(next) => commitChecked(next === true)}
             aria-label={`${displayLabel} checkbox`}
           />
@@ -516,7 +519,7 @@ export function ConfigItemRow({
               lastCommittedRef.current = String(nextValue);
               onValueChange(nextValue);
             }}
-            disabled={isLoading || isItemLoading || isReadOnly}
+            disabled={controlDisabled}
           >
             <SelectTrigger ref={selectFocusRef} data-testid={selectTestId} aria-label={`${displayLabel} select`}>
               <SelectValue placeholder={isItemLoading ? "Loading…" : displayValueLabel || "Select"} />
@@ -582,7 +585,7 @@ export function ConfigItemRow({
               min={0}
               max={sliderOptions.length - 1}
               step={1}
-              disabled={isLoading || isItemLoading || isReadOnly}
+              disabled={controlDisabled}
               onValueChange={sliderControl.onValueChange}
               onValueCommit={sliderControl.onValueCommit}
               valueFormatter={formatSliderLabel}
@@ -638,7 +641,7 @@ export function ConfigItemRow({
           type={inputType}
           value={inputValue}
           aria-label={`${displayLabel} ${controlKind === "password" ? "password" : "text"} input`}
-          disabled={((isLoading || isItemLoading) && !isTextEditing) || isReadOnly}
+          disabled={(isItemLoading && !isTextEditing) || isReadOnly}
           onFocus={() => {
             if (isReadOnly || isTextEditing) return;
             setIsTextEditing(true);

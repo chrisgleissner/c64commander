@@ -207,7 +207,10 @@ export class StreamGovernor {
     if (!audioActive) this.primed = false;
     // Latch "primed" the first time active audio reaches a healthy depth — before that the buffer is
     // filling (or absent), so its low value is warmup, not starvation, and must not drive a demote.
-    if (audioActive && signals.audioBufferMs >= healthyMs) this.primed = true;
+    // The buffer must also hold something: the native sink's healthy depth is 0 ms, so an empty buffer that had
+    // not received its first packet yet read as primed and critical on the same tick, and every Game Mode start
+    // shed video to the floor, then took half a minute to climb back.
+    if (audioActive && signals.audioBufferMs > 0 && signals.audioBufferMs >= healthyMs) this.primed = true;
     const audioReady = audioActive && this.primed;
 
     const demoteReason = this.pressureReason(signals, audioReady);

@@ -95,6 +95,8 @@ class MockC64UServer(
   internal var socketReadTimeoutMs: Int = 15_000
 
   private companion object {
+    /** The name the app gives its CPU restore cartridge (`restoreCart.ts`). */
+    const val CPU_RESTORE_CARTRIDGE_NAME = "C64C CPU RESTORE"
     /** Where the firmware keeps PAL/NTSC, as captured in `docs/c64/c64u-config.yaml`. */
     const val VIDEO_STANDARD_CATEGORY = "U64 Specific Settings"
     const val VIDEO_STANDARD_ITEM = "System Mode"
@@ -383,6 +385,10 @@ class MockC64UServer(
         "run_prg" -> streamServer?.show(MachineScreen.Running(name, "PRG"))
         "run_crt" -> streamServer?.show(MachineScreen.Running(name, "CRT"))
       }
+      if (runner == "run_crt") {
+        state.restartMachine()
+        if (containsAscii(request.body, CPU_RESTORE_CARTRIDGE_NAME)) state.enterCpuRestoreCartridge()
+      }
       return okResponse()
     }
 
@@ -487,6 +493,11 @@ class MockC64UServer(
         state.resetKeyboardBuffer()
         state.releaseAllMachineInput()
       }
+      when (path) {
+        "/v1/machine:pause" -> state.pauseMachine()
+        "/v1/machine:resume" -> state.resumeMachine()
+        "/v1/machine:reset", "/v1/machine:reboot" -> state.restartMachine()
+      }
       return okResponse()
     }
 
@@ -559,7 +570,7 @@ class MockC64UServer(
               request.queryParams["length"]?.toIntOrNull()?.let { min(max(it, 1), 4096) } ?: 256
       val data = JSONArray()
       repeat(length) { offset ->
-        val value = state.memory[address + offset] ?: 0
+        val value = state.readMemoryByte(address + offset)
         data.put(value)
       }
       val payload = JSONObject()
@@ -804,6 +815,17 @@ class MockC64UServer(
     return bytes
   }
 
+  private fun containsAscii(body: ByteArray, text: String): Boolean =
+    String(body, Charsets.ISO_8859_1).contains(text)
+
+  /** The names the firmware lists these under in `/v1/drives`, which differ from the endpoint keys. */
+  private fun firmwareDriveName(key: String): String =
+    when (key) {
+      MockC64UState.SOFT_IEC_DRIVE_KEY -> "IEC Drive"
+      MockC64UState.PRINTER_DRIVE_KEY -> "Printer Emulation"
+      else -> key
+    }
+
   private fun buildDrivesPayload(): JSONObject {
     val drivesArray = JSONArray()
     state.drives.forEach { (key, drive) ->
@@ -816,6 +838,9 @@ class MockC64UServer(
       drive.imageFile?.let { info.put("image_file", it) }
       drive.imagePath?.let { info.put("image_path", it) }
       drive.lastError?.let { info.put("last_error", it) }
+      if (key == MockC64UState.PRINTER_DRIVE_KEY) {
+        info.remove("type")
+      }
       drive.partitions?.let { partitions ->
         val array = JSONArray()
         partitions.forEach { partition ->
@@ -826,7 +851,7 @@ class MockC64UServer(
         }
         info.put("partitions", array)
       }
-      driveObj.put(key, info)
+      driveObj.put(firmwareDriveName(key), info)
       drivesArray.put(driveObj)
     }
     val payload = JSONObject()

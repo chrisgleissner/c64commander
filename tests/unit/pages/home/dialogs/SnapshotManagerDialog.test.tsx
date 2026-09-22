@@ -218,3 +218,24 @@ describe("SnapshotManagerDialog – close", () => {
     expect(document.activeElement).not.toBe(closeBtn);
   });
 });
+
+describe("SnapshotManagerDialog CPU + RAM snapshots", () => {
+  it("labels a snapshot that carries CPU state as CPU + RAM, not as the Program type it is filed under", () => {
+    const cpuSnapshot = makeSnapshot("snap-cpu", "program");
+    cpuSnapshot.metadata = { ...cpuSnapshot.metadata, display_ranges: ["$0000-$FFFF"], cpu_state_captured: true };
+
+    renderDialog([cpuSnapshot, makeSnapshot("snap-ram", "program")]);
+
+    expect(screen.getAllByText("CPU + RAM snapshot")).toHaveLength(1);
+    expect(screen.getAllByText("Program Snapshot")).toHaveLength(1);
+  });
+
+  it("falls back to the stored type name for a snapshot type this build does not know", () => {
+    const unknown = makeSnapshot("snap-future", "program");
+    unknown.snapshotType = "future" as SnapshotStorageEntry["snapshotType"];
+
+    renderDialog([unknown]);
+
+    expect(screen.getByText("future")).toBeTruthy();
+  });
+});

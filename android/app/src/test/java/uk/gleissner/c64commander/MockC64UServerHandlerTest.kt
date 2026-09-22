@@ -148,6 +148,106 @@ class MockC64UServerHandlerTest {
   }
 
   @Test
+  fun listsSoftIecAndPrinterUnderTheirFirmwareNamesAndResetsThemByEndpointKey() {
+    val config = JSONObject().apply {
+      put("categories", JSONObject().apply {
+        put("Printer Settings", JSONObject().apply {
+          put("IEC printer", JSONObject().apply { put("value", "Enabled") })
+          put("Bus ID", JSONObject().apply { put("value", 5) })
+        })
+      })
+    }
+    val server = MockC64UServer(MockC64UState.fromPayload(config))
+
+    val drives = JSONObject(String(handle(server, request("GET", "/v1/drives")).body, StandardCharsets.UTF_8))
+      .getJSONArray("drives")
+    val names = (0 until drives.length()).map { drives.getJSONObject(it).keys().next() }
+    assertEquals(listOf("a", "b", "IEC Drive", "Printer Emulation"), names)
+    val printer = drives.getJSONObject(3).getJSONObject("Printer Emulation")
+    assertEquals(5, printer.getInt("bus_id"))
+    assertTrue(printer.getBoolean("enabled"))
+    assertTrue(!printer.has("type"))
+
+    assertEquals(200, handle(server, request("PUT", "/v1/drives/printer:reset")).status)
+    assertEquals(200, handle(server, request("PUT", "/v1/drives/softiec:reset")).status)
+  }
+
+  @Test
+  fun jiffyClockAdvancesOnlyWhileRunningAndRasterAlwaysMoves() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    var now = 0L
+    state.nanoClock = { now }
+    state.restartMachine()
+    val server = MockC64UServer(state)
+    val read = { address: String ->
+      JSONObject(String(handle(server, request("GET", "/v1/machine:readmem", mapOf("address" to address, "length" to "3"))).body, StandardCharsets.UTF_8))
+        .getJSONArray("data").let { data -> (0 until data.length()).map { data.getInt(it) } }
+    }
+
+    now = 1_000_000_000L
+    assertEquals(listOf(0, 0, 60), read("00A0"))
+    handle(server, request("PUT", "/v1/machine:pause"))
+    val rasterBefore = read("D012")[0]
+    now += 1_000_000L
+    assertEquals(listOf(0, 0, 60), read("00A0"))
+    assertTrue(read("D012")[0] != rasterBefore)
+    handle(server, request("PUT", "/v1/machine:resume"))
+    now += 500_000_000L
+    assertEquals(90, read("00A0")[2])
+  }
+
+  @Test
+  fun resumeEntersAnArmedCaptureHandlerHookedOnTheKernalIrqVector() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    val handler = 0x033C
+    val armed = 0x0380
+    state.memory[handler] = 0xAD
+    state.memory[handler + 1] = armed and 0xFF
+    state.memory[handler + 2] = armed shr 8
+    state.memory[armed] = 1
+    state.memory[armed + 1] = 0
+    state.memory[0x0314] = handler and 0xFF
+    state.memory[0x0315] = handler shr 8
+
+    handle(server, request("PUT", "/v1/machine:pause"))
+    assertEquals(0, state.memory[armed + 1])
+    handle(server, request("PUT", "/v1/machine:resume"))
+
+    assertEquals(1, state.memory[armed + 1])
+    assertEquals(0, state.memory[armed])
+    val scratch = (armed - 7 until armed).map { state.memory[it] }
+    assertEquals(listOf(0xCD, 0xE5, 0x00, 0x00, 0x0A, 0xF6, 0x22), scratch)
+  }
+
+  @Test
+  fun theAppsCpuRestoreCartridgeReportsReadyAndAnyOtherCartridgeDoesNot() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+
+    handle(server, request("POST", "/v1/runners:run_crt", body = "C64 CARTRIDGE   GAME CART".toByteArray()))
+    assertNull(state.memory[0x02])
+
+    handle(server, request("POST", "/v1/runners:run_crt", body = "C64 CARTRIDGE   C64C CPU RESTORE".toByteArray()))
+    assertEquals(0xA5, state.memory[0x02])
+  }
+
+  @Test
+  fun resumeLeavesTheMachineAloneWhenNoCaptureHandlerIsArmed() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    state.memory[0x0314] = 0x31
+    state.memory[0x0315] = 0xEA
+    state.memory[0xEA31] = 0xAD
+    state.memory[0xEA32] = 0x80
+    state.memory[0xEA33] = 0x03
+
+    handle(server, request("PUT", "/v1/machine:resume"))
+
+    assertNull(state.memory[0x0381])
+  }
+
+  @Test
   fun handlesStreamsAndRunners() {
     val server = MockC64UServer(MockC64UState.fromPayload(JSONObject()))
 
