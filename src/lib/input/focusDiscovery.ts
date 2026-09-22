@@ -148,7 +148,7 @@ export class FocusDiscoveryEngine {
    * missing from the ring when the overlay closes. Retried on later scans while the ring still stands on the
    * fallback it was given, and dropped after {@link RETURN_TO_OPENER_WINDOW_MS}.
    */
-  private pendingReturn: { scope: Element; id: string; fallbackId: string | null; until: number } | null = null;
+  private pendingReturn: { scope: Element; id: string; fallbackId: string | undefined; until: number } | null = null;
 
   constructor(options: FocusDiscoveryEngineOptions) {
     this.controller = options.controller;
@@ -273,7 +273,7 @@ export class FocusDiscoveryEngine {
       this.pendingReturn = {
         scope: scope.element,
         id: returningTo,
-        fallbackId: this.controller.current()?.id ?? null,
+        fallbackId: this.controller.current()?.id,
         until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
       };
     } else if (!scopeChanged) {

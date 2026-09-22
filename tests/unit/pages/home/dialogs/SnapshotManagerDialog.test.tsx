@@ -229,4 +229,13 @@ describe("SnapshotManagerDialog CPU + RAM snapshots", () => {
     expect(screen.getAllByText("CPU + RAM snapshot")).toHaveLength(1);
     expect(screen.getAllByText("Program Snapshot")).toHaveLength(1);
   });
+
+  it("falls back to the stored type name for a snapshot type this build does not know", () => {
+    const unknown = makeSnapshot("snap-future", "program");
+    unknown.snapshotType = "future" as SnapshotStorageEntry["snapshotType"];
+
+    renderDialog([unknown]);
+
+    expect(screen.getByText("future")).toBeTruthy();
+  });
 });

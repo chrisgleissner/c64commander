@@ -335,6 +335,8 @@ describe("FocusDiscoveryEngine", () => {
     it("returns to the opener once it is enabled again", () => {
       const { controller, engine } = openAndCloseOverDisabledOpener();
       expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
+      engine.refresh();
+      expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
 
       el("opener").removeAttribute("disabled");
       engine.refresh();
