@@ -88,10 +88,11 @@ function SnapshotRow({
   const { profile } = useDisplayProfile();
   const compact = profile === "compact";
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
-  const snapshotTypeLabel = isReuSnapshotEntry(snapshot)
+  const typeLabel = isReuSnapshotEntry(snapshot)
     ? "REU snapshot"
-    : (typeConfig?.label ?? snapshot.snapshotType);
-  const typeLabel = snapshot.metadata.cpu_state_captured ? "CPU + RAM snapshot" : snapshotTypeLabel;
+    : snapshot.metadata.cpu_state_captured
+      ? "CPU + RAM snapshot"
+      : (typeConfig?.label ?? snapshot.snapshotType);
   const ranges = snapshot.metadata.display_ranges.join(", ");
   // The memory-range line is the most expensive line in the row on the smallest
   // supported screen. There the range string is too long for the text column and wraps
