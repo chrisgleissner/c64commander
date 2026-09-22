@@ -306,6 +306,20 @@ describe("StreamGovernor — native low-latency audio (underruns-only)", () => {
     expect(gov.state.effectivePercent).toBe(100);
   });
 
+  it("treats an empty native buffer at audio start as warmup, not starvation", () => {
+    const gov = new StreamGovernor("auto");
+    let t = 0;
+    for (let i = 0; i < 8; i++) {
+      t += 250;
+      gov.update(native({ audioBufferMs: 0, audioUnderruns: 1 }), t);
+    }
+    expect(gov.state.effectivePercent).toBe(100);
+
+    gov.update(native({ audioBufferMs: 30 }), t + 250);
+    const dry = gov.update(native({ audioBufferMs: 0 }), t + 500);
+    expect(dry.effectivePercent).toBe(100 - C.demoteStep);
+  });
+
   it("does NOT demote on a small-but-nonzero native buffer (depth is not a gate)", () => {
     const gov = new StreamGovernor("auto");
     gov.update(native({ audioBufferMs: 25 }), 1000); // prime
