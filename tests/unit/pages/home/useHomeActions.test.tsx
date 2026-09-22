@@ -101,9 +101,11 @@ vi.mock("@/lib/snapshot/cpu/cpuSnapshot", () => ({
 
 vi.mock("@/lib/snapshot/cpu/captureEngine", () => ({
   CpuCaptureFailedError: class CpuCaptureFailedError extends Error {
-    constructor(message: string) {
+    readonly failure: string;
+    constructor(message: string, failure: string) {
       super(message);
       this.name = "CpuCaptureFailedError";
+      this.failure = failure;
     }
   },
 }));
@@ -663,9 +665,9 @@ describe("useHomeActions", () => {
       );
     });
 
-    it("degrades with an actionable message when the program protects its interrupts", async () => {
+    it("degrades with an actionable message when no interrupt reaches the capture hook", async () => {
       const { CpuCaptureFailedError } = await import("@/lib/snapshot/cpu/captureEngine");
-      createCpuSnapshotMock.mockRejectedValueOnce(new CpuCaptureFailedError("no rideable interrupt"));
+      createCpuSnapshotMock.mockRejectedValueOnce(new CpuCaptureFailedError("no rideable interrupt", "no-interrupt"));
       const { result } = renderHook(() => useHomeActions());
 
       await act(async () => {
@@ -676,6 +678,23 @@ describe("useHomeActions", () => {
         expect.objectContaining({
           operation: "HOME_MACHINE_SAVE_CPU",
           description: expect.stringContaining("Use a Program or Basic RAM snapshot instead"),
+        }),
+      );
+    });
+
+    it("reports unstable registers as such rather than as disabled interrupts", async () => {
+      const { CpuCaptureFailedError } = await import("@/lib/snapshot/cpu/captureEngine");
+      createCpuSnapshotMock.mockRejectedValueOnce(new CpuCaptureFailedError("not stable", "unstable-registers"));
+      const { result } = renderHook(() => useHomeActions());
+
+      await act(async () => {
+        await result.current.handleSaveCpuSnapshot();
+      });
+
+      expect(reportUserErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "HOME_MACHINE_SAVE_CPU",
+          description: expect.stringContaining("the saved registers changed between two reads"),
         }),
       );
     });

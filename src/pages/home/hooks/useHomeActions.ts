@@ -26,10 +26,10 @@ import { pauseResumeMachine } from "@/lib/machine/pauseResumeMachine";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
-import { createCpuSnapshot, createSnapshot, CpuSnapshotUnsupportedError } from "@/lib/snapshot/snapshotCreation";
+import { createCpuSnapshot, createSnapshot } from "@/lib/snapshot/snapshotCreation";
+import { describeCpuSnapshotFailure } from "@/lib/snapshot/cpuSnapshotFailureMessage";
 import { restoreCpuSnapshotFromDecoded } from "@/lib/snapshot/cpu/cpuSnapshot";
 import { CpuRestoreUnsupportedError } from "@/lib/snapshot/cpu/restoreCart";
-import { CpuCaptureFailedError } from "@/lib/snapshot/cpu/captureEngine";
 import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
 import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
@@ -262,15 +262,8 @@ export function useHomeActions() {
             contentName: currentPlaybackLabel,
           });
         } catch (error) {
-          // CPU capture can't serve every program — SEI tight loops and
-          // vector-protected demos have no rideable interrupt. Degrade with a
-          // clear, actionable message; a plain RAM snapshot always works.
-          if (error instanceof CpuCaptureFailedError || error instanceof CpuSnapshotUnsupportedError) {
-            throw new Error(
-              "Couldn't capture CPU state for this program (it disables or protects its interrupts). " +
-                "Use a Program or Basic RAM snapshot instead.",
-            );
-          }
+          const description = describeCpuSnapshotFailure(error);
+          if (description) throw new Error(description);
           throw error;
         }
         succeeded = true;
