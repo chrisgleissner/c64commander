@@ -30,6 +30,7 @@ import { stopLeftoverDeviceStreams } from "@/lib/streams/leftoverDeviceStreams";
 import { isNetworkKnownOffline, recordNetworkStatus, subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
 import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
 import { registerUnreachableListener } from "@/lib/connection/reachabilityEvents";
+import { isActiveReachabilityHost } from "@/lib/connection/activeReachabilityHosts";
 import { addLog } from "@/lib/logging";
 import { DeviceDiscovery } from "@/lib/native/deviceDiscovery";
 
@@ -200,8 +201,9 @@ export const installNetworkTransitions = () => {
   const unsubscribeEdges = subscribeNetworkEdges(handleNetworkEdge);
   const unsubscribeConnection = subscribeConnection(resumeMirrorAfterOutage);
   const unsubscribeMirror = avMirrorSession.subscribe(trackMirror);
-  const unregisterUnreachable = registerUnreachableListener(() => {
-    void confirmDeviceUnreachable();
+  // Health checks probe the other saved devices too; one of those not answering says nothing about this one.
+  const unregisterUnreachable = registerUnreachableListener((host) => {
+    if (isActiveReachabilityHost(host)) void confirmDeviceUnreachable();
   });
   let removeNativeListener: (() => void) | null = null;
   let disposed = false;
