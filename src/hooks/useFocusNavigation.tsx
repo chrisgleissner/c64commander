@@ -512,7 +512,11 @@ export const FocusNavigationProvider = ({
         (action === "dpadUp" || action === "dpadDown") &&
         isSingleLineField(event.target) &&
         !(event.target as Element).closest(`${OPEN_OVERLAY_ANCESTOR_SELECTOR},[${SKIP_ATTR}]`);
-      if (leavesPageField) (event.target as HTMLElement).blur();
+      if (leavesPageField) {
+        // A field the user tapped into is where the ring continues from, so it is adopted first.
+        if (getInputModality() === "pointer") adoptActiveElement();
+        (event.target as HTMLElement).blur();
+      }
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target) && !leavesPageField) {

@@ -285,6 +285,37 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(button("Next").getAttribute(SELECTED)).toBe("true");
   });
 
+  it("continues from a field the user tapped into when Down leaves it", () => {
+    const FieldBetweenButtons = () => {
+      const beforeRef = useFocusItem<HTMLButtonElement>({ id: "before", order: 10 });
+      const fieldRef = useFocusItem<HTMLInputElement>({ id: "field", order: 20 });
+      const afterRef = useFocusItem<HTMLButtonElement>({ id: "after", order: 30 });
+      return (
+        <>
+          <button ref={beforeRef} onClick={() => {}}>
+            Before
+          </button>
+          <input ref={fieldRef} aria-label="Search categories" />
+          <button ref={afterRef} onClick={() => {}}>
+            After
+          </button>
+        </>
+      );
+    };
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <FieldBetweenButtons />
+      </FocusNavigationProvider>,
+    );
+    setInputModality("pointer");
+    const field = getByLabelText("Search categories") as HTMLInputElement;
+    field.focus();
+
+    fireEvent.keyDown(field, { code: "ArrowDown" });
+
+    expect(button("After").getAttribute(SELECTED)).toBe("true");
+  });
+
   /*
    * Escape and the device's Back key have to be able to leave a field, and where they leave it to
    * matters: a bare blur put DOM focus on the body, which is nowhere for a keypad user. When the
