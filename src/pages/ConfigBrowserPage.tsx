@@ -272,6 +272,14 @@ function CategorySection({
     soloItemRef.current = soloState.soloItem;
   }, [soloState.soloItem]);
 
+  // The skip flag is consumed only by a Solo-active -> inactive transition, so setting it while
+  // Solo is already off would leave it armed and swallow the next genuine unsolo.
+  const resetActiveSolo = useCallback(() => {
+    if (!soloItemRef.current) return;
+    skipSoloRoutingRef.current = true;
+    dispatchSolo({ type: "reset" });
+  }, []);
+
   useEffect(() => {
     refetchRef.current = refetch;
   }, [refetch]);
@@ -506,11 +514,10 @@ function CategorySection({
       }
       wasSoloActiveRef.current = false;
       if (reason === "close") {
-        skipSoloRoutingRef.current = true;
-        dispatchSolo({ type: "reset" });
+        resetActiveSolo();
       }
     },
-    [applySoloRouting, isAudioMixer, readFreshSoloSnapshot],
+    [applySoloRouting, isAudioMixer, readFreshSoloSnapshot, resetActiveSolo],
   );
 
   // Only an actual open -> closed transition undoes Solo. A plain "the card is closed" test also
@@ -676,8 +683,7 @@ function CategorySection({
 
   const resetAudioMixer = async () => {
     if (categoryName !== "Audio Mixer") return;
-    skipSoloRoutingRef.current = true;
-    dispatchSolo({ type: "reset" });
+    resetActiveSolo();
     soloSnapshotRef.current = [];
     resyncPendingRef.current = true;
     setIsResetting(true);
@@ -735,8 +741,7 @@ function CategorySection({
 
   const handleRefresh = async () => {
     if (isAudioMixer) {
-      skipSoloRoutingRef.current = true;
-      dispatchSolo({ type: "reset" });
+      resetActiveSolo();
       soloSnapshotRef.current = [];
       resyncPendingRef.current = true;
       syncAudioConfiguredItems([]);

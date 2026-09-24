@@ -537,6 +537,56 @@ describe("ConfigBrowserPage", () => {
     expect(await screen.findByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "0 dB");
   });
 
+  it("restores the other SID volumes when Solo is turned off after a Refresh made while Solo was inactive", async () => {
+    sessionStorage.clear();
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
+    const refetch = vi.fn().mockResolvedValue({
+      data: { "Audio Mixer": { items: audioMixerItems } },
+      isSuccess: true,
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: audioMixerItems } },
+      isLoading: false,
+      refetch,
+    }));
+
+    renderConfigBrowserPage();
+
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /refresh/i }));
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+
+    const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+    fireEvent.click(soloSwitch);
+    await waitFor(() =>
+      expect(updateConfigBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "OFF" }) }),
+      ),
+    );
+    updateConfigBatch.mockClear();
+
+    fireEvent.click(soloSwitch);
+
+    await waitFor(() =>
+      expect(updateConfigBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "0 dB" }) }),
+      ),
+    );
+  });
+
   it("discards a stale audio mixer solo snapshot instead of auto-restoring it (HARD9-054)", async () => {
     // Regression: the mount-time restore effect used to read the solo
     // snapshot from sessionStorage unconditionally and write those old
