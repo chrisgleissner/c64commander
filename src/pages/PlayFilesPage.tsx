@@ -134,6 +134,7 @@ import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layo
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { useDemoPlaylistCleanup } from "@/pages/playFiles/hooks/useDemoPlaylistCleanup";
 import {
+  shouldAutoRunHvscPreparation,
   shouldCancelHvscLifecycleOnDisable,
   shouldIncludeHvscSource,
   shouldOpenHvscPreparation,
@@ -918,10 +919,13 @@ export default function PlayFilesPage() {
   }, [browserOpen]);
 
   useEffect(() => {
-    if (!hvscControlsEnabled || !hvscPreparationOpen) return;
-    if (hvsc.hvscPreparationState === "READY") return;
-    if (hvsc.hvscUpdating) return;
-    void hvsc.runHvscPreparation();
+    const autoRun = shouldAutoRunHvscPreparation({
+      enabled: hvscControlsEnabled,
+      sheetOpen: hvscPreparationOpen,
+      updating: hvsc.hvscUpdating,
+      preparationState: hvsc.hvscPreparationState,
+    });
+    if (autoRun) void hvsc.runHvscPreparation();
   }, [hvsc.hvscPreparationState, hvsc.hvscUpdating, hvsc.runHvscPreparation, hvscControlsEnabled, hvscPreparationOpen]);
 
   useEffect(() => {
