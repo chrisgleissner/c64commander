@@ -116,6 +116,7 @@ const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_
 
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
   const { profile } = useDisplayProfile();
+  const [actionsOpen, setActionsOpen] = useState(false);
   // On a 320px screen the row's three controls - the selection circle, the actions
   // kebab and the play button - take about 150px of the 256px available, all of it at
   // the 44px target size, and the name was left a 96px ribbon in which most words of
@@ -186,7 +187,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           />
         ) : null}
         {item.showMenu === false ? null : (
-          <DropdownMenu modal={false}>
+          <DropdownMenu modal={false} open={actionsOpen} onOpenChange={setActionsOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -194,7 +195,12 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
                 className="h-9 w-9 min-h-[44px] min-w-[44px]"
                 aria-label="Item actions"
                 disabled={item.disableActions}
-                onClick={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  // The trigger opens on pointer-down or its own Enter; the keypad ring activates it
+                  // with a click, which carries no pointer (detail 0) and would otherwise do nothing.
+                  if (event.detail === 0) setActionsOpen(true);
+                }}
                 id={actionMenuTestId}
                 data-testid={actionMenuTestId}
               >

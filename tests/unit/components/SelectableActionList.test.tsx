@@ -588,6 +588,36 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(document.body.textContent).toContain("Delete");
   });
 
+  it("opens the item actions from a click with no pointer, which is how the keypad activates it", async () => {
+    const items: ActionListItem[] = [
+      {
+        id: "track-1",
+        title: "Track One",
+        selected: false,
+        actionLabel: "Play",
+        onAction: vi.fn(),
+        menuItems: [{ type: "action", label: "Delete", onSelect: vi.fn() }],
+      },
+    ];
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+      />,
+    );
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Item actions" }).click();
+    });
+
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+  });
+
   it("renders item with icon, titleSuffix, subtitle, and meta", () => {
     const items: ActionListItem[] = [
       {
