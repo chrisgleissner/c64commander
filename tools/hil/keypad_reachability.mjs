@@ -189,6 +189,13 @@ const STATE_EXPR = String.raw`(() => {
         .filter(visible)
         .filter((e) => !e.disabled && e.getAttribute('aria-hidden') !== 'true')
         .map(idOf),
+      // OK on a field row (a stop that is not a card) edits the row's first field, even when the
+      // row also wraps rows of its own, as Settings' host row wraps the three port rows.
+      editsField: (() => {
+        if (sel.matches('[data-section-label]')) return null;
+        const first = [...sel.querySelectorAll(INTERACTIVE)].filter(visible).find((e) => !e.disabled);
+        return first && first.matches('input,textarea') ? idOf(first) : null;
+      })(),
       hitW: box.w, hitH: box.h, viaLabel: box.viaLabel,
       fontSize: Math.round(parseFloat(getComputedStyle(sel).fontSize) * 10) / 10,
     };
@@ -209,6 +216,7 @@ const STATE_EXPR = String.raw`(() => {
     profile: document.documentElement.dataset.displayProfile || null,
     scope: scopeName,
     overlayDepth: overlays.length,
+    editing: document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') ?? false,
     current,
     inventory,
     tiny: tiny.slice(0, 20),
@@ -297,6 +305,9 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
       await sleep(settleMs + 200);
       continue;
     }
+    // OK on a closed card opens it without descending. The ring is still on the card, so there is
+    // nothing to come back out of, and a Back here would leave the route or the app.
+    if (inside.current?.id === id) continue;
     // Per card, so a child this sweep already saw under a different card does not end the descent
     // before it has started.
     const seenHere = new Set();
@@ -310,6 +321,7 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
         // row. `grade` applies the same rule to the top-level stops; without it here, every field
         // in Settings' Connection card and every select in Config read as unreachable.
         if (current.current.descendants?.length === 1) reached.add(current.current.descendants[0]);
+        if (current.current.editsField) reached.add(current.current.editsField);
       }
       key(KEY.DOWN);
       await sleep(settleMs);
@@ -328,6 +340,7 @@ function grade(routeLabel, { stops, wrapped, final }, descended = new Set()) {
   // descended into, so the ring never stops on that child. It is reached — through its card.
   for (const stop of stops) {
     if (stop.descendants?.length === 1) visited.add(stop.descendants[0]);
+    if (stop.editsField) visited.add(stop.editsField);
   }
   const unreachable = final.inventory.filter((i) => !visited.has(i.id)).map((i) => i.id);
   const offScreen = stops.filter((s) => s.inView === false).map((s) => ({ id: s.id, rect: s.rect, vh: s.vh }));
@@ -411,9 +424,13 @@ async function main() {
     for (const digit of ROUTE_KEYS) {
       // Leave any field or overlay first. A digit typed while a text input has focus is claimed by
       // T9, not by the tab shortcut, so without this the sweep stays wherever it happened to stop.
+      // Back only while something holds the keys: on a page, Back goes back through the route
+      // history, and from the first route it sends the app to the background, as Android's does.
       let switched = false;
       for (let attempt = 0; attempt < 3 && !switched; attempt += 1) {
         for (let back = 0; back < 3; back += 1) {
+          const held = await evaluate(STATE_EXPR);
+          if (held.overlayDepth === 0 && !held.editing) break;
           key(KEY.BACK);
           await sleep(220);
         }
