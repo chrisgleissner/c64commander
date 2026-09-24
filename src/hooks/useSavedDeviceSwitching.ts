@@ -198,6 +198,12 @@ export function useSavedDeviceSwitching() {
         applyC64APIRuntimeConfig(buildBaseUrlFromDeviceHost(nextDeviceHost), password ?? undefined, nextDeviceHost, {
           reason: "saved-device-switch",
         });
+      } catch (error) {
+        // An attempt left open pauses background health checks until the next switch begins.
+        const errorMessage = error instanceof Error ? error.message : String(error ?? "Unknown switch failure");
+        addLog("warn", "Saved-device switch failed before verification", { deviceId, error: errorMessage });
+        completeSavedDeviceSwitchAttempt(attemptId, { outcome: "error", errorMessage });
+        throw error;
       } finally {
         setSavedDeviceSwitchProbeWindow(false);
       }
