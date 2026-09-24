@@ -97,14 +97,43 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
  * has on the side it chose as `--radix-dropdown-menu-content-available-height`; taking the smaller
  * of that and the viewport clamp makes the menu fit and scroll instead.
  */
+/**
+ * Keep the focused item on screen while the menu settles. A menu focuses its first item before the
+ * popper has sized it; once the height limit lands the content scrolls, and on a short screen the
+ * focused item of a tall menu (a playlist row's details above its actions) was left out of sight.
+ */
+const useKeepFocusedItemInView = (forwardedRef: React.ForwardedRef<HTMLDivElement>) => {
+  const [node, setNode] = React.useState<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && focused !== node && node.contains(focused)) {
+        focused.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+  return React.useCallback(
+    (element: HTMLDivElement | null) => {
+      setNode(element);
+      if (typeof forwardedRef === "function") forwardedRef(element);
+      else if (forwardedRef) forwardedRef.current = element;
+    },
+    [forwardedRef],
+  );
+};
+
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(({ className, sideOffset = 4, collisionPadding, children, ...props }, ref) => {
+  const contentRef = useKeepFocusedItemInView(ref);
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
-        ref={ref}
+        ref={contentRef}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding ?? resolveSafeAreaCollisionPadding()}
         className={cn(
