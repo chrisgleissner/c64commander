@@ -92,6 +92,23 @@ describe("the Android Back key", () => {
     uninstall();
   });
 
+  it("does not leave the route when an open overlay closed on the key without cancelling it", async () => {
+    const onUnhandled = vi.fn();
+    const uninstall = installDeviceBackButton(onUnhandled);
+    await flush();
+    const overlay = document.createElement("div");
+    overlay.setAttribute("role", "dialog");
+    document.body.appendChild(overlay);
+    const closeWithoutCancelling = () => overlay.remove();
+    document.addEventListener("keydown", closeWithoutCancelling);
+
+    appListener.backButton?.();
+
+    document.removeEventListener("keydown", closeWithoutCancelling);
+    expect(onUnhandled).not.toHaveBeenCalled();
+    uninstall();
+  });
+
   it("registers exactly one listener and removes it again", async () => {
     const uninstall = installDeviceBackButton(vi.fn());
     await flush();

@@ -510,5 +510,16 @@ describe("SearchOverlay", () => {
 
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
+
+    it("consumes the Back key it closes on when focus is outside the field", async () => {
+      renderOverlay();
+      await open();
+      screen.getByTestId("search-input").blur();
+
+      const notCancelled = fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+      expect(notCancelled).toBe(false);
+      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
+    });
   });
 });
