@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -1158,6 +1159,35 @@ describe("the keypad highlight follows focus handed back to a menu trigger", () 
 
     expect(button("Item actions").getAttribute(SELECTED)).toBe("true");
     expect(button("Card action").getAttribute(SELECTED)).toBeNull();
+  });
+
+  it("goes into a card on the second OK after the first OK opened it", async () => {
+    const Card = () => {
+      const [open, setOpen] = useState(false);
+      return (
+        <section data-section-label="Memory">
+          <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+            Memory
+          </button>
+          {open ? <button type="button">Kernal ROM</button> : null}
+        </section>
+      );
+    };
+    render(
+      <FocusNavigationProvider>
+        <Card />
+        <button type="button">Next section</button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { code: "Enter" });
+    await waitFor(() => expect(button("Kernal ROM")).toBeInTheDocument());
+    fireEvent.keyDown(document.activeElement ?? document.body, { code: "Enter" });
+
+    await waitFor(() => expect(button("Memory").getAttribute(SELECTED)).toBe("true"));
+    expect(button("Memory")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("stays on a single-control card after OK activates that control, so Down moves on", () => {

@@ -297,7 +297,10 @@ export const FocusNavigationProvider = ({
         // `contains` check lets that focus stand while still re-anchoring a plain
         // button/control that did not move focus.
         onActivate: (item) => {
-          const element = engineRef.current?.elementForId(item.id) ?? null;
+          // Anchored on the ring's item, which for a single-control card is the card: DOM focus
+          // left on the control it clicked took the next OK from the ring, and a card header's
+          // toggle then closed the card it had just opened instead of going into it.
+          const element = engineRef.current?.elementForId(created.focus.current()?.id ?? item.id) ?? null;
           if (element && element.contains(document.activeElement)) return;
           // Activating a bare text field is the explicit "go in" that starts
           // editing, so it is the one place the field does take real DOM focus.
