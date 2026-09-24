@@ -1519,7 +1519,7 @@ export function DiagnosticsDialog({
       <p className="px-3 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           openConnectionView();
@@ -1530,7 +1530,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           handleManageDevices();
@@ -1542,7 +1542,7 @@ export function DiagnosticsDialog({
       <div className="my-1 border-t border-border" />
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setConfigDriftOpen(true);
@@ -1553,7 +1553,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setDecisionStateOpen(true);
@@ -1564,7 +1564,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setLatencyOpen(true);
@@ -1575,7 +1575,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setKeyExplorerOpen(true);
@@ -1586,7 +1586,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHistoryOpen(true);
@@ -1597,7 +1597,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHeatMapVariant("REST");
@@ -1608,7 +1608,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHeatMapVariant("FTP");
@@ -1619,7 +1619,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHeatMapVariant("CONFIG");
@@ -1636,7 +1636,7 @@ export function DiagnosticsDialog({
       >
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+          className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
           onClick={() => {
             setOverflowOpen(false);
             void onShareAll();
@@ -1648,7 +1648,7 @@ export function DiagnosticsDialog({
         </button>
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+          className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
           onClick={() => {
             setOverflowOpen(false);
             handleShareFiltered();
@@ -1662,7 +1662,7 @@ export function DiagnosticsDialog({
           <AlertDialogTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
+              className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
               data-testid="diagnostics-clear-all-trigger"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1790,7 +1790,7 @@ export function DiagnosticsDialog({
                   </p>
                   <button
                     type="button"
-                    className="block truncate text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                    className="flex min-h-11 w-full items-center text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
                     data-testid="diagnostics-device-line"
                     onPointerDown={handleDevicePointerDown}
                     onPointerUp={handleDevicePointerUp}
@@ -1807,7 +1807,7 @@ export function DiagnosticsDialog({
                       }
                     }}
                   >
-                    {connectionLabel}
+                    <span className="min-w-0 truncate">{connectionLabel}</span>
                   </button>
                   <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
                     {formatRelativeTime(lastCheckTimestamp)}
