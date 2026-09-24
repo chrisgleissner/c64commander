@@ -290,7 +290,6 @@ const writeValues = async (entries: Array<[string, unknown]>) => {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
-      let remaining = entries.length;
       let settled = false;
 
       const rejectOnce = (error: unknown) => {
@@ -299,16 +298,18 @@ const writeValues = async (entries: Array<[string, unknown]>) => {
         reject(error);
       };
 
+      // Every put can succeed and the commit still abort (e.g. QuotaExceededError), so only the
+      // transaction's own completion means the values were stored.
+      tx.oncomplete = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      tx.onabort = () => rejectOnce(tx.error ?? new Error("IndexedDB write transaction aborted"));
+      tx.onerror = () => rejectOnce(tx.error ?? new Error("IndexedDB write failed"));
+
       entries.forEach(([key, value]) => {
         const request = store.put(value, key);
-        request.onsuccess = () => {
-          if (settled) return;
-          remaining -= 1;
-          if (remaining === 0) {
-            settled = true;
-            resolve();
-          }
-        };
         request.onerror = () => rejectOnce(request.error ?? new Error("IndexedDB write failed"));
       });
     });
