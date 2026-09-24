@@ -204,6 +204,23 @@ export const applyDurationOverrideToPlaylist = (playlist: PlaylistItem[], durati
 };
 
 /**
+ * Applies durations resolved by a background songlengths pass to the playlist as it is now, matched
+ * by id because items may have been added or moved meanwhile. A duration set meanwhile is kept, except
+ * the Default duration fallback (`durationSource: "default"`), which a resolved songlength replaces.
+ */
+export const mergeResolvedSonglengthDurations = (current: PlaylistItem[], resolved: PlaylistItem[]) => {
+  const resolvedById = new Map(resolved.map((item) => [item.id, item]));
+  const merged = current.map((item) => {
+    const enriched = resolvedById.get(item.id);
+    if (!enriched || enriched.durationMs === undefined || enriched.durationMs === null) return item;
+    const hasDuration = item.durationMs !== undefined && item.durationMs !== null;
+    if (hasDuration && (item.durationSource !== "default" || enriched.durationSource === "default")) return item;
+    return { ...item, durationMs: enriched.durationMs, durationSource: enriched.durationSource ?? null };
+  });
+  return merged.some((item, index) => item !== current[index]) ? merged : current;
+};
+
+/**
  * True when an observed saved-device selection change must locally detach
  * the Play transport instead of letting it keep firing against whatever
  * device is now selected. Saved devices + the always-visible health-badge

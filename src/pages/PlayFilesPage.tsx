@@ -187,6 +187,7 @@ import {
   canAdvancePrevious,
   shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
+  mergeResolvedSonglengthDurations,
   clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
@@ -2261,19 +2262,7 @@ export default function PlayFilesPage() {
     const applyUpdates = async () => {
       const updated = await applySonglengthsToItems(snapshot);
       if (cancelled) return;
-      // ID-based merge: apply enriched durations to items still in the playlist even
-      // if the playlist reference changed (e.g. new items added) during async enrichment.
-      // Only overwrites durations that were absent (null/undefined) to avoid stale clobber.
-      setPlaylist((prev) => {
-        const durationById = new Map(updated.map((item) => [item.id, item.durationMs]));
-        const merged = prev.map((item) => {
-          if (item.durationMs !== undefined && item.durationMs !== null) return item;
-          const enrichedDuration = durationById.get(item.id);
-          if (enrichedDuration === undefined || enrichedDuration === null) return item;
-          return { ...item, durationMs: enrichedDuration };
-        });
-        return merged.some((item, index) => item !== prev[index]) ? merged : prev;
-      });
+      setPlaylist((prev) => mergeResolvedSonglengthDurations(prev, updated));
     };
     void applyUpdates();
     return () => {

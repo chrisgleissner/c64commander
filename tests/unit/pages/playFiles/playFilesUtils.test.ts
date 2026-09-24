@@ -11,6 +11,7 @@ import {
   buildSubsongSwitchItem,
   shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
+  mergeResolvedSonglengthDurations,
   formatTime,
   formatBytes,
   formatDate,
@@ -267,6 +268,39 @@ describe("playFilesUtils", () => {
       const playlist = [createPlaylistItem("resolved", 12_000), createPlaylistItem("defaulted", 12_000, "default")];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
+    });
+
+    describe("mergeResolvedSonglengthDurations", () => {
+      it("replaces the Default duration fallback with a songlength resolved in the background", () => {
+        const fallback = createPlaylistItem("fallback", 180_000, "default");
+        const resolved = { ...fallback, durationMs: 42_000, durationSource: null };
+
+        const merged = mergeResolvedSonglengthDurations([fallback], [resolved]);
+
+        expect(merged[0]).toEqual({ ...fallback, durationMs: 42_000, durationSource: null });
+      });
+
+      it("keeps the fallback when the songlengths pass could not resolve the item", () => {
+        const playlist = [createPlaylistItem("fallback", 180_000, "default")];
+
+        expect(mergeResolvedSonglengthDurations(playlist, [createPlaylistItem("fallback", 180_000, "default")])).toBe(
+          playlist,
+        );
+      });
+
+      it("never clobbers a duration resolved while the pass was running", () => {
+        const playlist = [createPlaylistItem("resolved", 95_000)];
+
+        expect(mergeResolvedSonglengthDurations(playlist, [createPlaylistItem("resolved", 42_000)])).toBe(playlist);
+      });
+
+      it("fills an item that has no duration yet", () => {
+        const unresolved = createPlaylistItem("unresolved", undefined);
+
+        const merged = mergeResolvedSonglengthDurations([unresolved], [createPlaylistItem("unresolved", 42_000)]);
+
+        expect(merged[0]).toEqual({ ...unresolved, durationMs: 42_000, durationSource: null });
+      });
     });
   });
 
