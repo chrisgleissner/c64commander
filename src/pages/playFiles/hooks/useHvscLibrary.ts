@@ -20,7 +20,6 @@ import {
   cancelHvscInstall,
   checkForHvscUpdates,
   clearHvscStatusSummary,
-  describeHvscPreparationTransition,
   getDefaultHvscStatusSummary,
   getHvscCacheStatus,
   getHvscFolderListing,
@@ -48,6 +47,7 @@ import {
   type HvscStatus,
 } from "@/lib/hvsc";
 import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import { logHvscPreparationTransition } from "@/lib/hvsc/hvscPreparationTransitionLog";
 import { subscribeHvscDemoLibraryRemoved } from "@/lib/hvsc/hvscDemoLibraryCleanup";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 
@@ -1372,28 +1372,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     return hvscFolders.filter((folder) => folder.toLowerCase().includes(hvscFolderFilter.toLowerCase()));
   }, [hvscFolders, hvscFolderFilter]);
 
-  const previousPreparationSnapshotRef = useRef<HvscPreparationSnapshot | null>(null);
-
-  useEffect(() => {
-    const previous = previousPreparationSnapshotRef.current;
-    if (
-      previous &&
-      previous.state === hvscPreparationSnapshot.state &&
-      previous.failedPhase === hvscPreparationSnapshot.failedPhase &&
-      previous.errorReason === hvscPreparationSnapshot.errorReason
-    ) {
-      return;
-    }
-
-    addLog("info", "HVSC preparation state transition", {
-      transition: describeHvscPreparationTransition(previous, hvscPreparationSnapshot),
-      fromState: previous?.state ?? null,
-      toState: hvscPreparationSnapshot.state,
-      failedPhase: hvscPreparationSnapshot.failedPhase,
-      reason: hvscPreparationSnapshot.errorReason,
-    });
-    previousPreparationSnapshotRef.current = hvscPreparationSnapshot;
-  }, [hvscPreparationSnapshot]);
+  useEffect(() => logHvscPreparationTransition(hvscPreparationSnapshot), [hvscPreparationSnapshot]);
 
   useEffect(() => {
     if (!hvscInProgress) return;

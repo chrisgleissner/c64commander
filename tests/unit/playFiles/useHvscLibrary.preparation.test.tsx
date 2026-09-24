@@ -9,6 +9,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
+import { resetHvscPreparationTransitionLogForTests } from "@/lib/hvsc/hvscPreparationTransitionLog";
 
 const mocks = vi.hoisted(() => ({
   toastMock: vi.fn(),
@@ -169,6 +170,7 @@ describe("useHvscLibrary preparation state coverage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    resetHvscPreparationTransitionLogForTests();
     progressListener = null;
     mocks.addHvscProgressListenerMock.mockImplementation((listener: (event: Record<string, unknown>) => void) => {
       progressListener = listener;
@@ -582,6 +584,21 @@ describe("useHvscLibrary preparation state coverage", () => {
         expect.objectContaining({ toState: "READY" }),
       ),
     );
+  });
+
+  it("does not log the same preparation state again when the Play page mounts again", async () => {
+    const transitionLogs = () =>
+      mocks.addLogMock.mock.calls.filter(([, message]) => message === "HVSC preparation state transition");
+
+    const first = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(first.result.current.hvscPreparationState).toBe("NOT_PRESENT"));
+    await waitFor(() => expect(transitionLogs()).toHaveLength(1));
+    first.unmount();
+
+    const second = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(second.result.current.hvscPreparationState).toBe("NOT_PRESENT"));
+
+    expect(transitionLogs()).toHaveLength(1);
   });
 
   it("returns hvscPhase as index when metadata is in-progress and hvsc is not updating", async () => {
