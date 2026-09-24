@@ -11,7 +11,7 @@ import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
 import { useFocusItem, useFocusNavigationContext } from "@/hooks/useFocusNavigation";
-import { normalizeKeyEvent, setInputModality } from "@/lib/input";
+import { SKIP_ATTR, normalizeKeyEvent, setInputModality } from "@/lib/input";
 import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
@@ -488,6 +488,10 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
             aria-label={nativeInputAriaLabel}
             data-testid={nativeInputTestId}
             disabled={props.disabled}
+            // Touch-only: this transparent input sits over the thumb, which is the keyboard stop.
+            // As a second stop it drew no visible highlight and its native arrow keys trapped focus.
+            tabIndex={-1}
+            {...{ [SKIP_ATTR]: "true" }}
             className={cn(
               "absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0",
               nativeInputClassName,
