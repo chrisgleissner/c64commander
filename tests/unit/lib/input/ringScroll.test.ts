@@ -20,6 +20,12 @@ describe("aligning a ring stop the app has just moved to", () => {
     expect(resolveRingScrollAlignment({ ...handset, top: 196, bottom: 609, height: 413 })).toBe("nearest");
   });
 
+  it("brings a tall card's heading into view when the card was reached from below", () => {
+    // Config's Memory & ROMs card, left open and selected by Back from a control inside it: 2810 px
+    // tall with its top 2460 px above the screen.
+    expect(resolveRingScrollAlignment({ ...handset, top: -2460, bottom: 350, height: 2810 })).toBe("start");
+  });
+
   it("does not scroll a stop that is already within the reserved area", () => {
     expect(resolveRingScrollAlignment({ ...handset, top: 234, bottom: 298, height: 64 })).toBe("nearest");
   });

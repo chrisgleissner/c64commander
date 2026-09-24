@@ -27,5 +27,8 @@ export const resolveRingScrollAlignment = (geometry: RingScrollGeometry): Scroll
   const reserved = geometry.marginTop + geometry.marginBottom;
   const fitsInReservedArea = geometry.height <= geometry.viewportHeight - reserved;
   const belowReservedArea = geometry.bottom > geometry.viewportHeight - geometry.marginBottom;
-  return fitsInReservedArea && belowReservedArea ? "end" : "nearest";
+  if (fitsInReservedArea) return belowReservedArea ? "end" : "nearest";
+  // A tall card reached from below, or by Back from a control inside it, has its heading above the
+  // app bar, and `nearest` leaves it there because part of the card is already on screen.
+  return geometry.top < geometry.marginTop ? "start" : "nearest";
 };
