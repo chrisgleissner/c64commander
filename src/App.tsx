@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import React, { Suspense, lazy, useCallback, useEffect, useMemo } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppStyleProvider } from "@/components/AppStyleProvider";
 import { TabBar } from "@/components/TabBar";
@@ -75,8 +75,7 @@ const describeUnhandledRejectionReason = (error: unknown) => {
 };
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
-import { LightingStudioProvider } from "@/hooks/useLightingStudio";
-import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
+import { LightingStudioProvider, useLightingStudio } from "@/hooks/useLightingStudio";
 import { StartupLaunchSequence } from "@/components/StartupLaunchSequence";
 import {
   markStartupLaunchSequenceComplete,
@@ -87,6 +86,24 @@ import {
 } from "@/lib/startup/launchSequence";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
+const LightingStudioDialog = lazy(async () => ({
+  default: (await import("@/components/lighting/LightingStudioDialog")).LightingStudioDialog,
+}));
+
+/** Loaded on first open rather than at startup: the startup bundle has a size budget, and most sessions never open it. */
+const LightingStudioDialogHost = () => {
+  const { studioOpen, contextLensOpen } = useLightingStudio();
+  const [requested, setRequested] = useState(false);
+  useEffect(() => {
+    if (studioOpen || contextLensOpen) setRequested(true);
+  }, [studioOpen, contextLensOpen]);
+  if (!requested && !studioOpen && !contextLensOpen) return null;
+  return (
+    <Suspense fallback={null}>
+      <LightingStudioDialog />
+    </Suspense>
+  );
+};
 const AppStylesGalleryPage = lazy(() => import("./pages/AppStylesGalleryPage"));
 
 export const shouldBundleCoverageProbeModules = () =>
@@ -349,7 +366,7 @@ const AppRoutes = () => {
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />
             <DeviceAuthChallengeDialog />
-            <LightingStudioDialog />
+            <LightingStudioDialogHost />
             {coverageProbeEnabled && TestHeartbeat ? (
               <Suspense fallback={null}>
                 <TestHeartbeat />
