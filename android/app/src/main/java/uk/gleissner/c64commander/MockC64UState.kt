@@ -68,6 +68,7 @@ class MockC64UState private constructor(
   var nanoClock: () -> Long = System::nanoTime
   private var runningSinceNanos: Long? = null
   private var runNanosBeforePause: Long = 0
+  private var keyboardBufferFilledAtRunNanos: Long? = null
 
   // HARD12-017: REST-injected keyboard/joystick relay state (GET/POST
   // /v1/machine:input). `tap` transitions are momentary and never persist here.
@@ -99,8 +100,29 @@ class MockC64UState private constructor(
         ((jiffies shr (8 * (JIFFY_CLOCK_END - address))) and 0xFF).toInt()
       }
       RASTER_REGISTER -> ((nanoClock() / RASTER_LINE_NANOS) % PAL_RASTER_LINES and 0xFF).toInt()
+      KEYBOARD_BUFFER_COUNT -> keyboardBufferCount()
       else -> memory[address] ?: 0
     }
+  }
+
+  fun writeMemoryByte(address: Int, value: Int) {
+    memory[address] = value
+    if (address == KEYBOARD_BUFFER_COUNT) {
+      keyboardBufferFilledAtRunNanos = if (value > 0) runNanos() else null
+    }
+  }
+
+  /**
+   * A running KERNAL empties the keyboard buffer within a couple of jiffies. The simulator runs no
+   * 6502 code, so it drains the buffer itself; otherwise every disk autostart in Demo Mode waited for
+   * a buffer that never emptied and failed. A paused machine keeps its keys, as a real one does.
+   */
+  private fun keyboardBufferCount(): Int {
+    val filledAt = keyboardBufferFilledAtRunNanos ?: return memory[KEYBOARD_BUFFER_COUNT] ?: 0
+    if (runNanos() - filledAt < KEYBOARD_DRAIN_NANOS) return memory[KEYBOARD_BUFFER_COUNT] ?: 0
+    memory[KEYBOARD_BUFFER_COUNT] = 0
+    keyboardBufferFilledAtRunNanos = null
+    return 0
   }
 
   fun pauseMachine() {
@@ -174,7 +196,8 @@ class MockC64UState private constructor(
   fun resetKeyboardBuffer() {
     val bufferStart = 0x0277
     val bufferLength = 10
-    memory[0x00C6] = 0
+    memory[KEYBOARD_BUFFER_COUNT] = 0
+    keyboardBufferFilledAtRunNanos = null
     repeat(bufferLength) { offset ->
       memory[bufferStart + offset] = 0
     }
@@ -188,6 +211,8 @@ class MockC64UState private constructor(
     private const val JIFFY_CLOCK_START = 0x00A0
     private const val JIFFY_CLOCK_END = 0x00A2
     private const val RASTER_REGISTER = 0xD012
+    private const val KEYBOARD_BUFFER_COUNT = 0x00C6
+    private const val KEYBOARD_DRAIN_NANOS = 2 * (1_000_000_000L / 60)
     private const val JIFFY_NANOS = 1_000_000_000L / 60
     private const val RASTER_LINE_NANOS = 64_000L
     private const val PAL_RASTER_LINES = 312L
