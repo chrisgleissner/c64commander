@@ -145,7 +145,34 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     requestSteps.push({ type: "connect", host, port });
 
     await transport.connect(host, port);
+    try {
+      await authenticateOpenConnection();
+    } catch (error) {
+      await closeFailedConnection(error as Error);
+      throw error;
+    }
 
+    resetIdleTimer();
+    addLog("info", "Telnet session connected", { host, port, authenticated });
+  }
+
+  // The firmware allows only four Telnet sessions, so a socket left open by a failed
+  // login holds one of them until the device drops it.
+  async function closeFailedConnection(connectError: Error): Promise<void> {
+    try {
+      await transport.disconnect();
+    } catch (disconnectError) {
+      addLog("warn", "Telnet disconnect after failed connect failed", {
+        host,
+        port,
+        connectError: connectError.message,
+        error: (disconnectError as Error).message,
+        stack: (disconnectError as Error).stack,
+      });
+    }
+  }
+
+  async function authenticateOpenConnection(): Promise<void> {
     // Read initial data (Telnet WILL ECHO / DONT LINEMODE + RIS)
     const initData = await transport.read(2000);
     const initText = textDecoder.decode(initData);
@@ -165,7 +192,6 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
       appendResponseText(authText);
 
       if (authText.includes("Password:") || authText.includes("incorrect") || authText.includes("denied")) {
-        await transport.disconnect();
         throw new TelnetError("Authentication failed", "AUTH_FAILED");
       }
 
@@ -176,9 +202,6 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
       authenticated = true;
       screenBuffer = initData;
     }
-
-    resetIdleTimer();
-    addLog("info", "Telnet session connected", { host, port, authenticated });
   }
 
   async function ensureConnected(): Promise<void> {
