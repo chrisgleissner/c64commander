@@ -144,6 +144,11 @@ export class FocusController {
     return this.items.find((entry) => entry.id === this.currentId) ?? null;
   }
 
+  /** True while `current` is the default first item rather than one the user or app chose. */
+  currentIsDefaultSelection(): boolean {
+    return this.currentIsDefault;
+  }
+
   /** The parent id of the currently active nested scope, or null at root level. */
   currentScopeParentId(): string | null {
     return this.scopeParentId;

@@ -384,6 +384,28 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  it("returns to the opener when the page behind a closed dialog reappears a scan later", () => {
+    // Radix unhides the page behind a dialog after the dialog has gone, so the first scan
+    // afterwards sees only what was never hidden.
+    const page = mount(`<div id="page"><button id="first">first</button><button id="opener">opener</button></div>`);
+    mount(`<button id="tab">tab</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const dialog = mount(`<div role="dialog"><button id="ok">OK</button></div>`);
+    engine.refresh();
+    page.setAttribute("aria-hidden", "true");
+    dialog.remove();
+    engine.refresh();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
   it("does not restore a remembered item that the page no longer has", () => {
     const page = mount(`<button id="first">first</button><button id="opener">opener</button>`);
     const { controller, engine } = makeEngine();

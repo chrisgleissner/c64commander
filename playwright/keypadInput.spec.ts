@@ -143,6 +143,22 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "cta-activated");
   });
 
+  test("closing a dialog returns the ring to the control that opened it", async ({ page }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/play");
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
+    const addItems = page.getByTestId("add-items-to-playlist");
+    expect(await ringFocus(page, addItems)).toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Add items" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Add items" })).toBeHidden();
+
+    await expect(addItems).toHaveAttribute(SELECTED, "true");
+    await snap(page, testInfo, "ring-back-on-opener");
+  });
+
   test("the guidance bar stays visible above an open sheet, which stands on it", async ({ page }, testInfo) => {
     await enableKeypad(page);
     await page.goto("/");

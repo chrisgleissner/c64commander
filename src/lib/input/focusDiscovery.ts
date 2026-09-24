@@ -303,8 +303,11 @@ export class FocusDiscoveryEngine {
   private retryPendingReturn(scope: Element): void {
     const pending = this.pendingReturn;
     if (!pending) return;
-    const stillApplies =
-      pending.scope === scope && Date.now() <= pending.until && this.controller.current()?.id === pending.fallbackId;
+    // A default selection follows the page's first item as the page reappears, which is not the
+    // user moving away from the fallback.
+    const userMoved =
+      this.controller.current()?.id !== pending.fallbackId && !this.controller.currentIsDefaultSelection();
+    const stillApplies = pending.scope === scope && Date.now() <= pending.until && !userMoved;
     if (!stillApplies) {
       this.pendingReturn = null;
       return;
