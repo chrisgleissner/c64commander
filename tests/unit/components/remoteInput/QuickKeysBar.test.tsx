@@ -97,6 +97,12 @@ describe("QuickKeysBar", () => {
     }
   });
 
+  it("prints key labels at the 14 px text floor at the default control size", () => {
+    render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+
+    expect(Number.parseFloat(screen.getByTestId("remote-input-key-return").style.fontSize)).toBeGreaterThanOrEqual(14);
+  });
+
   it("exposes all eight function keys, printed lower-case with a space (f 1 … f 8)", () => {
     render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
     for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) {

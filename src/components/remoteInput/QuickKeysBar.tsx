@@ -195,7 +195,7 @@ export const QuickKeysBar = ({
   // minHeight rather than height: the keycap labels wrap (see QuickKeyButtonImpl), and
   // a fixed height would cut the second line off instead of letting the key grow.
   const keyStyle = useMemo(
-    () => ({ minHeight: Math.round(40 * safeScale), fontSize: Math.round(13 * safeScale) }),
+    () => ({ minHeight: Math.round(40 * safeScale), fontSize: Math.round(14 * safeScale) }),
     [safeScale],
   );
   const iconPx = Math.round(18 * safeScale);
