@@ -411,6 +411,13 @@
   will-change: opacity;
 }
 
+/* `will-change: opacity` makes the shell a stacking context, and every dialog renders outside it at
+   a higher z-index: the keypad guidance bar inside the shell was painted under every dialog and
+   sheet. Once the launch fade is over there is nothing left to animate. */
+.app-launch-shell[data-launch-phase="app-ready"] {
+  will-change: auto;
+}
+
 .app-launch-shell[data-launch-phase="fade-in"],
 .app-launch-shell[data-launch-phase="hold"] {
   opacity: 0;
@@ -606,6 +613,11 @@ button:focus-visible,
  */
 .keypad-guidance-bar[data-visible="false"] {
   display: none;
+}
+
+/* The tab bar slides away under a dialog or sheet, so the bar moves down to the screen edge. */
+:root[data-interstitial-active="true"] .keypad-guidance-bar {
+  bottom: var(--safe-area-inset-bottom, 0px);
 }
 
 .keypad-guidance-bar {

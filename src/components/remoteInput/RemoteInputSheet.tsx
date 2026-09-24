@@ -475,10 +475,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         // X is gone — the floating restore handle brings it, and everything else, back.
         showClose={!chromeHidden}
         closeTestId="remote-input-close"
-        // The 5rem clearance is for the tab bar, which is hidden under a sheet. Normal mode keeps
-        // only the navigation bar's inset, so the keys at rest end above it rather than under it.
-        // Game Mode keeps the default clearance for its edge-anchored controls.
-        className={showFooterActions ? "pb-[var(--safe-area-inset-bottom)]" : undefined}
+        // Normal mode keeps only the navigation bar's inset, so the keys at rest end above it rather
+        // than under it. Game Mode keeps the 5rem clearance for its edge-anchored controls.
+        className={showFooterActions ? "pb-[var(--safe-area-inset-bottom)]" : "pb-[var(--app-sheet-bottom-clearance)]"}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
       >

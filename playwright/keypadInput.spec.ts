@@ -143,6 +143,38 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "cta-activated");
   });
 
+  test("the guidance bar stays visible above an open sheet, which stands on it", async ({ page }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/");
+    await expect(page.getByTestId("tab-home")).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+
+    await page.keyboard.press("*");
+    const sheet = page.getByTestId("diagnostics-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+
+    const layout = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+      const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"]');
+      const surface = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
+      return {
+        shellWillChange: shell ? getComputedStyle(shell).willChange : null,
+        barTop: bar?.getBoundingClientRect().top ?? 0,
+        barBottom: bar?.getBoundingClientRect().bottom ?? 0,
+        sheetBottom: surface?.getBoundingClientRect().bottom ?? 0,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    // A `will-change: opacity` shell is a stacking context that every dialog outranks, which hid the
+    // bar under each one.
+    expect(layout.shellWillChange).toBe("auto");
+    expect(layout.sheetBottom).toBeLessThanOrEqual(layout.barTop + 1);
+    expect(layout.barBottom).toBeGreaterThan(layout.viewportHeight - 60);
+    await snap(page, testInfo, "guidance-bar-over-sheet");
+  });
+
   test("HAZARD 1: a focused slider — Left/Right change the value, Up/Down move focus", async ({ page }, testInfo) => {
     await enableKeypad(page);
     await page.goto("/");

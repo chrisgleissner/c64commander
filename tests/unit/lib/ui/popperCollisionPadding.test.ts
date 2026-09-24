@@ -23,6 +23,25 @@ describe("resolveSafeAreaCollisionPadding", () => {
     expect(resolveSafeAreaCollisionPadding()).toEqual({ top: 30, right: 0, bottom: 12, left: 0 });
   });
 
+  it("also keeps them clear of the keypad guidance bar while it shows", () => {
+    document.documentElement.style.setProperty("--safe-area-inset-bottom", "12px");
+    document.documentElement.style.setProperty(
+      "--keypad-guidance-reserved-height",
+      "var(--keypad-guidance-bar-height)",
+    );
+    const bar = document.createElement("div");
+    bar.setAttribute("data-testid", "keypad-guidance-bar");
+    bar.setAttribute("data-visible", "true");
+    bar.getBoundingClientRect = () => ({ height: 26 }) as DOMRect;
+    document.body.appendChild(bar);
+    try {
+      expect(resolveSafeAreaCollisionPadding().bottom).toBe(38);
+    } finally {
+      bar.remove();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
+  });
+
   it("reads an unset or unparsable inset as no padding", () => {
     document.documentElement.style.setProperty("--safe-area-inset-top", "env(safe-area-inset-top, 0px)");
 

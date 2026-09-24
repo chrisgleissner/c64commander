@@ -52,15 +52,19 @@ export const APP_DIALOG_CONTENT_CLASS = `fixed left-[50dvw] flex max-h-[calc(100
 /**
  * Class list of `AppSheetContent`. The sheet is full width and not transform-centred below the `sm`
  * breakpoint, so its enter and exit translate only needs the `sm:` variant.
+ *
+ * It stands on the keypad guidance bar while that shows, which is 0px otherwise. Its bottom padding
+ * only clears the navigation bar: the tab bar it used to clear with 5rem hides under every sheet,
+ * which left the bottom fifth of a 427px screen blank below the Diagnostics log.
  */
 export const APP_SHEET_CONTENT_CLASS = [
-  "fixed inset-x-0 bottom-0 flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
+  "fixed inset-x-0 bottom-[var(--keypad-guidance-reserved-height,0px)] flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
   "rounded-t-[var(--interstitial-radius)] shadow-[var(--interstitial-shadow)]",
   "sm:left-1/2 sm:right-auto sm:w-[min(100vw-2rem,56rem)] sm:-translate-x-1/2",
   "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
   "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
   "sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=closed]:slide-out-to-left-1/2",
-  "pb-[var(--app-sheet-bottom-clearance)]",
+  "pb-[max(1rem,var(--safe-area-inset-bottom))]",
 ].join(" ");
 
 const stickyFooterClass =

@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { readKeypadGuidanceReservePx } from "@/lib/ui/keypadGuidanceReserve";
+
 export type CollisionPadding = { top: number; right: number; bottom: number; left: number };
 
 const readInsetPx = (style: CSSStyleDeclaration, name: string): number => {
@@ -15,7 +17,7 @@ const readInsetPx = (style: CSSStyleDeclaration, name: string): number => {
 
 /**
  * The room a menu, popover or select list must leave free at each screen edge: the system bars
- * the app draws under. Without it a tall menu flipped above its trigger was placed at y=0, under
+ * the app draws under, and the keypad guidance bar while it shows. Without it a tall menu flipped above its trigger was placed at y=0, under
  * the status bar's clock and icons, and its available height counted space the user cannot read.
  */
 export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
@@ -24,7 +26,7 @@ export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
   return {
     top: readInsetPx(style, "--safe-area-inset-top"),
     right: readInsetPx(style, "--safe-area-inset-right"),
-    bottom: readInsetPx(style, "--safe-area-inset-bottom"),
+    bottom: readInsetPx(style, "--safe-area-inset-bottom") + readKeypadGuidanceReservePx(),
     left: readInsetPx(style, "--safe-area-inset-left"),
   };
 };
