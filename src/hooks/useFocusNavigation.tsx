@@ -363,13 +363,19 @@ export const FocusNavigationProvider = ({
     ringListenersRef.current.forEach((listener) => listener());
   }, [refreshHighlight]);
 
+  // Focus moved by a component's effect lands before the ring has scanned the control it moved to.
+  const focusAwaitingRingRef = useRef<HTMLElement | null>(null);
+  const adoptFocusAwaitingRingRef = useRef<() => void>(() => undefined);
   const engine = useMemo(
     () =>
       new FocusDiscoveryEngine({
         controller: controller.focus,
         listExplicit: () => Array.from(descriptorsRef.current.values()),
         freezeDuringTransientLayer: () => controller.layerDepth > 0,
-        onAfterAssemble: () => notifyRing(),
+        onAfterAssemble: () => {
+          adoptFocusAwaitingRingRef.current();
+          notifyRing();
+        },
       }),
     [controller, notifyRing],
   );
@@ -446,7 +452,13 @@ export const FocusNavigationProvider = ({
       if (!innermost || innermost.element.contains(element)) innermost = { id: item.id, element };
     }
     if (innermost) controller.focus.setCurrent(innermost.id);
+    return innermost?.element === active;
   }, [controller]);
+  adoptFocusAwaitingRingRef.current = () => {
+    const awaiting = focusAwaitingRingRef.current;
+    focusAwaitingRingRef.current = null;
+    if (awaiting && awaiting === document.activeElement) adoptActiveElement();
+  };
 
   // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
   // handler below already knows how to read. Installed whether or not keypad navigation is on,
@@ -756,7 +768,7 @@ export const FocusNavigationProvider = ({
     const handleFocusIn = (event: FocusEvent) => {
       if (dispatchingRef.current) return;
       if (getInputModality() !== "key-navigation" || !(event.target instanceof HTMLElement)) return;
-      adoptActiveElement();
+      focusAwaitingRingRef.current = adoptActiveElement() ? null : event.target;
       notifyRing();
       if (isWithinOpenOverlay(event.target)) event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
     };

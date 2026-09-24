@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -1082,6 +1082,36 @@ describe("the keypad highlight follows focus that a menu moves itself", () => {
 
     expect(remove.getAttribute(SELECTED)).toBe("true");
     expect(scrollIntoView).toHaveBeenCalled();
+  });
+});
+
+describe("the keypad highlight follows focus moved to a control the ring has not scanned yet", () => {
+  afterEach(() => resetInputModality());
+
+  it("highlights a control that received focus in the same task that added it", async () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="From C64U" data-section-label="From C64U">
+          <button type="button">Close</button>
+          <div data-testid="entries">
+            <button type="button">Open Demos</button>
+          </div>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    button("Open Demos").focus();
+    await waitFor(() => expect(button("Open Demos").getAttribute(SELECTED)).toBe("true"));
+
+    // A folder view replaces its entries and focuses the first one before the ring rescans.
+    const entries = screen.getByTestId("entries");
+    const firstEntry = document.createElement("button");
+    firstEntry.type = "button";
+    firstEntry.textContent = "Open Collection";
+    entries.replaceChildren(firstEntry);
+    firstEntry.focus();
+
+    await waitFor(() => expect(firstEntry.getAttribute(SELECTED)).toBe("true"));
   });
 });
 
