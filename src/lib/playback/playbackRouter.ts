@@ -376,9 +376,10 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
     }
     return blob;
   } catch (error) {
-    addLog("debug", "FTP SID fetch failed", {
+    addLog("warn", "FTP SID fetch failed", {
       path: normalizedPath,
       error: (error as Error).message,
+      stack: (error as Error).stack,
     });
     return getRememberedUltimateSidBlob(path);
   }

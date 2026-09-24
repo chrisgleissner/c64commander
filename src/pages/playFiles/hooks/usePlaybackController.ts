@@ -941,6 +941,8 @@ export function usePlaybackController({
                 ...effectiveRequest,
                 file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
               };
+            } else if (!noMachineForRoms) {
+              emitEngineNotice("sid-unreadable-on-c64");
             }
           }
           if (selection.route === "local" && effectiveRequest.file) {

@@ -17,7 +17,7 @@ import {
 import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { buildAutostartSequence } from "@/lib/playback/autostart";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
@@ -949,6 +949,21 @@ describe("playbackRouter", () => {
     vi.mocked(readFtpFile).mockRejectedValue(new Error("connection refused"));
     const result = await tryFetchUltimateSidBlob("MUSIC/DEMO.SID");
     expect(result).toBeNull();
+  });
+
+  // A tune set to play on this device falls back to the C64 when this read fails, so the failure has
+  // to be visible in the log at the default level.
+  it("logs a failed FTP read of a SID as a warning with the error", async () => {
+    vi.mocked(addLog).mockClear();
+    vi.mocked(readFtpFile).mockRejectedValue(new Error("connection refused"));
+
+    await tryFetchUltimateSidBlob("/MUSIC/DEMO.SID");
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "FTP SID fetch failed",
+      expect.objectContaining({ path: "/MUSIC/DEMO.SID", error: "connection refused", stack: expect.any(String) }),
+    );
   });
 
   it("keeps a SID it read from the Ultimate, so the tune can still be read once the network is gone", async () => {

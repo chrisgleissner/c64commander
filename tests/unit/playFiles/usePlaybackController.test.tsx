@@ -10,6 +10,7 @@ import {
   tryFetchUltimateSidBlob,
 } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
@@ -2902,6 +2903,24 @@ describe("usePlaybackController", () => {
 
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    it("says so when a tune set to play on this device cannot be read off the Ultimate", async () => {
+      enableLocal();
+      const controller = fakeController();
+      vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(null);
+      const playlist = [
+        createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+      ];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ description: ENGINE_FALLBACK_MESSAGES["sid-unreadable-on-c64"] }),
+      );
     });
 
     it("plays a SID on this device, without trying to connect, when no C64 Ultimate is connected", async () => {
