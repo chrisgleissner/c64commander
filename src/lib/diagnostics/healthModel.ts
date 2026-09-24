@@ -10,6 +10,7 @@ import type { HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 
 // §7.1 — Health states (fixed labels, must not be paraphrased)
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
@@ -749,7 +750,7 @@ export const getBadgeAriaLabel = (
   const deviceLabel = connectedDeviceLabel ?? inferConnectedDeviceLabel(product) ?? "C64U";
   // While the device is still being probed it is not connected, whether or not it answers in the end.
   if (connectivity === "Checking") return `Connecting to ${deviceLabel}`;
-  const connPhrase = connectivity === "Online" ? `Connected to ${deviceLabel}` : "Demo mode";
+  const connPhrase = connectivity === "Online" ? `Connected to ${deviceLabel}` : DEMO_MODE_DEVICE_LABEL;
   switch (health) {
     case "Healthy":
       return `${connPhrase}, system healthy`;

@@ -216,6 +216,7 @@ import {
   pinDemoModeByUserChoice,
 } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
+import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useNavigate } from "react-router-dom";
@@ -2068,7 +2069,7 @@ export default function SettingsPage() {
                   : status.isConnected
                     ? `Connected to ${baseUrl}`
                     : isDemoActive
-                      ? `Demo mode — ${baseUrl}`
+                      ? `${DEMO_MODE_DEVICE_LABEL} — ${baseUrl}`
                       : status.error || "Not connected"}
               </div>
             </SettingsSection>

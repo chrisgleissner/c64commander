@@ -2261,6 +2261,18 @@ describe("SettingsPage", () => {
     expect(screen.getByText("Connected to http://c64u")).toBeInTheDocument();
   });
 
+  it("names Demo Mode with its product capitals in the connection status", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: { state: "DEMO_ACTIVE", isConnected: false, isConnecting: false, error: null, deviceInfo: null },
+      baseUrl: "http://127.0.0.1:8064",
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByText("Demo Mode — http://127.0.0.1:8064")).toBeInTheDocument();
+  });
+
   it("shows the connecting state and spinning refresh icon while connecting", () => {
     connectionPayloadRef.current = {
       ...connectionPayloadRef.current,
