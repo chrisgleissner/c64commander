@@ -81,11 +81,24 @@ export const resetRemoteTuneHandoverForTests = () => {
   tuneForPage = null;
 };
 
+const logHandoverFailure = (message: string, error: unknown, context: Record<string, unknown> = {}) =>
+  addLog("warn", message, {
+    ...context,
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+
+const readTuneBytes = (readBytes: RemoteTune["readBytes"], context: Record<string, unknown>) =>
+  readBytes().catch((error: unknown) => {
+    logHandoverFailure("Playback: could not read the tune's bytes to carry it on this phone", error, context);
+    return null;
+  });
+
 const carryOnWithoutPage = async () => {
   const tune = remoteTune;
   if (!tune || !isRemotePlaybackActive() || handedOver?.startedAt === tune.startedAt) return;
   if (!LocalSidPlaybackController.isSupported() || Date.now() - tune.startedAt >= tune.durationMs) return;
-  const bytes = await tune.readBytes().catch(() => null);
+  const bytes = await readTuneBytes(tune.readBytes, { item: tune.label });
   if (!bytes) {
     addLog("info", "Playback: the C64 is out of reach and this tune cannot carry on here", { item: tune.label });
     return;
@@ -131,10 +144,13 @@ const carryOnWithoutPage = async () => {
 // Back home the C64 is still looping the tune it was playing; the phone finishes it, the next track goes back.
 // A check that cannot be made leaves the reset to go ahead, as it did before the check existed.
 const stillPlaysTuneLeft = async (tuneLeft: HandedOver) => {
-  const bytes = tuneLeft.readBytes ? await tuneLeft.readBytes().catch(() => null) : null;
+  const bytes = tuneLeft.readBytes ? await readTuneBytes(tuneLeft.readBytes, { deviceHost: tuneLeft.host }) : null;
   if (!bytes) return null;
   return isTuneStillPlayingOnC64(getC64API(), bytes).catch((error) => {
     if (isAbortLikeError(error)) throw error;
+    logHandoverFailure("Playback: could not check whether the C64 still plays the tune; resetting it", error, {
+      deviceHost: tuneLeft.host,
+    });
     return null;
   });
 };
