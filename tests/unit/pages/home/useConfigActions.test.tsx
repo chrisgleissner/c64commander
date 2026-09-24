@@ -12,6 +12,7 @@ const readItemValueMock = vi.fn();
 const updateHasChangesMock = vi.fn();
 const getActiveBaseUrlMock = vi.fn(() => "http://c64u");
 const routingEpochRef = vi.hoisted(() => ({ current: 0 }));
+const addLogMock = vi.fn();
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
@@ -52,6 +53,11 @@ vi.mock("@/lib/config/appConfigStore", () => ({
   getActiveBaseUrl: (...args: unknown[]) => getActiveBaseUrlMock(...args),
   updateHasChanges: (...args: unknown[]) => updateHasChangesMock(...args),
 }));
+
+vi.mock("@/lib/logging", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/logging")>("@/lib/logging");
+  return { ...actual, addLog: (...args: unknown[]) => addLogMock(...args) };
+});
 
 vi.mock("@/hooks/useC64Connection", () => ({
   useConnectionRoutingEpoch: () => routingEpochRef.current,
@@ -122,6 +128,27 @@ describe("useConfigActions", () => {
     expect(fetchQueryMock).toHaveBeenCalledTimes(1);
     expect(getDrivesMock).toHaveBeenCalledTimes(1);
     expect(result.current.configWritePending).toEqual({ "Audio:Volume": true });
+  });
+
+  it("keeps a successful write applied and logs a warning when only the follow-up drive refresh fails", async () => {
+    getDrivesMock.mockRejectedValueOnce(new Error("drives unavailable"));
+    const { result } = renderHook(() => useConfigActions());
+
+    let writeResult: boolean | undefined;
+    await act(async () => {
+      writeResult = await result.current.updateConfigValue("Drive A Settings", "Drive", "Enabled", "OP", "Updated", {
+        refreshDrives: true,
+      });
+    });
+
+    expect(writeResult).toBe(true);
+    expect(reportUserErrorMock).not.toHaveBeenCalled();
+    expect(result.current.resolveConfigValue({}, "Drive A Settings", "Drive", "Disabled")).toBe("Enabled");
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Drive refresh after config write failed",
+      expect.objectContaining({ category: "Drive A Settings", item: "Drive" }),
+    );
   });
 
   it("resolves true on a successful write and false on a failed write", async () => {
