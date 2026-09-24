@@ -291,13 +291,13 @@ test.describe("Keypad / T9 input", () => {
     await expect(trigger).toBeFocused();
     await snap(page, testInfo, "dropdown-closed");
 
-    // Keypad back (Android keyCode 4) also closes the dropdown via the layer.
+    // The Android Back key also closes the dropdown. It reaches the page the way the app's native
+    // Back listener delivers it: an Escape keydown with no key code, at the focused element.
     await page.keyboard.press("Enter");
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await page.evaluate(() => {
-      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "keyCode", { get: () => 4 });
-      window.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" });
+      (document.activeElement ?? document).dispatchEvent(event);
     });
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
     await snap(page, testInfo, "dropdown-keypad-back-closed");
