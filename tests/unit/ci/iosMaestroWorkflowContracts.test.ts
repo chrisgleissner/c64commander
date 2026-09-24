@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const repoFile = (...parts: string[]) => path.resolve(process.cwd(), ...parts);
@@ -53,6 +54,16 @@ describe("iOS Maestro CI contracts", () => {
       encoding: "utf8",
     });
     expect(parsed.status, parsed.stderr).toBe(0);
+  });
+
+  it("names the missing artifacts directory among the reasons a flow failed validation", () => {
+    const flowDir = path.join(mkdtempSync(path.join(tmpdir(), "ios-connectivity-")), "never-ran");
+    const result = spawnSync("bash", [repoFile("scripts", "ci", "validate-ios-connectivity.sh"), flowDir], {
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toContain("  - no artifacts directory: the flow produced no evidence");
   });
 
   it("treats fallback debug payloads as diagnostic evidence instead of connectivity failures", () => {

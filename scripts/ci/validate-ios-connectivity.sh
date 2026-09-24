@@ -186,6 +186,7 @@ if [[ ! -d "$FLOW_DIR" ]]; then
   mkdir -p "$FLOW_DIR"
   VALID="false"
   had_error=1
+  errors+=("no artifacts directory: the flow produced no evidence")
   ERRORS_JSON='["no artifacts directory: the flow produced no evidence"]'
 fi
 
