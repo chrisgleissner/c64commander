@@ -312,14 +312,14 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     clearIdleTimer();
     authenticated = false;
     screenBuffer = new Uint8Array(0);
-    if (transport.isConnected()) {
-      try {
-        await transport.disconnect();
-      } catch (error) {
-        addLog("warn", "Error during Telnet disconnect", {
-          error: (error as Error).message,
-        });
-      }
+    // Closed whatever the transport reports: a failed send or read marks it disconnected while the
+    // native socket stays open, holding one of the firmware's four Telnet sessions.
+    try {
+      await transport.disconnect();
+    } catch (error) {
+      addLog("warn", "Error during Telnet disconnect", {
+        error: (error as Error).message,
+      });
     }
     addLog("info", "Telnet session disconnected", { host });
   }

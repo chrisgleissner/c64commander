@@ -268,6 +268,18 @@ describe("createTelnetSession", () => {
       expect(session.isConnected()).toBe(false);
     });
 
+    it("closes the socket on disconnect after a failed send marked the transport disconnected", async () => {
+      const mock = new TelnetMock();
+      const session = createTelnetSession(mock);
+      await session.connect("localhost", 23);
+      vi.spyOn(mock, "isConnected").mockReturnValue(false);
+      const disconnectSpy = vi.spyOn(mock, "disconnect");
+
+      await session.disconnect();
+
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("disconnect handles transport errors gracefully", async () => {
       const mock = new TelnetMock();
       const session = createTelnetSession(mock);
