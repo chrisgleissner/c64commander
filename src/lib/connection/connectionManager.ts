@@ -884,6 +884,7 @@ const tryReachableSavedDeviceFallback = async (
   // switch's cross-device hygiene BEFORE re-selecting, while the runtime API still targets the old
   // device; otherwise device A's paused state, health verdict and watchdogs leaked onto device B.
   const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id);
+  if (!isCurrentRun()) return false;
   // HARD16-001: select the reachable device BEFORE verifying (as executeSavedDeviceSwitch does):
   // verification stamps whichever device is selected, and verifying first wrote this identity onto
   // the powered-off original. The HARD12-011 window guards against a late /v1/info from that host.

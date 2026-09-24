@@ -506,6 +506,27 @@ describe("a user choice made while a discovery is still running", () => {
     expect(isDemoModePinnedByUser()).toBe(true);
   });
 
+  it("does not select the reachable saved device when the user switched devices while the old one was released", async () => {
+    getInfoMock.mockResolvedValueOnce(UNHEALTHY).mockResolvedValue(HEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+      ]),
+    );
+    const release = deferred<{ videoWasLive: boolean; audioWasLive: boolean }>();
+    prepareForDeviceRetargetMock.mockReturnValueOnce(release.promise);
+
+    const discovery = discoverConnection("manual");
+    await vi.waitFor(() => expect(prepareForDeviceRetargetMock).toHaveBeenCalled());
+    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.70" });
+    release.resolve({ videoWasLive: false, audioWasLive: false });
+    await discovery;
+
+    expect(selectSavedDeviceMock).not.toHaveBeenCalled();
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.70", undefined, "192.168.1.70");
+  });
+
   it("does not enter Demo Mode over a device the user switched to while the simulated device was starting", async () => {
     getInfoMock.mockResolvedValue(HEALTHY);
     await verifyCurrentConnectionTarget({ deviceHost: "u64" });
