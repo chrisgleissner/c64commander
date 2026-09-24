@@ -135,6 +135,13 @@ export class FocusController {
     this.currentIsDefault = false;
   }
 
+  /** Returns to the default selection, which follows the first top-level item as items arrive. */
+  resetToDefault(): void {
+    this.scopeParentId = null;
+    this.currentId = this.firstEnabledIdInScope(null);
+    this.currentIsDefault = this.currentId !== null;
+  }
+
   /** The ordered list of items (enabled and disabled), as plain FocusItems. */
   list(): FocusItem[] {
     return this.items.map(({ seq: _seq, ...item }) => item);

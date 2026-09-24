@@ -651,8 +651,12 @@ export const FocusNavigationProvider = ({
       const shortcuts = shortcutsRef.current;
       const shortcutDigit = digitForAction(action);
       if (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) {
+        // The tab bar stays in the ring across routes, so a ring standing on it would stay there;
+        // a jump lands on the page it opened instead.
+        controller.focus.resetToDefault();
         shortcuts.jumpToTab(shortcutDigit - 1);
         setInputModality("key-navigation");
+        notifyRing();
         event.preventDefault();
         return;
       }

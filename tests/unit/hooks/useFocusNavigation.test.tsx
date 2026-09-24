@@ -746,6 +746,28 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(openDeviceSwitcher).toHaveBeenCalledTimes(1);
   });
 
+  it("lands on the page's first control after a tab jump made while the ring was on the tab bar", async () => {
+    const jumpToTab = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ jumpToTab }}>
+        <button type="button">Page first</button>
+        <button type="button">Page second</button>
+        <nav data-focus-scope="tabbar">
+          <button type="button">Play tab</button>
+        </nav>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    button("Play tab").focus();
+    await waitFor(() => expect(button("Play tab").getAttribute(SELECTED)).toBe("true"));
+
+    fireEvent.keyDown(document.body, { code: "Digit4" });
+
+    expect(jumpToTab).toHaveBeenCalledWith(3);
+    await waitFor(() => expect(button("Page first").getAttribute(SELECTED)).toBe("true"));
+    resetInputModality();
+  });
+
   /*
    * 8 and 9 exist because the same two actions cost ten and eight presses through Home's Quick
    * Actions grid from a cold arrival, measured on the handset. The grid is not moving; these are a
