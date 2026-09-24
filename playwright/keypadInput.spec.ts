@@ -157,14 +157,22 @@ test.describe("Keypad / T9 input", () => {
     await expect(sheet).toBeVisible();
     await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
 
+    await sheet.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
     const layout = await page.evaluate(() => {
       const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+      const reserveProbe = document.createElement("div");
+      reserveProbe.style.height = "var(--keypad-guidance-reserved-height)";
+      document.body.appendChild(reserveProbe);
+      const reservedHeight = reserveProbe.getBoundingClientRect().height;
+      reserveProbe.remove();
       const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"]');
       const surface = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
       return {
         shellWillChange: shell ? getComputedStyle(shell).willChange : null,
         barTop: bar?.getBoundingClientRect().top ?? 0,
         barBottom: bar?.getBoundingClientRect().bottom ?? 0,
+        barHeight: bar?.getBoundingClientRect().height ?? 0,
+        reservedHeight,
         sheetBottom: surface?.getBoundingClientRect().bottom ?? 0,
         viewportHeight: window.innerHeight,
       };
@@ -172,6 +180,7 @@ test.describe("Keypad / T9 input", () => {
     // A `will-change: opacity` shell is a stacking context that every dialog outranks, which hid the
     // bar under each one.
     expect(layout.shellWillChange).toBe("auto");
+    expect(layout.reservedHeight).toBeGreaterThanOrEqual(layout.barHeight - 0.5);
     expect(layout.sheetBottom).toBeLessThanOrEqual(layout.barTop + 1);
     expect(layout.barBottom).toBeGreaterThan(layout.viewportHeight - 60);
     // The sheet itself has no context menu of its own, so the Menu legend is not offered.
