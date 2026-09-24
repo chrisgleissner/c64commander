@@ -1013,6 +1013,14 @@ const transitionToDemoActive = async (
     await transitionToOfflineNoDemo(trigger);
     return;
   }
+  const fuzzBaseUrl = isFuzzModeEnabled() ? getFuzzMockBaseUrl() : null;
+  if (!fuzzBaseUrl && !isSimulatedDeviceAvailable()) {
+    // HARD27-027: without a simulated device there is nothing to demonstrate, so neither the offer nor a
+    // server start: the start can only fail, and DEMO_ACTIVE would send every card to the unreachable host.
+    addLog("info", "Demo mode has no simulated device on this platform; staying offline", { trigger });
+    await transitionToOfflineNoDemo(trigger);
+    return;
+  }
   if (options.bypassStickyRealDeviceLock) stickyRealDeviceLock = false;
   cancelActiveDiscovery();
   resetInteractionState("transition-demo-active");
@@ -1033,19 +1041,16 @@ const transitionToDemoActive = async (
   // triggered by the DEMO_ACTIVE re-render already target the mock server
   // instead of the unreachable real-device hostname.
 
-  if (isFuzzModeEnabled()) {
-    const fuzzBaseUrl = getFuzzMockBaseUrl();
-    if (fuzzBaseUrl) {
-      const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
-      applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
-      addLog("info", "Fuzz mode using forced mock base URL", {
-        trigger,
-        baseUrl: fuzzBaseUrl,
-      });
-      transitionTo("DEMO_ACTIVE", trigger);
-      logDiscoveryDecision("DEMO_ACTIVE", trigger, { mode: "demo" });
-      return;
-    }
+  if (fuzzBaseUrl) {
+    const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
+    applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
+    addLog("info", "Fuzz mode using forced mock base URL", {
+      trigger,
+      baseUrl: fuzzBaseUrl,
+    });
+    transitionTo("DEMO_ACTIVE", trigger);
+    logDiscoveryDecision("DEMO_ACTIVE", trigger, { mode: "demo" });
+    return;
   }
 
   const hasMockServerOverride =
@@ -1059,8 +1064,7 @@ const transitionToDemoActive = async (
     try {
       startedMock = await startMockServer();
     } catch (error) {
-      // On non-native platforms the internal demo servers may be unavailable.
-      // Still enter DEMO_ACTIVE for deterministic UI/state behavior.
+      // A simulated device that fails to start still enters DEMO_ACTIVE for deterministic UI/state behavior.
       setSnapshot({ lastProbeError: (error as Error).message });
       addLog("info", "Demo mode mock server unavailable", {
         error: (error as Error).message,
@@ -1091,14 +1095,6 @@ const transitionToDemoActive = async (
       trigger,
       baseUrl: activeMockUrl,
     });
-  } else if (!isSimulatedDeviceAvailable()) {
-    // HARD27-027: without a simulated device there is nothing to demonstrate.
-    // Entering DEMO_ACTIVE anyway counted as connected, so every card queried
-    // the stored real host - powered off, which is why demo was offered - and
-    // failed, while the badge read Demo. Offline is the honest state.
-    addLog("info", "Demo mode has no simulated device on this platform; staying offline", { trigger });
-    await transitionToOfflineNoDemo(trigger);
-    return;
   } else {
     const fallbackHost = resolveDeviceHostFromStorage();
     const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);

@@ -656,6 +656,22 @@ describe("startup on a platform with no simulated device (HARD27-027)", () => {
     expect(snapshot.state).toBe("OFFLINE_NO_DEMO");
     expect(snapshot.demoInterstitialVisible).toBe(false);
   });
+
+  it("neither tries to start a simulated device nor records the Demo Mode offer as shown", async () => {
+    setNetwork(true);
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    const discovery = discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(4000);
+    await discovery;
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(startMockServer).not.toHaveBeenCalled();
+    expect(localStorage.getItem("c64u_demo_offer_seen")).toBeNull();
+    expect(getConnectionSnapshot().lastProbeError).not.toBe("Mock C64U server is only available on native platforms.");
+  });
 });
 
 // Somebody who has seen the offer and has used a real device is most likely just out and about.
