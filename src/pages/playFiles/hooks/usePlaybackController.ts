@@ -995,6 +995,9 @@ export function usePlaybackController({
           await stopRemoteTuneBeforeLocalPlayback(async () => {
             if (isPausedRef.current) await resumeMachineWithRetry(api);
             await stopMachineWithGracePeriod(api, false);
+            // As Stop does: a paused tune muted the C64, and nothing on this path would unmute it.
+            writeMachineExecutionFromPlay("running");
+            await restoreVolumeOverrides("stop");
           });
         }
         if (!routeToLocal) {

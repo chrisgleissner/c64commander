@@ -3148,6 +3148,26 @@ describe("usePlaybackController", () => {
       expect(isRemotePlaybackActive()).toBe(false);
     });
 
+    it("restores the C64's volume after stopping its tune for one that plays on this device", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
+      const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        restoreVolumeOverrides,
+      });
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      restoreVolumeOverrides.mockClear();
+
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+
+      expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+      expect(machineReset.mock.invocationCallOrder[0]).toBeLessThan(restoreVolumeOverrides.mock.invocationCallOrder[0]);
+    });
+
     // Carrying a tune on to the phone when the C64 goes out of reach must leave the tune marked as playing
     // there, so it is reset when the device comes back instead of looping on.
     it("leaves the C64 tune to the reconnect path when the C64 is out of reach", async () => {
