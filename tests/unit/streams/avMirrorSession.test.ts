@@ -79,7 +79,13 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
 }));
 
 import { AvMirrorSession, WIFI_AUDIO_BLOCKS_VIDEO, avMirrorSession } from "@/lib/streams/avMirrorSession";
-import { __resetPhoneAudioOwnership, claimPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { __resetPhoneAudioOwnership, claimPhoneAudio, interruptPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/logging")>();
+  return { ...actual, addLog: vi.fn() };
+});
 
 const makeSession = () => {
   audioInstances.length = 0;
@@ -392,6 +398,31 @@ describe("AvMirrorSession", () => {
       claimPhoneAudio("local-sid", {}, vi.fn(), { pause: vi.fn(), resume: vi.fn() });
       await vi.waitFor(() => {
         expect(audio.stop).toHaveBeenCalled();
+      });
+    });
+
+    it("logs at warn when stopping or restarting mirror audio for an audio focus change fails", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      vi.mocked(addLog).mockClear();
+      audio.stop.mockRejectedValueOnce(new Error("streams:stop refused"));
+      audio.start.mockRejectedValueOnce(new Error("streams:start refused"));
+
+      const interrupted = interruptPhoneAudio();
+      await vi.waitFor(() => {
+        expect(addLog).toHaveBeenCalledWith(
+          "warn",
+          "A/V mirror: audio focus pause failed",
+          expect.objectContaining({ error: "streams:stop refused" }),
+        );
+      });
+      interrupted?.resume();
+      await vi.waitFor(() => {
+        expect(addLog).toHaveBeenCalledWith(
+          "warn",
+          "A/V mirror: audio focus resume failed",
+          expect.objectContaining({ error: "streams:start refused" }),
+        );
       });
     });
 

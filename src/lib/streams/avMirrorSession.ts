@@ -141,6 +141,14 @@ const INITIAL: AvMirrorSnapshot = {
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
 
+const warnAudioFocusFailure = (action: "pause" | "resume", error: unknown) => {
+  addLog("warn", `A/V mirror: audio focus ${action} failed`, {
+    service: "streams",
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+};
+
 /**
  * Which audio buffer the governor is judged on, and the nominal depth that describes it.
  *
@@ -681,8 +689,8 @@ export class AvMirrorSession {
         {
           // A focus loss (HARD27-006): the C64 keeps streaming, so there is no position to hold —
           // stop receiving and start again if the loss turns out to have been transient.
-          pause: () => void this.stopAudio().catch(() => undefined),
-          resume: () => void this.startAudio().catch(() => undefined),
+          pause: () => void this.stopAudio().catch((error) => warnAudioFocusFailure("pause", error)),
+          resume: () => void this.startAudio().catch((error) => warnAudioFocusFailure("resume", error)),
         },
       );
       // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
