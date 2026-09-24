@@ -1276,6 +1276,12 @@ button:focus-visible,
   -webkit-tap-highlight-color: transparent !important;
 }
 
+/* Compact inline summary selects start their possibly two-line value at the top of the 44px
+   target, so the paired label must start there too. Centered, it sits about 11px lower. */
+:root[data-display-profile="compact"] .inline-summary-label-value-pair {
+  align-items: flex-start;
+}
+
 /* The compact profile's spacing ramp, the counterpart to its type ramp above. These
    utilities were sized for a 393px phone and carry about a fifth of every page's height on
    a 320x427 screen, so page content goes on one 8px vertical rhythm instead. Column gaps
@@ -1302,12 +1308,6 @@ button:focus-visible,
   > :not([hidden])
   ~ :not([hidden]) {
   margin-top: 0.5rem;
-}
-
-/* Compact inline summary selects start their possibly two-line value at the top of the 44px
-   target, so the paired label must start there too. Centered, it sits about 11px lower. */
-:root[data-display-profile="compact"] .inline-summary-label-value-pair {
-  align-items: flex-start;
 }
 
 /* Was 8px under the tab labels against 2px above them, and not the Android navigation
