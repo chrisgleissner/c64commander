@@ -203,6 +203,17 @@ describe("logging", () => {
     expect(getLogs()).toEqual([]);
   });
 
+  it.each(["null", "{}", '"text"'])("keeps logging when the stored logs parse to the non-list %s", (stored) => {
+    localStorage.setItem("c64u_app_logs", stored);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(() => addLog("warn", "after corrupt storage")).not.toThrow();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(getLogs().map((entry) => entry.message)).toEqual(["after corrupt storage"]);
+  });
+
   it("truncates stack trace by character count", () => {
     const error = new Error("long stack");
     const longLine = "a".repeat(3005);

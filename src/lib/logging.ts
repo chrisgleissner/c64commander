@@ -108,7 +108,10 @@ const readLogsFromStorage = (): LogEntry[] => {
   const raw = localStorage.getItem(LOG_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as LogEntry[];
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as LogEntry[];
+    console.warn("Discarded stored logs that are not a list", { type: parsed === null ? "null" : typeof parsed });
+    return [];
   } catch (error) {
     console.warn("Failed to parse stored logs", { error });
     return [];
