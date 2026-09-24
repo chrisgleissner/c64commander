@@ -162,7 +162,11 @@ export const resolveAppSheetTopClearancePx = () => {
   // at 0 against the 90px the same header settles at, which put the sheet over the badge and then
   // across the whole screen. Below half of what the CSS height implies, the measurement is not a
   // shorter badge lane, it is a measurement taken too early.
-  return fromBadgeLane >= fromCssHeight / 2 ? fromBadgeLane : fromCssHeight;
+  const clearance = fromBadgeLane >= fromCssHeight / 2 ? fromBadgeLane : fromCssHeight;
+  // The overlap reclaims header padding, not the title: where the badge is as tall as the title
+  // zone, a sheet at badge bottom minus the overlap covered the logo and the page heading.
+  const titleBottom = getAppBarTitleBounds()?.bottom ?? 0;
+  return Math.max(clearance, Math.ceil(titleBottom));
 };
 
 export const resolveWorkflowSheetLayout = () => ({
