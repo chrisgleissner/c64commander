@@ -1043,6 +1043,30 @@ describe("the keypad highlight follows focus that a menu moves itself", () => {
   });
 });
 
+describe("the keypad highlight follows focus handed back to a menu trigger", () => {
+  afterEach(() => resetInputModality());
+
+  it("moves the ring onto the trigger a closing menu returns focus to", () => {
+    const onActions = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <button type="button">Card action</button>
+        <button type="button" aria-haspopup="menu" onClick={onActions}>
+          Item actions
+        </button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+    expect(button("Card action").getAttribute(SELECTED)).toBe("true");
+
+    button("Item actions").focus();
+
+    expect(button("Item actions").getAttribute(SELECTED)).toBe("true");
+    expect(button("Card action").getAttribute(SELECTED)).toBeNull();
+  });
+});
+
 describe("OK toggles a checkbox inside a dialog", () => {
   it("checks a focused checkbox on Enter, which the checkbox itself ignores", () => {
     const onCheckedChange = vi.fn();

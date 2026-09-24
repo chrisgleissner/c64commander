@@ -723,24 +723,26 @@ export const FocusNavigationProvider = ({
     // Pointer/touch always wins: capture-phase so it flips modality (and clears
     // the highlight + guidance bar via the subscription) before any other handler.
     const handlePointer = () => setInputModality("pointer");
-    // Menus and listboxes move DOM focus themselves on Up/Down, and a menu focuses its first item
-    // on open without scrolling to it. The highlight follows that focus and the item is brought
-    // into view: on a short screen a tall menu opened with the focused item below the fold.
-    const handleOverlayFocus = (event: FocusEvent) => {
-      if (getInputModality() !== "key-navigation" || !isWithinOpenOverlay(event.target)) return;
+    // Focus the app moves by itself is where the user is: menus and listboxes move it on Up/Down,
+    // and a closing menu hands it back to its trigger. The highlight follows it, or OK would act on
+    // the focused control while the highlight showed another. A menu also focuses its first item on
+    // open without scrolling to it, so inside an overlay the item is brought into view: on a short
+    // screen a tall menu opened with the focused item below the fold.
+    const handleFocusIn = (event: FocusEvent) => {
+      if (getInputModality() !== "key-navigation" || !(event.target instanceof HTMLElement)) return;
       adoptActiveElement();
       notifyRing();
-      if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (isWithinOpenOverlay(event.target)) event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
     };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pointerdown", handlePointer, true);
     window.addEventListener("touchstart", handlePointer, true);
-    window.addEventListener("focusin", handleOverlayFocus, true);
+    window.addEventListener("focusin", handleFocusIn, true);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
-      window.removeEventListener("focusin", handleOverlayFocus, true);
+      window.removeEventListener("focusin", handleFocusIn, true);
     };
   }, [adoptActiveElement, controller, enabled, keymap, notifyRing, startEngine]);
 
