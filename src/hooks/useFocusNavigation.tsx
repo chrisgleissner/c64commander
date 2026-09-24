@@ -105,10 +105,14 @@ const FocusNavigationContext = createContext<FocusNavigationContextValue | null>
 const DIALOG_ANCESTOR_SELECTOR = '[role="dialog"],[role="alertdialog"]';
 /** Controls that ignore Enter by design and toggle only on Space or a click. */
 const ENTER_IGNORING_CONTROL_SELECTOR = '[role="checkbox"],[role="radio"]';
-/** Single-line text fields: Up/Down cannot move the caret, so they are free to move focus. */
-const SINGLE_LINE_TEXT_TYPES = new Set(["text", "search", "url", "tel", "email", "password"]);
-const isSingleLineTextField = (target: EventTarget | null): boolean =>
-  target instanceof HTMLInputElement && SINGLE_LINE_TEXT_TYPES.has(target.type);
+/**
+ * Single-line fields, where Up/Down move focus. The caret cannot move vertically in them, and a
+ * number field's own Up/Down step left a dialog's number field with no key that reached anything
+ * else: digits type its value, and Back closes the dialog.
+ */
+const SINGLE_LINE_FIELD_TYPES = new Set(["text", "search", "url", "tel", "email", "password", "number"]);
+const isSingleLineField = (target: EventTarget | null): boolean =>
+  target instanceof HTMLInputElement && SINGLE_LINE_FIELD_TYPES.has(target.type);
 
 /**
  * Move focus to the next/previous tabbable inside `overlay`, wrapping at the ends.
@@ -434,13 +438,15 @@ export const FocusNavigationProvider = ({
   const adoptActiveElement = useCallback(() => {
     const active = document.activeElement;
     if (!(active instanceof HTMLElement)) return;
+    // The innermost item holding focus: a card or dialog surface is an item too, and it is
+    // listed before the control inside it that actually has focus.
+    let innermost: { id: string; element: HTMLElement } | null = null;
     for (const item of controller.focus.list()) {
       const element = engineRef.current?.elementForId(item.id);
-      if (element && (element === active || element.contains(active))) {
-        controller.focus.setCurrent(item.id);
-        return;
-      }
+      if (!element?.contains(active)) continue;
+      if (!innermost || innermost.element.contains(element)) innermost = { id: item.id, element };
     }
+    if (innermost) controller.focus.setCurrent(innermost.id);
   }, [controller]);
 
   // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
@@ -498,7 +504,7 @@ export const FocusNavigationProvider = ({
       // navigation moved DOM focus to an arbitrary control while the highlight stayed on the field.
       const leavesPageField =
         (action === "dpadUp" || action === "dpadDown") &&
-        isSingleLineTextField(event.target) &&
+        isSingleLineField(event.target) &&
         !(event.target as Element).closest(`${OPEN_OVERLAY_ANCESTOR_SELECTOR},[${SKIP_ATTR}]`);
       if (leavesPageField) (event.target as HTMLElement).blur();
       // Never touch editable targets (the field + its T9 composer own them); and
@@ -508,9 +514,9 @@ export const FocusNavigationProvider = ({
         // cannot move vertically there, so the key would otherwise do nothing at all — and inside
         // an overlay that is a dead end, because the ring is inert there and Escape belongs to the
         // dialog. A keypad user who landed in the host field of the discovery dialog could reach
-        // nothing else, including its own Connect button. Textareas, selects, contenteditable and
-        // the stepper inputs keep their vertical keys, which do mean something in those.
-        if ((action === "dpadUp" || action === "dpadDown") && isSingleLineTextField(event.target)) {
+        // nothing else, including its own Connect button. Textareas, selects and contenteditable
+        // keep their vertical keys, which do mean something in those.
+        if ((action === "dpadUp" || action === "dpadDown") && isSingleLineField(event.target)) {
           const overlay = (event.target as Element).closest(OPEN_OVERLAY_ANCESTOR_SELECTOR);
           // Except where the overlay has opted out with `data-key-nav-skip`, which says it drives
           // its own keys. The search overlay does: its Up/Down move an aria-activedescendant while
@@ -623,6 +629,14 @@ export const FocusNavigationProvider = ({
       // 8 and 9: the two machine controls this user opens the app for. They sit in Home's Quick
       // Actions grid, which is where they read best and is not moving; these are a shorter way to
       // the same actions. 7 is search and 0 is Game Mode, so these were the digits going spare.
+      // A held key repeats. The one-shot commands below must run once per press, or holding 8
+      // toggles pause and resume for as long as the key is down.
+      const isOneShotCommand =
+        action === "digit8" || action === "digit9" || action === "digit0" || action === "star" || action === "hash";
+      if (isOneShotCommand && event.repeat) {
+        event.preventDefault();
+        return;
+      }
       if (action === "digit8" && shortcuts.machinePauseResume) {
         shortcuts.machinePauseResume();
         setInputModality("key-navigation");

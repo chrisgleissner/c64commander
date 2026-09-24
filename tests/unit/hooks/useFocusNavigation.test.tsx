@@ -883,6 +883,23 @@ describe("vertical keys escape a single-line field inside an overlay", () => {
     expect(document.activeElement).toBe(button("Not now"));
   });
 
+  it("moves focus off a number field on Down, whose own Up/Down would otherwise trap the keypad", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Lighting Studio">
+          <input type="number" aria-label="Red" defaultValue="10" />
+          <button type="button">Apply</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const red = screen.getByLabelText("Red");
+    red.focus();
+
+    fireEvent.keyDown(red, { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(button("Apply"));
+  });
+
   it("leaves a textarea alone, where Up and Down move the caret", () => {
     render(
       <FocusNavigationProvider>
@@ -956,7 +973,18 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
   });
 
   it("draws the steady keypad highlight on the dialog control that Down moved to", () => {
-    render(<Dialog />);
+    // The dialog's content is a ring group of its own, as a sheet or modal surface is.
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Demo Mode">
+          <div data-section-label="Demo Mode">
+            <button type="button">Close</button>
+            <button type="button">Retry connection</button>
+            <button type="button">Continue in Demo Mode</button>
+          </div>
+        </div>
+      </FocusNavigationProvider>,
+    );
 
     fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowDown" });
     fireEvent.keyDown(button("Close"), { code: "ArrowDown" });
@@ -982,6 +1010,23 @@ describe("OK toggles a checkbox inside a dialog", () => {
     fireEvent.keyDown(checkbox, { key: "Enter", code: "", keyCode: 13 });
 
     expect(onCheckedChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("one-shot keypad commands ignore key repeat", () => {
+  it("pauses once for a held 8, not once per repeat", () => {
+    const machinePauseResume = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ machinePauseResume }}>
+        <button type="button">A</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56 });
+    fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56, repeat: true });
+    fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56, repeat: true });
+
+    expect(machinePauseResume).toHaveBeenCalledTimes(1);
   });
 });
 
