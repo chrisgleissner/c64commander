@@ -183,7 +183,7 @@ export function DriveCard({
           before only because the floor was a rem that happened to be 49.5px there; sizing the floor
           honestly in pixels is what exposed the column count as the real problem. */}
       <div className={cn("grid gap-2 text-xs", profile === "expanded" ? "grid-cols-2" : "grid-cols-1")}>
-        <div className="flex items-center gap-2">
+        <div className="inline-summary-label-value-pair flex items-center gap-2">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
             <SelectTrigger
@@ -210,7 +210,12 @@ export function DriveCard({
             </SelectContent>
           </Select>
         </div>
-        <div className={cn("flex items-center gap-2 min-w-0", profile === "compact" ? "justify-start" : "justify-end")}>
+        <div
+          className={cn(
+            "inline-summary-label-value-pair flex items-center gap-2 min-w-0",
+            profile === "compact" ? "justify-start" : "justify-end",
+          )}
+        >
           {typeValue !== undefined && (
             <>
               <span className="shrink-0 text-muted-foreground whitespace-nowrap">Type</span>

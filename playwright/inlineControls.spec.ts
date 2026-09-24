@@ -8,7 +8,7 @@
 /**
  * Home's read-only values read as text, and no value is cut while its row still has room.
  *
- * Two rules, checked together on one page load each because they need the same expensive setup —
+ * Three rules, checked together on one page load each because they need the same expensive setup —
  * every card open — and the 90s per-test budget does not stretch to doing it twice.
  *
  * **No border.** "Single Color" against Pattern, "Indigo" against Color, "UltiSID1-A" against SID
@@ -18,6 +18,10 @@
  * in 0.10.0-rc1 deleted it as redundant — true of a bare element, false of one whose base already
  * draws a border — and every value gained a 1px box with no padding inside it, so the text touched
  * the box and each row grew from 27px to 49.5px.
+ *
+ * **Shared vertical start (compact only).** A compact SelectTrigger deliberately grows to the 44px
+ * target floor. Its value must remain vertically aligned with its neighboring label; otherwise the
+ * value begins at the top of that target while the label is centered beside it, about 11px lower.
  *
  * **No cut value.** Four places cut text that had space beside it, all because a container fixed
  * its split before it knew what was in it: the SID shaping row gave three controls a third each, so
@@ -35,7 +39,7 @@ import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 
 /** The Home cards whose rows carry inline value controls. Named, so nothing else is opened. */
-const SECTIONS = ["cpu-ram", "ports", "video", "audio", "user-interface", "drives", "printers"];
+const SECTIONS = ["cpu-ram", "ports", "video", "audio", "lighting", "user-interface", "drives", "printers"];
 
 /**
  * Two profiles, chosen as the extremes rather than swept.
@@ -93,6 +97,7 @@ test.describe("Home inline value controls", () => {
         const root = document.querySelector('[data-slot-active="true"]') ?? document.body;
         const bordered: string[] = [];
         const clipped: string[] = [];
+        const misaligned: string[] = [];
         let inlineCount = 0;
 
         for (const trigger of root.querySelectorAll<HTMLElement>('[role="combobox"]')) {
@@ -107,6 +112,24 @@ test.describe("Home inline value controls", () => {
               `${trigger.getAttribute("data-testid") ?? "(no testid)"} "${(trigger.textContent ?? "")
                 .trim()
                 .slice(0, 30)}" has a ${width}px border`,
+            );
+          }
+
+          // Inline controls have a sibling text label in the rows where the value is visually
+          // paired with a label. SummaryConfigControlRow carries its label inside the trigger, so
+          // it is not a candidate. Compare the actual text runs, not their 44px hit targets: the
+          // regression was visible in glyph position, not control geometry.
+          const row = trigger.parentElement;
+          const label = row?.querySelector<HTMLElement>(":scope > span");
+          const value = trigger.querySelector<HTMLElement>("span");
+          if (!label || !value) continue;
+          const labelRect = label.getClientRects()[0];
+          const valueRect = value.getClientRects()[0];
+          if (!labelRect || !valueRect) continue;
+          if (Math.abs(labelRect.top - valueRect.top) > 1) {
+            misaligned.push(
+              `${trigger.getAttribute("data-testid") ?? "(no testid)"}: label starts at ${labelRect.top}px, ` +
+                `value starts at ${valueRect.top}px`,
             );
           }
         }
@@ -131,13 +154,16 @@ test.describe("Home inline value controls", () => {
           );
         }
 
-        return { bordered, clipped: [...new Set(clipped)], inlineCount };
+        return { bordered, clipped: [...new Set(clipped)], misaligned, inlineCount };
       });
 
       // Guards the two assertions below against passing on a page that rendered nothing.
       expect(report.inlineCount, "Home must render inline value controls here").toBeGreaterThan(3);
       expect(report.bordered, report.bordered.join("\n")).toEqual([]);
       expect(report.clipped, report.clipped.join("\n")).toEqual([]);
+      if (variant.profile === "compact") {
+        expect(report.misaligned, report.misaligned.join("\n")).toEqual([]);
+      }
     });
   }
 });

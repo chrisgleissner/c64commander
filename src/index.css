@@ -1304,6 +1304,12 @@ button:focus-visible,
   margin-top: 0.5rem;
 }
 
+/* Compact inline summary selects start their possibly two-line value at the top of the 44px
+   target, so the paired label must start there too. Centered, it sits about 11px lower. */
+:root[data-display-profile="compact"] .inline-summary-label-value-pair {
+  align-items: flex-start;
+}
+
 /* Was 8px under the tab labels against 2px above them, and not the Android navigation
    inset — that is `--app-tab-bar-safe-area-bottom`, reserved on `.tab-bar-frame`. The
    compact `--app-tab-bar-visual-height` comes down with it, or the bar shrinks inside a
