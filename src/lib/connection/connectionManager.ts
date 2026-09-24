@@ -1052,14 +1052,11 @@ const transitionToDemoActive = async (
     Boolean((window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl);
   const shouldStartDemoServer = !demoServerStartedThisSession && (!isTestProbeEnabled() || hasMockServerOverride);
 
+  const transitionsAtEntry = connectionTransitionCount;
+  let startedMock: Awaited<ReturnType<typeof startMockServer>> | null = null;
   if (shouldStartDemoServer) {
     try {
-      const { baseUrl, ftpPort } = await startMockServer();
-      demoServerStartedThisSession = true;
-      const mockHost = getDeviceHostFromBaseUrl(baseUrl);
-      applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
-      if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
-      // The token is applied below, once the active server is known.
+      startedMock = await startMockServer();
     } catch (error) {
       // On non-native platforms the internal demo servers may be unavailable.
       // Still enter DEMO_ACTIVE for deterministic UI/state behavior.
@@ -1068,6 +1065,17 @@ const transitionToDemoActive = async (
         error: (error as Error).message,
       });
     }
+  }
+  // A switch or reconnect that completed while the simulated device was starting owns the connection now.
+  if (connectionTransitionCount !== transitionsAtEntry) {
+    addLog("info", "Demo Mode entry abandoned: the connection changed while it started", { trigger });
+    return;
+  }
+  if (startedMock) {
+    demoServerStartedThisSession = true;
+    applyC64APIRuntimeConfig(startedMock.baseUrl, undefined, getDeviceHostFromBaseUrl(startedMock.baseUrl));
+    if (startedMock.ftpPort) setRuntimeFtpPortOverride(startedMock.ftpPort);
+    // The token is applied below, once the active server is known.
   }
 
   const activeMockUrl = getActiveMockBaseUrl();

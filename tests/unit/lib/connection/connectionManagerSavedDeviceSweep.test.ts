@@ -154,7 +154,9 @@ import {
   pinDemoModeByUserChoice,
   probeDeviceReachability,
   resetManualDiscoveryFallbackCooldownForTests,
+  verifyCurrentConnectionTarget,
 } from "@/lib/connection/connectionManager";
+import { startMockServer } from "@/lib/mock/mockServer";
 
 const HEALTHY = { product: "Ultimate-64" };
 const UNHEALTHY = {};
@@ -502,5 +504,21 @@ describe("a user choice made while a discovery is still running", () => {
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(isDemoModePinnedByUser()).toBe(true);
+  });
+
+  it("does not enter Demo Mode over a device the user switched to while the simulated device was starting", async () => {
+    getInfoMock.mockResolvedValue(HEALTHY);
+    await verifyCurrentConnectionTarget({ deviceHost: "u64" });
+    const mockStart = deferred<{ baseUrl: string; ftpPort?: number }>();
+    vi.mocked(startMockServer).mockReturnValueOnce(mockStart.promise);
+
+    const choosingDemo = pinDemoModeByUserChoice();
+    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.60" });
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    mockStart.resolve({ baseUrl: "http://127.0.0.1:45999" });
+    await choosingDemo;
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.60", undefined, "192.168.1.60");
   });
 });
