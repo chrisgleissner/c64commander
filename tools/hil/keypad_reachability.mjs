@@ -276,6 +276,7 @@ async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}
 async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
   const reached = new Set();
   const pending = new Set(stops.filter((stop) => stop.isGroup && stop.id).map((stop) => stop.id));
+  const topLevelIds = new Set(stops.map((stop) => stop.id).filter(Boolean));
   if (pending.size === 0) return reached;
 
   // One lap plus a margin: the ring may have moved on since walkScope recorded it, and a descend
@@ -305,9 +306,19 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
       await sleep(settleMs + 200);
       continue;
     }
-    // OK on a closed card opens it without descending. The ring is still on the card, so there is
-    // nothing to come back out of, and a Back here would leave the route or the app.
-    if (inside.current?.id === id) continue;
+    // OK on a closed card opens it, and a second OK goes in. If the ring is still on the card after
+    // both, the card has nothing to go into, and a Back here would leave the route or the app.
+    if (inside.current?.id === id) {
+      key(KEY.CENTER);
+      await sleep(settleMs + 240);
+      const second = await evaluate(STATE_EXPR);
+      if (second.route !== before.route || second.overlayDepth > before.overlayDepth) {
+        key(KEY.BACK);
+        await sleep(settleMs + 200);
+        continue;
+      }
+      if (second.current?.id === id) continue;
+    }
     // Per card, so a child this sweep already saw under a different card does not end the descent
     // before it has started.
     const seenHere = new Set();
@@ -328,8 +339,13 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
       const next = await evaluate(STATE_EXPR);
       if (!next.current?.id || seenHere.has(next.current.id)) break;
     }
-    key(KEY.BACK);
-    await sleep(settleMs + 200);
+    // Only come back out if the ring is still inside the card: Down past its last control can move
+    // the ring on to the next top-level stop, where Back would leave the route or the app.
+    const after = await evaluate(STATE_EXPR);
+    if (after.current?.id && !topLevelIds.has(after.current.id)) {
+      key(KEY.BACK);
+      await sleep(settleMs + 200);
+    }
   }
   return reached;
 }
