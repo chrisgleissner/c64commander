@@ -6,10 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useEffect, useRef } from "react";
 import { ArrowUp, ChevronRight, Folder, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathWrap } from "@/components/PathWrap";
+import { getInputModality } from "@/lib/input";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 export type ItemSelectionViewProps = {
@@ -44,9 +46,29 @@ export const ItemSelectionView = ({
   emptyLabel,
 }: ItemSelectionViewProps) => {
   const atRoot = path === rootPath || path === rootPath.replace(/\/$/, "");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusFollowsNavigationRef = useRef(false);
+  const navigate = (go: () => void) => {
+    focusFollowsNavigationRef.current =
+      getInputModality() === "key-navigation" && (rootRef.current?.contains(document.activeElement) ?? false);
+    go();
+  };
+  const handleOpen = (entryPath: string) => navigate(() => onOpen(entryPath));
+
+  // The control that opened a folder is replaced by the folder's entries, and the Up and Root
+  // buttons disable while it loads, so focus fell back to the dialog. A keypad reader then walked
+  // the whole header again for every folder level.
+  useEffect(() => {
+    if (isLoading || !focusFollowsNavigationRef.current) return;
+    focusFollowsNavigationRef.current = false;
+    if (rootRef.current?.contains(document.activeElement)) return;
+    rootRef.current
+      ?.querySelector<HTMLElement>('[data-testid="source-entry-row"] :is(button, [role="checkbox"]):not(:disabled)')
+      ?.focus();
+  }, [entries, isLoading]);
 
   return (
-    <div className="space-y-3 relative">
+    <div ref={rootRef} className="space-y-3 relative">
       {showLoadingIndicator && (
         <div
           className="absolute right-3 top-2 z-10 rounded-full bg-muted/80 px-2 py-0.5 text-xs text-muted-foreground shadow-elev-1"
@@ -59,13 +81,13 @@ export const ItemSelectionView = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={onNavigateRoot}
+          onClick={() => navigate(onNavigateRoot)}
           disabled={atRoot || isLoading}
           data-testid="navigate-root"
         >
           Root
         </Button>
-        <Button variant="ghost" size="sm" onClick={onNavigateUp} disabled={atRoot || isLoading}>
+        <Button variant="ghost" size="sm" onClick={() => navigate(onNavigateUp)} disabled={atRoot || isLoading}>
           <ArrowUp className="h-4 w-4 mr-1" />
           Up
         </Button>
@@ -105,7 +127,7 @@ export const ItemSelectionView = ({
               onClick={
                 canNavigateFolder
                   ? () => {
-                      onOpen(entry.path);
+                      handleOpen(entry.path);
                     }
                   : undefined
               }
@@ -114,7 +136,7 @@ export const ItemSelectionView = ({
                   ? (event: React.KeyboardEvent) => {
                       if (event.key === "Enter" && !(event.target as HTMLElement).closest('[role="checkbox"]')) {
                         event.preventDefault();
-                        onOpen(entry.path);
+                        handleOpen(entry.path);
                       }
                     }
                   : undefined
@@ -148,7 +170,7 @@ export const ItemSelectionView = ({
                   onClick={(event) => {
                     event.stopPropagation();
                     if (!canNavigateFolder) return;
-                    onOpen(entry.path);
+                    handleOpen(entry.path);
                   }}
                 >
                   <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ItemSelectionView } from "@/components/itemSelection/ItemSelectionView";
+import { resetInputModality, setInputModality } from "@/lib/input";
+import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 describe("ItemSelectionView", () => {
   it("opens a folder when the row container is clicked", () => {
@@ -99,5 +101,51 @@ describe("ItemSelectionView", () => {
     if (checkbox) fireEvent.click(checkbox.parentElement as HTMLElement);
 
     expect(onToggleSelect).not.toHaveBeenCalled();
+  });
+
+  describe("focus after opening a folder", () => {
+    afterEach(() => resetInputModality());
+
+    const Browser = ({ path, entries, isLoading }: { path: string; entries: SourceEntry[]; isLoading: boolean }) => (
+      <ItemSelectionView
+        path={path}
+        rootPath="/"
+        entries={entries}
+        isLoading={isLoading}
+        selection={new Map()}
+        onToggleSelect={vi.fn()}
+        onOpen={vi.fn()}
+        onNavigateUp={vi.fn()}
+        onNavigateRoot={vi.fn()}
+        onRefresh={vi.fn()}
+        showFolderSelect={false}
+        emptyLabel="No entries"
+      />
+    );
+    const usb0: SourceEntry[] = [{ type: "dir", name: "Demos", path: "/Usb0/Demos" }];
+    const demos: SourceEntry[] = [{ type: "dir", name: "Collection", path: "/Usb0/Demos/Collection" }];
+
+    const openDemos = () => {
+      const view = render(<Browser path="/Usb0" entries={usb0} isLoading={false} />);
+      const open = screen.getByRole("button", { name: "Open Demos" });
+      open.focus();
+      fireEvent.click(open);
+      view.rerender(<Browser path="/Usb0/Demos" entries={usb0} isLoading />);
+      view.rerender(<Browser path="/Usb0/Demos" entries={demos} isLoading={false} />);
+    };
+
+    it("moves keypad focus to the opened folder's first entry", () => {
+      setInputModality("key-navigation");
+      openDemos();
+
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open Collection" }));
+    });
+
+    it("leaves focus alone when the folder was opened by touch", () => {
+      setInputModality("pointer");
+      openDemos();
+
+      expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Open Collection" }));
+    });
   });
 });
