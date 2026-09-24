@@ -209,6 +209,28 @@ describe("FocusController.setItems — DOM-order batch population", () => {
     expect(controller.current()?.id).toBe("a");
   });
 
+  it("moves a default selection to the new first item when a page arrives after a route change", () => {
+    const controller = new FocusController();
+    controller.setItems([item("old-page", 0), item("tab-home", 0), item("tab-play", 0)]);
+    expect(controller.focusNext()?.id).toBe("tab-home");
+    controller.setItems([item("new-page", 0), item("tab-home", 0), item("tab-play", 0)]);
+    controller.setCurrent("new-page");
+    // The route changes: the page unmounts first, leaving only the persistent tabs...
+    controller.setItems([item("tab-home", 0), item("tab-play", 0)]);
+    expect(controller.current()?.id).toBe("tab-home");
+    // ...and the next page renders a moment later. Nobody chose the tab, so the page's first item wins.
+    controller.setItems([item("app-bar", 0), item("next-page", 0), item("tab-home", 0), item("tab-play", 0)]);
+    expect(controller.current()?.id).toBe("app-bar");
+  });
+
+  it("keeps a selection the user moved to when new items arrive before it", () => {
+    const controller = new FocusController();
+    controller.setItems([item("tab-home", 0), item("tab-play", 0)]);
+    controller.focusNext();
+    controller.setItems([item("app-bar", 0), item("tab-home", 0), item("tab-play", 0)]);
+    expect(controller.current()?.id).toBe("tab-play");
+  });
+
   it("keeps a nested scope when the parent survives, and exits it when it vanishes", () => {
     const controller = new FocusController();
     controller.setItems([item("card", 0), item("child", 0, { parentId: "card" })]);
