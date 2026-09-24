@@ -119,6 +119,22 @@ describe("KeypadGuidanceBar", () => {
     expect(bar()).toHaveAttribute("data-visible", "true");
   });
 
+  it("keeps out of the way while search, which drives its own keys, is open", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button>Settings</button>
+        <div role="dialog" aria-label="Search" data-key-nav-skip="true">
+          <input aria-label="Search the app" />
+        </div>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(bar()).toHaveAttribute("data-visible", "false");
+  });
+
   it("exposes the Menu soft key when the focused item has a context menu", () => {
     render(
       <FocusNavigationProvider enabled>

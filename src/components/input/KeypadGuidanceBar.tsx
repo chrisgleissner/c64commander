@@ -38,6 +38,7 @@ import {
   getInputModality,
   hasContextMenu,
   resolveGuidanceLabels,
+  SKIP_ATTR,
   type GuidanceState,
 } from "@/lib/input";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
@@ -202,7 +203,10 @@ export const KeypadGuidanceBar = () => {
      * one swipe navigation and Home read.
      */
     const duringTour = document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE);
-    if (!labels.visible || duringTour) {
+    // Search is a dialog that drives its own keys, so the ring's labels behind it (the control the
+    // search was opened from) say nothing about what the keys do there.
+    const keysOwnedByDialog = document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
+    if (!labels.visible || duringTour || keysOwnedByDialog) {
       setAttrIfChanged(root, "data-visible", "false");
       reserveGuidanceHeight(false);
       return;
