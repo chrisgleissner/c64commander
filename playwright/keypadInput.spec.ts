@@ -349,10 +349,12 @@ test.describe("Keypad / T9 input", () => {
 
     await page.keyboard.press("Enter");
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    // The list moves focus to the current option only once it has been positioned; a key sent
-    // before that reaches the trigger, which ignores it while the list is open.
-    await expect(page.getByRole("option", { name: before, exact: true })).toBeFocused();
+    // The list moves focus to the current option only once it has been positioned, and moves it on
+    // Down in a timer: a key sent before either lands on the option it was meant to leave.
+    const current = page.getByRole("option", { name: before, exact: true });
+    await expect(current).toBeFocused();
     await page.keyboard.press("ArrowDown");
+    await expect(current).not.toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listbox")).toHaveCount(0);
     await expect(trigger).not.toHaveText(before);
