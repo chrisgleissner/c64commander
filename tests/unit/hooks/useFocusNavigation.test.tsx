@@ -994,6 +994,34 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
   });
 });
 
+describe("the keypad highlight follows focus that a menu moves itself", () => {
+  afterEach(() => resetInputModality());
+
+  it("highlights and reveals the menu item that received focus", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="menu" aria-label="Item actions">
+          <div role="menuitem" tabIndex={-1}>
+            Review playback config
+          </div>
+          <div role="menuitem" tabIndex={-1}>
+            Remove
+          </div>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    const remove = screen.getByRole("menuitem", { name: "Remove" });
+    const scrollIntoView = vi.fn();
+    remove.scrollIntoView = scrollIntoView;
+
+    remove.focus();
+
+    expect(remove.getAttribute(SELECTED)).toBe("true");
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+});
+
 describe("OK toggles a checkbox inside a dialog", () => {
   it("checks a focused checkbox on Enter, which the checkbox itself ignores", () => {
     const onCheckedChange = vi.fn();
