@@ -74,6 +74,29 @@ export const markRemotePlaybackStopped = (): void => {
   notifyPlaybackActivityChanged();
 };
 
+/**
+ * Silence the C64 before a tune starts on this device.
+ *
+ * Moving to the C64 already stops the on-device engine; moving the other way left the C64 playing
+ * underneath, and Stop then had no reason to reset it. The flag is cleared even when the stop fails,
+ * so a C64 that does not answer delays one tune by the caller's bound rather than every tune after.
+ */
+export const stopRemoteTuneBeforeLocalPlayback = async (stopMachine: () => Promise<void>): Promise<void> => {
+  if (!remotePlaybackActive) return;
+  try {
+    await stopMachine();
+    addLog("info", "Playback: stopped the tune on the C64 before playing on this device", { service: "playback" });
+  } catch (error) {
+    addLog("warn", "Playback: could not stop the tune on the C64 before playing on this device", {
+      service: "playback",
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  } finally {
+    markRemotePlaybackStopped();
+  }
+};
+
 /** Test seam. */
 export const __isRemotePlaybackActive = (): boolean => remotePlaybackActive;
 

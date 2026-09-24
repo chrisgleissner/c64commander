@@ -62,6 +62,7 @@ import {
   isLocalPlaybackActive,
   markRemotePlaybackStarted,
   markRemotePlaybackStopped,
+  stopRemoteTuneBeforeLocalPlayback,
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { hasCompleteRomSet } from "@/lib/roms/romStore";
@@ -984,6 +985,14 @@ export function usePlaybackController({
           localSidPlaybackRef.current.stop();
         }
         const api = getC64API();
+        const c64PlaysCurrentTune = !currentPlaybackIsLocalRef.current && !isLocalPlaybackActive();
+        if (routeToLocal && c64PlaysCurrentTune && !isDeviceOutOfReach()) {
+          // Out of reach, the tune left on the C64 is stopped when it returns (see remoteTuneHandover).
+          await stopRemoteTuneBeforeLocalPlayback(async () => {
+            if (isPausedRef.current) await resumeMachineWithRetry(api);
+            await stopMachineWithGracePeriod(api, false);
+          });
+        }
         if (!routeToLocal) {
           try {
             await ensurePlaybackConnection();
@@ -1344,6 +1353,7 @@ export function usePlaybackController({
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
       resumeMachineWithRetry,
+      stopMachineWithGracePeriod,
       pauseMuteSnapshotRef,
       pausingFromPauseRef,
       resumingFromPauseRef,
@@ -1426,6 +1436,7 @@ export function usePlaybackController({
         } else {
           try {
             await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+            markRemotePlaybackStopped();
           } catch (error) {
             addErrorLog("Stopping the C64 for a playback-engine switch failed", {
               error: (error as Error).message,
