@@ -33,7 +33,7 @@ describe("the Android Back key", () => {
   });
 
   it("reaches the page as a key event, which it does not do on its own", async () => {
-    const uninstall = installDeviceBackButton();
+    const uninstall = installDeviceBackButton(vi.fn());
     await flush();
     const seen: KeyboardEvent[] = [];
     const handler = (event: Event) => seen.push(event as KeyboardEvent);
@@ -49,8 +49,51 @@ describe("the Android Back key", () => {
     uninstall();
   });
 
+  it("delivers the key to the focused element, as a real key would be", async () => {
+    const uninstall = installDeviceBackButton(vi.fn());
+    await flush();
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    field.focus();
+    const targets: EventTarget[] = [];
+    const handler = (event: Event) => targets.push(event.target as EventTarget);
+    window.addEventListener("keydown", handler, true);
+
+    appListener.backButton?.();
+
+    window.removeEventListener("keydown", handler, true);
+    field.remove();
+    expect(targets).toEqual([field]);
+    uninstall();
+  });
+
+  it("falls back to leaving the route when nothing on the page consumed the key", async () => {
+    const onUnhandled = vi.fn();
+    const uninstall = installDeviceBackButton(onUnhandled);
+    await flush();
+
+    appListener.backButton?.();
+
+    expect(onUnhandled).toHaveBeenCalledTimes(1);
+    uninstall();
+  });
+
+  it("does not leave the route when the page consumed the key, for example to close a dialog", async () => {
+    const onUnhandled = vi.fn();
+    const uninstall = installDeviceBackButton(onUnhandled);
+    await flush();
+    const consume = (event: Event) => event.preventDefault();
+    document.addEventListener("keydown", consume);
+
+    appListener.backButton?.();
+
+    document.removeEventListener("keydown", consume);
+    expect(onUnhandled).not.toHaveBeenCalled();
+    uninstall();
+  });
+
   it("registers exactly one listener and removes it again", async () => {
-    const uninstall = installDeviceBackButton();
+    const uninstall = installDeviceBackButton(vi.fn());
     await flush();
 
     expect(appListener.addListener).toHaveBeenCalledTimes(1);
@@ -69,7 +112,7 @@ describe("the Android Back key", () => {
         }),
     );
 
-    const uninstall = installDeviceBackButton();
+    const uninstall = installDeviceBackButton(vi.fn());
     uninstall();
     resolveHandle?.({ remove: appListener.remove });
     await flush();
@@ -80,7 +123,7 @@ describe("the Android Back key", () => {
   it("says so when it cannot register, rather than leaving Back silently dead", async () => {
     appListener.addListener.mockRejectedValueOnce(new Error("listener unavailable"));
 
-    installDeviceBackButton();
+    installDeviceBackButton(vi.fn());
     await flush();
 
     expect(addLogMock).toHaveBeenCalledWith(

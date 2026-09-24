@@ -17,6 +17,7 @@ import {
 import { NavigationController, resetInputModality, setInputModality } from "@/lib/input";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const SELECTED = "data-key-selected";
 
@@ -244,14 +245,44 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     const input = getByLabelText("host") as HTMLInputElement;
     input.focus();
-    // The field keeps the key (default not prevented) and focus does not move to A.
-    expect(fireEvent.keyDown(input, { code: "ArrowDown" })).toBe(true);
+    // The field keeps its typing and caret keys (default not prevented) and focus stays.
+    expect(fireEvent.keyDown(input, { code: "ArrowLeft" })).toBe(true);
+    expect(fireEvent.keyDown(input, { key: "a" })).toBe(true);
     expect(document.activeElement).toBe(input);
 
     const note = getByLabelText("note") as HTMLDivElement;
     note.focus();
     expect(fireEvent.keyDown(note, { code: "ArrowDown" })).toBe(true);
     expect(document.activeElement).toBe(note);
+  });
+
+  it("moves the ring on when Down is pressed in a single-line field on a page", () => {
+    const FieldThenButton = () => {
+      const fieldRef = useFocusItem<HTMLInputElement>({ id: "field", order: 10 });
+      const nextRef = useFocusItem<HTMLButtonElement>({ id: "next", order: 20 });
+      return (
+        <>
+          <input ref={fieldRef} aria-label="Search categories" />
+          <button ref={nextRef} onClick={() => {}}>
+            Next
+          </button>
+        </>
+      );
+    };
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <FieldThenButton />
+      </FocusNavigationProvider>,
+    );
+    const field = getByLabelText("Search categories") as HTMLInputElement;
+    // The ring starts on the field; OK is the explicit "go in" that focuses it for typing.
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(document.activeElement).toBe(field);
+
+    expect(fireEvent.keyDown(field, { code: "ArrowDown" })).toBe(false);
+
+    expect(document.activeElement).toBe(button("Next"));
+    expect(button("Next").getAttribute(SELECTED)).toBe("true");
   });
 
   /*
@@ -422,6 +453,35 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     expect(document.activeElement).toBe(button("Card"));
     expect(button("Card")).toHaveAttribute(SELECTED, "true");
+  });
+
+  it("leaves the route on the device's own Back key once nothing on the page is left to close", () => {
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider onNavigateBack={onNavigateBack}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the device's own Back key to an open dialog instead of leaving the route", () => {
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider onNavigateBack={onNavigateBack}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+        <div role="dialog" aria-label="Settings" />
+      </FocusNavigationProvider>,
+    );
+
+    const event = fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(onNavigateBack).not.toHaveBeenCalled();
+    expect(event).toBe(true);
   });
 
   it("exposes the controller via useFocusNavigation (null outside a provider)", () => {
@@ -893,6 +953,35 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
 
     fireEvent.keyDown(button("Continue in Demo Mode"), { code: "ArrowDown" });
     expect(document.activeElement).toBe(button("Close"));
+  });
+
+  it("draws the steady keypad highlight on the dialog control that Down moved to", () => {
+    render(<Dialog />);
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowDown" });
+    fireEvent.keyDown(button("Close"), { code: "ArrowDown" });
+
+    expect(button("Retry connection").getAttribute(SELECTED)).toBe("true");
+    expect(document.querySelectorAll(`[${SELECTED}="true"]`)).toHaveLength(1);
+  });
+});
+
+describe("OK toggles a checkbox inside a dialog", () => {
+  it("checks a focused checkbox on Enter, which the checkbox itself ignores", () => {
+    const onCheckedChange = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Add items">
+          <Checkbox aria-label="Select Usb0" onCheckedChange={onCheckedChange} />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const checkbox = screen.getByRole("checkbox", { name: "Select Usb0" });
+    checkbox.focus();
+
+    fireEvent.keyDown(checkbox, { key: "Enter", code: "", keyCode: 13 });
+
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
   });
 });
 

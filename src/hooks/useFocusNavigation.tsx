@@ -66,7 +66,7 @@ import {
 import { useInputProfile } from "@/hooks/useInputProfile";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
-import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
@@ -103,6 +103,8 @@ const FocusNavigationContext = createContext<FocusNavigationContextValue | null>
  * built-in cursor; Radix gives it only a Tab focus trap, which a keypad handset cannot use.
  */
 const DIALOG_ANCESTOR_SELECTOR = '[role="dialog"],[role="alertdialog"]';
+/** Controls that ignore Enter by design and toggle only on Space or a click. */
+const ENTER_IGNORING_CONTROL_SELECTOR = '[role="checkbox"],[role="radio"]';
 /** Single-line text fields: Up/Down cannot move the caret, so they are free to move focus. */
 const SINGLE_LINE_TEXT_TYPES = new Set(["text", "search", "url", "tel", "email", "password"]);
 const isSingleLineTextField = (target: EventTarget | null): boolean =>
@@ -442,9 +444,9 @@ export const FocusNavigationProvider = ({
   }, [controller]);
 
   // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
-  // handler below already knows how to read. Its own effect, because registering with the native
-  // bridge is asynchronous and the handler's effect re-runs whenever the keymap or controller does.
-  useEffect(() => (enabled ? installDeviceBackButton() : undefined), [enabled]);
+  // handler below already knows how to read. Installed whether or not keypad navigation is on,
+  // because the listener replaces Android's own Back handling for the whole app.
+  useEffect(() => installDeviceBackButton(() => onNavigateBackRef.current?.()), []);
 
   useEffect(() => {
     if (!enabled) {
@@ -461,13 +463,21 @@ export const FocusNavigationProvider = ({
       setInputModality("pointer");
       return;
     }
+    // Up/Down inside a dialog move DOM focus, not the ring, and a button's own focus style fades
+    // after 160 ms. Moving the ring onto the same control keeps the steady highlight on it.
+    const followDialogFocus = () => {
+      setInputModality("key-navigation");
+      adoptActiveElement();
+      notifyRing();
+    };
     const handleKeyDown = (event: KeyboardEvent) => {
       const normalized = normalizeKeyEvent(event, keymap);
-      // Android's hardware Back carries no key code, so it matches no keymap binding and used to
-      // fall through the `action === null` return below without ascending. It means what Escape
-      // means here: dismiss, disengage, come back out of the card.
+      // Android's hardware Back carries no key code, so it matches no keymap binding. With an
+      // overlay open it means Escape, which the overlay closes on; otherwise it is the hardware
+      // `back`: disengage, come out of the card, and once nothing is left, leave the route.
       const isDeviceBackButton = isDeviceBackKey(event);
-      const action = normalized.action ?? (isDeviceBackButton ? "escape" : null);
+      const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
+      const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
       // Before any branch below reads the ring, so the first key navigates.
       if (action !== null) startEngine();
       // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
@@ -483,9 +493,17 @@ export const FocusNavigationProvider = ({
           return;
         }
       }
+      // Up/Down in a single-line field on a page leave the field and move the ring on from the
+      // field's own stop: the caret cannot move vertically, and left to the WebView, spatial
+      // navigation moved DOM focus to an arbitrary control while the highlight stayed on the field.
+      const leavesPageField =
+        (action === "dpadUp" || action === "dpadDown") &&
+        isSingleLineTextField(event.target) &&
+        !(event.target as Element).closest(`${OPEN_OVERLAY_ANCESTOR_SELECTOR},[${SKIP_ATTR}]`);
+      if (leavesPageField) (event.target as HTMLElement).blur();
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
-      if (isEditableTarget(event.target)) {
+      if (isEditableTarget(event.target) && !leavesPageField) {
         // Up/Down inside a SINGLE-LINE field move focus rather than being swallowed. The caret
         // cannot move vertically there, so the key would otherwise do nothing at all — and inside
         // an overlay that is a dead end, because the ring is inert there and Escape belongs to the
@@ -504,6 +522,7 @@ export const FocusNavigationProvider = ({
             overlay &&
             stepFocusWithinOverlay(overlay, event.target as Element, action === "dpadDown")
           ) {
+            followDialogFocus();
             event.preventDefault();
             return;
           }
@@ -540,11 +559,23 @@ export const FocusNavigationProvider = ({
         if (overlay) {
           const from = document.activeElement instanceof Element ? document.activeElement : (event.target as Element);
           if (stepFocusWithinOverlay(overlay, from, action === "dpadDown")) {
+            followDialogFocus();
             event.preventDefault();
             return;
           }
           return;
         }
+      }
+      // OK arrives as Enter, and checkboxes and radios follow WAI-ARIA in ignoring Enter; a keypad
+      // has no Space key. Click them instead, or no key can toggle one that holds DOM focus.
+      if (
+        (action === "enter" || action === "center" || action === "activate") &&
+        event.target instanceof HTMLElement &&
+        event.target.matches(ENTER_IGNORING_CONTROL_SELECTOR)
+      ) {
+        event.target.click();
+        event.preventDefault();
+        return;
       }
       if (isWithinOpenOverlay(event.target)) return;
       const activeElement = document.activeElement;

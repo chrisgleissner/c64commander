@@ -121,7 +121,7 @@ describe("MachineControls", () => {
       }
       return { remove: appListenerState.remove };
     });
-    uninstallDeviceBackButton = installDeviceBackButton();
+    uninstallDeviceBackButton = installDeviceBackButton(() => undefined);
   });
 
   it("keeps the canonical primary quick actions in a two-column compact grid", () => {

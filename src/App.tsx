@@ -56,6 +56,7 @@ import {
 } from "@/lib/diagnostics/diagnosticsReconciler";
 import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
+import { navigateBackOrLeave } from "@/lib/navigation/navigateBack";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
 import { variant } from "@/generated/variant";
@@ -308,7 +309,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
     <FocusNavigationProvider
       enabled={flags.keypad_input_enabled}
       profileId={KEYPAD_FOCUS_PROFILE_ID}
-      onNavigateBack={() => navigate(-1)}
+      onNavigateBack={() => navigateBackOrLeave(navigate)}
       shortcuts={shortcuts}
     >
       {children}
