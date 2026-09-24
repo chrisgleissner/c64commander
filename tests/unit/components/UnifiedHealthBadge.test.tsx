@@ -260,6 +260,23 @@ describe("UnifiedHealthBadge", () => {
     vi.useRealTimers();
   });
 
+  it("says DEMO on the compact profile in Demo Mode, where the host name is left out", () => {
+    (mockState.healthState as { state: string }).state = "Idle";
+    (mockState.healthState as { connectivity: string }).connectivity = "Demo";
+    mockState.healthState.problemCount = 0;
+
+    render(<UnifiedHealthBadge />);
+
+    expect(screen.getByTestId("unified-health-badge-demo")).toHaveTextContent("DEMO");
+  });
+
+  it("shows no host label on the compact profile while connected to a real device", () => {
+    render(<UnifiedHealthBadge />);
+
+    expect(screen.queryByTestId("unified-health-badge-demo")).toBeNull();
+    expect(screen.getByTestId("unified-health-badge").textContent).not.toContain("C64U");
+  });
+
   it("renders capped counts exactly once on compact and medium profiles", () => {
     mockState.healthState.problemCount = 1000;
 

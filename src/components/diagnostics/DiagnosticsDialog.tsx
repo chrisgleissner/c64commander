@@ -59,6 +59,7 @@ import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useOnOpen } from "@/hooks/useOnOpen";
+import { DEMO_MODE_CONNECTION_LABEL } from "@/lib/connection/demoModeLabels";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
@@ -1379,15 +1380,18 @@ export function DiagnosticsDialog({
   const connectionDisplayName = selectedSavedDevice
     ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
     : connectionDraft.name || healthState.connectedDeviceLabel || connectionDraft.host;
-  const connectionLabel = buildConnectionLabel(
-    selectedSavedDevice
-      ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
-      : (healthState.connectedDeviceLabel ?? "C64U"),
-    selectedProductCode,
-  );
+  const connectionState = useConnectionState();
+  const connectionLabel =
+    connectionState.state === "DEMO_ACTIVE"
+      ? DEMO_MODE_CONNECTION_LABEL
+      : buildConnectionLabel(
+          selectedSavedDevice
+            ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
+            : (healthState.connectedDeviceLabel ?? "C64U"),
+          selectedProductCode,
+        );
   // Offered only where it is the answer: the app is not talking to a device, and Demo Mode is
   // available. In Demo Mode already, or connected to real hardware, it would be noise.
-  const connectionState = useConnectionState();
   const showSimulatedDeviceOffer =
     (connectionState.state === "OFFLINE_NO_DEMO" || connectionState.state === "UNKNOWN") &&
     featureFlagManager.getSnapshot().flags.demo_mode_enabled;

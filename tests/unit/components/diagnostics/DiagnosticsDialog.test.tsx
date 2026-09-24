@@ -36,6 +36,18 @@ vi.mock("@/lib/tracing/traceFormatter", async () => {
 
 // The connection editor surface reads the keypad/T9 flag; default it off so
 // digit keys insert literal digits (the touch / hardware-keyboard path).
+const connectionStateOverride = vi.hoisted(() => ({ state: null as string | null }));
+vi.mock("@/hooks/useConnectionState", async () => {
+  const actual = await vi.importActual<typeof import("@/hooks/useConnectionState")>("@/hooks/useConnectionState");
+  return {
+    ...actual,
+    useConnectionState: () => {
+      const snapshot = actual.useConnectionState();
+      return connectionStateOverride.state ? { ...snapshot, state: connectionStateOverride.state } : snapshot;
+    },
+  };
+});
+
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
@@ -610,6 +622,18 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("diagnostics-devices-toggle")).toBeNull();
     expect(screen.queryByTestId("manage-devices-button")).toBeNull();
     expect(screen.queryByText("Switch saved devices from diagnostics.")).toBeNull();
+  });
+
+  it("names Demo Mode on the device line instead of the saved device the simulated one answers as", () => {
+    setViewportWidth(600);
+    connectionStateOverride.state = "DEMO_ACTIVE";
+    try {
+      renderDialog();
+
+      expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent("Demo Mode · simulated device");
+    } finally {
+      connectionStateOverride.state = null;
+    }
   });
 
   it("opens connection view on tap and connection edit on long press", async () => {

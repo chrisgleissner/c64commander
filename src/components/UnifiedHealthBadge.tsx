@@ -618,6 +618,22 @@ export function UnifiedHealthBadge({ className }: Props) {
               (`app-chrome-badge-host`) so the breakpoint lives beside the other header rules
               instead of being duplicated as a width listener here.
             */}
+            {profile === "compact" && connectivity === "Demo" ? (
+              // Not a host name, so not dropped with one: on a narrow screen this word is the only
+              // sign that nothing real is connected.
+              <>
+                <span
+                  className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                  data-overlay-critical="badge"
+                  data-testid="unified-health-badge-demo"
+                >
+                  {badgeText.leadingLabel}
+                </span>
+                <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                  {" "}
+                </span>
+              </>
+            ) : null}
             {profile === "compact" ? null : (
               <>
                 <span
