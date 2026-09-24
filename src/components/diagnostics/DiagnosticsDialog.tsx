@@ -1884,7 +1884,7 @@ export function DiagnosticsDialog({
             {/* The whole bar opens the editor: its chips look tappable, and the funnel alone was a 24 px target. */}
             <button
               type="button"
-              className="mt-3 flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-left text-xs"
+              className="mt-3 flex min-h-11 w-full shrink-0 flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-left text-xs"
               data-testid="filters-collapsed-bar"
               aria-label="Edit filters"
               onClick={() => setFiltersOpen(true)}
@@ -1909,7 +1909,7 @@ export function DiagnosticsDialog({
             </button>
 
             {/* Phase 2: Evidence list (immediately visible) */}
-            <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
+            <section className="mt-2 shrink-0" data-testid="evidence-panel">
               <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
               </p>
