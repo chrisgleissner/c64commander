@@ -1065,6 +1065,28 @@ describe("the keypad highlight follows focus handed back to a menu trigger", () 
     expect(button("Item actions").getAttribute(SELECTED)).toBe("true");
     expect(button("Card action").getAttribute(SELECTED)).toBeNull();
   });
+
+  it("stays on a single-control card after OK activates that control, so Down moves on", () => {
+    const onToggle = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <section data-section-label="Appearance">
+          <button type="button" onClick={onToggle}>
+            Appearance
+          </button>
+        </section>
+        <button type="button">Next section</button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(button("Next section").getAttribute(SELECTED)).toBe("true");
+  });
 });
 
 describe("OK toggles a checkbox inside a dialog", () => {

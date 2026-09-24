@@ -278,6 +278,7 @@ export const FocusNavigationProvider = ({
   const scopeElementRef = useRef<HTMLElement | null>(null);
   const ringListenersRef = useRef(new Set<() => void>());
   const engineRef = useRef<FocusDiscoveryEngine | null>(null);
+  const dispatchingRef = useRef(false);
 
   const openContextMenuFor = useCallback((element: HTMLElement | null, isGroup: boolean): boolean => {
     const trigger = findContextMenuTrigger(element, isGroup);
@@ -702,7 +703,15 @@ export const FocusNavigationProvider = ({
       // Seamless pointer → key hand-off: start the move from where the user is.
       if (getInputModality() === "pointer") adoptActiveElement();
 
-      const handled = controller.dispatch(action).type !== "ignored";
+      // Focus the ring moves itself during a dispatch is already where the ring wants it; adopting
+      // it again would, for one, descend into a card whose single control OK just activated.
+      dispatchingRef.current = true;
+      let handled = false;
+      try {
+        handled = controller.dispatch(action).type !== "ignored";
+      } finally {
+        dispatchingRef.current = false;
+      }
       if (handled) {
         setInputModality("key-navigation");
         notifyRing();
@@ -729,6 +738,7 @@ export const FocusNavigationProvider = ({
     // open without scrolling to it, so inside an overlay the item is brought into view: on a short
     // screen a tall menu opened with the focused item below the fold.
     const handleFocusIn = (event: FocusEvent) => {
+      if (dispatchingRef.current) return;
       if (getInputModality() !== "key-navigation" || !(event.target instanceof HTMLElement)) return;
       adoptActiveElement();
       notifyRing();
