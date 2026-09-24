@@ -39,7 +39,6 @@ import {
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
 import {
-  getLocalFilePath,
   isSongCategory,
   resolvePlayTargetIndex,
   tryAcquireSingleFlight,
@@ -87,11 +86,8 @@ import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
-import {
-  resolveHvscDurationSecondsForSongNr,
-  resolveUltimateSidDurationByMd5,
-  warmNeighbouringLeadIns,
-} from "@/pages/playFiles/sidBytesAhead";
+import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
+import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
 import {
   applyConfigFileReference,
@@ -630,57 +626,8 @@ export function usePlaybackController({
   );
 
   const resolveSidMetadata = useCallback(
-    async (file?: LocalPlayFile, songNr?: number | null) => {
-      if (!file)
-        return {
-          durationMs: undefined,
-          subsongCount: undefined,
-          readable: false,
-        } as const;
-      let buffer: ArrayBuffer;
-      try {
-        buffer = await file.arrayBuffer();
-      } catch (error) {
-        addErrorLog("Failed to read local SID file", {
-          error: (error as Error).message,
-        });
-        return {
-          durationMs: durationFallbackMs,
-          subsongCount: undefined,
-          readable: false,
-        } as const;
-      }
-      const { getSidSongCount } = await import("@/lib/sid/sidUtils");
-      const subsongCount = getSidSongCount(buffer);
-
-      try {
-        const filePath = getLocalFilePath(file);
-        const localDurationMs = await resolveSonglengthDurationMsForPath(filePath, file, songNr ?? null);
-        if (localDurationMs !== null) {
-          return {
-            durationMs: localDurationMs,
-            subsongCount,
-            readable: true,
-          } as const;
-        }
-
-        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
-        const md5 = await computeSidMd5(buffer);
-        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
-        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
-        return { durationMs, subsongCount, readable: true } as const;
-      } catch (error) {
-        addErrorLog("Failed to resolve SID metadata", {
-          error: (error as Error).message,
-          file: file.name,
-        });
-        return {
-          durationMs: durationFallbackMs,
-          subsongCount,
-          readable: true,
-        } as const;
-      }
-    },
+    (file?: LocalPlayFile, songNr?: number | null) =>
+      resolveLocalSidMetadata(file, songNr, durationFallbackMs, resolveSonglengthDurationMsForPath),
     [durationFallbackMs, resolveSonglengthDurationMsForPath],
   );
 
