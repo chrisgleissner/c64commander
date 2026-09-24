@@ -18,6 +18,9 @@ tags:
           text: "Continue in Demo Mode"
           optional: true
       - tapOn:
+          text: "Skip"
+          optional: true
+      - tapOn:
           text: "Got it"
           optional: true
       - tapOn:

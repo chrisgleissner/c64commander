@@ -23,6 +23,9 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      - tapOn:
+          text: "Skip"
+          optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:

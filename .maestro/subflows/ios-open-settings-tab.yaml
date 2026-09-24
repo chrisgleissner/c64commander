@@ -17,6 +17,10 @@ tags:
 - retry:
     maxRetries: 3
     commands:
+      # The first-run tour covers the tab bar until it is dismissed.
+      - tapOn:
+          text: "Skip"
+          optional: true
       - tapOn:
           id: "tab-settings"
           optional: true
