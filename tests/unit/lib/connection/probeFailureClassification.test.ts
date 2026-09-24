@@ -113,6 +113,8 @@ vi.mock("@/lib/logging", () => ({
 
 import { probeDeviceReachability, probeInfoOnce, probeOnce } from "@/lib/connection/connectionManager";
 
+const DEVICE_ANSWER = { product: "Ultimate 64", errors: [] };
+
 const annotatedAuthError = () => Object.assign(new Error("getInfo failed: HTTP 401"), { c64uHttpStatus: 401 });
 
 describe("every probe entry point classifies an auth failure through the same chokepoint", () => {
@@ -149,6 +151,9 @@ describe("every probe entry point classifies an auth failure through the same ch
     await probeOnce();
     const fromProbeOnce = addLogMock.mock.calls.filter((call) => call[0] !== "debug");
 
+    // A repeat of the same failure is not announced again until the device has answered in between.
+    getInfoMock.mockResolvedValueOnce(DEVICE_ANSWER);
+    await probeInfoOnce();
     addLogMock.mockReset();
     getInfoMock.mockRejectedValueOnce(new Error("Some bespoke transport failure"));
     await probeInfoOnce();
@@ -156,5 +161,30 @@ describe("every probe entry point classifies an auth failure through the same ch
 
     expect(fromProbeOnce.length).toBe(1);
     expect(fromProbeInfoOnce).toEqual(fromProbeOnce);
+  });
+});
+
+describe("a device that keeps not answering", () => {
+  const probeFailureLogs = () => addLogMock.mock.calls.filter((call) => call[1] === "Probe request failed").length;
+
+  beforeEach(() => {
+    getInfoMock.mockReset();
+    addLogMock.mockReset();
+  });
+
+  it("logs the failure once while it repeats, and again after the device has answered in between", async () => {
+    getInfoMock.mockResolvedValueOnce(DEVICE_ANSWER);
+    await probeOnce();
+    getInfoMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await probeOnce();
+    await probeOnce();
+    await probeOnce();
+    expect(probeFailureLogs()).toBe(1);
+
+    getInfoMock.mockResolvedValueOnce(DEVICE_ANSWER);
+    await probeOnce();
+    await probeOnce();
+    expect(probeFailureLogs()).toBe(2);
   });
 });

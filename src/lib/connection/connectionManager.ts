@@ -77,6 +77,7 @@ import {
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demoOfferMemory";
 import { isNativePlatform } from "@/lib/native/platform";
+import { clearProbeFailureLog, isNewProbeFailure, noteProbeAnswered } from "@/lib/connection/probeFailureLog";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -259,6 +260,7 @@ const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): Pr
   const authRequired = isAuthRequiredError(error);
   const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
   if (authRequired || /^HTTP\s+\d+/.test(message)) {
+    noteProbeAnswered(config.deviceHost);
     return {
       kind: authRequired ? "auth" : "http",
       result: { ok: false, deviceInfo: null, error: message, authRequired },
@@ -268,13 +270,15 @@ const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): Pr
   // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
   // see a user-friendly message instead of the raw fetch error text.
   const failure = normalizeTransportError(error, { host: config.deviceHost });
-  addLog("info", "Probe request failed", {
-    baseUrl: config.baseUrl,
-    deviceHost: config.deviceHost,
-    class: failure.class,
-    userMessage: failure.userMessage,
-    error: failure.rawMessage,
-  });
+  if (isNewProbeFailure(config.deviceHost, failure.class)) {
+    addLog("info", "Probe request failed", {
+      baseUrl: config.baseUrl,
+      deviceHost: config.deviceHost,
+      class: failure.class,
+      userMessage: failure.userMessage,
+      error: failure.rawMessage,
+    });
+  }
   return {
     kind: "transport",
     result: { ok: false, deviceInfo: null, error: failure.userMessage, authRequired: false },
@@ -292,6 +296,7 @@ const runProbeInfo = async (
       signal: options.signal,
       ...PROBE_REQUEST_OPTIONS,
     });
+    noteProbeAnswered(config.deviceHost);
     const healthy = isProbePayloadHealthy(response);
     return {
       kind: healthy ? "ok" : "payload",
@@ -1448,6 +1453,7 @@ export async function initializeConnectionManager() {
   activeManualDiscovery = null;
   lastManualDiscoveryFallbackAtMs = 0;
   backgroundProbeSuppressedWhileOffline = false;
+  clearProbeFailureLog();
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();
