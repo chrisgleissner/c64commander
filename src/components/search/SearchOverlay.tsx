@@ -314,8 +314,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   /*
    * Read through the keymap, not off `event.key`.
    *
-   * A keypad handset's D-pad emits `code: "DpadDown"` or `keyCode: 20`, never `key: "ArrowDown"`,
-   * so a handler that compares key names is inert on exactly the hardware that has no pointer to
+   * A keypad host may report its D-pad as `code: "DpadDown"` rather than `key: "ArrowDown"`, so a
+   * handler that compares key names can be inert on exactly the hardware that has no pointer to
    * fall back on. The keypad profile carries the keyboard bindings too, so one lookup serves both.
    */
   const onKeyDown = useCallback(

@@ -491,7 +491,7 @@ describe("SearchOverlay", () => {
       renderOverlay();
       await open();
 
-      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Unidentified", code: "Backspace", keyCode: 4 });
+      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Unidentified", code: "GoBack" });
 
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });

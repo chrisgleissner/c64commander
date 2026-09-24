@@ -114,7 +114,7 @@ describe("installed overrides", () => {
     installKeymapOverrides([parsed({ bindings: [{ key: "F1", action: "openSearch" }] })]);
 
     expect(findBinding(resolveInputProfile("keypad"), press({ key: "F1" }))?.action).toBe("openSearch");
-    expect(findBinding(resolveInputProfile("keypad"), press({ keyCode: 19 }))?.action).toBe("dpadUp");
+    expect(findBinding(resolveInputProfile("keypad"), press({ code: "DpadUp" }))?.action).toBe("dpadUp");
     expect(findBinding(resolveInputProfile("defaultKeyboard"), press({ key: "F1", code: "F1" }))?.action).toBe(
       "softLeft",
     );

@@ -7,23 +7,21 @@
  */
 
 /**
- * Generic keypad profile for a D-pad + numeric keypad device (NOT validated on
- * specific hardware; the exact KeyboardEvent codes a given Android WebView host
- * surfaces for these keys vary, so each key is bound by several plausible
- * aliases).
+ * Keypad profile for a D-pad + numeric keypad device.
  *
- * Physical key → semantic action:
- *   D-pad up/down/left/right → dpadUp/Down/Left/Right
- *     (codes: Dpad*, Arrow* inherited from the desktop base, legacy keyCodes)
- *   D-pad center / OK        → center        (Android KEYCODE_DPAD_CENTER = 23)
- *   Numeric keypad 0–9       → digit0–9      (T9 source; inherited + Numpad)
- *   ✱ (star)                 → star          (KEYCODE_STAR = 17 / key "*")
- *   # (pound)                → hash          (KEYCODE_POUND = 18 / key "#")
- *   Left/right soft keys     → softLeft / softRight (SoftLeft/SoftRight, F1/F2)
- *   Back / Clear             → back          (KEYCODE_BACK = 4 / GoBack / Escape)
- *   Call / Send              → activate      (KEYCODE_CALL = 5)
- *   Menu                     → openMenu      (KEYCODE_MENU / ContextMenu)
- *   F1 / F3                  → function1 / function3 (neutral; routed by context)
+ * Bindings are DOM key codes, never Android key codes. Measured in an Android WebView:
+ *   D-pad up/down/left/right → ArrowUp/Down/Left/Right (inherited from the desktop base)
+ *   D-pad center / OK        → Enter, keyCode 13 (inherited)
+ *   Numeric keypad 0–9       → key "0"–"9", code "" (inherited digit fallbacks)
+ *   ✱ / #                    → key "*" / "#", keyCode 0 (inherited)
+ *   Soft keys, Menu          → forwarded by the native shell as SoftLeft / SoftRight /
+ *                              ContextMenu, because the WebView reports the soft keys as
+ *                              "Unidentified" and drops Menu
+ *   Back                     → reaches Capacitor, not the page; see `deviceBackButton`
+ *
+ * The named codes below cover hosts that report them. Android key codes (17 = ✱, 82 = Menu, ...)
+ * are not bound: as DOM key codes they mean Ctrl, Alt, Caps Lock, R and so on, so on a hardware
+ * keyboard Ctrl opened Diagnostics and R opened the quick menu.
  *
  * A slightly longer multi-tap window suits a physical keypad.
  */
@@ -32,42 +30,30 @@ import { mergeKeymaps, type KeyBinding } from "../keymap";
 import { defaultKeyboardProfile } from "./defaultKeyboard";
 
 const keypadBindings: KeyBinding[] = [
-  // D-pad (named codes some WebViews emit, plus Android KEYCODE_DPAD_* legacy codes).
+  // D-pad (named codes some hosts emit).
   { code: "DpadUp", action: "dpadUp" },
   { code: "DpadDown", action: "dpadDown" },
   { code: "DpadLeft", action: "dpadLeft" },
   { code: "DpadRight", action: "dpadRight" },
   { code: "DpadCenter", action: "center" },
-  { keyCode: 19, action: "dpadUp" },
-  { keyCode: 20, action: "dpadDown" },
-  { keyCode: 21, action: "dpadLeft" },
-  { keyCode: 22, action: "dpadRight" },
-  { keyCode: 23, action: "center" },
 
-  // Star / pound (named codes + Android legacy keyCodes).
+  // Star / pound (named codes).
   { code: "Star", action: "star" },
-  { keyCode: 17, action: "star" },
   { code: "Pound", action: "hash" },
-  { keyCode: 18, action: "hash" },
 
   // Soft keys.
   { code: "SoftLeft", action: "softLeft" },
   { code: "SoftRight", action: "softRight" },
-  { keyCode: 1, action: "softLeft" },
-  { keyCode: 2, action: "softRight" },
 
   // Back / clear.
   { code: "GoBack", action: "back" },
   { code: "BrowserBack", action: "back" },
-  { keyCode: 4, action: "back" },
 
   // Call / send → primary activate.
   { code: "Call", action: "activate" },
-  { keyCode: 5, action: "activate" },
 
   // Menu.
   { code: "ContextMenu", action: "openMenu" },
-  { keyCode: 82, action: "openMenu" },
 
   // Function keys are deliberately neutral here. Their meaning belongs to the
   // owning context: normal navigation may run a persisted app assignment, while
