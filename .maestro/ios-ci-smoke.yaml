@@ -8,7 +8,7 @@ tags:
   - ci-critical-ios
 ---
 # "Connection.*", not "Connection": the section header is one <button> whose whole text is
-# "Connection Saved devices, discovery, passwords, demo mode".
+# "Connection Saved devices, discovery, passwords, Demo Mode".
 # See subflows/ios-open-settings-tab.yaml.
 #
 # Play anchor is an alternation, not "Playlist": PlaylistPanel's title sits below the fold on

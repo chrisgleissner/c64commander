@@ -71,7 +71,7 @@ for arg in "$@"; do
   esac
 done
 [[ -n "$device" ]] || { echo "No device selected" >&2; exit 2; }
-echo "Element: Connection Saved devices, discovery, passwords, demo mode"
+echo "Element: Connection Saved devices, discovery, passwords, Demo Mode"
 STUB
 chmod +x "$MAESTRO_BIN"
 

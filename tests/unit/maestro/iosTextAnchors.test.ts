@@ -13,7 +13,7 @@ import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
  *
  *   "Connection"            the Settings section header is a single <button> holding the <h2>
  *                           title and an sr-only summary, so its whole text is
- *                           "Connection Saved devices, discovery, passwords, demo mode".
+ *                           "Connection Saved devices, discovery, passwords, Demo Mode".
  *   "Playlist"              PlaylistPanel's title is below the fold on the iOS screen and
  *                           assertVisible only counts what is on screen.
  *   "Enable HVSC downloads" no such string exists; the flag title is "HVSC downloads" and the
@@ -236,7 +236,7 @@ describe("iOS Maestro text anchors", () => {
   it("anchors the Settings section on the header button's whole text", () => {
     const name = settingsSectionName("connection");
 
-    expect(name).toBe("Connection Saved devices, discovery, passwords, demo mode");
+    expect(name).toBe("Connection Saved devices, discovery, passwords, Demo Mode");
     expect(matchesWholeText(CONNECTION_ANCHOR, name)).toBe(true);
     // The negative half: the bare title is what the flows used and what failed.
     expect(matchesWholeText("Connection", name)).toBe(false);

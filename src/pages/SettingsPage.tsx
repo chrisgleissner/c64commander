@@ -1586,7 +1586,7 @@ export default function SettingsPage() {
             <SettingsSection
               id="connection"
               title="Connection"
-              summary="Saved devices, discovery, passwords, demo mode"
+              summary="Saved devices, discovery, passwords, Demo Mode"
               icon={Wifi}
               defaultOpen
             >
