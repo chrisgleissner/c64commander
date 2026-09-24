@@ -648,6 +648,24 @@ describe("indexedDB playlist repository", () => {
     await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
   });
 
+  it("retries initialization on the next call after a failed initialization instead of failing until relaunch", async () => {
+    const fakeOptions: FakeIndexedDbOptions = { failPut: true };
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb(fakeOptions),
+      configurable: true,
+      writable: true,
+    });
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+
+    await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
+
+    fakeOptions.failPut = false;
+    await expect(repository.upsertTracks([buildTrack({ trackId: "track-after-recovery" })])).resolves.toBeUndefined();
+    expect((await repository.getTracksByIds(["track-after-recovery"])).has("track-after-recovery")).toBe(true);
+  });
+
   it("normalizes partial persisted state fields to defaults", async () => {
     Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({

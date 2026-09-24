@@ -412,7 +412,10 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
       }
 
       await persistMigratedState(migrateState(legacy as Record<string, unknown>));
-    })();
+    })().catch((error) => {
+      this.initializationPromise = null;
+      throw error;
+    });
 
     return this.initializationPromise;
   }
