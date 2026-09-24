@@ -95,7 +95,13 @@ const runRecoveryProbe = async (): Promise<RecoveryOutcome> => {
       await retry();
       return "recovered";
     } catch (error) {
-      return isAuthRequiredError(error) ? "auth-rejected" : "unreachable";
+      const authRejected = isAuthRequiredError(error);
+      addLog("warn", "Auth challenge: retrying the original request failed", {
+        authRequired: authRejected,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      return authRejected ? "auth-rejected" : "unreachable";
     }
   }
   const result = await verifyCurrentConnectionTarget();

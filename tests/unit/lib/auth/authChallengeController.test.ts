@@ -215,6 +215,25 @@ describe("submitAuthChallengePassword", () => {
     expect(message).toMatch(/didn't respond|busy/i);
   });
 
+  it("logs at warn when a captured retry throws a non-auth error, including programming errors", async () => {
+    const retry = vi.fn(async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'items')");
+    });
+    notifyAuthRequired({ host: "192.168.1.167", retry });
+
+    await submitAuthChallengePassword(SECRET);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Auth challenge: retrying the original request failed",
+      expect.objectContaining({
+        authRequired: false,
+        error: "Cannot read properties of undefined (reading 'items')",
+      }),
+    );
+    expect(JSON.stringify(addLog.mock.calls)).not.toContain(SECRET);
+  });
+
   it("is a no-op when no challenge is open", async () => {
     const recovered = await submitAuthChallengePassword(SECRET);
     expect(recovered).toBe(false);
