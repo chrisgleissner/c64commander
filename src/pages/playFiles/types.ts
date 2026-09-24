@@ -95,6 +95,7 @@ export type PlaylistItem = {
 
 export type StoredPlaylistState = {
   items: Array<{
+    id?: string | null;
     source: PlaySource;
     path: string;
     name: string;

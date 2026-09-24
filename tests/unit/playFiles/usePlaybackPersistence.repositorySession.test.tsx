@@ -371,4 +371,72 @@ describe("usePlaybackPersistence repository session persistence", () => {
       expect(result.current.shuffleSeed).toBeNull();
     });
   });
+  it("restores every tune of an expanded SID with its own stored id and duration instead of one shared id", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const trackId = "hvsc:hvsc-library:/MUSICIANS/Test/album.sid";
+    const baseId = `${trackId}:2026-04-03T20:00:00.000Z`;
+    const itemRecord = (playlistItemId: string, songNr: number, durationOverrideMs: number | null) => ({
+      playlistItemId,
+      playlistId: playlistStorageKey,
+      trackId,
+      songNr,
+      sortKey: String(songNr).padStart(8, "0"),
+      durationOverrideMs,
+      configRef: null,
+      configOrigin: null,
+      configOverrides: null,
+      addedAt: "2026-04-03T20:00:00.000Z",
+      status: "ready",
+      unavailableReason: null,
+    });
+    repository.getPlaylistItems.mockResolvedValueOnce([
+      itemRecord(baseId, 1, 61000),
+      itemRecord(`${baseId}#tune2`, 2, 5000),
+      itemRecord(`${baseId}#tune3`, 3, null),
+    ]);
+    repository.getPlaylistItemCount.mockResolvedValue(3);
+    repository.getTracksByIds.mockResolvedValue(
+      new Map([
+        [
+          trackId,
+          {
+            trackId,
+            sourceKind: "hvsc",
+            sourceId: "hvsc-library",
+            sourceLocator: "/MUSICIANS/Test/album.sid",
+            path: "/MUSICIANS/Test/album.sid",
+            title: "album.sid",
+            origin: null,
+            configRef: null,
+            archiveRef: null,
+            defaultDurationMs: 99000,
+            subsongCount: 3,
+            sizeBytes: null,
+            modifiedAt: null,
+          },
+        ],
+      ]),
+    );
+    repository.getSession.mockResolvedValue({
+      playlistId: playlistStorageKey,
+      currentPlaylistItemId: `${baseId}#tune2`,
+      isPlaying: false,
+      isPaused: false,
+      elapsedMs: 0,
+      playedMs: 0,
+      randomCursor: null,
+      activeQuery: "",
+      updatedAt: "2026-04-03T20:00:00.000Z",
+    });
+
+    const { result } = renderHook(() => useHarness(playlistStorageKey, { startEmpty: true }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(3);
+    });
+    expect(result.current.playlist.map((item) => item.id)).toEqual([baseId, `${baseId}#tune2`, `${baseId}#tune3`]);
+    expect(result.current.playlist.map((item) => item.durationMs)).toEqual([61000, 5000, undefined]);
+    expect(result.current.playlist.map((item) => item.request.songNr)).toEqual([1, 2, 3]);
+    expect(result.current.currentIndex).toBe(1);
+  });
 });

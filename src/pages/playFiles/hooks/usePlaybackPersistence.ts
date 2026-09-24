@@ -30,7 +30,7 @@ import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
-import type { PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
+import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { commitPlaylistSnapshot, usePlaylistRepositorySyncSnapshot } from "@/pages/playFiles/playlistRepositorySync";
 
@@ -98,6 +98,11 @@ interface UsePlaybackPersistenceProps {
    */
   setSessionRestoreSettled: (settled: boolean) => void;
 }
+
+// Tunes of one SID share a track record, so only the item's own duration is specific to it. Records
+// written before the override existed carry no field and fall back to the track.
+const resolveRestoredItemDurationMs = (item: PlaylistItemRecord, track: TrackRecord) =>
+  (item.durationOverrideMs === undefined ? track.defaultDurationMs : item.durationOverrideMs) ?? undefined;
 
 export function usePlaybackPersistence({
   playlist,
@@ -217,7 +222,10 @@ export function usePlaybackPersistence({
           sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
           modifiedAt: localEntry?.modifiedAt ?? entry.modifiedAt ?? null,
         };
-        return buildPlaylistItem(playable, entry.songNr, entry.addedAt ?? null);
+        const item = buildPlaylistItem(playable, entry.songNr, entry.addedAt ?? null);
+        // A stored id is not reproducible from the entry: expanded tunes, radio and search items
+        // share a path and addedAt with siblings, and the session store holds the id.
+        return item && entry.id ? { ...item, id: entry.id } : item;
       })
       .filter((item): item is PlaylistItem => Boolean(item));
     return { items: hydrated, index: stored.currentIndex ?? -1 };
@@ -277,6 +285,7 @@ export function usePlaybackPersistence({
           const track = tracks.get(playlistItem.trackId);
           if (!track) return null;
           return {
+            id: playlistItem.playlistItemId ?? null,
             source: track.sourceKind,
             path: track.path,
             name: track.title,
@@ -288,7 +297,7 @@ export function usePlaybackPersistence({
             ),
             configOverrides: playlistItem.configOverrides ?? null,
             archiveRef: track.archiveRef ?? null,
-            durationMs: track.defaultDurationMs ?? undefined,
+            durationMs: resolveRestoredItemDurationMs(playlistItem, track),
             durationSource: track.durationSource ?? null,
             songNr: playlistItem.songNr,
             subsongCount: track.subsongCount ?? undefined,
