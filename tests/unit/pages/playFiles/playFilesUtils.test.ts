@@ -23,6 +23,7 @@ import {
   tryAcquireSingleFlight,
   releaseSingleFlight,
   resolvePlayTargetIndex,
+  resolveLaunchedItemIndex,
   clampDurationSeconds,
   formatDurationSeconds,
   durationSecondsToSlider,
@@ -268,6 +269,22 @@ describe("playFilesUtils", () => {
       const playlist = [createPlaylistItem("resolved", 12_000), createPlaylistItem("defaulted", 12_000, "default")];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
+    });
+
+    describe("resolveLaunchedItemIndex", () => {
+      const playlist = [createPlaylistItem("a", 1), createPlaylistItem("b", 1), createPlaylistItem("c", 1)];
+
+      it("keeps the launch index while the item is still there", () => {
+        expect(resolveLaunchedItemIndex(playlist, "b", 1)).toBe(1);
+      });
+
+      it("follows the item when an earlier row was removed during the launch", () => {
+        expect(resolveLaunchedItemIndex(playlist.slice(1), "c", 2)).toBe(1);
+      });
+
+      it("falls back to the launch index when the item is no longer in the playlist", () => {
+        expect(resolveLaunchedItemIndex(playlist, "gone", 2)).toBe(2);
+      });
     });
 
     describe("mergeResolvedSonglengthDurations", () => {

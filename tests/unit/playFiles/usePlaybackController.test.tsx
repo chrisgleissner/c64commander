@@ -3590,6 +3590,33 @@ describe("scrubbing a tune this page did not start", () => {
 // "Remaining" subtracts the played clock from the whole playlist's length, so a seek has to move that clock
 // by the distance seeked. Setting it to the position within the current tune dropped every earlier tune's
 // time from it, and "Remaining" jumped up by that much.
+describe("a launch that outlasts a playlist edit", () => {
+  it("selects the launched tune where it sits after an earlier row was removed during the launch", async () => {
+    let finishLaunch: () => void = () => {};
+    vi.mocked(executePlayPlan).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLaunch = resolve;
+        }),
+    );
+    const setCurrentIndex = vi.fn();
+    const playlist = [
+      createPlaylistItem({ id: "first", label: "first.prg" }),
+      createPlaylistItem({ id: "second", label: "second.prg" }),
+      createPlaylistItem({ id: "third", label: "third.prg" }),
+    ];
+    const { result } = renderPlaybackController(playlist, { setCurrentIndex });
+
+    const launch = result.current.playItem(playlist[2], { playlistIndex: 2 });
+    await vi.waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalled());
+    playlist.splice(0, 1);
+    finishLaunch();
+    await launch;
+
+    expect(setCurrentIndex).toHaveBeenLastCalledWith(1);
+  });
+});
+
 describe("a seek keeps the time played by earlier tunes", () => {
   const seekingController = (fromSeconds: number, toSeconds: number) => {
     let position = fromSeconds;

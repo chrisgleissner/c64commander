@@ -40,6 +40,7 @@ import {
 } from "@/lib/playback/playbackRouter";
 import {
   isSongCategory,
+  resolveLaunchedItemIndex,
   resolvePlayTargetIndex,
   tryAcquireSingleFlight,
   releaseSingleFlight,
@@ -1268,7 +1269,7 @@ export function usePlaybackController({
           setCurrentSubsongCount(null);
         }
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
-          setVisibleCurrentIndex(options.playlistIndex);
+          setVisibleCurrentIndex(resolveLaunchedItemIndex(playlistRef.current, item.id, options.playlistIndex));
         }
         trackStartedAtRef.current = now;
         // HARD12-007: do NOT pass reset=true here — `startPlaylist`'s explicit

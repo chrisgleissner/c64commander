@@ -178,6 +178,16 @@ export const isPlaybackSessionRestoreStale = (
   return nowMs - updatedAtMs > staleAfterMs;
 };
 
+/**
+ * Where a launched item sits now. A launch can take seconds, and removing or inserting an earlier row
+ * meanwhile moves it, so the index captured when it started can name a different tune.
+ */
+export const resolveLaunchedItemIndex = (playlist: readonly PlaylistItem[], itemId: string, launchIndex: number) => {
+  if (playlist[launchIndex]?.id === itemId) return launchIndex;
+  const currentIndex = playlist.findIndex((entry) => entry.id === itemId);
+  return currentIndex >= 0 ? currentIndex : launchIndex;
+};
+
 export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: number): number | null => {
   if (playlistLength <= 0) return null;
   if (currentIndex < 0) return 0;
