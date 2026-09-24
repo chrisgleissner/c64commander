@@ -126,6 +126,19 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
 
+/**
+ * The visible title a dialog names itself by. Without it a dialog's breadcrumb in the keypad
+ * guidance bar fell through to its presentation attribute and read "sheet" or "dialog".
+ */
+const labelledByText = (element: Element): string | undefined => {
+  const ids = element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [];
+  const text = ids
+    .map((id) => element.ownerDocument.getElementById(id)?.textContent?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ");
+  return text || undefined;
+};
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -451,6 +464,7 @@ export class FocusDiscoveryEngine {
       const implicitGroupLabel = node.isGroup
         ? element.getAttribute(SECTION_LABEL_ATTR) ||
           element.getAttribute("aria-label") ||
+          labelledByText(element) ||
           element.getAttribute("data-modal-surface") ||
           element.getAttribute("data-app-surface") ||
           element.getAttribute("data-sheet-presentation") ||

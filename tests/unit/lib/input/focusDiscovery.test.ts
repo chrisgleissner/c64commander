@@ -229,6 +229,21 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("names a dialog group by its visible title rather than its presentation attribute", () => {
+    mount(`
+      <div role="dialog" id="dialog" aria-labelledby="title" data-sheet-presentation="sheet">
+        <h2 id="title">Diagnostics</h2>
+        <button id="run">Run health check</button>
+        <button id="close">Close</button>
+      </div>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(controller.current()?.group).toBe("Diagnostics");
+    engine.stop();
+  });
+
   it("shims tabindex on non-natively-focusable elements while running and removes it on stop", () => {
     mount(`<div data-focus-group="card" id="card"><button id="btn">b</button></div>`);
     const { engine } = makeEngine();
