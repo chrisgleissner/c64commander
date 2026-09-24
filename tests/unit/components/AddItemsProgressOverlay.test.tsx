@@ -12,6 +12,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { resolveCenteredOverlayLayout } from "@/components/ui/interstitialStyles";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import { discoverInteractiveElements, resolveActiveScope } from "@/lib/input/discovery";
 
 const buildProgress = (overrides?: Partial<Parameters<typeof AddItemsProgressOverlay>[0]["progress"]>) => ({
   status: "scanning" as const,
@@ -114,5 +116,63 @@ describe("AddItemsProgressOverlay", () => {
         writable: true,
       });
     }
+  });
+
+  it("becomes the active keypad scope so the tab bar and page behind it leave the ring", () => {
+    render(
+      <>
+        <button type="button">Page action</button>
+        <nav data-focus-scope="tabbar">
+          <button type="button">Home tab</button>
+        </nav>
+        <AddItemsProgressOverlay progress={buildProgress()} onCancel={vi.fn()} testId="progress" />
+      </>,
+    );
+
+    const scope = resolveActiveScope(document);
+    expect(scope).toEqual({ element: screen.getByTestId("progress"), kind: "overlay" });
+    expect(discoverInteractiveElements(scope.element)).toEqual([screen.getByRole("button", { name: /cancel/i })]);
+  });
+
+  it("keeps keypad Down on Cancel instead of moving onto the hidden tab bar", () => {
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <button type="button">Page action</button>
+        <nav data-focus-scope="tabbar">
+          <button type="button">Home tab</button>
+        </nav>
+        <AddItemsProgressOverlay progress={buildProgress()} onCancel={vi.fn()} testId="progress" />
+      </FocusNavigationProvider>,
+    );
+    const cancel = screen.getByRole("button", { name: /cancel/i });
+    cancel.focus();
+
+    fireEvent.keyDown(cancel, { key: "ArrowDown", code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it("cancels the import on the Android Back key, which arrives as a keyCode-0 Escape on the document", () => {
+    const onCancel = vi.fn();
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad" onNavigateBack={onNavigateBack}>
+        <AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onNavigateBack).not.toHaveBeenCalled();
+  });
+
+  it("cancels the import on Escape pressed while Cancel has focus", () => {
+    const onCancel = vi.fn();
+    render(<AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />);
+
+    fireEvent.keyDown(screen.getByRole("button", { name: /cancel/i }), { key: "Escape", code: "Escape" });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

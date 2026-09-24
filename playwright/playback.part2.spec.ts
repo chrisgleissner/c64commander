@@ -671,7 +671,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "choose-source");
 
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.locator('[role="dialog"]:not([data-testid="add-items-overlay"])')).toBeHidden();
     const overlay = page.getByTestId("add-items-overlay");
     await expect(overlay).toBeVisible();
     await expect(overlay).toContainText("Scanning");

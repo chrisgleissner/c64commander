@@ -14,7 +14,9 @@ import {
   resolveInterstitialBackdropOpacity,
 } from "@/components/ui/interstitialStyles";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
+import { isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
 import { cn } from "@/lib/utils";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 export type AddItemsProgressState = {
@@ -61,9 +63,25 @@ export const AddItemsProgressOverlay = ({
   const isVisible = visible === true || (visible !== false && ACTIVE_PROGRESS_STATES.has(progress.status));
   const layer = useRegisterInterstitial("progress", isVisible);
 
+  // Android Back arrives as an Escape dispatched on the document, not on the focused Cancel button,
+  // so the dismissal keys are heard on the document.
+  useEffect(() => {
+    if (!isVisible || !onCancel) return undefined;
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
+      if (action !== "escape" && action !== "back" && !isDeviceBackKey(event)) return;
+      event.preventDefault();
+      onCancel();
+    };
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => document.removeEventListener("keydown", onDocumentKeyDown);
+  }, [isVisible, onCancel]);
+
   if (!isVisible) return null;
 
   const { top } = resolveCenteredOverlayLayout(176);
+  const resolvedTitle = resolveTitle(title, progress.status);
 
   const overlay = (
     <div
@@ -71,6 +89,9 @@ export const AddItemsProgressOverlay = ({
         "fixed inset-0 flex items-start justify-center px-4 pb-[calc(1.5rem+var(--safe-area-inset-bottom))]",
         APP_INTERSTITIAL_BACKDROP_CLASSNAME,
       )}
+      role="dialog"
+      aria-modal="true"
+      aria-label={resolvedTitle}
       data-interstitial-depth={layer?.depth ?? 1}
       style={{
         backgroundColor: `hsl(var(--interstitial-scrim) / ${layer?.backdropOpacity ?? resolveInterstitialBackdropOpacity(1)})`,
@@ -87,7 +108,7 @@ export const AddItemsProgressOverlay = ({
         style={{ zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
       >
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold">{resolveTitle(title, progress.status)}</p>
+          <p className="text-sm font-semibold">{resolvedTitle}</p>
           <span className="text-xs text-muted-foreground">{formatElapsed(progress.elapsedMs)}</span>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">

@@ -1217,6 +1217,14 @@ their feature flag and library state allow it.
   selected]`
 - Result row — `archive-result-row` — the checkbox in the row carries the selection
 
+**Import progress** (`add-items-overlay` on Play, `add-disks-overlay` on Disks) — shown
+while a confirmed selection is scanned and added. It is a modal dialog scope, so the
+keypad ring holds only its one control while it is up; the page and the hidden tab bar
+are out of reach.
+
+- Cancel — button — no testid — stops the import. Escape and the device Back key do the
+  same
+
 ---
 
 ## 6. Known findings / limitations (as of last verification)
