@@ -214,6 +214,33 @@ describe("logging", () => {
     expect(getLogs().map((entry) => entry.message)).toEqual(["after corrupt storage"]);
   });
 
+  it("keeps the name, message and stack of an Error nested in log details", () => {
+    const reason = new TypeError("rejected with a reason");
+    addErrorLog("Unhandled promise rejection", { reason, context: { cause: new Error("inner failure") } });
+
+    const details = getLogs()[0].details as {
+      reason: { name: string; message: string; stack: string };
+      context: { cause: { message: string } };
+    };
+    expect(details.reason).toEqual(
+      expect.objectContaining({ name: "TypeError", message: "rejected with a reason", stack: expect.any(String) }),
+    );
+    expect(details.reason.stack).toContain("rejected with a reason");
+    expect(details.context.cause.message).toBe("inner failure");
+  });
+
+  it("keeps the message of an Error passed to console.warn inside a details object", () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    try {
+      console.warn("Operation failed", { error: new Error("disk full") });
+    } finally {
+      uninstallBridge();
+    }
+
+    const entry = getLogs().find((log) => log.message === "Operation failed");
+    expect(JSON.stringify(entry?.details)).toContain("disk full");
+  });
+
   it("truncates stack trace by character count", () => {
     const error = new Error("long stack");
     const longLine = "a".repeat(3005);

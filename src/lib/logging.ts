@@ -94,6 +94,10 @@ const safeSerializeDetails = (details: unknown): unknown => {
         if (typeof value === "object" && value !== null) {
           if (seen.has(value)) return "[Circular]";
           seen.add(value);
+          // An Error's name, message and stack are not enumerable, so JSON.stringify alone reduces it to {}.
+          if (value instanceof Error) {
+            return { ...value, name: value.name, message: value.message, stack: trimStack(value.stack) };
+          }
         }
         return value;
       }),
