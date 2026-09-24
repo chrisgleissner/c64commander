@@ -556,3 +556,35 @@ describe("TypeKeyboard", () => {
     });
   });
 });
+
+describe("TypeKeyboard keycap text on the deck profiles", () => {
+  const textSizesIn = (key: HTMLElement) =>
+    Array.from(key.querySelectorAll<HTMLElement>("span[style]"))
+      .filter((span) => span.style.fontSize !== "")
+      .map((span) => ({ text: span.textContent, px: Number.parseFloat(span.style.fontSize) }));
+
+  it.each(["compact", "medium"] as const)(
+    "prints every label, stacked label and shifted legend at 14 px or more on %s",
+    (profile) => {
+      renderKeyboard(profile);
+
+      const sizes = [
+        "remote-input-key-1",
+        "remote-input-key-q",
+        "remote-input-key-shift-lock",
+        "remote-input-key-run-stop",
+      ]
+        .map((testId) => screen.getByTestId(testId))
+        .flatMap(textSizesIn);
+
+      expect(sizes.length).toBeGreaterThanOrEqual(4);
+      expect(sizes.filter(({ px }) => px < 14)).toEqual([]);
+    },
+  );
+
+  it("prints the shifted legend on a medium number key at 14 px", () => {
+    renderKeyboard("medium");
+
+    expect(textSizesIn(screen.getByTestId("remote-input-key-1"))).toContainEqual({ text: "!", px: 14 });
+  });
+});

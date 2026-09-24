@@ -26,6 +26,7 @@ import {
 } from "@/lib/remoteInput/keyboardLayout";
 import { toneButtonClass } from "@/lib/remoteInput/keyTone";
 import { keyFaceForDisplayProfile } from "@/lib/remoteInput/narrowKeyLabels";
+import { resolveKeyCapFontSizes, type KeyCapFontSizes } from "@/lib/remoteInput/keyCapTypography";
 import { charToKeyboardInputEvents } from "@/lib/remoteInput/keyboardCharMapping";
 import { specialKeyToKeyboardInputEvent } from "@/lib/remoteInput/specialKeyMapping";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -112,7 +113,7 @@ type KeyboardKeyButtonProps = {
   fill: boolean | undefined;
   label: string;
   showSecondary: boolean;
-  keyFontPx: number;
+  fontSizes: KeyCapFontSizes;
   disabled: boolean;
   latched: boolean;
   isModifierOrShiftLock: boolean;
@@ -142,7 +143,7 @@ const KeyboardKeyButtonImpl = ({
   fill,
   label,
   showSecondary,
-  keyFontPx,
+  fontSizes,
   disabled,
   latched,
   isModifierOrShiftLock,
@@ -152,16 +153,10 @@ const KeyboardKeyButtonImpl = ({
   onTap,
 }: KeyboardKeyButtonProps) => {
   const Icon = def.icon;
-  const iconPx = Math.max(15, Math.round(keyFontPx * 1.35));
-  /*
-   * The shifted legend is sized by its key, not by the page's type scale.
-   *
-   * It was briefly moved onto `text-xs` while raising every text size above the 14px readability
-   * floor. That floor is about text a reader reads; this is a hint printed in the corner of a key
-   * that already carries its own label, and at 16px it no longer fits the keycap. Sizing it from
-   * `keyFontPx` keeps the proportion the keyboard is laid out to, at whatever size the keys are.
-   */
-  const secondaryFontPx = Math.max(10, Math.round(keyFontPx * 0.62));
+  const iconPx = Math.max(15, Math.round(fontSizes.label * 1.35));
+  // Sized by the key, not by the page's type scale: `text-xs` renders at 16 px on small screens,
+  // which does not fit the keycap.
+  const secondaryFontPx = fontSizes.legend;
   const secondaryEl = showSecondary ? (
     <span
       style={{ fontSize: secondaryFontPx }}
@@ -199,9 +194,7 @@ const KeyboardKeyButtonImpl = ({
         // (`pre-line` did, turning "SHFT LOCK" into a clipped "SH/T/LOC/K").
         // Everything else stays on one line.
         whiteSpace: isMultiline ? "pre" : "nowrap",
-        // A stacked two-line label has to fit its widest line inside a single
-        // 1u key, so it renders a step smaller than a single-glyph key.
-        fontSize: isMultiline ? Math.max(8, keyFontPx - 2) : keyFontPx,
+        fontSize: isMultiline ? fontSizes.stackedLabel : fontSizes.label,
         fontWeight: 600,
         lineHeight: 1.05,
       }}
@@ -500,12 +493,7 @@ export const TypeKeyboard = ({
   // RESTORE/C=/CTRL/SHIFT) render taller than the character grid so they are
   // easy to hit and read.
   const systemKeyHeightPx = 54;
-  // The expanded layout packs a full C64's worth of ~1u keys per row, so its
-  // labels get a smaller font; the deck profiles have roomier keys. Labels
-  // never wrap (nowrap), so long ones stay on one line instead of breaking into
-  // "RES/TOR/E". 10px keeps the widest single-key labels (RESTORE at 1.5u,
-  // RETURN at 2u) clear of the key borders at the authentic 1u key width.
-  const keyFontPx = profile === "expanded" ? 10 : 13;
+  const keyCapFontSizes = resolveKeyCapFontSizes(profile);
 
   const toggleModifier = (modifier: StickyModifier) => {
     vibrateTap(8);
@@ -611,7 +599,7 @@ export const TypeKeyboard = ({
         fill={options.fill}
         label={label}
         showSecondary={showSecondary}
-        keyFontPx={keyFontPx}
+        fontSizes={keyCapFontSizes}
         disabled={disabled}
         latched={latched}
         isModifierOrShiftLock={isModifier || isShiftLock}
