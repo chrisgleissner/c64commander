@@ -513,17 +513,18 @@ const DiagnosticsRuntimeBridge = () => {
 
     const startDeferredBridges = async () => {
       if (started || disposed) return;
-      if (getPlatform() === "web") return;
       started = true;
-      const [diagnosticsBridgeModule, nativeDebugSnapshotsModule, webServerLogsModule] = await Promise.all([
+      const webServerLogsModule = await import("@/lib/diagnostics/webServerLogs");
+      if (disposed) return;
+      stopWebServerLogBridge = webServerLogsModule.startWebServerLogBridge();
+      if (getPlatform() === "web") return;
+      const [diagnosticsBridgeModule, nativeDebugSnapshotsModule] = await Promise.all([
         import("@/lib/native/diagnosticsBridge"),
         import("@/lib/diagnostics/nativeDebugSnapshots"),
-        import("@/lib/diagnostics/webServerLogs"),
       ]);
       if (disposed) return;
       stopNativeDiagnosticsBridge = diagnosticsBridgeModule.stopNativeDiagnosticsBridge;
       stopDebugSnapshotPublisher = nativeDebugSnapshotsModule.startNativeDebugSnapshotPublisher();
-      stopWebServerLogBridge = webServerLogsModule.startWebServerLogBridge();
       await diagnosticsBridgeModule.startNativeDiagnosticsBridge();
     };
 

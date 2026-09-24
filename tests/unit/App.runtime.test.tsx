@@ -865,7 +865,7 @@ describe("App runtime wiring", () => {
     );
   });
 
-  it("does not start deferred diagnostics bridges on web after first meaningful interaction", async () => {
+  it("starts only the web server log bridge on web after first meaningful interaction", async () => {
     const { unmount } = render(<App />);
     await screen.findByText("Home Page");
 
@@ -875,12 +875,15 @@ describe("App runtime wiring", () => {
       );
     });
 
+    await waitFor(() => {
+      expect(mocks.startWebServerLogBridge).toHaveBeenCalledTimes(1);
+    });
     unmount();
 
     expect(mocks.uninstallConsoleBridge).toHaveBeenCalledTimes(1);
+    expect(mocks.webServerLogCleanup).toHaveBeenCalledTimes(1);
     expect(mocks.startNativeDiagnosticsBridge).not.toHaveBeenCalled();
     expect(mocks.debugSnapshotCleanup).not.toHaveBeenCalled();
-    expect(mocks.webServerLogCleanup).not.toHaveBeenCalled();
     expect(mocks.stopNativeDiagnosticsBridge).not.toHaveBeenCalled();
   });
 
