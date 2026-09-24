@@ -185,10 +185,8 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
 };
 
 /**
- * The context-menu trigger that belongs to `element`: the element itself, one inside an explicit
- * `[data-key-nav-menu-host]` it lives in, or, for a single ring stop, one inside it. A group's
- * triggers belong to the rows inside it, so a group has none of its own: Menu on the Playlist
- * card used to open the first row's actions.
+ * The context-menu trigger of `element`: itself, one in its `[data-key-nav-menu-host]`, or one inside
+ * a single ring stop. A group has none: its triggers belong to the rows inside it.
  */
 export const findContextMenuTrigger = (element: Element | null, isGroup: boolean): HTMLElement | null => {
   if (!element) return null;

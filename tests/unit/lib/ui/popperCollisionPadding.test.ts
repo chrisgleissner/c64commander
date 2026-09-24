@@ -6,11 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { resolveSafeAreaCollisionPadding } from "@/lib/ui/popperCollisionPadding";
+import {
+  resetSafeAreaCollisionPaddingForTests,
+  resolveSafeAreaCollisionPadding,
+} from "@/lib/ui/popperCollisionPadding";
 
 describe("resolveSafeAreaCollisionPadding", () => {
+  beforeEach(() => resetSafeAreaCollisionPaddingForTests());
+
   afterEach(() => {
     document.documentElement.style.removeProperty("--safe-area-inset-top");
     document.documentElement.style.removeProperty("--safe-area-inset-bottom");

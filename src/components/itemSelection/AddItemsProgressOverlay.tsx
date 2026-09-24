@@ -63,7 +63,7 @@ export const AddItemsProgressOverlay = ({
   const isVisible = visible === true || (visible !== false && ACTIVE_PROGRESS_STATES.has(progress.status));
   const layer = useRegisterInterstitial("progress", isVisible);
 
-  // Android Back arrives as an Escape dispatched on the document, not on the focused Cancel button,
+  // Android Back arrives as an Escape at whatever holds focus, which need not be inside the overlay,
   // so the dismissal keys are heard on the document.
   useEffect(() => {
     if (!isVisible || !onCancel) return undefined;

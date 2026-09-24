@@ -88,19 +88,9 @@ const DropdownMenuSubContent = React.forwardRef<
 ));
 DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
-/*
- * The menu is bounded by the space available beside its trigger, not just by the viewport.
- *
- * A viewport-height clamp alone still lets a menu anchored part-way down the page run off the
- * bottom: measured on a 393x727 viewport, a row's action menu opened with its last item at y=753,
- * where nothing — a finger, a pointer or the keypad — could reach it. Radix publishes the room it
- * has on the side it chose as `--radix-dropdown-menu-content-available-height`; taking the smaller
- * of that and the viewport clamp makes the menu fit and scroll instead.
- */
 /**
- * Keep the focused item on screen while the menu settles. A menu focuses its first item before the
- * popper has sized it; once the height limit lands the content scrolls, and on a short screen the
- * focused item of a tall menu (a playlist row's details above its actions) was left out of sight.
+ * Keep the focused item on screen while the menu settles: it is focused before the popper sizes
+ * the menu, and a tall menu then scrolled with its focused item out of sight.
  */
 const useKeepFocusedItemInView = (forwardedRef: React.ForwardedRef<HTMLDivElement>) => {
   const [node, setNode] = React.useState<HTMLDivElement | null>(null);
@@ -125,6 +115,15 @@ const useKeepFocusedItemInView = (forwardedRef: React.ForwardedRef<HTMLDivElemen
   );
 };
 
+/*
+ * The menu is bounded by the space available beside its trigger, not just by the viewport.
+ *
+ * A viewport-height clamp alone still lets a menu anchored part-way down the page run off the
+ * bottom: measured on a 393x727 viewport, a row's action menu opened with its last item at y=753,
+ * where nothing — a finger, a pointer or the keypad — could reach it. Radix publishes the room it
+ * has on the side it chose as `--radix-dropdown-menu-content-available-height`; taking the smaller
+ * of that and the viewport clamp makes the menu fit and scroll instead.
+ */
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>

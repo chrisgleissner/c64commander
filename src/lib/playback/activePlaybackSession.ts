@@ -75,11 +75,8 @@ export const markRemotePlaybackStopped = (): void => {
 };
 
 /**
- * Silence the C64 before a tune starts on this device.
- *
- * Moving to the C64 already stops the on-device engine; moving the other way left the C64 playing
- * underneath, and Stop then had no reason to reset it. The flag is cleared even when the stop fails,
- * so a C64 that does not answer delays one tune by the caller's bound rather than every tune after.
+ * Silence the C64 before a tune starts on this device, which otherwise left it playing underneath.
+ * The flag is cleared even when the stop fails, so an unanswering C64 delays one tune, not every one.
  */
 export const stopRemoteTuneBeforeLocalPlayback = async (stopMachine: () => Promise<void>): Promise<void> => {
   if (!remotePlaybackActive) return;

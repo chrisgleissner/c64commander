@@ -7,23 +7,10 @@
  */
 
 /**
- * Keypad profile for a D-pad + numeric keypad device.
- *
- * Bindings are DOM key codes, never Android key codes. Measured in an Android WebView:
- *   D-pad up/down/left/right → ArrowUp/Down/Left/Right (inherited from the desktop base)
- *   D-pad center / OK        → Enter, keyCode 13 (inherited)
- *   Numeric keypad 0–9       → key "0"–"9", code "" (inherited digit fallbacks)
- *   ✱ / #                    → key "*" / "#", keyCode 0 (inherited)
- *   Soft keys, Menu          → forwarded by the native shell as SoftLeft / SoftRight /
- *                              ContextMenu, because the WebView reports the soft keys as
- *                              "Unidentified" and drops Menu
- *   Back                     → reaches Capacitor, not the page; see `deviceBackButton`
- *
- * The named codes below cover hosts that report them. Android key codes (17 = ✱, 82 = Menu, ...)
- * are not bound: as DOM key codes they mean Ctrl, Alt, Caps Lock, R and so on, so on a hardware
- * keyboard Ctrl opened Diagnostics and R opened the quick menu.
- *
- * A slightly longer multi-tap window suits a physical keypad.
+ * Keypad profile for a D-pad + numeric keypad device, bound by DOM codes, never Android key codes
+ * (17, 18, 20 and 82 are Ctrl, Alt, Caps Lock and R as DOM codes). An Android WebView delivers the
+ * D-pad as Arrow keys, OK as Enter, and digits, ✱ and # by `key`; the native shell forwards the soft
+ * keys and Menu as SoftLeft / SoftRight / ContextMenu. See docs/cta-inventory.md §1.
  */
 
 import { mergeKeymaps, type KeyBinding } from "../keymap";
