@@ -49,6 +49,22 @@ describe("T9 multitap mode", () => {
     expect(s.cursor).toBe(1);
   });
 
+  it("types the digit 1 in multitap mode by cycling key 1 past its punctuation", () => {
+    expect(typeMultitap(createT9State(), 1, 9).text).toBe("1");
+  });
+
+  it("offers every key's own digit as a multitap candidate", () => {
+    for (let key = 0; key <= 9; key++) {
+      let s = createT9State();
+      const cycle: string[] = [];
+      for (let i = 0; i < 12; i++) {
+        s = pressDigit(s, key, i * 10, cfg);
+        cycle.push(s.text);
+      }
+      expect(cycle, `key ${key}`).toContain(String(key));
+    }
+  });
+
   it("commits the pending candidate when the window expires", () => {
     let s = createT9State();
     s = pressDigit(s, 2, 100, cfg);
