@@ -1,6 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import {
   AppDialog,
@@ -148,6 +149,41 @@ describe("App surface primitives", () => {
     );
     expect(overlay?.className).toContain(APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0]);
     expect(screen.getByText("Choose a mode").parentElement).toHaveClass("flex-1", "overflow-y-auto");
+  });
+
+  it("places an open dialog again when the keypad guidance bar appears under it", async () => {
+    localStorage.clear();
+    setViewportWidth(360);
+    renderWithProviders(
+      <AppDialog open>
+        <AppDialogContent>
+          <AppDialogHeader>
+            <AppDialogTitle>Demo Mode</AppDialogTitle>
+          </AppDialogHeader>
+        </AppDialogContent>
+      </AppDialog>,
+    );
+    const dialog = screen.getByRole("dialog");
+    const topBefore = Number.parseFloat(dialog.style.maxHeight);
+    const bar = document.createElement("div");
+    bar.setAttribute("data-testid", "keypad-guidance-bar");
+    bar.setAttribute("data-visible", "true");
+    bar.getBoundingClientRect = () => ({ height: 26 }) as DOMRect;
+    document.body.appendChild(bar);
+    try {
+      act(() => {
+        document.documentElement.style.setProperty(
+          "--keypad-guidance-reserved-height",
+          "var(--keypad-guidance-bar-height)",
+        );
+        window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+      });
+
+      await waitFor(() => expect(Number.parseFloat(dialog.style.maxHeight)).toBeLessThan(topBefore));
+    } finally {
+      bar.remove();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
   });
 
   // The centred layout already keeps a dialog above the navigation bar. The footer added the bar's

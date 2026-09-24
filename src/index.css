@@ -764,6 +764,12 @@ button:focus-visible,
   flex: 0 0 auto;
 }
 
+/* The display rule above outranks the user agent's [hidden], which left "Menu" on screen for every
+   control, including the many where the key does nothing. */
+.keypad-guidance-key[hidden] {
+  display: none;
+}
+
 .keypad-guidance-cap {
   display: inline-flex;
   align-items: center;

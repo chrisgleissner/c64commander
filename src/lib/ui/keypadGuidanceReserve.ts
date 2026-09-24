@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+/** Dispatched on `window` when the bar starts or stops reserving its height. */
+export const KEYPAD_GUIDANCE_RESERVE_EVENT = "c64u:keypad-guidance-reserve";
+
 /**
  * The height, in CSS px, of the keypad guidance bar while it is showing, else 0.
  *

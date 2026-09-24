@@ -6,6 +6,7 @@ import {
   resolveCenteredOverlayLayout,
   resolveWorkflowSheetLayout,
 } from "@/components/ui/interstitialStyles";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 const assignRef = <T>(ref: React.ForwardedRef<T>, value: T | null) => {
   if (typeof ref === "function") {
@@ -130,9 +131,11 @@ function useOverlayPosition<T extends HTMLElement>(
     }
 
     window.addEventListener("resize", updateLayout);
+    window.addEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, updateLayout);
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", updateLayout);
+      window.removeEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, updateLayout);
     };
   }, [enabled, nodeVersion, overlayName]);
 

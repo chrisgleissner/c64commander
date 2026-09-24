@@ -40,6 +40,7 @@ import {
   resolveGuidanceLabels,
   type GuidanceState,
 } from "@/lib/input";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
 const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortcut: boolean): GuidanceState => {
@@ -127,6 +128,8 @@ const reserveGuidanceHeight = (reserved: boolean): void => {
   const next = reserved ? "var(--keypad-guidance-bar-height)" : "0px";
   if (root.style.getPropertyValue("--keypad-guidance-reserved-height") === next) return;
   root.style.setProperty("--keypad-guidance-reserved-height", next);
+  // Dialogs are placed in JavaScript and have to be placed again when the bar appears under them.
+  window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
 };
 
 /**

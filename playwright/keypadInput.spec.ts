@@ -172,6 +172,8 @@ test.describe("Keypad / T9 input", () => {
     expect(layout.shellWillChange).toBe("auto");
     expect(layout.sheetBottom).toBeLessThanOrEqual(layout.barTop + 1);
     expect(layout.barBottom).toBeGreaterThan(layout.viewportHeight - 60);
+    // The sheet itself has no context menu of its own, so the Menu legend is not offered.
+    await expect(page.getByTestId("keypad-guidance-right")).toBeHidden();
     await snap(page, testInfo, "guidance-bar-over-sheet");
   });
 
