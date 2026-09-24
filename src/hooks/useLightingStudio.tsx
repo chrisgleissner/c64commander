@@ -376,7 +376,7 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
       !studioState.automation.circadian.locationPreference.useDeviceLocation
     )
       return;
-    if (deviceLocationStatus === "granted" || deviceLocationStatus === "pending") return;
+    if (deviceLocationStatus !== "idle") return;
     requestDeviceLocation();
   }, [
     deviceLocationStatus,

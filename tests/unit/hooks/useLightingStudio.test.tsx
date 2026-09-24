@@ -655,6 +655,44 @@ describe("LightingStudioProvider", () => {
     expect(screen.getByTestId("circadian-label")).toHaveTextContent("Device 35.690, 139.692");
   });
 
+  it("requests device location once for circadian automation and does not re-request after an asynchronous denial", async () => {
+    localStorage.setItem(
+      LIGHTING_STORAGE_KEY,
+      JSON.stringify({
+        activeProfileId: "profile-1",
+        profiles: [{ id: "profile-1", name: "Base", savedAt: new Date(0).toISOString(), surfaces: {} }],
+        automation: {
+          connectionSentinel: { enabled: true, mappings: {} },
+          quietLaunch: { enabled: false, profileId: null, windowMs: 45000 },
+          sourceIdentityMap: { enabled: false, mappings: {} },
+          circadian: {
+            enabled: true,
+            locationPreference: { useDeviceLocation: true, manualCoordinates: null, city: null },
+          },
+        },
+      }),
+    );
+    const getCurrentPosition = vi.fn((_success: PositionCallback, error: PositionErrorCallback) => {
+      setTimeout(() => error({ code: 1, message: "Permission denied" } as GeolocationPositionError), 0);
+    });
+    Object.defineProperty(global.navigator, "geolocation", {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+
+    renderProvider("/play");
+
+    await waitFor(() => expect(screen.getByTestId("location-status")).toHaveTextContent("denied"));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("location-status")).toHaveTextContent("denied");
+
+    fireEvent.click(screen.getByRole("button", { name: "locate" }));
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(2));
+  });
+
   it("reports unavailable geolocation and keeps the circadian fallback unresolved until updated", async () => {
     localStorage.setItem(
       LIGHTING_STORAGE_KEY,
