@@ -281,6 +281,13 @@ describe("RemoteInputSheet", () => {
     expect(screen.queryByTestId("remote-input-collapse-chrome")).not.toBeInTheDocument();
   });
 
+  it("keeps the sheet's accessible name in game mode, where its header is hidden", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+
+    expect(screen.getByRole("dialog", { name: "Remote Input" })).toBe(screen.getByTestId("remote-input-sheet"));
+  });
+
   it("brings the chrome, and its Close, back through the floating handle", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));

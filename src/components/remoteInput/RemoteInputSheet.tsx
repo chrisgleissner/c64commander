@@ -502,6 +502,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             <Settings2 className="h-5 w-5" />
           </button>
         ) : null}
+        {/* Game Mode hides the header, but the dialog keeps its name for the keypad breadcrumb and
+            screen readers. */}
+        {chromeHidden ? <AppSheetTitle className="sr-only">Remote Input</AppSheetTitle> : null}
         {chromeHidden ? null : (
           <AppSheetHeader>
             <AppSheetTitle className="flex items-center gap-2">
