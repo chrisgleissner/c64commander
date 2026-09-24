@@ -53,6 +53,8 @@ const defaultFilters = (): FilterState => ({
 });
 
 const TIME_BUCKET_MS = 30_000; // 30s buckets
+// Recharts draws its tick and legend text outside the type scale, so the 14 px text floor is set here.
+const CHART_TEXT_PX = 14;
 
 type TimePoint = {
   time: string;
@@ -352,10 +354,10 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
                       const d = new Date(v);
                       return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
                     }}
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: CHART_TEXT_PX }}
                     className="text-muted-foreground"
                   />
-                  <YAxis unit="ms" tick={{ fontSize: 10 }} width={48} className="text-muted-foreground" />
+                  <YAxis unit="ms" tick={{ fontSize: CHART_TEXT_PX }} width={60} className="text-muted-foreground" />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
@@ -378,7 +380,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
                       );
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: CHART_TEXT_PX }} />
                   <Line
                     type="monotone"
                     dataKey="p50"
