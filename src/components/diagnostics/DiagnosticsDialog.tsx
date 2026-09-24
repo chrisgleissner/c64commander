@@ -58,6 +58,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { useOnOpen } from "@/hooks/useOnOpen";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
@@ -1248,8 +1249,7 @@ export function DiagnosticsDialog({
   }, [allEntries]);
   const showDeviceFilter = showDeviceUi && deviceFilterOptions.length > 0;
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setHeaderExpanded(false);
     setSelectedTypes(defaultEvidenceTypes ?? new Set(DEFAULT_TYPES));
     setContributor("All");
@@ -1286,7 +1286,7 @@ export function DiagnosticsDialog({
             snapshot.host,
           ),
     );
-  }, [defaultEvidenceTypes, healthState.connectedDeviceLabel, open, selectedSavedDevice]);
+  });
 
   useEffect(() => {
     if (deviceFilter !== null && !deviceFilterOptions.some((option) => option.id === deviceFilter)) {

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -718,6 +718,24 @@ describe("DiagnosticsDialog", () => {
       ftpPort: 2121,
       telnetPort: 2323,
     });
+  });
+
+  it("keeps an in-progress connection edit when the selected saved device is updated while the dialog stays open", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    const selectedDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    renderDialog();
+
+    fireEvent.contextMenu(screen.getByTestId("diagnostics-device-line"));
+    fireEvent.change(screen.getByTestId("connection-edit-host"), { target: { value: "draft-host.local" } });
+
+    act(() => {
+      store.updateSavedDevice(selectedDeviceId, { lastSuccessfulConnectionAt: new Date(0).toISOString() });
+    });
+
+    expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
+    expect(screen.getByTestId("connection-edit-host")).toHaveValue("draft-host.local");
   });
 
   it("does not repeat the product code when the saved device name already matches it", async () => {
