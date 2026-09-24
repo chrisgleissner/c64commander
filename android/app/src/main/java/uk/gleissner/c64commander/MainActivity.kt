@@ -11,6 +11,7 @@ package uk.gleissner.c64commander
 import android.app.ActivityManager
 import android.graphics.Color
 import android.os.Bundle
+import android.view.KeyEvent
 import android.webkit.MimeTypeMap
 import androidx.core.view.WindowCompat
 import com.getcapacitor.Bridge
@@ -244,6 +245,14 @@ open class MainActivity : BridgeActivity() {
         error,
       )
     }
+  }
+
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return super.dispatchKeyEvent(event)
+    if (event.action == KeyEvent.ACTION_DOWN) {
+      bridge?.webView?.evaluateJavascript(SoftKeyForwarder.keydownScript(domCode, event.repeatCount > 0), null)
+    }
+    return true
   }
 
   override fun onPause() {
