@@ -1215,7 +1215,9 @@ their feature flag and library state allow it.
 - Select all (N) — button — `archive-select-all` `[only once there are results]`
 - Clear selection — button — `archive-clear-selection` `[only once something is
   selected]`
-- Result row — `archive-result-row` — the checkbox in the row carries the selection
+- Result row — `archive-result-row` — the checkbox in the row carries the selection; the
+  row is its label, so a tap anywhere on it toggles the checkbox. The checkbox is the only
+  keypad stop in the row
 
 **Import progress** (`add-items-overlay` on Play, `add-disks-overlay` on Disks) — shown
 while a confirmed selection is scanned and added. It is a modal dialog scope, so the
