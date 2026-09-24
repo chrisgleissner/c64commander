@@ -233,7 +233,7 @@ export function PrinterManager({
               profile === "compact" ? "grid grid-cols-1 gap-y-1.5" : "grid grid-cols-2 gap-x-4 gap-y-1",
             )}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="inline-summary-label-value-pair flex items-center justify-between gap-2">
               <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
               <Select
                 value={String(printerBusValue)}
@@ -273,7 +273,10 @@ export function PrinterManager({
             {printerControlRows
               .filter((entry) => entry.options.length > 0)
               .map((entry) => (
-                <div key={entry.itemName} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                <div
+                  key={entry.itemName}
+                  className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
+                >
                   <span className="shrink-0 text-muted-foreground whitespace-nowrap">{entry.label}</span>
                   <Select
                     value={entry.value}

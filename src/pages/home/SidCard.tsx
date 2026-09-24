@@ -189,7 +189,7 @@ export function SidCard({
         {/* Wraps: the label beside it is `shrink-0`, so when the row is too narrow the value is the
             only thing that can give. At the largest Text size "None" needed 61px against a 53px
             line and was split mid-word. Wrapping drops the value to its own line instead. */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-summary-label-value-pair flex flex-wrap items-center gap-2">
           {/* shrink-0: the label cannot wrap, so a flex row that shrinks it clips the text.
               CI measured "Address" needing 68px in a 66px box on all four sockets. Let the
               Select absorb the shrink instead; it truncates cleanly, a bare label does not. */}
@@ -216,7 +216,7 @@ export function SidCard({
             </Select>
           )}
         </div>
-        <div className="flex items-center gap-2 justify-end">
+        <div className="inline-summary-label-value-pair flex items-center gap-2 justify-end">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Address</span>
           <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
             <SelectTrigger
@@ -246,7 +246,7 @@ export function SidCard({
           "Resistor" alone needs 65px. Content sizing covers both profiles with one rule. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         {shapingControls.map((control, index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div key={index} className="inline-summary-label-value-pair flex items-center gap-2">
             <span className="shrink-0 text-muted-foreground whitespace-nowrap">{control.label}</span>
             {control.options && control.onChange ? (
               <Select value={control.value} onValueChange={control.onChange} disabled={!isConnected || control.pending}>
