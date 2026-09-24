@@ -150,6 +150,8 @@ vi.mock("@/lib/logging", () => ({
 import {
   discoverConnection,
   getConnectionSnapshot,
+  isDemoModePinnedByUser,
+  pinDemoModeByUserChoice,
   probeDeviceReachability,
   resetManualDiscoveryFallbackCooldownForTests,
 } from "@/lib/connection/connectionManager";
@@ -473,5 +475,32 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     await flushAsync();
 
     expect(startDeviceDiscoveryMock).not.toHaveBeenCalled();
+  });
+});
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+};
+
+describe("a user choice made while a discovery is still running", () => {
+  it("keeps Demo Mode chosen during a manual LAN scan when that scan then finds nothing", async () => {
+    getInfoMock.mockResolvedValue(UNHEALTHY);
+    const lanScan = deferred<{ candidates: never[]; scannedHosts: number; elapsedMs: number; unsupported: boolean }>();
+    startDeviceDiscoveryMock.mockReturnValueOnce(lanScan.promise);
+
+    const discovery = discoverConnection("manual");
+    await vi.waitFor(() => expect(startDeviceDiscoveryMock).toHaveBeenCalled());
+    await pinDemoModeByUserChoice();
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    lanScan.resolve({ candidates: [], scannedHosts: 12, elapsedMs: 8000, unsupported: false });
+    await discovery;
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(isDemoModePinnedByUser()).toBe(true);
   });
 });

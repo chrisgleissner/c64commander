@@ -653,6 +653,8 @@ const clearPinnedDemoMode = () => {
  * and it lifts an earlier decline.
  */
 export async function pinDemoModeByUserChoice() {
+  // A discovery still running would otherwise finish by going offline and clear this choice.
+  discoveryRunToken += 1;
   demoModePinnedByUser = true;
   demoModePinnedWithoutNetwork = isNetworkKnownOffline();
   persistDemoModeSessionFlag(DEMO_MODE_PINNED_SESSION_KEY, true);
