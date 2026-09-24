@@ -9,6 +9,7 @@
 import {
   discoverConnection,
   getConnectionSnapshot,
+  getConnectionTransitionCount,
   noteDeviceUnreachable,
   probeOnce,
   releaseDemoModeChosenWithoutNetwork,
@@ -139,13 +140,17 @@ export const confirmDeviceUnreachable = async () => {
     await showDeviceOffline("network-lost");
     return;
   }
+  // A probe that outlives a switch to another device must not report that device offline.
+  const transitionsAtStart = getConnectionTransitionCount();
+  const connectionMovedOn = () => getConnectionTransitionCount() !== transitionsAtStart;
   confirmingUnreachable = true;
   try {
     for (const delayMs of UNREACHABLE_CONFIRM_DELAYS_MS) {
       if (delayMs > 0) await wait(delayMs);
-      if (getConnectionSnapshot().state !== "REAL_CONNECTED") return;
+      if (connectionMovedOn()) return;
       if (await probeOnce()) return;
     }
+    if (connectionMovedOn()) return;
     await showDeviceOffline("not-answering");
   } finally {
     confirmingUnreachable = false;

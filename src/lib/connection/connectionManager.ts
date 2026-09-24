@@ -715,7 +715,12 @@ const stopDemoServer = async () => {
   }
 };
 
+let connectionTransitionCount = 0;
+/** Changes with every state transition, so work that spans awaits can tell the connection moved on under it. */
+export const getConnectionTransitionCount = () => connectionTransitionCount;
+
 const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) => {
+  connectionTransitionCount += 1;
   setSnapshot({
     state,
     lastDiscoveryTrigger: trigger,

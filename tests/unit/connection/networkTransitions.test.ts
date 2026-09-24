@@ -429,6 +429,31 @@ describe("following the phone on and off its network", () => {
     await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"), { timeout: 5000 });
   });
 
+  it("does not show a newly selected device offline when the last probe of the device it replaced fails late", async () => {
+    localStorage.setItem("c64u_discovery_probe_timeout_ms", "1000");
+    const { manager, transitions } = await connect();
+    const replacement = await createMockC64Server();
+    try {
+      server.setFaultMode("refused");
+      const requestsBefore = server.requests.length;
+      const confirming = transitions.confirmDeviceUnreachable();
+      await vi.waitFor(() => expect(server.requests.length).toBeGreaterThan(requestsBefore));
+      server.setFaultMode("timeout");
+      const requestsAfterFirstProbe = server.requests.length;
+      await vi.waitFor(() => expect(server.requests.length).toBeGreaterThan(requestsAfterFirstProbe), {
+        timeout: 4000,
+      });
+
+      await manager.verifyCurrentConnectionTarget({ deviceHost: hostOf(replacement.baseUrl) });
+      expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+      await confirming;
+
+      expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    } finally {
+      await replacement.close();
+    }
+  });
+
   it("does not check the connected device when a request to a different saved device goes unanswered", async () => {
     const { manager } = await connect();
     const events = await import("../../../src/lib/connection/reachabilityEvents");
