@@ -593,6 +593,18 @@ export const FocusNavigationProvider = ({
         event.preventDefault();
         return;
       }
+      // Radix focuses the dialog itself on open, and the ring shows it as a group whose OK opens
+      // it. Nothing inside the dialog answers OK on the dialog itself, so OK goes in here.
+      if (
+        (action === "enter" || action === "center" || action === "activate") &&
+        event.target instanceof Element &&
+        event.target.matches(DIALOG_ANCESTOR_SELECTOR) &&
+        stepFocusWithinOverlay(event.target, event.target, true)
+      ) {
+        followDialogFocus();
+        event.preventDefault();
+        return;
+      }
       if (isWithinOpenOverlay(event.target)) return;
       const activeElement = document.activeElement;
       // Left/Right belong to a focused value control (slider / tabs / segmented /

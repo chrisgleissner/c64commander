@@ -1000,6 +1000,17 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
     expect(document.activeElement).toBe(button("Close"));
   });
 
+  it("goes into the dialog on OK while the dialog itself holds focus", () => {
+    render(<Dialog />);
+    const dialog = screen.getByRole("dialog");
+    dialog.tabIndex = -1;
+    dialog.focus();
+
+    fireEvent.keyDown(dialog, { key: "Enter", code: "Enter" });
+
+    expect(document.activeElement).toBe(button("Close"));
+  });
+
   it("reaches the last control on Up when nothing in the dialog is focused yet", () => {
     render(<Dialog />);
     fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowUp" });
