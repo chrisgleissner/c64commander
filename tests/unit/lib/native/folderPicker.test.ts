@@ -7,8 +7,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { FolderPicker } from "@/lib/native/folderPicker";
+import { FolderPicker, canPickDocuments, resetDocumentPickerSupport } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
+import { addLog } from "@/lib/logging";
 
 // Mock getPlatform to allow testing both android and web paths
 vi.mock("@/lib/native/platform", () => ({
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   releasePersistedUris: vi.fn(),
   readFile: vi.fn(),
   readFileFromTree: vi.fn(),
+  canPickDocuments: vi.fn(),
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -39,6 +41,7 @@ vi.mock("@capacitor/core", () => ({
     releasePersistedUris: mocks.releasePersistedUris,
     readFile: mocks.readFile,
     readFileFromTree: mocks.readFileFromTree,
+    canPickDocuments: mocks.canPickDocuments,
   }),
 }));
 
@@ -135,5 +138,36 @@ describe("FolderPicker", () => {
 
     await FolderPicker.readFileFromTree({ treeUri: "", path: "" });
     expect(mocks.readFileFromTree).toHaveBeenCalled();
+  });
+
+  describe("canPickDocuments", () => {
+    beforeEach(() => {
+      resetDocumentPickerSupport();
+    });
+
+    it("logs a failed support check at warn and asks the plugin again on the next call", async () => {
+      vi.mocked(getPlatform).mockReturnValue("android");
+      mocks.canPickDocuments
+        .mockRejectedValueOnce(new Error("plugin bridge busy"))
+        .mockResolvedValueOnce({ directories: false, files: true });
+
+      await expect(canPickDocuments()).resolves.toEqual({ directories: true, files: true });
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Document picker support check failed; offering local sources anyway",
+        { error: "plugin bridge busy" },
+      );
+
+      await expect(canPickDocuments()).resolves.toEqual({ directories: false, files: true });
+      expect(mocks.canPickDocuments).toHaveBeenCalledTimes(2);
+    });
+
+    it("answers yes on the web build without calling the plugin", async () => {
+      vi.mocked(getPlatform).mockReturnValue("web");
+
+      await expect(canPickDocuments()).resolves.toEqual({ directories: true, files: true });
+      expect(mocks.canPickDocuments).not.toHaveBeenCalled();
+      expect(addLog).not.toHaveBeenCalled();
+    });
   });
 });
