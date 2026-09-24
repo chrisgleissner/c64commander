@@ -18,9 +18,7 @@ tags:
     maxRetries: 3
     commands:
       # The first-run tour covers the tab bar until it is dismissed.
-      - tapOn:
-          text: "Skip"
-          optional: true
+      - runFlow: dismiss-tour.yaml
       - tapOn:
           id: "tab-settings"
           optional: true

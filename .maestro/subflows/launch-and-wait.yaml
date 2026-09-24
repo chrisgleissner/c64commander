@@ -33,9 +33,7 @@ tags:
       # The first-run tour. On a fresh install nothing has been recorded, so it opens over
       # Home as a full-screen overlay and swallows every tap beneath it. Optional, so a run
       # on a device that has already seen it costs a warning and nothing else.
-      - tapOn:
-          text: "Skip"
-          optional: true
+      - runFlow: dismiss-tour.yaml
       - tapOn:
           text: "Retry connection"
           optional: true

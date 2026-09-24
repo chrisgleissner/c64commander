@@ -17,9 +17,7 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
-      - tapOn:
-          text: "Skip"
-          optional: true
+      - runFlow: dismiss-tour.yaml
       - tapOn:
           text: "Got it"
           optional: true

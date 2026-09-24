@@ -1,0 +1,13 @@
+appId: uk.gleissner.c64commander
+tags:
+  - subflow
+---
+# The first-run tour opens over the whole screen 900 ms after the last startup dialog closes, so a
+# single look straight after dismissing a dialog misses it and the next tap lands on the tour.
+- extendedWaitUntil:
+    visible: "Skip"
+    timeout: 2500
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
