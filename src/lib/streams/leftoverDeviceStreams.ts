@@ -49,7 +49,7 @@ const readRecord = (): LeftoverRecord => {
   } catch (error) {
     // An unreadable record means the sweep cannot run this launch, which is the difference between
     // a leftover stream being stopped and the Ultimate multicasting until someone notices.
-    addLog("debug", "Live View: could not read the record of device streams left running", {
+    addLog("warn", "Live View: could not read the record of device streams left running", {
       service: "streams",
       error: error instanceof Error ? error.message : String(error),
     });
@@ -65,7 +65,7 @@ const writeRecord = (record: LeftoverRecord): void => {
   } catch (error) {
     // A full or unavailable localStorage must never break starting or stopping a stream, but a
     // record that was not written is a sweep that will not happen.
-    addLog("debug", "Live View: could not record which device streams are running", {
+    addLog("warn", "Live View: could not record which device streams are running", {
       service: "streams",
       error: error instanceof Error ? error.message : String(error),
     });

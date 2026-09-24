@@ -184,16 +184,21 @@ describe("leftover device streams (HARD27-021)", () => {
     expect(getLeftoverDeviceStreamsForTests()).toEqual({});
   });
 
-  it("survives a corrupt record without throwing", async () => {
+  it("survives a corrupt record without throwing, and warns that the sweep cannot run", async () => {
     localStorage.setItem("c64u_device_streams_running", "{not json");
     expect(getLeftoverDeviceStreamsForTests()).toEqual({});
     await expect(stopLeftoverDeviceStreams()).resolves.toBeUndefined();
     expect(stopAt).not.toHaveBeenCalled();
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Live View: could not read the record of device streams left running",
+      expect.objectContaining({ service: "streams" }),
+    );
   });
 
   // A record that was not written is a sweep that will not happen, but it must never break the
   // start or stop it was riding on.
-  it("keeps going when localStorage refuses the record", () => {
+  it("keeps going when localStorage refuses the record, and warns that the sweep will not happen", () => {
     // Scoped to this key: the failure handler logs, and the logger uses localStorage too.
     const realSetItem = Storage.prototype.setItem;
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
@@ -211,6 +216,11 @@ describe("leftover device streams (HARD27-021)", () => {
     }
 
     expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Live View: could not record which device streams are running",
+      expect.objectContaining({ service: "streams", error: expect.stringContaining("quota") }),
+    );
   });
 
   it("keeps going when localStorage refuses to be read", () => {
