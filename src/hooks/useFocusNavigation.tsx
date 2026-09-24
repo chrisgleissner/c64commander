@@ -71,6 +71,7 @@ import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
@@ -477,6 +478,13 @@ export const FocusNavigationProvider = ({
       notifyRing();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
+      // The tour owns every key while it is up. Its listener is registered after this one, so
+      // stopping propagation there cannot keep OK from also activating the ring's item here. The
+      // guidance bar is still refreshed, which is how it learns to stay hidden during the tour.
+      if (document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE)) {
+        notifyRing();
+        return;
+      }
       const normalized = normalizeKeyEvent(event, keymap);
       // Android's hardware Back carries no key code, so it matches no keymap binding. With an
       // overlay open it means Escape, which the overlay closes on; otherwise it is the hardware

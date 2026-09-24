@@ -1013,6 +1013,24 @@ describe("OK toggles a checkbox inside a dialog", () => {
   });
 });
 
+describe("the first-run tour owns the keys", () => {
+  afterEach(() => document.documentElement.removeAttribute("data-tour-active"));
+
+  it("does not activate the ring's item on OK while the tour is up", () => {
+    const onA = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <Toolbar onA={onA} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    document.documentElement.setAttribute("data-tour-active", "true");
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+
+    expect(onA).not.toHaveBeenCalled();
+  });
+});
+
 describe("one-shot keypad commands ignore key repeat", () => {
   it("pauses once for a held 8, not once per repeat", () => {
     const machinePauseResume = vi.fn();
