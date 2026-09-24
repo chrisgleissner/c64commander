@@ -71,6 +71,7 @@ import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
+import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
@@ -2357,10 +2358,9 @@ export function usePlaybackController({
     // rewind takes to re-render. Rebasing first means there is no stale value to
     // reveal, whatever order the rest completes in.
     const positionMs = Math.max(0, target);
-    const now = Date.now();
-    trackStartedAtRef.current = now - positionMs;
-    playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
-    setPlayedMs(positionMs);
+    const paused = isPausedRef.current;
+    const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };
+    setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
     rescheduleAutoAdvance(positionMs);
     try {
       // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
@@ -2437,15 +2437,10 @@ export function usePlaybackController({
       // and the displayed time carries on from where it was, which reads as the
       // seek having done nothing.
       const positionMs = Math.max(0, controller.positionSeconds() * 1000);
-      const now = Date.now();
-      // Two independent clocks drive the UI and neither knows about the engine,
-      // so both have to be rebased or the audio jumps while the display carries
-      // on from the old spot — which reads as the seek having done nothing.
-      // `elapsedMs` (the big timer) is `now - trackStartedAt`, so shifting the
-      // start point is what moves it.
-      trackStartedAtRef.current = now - positionMs;
-      playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
-      setPlayedMs(positionMs);
+      // Two independent clocks drive the UI and neither knows about the engine, so both have to be
+      // rebased or the audio jumps while the display carries on from the old spot.
+      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
+      setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
       rescheduleAutoAdvance(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },

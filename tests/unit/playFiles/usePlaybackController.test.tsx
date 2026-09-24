@@ -10,6 +10,7 @@ import {
   tryFetchUltimateSidBlob,
 } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { getSidRadioStats, resetSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -3583,6 +3584,67 @@ describe("scrubbing a tune this page did not start", () => {
 
     result.current.seekToFraction(0.5, 60_000);
     await vi.waitFor(() => expect(seekTo).toHaveBeenCalled());
+  });
+});
+
+// "Remaining" subtracts the played clock from the whole playlist's length, so a seek has to move that clock
+// by the distance seeked. Setting it to the position within the current tune dropped every earlier tune's
+// time from it, and "Remaining" jumped up by that much.
+describe("a seek keeps the time played by earlier tunes", () => {
+  const seekingController = (fromSeconds: number, toSeconds: number) => {
+    let position = fromSeconds;
+    return {
+      positionSeconds: vi.fn(() => position),
+      seekBy: vi.fn(async () => {
+        position = toSeconds;
+      }),
+      seekTo: vi.fn(async (seconds: number) => {
+        position = seconds;
+      }),
+    };
+  };
+
+  it("moves the played clock by the distance of a relative seek", async () => {
+    const now = Date.now();
+    const clock = new PlaybackClock();
+    clock.hydrate(250_000, now);
+    const setPlayedMs = vi.fn();
+    const playlist = [createPlaylistItem({ category: "sid" })];
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      playedClockRef: { current: clock } as any,
+      trackStartedAtRef: { current: now - 10_000 },
+      setPlayedMs,
+      localSidPlaybackController: seekingController(10, 40),
+    });
+
+    await result.current.handleSeekBy(30);
+
+    const playedMs = setPlayedMs.mock.calls.at(-1)?.[0] as number;
+    expect(playedMs).toBeGreaterThanOrEqual(280_000);
+    expect(playedMs).toBeLessThan(281_000);
+  });
+
+  it("moves the played clock by the distance of a scrub while paused", async () => {
+    const clock = new PlaybackClock();
+    clock.hydrate(250_000, null);
+    const setPlayedMs = vi.fn();
+    const playlist = [createPlaylistItem({ category: "sid" })];
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 10_000,
+      playedClockRef: { current: clock } as any,
+      trackStartedAtRef: { current: 0 },
+      setPlayedMs,
+      localSidPlaybackController: seekingController(10, 10),
+    } as any);
+
+    result.current.seekToFraction(0.5, 60_000);
+
+    await vi.waitFor(() => expect(setPlayedMs).toHaveBeenCalled());
+    expect(setPlayedMs).toHaveBeenLastCalledWith(270_000);
+    expect(clock.current(Date.now() + 5_000)).toBe(270_000);
   });
 });
 
