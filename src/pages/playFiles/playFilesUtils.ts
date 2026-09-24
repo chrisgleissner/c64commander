@@ -10,6 +10,7 @@ import { formatByteSize, formatDetailDate, UNKNOWN_VALUE } from "@/lib/ui/detail
 import { extractAudioMixerItems as extractAudioMixerItemsFromLib } from "@/lib/config/audioMixerItems";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
+import { reportUserError } from "@/lib/uiErrors";
 import type { PlaylistItem } from "./types";
 // Re-exported from its owning store so the key and the storage it lives in
 // cannot drift apart. See src/lib/playback/playbackSessionStore.ts.
@@ -83,7 +84,8 @@ export const resolvePickerConfirm = (
  * The launch is deliberately not allowed to fail the add. By the time it runs the item is
  * already in the playlist, so letting a rejection through would make the picker report
  * "Add items failed" over an add that worked, and leave the user unsure whether the item is
- * queued at all. The launch reports its own failure, with the reason the launch actually gave.
+ * queued at all. A launch failure is reported here as a playback failure instead; one the
+ * launch already reported is marked handled and is not reported twice.
  */
 export const addThenMaybeLaunch = async <TItem>({
   launches,
@@ -99,7 +101,18 @@ export const addThenMaybeLaunch = async <TItem>({
   const added = await add();
   if (!added || !launches) return added;
   const target = takeLaunchTarget();
-  if (target !== undefined) await launch(target).catch(() => undefined);
+  if (target === undefined) return added;
+  try {
+    await launch(target);
+  } catch (error) {
+    reportUserError({
+      operation: "PLAYBACK_START",
+      title: "Playback failed",
+      description: (error as Error).message,
+      error,
+      context: { trigger: "picker-confirm" },
+    });
+  }
   return added;
 };
 
