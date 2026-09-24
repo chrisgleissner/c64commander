@@ -211,6 +211,8 @@ export class NavigationController {
       const children = this.focus.enabledChildrenOf(current.id);
       if (children.length === 1 && !this.focus.hasEnabledChildren(children[0].id)) {
         const leaf = children[0];
+        // Acting on the card makes it the user's choice, not a default the next re-scan may move.
+        this.focus.setCurrent(current.id);
         leaf.activate();
         this.callbacks.onActivate?.(leaf);
         return { type: "activated", item: leaf };

@@ -58,10 +58,8 @@ export class FocusController {
   private currentId: string | null = null;
   private scopeParentId: string | null = null;
   /**
-   * Whether `current` is only the default first item rather than one the user moved to. A route
-   * change first removes the old page and adds the new one a render later, so for a moment only the
-   * persistent tab bar is left; a default picked then must move to the new page's first item once
-   * it arrives, or every tab switch left the keypad selection in the tab bar.
+   * `current` is only the default first item, not one the user chose. A route change leaves just the
+   * tab bar for a render, so a default must follow the new page's first item when it arrives.
    */
   private currentIsDefault = false;
 
@@ -220,6 +218,7 @@ export class FocusController {
   activateCurrent(): boolean {
     const item = this.current();
     if (!item || !isEnabled(item)) return false;
+    this.currentIsDefault = false;
     item.activate();
     return true;
   }

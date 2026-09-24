@@ -223,6 +223,14 @@ describe("FocusController.setItems — DOM-order batch population", () => {
     expect(controller.current()?.id).toBe("app-bar");
   });
 
+  it("keeps the default item once the user has activated it", () => {
+    const controller = new FocusController();
+    controller.setItems([item("first", 0), item("second", 0)]);
+    controller.activateCurrent();
+    controller.setItems([item("new-top", 0), item("first", 0), item("second", 0)]);
+    expect(controller.current()?.id).toBe("first");
+  });
+
   it("keeps a selection the user moved to when new items arrive before it", () => {
     const controller = new FocusController();
     controller.setItems([item("tab-home", 0), item("tab-play", 0)]);
