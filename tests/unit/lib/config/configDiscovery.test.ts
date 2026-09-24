@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/logging", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/logging")>();
+  return { ...actual, addLog: vi.fn() };
+});
+
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { addLog } from "@/lib/logging";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 describe("discoverConfigCandidates", () => {
@@ -146,5 +152,26 @@ describe("discoverConfigCandidates", () => {
         listEntries,
       }),
     ).resolves.toEqual([]);
+  });
+
+  it("logs at warn which folder could not be listed", async () => {
+    vi.mocked(addLog).mockClear();
+    const listEntries = vi.fn(async () => {
+      throw new Error("permission denied");
+    });
+
+    await discoverConfigCandidates({
+      sourceType: "local",
+      sourceId: "phone",
+      sourceRootPath: "/Games",
+      targetFile: { name: "Game.prg", path: "/Games/Game.prg" },
+      listEntries,
+    });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Config discovery: could not list a folder; looking for no settings file there",
+      { path: "/Games/", error: "permission denied" },
+    );
   });
 });
