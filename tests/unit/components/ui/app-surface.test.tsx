@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { resetInputModality, setInputModality } from "@/lib/input/inputModality";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import {
   AppDialog,
@@ -183,6 +184,37 @@ describe("App surface primitives", () => {
     } finally {
       bar.remove();
       document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
+  });
+
+  it("keeps the control a keypad user is on in view when the dialog is placed again", async () => {
+    localStorage.clear();
+    setViewportWidth(360);
+    setInputModality("key-navigation");
+    renderWithProviders(
+      <AppDialog open>
+        <AppDialogContent>
+          <AppDialogHeader>
+            <AppDialogTitle>Demo Mode</AppDialogTitle>
+          </AppDialogHeader>
+          <AppDialogFooter>
+            <button type="button">Continue in Demo Mode</button>
+          </AppDialogFooter>
+        </AppDialogContent>
+      </AppDialog>,
+    );
+    const primary = screen.getByRole("button", { name: "Continue in Demo Mode" });
+    const scrollIntoView = vi.fn();
+    primary.scrollIntoView = scrollIntoView;
+    primary.focus();
+    try {
+      act(() => {
+        window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+      });
+
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    } finally {
+      resetInputModality();
     }
   });
 

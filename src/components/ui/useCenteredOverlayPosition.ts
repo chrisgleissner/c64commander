@@ -7,6 +7,7 @@ import {
   resolveWorkflowSheetLayout,
 } from "@/components/ui/interstitialStyles";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { getInputModality } from "@/lib/input/inputModality";
 
 const assignRef = <T>(ref: React.ForwardedRef<T>, value: T | null) => {
   if (typeof ref === "function") {
@@ -60,6 +61,18 @@ export function useWorkflowSheetPosition<T extends HTMLElement>(
   });
 }
 
+/**
+ * A surface that shrinks, for one when the keypad guidance bar appears under it, can leave the
+ * control a keypad user is on outside its scroll area, and nothing else would bring it back.
+ */
+const keepKeypadFocusInView = (surface: HTMLElement) => {
+  if (getInputModality() !== "key-navigation") return;
+  const focused = document.activeElement;
+  if (focused instanceof HTMLElement && focused !== surface && surface.contains(focused)) {
+    focused.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+};
+
 function useOverlayPosition<T extends HTMLElement>(
   forwardedRef: React.ForwardedRef<T>,
   overlayName: string,
@@ -107,6 +120,7 @@ function useOverlayPosition<T extends HTMLElement>(
       window.requestAnimationFrame(() => {
         const updatedElement = localRef.current;
         if (!updatedElement) return;
+        keepKeypadFocusInView(updatedElement);
         const bounds = boundsFromElement(updatedElement);
         if (bounds.left === 0 && bounds.right === 0 && bounds.top === 0 && bounds.bottom === 0) {
           const fallbackTop = Number.parseFloat(updatedElement.style.top || "0");
