@@ -20,6 +20,7 @@ type FakeIndexedDbOptions = {
   failGetWithoutError?: boolean;
   failPutWithoutError?: boolean;
   abortCommit?: boolean;
+  abortDeleteCommit?: boolean;
   preExistingStore?: boolean;
   initialPersistedState?: unknown;
 };
@@ -50,13 +51,14 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       const tx: Record<string, unknown> = { error: null };
       let pendingRequests = 0;
       let failedRequest: Record<string, unknown> | null = null;
+      let deletes = 0;
       const finishTransaction = () => {
         if (failedRequest) {
           tx.error = failedRequest.error;
           (tx.onabort as (() => void) | undefined)?.();
           return;
         }
-        if (options.abortCommit) {
+        if (options.abortCommit || (options.abortDeleteCommit && deletes > 0)) {
           tx.error = new Error("fake commit quota exceeded");
           (tx.onabort as (() => void) | undefined)?.();
           return;
@@ -101,6 +103,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
           });
         },
         delete: (key: string) => {
+          deletes += 1;
           const request: Record<string, unknown> = {};
           return runRequest(request, () => {
             ensureStore(storeName).delete(key);
@@ -368,6 +371,34 @@ describe("indexedDB playlist repository", () => {
     // (Orphaned tracks are reclaimed later by the debounced GC; see below.)
     expect(storeAfterSecond?.has("track:track-a")).toBe(true);
     expect(storeAfterSecond?.has("track:track-b")).toBe(true);
+  });
+
+  it("warns when deleting stale playlist-item records aborts at commit even though every delete succeeded", async () => {
+    const fakeOptions: FakeIndexedDbOptions = {};
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb(fakeOptions),
+      configurable: true,
+      writable: true,
+    });
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-a", "track-a", "0001"), buildItem("item-b", "track-b", "0002")],
+    });
+
+    fakeOptions.abortDeleteCommit = true;
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-b", "track-b", "0001")],
+    });
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Failed to delete stale playlist-item records from IndexedDB",
+      expect.objectContaining({ playlistId: "playlist-default", staleCount: 1 }),
+    );
   });
 
   it("garbage-collects orphaned track records while preserving cross-playlist shared tracks (HARD10-009)", async () => {

@@ -244,7 +244,6 @@ const deleteValues = async (keys: string[]) => {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
-      let remaining = keys.length;
       let settled = false;
 
       const rejectOnce = (error: unknown) => {
@@ -253,16 +252,17 @@ const deleteValues = async (keys: string[]) => {
         reject(error);
       };
 
+      // As for writes, only the transaction's completion means the deletes were committed.
+      tx.oncomplete = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      tx.onabort = () => rejectOnce(tx.error ?? new Error("IndexedDB delete transaction aborted"));
+      tx.onerror = () => rejectOnce(tx.error ?? new Error("IndexedDB delete failed"));
+
       keys.forEach((key) => {
         const request = store.delete(key);
-        request.onsuccess = () => {
-          if (settled) return;
-          remaining -= 1;
-          if (remaining === 0) {
-            settled = true;
-            resolve();
-          }
-        };
         request.onerror = () => rejectOnce(request.error ?? new Error("IndexedDB delete failed"));
       });
     });
