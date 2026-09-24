@@ -9,6 +9,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { claimNativeTrack, nextSerial, releaseNativeTrack } from "@/lib/audio/nativeTrackOwnership";
 import { NativeAudioSink, type NativeAudioBackend } from "@/lib/streams/audioNativeSink";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/logging")>();
+  return { ...actual, addLog: vi.fn() };
+});
 
 /** Flush the microtask queue. */
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -86,6 +92,34 @@ describe("NativeAudioSink", () => {
     // No further polls once closed.
     expect((backend.readAudioStats as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAfterClose);
     expect(backend.closeAudioTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a run of failing stats polls once at warn and once at info when the poll recovers", async () => {
+    let calls = 0;
+    const { backend } = fakeBackend({
+      readAudioStats: vi.fn(async () => {
+        calls += 1;
+        if (calls <= 4) throw new Error("plugin busy");
+        return { bufferedMs: 80, underruns: 0 };
+      }),
+    });
+    vi.mocked(addLog).mockClear();
+    const sink = new NativeAudioSink(47983, backend, 60, 5);
+    await sink.open();
+    await vi.waitFor(() => expect(sink.getStats().bufferedMs).toBe(80));
+    await sink.close();
+
+    const pollLogs = vi
+      .mocked(addLog)
+      .mock.calls.filter(([, message]) => message.startsWith("Native audio: stats poll"));
+    expect(pollLogs).toEqual([
+      [
+        "warn",
+        "Native audio: stats poll failed (last-known values retained)",
+        expect.objectContaining({ error: "plugin busy" }),
+      ],
+      ["info", "Native audio: stats poll recovered", { consecutiveFailures: 4 }],
+    ]);
   });
 
   it("returns false and never polls when the track cannot open", async () => {

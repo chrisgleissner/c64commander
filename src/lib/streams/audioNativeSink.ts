@@ -82,7 +82,7 @@ export class NativeAudioSink {
   private opened = false;
   private closed = false;
   private stats: NativeAudioStats = { bufferedMs: 0, underruns: 0 };
-  /** Consecutive stats-poll failures; surfaced in the WARN log so a stuck poll is diagnosable. */
+  /** Consecutive stats-poll failures, reported when the poll recovers. */
   private statsFailures = 0;
   /** AudioTrack buffer capacity (ms) reported at open — the sink's worst-case added latency. */
   private capacityMs = 0;
@@ -139,19 +139,20 @@ export class NativeAudioSink {
     if (this.closed || !this.opened) return;
     try {
       this.stats = await this.backend.readAudioStats();
+      if (this.statsFailures > 0) {
+        addLog("info", "Native audio: stats poll recovered", { consecutiveFailures: this.statsFailures });
+      }
       this.statsFailures = 0;
     } catch (error) {
-      // A failed read leaves the last buffer/underrun values in place, so a BROKEN native sink can't
-      // be silently read as healthy — surface it at WARN with a stack (not swallowed at DEBUG) so a
-      // persistently failing poll is diagnosable. We deliberately do NOT fabricate stats: zeroing the
-      // buffer or bumping underruns here would make the governor demote video against a phantom
-      // signal. The count is logged so a stuck poll is obvious in Diagnostics.
+      // Last-known values are kept rather than fabricated: zeroing the buffer or bumping underruns
+      // would make the governor demote video against a phantom signal. Only the first failure of a
+      // run is logged; one entry per 250 ms poll would push everything else out of the log.
       this.statsFailures += 1;
+      if (this.statsFailures > 1) return;
       const err = error instanceof Error ? error : new Error(String(error));
       addLog("warn", "Native audio: stats poll failed (last-known values retained)", {
         error: err.message,
         stack: err.stack,
-        consecutiveFailures: this.statsFailures,
       });
     }
   }
