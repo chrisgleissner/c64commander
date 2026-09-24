@@ -147,6 +147,8 @@ test.describe("Keypad / T9 input", () => {
     await enableKeypad(page);
     await page.goto("/");
     await expect(page.getByTestId("tab-home")).toBeVisible();
+    // The launch fade still animates the shell's opacity; what is asserted is the app once it is up.
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
     await page.keyboard.press("ArrowDown");
     await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
 
