@@ -339,6 +339,8 @@ test.describe("Keypad / T9 input", () => {
     await page.getByTestId("tab-config").click();
     await expect(page).toHaveURL(/\/config/);
     await page.getByTestId("config-menu-page-video-setup").click();
+    // A list that opens under the pointer highlights the option there, which a keypad user never has.
+    await page.mouse.move(0, 0);
 
     const trigger = page.locator('[data-testid^="config-select-trigger:"]').first();
     await expect(trigger).toBeVisible();
@@ -347,6 +349,9 @@ test.describe("Keypad / T9 input", () => {
 
     await page.keyboard.press("Enter");
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    // The list moves focus to the current option only once it has been positioned; a key sent
+    // before that reaches the trigger, which ignores it while the list is open.
+    await expect(page.getByRole("option", { name: before, exact: true })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listbox")).toHaveCount(0);
