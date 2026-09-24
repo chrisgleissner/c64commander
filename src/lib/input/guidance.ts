@@ -184,10 +184,20 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
   return null;
 };
 
-/** Whether `element` (or a `[data-key-nav-menu-host]` it lives in) exposes a context menu. */
-export const hasContextMenu = (element: Element | null): boolean => {
-  if (!element) return false;
-  if (element.matches(CONTEXT_MENU_SELECTOR)) return true;
-  const host = element.closest("[data-key-nav-menu-host]") ?? element;
-  return host.querySelector(CONTEXT_MENU_SELECTOR) !== null;
+/**
+ * The context-menu trigger that belongs to `element`: the element itself, one inside an explicit
+ * `[data-key-nav-menu-host]` it lives in, or, for a single ring stop, one inside it. A group's
+ * triggers belong to the rows inside it, so a group has none of its own: Menu on the Playlist
+ * card used to open the first row's actions.
+ */
+export const findContextMenuTrigger = (element: Element | null, isGroup: boolean): HTMLElement | null => {
+  if (!element) return null;
+  if (element.matches(CONTEXT_MENU_SELECTOR)) return element as HTMLElement;
+  const host = element.closest("[data-key-nav-menu-host]");
+  const scope = host ?? (isGroup ? null : element);
+  return scope?.querySelector<HTMLElement>(CONTEXT_MENU_SELECTOR) ?? null;
 };
+
+/** Whether `element` exposes a context menu of its own; see {@link findContextMenuTrigger}. */
+export const hasContextMenu = (element: Element | null, isGroup = false): boolean =>
+  findContextMenuTrigger(element, isGroup) !== null;

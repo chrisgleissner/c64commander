@@ -65,7 +65,7 @@ const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortc
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged,
     layerOpen: controller.layerDepth > 0,
-    hasMenu: hasContextMenu(currentElement),
+    hasMenu: hasContextMenu(currentElement, isGroup),
     gameModeShortcut,
   };
 };

@@ -840,6 +840,27 @@ describe("FocusNavigationProvider global shortcuts", () => {
     fireEvent.keyDown(document.body, { code: "ContextMenu" });
     expect(openQuickMenu).toHaveBeenCalledTimes(1);
   });
+
+  it("opens the quick menu from the Menu key on a card, not the first row's actions inside it", () => {
+    const openQuickMenu = vi.fn();
+    const openRowActions = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <section data-section-label="Playlist">
+          <button type="button">Tune one</button>
+          <button type="button" aria-haspopup="menu" onClick={openRowActions}>
+            Item actions
+          </button>
+        </section>
+        <button type="button">After</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+
+    expect(openRowActions).not.toHaveBeenCalled();
+    expect(openQuickMenu).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**

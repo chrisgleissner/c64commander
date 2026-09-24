@@ -83,6 +83,7 @@ export {
   resolveGuidanceLabels,
   classifyFocusKind,
   accessibleLabelFor,
+  findContextMenuTrigger,
   hasContextMenu,
 } from "./guidance";
 

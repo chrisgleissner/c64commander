@@ -46,11 +46,11 @@ import {
 } from "react";
 
 import {
-  CONTEXT_MENU_SELECTOR,
   FocusDiscoveryEngine,
   INTERACTIVE_SELECTOR,
   NavigationController,
   digitForAction,
+  findContextMenuTrigger,
   getInputModality,
   isFocusDisabled,
   isFocusVisible,
@@ -279,60 +279,57 @@ export const FocusNavigationProvider = ({
   const ringListenersRef = useRef(new Set<() => void>());
   const engineRef = useRef<FocusDiscoveryEngine | null>(null);
 
-  const openContextMenuFor = useCallback((element: HTMLElement | null): boolean => {
-    if (!element) return false;
-    const host = element.closest("[data-key-nav-menu-host]") ?? element;
-    const trigger = element.matches(CONTEXT_MENU_SELECTOR) ? element : host.querySelector(CONTEXT_MENU_SELECTOR);
-    if (trigger instanceof HTMLElement) {
-      trigger.click();
-      return true;
-    }
-    return false;
+  const openContextMenuFor = useCallback((element: HTMLElement | null, isGroup: boolean): boolean => {
+    const trigger = findContextMenuTrigger(element, isGroup);
+    trigger?.click();
+    return trigger !== null;
   }, []);
 
-  const controller = useMemo(
-    () =>
-      new NavigationController({
-        callbacks: {
-          onFocus: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
-          // After activation, keep the ring element focused — BUT respect an
-          // activation that intentionally moved focus into the item's own subtree
-          // (the field-row pattern focuses its inner <input> for editing). Yanking
-          // focus back to the row there would break OK-to-edit; the synchronous
-          // `contains` check lets that focus stand while still re-anchoring a plain
-          // button/control that did not move focus.
-          onActivate: (item) => {
-            const element = engineRef.current?.elementForId(item.id) ?? null;
-            if (element && element.contains(document.activeElement)) return;
-            // Activating a bare text field is the explicit "go in" that starts
-            // editing, so it is the one place the field does take real DOM focus.
-            // `focusRingElement` deliberately withholds focus from editables on
-            // arrival (that is what stops the ring being trapped), so focus it
-            // here instead of going through it. A synthetic click would not:
-            // `.click()` does not move focus the way a real pointer press does.
-            if (element && isEditableTarget(element)) {
-              element.focus({ preventScroll: true });
-              element.scrollIntoView({ block: "nearest", inline: "nearest" });
-              return;
-            }
-            focusRingElement(element);
-          },
-          onNavigateBack: () => onNavigateBackRef.current?.(),
-          onOpenMenu: (item) => {
-            const opened = openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null);
-            if (opened) return true;
-            // No context menu for this item: fall back to the global quick menu. Report
-            // whether we actually handled the key (a quick-menu handler exists) so the
-            // navigation controller consumes the open-menu key instead of letting it
-            // fall through as `ignored` (the callback contract returns boolean).
-            const quickMenu = shortcutsRef.current.openQuickMenu;
-            quickMenu?.();
-            return Boolean(quickMenu);
-          },
+  const controller = useMemo(() => {
+    const created: NavigationController = new NavigationController({
+      callbacks: {
+        onFocus: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
+        // After activation, keep the ring element focused — BUT respect an
+        // activation that intentionally moved focus into the item's own subtree
+        // (the field-row pattern focuses its inner <input> for editing). Yanking
+        // focus back to the row there would break OK-to-edit; the synchronous
+        // `contains` check lets that focus stand while still re-anchoring a plain
+        // button/control that did not move focus.
+        onActivate: (item) => {
+          const element = engineRef.current?.elementForId(item.id) ?? null;
+          if (element && element.contains(document.activeElement)) return;
+          // Activating a bare text field is the explicit "go in" that starts
+          // editing, so it is the one place the field does take real DOM focus.
+          // `focusRingElement` deliberately withholds focus from editables on
+          // arrival (that is what stops the ring being trapped), so focus it
+          // here instead of going through it. A synthetic click would not:
+          // `.click()` does not move focus the way a real pointer press does.
+          if (element && isEditableTarget(element)) {
+            element.focus({ preventScroll: true });
+            element.scrollIntoView({ block: "nearest", inline: "nearest" });
+            return;
+          }
+          focusRingElement(element);
         },
-      }),
-    [openContextMenuFor],
-  );
+        onNavigateBack: () => onNavigateBackRef.current?.(),
+        onOpenMenu: (item) => {
+          const opened = openContextMenuFor(
+            item ? (engineRef.current?.elementForId(item.id) ?? null) : null,
+            item ? created.focus.hasEnabledChildren(item.id) : false,
+          );
+          if (opened) return true;
+          // No context menu for this item: fall back to the global quick menu. Report
+          // whether we actually handled the key (a quick-menu handler exists) so the
+          // navigation controller consumes the open-menu key instead of letting it
+          // fall through as `ignored` (the callback contract returns boolean).
+          const quickMenu = shortcutsRef.current.openQuickMenu;
+          quickMenu?.();
+          return Boolean(quickMenu);
+        },
+      },
+    });
+    return created;
+  }, [openContextMenuFor]);
 
   /**
    * Applies the selected-control highlight imperatively: `data-key-selected` sits
