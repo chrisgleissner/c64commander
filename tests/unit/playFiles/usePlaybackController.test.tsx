@@ -3587,10 +3587,26 @@ describe("scrubbing a tune this page did not start", () => {
   });
 });
 
-// "Remaining" subtracts the played clock from the whole playlist's length, so a seek has to move that clock
-// by the distance seeked. Setting it to the position within the current tune dropped every earlier tune's
-// time from it, and "Remaining" jumped up by that much.
+// SID Radio claims its station before starting the playlist, so it has to learn when the start was dropped.
+describe("startPlaylist reports whether it started", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("resolves false when another play start holds playback and true once it started", async () => {
+    const playStartInFlightRef = { current: true };
+    const playlist = [createPlaylistItem()];
+    const { result } = renderPlaybackController(playlist, { playStartInFlightRef });
+
+    await expect(result.current.startPlaylist(playlist)).resolves.toBe(false);
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+
+    playStartInFlightRef.current = false;
+    await expect(result.current.startPlaylist(playlist)).resolves.toBe(true);
+  });
+});
+
 describe("a launch that outlasts a playlist edit", () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it("selects the launched tune where it sits after an earlier row was removed during the launch", async () => {
     let finishLaunch: () => void = () => {};
     vi.mocked(executePlayPlan).mockImplementationOnce(
@@ -3617,6 +3633,9 @@ describe("a launch that outlasts a playlist edit", () => {
   });
 });
 
+// "Remaining" subtracts the played clock from the whole playlist's length, so a seek has to move that clock
+// by the distance seeked. Setting it to the position within the current tune dropped every earlier tune's
+// time from it, and "Remaining" jumped up by that much.
 describe("a seek keeps the time played by earlier tunes", () => {
   const seekingController = (fromSeconds: number, toSeconds: number) => {
     let position = fromSeconds;

@@ -1615,10 +1615,8 @@ export default function PlayFilesPage() {
   );
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
-    startPlaylist: (items) => {
-      // Replace, never merge: the station owns the queue for as long as it runs.
-      void startPlaylist(items, 0, { replaceQueue: true });
-    },
+    // Replace, never merge: the station owns the queue for as long as it runs.
+    startPlaylist: (items) => startPlaylist(items, 0, { replaceQueue: true }),
     appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
     advanceToNext: handleNext,
     currentIndex,

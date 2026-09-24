@@ -1469,14 +1469,14 @@ export function usePlaybackController({
   }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS]);
 
   const startPlaylist = useCallback(
-    async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }) => {
-      if (!items.length) return;
+    async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }): Promise<boolean> => {
+      if (!items.length) return false;
       // Playlist row/title taps call this directly, so it needs the same
       // duplicate-start drop as handlePlay, and it must invalidate the
       // previous track's auto-advance guard before isPaused flips false —
       // a stale overdue guard otherwise fires on timeline reconciliation
       // and starts the previous playlist's next item over this fresh start.
-      if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
+      if (!tryAcquireSingleFlight(playStartInFlightRef)) return false;
       setIsPlaylistLoading(true);
       try {
         cancelAutoAdvance();
@@ -1513,6 +1513,7 @@ export function usePlaybackController({
         releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
       }
+      return true;
     },
     [
       applySonglengthsToItems,
