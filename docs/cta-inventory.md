@@ -931,9 +931,9 @@ available on this device", with no REST/firmware jargon]`
   each appear as two distinct keys (`remote-input-key-space` /
   `remote-input-key-space-bottom`, `remote-input-key-shift-left` /
   `remote-input-key-shift-right`). On the compact display profile RUN/STOP is
-  printed `RSTOP` (and, on the Keys tab, RESTORE is printed `RSTR`), because at
-  320 CSS px the full names are wider than the keys that carry them; both keep
-  their full accessible names on every profile. — buttons —
+  printed `RSTOP` and RETURN `RTRN` (and, on the Keys tab, RESTORE is printed
+  `RSTR`), because at 320 CSS px the full names are wider than the keys that
+  carry them; all keep their full accessible names on every profile. — buttons —
   `remote-input-key-{run-stop,ctrl,space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,commodore,shift-left,space-bottom,shift-right}`
   — R✅ I✅ (hidden in Game mode and Type mode). The modifier keys (RUN/STOP,
   CTRL, C=, both SHIFTs) have no kernal-buffer equivalent so are `[disabled off

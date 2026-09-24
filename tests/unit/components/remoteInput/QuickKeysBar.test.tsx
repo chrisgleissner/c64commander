@@ -331,6 +331,19 @@ describe("QuickKeysBar", () => {
     expect(mediumRunStop).toHaveAttribute("aria-label", "Run Stop");
   });
 
+  it("prints RETURN short on the compact profile only, and keeps its accessible name", () => {
+    renderAtProfile("compact", <QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+    const compactReturn = screen.getByTestId("remote-input-key-return");
+    expect(compactReturn).toHaveTextContent("RTRN");
+    expect(compactReturn).toHaveAttribute("aria-label", "Return");
+
+    cleanup();
+    renderAtProfile("medium", <QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+    const mediumReturn = screen.getByTestId("remote-input-key-return");
+    expect(mediumReturn).toHaveTextContent("RETURN");
+    expect(mediumReturn).toHaveAttribute("aria-label", "Return");
+  });
+
   it("colours both SHIFT keys with the shared primary shift treatment", () => {
     render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
     for (const id of ["remote-input-key-shift-left", "remote-input-key-shift-right"]) {
