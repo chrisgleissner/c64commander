@@ -70,6 +70,7 @@ function HexAddressInput({
         value={value}
         onChange={(e) => onChange(sanitizeHexAddressInput(e.target.value))}
         data-testid={testId}
+        data-t9-mode="hostname"
         className="pl-7 font-mono uppercase"
         inputMode="text"
         autoComplete="off"

@@ -43,6 +43,7 @@ import {
   type T9State,
 } from "@/lib/input";
 import { useInputProfile } from "@/hooks/useInputProfile";
+import { T9_DELETE_ACTION } from "@/lib/input/t9FieldComposer";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 
 /**
@@ -76,7 +77,7 @@ export interface UseT9InputOptions {
   readonly setValue: (next: string) => void;
   /** Initial composition mode. Connection (host/IP) fields use "hostname". */
   readonly mode?: T9Mode;
-  /** Input profile id (e.g. "keypad"); falls back to default. */
+  /** Input profile id; T9 is typed on a keypad, so it defaults to the keypad profile. */
   readonly profileId?: string | null;
   readonly config?: Partial<T9Config>;
   /** When false the adapter is inert and all keys pass through. */
@@ -95,7 +96,7 @@ export const useT9Input = ({
   value,
   setValue,
   mode: initialMode = "multitap",
-  profileId,
+  profileId = "keypad",
   config,
   enabled = false,
   now = defaultNow,
@@ -133,13 +134,14 @@ export const useT9Input = ({
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
       if (!enabled) return;
       const { action } = normalizeKeyEvent(event, keymap);
-      if (action === null || !FIELD_COMPOSER_ACTIONS.has(action)) {
+      const deleting = action === T9_DELETE_ACTION && stateRef.current.text.length > 0;
+      if (action === null || (!deleting && !FIELD_COMPOSER_ACTIONS.has(action))) {
         // Not a composer key — let focus nav / form submit / native typing run.
         return;
       }
 
       event.preventDefault();
-      const next = applySemanticAction(stateRef.current, action, now(), resolvedConfig);
+      const next = applySemanticAction(stateRef.current, deleting ? "delete" : action, now(), resolvedConfig);
       stateRef.current = next;
       if (next.mode !== mode) {
         setModeState(next.mode);

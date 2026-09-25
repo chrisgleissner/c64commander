@@ -242,3 +242,28 @@ describe("useT9Input — key-input diagnostics (GAP 4)", () => {
     expect(serialized).not.toContain("192");
   });
 });
+
+describe("useT9Input on a keypad with no Backspace", () => {
+  it("deletes the last character with the right soft key", () => {
+    let now = 1000;
+    const { state, press } = createDriver({ mode: "hostname", now: () => now });
+    [1, 9, 2].forEach((d) => {
+      now += 1;
+      press({ code: `Digit${d}`, key: String(d) });
+    });
+
+    press({ code: "SoftRight", key: "SoftRight" });
+
+    expect(state.value).toBe("19");
+  });
+
+  it("lets the right soft key through in an empty field, so it can still open a menu", () => {
+    const view = renderHook(() => useT9Input({ enabled: true, value: "", setValue: () => {} }));
+    let prevented = false;
+    const event = { ...makeEvent({ code: "SoftRight", key: "SoftRight" }), preventDefault: () => (prevented = true) };
+
+    act(() => view.result.current.onKeyDown(event as unknown as React.KeyboardEvent<HTMLInputElement>));
+
+    expect(prevented).toBe(false);
+  });
+});

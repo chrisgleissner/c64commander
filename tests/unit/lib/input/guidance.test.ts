@@ -35,6 +35,7 @@ const baseState: GuidanceState = {
   fieldEngaged: false,
   layerOpen: false,
   hasMenu: false,
+  fieldDeletes: false,
 };
 
 const state = (overrides: Partial<GuidanceState> = {}): GuidanceState => ({ ...baseState, ...overrides });
@@ -112,6 +113,10 @@ describe("resolveGuidanceLabels — right soft key (Menu)", () => {
 
   it("is hidden (null) when there is no context menu", () => {
     expect(resolveGuidanceLabels(state({ hasMenu: false })).right).toBeNull();
+  });
+
+  it("'Delete' in a T9 field with text, where a keypad has no other way to erase", () => {
+    expect(resolveGuidanceLabels(state({ fieldDeletes: true, hasMenu: true })).right).toBe("Delete");
   });
 });
 

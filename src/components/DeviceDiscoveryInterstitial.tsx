@@ -497,6 +497,7 @@ export function DeviceDiscoveryInterstitial() {
                 placeholder="c64u or 192.168.1.64"
                 disabled={manualBusy}
                 data-testid="startup-manual-device-host-input"
+                data-t9-mode="hostname"
                 aria-invalid={manualError ? true : undefined}
                 aria-describedby={manualError ? "startup-manual-device-error" : "startup-manual-device-help"}
               />

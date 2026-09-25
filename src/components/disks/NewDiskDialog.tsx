@@ -216,6 +216,7 @@ export function NewDiskDialog({
             <Input
               id="new-disk-folder"
               data-testid="new-disk-folder"
+              data-t9-mode="hostname"
               value={folder}
               placeholder="/USB0"
               onChange={(event) => setFolder(event.target.value)}

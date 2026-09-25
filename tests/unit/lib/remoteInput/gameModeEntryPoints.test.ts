@@ -120,6 +120,7 @@ describe("the guidance bar's Game Mode hint", () => {
     fieldEngaged: false,
     layerOpen: false,
     hasMenu: false,
+    fieldDeletes: false,
     gameModeShortcut: true,
     ...overrides,
   });

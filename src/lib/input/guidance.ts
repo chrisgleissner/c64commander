@@ -51,6 +51,8 @@ export interface GuidanceState {
   readonly layerOpen: boolean;
   /** True when the current item or scope exposes a context/overflow menu. */
   readonly hasMenu: boolean;
+  /** True when a T9 text field with text has focus, where the right soft key deletes. */
+  readonly fieldDeletes: boolean;
   /**
    * True where the `0` Game Mode shortcut currently applies — Home and Play, with a
    * device connected. A shortcut nobody knows about saves nobody anything, and this
@@ -69,7 +71,7 @@ export interface GuidanceLabels {
   readonly left: string;
   /** Center / OK key — Open / Edit / Select / Toggle / Adjust / Activate, or null. */
   readonly center: string | null;
-  /** Right soft key — "Menu" when a context menu exists, else hidden (null). */
+  /** Right soft key — "Delete" in a T9 field with text, "Menu" when a context menu exists, else hidden (null). */
   readonly right: string | null;
   /** The `0` hint — "Game Mode" where the shortcut applies, else hidden (null). */
   readonly shortcut: string | null;
@@ -117,7 +119,9 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   else if (!state.hasCurrent) center = null;
   else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
 
-  const right = state.hasMenu ? "Menu" : null;
+  let right: string | null = null;
+  if (state.fieldDeletes) right = "Delete";
+  else if (state.hasMenu) right = "Menu";
   const shortcut = state.gameModeShortcut ? "Game Mode" : null;
 
   return { visible, breadcrumb, left, center, right, shortcut };

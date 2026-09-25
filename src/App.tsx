@@ -39,6 +39,7 @@ import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { KeypadMachineShortcuts } from "@/components/input/KeypadMachineShortcuts";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
+import { T9FieldListener } from "@/components/input/T9FieldListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { TourHost } from "@/components/tour/TourHost";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -360,6 +361,7 @@ const AppRoutes = () => {
                 still works when FocusNavigationProvider is mounted disabled — which is what
                 keypad_input_enabled: false does (spec.md D11). */}
             <SearchKeyListener />
+            <T9FieldListener />
             <SearchOverlayHost />
             <TourHost />
             <ConnectionController />

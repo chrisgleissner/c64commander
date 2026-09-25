@@ -41,10 +41,16 @@ import {
   SKIP_ATTR,
   type GuidanceState,
 } from "@/lib/input";
+import { isT9Field } from "@/lib/input/t9FieldComposer";
+import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
-const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortcut: boolean): GuidanceState => {
+const buildGuidanceState = (
+  context: FocusNavigationContextValue,
+  gameModeShortcut: boolean,
+  t9Enabled: boolean,
+): GuidanceState => {
   const { controller, engine, enabled } = context;
   const focus = controller.focus;
   const current = focus.current();
@@ -68,9 +74,12 @@ const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortc
     fieldEngaged: controller.isFieldEngaged,
     layerOpen: controller.layerDepth > 0,
     hasMenu: hasContextMenu(currentElement, isGroup),
+    fieldDeletes: t9Enabled && isT9FieldWithText(document.activeElement),
     gameModeShortcut,
   };
 };
+
+const isT9FieldWithText = (element: Element | null): boolean => isT9Field(element) && element.value.length > 0;
 
 /** The two pages where entering Game Mode is the obvious next thing to do. */
 const GAME_MODE_SHORTCUT_PATHS = new Set(["/", "/play"]);
@@ -174,6 +183,7 @@ export const KeypadGuidanceBar = () => {
   const connection = useConnectionState();
   const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
+  const t9Enabled = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const rootRef = useRef<HTMLDivElement>(null);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
@@ -194,7 +204,7 @@ export const KeypadGuidanceBar = () => {
     // already refreshes on every ring change and modality flip, and a router hook
     // would make this piece of chrome unrenderable outside a Router.
     const labels = resolveGuidanceLabels(
-      buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname())),
+      buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname()), t9Enabled),
     );
     /*
      * The tour owns the keys while it runs, so this bar would be advertising actions that do not
@@ -221,7 +231,7 @@ export const KeypadGuidanceBar = () => {
     applySlot(centerSlotRef.current, centerActionRef.current, labels.center, "OK");
     applySlot(rightSlotRef.current, rightActionRef.current, labels.right, "Menu");
     applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
-  }, [context, gameModeAvailable]);
+  }, [context, gameModeAvailable, t9Enabled]);
 
   // Subscribe imperatively (mirrors refreshHighlight). The provider's notifyRing
   // fans out here on assembly, on each handled key, and on a modality flip, so
@@ -229,7 +239,14 @@ export const KeypadGuidanceBar = () => {
   useEffect(() => {
     if (!context) return;
     refresh();
-    return context.subscribeRingChange(refresh);
+    // Typing into a field is not a ring change, but it decides whether the right soft key deletes.
+    const fieldEvents = ["input", "focusin", "focusout"] as const;
+    fieldEvents.forEach((type) => document.addEventListener(type, refresh));
+    const unsubscribe = context.subscribeRingChange(refresh);
+    return () => {
+      fieldEvents.forEach((type) => document.removeEventListener(type, refresh));
+      unsubscribe();
+    };
   }, [context, refresh]);
 
   if (!context) return null;

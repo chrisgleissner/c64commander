@@ -720,13 +720,15 @@ const renderKeyboardReference = ({ features, variant }) => {
           "`*`",
           "Open Diagnostics",
           variant.runtime.defaultT9InputEnabled
-            ? "Cycle separators such as `.`, `:`, `-`, `_`, `/` in host fields"
+            ? "Switch the case of the last letter; in host fields, cycle separators such as `.`, `:`, `-`, `_`, `/`"
             : "Type `*` when the field accepts it",
         ],
         [
           "`#`",
           "Open **Switch device**",
-          variant.runtime.defaultT9InputEnabled ? "Toggle T9 mode" : "Type `#` when the field accepts it",
+          variant.runtime.defaultT9InputEnabled
+            ? "Switch between letters and digits"
+            : "Type `#` when the field accepts it",
         ],
       ],
     ),
@@ -737,13 +739,14 @@ const renderKeyboardReference = ({ features, variant }) => {
       "",
       "#### T9 Text Entry",
       "",
-      "T9 lets you type letters on the number keys, in fields such as hostnames and filters.",
+      "T9 lets you type letters on the number keys in every text field: search, filters, names, passwords and hostnames.",
       "",
       "1. Focus a text field.",
-      "2. Press `#` if you need to toggle T9 mode.",
-      "3. Press number keys to enter letters.",
+      "2. Press a number key repeatedly to step through its letters, then pause or press another key to move on. `0` types a space.",
+      "3. Press `#` to switch between letters and digits. Host, address and folder fields start with digits; other fields start with letters.",
       "4. Press `*` in host fields to cycle separators.",
-      "5. Use Back to leave the field.",
+      "5. Press the Right Soft Key to delete the last character. The guidance bar shows **Delete** while it does.",
+      "6. Use Back to leave the field.",
       "",
       `For hostnames, this makes ${t9HostnameExamples(variant)} practical without a touchscreen.`,
     );
