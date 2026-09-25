@@ -70,6 +70,34 @@ describe("SongLengthServiceFacade logging fallback (jsdom)", () => {
     warnSpy.mockRestore();
   });
   // A reset is part of installing or clearing an HVSC library, and every install logged it as a warning.
+  it("logs a resolve strategy when it changes, not once per tune resolved", async () => {
+    const { SongLengthServiceFacade, InMemoryTextBackend } = await import("@/lib/songlengths");
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: "test" });
+    await service.loadOnColdStart(
+      "/Songlengths.md5",
+      async () => [
+        {
+          path: "/Songlengths.md5",
+          content: [
+            "; /MUSICIANS/A/a1.sid",
+            "0123456789abcdef0123456789abcdef=0:30",
+            "; /MUSICIANS/A/a2.sid",
+            "fedcba9876543210fedcba9876543210=0:40",
+          ].join("\n"),
+        },
+      ],
+      "test-label",
+    );
+    const strategyLogs = () =>
+      addLogMock.mock.calls.filter(([, message]) => message === "Songlengths resolve strategy");
+
+    for (let i = 0; i < 50; i += 1) service.resolveDurationSeconds({ virtualPath: "/MUSICIANS/A/a1.sid" });
+    service.resolveDurationSeconds({ virtualPath: "/MUSICIANS/B/missing.sid" });
+
+    expect(strategyLogs()).toHaveLength(2);
+    expect(strategyLogs()[1][2]).toMatchObject({ resolvesSincePrevious: 50 });
+  });
+
   it("logs a reset at info", async () => {
     const { SongLengthServiceFacade, InMemoryTextBackend } = await import("@/lib/songlengths");
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: "test" });
