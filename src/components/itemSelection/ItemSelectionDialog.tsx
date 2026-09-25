@@ -644,7 +644,8 @@ export const ItemSelectionDialog = ({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent className="overflow-hidden p-0">
+      {/* A browser is its list: on the smallest screen it takes the header's height too. */}
+      <AppSheetContent className="overflow-hidden p-0" fullScreen={profile === "compact"}>
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {compactHeader ? (
             <AppSheetHeader
@@ -717,7 +718,7 @@ export const ItemSelectionDialog = ({
                     find a tune in an archive filed by composer, so the reach is made explicit and
                     switchable rather than assumed. Only shown for a source that can actually search
                     beyond the current folder. */}
-                {browser.canSearchSource ? (
+                {browser.canSearchSource && (profile !== "compact" || searchText.trim().length > 0) ? (
                   <div className="flex flex-wrap items-center gap-2" data-testid="add-items-search-scope">
                     <Button
                       type="button"

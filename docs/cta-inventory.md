@@ -1203,7 +1203,7 @@ their feature flag and library state allow it.
 - Search / filter — text — `add-items-filter` — its accessible name follows the scope:
   "Filter this folder" or "Search the whole source"
 - Scope (`add-items-search-scope`) `[only when the source can search past the current
-  folder]`:
+  folder; on the compact profile only while the filter holds text]`:
   - This folder — button — `add-items-scope-folder`
   - Everywhere — button — `add-items-scope-source`
   - Scan — button — `add-items-deep-scan` `[only for a source that has to be walked
@@ -1213,6 +1213,9 @@ their feature flag and library state allow it.
 
 - Root — button — `navigate-root` — jumps to the source root; disabled at the root
 - Up, Refresh — buttons — no testid; the pair either side of Root
+- _On the compact profile the three are 44px icon buttons (Up, Root, Refresh, keeping those
+  accessible names) on the same row as the path, and the browser takes the whole screen below
+  the status bar._
 - Entry row — `source-entry-row` — a focusable row for a folder (Enter opens it) and a
   plain row for a file, whose checkbox carries the selection. Its expanded detail is
   `source-entry-detail`

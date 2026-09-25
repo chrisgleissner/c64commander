@@ -192,10 +192,15 @@ AppSurfaceOverlay.displayName = "AppSurfaceOverlay";
 type AppSheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   showClose?: boolean;
   closeTestId?: string;
+  /** Start at the top of the screen, below the status bar, instead of below the app header. */
+  fullScreen?: boolean;
 };
 
 const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppSheetContentProps>(
-  ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, style, ...props }, ref) => {
+  (
+    { className, children, onOpenAutoFocus, showClose = true, closeTestId, style, fullScreen = false, ...props },
+    ref,
+  ) => {
     const {
       composedRef,
       nodeRef,
@@ -206,6 +211,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
     const layer = useRegisterInterstitial("sheet", isOpen);
     const contentStyle = {
       ...positionedStyle,
+      ...(fullScreen ? { top: 0, "--app-sheet-top-clearance": "0px" } : {}),
       ...(style ?? {}),
       "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
       zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface,
@@ -217,7 +223,11 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
         <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose }}>
           <DialogPrimitive.Content
             ref={composedRef}
-            className={cn(APP_SHEET_CONTENT_CLASS, className)}
+            className={cn(
+              APP_SHEET_CONTENT_CLASS,
+              className,
+              fullScreen && "rounded-none border-t-0 pt-[var(--safe-area-inset-top,0px)]",
+            )}
             style={contentStyle}
             data-app-surface="sheet"
             data-interstitial-depth={layer?.depth ?? 1}
