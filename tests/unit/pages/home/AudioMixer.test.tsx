@@ -273,6 +273,19 @@ describe("AudioMixer", () => {
     expect(screen.getByText("Audio")).toBeDefined();
   });
 
+  it("says the device has no SID mixer instead of offering controls for SIDs it does not have", () => {
+    mockSidControlEntries.mockReturnValue({
+      ...mockSidControlEntries(),
+      sidAudioMissing: true,
+      sidControlEntries: [],
+    });
+    render(<AudioMixer {...defaultProps} />);
+
+    expect(screen.getByTestId("home-sid-unavailable")).toHaveTextContent("Not available on this device");
+    expect(screen.queryByTestId("sid-card-socket1")).toBeNull();
+    expect(screen.getByTestId("reset-btn")).toBeDisabled();
+  });
+
   it("renders a SID card for each control entry", () => {
     render(<AudioMixer {...defaultProps} />);
     expect(screen.getByTestId("sid-card-socket1")).toBeDefined();

@@ -120,6 +120,7 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category: "Audio Mixer" });
 
   const {
+    sidAudioMissing,
     sidControlEntries,
     sidSilenceTargets,
     sidAddressingCategory,
@@ -278,12 +279,17 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
           hideTitle
           title="SID"
           resetAction={() => void handleSidReset()}
-          resetDisabled={!isConnected || machineTaskBusy}
+          resetDisabled={!isConnected || machineTaskBusy || sidAudioMissing}
           resetTestId="home-sid-reset"
         />
       }
     >
       <div className="space-y-3">
+        {sidAudioMissing ? (
+          <p className="text-sm text-muted-foreground" data-testid="home-sid-unavailable">
+            Not available on this device. Its audio settings are on the Config page.
+          </p>
+        ) : null}
         {hasMasterVolume ? (
           <MasterVolumeControl
             isConnected={isConnected}

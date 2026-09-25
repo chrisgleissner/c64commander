@@ -558,6 +558,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
     intent: "user",
     refetchOnMount: "always",
   },
+  useC64Categories: () => ({ data: undefined, isPlaceholderData: false }),
   useC64Connection: () => ({
     status: statusPayloadRef.current,
   }),
