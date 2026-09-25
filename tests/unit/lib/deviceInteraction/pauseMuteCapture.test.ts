@@ -36,6 +36,9 @@ const sidAddressingCategory = {
 };
 
 const makeApi = (overrides: Record<string, unknown> = {}) => ({
+  getCategories: vi.fn(async () => ({
+    categories: ["Audio Mixer", "SID Sockets Configuration", "SID Addressing", "Drive A Settings"],
+  })),
   getCategory: vi.fn(async (category: string) => {
     if (category === "Audio Mixer") return audioMixerCategory;
     if (category === "SID Sockets Configuration") return sidSocketsCategory;
@@ -55,6 +58,16 @@ describe("capturePauseMuteToPersistedSnapshot (HARD19-010)", () => {
     const api = makeApi();
     expect(await capturePauseMuteToPersistedSnapshot(api, null)).toBe(false);
     expect(api.getCategory).not.toHaveBeenCalled();
+  });
+
+  it("asks a device without a mixer for none of the mixer categories", async () => {
+    const api = makeApi({
+      getCategories: vi.fn(async () => ({ categories: ["Audio Output Settings", "Drive A Settings"] })),
+    });
+
+    expect(await capturePauseMuteToPersistedSnapshot(api, "u2-cartridge")).toBe(false);
+    expect(api.getCategory).not.toHaveBeenCalled();
+    expect(api.updateConfigBatch).not.toHaveBeenCalled();
   });
 
   it("writes the SID mute batch and persists the pre-mute snapshot when a mute is applied", async () => {
