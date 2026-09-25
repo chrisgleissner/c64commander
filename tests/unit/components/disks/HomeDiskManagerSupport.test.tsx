@@ -16,6 +16,7 @@ import {
   resolveDriveBusId,
   resolveDriveStatusRaw,
   resolveDriveType,
+  isSoftIecDefaultPathConfigurable,
   resolveSoftIecDefaultPath,
   resolveSoftIecServiceError,
   resolveStatusDisplaySeverity,
@@ -107,6 +108,16 @@ describe("HomeDiskManagerSupport", () => {
     expect(resolveSoftIecDefaultPath(payload, "/Fallback")).toBe("/Games/");
     expect(resolveSoftIecDefaultPath({}, "/Fallback")).toBe("/Fallback/");
     expect(resolveSoftIecDefaultPath({}, null)).toBe("/USB0/");
+  });
+
+  it("treats the Soft IEC path as settable only where the firmware lists a Default Path item", () => {
+    expect(
+      isSoftIecDefaultPathConfigurable({ "SoftIEC Drive Settings": { items: { "Default Path": "/USB0/" } } }),
+    ).toBe(true);
+    expect(isSoftIecDefaultPathConfigurable({ "SoftIEC Drive Settings": { items: { "IEC Drive": "Enabled" } } })).toBe(
+      false,
+    );
+    expect(isSoftIecDefaultPathConfigurable(undefined)).toBe(false);
   });
 
   it("maps display severity and status colors", () => {

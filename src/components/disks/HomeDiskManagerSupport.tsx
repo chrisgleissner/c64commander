@@ -140,6 +140,10 @@ export const resolveDriveType = (drive: DriveKey, payload: unknown, fallbackInfo
   return DRIVE_DEFAULT_TYPE;
 };
 
+// Firmware 3.15 and C64U 1.2 dropped the item: the drive still reports its path, and nothing can set it.
+export const isSoftIecDefaultPathConfigurable = (payload: unknown) =>
+  getCategoryConfigValue(payload, SOFT_IEC_CONTROL.category, SOFT_IEC_DEFAULT_PATH_ITEM) !== undefined;
+
 export const resolveSoftIecDefaultPath = (payload: unknown, fallbackPath?: string | null) => {
   const fromConfig = String(
     getCategoryConfigValue(payload, SOFT_IEC_CONTROL.category, SOFT_IEC_DEFAULT_PATH_ITEM) ?? "",

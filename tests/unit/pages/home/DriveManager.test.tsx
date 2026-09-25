@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   toastSpy,
@@ -110,12 +110,16 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
 
 // Mock useDriveData
 const refetchDrivesSpy = vi.fn().mockResolvedValue(undefined);
+const driveData = vi.hoisted(() => ({
+  softIecConfig: undefined as unknown,
+  drivesByClass: new Map<string, unknown>(),
+}));
 vi.mock("@/pages/home/hooks/useDriveData", () => ({
   useDriveData: () => ({
     refetchDrives: refetchDrivesSpy,
     driveASettingsCategory: undefined,
     driveBSettingsCategory: undefined,
-    softIecConfig: undefined,
+    softIecConfig: driveData.softIecConfig,
     driveSummaryItems: [
       { key: "a", label: "Drive A", mountedLabel: "game.d64", isMounted: true },
       {
@@ -131,7 +135,7 @@ vi.mock("@/pages/home/hooks/useDriveData", () => ({
         isMounted: false,
       },
     ],
-    drivesByClass: new Map(),
+    drivesByClass: driveData.drivesByClass,
   }),
 }));
 
@@ -143,7 +147,9 @@ vi.mock("@/pages/home/DriveCard", () => ({
       <span data-testid="drive-enabled">{props.enabled ? "Enabled" : "Disabled"}</span>
       <span data-testid="drive-bus">{props.busIdValue}</span>
       {props.typeValue && <span data-testid="drive-type">{props.typeValue}</span>}
-      <span data-testid="drive-mounted">{props.mountedPath ?? "none"}</span>
+      <span data-testid="drive-mounted" data-editable={String(props.pathEditable ?? true)}>
+        {props.mountedPath ?? "none"}
+      </span>
       <span data-testid="drive-status">{props.statusSummary}</span>
       <button data-testid="drive-toggle" onClick={props.onToggle}>
         Toggle
@@ -291,6 +297,32 @@ describe("DriveManager", () => {
     expect(screen.getByTestId("drive-card-a")).toBeDefined();
     expect(screen.getByTestId("drive-card-b")).toBeDefined();
     expect(screen.getByTestId("drive-card-soft-iec")).toBeDefined();
+  });
+
+  describe("Soft IEC path", () => {
+    afterEach(() => {
+      driveData.softIecConfig = undefined;
+      driveData.drivesByClass = new Map();
+    });
+
+    it("shows the path the drive reports, read-only, on firmware without a Default Path item", () => {
+      driveData.softIecConfig = { "SoftIEC Drive Settings": { items: { "IEC Drive": "Enabled" } } };
+      driveData.drivesByClass = new Map([["SOFT_IEC_DRIVE", { partitions: [{ id: 1, path: "/Temp/" }] }]]);
+      render(<DriveManager {...defaultProps} />);
+
+      const path = within(screen.getByTestId("drive-card-soft-iec")).getByTestId("drive-mounted");
+      expect(path).toHaveTextContent("/Temp/");
+      expect(path).toHaveAttribute("data-editable", "false");
+    });
+
+    it("keeps the path editable where the firmware still has a Default Path item", () => {
+      driveData.softIecConfig = { "SoftIEC Drive Settings": { items: { "Default Path": "/USB0/Games/" } } };
+      render(<DriveManager {...defaultProps} />);
+
+      const path = within(screen.getByTestId("drive-card-soft-iec")).getByTestId("drive-mounted");
+      expect(path).toHaveTextContent("/USB0/Games/");
+      expect(path).toHaveAttribute("data-editable", "true");
+    });
   });
 
   describe("telnet controls", () => {
@@ -638,18 +670,6 @@ describe("DriveManager", () => {
       expect(buses[0].textContent).toBe("8"); // Drive A default
       expect(buses[1].textContent).toBe("9"); // Drive B default
       expect(buses[2].textContent).toBe("11"); // Soft IEC default
-    });
-
-    it("shows Soft IEC default path from resolveConfigValue", () => {
-      resolveConfigValueSpy.mockImplementation(
-        (_payload: unknown, _category: string, itemName: string, fallback: string | number) => {
-          if (itemName === "Default Path") return "/SD/";
-          return fallback;
-        },
-      );
-      render(<DriveManager {...defaultProps} />);
-      const mounted = screen.getAllByTestId("drive-mounted");
-      expect(mounted[2].textContent).toBe("/SD/");
     });
   });
 });
