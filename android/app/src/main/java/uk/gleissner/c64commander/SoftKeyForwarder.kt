@@ -34,27 +34,37 @@ object SoftKeyForwarder {
     "(function(){var t=document.activeElement||document;" +
       "t.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true," +
       "key:'$domCode',code:'$domCode',repeat:$repeat}));})()"
+}
 
-  /**
-   * Routes one key event from the activity. [dispatch] is the normal view dispatch, [runScript]
-   * evaluates JavaScript in the page, and [editingText] says whether a text field in the WebView
-   * has the input method.
-   *
-   * OK arrives as D-pad Center, which the WebView keeps for itself while a text field has focus:
-   * the page never learned that OK was pressed. It goes on as a real Enter instead, so the page
-   * gets a trusted keydown and a form still submits on it.
-   */
+/**
+ * Routes key events from the activity. [dispatch] is the normal view dispatch, [runScript]
+ * evaluates JavaScript in the page, and [editingText] says whether a text field in the WebView has
+ * the input method.
+ *
+ * OK arrives as D-pad Center, which the WebView keeps for itself while a text field has focus: the
+ * page never learned that OK was pressed. It goes on as a real Enter instead, so the page gets a
+ * trusted keydown and a form still submits on it. The choice is made once per press, on its first
+ * down event, so the press's repeats and its up event are the same key as its down event.
+ */
+class SoftKeyRouter {
+  private var okPressGoesOnAsEnter = false
+
   fun route(
     event: KeyEvent,
     editingText: () -> Boolean,
     dispatch: (KeyEvent) -> Boolean,
     runScript: (String) -> Unit,
   ): Boolean {
-    if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER && editingText()) {
-      return dispatch(asEnter(event))
+    if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+      if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) okPressGoesOnAsEnter = editingText()
+      val sendAsEnter = okPressGoesOnAsEnter
+      if (event.action == KeyEvent.ACTION_UP) okPressGoesOnAsEnter = false
+      return dispatch(if (sendAsEnter) asEnter(event) else event)
     }
-    val domCode = domCodeFor(event.keyCode) ?: return dispatch(event)
-    if (event.action == KeyEvent.ACTION_DOWN) runScript(keydownScript(domCode, event.repeatCount > 0))
+    val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return dispatch(event)
+    if (event.action == KeyEvent.ACTION_DOWN) {
+      runScript(SoftKeyForwarder.keydownScript(domCode, event.repeatCount > 0))
+    }
     return true
   }
 

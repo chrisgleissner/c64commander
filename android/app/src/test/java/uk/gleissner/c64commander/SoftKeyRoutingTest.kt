@@ -18,11 +18,12 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class SoftKeyRoutingTest {
+  private val router = SoftKeyRouter()
   private val dispatched = mutableListOf<KeyEvent>()
   private val scripts = mutableListOf<String>()
 
   private fun route(event: KeyEvent, editingText: Boolean): Boolean =
-    SoftKeyForwarder.route(
+    router.route(
       event,
       editingText = { editingText },
       dispatch = { dispatched += it; true },
@@ -37,6 +38,23 @@ class SoftKeyRoutingTest {
     assertEquals(listOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_ENTER), dispatched.map { it.keyCode })
     assertEquals(listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP), dispatched.map { it.action })
     assertTrue(scripts.isEmpty())
+  }
+
+  @Test
+  fun keepsOnePressTheSameKeyWhenTheFieldLosesFocusBeforeTheKeyIsReleased() {
+    route(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER), editingText = true)
+    route(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 1), editingText = false)
+    route(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER), editingText = false)
+
+    assertEquals(List(3) { KeyEvent.KEYCODE_ENTER }, dispatched.map { it.keyCode })
+  }
+
+  @Test
+  fun keepsOnePressTheSameKeyWhenAFieldTakesFocusBeforeTheKeyIsReleased() {
+    route(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER), editingText = false)
+    route(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER), editingText = true)
+
+    assertEquals(List(2) { KeyEvent.KEYCODE_DPAD_CENTER }, dispatched.map { it.keyCode })
   }
 
   @Test

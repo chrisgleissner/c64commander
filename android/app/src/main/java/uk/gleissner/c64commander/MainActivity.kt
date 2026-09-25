@@ -248,8 +248,10 @@ open class MainActivity : BridgeActivity() {
     }
   }
 
+  private val softKeyRouter = SoftKeyRouter()
+
   override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-    SoftKeyForwarder.route(
+    softKeyRouter.route(
       event,
       editingText = ::isEditingTextInWebView,
       dispatch = { super.dispatchKeyEvent(it) },
