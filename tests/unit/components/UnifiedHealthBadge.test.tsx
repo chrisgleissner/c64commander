@@ -7,6 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { requestDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CONNECTED_DEVICE_ANNOUNCEMENT_MS,
@@ -15,6 +16,8 @@ import {
 } from "@/components/UnifiedHealthBadge";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
+const mockToast = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/use-toast", () => ({ toast: mockToast }));
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -693,6 +696,32 @@ describe("UnifiedHealthBadge", () => {
     } finally {
       mockState.savedDevices.devices = originalDevices;
     }
+  });
+
+  it("says there is nothing to switch to when # is pressed with one saved device", () => {
+    const originalDevices = mockState.savedDevices.devices;
+    mockState.savedDevices.devices = [originalDevices[0]];
+    mockToast.mockClear();
+    try {
+      render(<UnifiedHealthBadge />);
+
+      act(() => requestDeviceSwitcherOpen());
+
+      expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "No other device to switch to" }));
+    } finally {
+      mockState.savedDevices.devices = originalDevices;
+    }
+  });
+
+  it("opens the switch picker when # is pressed with several saved devices", () => {
+    mockToast.mockClear();
+    render(<UnifiedHealthBadge />);
+
+    act(() => requestDeviceSwitcherOpen());
+
+    expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it("opens the switch picker on long press without also opening diagnostics", async () => {

@@ -1153,7 +1153,7 @@ Press either from any page and the app takes you to Play and does it there. **Th
 | Key | Outside text fields | Inside text fields |
 | --- | --- | --- |
 | `*` | Open Diagnostics | Type `*` when the field accepts it |
-| `#` | Open **Switch device** | Type `#` when the field accepts it |
+| `#` | Open **Switch device** when more than one device is saved | Type `#` when the field accepts it |
 
 #### Quick menu
 

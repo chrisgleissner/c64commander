@@ -725,7 +725,7 @@ const renderKeyboardReference = ({ features, variant }) => {
         ],
         [
           "`#`",
-          "Open **Switch device**",
+          "Open **Switch device** when more than one device is saved",
           variant.runtime.defaultT9InputEnabled
             ? "Switch between letters and digits"
             : "Type `#` when the field accepts it",

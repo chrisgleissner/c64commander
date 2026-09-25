@@ -28,6 +28,7 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
+import { toast } from "@/hooks/use-toast";
 import { subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
 import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import {
@@ -517,9 +518,19 @@ export function UnifiedHealthBadge({ className }: Props) {
     setPickerOpen(true);
   }, [canSwitchDevices]);
 
-  // Keypad equivalent of the long-press: a global `#` / quick-menu command opens
-  // the same Device Switcher (it self-gates on having more than one saved device).
-  useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPicker), [openSwitchPicker]);
+  // Keypad equivalent of the long-press: `#` and the search action open the same Device Switcher.
+  // With one saved device there is nothing to switch to, and a key that did nothing said nothing.
+  const openSwitchPickerOnRequest = useCallback(() => {
+    if (canSwitchDevices) {
+      openSwitchPicker();
+      return;
+    }
+    toast({
+      title: "No other device to switch to",
+      description: "Add another device in Settings, under Saved devices.",
+    });
+  }, [canSwitchDevices, openSwitchPicker]);
+  useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPickerOnRequest), [openSwitchPickerOnRequest]);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {

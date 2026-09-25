@@ -1167,7 +1167,7 @@ Change either one in **Settings → Play and Disk → Remote function keys**. A 
 | Key | Outside text fields | Inside text fields |
 | --- | --- | --- |
 | `*` | Open Diagnostics | Switch the case of the last letter; in host fields, cycle separators such as `.`, `:`, `-`, `_`, `/` |
-| `#` | Open **Switch device** | Switch between letters and digits |
+| `#` | Open **Switch device** when more than one device is saved | Switch between letters and digits |
 
 #### T9 Text Entry
 
