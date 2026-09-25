@@ -20,8 +20,8 @@ vi.mock("@/hooks/useFeatureFlags", async (importOriginal) => ({
   useFeatureFlagValue: (id: string) => id === "keypad_input_enabled",
 }));
 
-const rightAction = () =>
-  screen.getByTestId("keypad-guidance-right").querySelector(".keypad-guidance-action")?.textContent ?? "";
+const actionOf = (slotTestId: string) =>
+  screen.getByTestId(slotTestId).querySelector(".keypad-guidance-action")?.textContent ?? "";
 
 const renderWithField = () => {
   render(
@@ -39,7 +39,7 @@ const typeInto = (field: HTMLElement, value: string) => {
   fireEvent.input(field);
 };
 
-describe("KeypadGuidanceBar right soft key in a T9 field", () => {
+describe("KeypadGuidanceBar while a text field has focus", () => {
   beforeEach(() => {
     t9.editionDefault = true;
   });
@@ -51,11 +51,19 @@ describe("KeypadGuidanceBar right soft key in a T9 field", () => {
     typeInto(field, "si");
 
     expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
-    expect(rightAction()).toBe("Delete");
+    expect(actionOf("keypad-guidance-right")).toBe("Delete");
 
     typeInto(field, "");
 
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
+  it("names Back and OK as Done while a page field has focus, since both leave it", () => {
+    const field = renderWithField();
+    act(() => field.focus());
+
+    expect(actionOf("keypad-guidance-left")).toBe("Done");
+    expect(actionOf("keypad-guidance-center")).toBe("Done");
   });
 
   it("does not offer Delete in an edition that types digits literally", () => {

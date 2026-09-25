@@ -744,9 +744,9 @@ const renderKeyboardReference = ({ features, variant }) => {
       "1. Focus a text field.",
       "2. Press a number key repeatedly to step through its letters, then pause or press another key to move on. `0` types a space.",
       "3. Press `#` to switch between letters and digits. Host, address and folder fields start with digits; other fields start with letters.",
-      "4. Press `*` in host fields to cycle separators.",
+      "4. Press `*` in host fields to cycle separators. In other fields, `1` steps through punctuation and symbols such as `@`, `#` and `&`.",
       "5. Press the Right Soft Key to delete the last character. The guidance bar shows **Delete** while it does.",
-      "6. Use Back to leave the field.",
+      "6. Press OK when you are done. In a field on a page, OK and Back both leave the field.",
       "",
       `For hostnames, this makes ${t9HostnameExamples(variant)} practical without a touchscreen.`,
     );

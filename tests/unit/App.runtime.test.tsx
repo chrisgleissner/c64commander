@@ -47,8 +47,10 @@ const mocks = vi.hoisted(() => ({
   function1Action: { current: "playPause" },
   startGameMode: vi.fn().mockResolvedValue({ startedVideo: false, startedAudio: false }),
   toast: vi.fn(),
+  t9ByDefault: { current: false },
 }));
 
+vi.mock("@/lib/input/t9Defaults", () => ({ isDefaultT9InputEnabled: () => mocks.t9ByDefault.current }));
 vi.mock("@/hooks/use-toast", () => ({ toast: mocks.toast, useToast: () => ({ toasts: [], toast: mocks.toast }) }));
 
 vi.mock("@/generated/variant", async (importOriginal) => {
@@ -301,6 +303,7 @@ describe("App runtime wiring", () => {
     mocks.function1Action.current = "playPause";
     mocks.startGameMode.mockClear();
     mocks.toast.mockClear();
+    mocks.t9ByDefault.current = false;
 
     Object.defineProperty(window, "__c64uTestProbeEnabled", {
       configurable: true,
@@ -363,6 +366,21 @@ describe("App runtime wiring", () => {
       expect(mocks.startGameMode).not.toHaveBeenCalled();
       expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Game Mode is not available" }));
     });
+  });
+
+  it("types T9 letters into any text field in an edition that types T9 by default", async () => {
+    mocks.extraFlags = { keypad_input_enabled: true };
+    mocks.t9ByDefault.current = true;
+    render(<App />);
+    await screen.findByText("Home Page");
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    field.focus();
+
+    fireEvent.keyDown(field, { key: "7", code: "Digit7" });
+
+    expect(field.value).toBe("p");
+    field.remove();
   });
 
   it("returns to the previous page on the Back key once nothing on the page is left to close", async () => {

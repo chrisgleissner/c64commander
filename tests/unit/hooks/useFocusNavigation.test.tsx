@@ -286,6 +286,43 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(button("Next").getAttribute(SELECTED)).toBe("true");
   });
 
+  it("leaves a single-line field on a page on OK, after the field has handled its own Enter", () => {
+    const committed: string[] = [];
+    const FieldThenButton = () => {
+      const fieldRef = useFocusItem<HTMLInputElement>({ id: "field", order: 10 });
+      const nextRef = useFocusItem<HTMLButtonElement>({ id: "next", order: 20 });
+      return (
+        <>
+          <input
+            ref={fieldRef}
+            aria-label="Probe timeout"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") committed.push(event.currentTarget.value);
+            }}
+          />
+          <button ref={nextRef} onClick={() => {}}>
+            Next
+          </button>
+        </>
+      );
+    };
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <FieldThenButton />
+      </FocusNavigationProvider>,
+    );
+    const field = getByLabelText("Probe timeout") as HTMLInputElement;
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(document.activeElement).toBe(field);
+    field.value = "900";
+
+    fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
+
+    expect(committed).toEqual(["900"]);
+    expect(document.activeElement).not.toBe(field);
+    expect(field.getAttribute(SELECTED)).toBe("true");
+  });
+
   it("continues from a field the user tapped into when Down leaves it", () => {
     const FieldBetweenButtons = () => {
       const beforeRef = useFocusItem<HTMLButtonElement>({ id: "before", order: 10 });
@@ -1294,6 +1331,21 @@ describe("one-shot keypad commands ignore key repeat", () => {
     fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56, repeat: true });
 
     expect(machinePauseResume).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicks the selected control once for a held Call key, not once per repeat", () => {
+    const onA = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toolbar onA={onA} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { key: "Call", code: "Call" });
+    fireEvent.keyDown(document.body, { key: "Call", code: "Call", repeat: true });
+    fireEvent.keyDown(document.body, { key: "Call", code: "Call", repeat: true });
+
+    expect(onA).toHaveBeenCalledTimes(1);
   });
 });
 

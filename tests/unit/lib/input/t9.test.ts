@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_T9_CONFIG,
+  MULTITAP_CANDIDATES,
   applySemanticAction,
   commitPending,
   createT9State,
@@ -50,14 +51,18 @@ describe("T9 multitap mode", () => {
   });
 
   it("types the digit 1 in multitap mode by cycling key 1 past its punctuation", () => {
-    expect(typeMultitap(createT9State(), 1, 9).text).toBe("1");
+    expect(typeMultitap(createT9State(), 1, MULTITAP_CANDIDATES[1].length).text).toBe("1");
+  });
+
+  it("offers the symbols a password needs on key 1, since * and # have jobs of their own", () => {
+    ["@", "#", "&", "*", "+", "=", "$", "%"].forEach((symbol) => expect(MULTITAP_CANDIDATES[1]).toContain(symbol));
   });
 
   it("offers every key's own digit as a multitap candidate", () => {
     for (let key = 0; key <= 9; key++) {
       let s = createT9State();
       const cycle: string[] = [];
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < MULTITAP_CANDIDATES[key].length; i++) {
         s = pressDigit(s, key, i * 10, cfg);
         cycle.push(s.text);
       }

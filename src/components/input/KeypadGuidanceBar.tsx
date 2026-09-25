@@ -41,6 +41,7 @@ import {
   SKIP_ATTR,
   type GuidanceState,
 } from "@/lib/input";
+import { isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isT9Field } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
@@ -71,13 +72,17 @@ const buildGuidanceState = (
     currentKind: classifyFocusKind(currentElement, isGroup),
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
-    fieldEngaged: controller.isFieldEngaged,
+    fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),
     layerOpen: controller.layerDepth > 0,
     hasMenu: hasContextMenu(currentElement, isGroup),
     fieldDeletes: t9Enabled && isT9FieldWithText(document.activeElement),
     gameModeShortcut,
   };
 };
+
+/** A single-line field on a page, where OK and Back both leave the field. */
+const isPageTextField = (element: Element | null): boolean =>
+  isSingleLineField(element) && element.closest(OPEN_OVERLAY_ANCESTOR_SELECTOR) === null;
 
 const isT9FieldWithText = (element: Element | null): boolean => isT9Field(element) && element.value.length > 0;
 
