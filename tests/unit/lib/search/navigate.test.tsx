@@ -59,6 +59,16 @@ describe("waitForElement", () => {
     }
   });
 
+  it("stops observing the page and gives up when its caller moves on", async () => {
+    const stop = new AbortController();
+    const promise = waitForElement('[data-testid="late"]', 60_000, stop.signal);
+
+    stop.abort();
+    mountControl("late");
+
+    await expect(promise).resolves.toBeNull();
+  });
+
   it("has a ceiling of two seconds", () => {
     expect(ANCHOR_WAIT_CEILING_MS).toBe(2_000);
   });
@@ -170,6 +180,24 @@ describe("navigateToSearchTarget", () => {
       ),
     ).resolves.toBe("landed");
     expect(document.activeElement).toBe(control);
+  });
+
+  it("leaves a control that arrives after the caller moved on unfocused, and says so", async () => {
+    const opts = options();
+    const stop = new AbortController();
+    mountSection("settings", "appearance");
+    const promise = navigateToSearchTarget(
+      { kind: "control", path: "/settings", scope: "settings", sectionId: "appearance", testId: "late-control" },
+      { ...opts, currentPath: "/settings", signal: stop.signal },
+    );
+    await Promise.resolve();
+
+    stop.abort();
+    const control = mountControl("late-control");
+
+    await expect(promise).resolves.toBe("cancelled");
+    expect(document.activeElement).not.toBe(control);
+    expect(opts.onToast).not.toHaveBeenCalled();
   });
 
   it("toasts, naming what could not be reached, rather than failing silently", async () => {

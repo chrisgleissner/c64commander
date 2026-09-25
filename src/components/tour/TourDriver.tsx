@@ -114,7 +114,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       setHole(null);
       return;
     }
-    let current = true;
+    const stepChange = new AbortController();
     const { path, scope, sectionId, testIds } = step.anchor;
     void navigateToSearchTarget(
       scope && sectionId ? { kind: "control", path, scope, sectionId, testId: testIds[0] } : { kind: "route", path },
@@ -125,17 +125,16 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         // A step whose anchors never appear degrades to the caption alone, so the toast the
         // resolver would raise for search is deliberately swallowed here.
         onToast: () => undefined,
+        signal: stepChange.signal,
       },
     ).then(() => {
       // The resolver waits up to two seconds for the anchor. Measuring on a shorter fixed delay
       // decided a slow step had failed while the element was still on its way, so it is measured
       // again here, once the resolver knows the answer either way.
-      if (current) setAnchorResolved((count) => count + 1);
+      if (!stepChange.signal.aborted) setAnchorResolved((count) => count + 1);
     });
     if (!isConnectedRef.current && step.requiresDevice) ranWithoutDeviceRef.current = true;
-    return () => {
-      current = false;
-    };
+    return () => stepChange.abort();
   }, [step, navigate]);
 
   /*
