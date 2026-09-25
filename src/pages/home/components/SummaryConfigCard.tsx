@@ -19,6 +19,7 @@ import {
   resolveSelectValue,
   resolveToggleOption,
 } from "../utils/uiLogic";
+import { CONFIG_UNAVAILABLE_LABEL } from "../utils/HomeConfigUtils";
 
 type SummaryConfigCardProps = {
   children: ReactNode;
@@ -102,15 +103,26 @@ export function SummaryConfigControlRow({
   toggleHints,
   value,
 }: SummaryConfigControlRowProps) {
+  // A device without the item (an Ultimate-II+ has no User Port Power) offers nothing to change.
+  const unavailable = value === CONFIG_UNAVAILABLE_LABEL;
   const focusRef = useFocusItem<HTMLButtonElement>({
     id: focusId ?? "",
     order: focusOrder,
     group: focusGroup,
     parentId: focusParentId,
-    disabled,
+    disabled: disabled || unavailable,
   });
   const normalizedOptions = options.map((option) => String(option));
   const shouldRenderCheckbox = controlType === "checkbox" || (controlType === "auto" && normalizedOptions.length === 2);
+
+  if (shouldRenderCheckbox && unavailable) {
+    return (
+      <div className="flex min-h-11 w-full items-center justify-between gap-2" data-testid={testId}>
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground">{CONFIG_UNAVAILABLE_LABEL}</span>
+      </div>
+    );
+  }
 
   if (shouldRenderCheckbox) {
     const enabledValue = resolveToggleOption(normalizedOptions, true, toggleHints);
@@ -147,7 +159,7 @@ export function SummaryConfigControlRow({
       <Select
         value={selectValue}
         onValueChange={(nextValue) => onValueChange(resolveSelectValue(nextValue))}
-        disabled={disabled}
+        disabled={disabled || unavailable}
       >
         {/* The trigger spans the whole row and carries the label itself, rather than
             sitting beside it as a value-sized chip. Sized to its own text it came out

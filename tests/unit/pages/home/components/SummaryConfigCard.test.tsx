@@ -273,3 +273,44 @@ describe("SummaryConfigControlRow — controlType override", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
+
+describe("SummaryConfigControlRow — an item the device does not have", () => {
+  it("shows a toggle for a missing item as not available, neither on nor off", () => {
+    render(
+      <SummaryConfigControlRow
+        controlType="checkbox"
+        disabled={false}
+        label="User Port Power"
+        options={["Not available"]}
+        selectTriggerClassName="cls"
+        testId="row-missing-toggle"
+        value="Not available"
+        onValueChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.getByTestId("row-missing-toggle")).toHaveTextContent("User Port Power");
+    expect(screen.getByTestId("row-missing-toggle")).toHaveTextContent("Not available");
+  });
+
+  it("disables a select for a missing item even while the device is connected", () => {
+    render(
+      <SummaryConfigControlRow
+        controlType="select"
+        disabled={false}
+        label="Joystick Input"
+        options={["Not available"]}
+        selectTriggerClassName="cls"
+        testId="row-missing-select"
+        value="Not available"
+        onValueChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("row-missing-select").closest("[data-disabled]")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
+  });
+});

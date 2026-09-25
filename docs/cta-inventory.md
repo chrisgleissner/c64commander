@@ -248,6 +248,7 @@ not-connected / empty / single-device).
   - Serial Bus Mode — select — `home-serial-bus-mode` — R✅ I✅
   - Cartridge Preference — select — `home-cartridge-preference` — R✅ I✅
   - User Port Power — checkbox — `home-user-port-power` — R✅ I✅
+  - _Every Quick Config row (`SummaryConfigControlRow`) whose item the connected device does not have — an Ultimate-II+ has no `U64 Specific Settings` — reads "Not available" and is disabled, and the focus ring skips it. A checkbox row shows the words instead of a box, so it is neither on nor off._
 - **Quick Config → Video** (`home-video-summary`)
   - Screen colors — button — `home-video-screen-colors` — R✅ I✅ — first in the card, because it is the one row here people actually change; opens the **Screen colors sheet** (below) _(needs no device connection: the app's own palette is a local rendering choice, so the row stays usable while the rest of the card is disabled. The 16-swatch strip beneath it, `home-video-screen-colors-preview`, is display-only)_
   - **Screen colors sheet** (`screen-colors-*`, opened by `home-video-screen-colors`)
