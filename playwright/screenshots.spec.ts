@@ -3369,10 +3369,20 @@ test.describe("App screenshots", () => {
       // other three are README pictures and stay at the medium profile the whole file is
       // captured at.
       await applyDisplayProfileViewport(page, "compact");
-      const scope = readyDialog.getByTestId("add-items-search-scope");
-      await expect(scope).toBeVisible();
-      await readyDialog.getByTestId("add-items-scope-source").click();
-      await expect(readyDialog.getByTestId("add-items-scope-source")).toHaveAttribute("aria-pressed", "true");
+      // The compact profile shows the scope control once there is something to search for. The
+      // mocked archive has no search index, so the picture searches a folder that has a match.
+      for (const folder of ["MUSICIANS", "A"]) {
+        await readyDialog
+          .getByTestId("source-entry-row")
+          .filter({ hasText: new RegExp(`^\\s*${folder}\\s*$`) })
+          .first()
+          .click();
+      }
+      await readyDialog.getByTestId("add-items-filter").fill("Second");
+      await expect(readyDialog.getByTestId("add-items-search-scope")).toBeVisible();
+      await readyDialog.getByTestId("add-items-scope-folder").click();
+      await expect(readyDialog.getByTestId("add-items-scope-folder")).toHaveAttribute("aria-pressed", "true");
+      await expect(readyDialog.getByTestId("source-entry-row").filter({ hasText: /Second/ })).toBeVisible();
       // One rendition per manual profile; each manual embeds only its own.
       for (const profileId of MANUAL_PROFILE_SEQUENCE) {
         await applyDisplayProfileViewport(page, profileId);

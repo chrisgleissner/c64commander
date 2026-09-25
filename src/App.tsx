@@ -39,6 +39,7 @@ import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { KeypadMachineShortcuts } from "@/components/input/KeypadMachineShortcuts";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
+import { T9FieldListener } from "@/components/input/T9FieldListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { TourHost } from "@/components/tour/TourHost";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
@@ -58,6 +59,7 @@ import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
 import { navigateBackOrLeave } from "@/lib/navigation/navigateBack";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { PageLoadingFallback } from "@/components/PageLoadingFallback";
 import { t } from "@/lib/i18n";
 import { variant } from "@/generated/variant";
 
@@ -214,12 +216,6 @@ const DeviceSwitchLabLauncherGate = ({ enabled }: { enabled: boolean }) => {
   );
 };
 
-const RouteLoadingFallback = () => (
-  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    {t("app.loadingScreen", "Loading screen...")}
-  </div>
-);
-
 /**
  * Renders NotFound only for genuinely unknown paths — not for primary tab routes
  * or known sub-routes (which are rendered inside the SwipeNavigationLayer slots).
@@ -360,6 +356,7 @@ const AppRoutes = () => {
                 still works when FocusNavigationProvider is mounted disabled — which is what
                 keypad_input_enabled: false does (spec.md D11). */}
             <SearchKeyListener />
+            <T9FieldListener />
             <SearchOverlayHost />
             <TourHost />
             <ConnectionController />
@@ -373,7 +370,7 @@ const AppRoutes = () => {
               </Suspense>
             ) : null}
             <DeviceSwitchLabLauncherGate enabled={coverageProbeEnabled} />
-            <Suspense fallback={<RouteLoadingFallback />}>
+            <Suspense fallback={<PageLoadingFallback />}>
               <SwipeNavigationLayer />
               <Routes>
                 {coverageProbeEnabled && CoverageProbePage ? (

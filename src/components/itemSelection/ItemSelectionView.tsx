@@ -7,11 +7,13 @@
  */
 
 import { useEffect, useRef } from "react";
-import { ArrowUp, ChevronRight, Folder, RefreshCw } from "lucide-react";
+import { ArrowUp, ArrowUpToLine, ChevronRight, Folder, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PathWrap } from "@/components/PathWrap";
 import { getInputModality } from "@/lib/input";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { cn } from "@/lib/utils";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 export type ItemSelectionViewProps = {
@@ -46,6 +48,7 @@ export const ItemSelectionView = ({
   emptyLabel,
 }: ItemSelectionViewProps) => {
   const atRoot = path === rootPath || path === rootPath.replace(/\/$/, "");
+  const compact = useDisplayProfile().profile === "compact";
   const rootRef = useRef<HTMLDivElement>(null);
   const focusFollowsNavigationRef = useRef(false);
   const navigate = (go: () => void) => {
@@ -67,6 +70,20 @@ export const ItemSelectionView = ({
       ?.focus();
   }, [entries, isLoading]);
 
+  const pathLabel = (
+    <div
+      id="source-path-label"
+      className="flex min-w-0 flex-1 items-start gap-2 font-semibold text-sm"
+      data-testid="source-path-label"
+      aria-label={`Path: ${path}`}
+    >
+      <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
+      <div className="min-w-0">
+        <PathWrap path={path} className="text-foreground" />
+      </div>
+    </div>
+  );
+
   return (
     <div ref={rootRef} className="space-y-3 relative">
       {showLoadingIndicator && (
@@ -77,37 +94,66 @@ export const ItemSelectionView = ({
           Loading…
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate(onNavigateRoot)}
-          disabled={atRoot || isLoading}
-          data-testid="navigate-root"
-        >
-          Root
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => navigate(onNavigateUp)} disabled={atRoot || isLoading}>
-          <ArrowUp className="h-4 w-4 mr-1" />
-          Up
-        </Button>
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
-          <RefreshCw className="h-4 w-4 mr-1" />
-          {isLoading ? "Loading…" : "Refresh"}
-        </Button>
-      </div>
-
-      <div
-        id="source-path-label"
-        className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm"
-        data-testid="source-path-label"
-        aria-label={`Path: ${path}`}
-      >
-        <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
-        <div className="min-w-0">
-          <PathWrap path={path} className="text-foreground" />
+      {compact ? (
+        // One row instead of two: at 320x427 every line above the list is a row of files the reader cannot see.
+        <div className="flex min-w-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 shrink-0"
+            onClick={() => navigate(onNavigateUp)}
+            disabled={atRoot || isLoading}
+            aria-label="Up"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 shrink-0"
+            onClick={() => navigate(onNavigateRoot)}
+            disabled={atRoot || isLoading}
+            data-testid="navigate-root"
+            aria-label="Root"
+          >
+            <ArrowUpToLine className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11 shrink-0"
+            onClick={onRefresh}
+            disabled={isLoading}
+            aria-label={isLoading ? "Loading…" : "Refresh"}
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          </Button>
+          {pathLabel}
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(onNavigateRoot)}
+              disabled={atRoot || isLoading}
+              data-testid="navigate-root"
+            >
+              Root
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate(onNavigateUp)} disabled={atRoot || isLoading}>
+              <ArrowUp className="h-4 w-4 mr-1" />
+              Up
+            </Button>
+            <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              {isLoading ? "Loading…" : "Refresh"}
+            </Button>
+          </div>
+          {pathLabel}
+        </>
+      )}
 
       <div className="space-y-2">
         {entries.length === 0 && <p className="text-xs text-muted-foreground">{emptyLabel}</p>}

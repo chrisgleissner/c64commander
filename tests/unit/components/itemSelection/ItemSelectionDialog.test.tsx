@@ -269,6 +269,44 @@ describe("ItemSelectionDialog display profiles", () => {
     vi.useRealTimers();
   });
 
+  it("keeps a confirm label that is not an 'Add to' whole on the smallest screen", async () => {
+    localStorage.clear();
+    setViewportWidth(320);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Choose a folder"
+          confirmLabel="Select directory"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    expect(await screen.findByTestId("add-items-confirm")).toHaveTextContent(/^Select directory$/);
+  });
+
+  it("keeps the source title readable on the smallest screen by dropping 'to playlist' from the confirm", async () => {
+    localStorage.clear();
+    setViewportWidth(320);
+
+    render(
+      <DisplayProfileProvider>
+        <Harness />
+      </DisplayProfileProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    const confirm = await screen.findByTestId("add-items-confirm");
+    expect(confirm).toHaveTextContent(/^Add$/);
+    expect(confirm).toHaveAccessibleName("Add to playlist");
+  });
+
   it("keeps the browser as a sheet across profile changes while preserving selection and filter state", async () => {
     localStorage.clear();
     setViewportWidth(360);

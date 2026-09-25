@@ -28,6 +28,7 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
+import { toast } from "@/hooks/use-toast";
 import { subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
 import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import {
@@ -411,6 +412,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedDeviceIds, setExpandedDeviceIds] = useState<string[]>([]);
   const [pendingSwitch, setPendingSwitch] = useState<PendingSwitchState | null>(null);
+  const badgeRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -517,9 +519,25 @@ export function UnifiedHealthBadge({ className }: Props) {
     setPickerOpen(true);
   }, [canSwitchDevices]);
 
-  // Keypad equivalent of the long-press: a global `#` / quick-menu command opens
-  // the same Device Switcher (it self-gates on having more than one saved device).
-  useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPicker), [openSwitchPicker]);
+  // Keypad equivalent of the long-press: `#` and the search action open the same Device Switcher.
+  // With one saved device there is nothing to switch to, and a key that did nothing said nothing.
+  // Every page has its own badge, and a swipe keeps neighboring pages mounted in inactive slots.
+  // Only the badge on the page in view answers, or one # opened a picker or a message per page.
+  // The slot marker is checked rather than `inert`: the whole layer is inert while a dialog is
+  // open, and the Quick menu asks for the switcher in the same moment it closes itself.
+  const openSwitchPickerOnRequest = useCallback(() => {
+    if (badgeRef.current?.closest('[data-slot-active="false"]')) return;
+    if (canSwitchDevices) {
+      openSwitchPicker();
+      return;
+    }
+    toast({
+      title: "No other device to switch to",
+      description: "Add another device in Settings, under Saved devices.",
+      alwaysVisible: true,
+    });
+  }, [canSwitchDevices, openSwitchPicker]);
+  useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPickerOnRequest), [openSwitchPickerOnRequest]);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -610,6 +628,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   return (
     <>
       <button
+        ref={badgeRef}
         type="button"
         role="button"
         aria-label={ariaLabel}

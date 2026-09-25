@@ -29,7 +29,8 @@
 import type { InputModality } from "./inputModality";
 
 /** What the current ring item is, for choosing the OK-key label. */
-export type FocusKind = "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "none";
+export type FocusKind =
+  "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "status" | "none";
 
 /** A plain, DOM-free snapshot of the ring the bar needs to choose its labels. */
 export interface GuidanceState {
@@ -51,6 +52,8 @@ export interface GuidanceState {
   readonly layerOpen: boolean;
   /** True when the current item or scope exposes a context/overflow menu. */
   readonly hasMenu: boolean;
+  /** True when a T9 text field with text has focus, where the right soft key deletes. */
+  readonly fieldDeletes: boolean;
   /**
    * True where the `0` Game Mode shortcut currently applies — Home and Play, with a
    * device connected. A shortcut nobody knows about saves nobody anything, and this
@@ -69,7 +72,7 @@ export interface GuidanceLabels {
   readonly left: string;
   /** Center / OK key — Open / Edit / Select / Toggle / Adjust / Activate, or null. */
   readonly center: string | null;
-  /** Right soft key — "Menu" when a context menu exists, else hidden (null). */
+  /** Right soft key — "Delete" in a T9 field with text, "Menu" when a context menu exists, else hidden (null). */
   readonly right: string | null;
   /** The `0` hint — "Game Mode" where the shortcut applies, else hidden (null). */
   readonly shortcut: string | null;
@@ -85,6 +88,7 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   switch: "Toggle",
   slider: "Adjust",
   tab: "Switch",
+  status: "",
   none: "",
 };
 
@@ -114,10 +118,12 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   let center: string | null;
   if (state.layerOpen) center = "Select";
   else if (state.fieldEngaged) center = "Done";
-  else if (!state.hasCurrent) center = null;
+  else if (!state.hasCurrent || state.currentKind === "status") center = null;
   else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
 
-  const right = state.hasMenu ? "Menu" : null;
+  let right: string | null = null;
+  if (state.fieldDeletes) right = "Delete";
+  else if (state.hasMenu) right = "Menu";
   const shortcut = state.gameModeShortcut ? "Game Mode" : null;
 
   return { visible, breadcrumb, left, center, right, shortcut };
@@ -136,6 +142,7 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   const role = element.getAttribute("role");
   const tag = element.tagName;
   if (role === "slider") return "slider";
+  if (role === "status") return "status";
   if (role === "tab") return "tab";
   if (
     role === "switch" ||
@@ -167,6 +174,23 @@ const tidyLabel = (raw: string): string => {
 };
 
 /**
+ * The first line of what the element shows. `textContent` joins a title and the description
+ * under it without a space, and includes text the layout hides: a section header read
+ * "ConnectionSaved devices, discov…". The rendered text keeps lines apart and leaves hidden text
+ * out, and its first line is the title. Environments without layout fall back to `textContent`.
+ */
+const renderedFirstLine = (element: Element): string | null => {
+  const rendered = element instanceof HTMLElement ? element.innerText : undefined;
+  const text = typeof rendered === "string" ? rendered : element.textContent;
+  return (
+    text
+      ?.split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? null
+  );
+};
+
+/**
  * A short human label for the current element, for the breadcrumb tail. Prefers
  * an explicit accessible name (`aria-label`), then visible text, then
  * placeholder/title. Returns `null` when nothing readable is found.
@@ -175,8 +199,8 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
   if (!element) return null;
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel && ariaLabel.trim()) return tidyLabel(ariaLabel);
-  const text = element.textContent;
-  if (text && text.trim()) return tidyLabel(text);
+  const text = renderedFirstLine(element);
+  if (text) return tidyLabel(text);
   const placeholder = element.getAttribute("placeholder");
   if (placeholder && placeholder.trim()) return tidyLabel(placeholder);
   const title = element.getAttribute("title");

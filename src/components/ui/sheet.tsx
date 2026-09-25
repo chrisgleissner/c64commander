@@ -150,7 +150,13 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
           style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
         >
           {children}
-          <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+          {/* 44px around the same icon position; compact pads the sheet by the status bar, so the button moves with it. */}
+          <SheetPrimitive.Close
+            className={cn(
+              "absolute right-0.5 flex h-11 w-11 items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
+              density === "compact" ? "top-[calc(0.125rem+var(--safe-area-inset-top))]" : "top-0.5",
+            )}
+          >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>

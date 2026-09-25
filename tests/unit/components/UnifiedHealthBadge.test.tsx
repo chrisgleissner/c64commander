@@ -7,6 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { requestDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CONNECTED_DEVICE_ANNOUNCEMENT_MS,
@@ -15,6 +16,8 @@ import {
 } from "@/components/UnifiedHealthBadge";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
+const mockToast = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/use-toast", () => ({ toast: mockToast }));
 
 const createDeferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -693,6 +696,62 @@ describe("UnifiedHealthBadge", () => {
     } finally {
       mockState.savedDevices.devices = originalDevices;
     }
+  });
+
+  it("says there is nothing to switch to when # is pressed with one saved device", () => {
+    const originalDevices = mockState.savedDevices.devices;
+    mockState.savedDevices.devices = [originalDevices[0]];
+    mockToast.mockClear();
+    try {
+      render(<UnifiedHealthBadge />);
+
+      act(() => requestDeviceSwitcherOpen());
+
+      expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "No other device to switch to", alwaysVisible: true }),
+      );
+    } finally {
+      mockState.savedDevices.devices = originalDevices;
+    }
+  });
+
+  it("leaves # to the badge on the page in view, not one in a slot a swipe keeps mounted", () => {
+    mockToast.mockClear();
+    render(
+      <div data-slot-active="false" inert="">
+        <UnifiedHealthBadge />
+      </div>,
+    );
+
+    act(() => requestDeviceSwitcherOpen());
+
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+  });
+
+  it("still answers while a dialog has made the whole page layer inert, as the Quick menu does", () => {
+    mockToast.mockClear();
+    render(
+      <div inert="">
+        <div data-slot-active="true">
+          <UnifiedHealthBadge />
+        </div>
+      </div>,
+    );
+
+    act(() => requestDeviceSwitcherOpen());
+
+    expect(screen.getByTestId("switch-device-sheet")).toBeInTheDocument();
+  });
+
+  it("opens the switch picker when # is pressed with several saved devices", () => {
+    mockToast.mockClear();
+    render(<UnifiedHealthBadge />);
+
+    act(() => requestDeviceSwitcherOpen());
+
+    expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it("opens the switch picker on long press without also opening diagnostics", async () => {

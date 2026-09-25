@@ -276,7 +276,11 @@ export function SnapshotManagerDialog({
 
   return (
     <AppSheet open={open} onOpenChange={handleOpenChange}>
-      <AppSheetContent className="overflow-hidden p-0" data-testid="snapshot-manager-dialog">
+      <AppSheetContent
+        className="overflow-hidden p-0"
+        data-testid="snapshot-manager-dialog"
+        fullScreen={profile === "compact"}
+      >
         <div className="flex h-full min-h-0 flex-col">
           <AppSheetHeader>
             {/* Named for the tile that opens it. */}
@@ -289,7 +293,7 @@ export function SnapshotManagerDialog({
           <div
             className={
               compact
-                ? "shrink-0 space-y-2 border-b border-border px-4 py-3"
+                ? "shrink-0 space-y-2 border-b border-border px-4 py-2"
                 : "shrink-0 space-y-3 border-b border-border px-6 py-4"
             }
           >
@@ -321,7 +325,7 @@ export function SnapshotManagerDialog({
             </div>
           </div>
 
-          <AppSheetBody className={compact ? "px-4 py-3" : "px-6 py-4"} data-testid="snapshot-list">
+          <AppSheetBody className={compact ? "px-4 py-2" : "px-6 py-4"} data-testid="snapshot-list">
             <div className="pr-2">
               <div className="space-y-2" data-testid="snapshot-list-content">
                 {filtered.length === 0 ? (

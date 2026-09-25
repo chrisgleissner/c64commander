@@ -69,9 +69,9 @@ describe("SnapshotManagerDialog", () => {
     );
     expect(filters?.className).toContain("space-y-2");
     expect(filters?.className).toContain("px-4");
-    expect(filters?.className).toContain("py-3");
+    expect(filters?.className).toContain("py-2");
     expect(body.className).toContain("px-4");
-    expect(body.className).toContain("py-3");
+    expect(body.className).toContain("py-2");
     expect(description.className).toContain("hidden");
   });
 

@@ -251,6 +251,7 @@ export function ConnectionActionsRegion({
                       disabled={isBusy}
                       className="h-7 text-xs font-mono"
                       data-testid="switch-device-host-input"
+                      data-t9-mode="hostname"
                     />
                   </div>
                   <div className="w-16 shrink-0">

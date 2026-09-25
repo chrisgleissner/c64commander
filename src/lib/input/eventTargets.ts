@@ -28,6 +28,15 @@ export const isEditableTarget = (target: EventTarget | null): boolean => {
 };
 
 /**
+ * Single-line fields, where Up/Down move focus. The caret cannot move vertically in them, and a
+ * number field's own Up/Down step left a dialog's number field with no key that reached anything
+ * else: digits type its value, and Back closes the dialog.
+ */
+const SINGLE_LINE_FIELD_TYPES = new Set(["text", "search", "url", "tel", "email", "password", "number"]);
+export const isSingleLineField = (target: EventTarget | null): target is HTMLInputElement =>
+  target instanceof HTMLInputElement && SINGLE_LINE_FIELD_TYPES.has(target.type);
+
+/**
  * Radix overlays (dialog, alert dialog, dropdown/context menu, select listbox, popover) own the
  * keyboard while focus is inside them, so a global shortcut must stay inert there.
  */

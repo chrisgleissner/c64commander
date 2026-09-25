@@ -115,6 +115,7 @@ export function DemoModeInterstitial() {
             <Input
               id="demo-device-host"
               data-testid="demo-interstitial-host-input"
+              data-t9-mode="hostname"
               value={deviceHostInput}
               onChange={(e) => {
                 setDeviceHostInput(e.target.value);

@@ -35,6 +35,7 @@ const baseState: GuidanceState = {
   fieldEngaged: false,
   layerOpen: false,
   hasMenu: false,
+  fieldDeletes: false,
 };
 
 const state = (overrides: Partial<GuidanceState> = {}): GuidanceState => ({ ...baseState, ...overrides });
@@ -92,6 +93,10 @@ describe("resolveGuidanceLabels — center / OK key", () => {
     expect(resolveGuidanceLabels(state({ currentKind: kind })).center).toBe(label);
   });
 
+  it("offers no OK action on a status, such as a page that is still loading", () => {
+    expect(resolveGuidanceLabels(state({ currentKind: "status" })).center).toBeNull();
+  });
+
   it("'Done' while a field is engaged (OK commits/leaves)", () => {
     expect(resolveGuidanceLabels(state({ fieldEngaged: true, currentKind: "field" })).center).toBe("Done");
   });
@@ -112,6 +117,10 @@ describe("resolveGuidanceLabels — right soft key (Menu)", () => {
 
   it("is hidden (null) when there is no context menu", () => {
     expect(resolveGuidanceLabels(state({ hasMenu: false })).right).toBeNull();
+  });
+
+  it("'Delete' in a T9 field with text, where a keypad has no other way to erase", () => {
+    expect(resolveGuidanceLabels(state({ fieldDeletes: true, hasMenu: true })).right).toBe("Delete");
   });
 });
 
@@ -179,6 +188,29 @@ describe("accessibleLabelFor", () => {
 
   it("falls back to visible text, collapsing whitespace", () => {
     expect(accessibleLabelFor(make("<button>  Save   config </button>"))).toBe("Save config");
+  });
+
+  it("names a titled button by the title it shows, not the description the layout hides", () => {
+    const toggle = make("<button><span>Connection</span><span>Saved devices, discovery</span></button>");
+    Object.defineProperty(toggle, "innerText", { value: "Connection" });
+
+    expect(accessibleLabelFor(toggle)).toBe("Connection");
+  });
+
+  it("keeps a title and the description under it apart, naming the title", () => {
+    const toggle = make("<button><span>Connection</span><span>Saved devices</span></button>");
+    Object.defineProperty(toggle, "innerText", { value: "Connection\nSaved devices" });
+
+    expect(accessibleLabelFor(toggle)).toBe("Connection");
+  });
+
+  it("reads the text of an element that is not an HTML element, such as an SVG label", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.textContent = "Joystick";
+    svg.appendChild(text);
+
+    expect(accessibleLabelFor(svg)).toBe("Joystick");
   });
 
   it("falls back to placeholder, then title", () => {

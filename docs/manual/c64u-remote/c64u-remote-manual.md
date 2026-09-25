@@ -381,7 +381,7 @@ To search instead of browsing, type in the box at the top and choose **Everywher
 
 Some sources have to be read one folder at a time, such as a folder on your device or the card in your C64. These offer a **Scan** button instead of searching as you type.
 
-![Searching the whole of HVSC rather than one folder](../../img/app/play/import/profiles/compact/09-hvsc-search-scope.png)
+![Choosing whether a search covers this folder or the whole of HVSC](../../img/app/play/import/profiles/compact/09-hvsc-search-scope.png)
 
 Preferred path: add a whole folder first, then filter the playlist to pick what plays next.
 
@@ -1166,18 +1166,19 @@ Change either one in **Settings → Play and Disk → Remote function keys**. A 
 
 | Key | Outside text fields | Inside text fields |
 | --- | --- | --- |
-| `*` | Open Diagnostics | Cycle separators such as `.`, `:`, `-`, `_`, `/` in host fields |
-| `#` | Open **Switch device** | Toggle T9 mode |
+| `*` | Open Diagnostics | Switch the case of the last letter; in host fields, cycle separators such as `.`, `:`, `-`, `_`, `/` |
+| `#` | Open **Switch device** when more than one device is saved | Switch between letters and digits |
 
 #### T9 Text Entry
 
-T9 lets you type letters on the number keys, in fields such as hostnames and filters.
+T9 lets you type letters on the number keys in every text field: search, filters, names, passwords and hostnames.
 
 1. Focus a text field.
-2. Press `#` if you need to toggle T9 mode.
-3. Press number keys to enter letters.
-4. Press `*` in host fields to cycle separators.
-5. Use Back to leave the field.
+2. Press a number key repeatedly to step through its letters, then pause or press another key to move on. `0` types a space.
+3. Press `#` to switch between letters and digits. Host, address and folder fields start with digits; other fields start with letters.
+4. Press `*` in host fields to cycle separators. In other fields, `1` steps through punctuation and symbols such as `@`, `#` and `&`.
+5. Press the Right Soft Key to delete the last character. The guidance bar shows **Delete** while it does.
+6. Press OK when you are done. In a field on a page, OK and Back both leave the field.
 
 For hostnames, this makes entries such as `c64u` and `192.168.1.64` practical without a touchscreen.
 

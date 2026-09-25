@@ -41,10 +41,17 @@ import {
   SKIP_ATTR,
   type GuidanceState,
 } from "@/lib/input";
+import { isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isT9Field } from "@/lib/input/t9FieldComposer";
+import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
-const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortcut: boolean): GuidanceState => {
+const buildGuidanceState = (
+  context: FocusNavigationContextValue,
+  gameModeShortcut: boolean,
+  t9Enabled: boolean,
+): GuidanceState => {
   const { controller, engine, enabled } = context;
   const focus = controller.focus;
   const current = focus.current();
@@ -65,12 +72,19 @@ const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortc
     currentKind: classifyFocusKind(currentElement, isGroup),
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
-    fieldEngaged: controller.isFieldEngaged,
+    fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),
     layerOpen: controller.layerDepth > 0,
     hasMenu: hasContextMenu(currentElement, isGroup),
+    fieldDeletes: t9Enabled && isT9FieldWithText(document.activeElement),
     gameModeShortcut,
   };
 };
+
+/** A single-line field on a page, where OK and Back both leave the field. */
+const isPageTextField = (element: Element | null): boolean =>
+  isSingleLineField(element) && element.closest(OPEN_OVERLAY_ANCESTOR_SELECTOR) === null;
+
+const isT9FieldWithText = (element: Element | null): boolean => isT9Field(element) && element.value.length > 0;
 
 /** The two pages where entering Game Mode is the obvious next thing to do. */
 const GAME_MODE_SHORTCUT_PATHS = new Set(["/", "/play"]);
@@ -174,6 +188,7 @@ export const KeypadGuidanceBar = () => {
   const connection = useConnectionState();
   const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
+  const t9Enabled = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const rootRef = useRef<HTMLDivElement>(null);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
@@ -194,7 +209,7 @@ export const KeypadGuidanceBar = () => {
     // already refreshes on every ring change and modality flip, and a router hook
     // would make this piece of chrome unrenderable outside a Router.
     const labels = resolveGuidanceLabels(
-      buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname())),
+      buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname()), t9Enabled),
     );
     /*
      * The tour owns the keys while it runs, so this bar would be advertising actions that do not
@@ -221,7 +236,7 @@ export const KeypadGuidanceBar = () => {
     applySlot(centerSlotRef.current, centerActionRef.current, labels.center, "OK");
     applySlot(rightSlotRef.current, rightActionRef.current, labels.right, "Menu");
     applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
-  }, [context, gameModeAvailable]);
+  }, [context, gameModeAvailable, t9Enabled]);
 
   // Subscribe imperatively (mirrors refreshHighlight). The provider's notifyRing
   // fans out here on assembly, on each handled key, and on a modality flip, so
@@ -229,7 +244,22 @@ export const KeypadGuidanceBar = () => {
   useEffect(() => {
     if (!context) return;
     refresh();
-    return context.subscribeRingChange(refresh);
+    // Typing into a field is not a ring change, but it decides whether the right soft key deletes.
+    // A field whose own T9 composer sets its value through React state fires no input event, so a
+    // key pressed in a field is listened for too. The native shell forwards the soft keys as a
+    // keydown only. Keys elsewhere already refresh the bar through the ring.
+    const fieldEvents = ["input", "focusin", "focusout"] as const;
+    const refreshAfterFieldKey = (event: KeyboardEvent) => {
+      if (isT9Field(event.target)) refresh();
+    };
+    fieldEvents.forEach((type) => document.addEventListener(type, refresh));
+    document.addEventListener("keydown", refreshAfterFieldKey);
+    const unsubscribe = context.subscribeRingChange(refresh);
+    return () => {
+      fieldEvents.forEach((type) => document.removeEventListener(type, refresh));
+      document.removeEventListener("keydown", refreshAfterFieldKey);
+      unsubscribe();
+    };
   }, [context, refresh]);
 
   if (!context) return null;

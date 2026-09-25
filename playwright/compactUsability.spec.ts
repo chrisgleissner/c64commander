@@ -79,6 +79,16 @@ const expectUsable = async (page: Page, name: string, selector: string, kind: Su
   return measurement;
 };
 
+/** A phone's status bar, measured at 30px on the Pixel 4 at 480x640: the app draws under it. */
+const emulatePhoneSystemBars = (page: Page) =>
+  page.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () => {
+      const style = document.createElement("style");
+      style.textContent = ":root { --safe-area-inset-top: 30px !important; }";
+      document.head.append(style);
+    });
+  });
+
 const openDialog = (page: Page): Locator => page.locator('[role="dialog"][data-state="open"]').last();
 
 /**
@@ -276,6 +286,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
   test.beforeEach(async ({ page }, testInfo) => {
     disableTraceAssertions(testInfo, "Layout-only coverage; trace assertions disabled.");
+    await emulatePhoneSystemBars(page);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {
@@ -908,6 +919,7 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
 
   test.beforeEach(async ({ page }, testInfo) => {
     disableTraceAssertions(testInfo, "Layout-only coverage; trace assertions disabled.");
+    await emulatePhoneSystemBars(page);
     await page.addInitScript((tourTaken: string) => {
       localStorage.setItem("c64u_display_profile_override", "compact");
       localStorage.setItem("c64u_tour_state:v1", tourTaken);
@@ -976,6 +988,10 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
     await openCompact(page, "/");
     const picker = page.getByRole("dialog", { name: /Choose your C64/i });
     await auditOne(page, "Device discovery", picker, "list");
+
+    const titleBox = await picker.getByRole("heading", { name: /Choose your C64/i }).boundingBox();
+    expect(titleBox, "the picker has no title").not.toBeNull();
+    expect(titleBox!.y, "the picker's title is under the status bar").toBeGreaterThanOrEqual(30);
 
     // The footer had no side padding, so "Not now" sat on the dialog's edge.
     const dialogBox = await picker.boundingBox();

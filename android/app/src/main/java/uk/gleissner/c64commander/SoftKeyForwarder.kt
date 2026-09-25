@@ -14,8 +14,10 @@ import android.view.KeyEvent
  * Keypad keys the WebView cannot deliver to the page itself.
  *
  * Chromium hands the soft keys to the page as `key: "Unidentified"` with no key code, so no
- * keymap binding can tell them apart, and it does not deliver the Menu key at all. They are
- * forwarded as keydown events carrying the DOM `code` the keypad keymap binds.
+ * keymap binding can tell them apart, and it does not deliver the Menu key at all. The green
+ * Call key never reaches the page either: left unconsumed, Android opens the dialer and the app
+ * goes to the background. They are forwarded as keydown events carrying the DOM `code` the
+ * keypad keymap binds.
  */
 object SoftKeyForwarder {
   private val DOM_CODES =
@@ -23,6 +25,7 @@ object SoftKeyForwarder {
       KeyEvent.KEYCODE_SOFT_LEFT to "SoftLeft",
       KeyEvent.KEYCODE_SOFT_RIGHT to "SoftRight",
       KeyEvent.KEYCODE_MENU to "ContextMenu",
+      KeyEvent.KEYCODE_CALL to "Call",
     )
 
   fun domCodeFor(keyCode: Int): String? = DOM_CODES[keyCode]
@@ -31,4 +34,63 @@ object SoftKeyForwarder {
     "(function(){var t=document.activeElement||document;" +
       "t.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true," +
       "key:'$domCode',code:'$domCode',repeat:$repeat}));})()"
+}
+
+/**
+ * Routes key events from the activity. [dispatch] is the normal view dispatch, [runScript]
+ * evaluates JavaScript in the page, and [editingText] says whether a text field in the WebView has
+ * the input method.
+ *
+ * OK arrives as D-pad Center, which the WebView keeps for itself while a text field has focus: the
+ * page never learned that OK was pressed. It goes on as a real Enter instead, so the page gets a
+ * trusted keydown and a form still submits on it. The choice is made once per press, on its first
+ * down event, so the press's repeats and its up event are the same key as its down event.
+ */
+class SoftKeyRouter {
+  private var okPressInProgress = false
+  private var okPressGoesOnAsEnter = false
+
+  /**
+   * Forgets the press in progress, for when the window loses focus and its down events may stop
+   * arriving. The next down event decides afresh; an up event that still arrives keeps its pair.
+   */
+  fun reset() {
+    okPressInProgress = false
+  }
+
+  fun route(
+    event: KeyEvent,
+    editingText: () -> Boolean,
+    dispatch: (KeyEvent) -> Boolean,
+    runScript: (String) -> Unit,
+  ): Boolean {
+    if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+      if (event.action == KeyEvent.ACTION_DOWN && (event.repeatCount == 0 || !okPressInProgress)) {
+        okPressInProgress = true
+        okPressGoesOnAsEnter = editingText()
+      }
+      val sendAsEnter = okPressGoesOnAsEnter
+      if (event.action == KeyEvent.ACTION_UP) reset()
+      return dispatch(if (sendAsEnter) asEnter(event) else event)
+    }
+    val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return dispatch(event)
+    if (event.action == KeyEvent.ACTION_DOWN) {
+      runScript(SoftKeyForwarder.keydownScript(domCode, event.repeatCount > 0))
+    }
+    return true
+  }
+
+  private fun asEnter(event: KeyEvent): KeyEvent =
+    KeyEvent(
+      event.downTime,
+      event.eventTime,
+      event.action,
+      KeyEvent.KEYCODE_ENTER,
+      event.repeatCount,
+      event.metaState,
+      event.deviceId,
+      event.scanCode,
+      event.flags,
+      event.source,
+    )
 }

@@ -16,11 +16,12 @@
  * ──────────────────────────────────────────────────────────────────────────
  *  Multi-tap table (mode "multitap", general text)
  * ──────────────────────────────────────────────────────────────────────────
- *   1 → . , ? ! - _ : / 1      6 → m n o 6
- *   2 → a b c 2                7 → p q r s 7
- *   3 → d e f 3                8 → t u v 8
- *   4 → g h i 4                9 → w x y z 9
- *   5 → j k l 5                0 → (space) 0
+ *   1 → . , ? ! - _ : / @ # & * + = ' " ( ) ; $ % 1
+ *   2 → a b c 2                6 → m n o 6
+ *   3 → d e f 3                7 → p q r s 7
+ *   4 → g h i 4                8 → t u v 8
+ *   5 → j k l 5                9 → w x y z 9
+ *                              0 → (space) 0
  *
  *   star  → toggle case of the last/pending character (configurable)
  *   hash  → cycle input mode (multitap ↔ hostname) (configurable)
@@ -77,7 +78,7 @@ export const STAR_KEY = -1;
 /** General-text multi-tap candidates, indexed by digit. */
 export const MULTITAP_CANDIDATES: Readonly<Record<number, readonly string[]>> = {
   0: [" ", "0"],
-  1: [".", ",", "?", "!", "-", "_", ":", "/", "1"],
+  1: [".", ",", "?", "!", "-", "_", ":", "/", "@", "#", "&", "*", "+", "=", "'", '"', "(", ")", ";", "$", "%", "1"],
   2: ["a", "b", "c", "2"],
   3: ["d", "e", "f", "3"],
   4: ["g", "h", "i", "4"],
