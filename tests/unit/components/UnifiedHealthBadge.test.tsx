@@ -716,10 +716,10 @@ describe("UnifiedHealthBadge", () => {
     }
   });
 
-  it("leaves # to the badge on the page in view, not one on an inert page kept mounted by a swipe", () => {
+  it("leaves # to the badge on the page in view, not one in a slot a swipe keeps mounted", () => {
     mockToast.mockClear();
     render(
-      <div inert="">
+      <div data-slot-active="false" inert="">
         <UnifiedHealthBadge />
       </div>,
     );
@@ -727,6 +727,21 @@ describe("UnifiedHealthBadge", () => {
     act(() => requestDeviceSwitcherOpen());
 
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+  });
+
+  it("still answers while a dialog has made the whole page layer inert, as the Quick menu does", () => {
+    mockToast.mockClear();
+    render(
+      <div inert="">
+        <div data-slot-active="true">
+          <UnifiedHealthBadge />
+        </div>
+      </div>,
+    );
+
+    act(() => requestDeviceSwitcherOpen());
+
+    expect(screen.getByTestId("switch-device-sheet")).toBeInTheDocument();
   });
 
   it("opens the switch picker when # is pressed with several saved devices", () => {

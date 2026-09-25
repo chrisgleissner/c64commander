@@ -521,10 +521,12 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   // Keypad equivalent of the long-press: `#` and the search action open the same Device Switcher.
   // With one saved device there is nothing to switch to, and a key that did nothing said nothing.
-  // Every page has its own badge, and a swipe keeps neighboring pages mounted but inert. Only the
-  // badge on the page in view answers, or one # opened a picker or a message per mounted page.
+  // Every page has its own badge, and a swipe keeps neighboring pages mounted in inactive slots.
+  // Only the badge on the page in view answers, or one # opened a picker or a message per page.
+  // The slot marker is checked rather than `inert`: the whole layer is inert while a dialog is
+  // open, and the Quick menu asks for the switcher in the same moment it closes itself.
   const openSwitchPickerOnRequest = useCallback(() => {
-    if (badgeRef.current?.closest("[inert]")) return;
+    if (badgeRef.current?.closest('[data-slot-active="false"]')) return;
     if (canSwitchDevices) {
       openSwitchPicker();
       return;
