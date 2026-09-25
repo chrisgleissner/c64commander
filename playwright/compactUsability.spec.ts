@@ -974,7 +974,14 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
     });
 
     await openCompact(page, "/");
-    await auditOne(page, "Device discovery", page.getByRole("dialog", { name: /Choose your C64/i }), "list");
+    const picker = page.getByRole("dialog", { name: /Choose your C64/i });
+    await auditOne(page, "Device discovery", picker, "list");
+
+    // The footer had no side padding, so "Not now" sat on the dialog's edge.
+    const dialogBox = await picker.boundingBox();
+    const dismissBox = await picker.getByTestId("startup-device-discovery-dismiss").boundingBox();
+    expect(dialogBox && dismissBox).toBeTruthy();
+    expect(dialogBox!.x + dialogBox!.width - (dismissBox!.x + dismissBox!.width)).toBeGreaterThanOrEqual(8);
   });
 
   test("the network password dialog fits the panel", async ({ page }) => {

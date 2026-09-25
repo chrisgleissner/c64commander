@@ -579,7 +579,7 @@ export function DeviceDiscoveryInterstitial() {
           </div>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter className="px-4 pt-3">
           {/* Connect lives in the footer, not inside the form it submits. The footer sits outside
               that form's scroll container, so the dialog's primary action cannot be pushed below
               the fold on a short viewport, and it sits beside "Not now" where the focus ring
