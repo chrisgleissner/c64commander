@@ -121,14 +121,21 @@ const STATE_EXPR = String.raw`(() => {
   // to be on screen. The discriminator used to be the element's viewport top, which changes when
   // the page scrolls: the same button was then counted once as reached and again, at a different
   // offset, as unreachable.
+  // Anchored at the nearest ancestor with a test id: the swipe layer reorders its page panels on a
+  // route change, so a path from the body gave the same control a new identity on every lap.
   const pathOf = (e) => {
     const parts = [];
-    for (let node = e; node && node !== document.body; node = node.parentElement) {
+    let node = e;
+    for (; node && node !== document.body; node = node.parentElement) {
+      const anchorId = node !== e ? node.getAttribute('data-testid') : null;
+      if (anchorId && document.querySelectorAll('[data-testid="' + CSS.escape(anchorId) + '"]').length === 1) break;
       const siblings = node.parentElement ? [...node.parentElement.children] : [];
       parts.unshift(siblings.indexOf(node));
     }
-    return parts.join('.');
+    const anchor = node && node !== document.body ? node.getAttribute('data-testid') + '/' : '';
+    return anchor + parts.join('.');
   };
+  const usable = (e) => !e.disabled && e.getAttribute('aria-disabled') !== 'true';
   const idOf = (e) => {
     const t = e.getAttribute('data-testid');
     // A test id shared by every row of a list (Config's rows all carry one) is not an identity.
@@ -149,7 +156,7 @@ const STATE_EXPR = String.raw`(() => {
 
   const inventory = [...scopeEl.querySelectorAll(INTERACTIVE)]
     .filter(visible)
-    .filter((e) => !e.disabled && e.getAttribute('aria-hidden') !== 'true')
+    .filter((e) => usable(e) && e.getAttribute('aria-hidden') !== 'true')
     // A control inside a label is represented by its label; the ring stops on one of them.
     .map((e) => ({ id: idOf(e), tag: e.tagName, box: hitBox(e) }));
 
@@ -185,16 +192,16 @@ const STATE_EXPR = String.raw`(() => {
         r.left >= -1 &&
         r.right <= innerWidth + 1 &&
         (r.bottom <= innerHeight + 1 || r.height > usableHeight(sel) - 1),
-      isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter((e) => !e.disabled).length > 0,
+      isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter(usable).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)
-        .filter((e) => !e.disabled && e.getAttribute('aria-hidden') !== 'true')
+        .filter((e) => usable(e) && e.getAttribute('aria-hidden') !== 'true')
         .map(idOf),
       // OK on a field row (a stop that is not a card) edits the row's first field, even when the
       // row also wraps rows of its own, as Settings' host row wraps the three port rows.
       editsField: (() => {
         if (sel.matches('[data-section-label]')) return null;
-        const first = [...sel.querySelectorAll(INTERACTIVE)].filter(visible).find((e) => !e.disabled);
+        const first = [...sel.querySelectorAll(INTERACTIVE)].filter(visible).find(usable);
         return first && first.matches('input,textarea') ? idOf(first) : null;
       })(),
       hitW: box.w, hitH: box.h, viaLabel: box.viaLabel,
