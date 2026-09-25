@@ -1669,7 +1669,7 @@ export default function SettingsPage() {
                                 ? detail
                                 : [productCode, detail].filter(Boolean).join(" · ");
                               return secondary ? (
-                                <p className="break-all text-xs text-muted-foreground">{secondary}</p>
+                                <p className="break-words text-xs text-muted-foreground">{secondary}</p>
                               ) : null;
                             })()}
                           </div>
