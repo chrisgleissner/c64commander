@@ -30,8 +30,18 @@ object SoftKeyForwarder {
 
   fun domCodeFor(keyCode: Int): String? = DOM_CODES[keyCode]
 
-  fun keydownScript(domCode: String, repeat: Boolean): String =
+  /**
+   * OK while a text field is being edited. The WebView keeps D-pad Center for itself there, so the
+   * page never learned that OK was pressed and a keypad user had no OK in any text field. It is
+   * forwarded as Enter, which is what OK means to a field, with the D-pad code the keymap binds.
+   */
+  fun editingKeyFor(keyCode: Int): Pair<String, String>? =
+    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) "Enter" to "DpadCenter" else null
+
+  fun keydownScript(domCode: String, repeat: Boolean): String = keydownScript(domCode, domCode, repeat)
+
+  fun keydownScript(key: String, domCode: String, repeat: Boolean): String =
     "(function(){var t=document.activeElement||document;" +
       "t.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true," +
-      "key:'$domCode',code:'$domCode',repeat:$repeat}));})()"
+      "key:'$key',code:'$domCode',repeat:$repeat}));})()"
 }

@@ -12,6 +12,7 @@ import android.app.ActivityManager
 import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import android.webkit.MimeTypeMap
 import androidx.core.view.WindowCompat
 import com.getcapacitor.Bridge
@@ -248,11 +249,26 @@ open class MainActivity : BridgeActivity() {
   }
 
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    val editingKey = SoftKeyForwarder.editingKeyFor(event.keyCode)
+    if (editingKey != null && isEditingTextInWebView()) {
+      if (event.action == KeyEvent.ACTION_DOWN) {
+        val (key, domCode) = editingKey
+        bridge?.webView?.evaluateJavascript(SoftKeyForwarder.keydownScript(key, domCode, event.repeatCount > 0), null)
+      }
+      return true
+    }
     val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return super.dispatchKeyEvent(event)
     if (event.action == KeyEvent.ACTION_DOWN) {
       bridge?.webView?.evaluateJavascript(SoftKeyForwarder.keydownScript(domCode, event.repeatCount > 0), null)
     }
     return true
+  }
+
+  /** The WebView holds the input method only while a text field in it has focus. */
+  private fun isEditingTextInWebView(): Boolean {
+    val webView = bridge?.webView ?: return false
+    val inputMethods = getSystemService(InputMethodManager::class.java) ?: return false
+    return webView.hasFocus() && inputMethods.isActive(webView)
   }
 
   override fun onPause() {
