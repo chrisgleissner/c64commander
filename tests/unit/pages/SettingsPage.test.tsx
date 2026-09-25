@@ -1981,7 +1981,7 @@ describe("SettingsPage", () => {
       renderSettingsPage();
 
       expect(screen.getByTestId("settings-app-style-match-status")).toHaveTextContent(
-        /The device hasn't reported a Color Scheme yet — using Cool Grey until it connects or you refresh the connection\./,
+        /The device hasn't reported a Color Scheme yet — using Cool Gray until it connects or you refresh the connection\./,
       );
     });
 
@@ -2259,6 +2259,18 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     expect(screen.getByText("Connected to http://c64u")).toBeInTheDocument();
+  });
+
+  it("names Demo Mode with its product capitals in the connection status", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: { state: "DEMO_ACTIVE", isConnected: false, isConnecting: false, error: null, deviceInfo: null },
+      baseUrl: "http://127.0.0.1:8064",
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByText("Demo Mode — http://127.0.0.1:8064")).toBeInTheDocument();
   });
 
   it("shows the connecting state and spinning refresh icon while connecting", () => {

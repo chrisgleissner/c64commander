@@ -8,6 +8,7 @@
 
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { useC64Categories, useC64ConfigItems } from "@/hooks/useC64Connection";
 import { useSidData } from "@/pages/home/hooks/useSidData";
 
 vi.mock("@/hooks/useC64Connection", () => ({
@@ -16,6 +17,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
     refetchOnMount: "always",
   },
   useC64ConfigItems: vi.fn(() => ({ data: undefined })),
+  useC64Categories: vi.fn(() => ({ data: undefined, isPlaceholderData: false })),
 }));
 
 vi.mock("@/lib/config/sidDetails", () => ({
@@ -53,5 +55,19 @@ describe("useSidData", () => {
     expect(result.current.sidControlEntries[0].volume).toBe("50");
     expect(result.current.sidControlEntries[0].pan).toBe("25");
     expect(result.current.sidControlEntries[0].addressRaw).toBe("de00");
+  });
+
+  it("reads no SID categories from a device that lists no Audio Mixer", () => {
+    vi.mocked(useC64Categories).mockReturnValue({
+      data: { categories: ["Audio Output Settings", "Drive A Settings"], errors: [] },
+      isPlaceholderData: false,
+    } as never);
+    vi.mocked(useC64ConfigItems).mockClear();
+
+    const { result } = renderHook(() => useSidData(true, {}));
+
+    expect(result.current.sidAudioMissing).toBe(true);
+    expect(result.current.sidControlEntries).toEqual([]);
+    expect(vi.mocked(useC64ConfigItems).mock.calls.every(([, , enabled]) => enabled === false)).toBe(true);
   });
 });

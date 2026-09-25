@@ -150,9 +150,13 @@ vi.mock("@/lib/logging", () => ({
 import {
   discoverConnection,
   getConnectionSnapshot,
+  isDemoModePinnedByUser,
+  pinDemoModeByUserChoice,
   probeDeviceReachability,
   resetManualDiscoveryFallbackCooldownForTests,
+  verifyCurrentConnectionTarget,
 } from "@/lib/connection/connectionManager";
+import { startMockServer } from "@/lib/mock/mockServer";
 
 const HEALTHY = { product: "Ultimate-64" };
 const UNHEALTHY = {};
@@ -473,5 +477,69 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     await flushAsync();
 
     expect(startDeviceDiscoveryMock).not.toHaveBeenCalled();
+  });
+});
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+};
+
+describe("a user choice made while a discovery is still running", () => {
+  it("keeps Demo Mode chosen during a manual LAN scan when that scan then finds nothing", async () => {
+    getInfoMock.mockResolvedValue(UNHEALTHY);
+    const lanScan = deferred<{ candidates: never[]; scannedHosts: number; elapsedMs: number; unsupported: boolean }>();
+    startDeviceDiscoveryMock.mockReturnValueOnce(lanScan.promise);
+
+    const discovery = discoverConnection("manual");
+    await vi.waitFor(() => expect(startDeviceDiscoveryMock).toHaveBeenCalled());
+    await pinDemoModeByUserChoice();
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    lanScan.resolve({ candidates: [], scannedHosts: 12, elapsedMs: 8000, unsupported: false });
+    await discovery;
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(isDemoModePinnedByUser()).toBe(true);
+  });
+
+  it("does not select the reachable saved device when the user switched devices while the old one was released", async () => {
+    getInfoMock.mockResolvedValueOnce(UNHEALTHY).mockResolvedValue(HEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+      ]),
+    );
+    const release = deferred<{ videoWasLive: boolean; audioWasLive: boolean }>();
+    prepareForDeviceRetargetMock.mockReturnValueOnce(release.promise);
+
+    const discovery = discoverConnection("manual");
+    await vi.waitFor(() => expect(prepareForDeviceRetargetMock).toHaveBeenCalled());
+    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.70" });
+    release.resolve({ videoWasLive: false, audioWasLive: false });
+    await discovery;
+
+    expect(selectSavedDeviceMock).not.toHaveBeenCalled();
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.70", undefined, "192.168.1.70");
+  });
+
+  it("does not enter Demo Mode over a device the user switched to while the simulated device was starting", async () => {
+    getInfoMock.mockResolvedValue(HEALTHY);
+    await verifyCurrentConnectionTarget({ deviceHost: "u64" });
+    const mockStart = deferred<{ baseUrl: string; ftpPort?: number }>();
+    vi.mocked(startMockServer).mockReturnValueOnce(mockStart.promise);
+
+    const choosingDemo = pinDemoModeByUserChoice();
+    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.60" });
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    mockStart.resolve({ baseUrl: "http://127.0.0.1:45999" });
+    await choosingDemo;
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.60", undefined, "192.168.1.60");
   });
 });

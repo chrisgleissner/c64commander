@@ -104,12 +104,13 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
           className={cn("flex items-center justify-between gap-2", isCompact ? "min-h-0" : "min-h-11")}
           data-testid="app-bar-row"
         >
+          {/* Never narrower than the title's longest word, so the badge gives way rather than the title breaking inside a word. */}
           <div
-            className={cn("flex min-w-0 items-center", isCompact ? "min-h-0" : "min-h-11")}
+            className={cn("flex min-w-min items-center", isCompact ? "min-h-0" : "min-h-11")}
             data-testid="app-bar-title-zone"
           >
             {leading ?? (
-              <div className={cn("flex min-w-0 items-center gap-2", isCompact ? "min-h-0" : "min-h-11")}>
+              <div className={cn("flex min-w-min items-center gap-2", isCompact ? "min-h-0" : "min-h-11")}>
                 {leadingVisual}
                 {/*
                   Wraps to a second line rather than being cut. At the largest text size the title
@@ -119,13 +120,16 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
                   title takes a second line on the few pages and sizes where one is not enough; at
                   the default text size every title still fits on one.
                 */}
-                <h1 className="c64-header line-clamp-2 break-words text-xl leading-tight" data-testid={titleTestId}>
+                <h1
+                  className="c64-header line-clamp-2 min-w-min break-words text-xl leading-tight"
+                  data-testid={titleTestId}
+                >
                   {title}
                 </h1>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             {/*
               The Quick menu, in the same place on every page.
               It already existed for the keypad's Menu key — jump to a page, Game Mode,

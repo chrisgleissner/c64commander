@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from "react";
-import { useC64ConfigItems } from "@/hooks/useC64Connection";
+import { useC64Categories, useC64ConfigItems } from "@/hooks/useC64Connection";
 import {
   HOME_SID_ADDRESSING_ITEMS,
   HOME_SID_SOCKET_ITEMS,
@@ -20,32 +20,39 @@ import { buildConfigKey } from "../utils/HomeConfigUtils";
 import { buildSidSilenceTargets } from "@/lib/sid/sidSilence";
 
 export function useSidData(isConnected: boolean, configOverrides: Record<string, string | number>) {
+  // An Ultimate-II+ lists no Audio Mixer: its SIDs are emulated under Audio Output Settings instead.
+  // The previous device's list stands in while this one's loads, so it is not taken as this device's answer.
+  const { data: categoryList, isPlaceholderData } = useC64Categories();
+  const sidAudioMissing =
+    isConnected && !isPlaceholderData && Boolean(categoryList) && !categoryList?.categories?.includes("Audio Mixer");
+  const readSidAudio = isConnected && !sidAudioMissing;
   const { data: sidSocketsCategory } = useC64ConfigItems(
     "SID Sockets Configuration",
     [...HOME_SID_SOCKET_ITEMS],
-    isConnected,
+    readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: ultiSidCategory } = useC64ConfigItems(
     "UltiSID Configuration",
     [...HOME_ULTISID_ITEMS],
-    isConnected,
+    readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: sidAddressingCategory } = useC64ConfigItems(
     "SID Addressing",
     [...HOME_SID_ADDRESSING_ITEMS],
-    isConnected,
+    readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
   const { data: audioMixerCategory } = useC64ConfigItems(
     "Audio Mixer",
     [...SID_AUDIO_ITEMS],
-    isConnected,
+    readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
 
   const sidControlEntries = useMemo(() => {
+    if (sidAudioMissing) return [];
     const entries = buildSidControlEntries(audioMixerCategory, sidAddressingCategory);
     return entries.map((entry) => {
       const volumeOverride = configOverrides[buildConfigKey("Audio Mixer", entry.volumeItem)];
@@ -58,11 +65,12 @@ export function useSidData(isConnected: boolean, configOverrides: Record<string,
         addressRaw: addressOverride !== undefined ? String(addressOverride) : entry.addressRaw,
       };
     });
-  }, [audioMixerCategory, configOverrides, sidAddressingCategory]);
+  }, [audioMixerCategory, configOverrides, sidAddressingCategory, sidAudioMissing]);
 
   const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
 
   return {
+    sidAudioMissing,
     sidSocketsCategory,
     ultiSidCategory,
     sidAddressingCategory,

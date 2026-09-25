@@ -197,6 +197,41 @@ class MockC64UServerHandlerTest {
   }
 
   @Test
+  fun keyboardBufferDrainsWhileRunningSoADiskAutostartCanProceed() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    var now = 0L
+    state.nanoClock = { now }
+    state.restartMachine()
+    val server = MockC64UServer(state)
+    val readCount = {
+      JSONObject(String(handle(server, request("GET", "/v1/machine:readmem", mapOf("address" to "00C6", "length" to "1"))).body, StandardCharsets.UTF_8))
+        .getJSONArray("data").getInt(0)
+    }
+
+    handle(server, request("PUT", "/v1/machine:writemem", mapOf("address" to "00C6", "data" to "0A")))
+    assertEquals(10, readCount())
+    now += 50_000_000L
+    assertEquals(0, readCount())
+  }
+
+  @Test
+  fun keyboardBufferStaysFullWhileTheMachineIsPaused() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    var now = 0L
+    state.nanoClock = { now }
+    state.restartMachine()
+    val server = MockC64UServer(state)
+    handle(server, request("PUT", "/v1/machine:pause"))
+
+    handle(server, request("PUT", "/v1/machine:writemem", mapOf("address" to "00C6", "data" to "0A")))
+    now += 1_000_000_000L
+
+    val count = JSONObject(String(handle(server, request("GET", "/v1/machine:readmem", mapOf("address" to "00C6", "length" to "1"))).body, StandardCharsets.UTF_8))
+      .getJSONArray("data").getInt(0)
+    assertEquals(10, count)
+  }
+
+  @Test
   fun resumeEntersAnArmedCaptureHandlerHookedOnTheKernalIrqVector() {
     val state = MockC64UState.fromPayload(JSONObject())
     val server = MockC64UServer(state)

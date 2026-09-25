@@ -122,19 +122,11 @@ const QuickKeyButtonImpl = ({
     size="sm"
     variant="secondary"
     style={keyStyle}
-    // Four keys share the row, so on a 320px screen each has about 74px. At the
-    // default control size RUN/STOP needs 85px and RETURN 76px, and the button base
-    // sets nowrap, so both were cut off inside their own key. Narrower padding gets
-    // RETURN and the f-keys in; RUN/STOP breaks at its slash onto two lines, which is
-    // how the real keycap is printed anyway. h-auto lets a key with a wrapped label
-    // grow rather than cut the second line off, and the inline minHeight keeps the
-    // single-line keys at their usual size.
+    // h-auto lets a key with a wrapped label grow rather than cut the second line off;
+    // the inline minHeight keeps single-line keys at their usual size. break-normal:
+    // src/index.css sets word-break: break-word on button, which split a label that
+    // filled its key mid-word ("RETUR" / "N").
     className={cn(
-      // break-normal alongside whitespace-normal: the label may wrap, but only where a
-      // break belongs. RUN/STOP still folds at the slash the way the real keycap is
-      // printed, while RETURN stays whole - it measured 70px in a 70px line and was
-      // being broken into "RETUR" and "N". src/index.css sets word-break: break-word
-      // on button, which is what permitted the mid-word break.
       "h-auto min-w-0 flex-1 overflow-hidden whitespace-normal break-normal px-0.5 py-1 leading-tight",
       tone ? toneButtonClass(tone, latched) : undefined,
     )}
@@ -187,6 +179,9 @@ export const QuickKeysBar = ({
   // shortens; the button keeps "Run Stop" as its accessible name everywhere.
   const { profile } = useDisplayProfile();
   const runStopFace = keyFaceForDisplayProfile("RUN/STOP", profile);
+  // At the 14px text floor RETURN needs 77px, and each of the row's four keys has 75px.
+  // The Keys tab's RETURN spans two keys and fits, so this face is the bar's alone.
+  const returnFace = profile === "compact" ? "RTRN" : "RETURN";
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
   // Memoized (not a fresh object every render): passed straight through to
   // the memoized QuickKeyButton below, so a new object identity here would
@@ -195,7 +190,7 @@ export const QuickKeysBar = ({
   // minHeight rather than height: the keycap labels wrap (see QuickKeyButtonImpl), and
   // a fixed height would cut the second line off instead of letting the key grow.
   const keyStyle = useMemo(
-    () => ({ minHeight: Math.round(40 * safeScale), fontSize: Math.round(13 * safeScale) }),
+    () => ({ minHeight: Math.round(40 * safeScale), fontSize: Math.round(14 * safeScale) }),
     [safeScale],
   );
   const iconPx = Math.round(18 * safeScale);
@@ -433,7 +428,8 @@ export const QuickKeysBar = ({
         })}
         {holdableKeyBtn({
           testId: "remote-input-key-return",
-          label: "RETURN",
+          label: returnFace,
+          ariaLabel: "Return",
           callbacks: holdableCallbacks.return,
           fallbackOnPress: () => tapChar("\n"),
           disabled: disabledNoAuth,

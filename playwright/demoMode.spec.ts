@@ -165,7 +165,7 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED");
     await seedVerifiedMockIdentity(page);
     await expect(indicator).toHaveAttribute("data-health-state", "Healthy");
-    await expect(indicator).toContainText("C64U");
+    await expect(indicator).toHaveAttribute("aria-label", /^Connected to C64U, system healthy$/);
     await snap(page, testInfo, "real-connected-indicator");
   });
 
@@ -340,7 +340,7 @@ test.describe("Automatic Demo Mode", () => {
     await expect(dialog).toBeHidden();
 
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
-    await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo mode)/);
+    await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo Mode)/);
     await snap(page, testInfo, "demo-indicator");
 
     // Manual retry: should not show interstitial again in this session.

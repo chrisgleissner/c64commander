@@ -221,16 +221,18 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
 
   useEffect(() => subscribeSearchClose(close), [close]);
 
-  // Android Back is not a key event on a touch handset: the interstitial layer turns it into an
-  // Escape on the document, which never passes through the field. Without both, Back popped the
-  // route underneath and left the overlay open.
+  // Android Back reaches the page as an Escape keydown at the focused element, which is not always
+  // the field. Without both, Back popped the route underneath and left the overlay open.
   usePopoverBackDismiss(true);
   // A toast left over from the page sits above this overlay and covered its first results, taking
   // the tap meant for them. Toasts raised from inside the overlay still show.
   useEffect(() => dismissAllToasts(), []);
   useEffect(() => {
     const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) close();
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      // Consumed, or the app's Back listener would also leave the page underneath.
+      event.preventDefault();
+      close();
     };
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
@@ -314,8 +316,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   /*
    * Read through the keymap, not off `event.key`.
    *
-   * A keypad handset's D-pad emits `code: "DpadDown"` or `keyCode: 20`, never `key: "ArrowDown"`,
-   * so a handler that compares key names is inert on exactly the hardware that has no pointer to
+   * A keypad host may report its D-pad as `code: "DpadDown"` rather than `key: "ArrowDown"`, so a
+   * handler that compares key names can be inert on exactly the hardware that has no pointer to
    * fall back on. The keypad profile carries the keyboard bindings too, so one lookup serves both.
    */
   const onKeyDown = useCallback(

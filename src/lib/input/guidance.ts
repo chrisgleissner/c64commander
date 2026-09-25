@@ -184,10 +184,18 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
   return null;
 };
 
-/** Whether `element` (or a `[data-key-nav-menu-host]` it lives in) exposes a context menu. */
-export const hasContextMenu = (element: Element | null): boolean => {
-  if (!element) return false;
-  if (element.matches(CONTEXT_MENU_SELECTOR)) return true;
-  const host = element.closest("[data-key-nav-menu-host]") ?? element;
-  return host.querySelector(CONTEXT_MENU_SELECTOR) !== null;
+/**
+ * The context-menu trigger of `element`: itself, one in its `[data-key-nav-menu-host]`, or one inside
+ * a single ring stop. A group has none: its triggers belong to the rows inside it.
+ */
+export const findContextMenuTrigger = (element: Element | null, isGroup: boolean): HTMLElement | null => {
+  if (!element) return null;
+  if (element.matches(CONTEXT_MENU_SELECTOR)) return element as HTMLElement;
+  const host = element.closest("[data-key-nav-menu-host]");
+  const scope = host ?? (isGroup ? null : element);
+  return scope?.querySelector<HTMLElement>(CONTEXT_MENU_SELECTOR) ?? null;
 };
+
+/** Whether `element` exposes a context menu of its own; see {@link findContextMenuTrigger}. */
+export const hasContextMenu = (element: Element | null, isGroup = false): boolean =>
+  findContextMenuTrigger(element, isGroup) !== null;

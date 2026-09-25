@@ -357,4 +357,54 @@ describe("SelectableActionList", () => {
 
     expect(screen.getAllByText("No disks in the collection yet.")).toHaveLength(1);
   });
+
+  const renderRow = (row: Partial<ActionListItem>) =>
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Playlist"
+          items={[{ id: "row-1", title: "Alpha", selected: false, actionLabel: "Play", onAction: vi.fn(), ...row }]}
+          emptyLabel="Empty"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          rowTestId="row"
+        />
+      </DisplayProfileProvider>,
+    );
+
+  it("selects a row from a tap beside its checkbox inside a 44 px label, without activating the row", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+    const onSelectToggle = vi.fn();
+    const onRowClick = vi.fn();
+    renderRow({ onSelectToggle, onRowClick });
+
+    const target = screen.getByRole("checkbox", { name: "Select Alpha" }).closest("label");
+    expect(target).not.toBeNull();
+    expect(target).toHaveClass("h-11", "w-11");
+
+    fireEvent.click(target!);
+
+    expect(onSelectToggle).toHaveBeenCalledTimes(1);
+    expect(onSelectToggle).toHaveBeenCalledWith(true);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it("gives the row title button a 44 px minimum target", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+    renderRow({ onTitleClick: vi.fn() });
+
+    expect(screen.getByRole("button", { name: "Alpha" })).toHaveClass("min-h-11", "min-w-11");
+  });
+
+  it("drops the stacked compact row's own vertical padding so the taller title does not grow the row", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    renderRow({});
+
+    expect(screen.getByTestId("row")).toHaveClass("py-0", "gap-y-0");
+    expect(screen.getByTestId("row")).not.toHaveClass("py-[0.44rem]");
+  });
 });

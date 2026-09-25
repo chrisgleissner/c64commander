@@ -315,7 +315,7 @@ describe("carrying a tune from the C64 on to the phone", () => {
     unregister();
   });
 
-  it("resets the C64 as before when its memory cannot be read to check", async () => {
+  it("resets the C64 as before when its memory cannot be read to check, and logs why it could not check", async () => {
     const { bytes } = psidAt1000();
     device.readMemoryError = new Error("readMemory failed: HTTP 500");
     rememberRemoteTune(tune({ readBytes: vi.fn(async () => bytes) }));
@@ -325,7 +325,46 @@ describe("carrying a tune from the C64 on to the phone", () => {
     setConnection("REAL_CONNECTED");
 
     await vi.waitFor(() => expect(device.machineReset).toHaveBeenCalledTimes(1), { timeout: 3000 });
-    expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
+    expect(addLog).not.toHaveBeenCalledWith(
+      "warn",
+      "Playback: could not stop the tune left playing on the C64",
+      expect.anything(),
+    );
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Playback: could not check whether the C64 still plays the tune; resetting it",
+      expect.objectContaining({ error: "readMemory failed: HTTP 500", deviceHost: "c64u" }),
+    );
+  });
+
+  it("logs a failed read of the tune's bytes when the C64 goes out of reach", async () => {
+    rememberRemoteTune(tune({ readBytes: vi.fn(async () => Promise.reject(new Error("FTP read timed out"))) }));
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Playback: could not read the tune's bytes to carry it on this phone",
+        expect.objectContaining({ item: "Waltz.sid", error: "FTP read timed out" }),
+      ),
+    );
+    expect(engine.play).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed read of the tune's bytes that is not an Error by its text, with no stack", async () => {
+    rememberRemoteTune(tune({ readBytes: vi.fn(() => Promise.reject("FTP session closed")) }));
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Playback: could not read the tune's bytes to carry it on this phone",
+        { item: "Waltz.sid", error: "FTP session closed", stack: undefined },
+      ),
+    );
+    expect(engine.play).not.toHaveBeenCalled();
   });
 
   it("does not reset a different device the app reconnected to", async () => {

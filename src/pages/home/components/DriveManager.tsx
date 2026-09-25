@@ -43,6 +43,7 @@ import {
   type DeviceConfigDomain,
   type DeviceConfigItemRef,
 } from "../hooks/useDeviceConfigOptionDomains";
+import { isSoftIecDefaultPathConfigurable, resolveSoftIecDefaultPath } from "@/components/disks/HomeDiskManagerSupport";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
   const message = value?.trim() ?? "";
@@ -375,7 +376,7 @@ export function DriveManager({
 
           let mountedPath = summary?.mountedLabel;
           if (isSoftIec) {
-            mountedPath = String(resolveConfigValue(softIecConfig, "SoftIEC Drive Settings", "Default Path", "/USB0/"));
+            mountedPath = resolveSoftIecDefaultPath(softIecConfig, device?.partitions?.[0]?.path ?? null);
           }
           const mountedPathLabel = isSoftIec ? "Path" : "Disk";
           const pathPending = isSoftIec
@@ -451,6 +452,7 @@ export function DriveManager({
               mountedPath={mountedPath}
               mountedPathLabel={mountedPathLabel}
               onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel)}
+              pathEditable={!isSoftIec || isSoftIecDefaultPathConfigurable(softIecConfig)}
               statusSummary={statusSummary}
               statusSeverity={statusSeverity}
               onStatusClick={

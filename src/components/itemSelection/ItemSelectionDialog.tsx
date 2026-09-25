@@ -631,10 +631,11 @@ export const ItemSelectionDialog = ({
   ) : null;
 
   /*
-   * On the compact profile the sheet's own title bar carries the source and the count, and the
+   * On the compact profile the sheet's own header carries the source and the count, and the
    * separate heading row above the filter is dropped. Both said much the same thing, and on a
    * 320x427 panel the header, that row, the filter, the scope buttons and the footer together
-   * left about one row of the list the sheet exists to show.
+   * left about one row of the list the sheet exists to show. The count sits under the title rather
+   * than beside the confirm button: beside it, the title was cut to its first letter.
    *
    * The visible title becomes the source rather than "Add items": by this point the user has
    * already chosen to add items and chosen where from, so the source is the useful half.
@@ -647,17 +648,12 @@ export const ItemSelectionDialog = ({
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {compactHeader ? (
             <AppSheetHeader
-              actions={
-                <>
-                  {selectionCount}
-                  {headerConfirmButton}
-                </>
-              }
+              actions={headerConfirmButton}
               titleContent={
                 <AppSheetTitle className="flex min-w-0 items-center gap-2 text-base" data-testid="add-items-title">
                   <span className="truncate">{selectedSourceLabel ? `From ${selectedSourceLabel}` : title}</span>
                   {selectedSourceOrigin ? (
-                    <span aria-hidden="true" data-testid="add-items-selection-icon">
+                    <span aria-hidden="true" className="shrink-0" data-testid="add-items-selection-icon">
                       <FileOriginIcon
                         origin={selectedSourceOrigin}
                         className={resolveSelectionHeadingIconClassName(selectedSourceOrigin)}
@@ -666,7 +662,11 @@ export const ItemSelectionDialog = ({
                   ) : null}
                 </AppSheetTitle>
               }
-              descriptionContent={<AppSheetDescription>{title}</AppSheetDescription>}
+              descriptionContent={
+                <AppSheetDescription className="not-sr-only" asChild>
+                  {selectionCount}
+                </AppSheetDescription>
+              }
             />
           ) : (
             <AppSheetHeader>

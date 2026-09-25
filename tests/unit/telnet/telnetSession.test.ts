@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TelnetMock } from "@/lib/telnet/telnetMock";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
+import { addLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
@@ -45,6 +46,41 @@ describe("createTelnetSession", () => {
       const mock = new TelnetMock({ password: "needed" });
       const session = createTelnetSession(mock);
       await expect(session.connect("localhost", 23)).rejects.toThrow(TelnetError);
+    });
+
+    it("closes the opened socket when the device asks for a password and none is provided", async () => {
+      const mock = new TelnetMock({ password: "needed" });
+      const disconnectSpy = vi.spyOn(mock, "disconnect");
+      const session = createTelnetSession(mock);
+
+      await expect(session.connect("localhost", 23)).rejects.toThrow("Device requires password but none provided");
+
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+      expect(mock.isConnected()).toBe(false);
+    });
+
+    it("closes the opened socket and rethrows when the initial read fails after connect", async () => {
+      const mock = new TelnetMock();
+      const disconnectSpy = vi.spyOn(mock, "disconnect");
+      vi.spyOn(mock, "read").mockRejectedValueOnce(new TelnetError("Read failed: reset", "DISCONNECTED"));
+      const session = createTelnetSession(mock);
+
+      await expect(session.connect("localhost", 23)).rejects.toThrow("Read failed: reset");
+
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("rethrows the connect failure when closing the failed socket also fails", async () => {
+      const mock = new TelnetMock({ password: "needed" });
+      vi.spyOn(mock, "disconnect").mockRejectedValueOnce(new Error("socket already gone"));
+      const session = createTelnetSession(mock);
+
+      await expect(session.connect("localhost", 23)).rejects.toThrow("Device requires password but none provided");
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Telnet disconnect after failed connect failed",
+        expect.objectContaining({ error: "socket already gone" }),
+      );
     });
 
     it("disconnects cleanly", async () => {
@@ -230,6 +266,18 @@ describe("createTelnetSession", () => {
       // Calling disconnect again should not throw
       await session.disconnect();
       expect(session.isConnected()).toBe(false);
+    });
+
+    it("closes the socket on disconnect after a failed send marked the transport disconnected", async () => {
+      const mock = new TelnetMock();
+      const session = createTelnetSession(mock);
+      await session.connect("localhost", 23);
+      vi.spyOn(mock, "isConnected").mockReturnValue(false);
+      const disconnectSpy = vi.spyOn(mock, "disconnect");
+
+      await session.disconnect();
+
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
     });
 
     it("disconnect handles transport errors gracefully", async () => {

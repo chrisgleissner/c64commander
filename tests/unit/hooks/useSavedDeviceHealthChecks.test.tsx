@@ -722,6 +722,42 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId["device-office"]?.error).toBeNull();
   });
 
+  it("stops showing the selected device as verifying when a saved-device switch cancels its check", async () => {
+    const { result } = renderBackgroundHook();
+    await flushAsyncWork();
+    mockRunConnectivityProbeForTarget.mockImplementationOnce(createAbortablePendingRun());
+    await act(async () => {
+      result.current.refreshAll();
+    });
+    await flushAsyncWork();
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
+
+    beginSavedDeviceSwitchAttempt({ fromDeviceId: "device-office", toDeviceId: "device-backup", routePath: "/play" });
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(false);
+    expect(result.current.byDeviceId["device-office"]?.liveProbes).toBeNull();
+  });
+
+  it("stops showing every device as verifying when the switcher closes during its checks", async () => {
+    mockRunHealthCheckForTarget.mockImplementation(createAbortablePendingRun());
+    const savedDevices = buildSavedDevices();
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useSavedDeviceHealthChecks(savedDevices, enabled, HEALTH_CHECK_CONTEXTS.switchDeviceDialog, selectedDeviceId),
+      { initialProps: { enabled: true } },
+    );
+    await flushAsyncWork();
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(true);
+    expect(result.current.byDeviceId["device-backup"]?.running).toBe(true);
+
+    rerender({ enabled: false });
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId["device-office"]?.running).toBe(false);
+    expect(result.current.byDeviceId["device-backup"]?.running).toBe(false);
+  });
+
   it("pauses background-maintenance polling while diagnostics suppression is armed", async () => {
     diagnosticsSuppressionMock.setActive(true);
 

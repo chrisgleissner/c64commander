@@ -2198,15 +2198,18 @@ describe("connectionManager", () => {
     expect(responses.every((event) => event.data.expectedFailure === true)).toBe(true);
   });
 
-  it("logs an unanswered probe at info while the device is already shown absent", async () => {
-    const manager = await reachOffline();
+  it("logs an unanswered probe at info once, not again on each repeat while the device is shown absent", async () => {
     const addLogSpy = vi.spyOn(logging, "addLog");
+    const probeFailureLevels = () =>
+      addLogSpy.mock.calls.filter((call) => call[1] === "Probe request failed").map((call) => call[0]);
+    const manager = await reachOffline();
+    const levelsWhileGoingOffline = probeFailureLevels();
 
     await manager.probeOnce();
 
-    const levels = addLogSpy.mock.calls.filter((call) => call[1] === "Probe request failed").map((call) => call[0]);
-    expect(levels).toContain("info");
-    expect(levels).not.toContain("warn");
+    expect(levelsWhileGoingOffline).toContain("info");
+    expect(levelsWhileGoingOffline).not.toContain("warn");
+    expect(probeFailureLevels()).toEqual(levelsWhileGoingOffline);
     addLogSpy.mockRestore();
   });
 

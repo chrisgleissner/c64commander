@@ -227,25 +227,27 @@ export const ArchiveSelectionView = ({
           const key = resultKey(result);
           const isSelected = selection.has(key);
           return (
-            <div
+            // The whole row is the checkbox's label, so a tap anywhere on it selects: the 16 px box
+            // alone was the only target.
+            <label
               key={key}
-              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-2"
+              className="flex cursor-pointer items-center gap-2 min-w-0 border-b border-border/50 py-2"
               data-testid="archive-result-row"
             >
-              <div className="shrink-0">
+              <span className="shrink-0">
                 <Checkbox
                   checked={isSelected}
                   onCheckedChange={() => onToggleSelect(result)}
                   aria-label={`Select ${result.name}`}
                 />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col text-left">
-                <p className="text-sm font-medium break-words whitespace-normal">{result.name}</p>
-                <p className="text-xs text-muted-foreground break-words">
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col text-left">
+                <span className="text-sm font-medium break-words whitespace-normal">{result.name}</span>
+                <span className="text-xs text-muted-foreground break-words">
                   {result.group ?? "Unknown group"} • {result.year || "Unknown year"}
-                </p>
-              </div>
-            </div>
+                </span>
+              </span>
+            </label>
           );
         })}
       </div>

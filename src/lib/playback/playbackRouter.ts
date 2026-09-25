@@ -336,39 +336,52 @@ const withSidPropagationPreflightDeadline = async <T>(promise: Promise<T>, path:
  */
 const rememberedSidBlobs = new Map<string, Blob>();
 const REMEMBERED_SID_BLOBS = 16;
-const sidBlobKey = (path: string) =>
-  `${normalizeFtpHost(getC64APIConfigSnapshot().deviceHost)}:${normalizeUltimatePath(path).toLowerCase()}`;
 
-export const getRememberedUltimateSidBlob = (path: string): Blob | null =>
-  rememberedSidBlobs.get(sidBlobKey(path)) ?? null;
+/** A playlist item added from another saved Ultimate lives on that device, not on the one connected now. */
+const isOnAnotherDevice = (origin?: DeviceBoundContentOrigin | null): origin is DeviceBoundContentOrigin =>
+  Boolean(origin) && !isOriginOnSelectedDevice(origin);
+
+const sidBlobKey = (path: string, origin?: DeviceBoundContentOrigin | null) =>
+  isOnAnotherDevice(origin)
+    ? `${origin.originDeviceId}:${normalizeUltimatePath(origin.originPath).toLowerCase()}`
+    : `${normalizeFtpHost(getC64APIConfigSnapshot().deviceHost)}:${normalizeUltimatePath(path).toLowerCase()}`;
+
+export const getRememberedUltimateSidBlob = (path: string, origin?: DeviceBoundContentOrigin | null): Blob | null =>
+  rememberedSidBlobs.get(sidBlobKey(path, origin)) ?? null;
 
 export const clearRememberedUltimateSidBlobsForTests = () => rememberedSidBlobs.clear();
 
-export const tryFetchUltimateSidBlob = async (path: string) => {
-  const normalizedPath = normalizeUltimatePath(path);
+const readSelectedDeviceSidBlob = async (normalizedPath: string): Promise<Blob | null> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
-  const host = normalizeFtpHost(rawHost);
+  const response = await readFtpFile({
+    host: normalizeFtpHost(rawHost),
+    port: getStoredFtpPort(),
+    password,
+    path: normalizedPath,
+  });
+  const bytes = base64ToUint8(response.data);
+  if (typeof response.sizeBytes === "number" && response.sizeBytes !== bytes.length) {
+    addLog("warn", "FTP SID payload size mismatch", {
+      path: normalizedPath,
+      expectedBytes: response.sizeBytes,
+      actualBytes: bytes.length,
+    });
+    return null;
+  }
+  return new Blob([bytes], { type: "application/octet-stream" });
+};
+
+export const tryFetchUltimateSidBlob = async (path: string, origin?: DeviceBoundContentOrigin | null) => {
+  const normalizedPath = normalizeUltimatePath(path);
   // Offline means the device cannot be read from — except in Demo Mode, where "the device" is this
   // process answering on loopback and the radios are irrelevant.
-  if (isNetworkKnownOffline() && !isSimulatedDeviceTarget()) return getRememberedUltimateSidBlob(path);
+  if (isNetworkKnownOffline() && !isSimulatedDeviceTarget()) return getRememberedUltimateSidBlob(path, origin);
   try {
-    const response = await readFtpFile({
-      host,
-      port: getStoredFtpPort(),
-      password,
-      path: normalizedPath,
-    });
-    const bytes = base64ToUint8(response.data);
-    if (typeof response.sizeBytes === "number" && response.sizeBytes !== bytes.length) {
-      addLog("warn", "FTP SID payload size mismatch", {
-        path: normalizedPath,
-        expectedBytes: response.sizeBytes,
-        actualBytes: bytes.length,
-      });
-      return null;
-    }
-    const blob = new Blob([bytes], { type: "application/octet-stream" });
-    const key = sidBlobKey(path);
+    const blob = isOnAnotherDevice(origin)
+      ? await fetchUltimateOriginBlob(origin)
+      : await readSelectedDeviceSidBlob(normalizedPath);
+    if (!blob) return null;
+    const key = sidBlobKey(path, origin);
     rememberedSidBlobs.delete(key);
     rememberedSidBlobs.set(key, blob);
     if (rememberedSidBlobs.size > REMEMBERED_SID_BLOBS) {
@@ -376,11 +389,12 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
     }
     return blob;
   } catch (error) {
-    addLog("debug", "FTP SID fetch failed", {
+    addLog("warn", "FTP SID fetch failed", {
       path: normalizedPath,
       error: (error as Error).message,
+      stack: (error as Error).stack,
     });
-    return getRememberedUltimateSidBlob(path);
+    return getRememberedUltimateSidBlob(path, origin);
   }
 };
 

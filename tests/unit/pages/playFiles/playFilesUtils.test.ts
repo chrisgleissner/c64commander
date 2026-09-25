@@ -11,6 +11,7 @@ import {
   buildSubsongSwitchItem,
   shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
+  mergeResolvedSonglengthDurations,
   formatTime,
   formatBytes,
   formatDate,
@@ -22,6 +23,7 @@ import {
   tryAcquireSingleFlight,
   releaseSingleFlight,
   resolvePlayTargetIndex,
+  resolveLaunchedItemIndex,
   clampDurationSeconds,
   formatDurationSeconds,
   durationSecondsToSlider,
@@ -267,6 +269,55 @@ describe("playFilesUtils", () => {
       const playlist = [createPlaylistItem("resolved", 12_000), createPlaylistItem("defaulted", 12_000, "default")];
 
       expect(applyDurationOverrideToPlaylist(playlist, 12_000)).toBe(playlist);
+    });
+
+    describe("resolveLaunchedItemIndex", () => {
+      const playlist = [createPlaylistItem("a", 1), createPlaylistItem("b", 1), createPlaylistItem("c", 1)];
+
+      it("keeps the launch index while the item is still there", () => {
+        expect(resolveLaunchedItemIndex(playlist, "b", 1)).toBe(1);
+      });
+
+      it("follows the item when an earlier row was removed during the launch", () => {
+        expect(resolveLaunchedItemIndex(playlist.slice(1), "c", 2)).toBe(1);
+      });
+
+      it("falls back to the launch index when the item is no longer in the playlist", () => {
+        expect(resolveLaunchedItemIndex(playlist, "gone", 2)).toBe(2);
+      });
+    });
+
+    describe("mergeResolvedSonglengthDurations", () => {
+      it("replaces the Default duration fallback with a songlength resolved in the background", () => {
+        const fallback = createPlaylistItem("fallback", 180_000, "default");
+        const resolved = { ...fallback, durationMs: 42_000, durationSource: null };
+
+        const merged = mergeResolvedSonglengthDurations([fallback], [resolved]);
+
+        expect(merged[0]).toEqual({ ...fallback, durationMs: 42_000, durationSource: null });
+      });
+
+      it("keeps the fallback when the songlengths pass could not resolve the item", () => {
+        const playlist = [createPlaylistItem("fallback", 180_000, "default")];
+
+        expect(mergeResolvedSonglengthDurations(playlist, [createPlaylistItem("fallback", 180_000, "default")])).toBe(
+          playlist,
+        );
+      });
+
+      it("never clobbers a duration resolved while the pass was running", () => {
+        const playlist = [createPlaylistItem("resolved", 95_000)];
+
+        expect(mergeResolvedSonglengthDurations(playlist, [createPlaylistItem("resolved", 42_000)])).toBe(playlist);
+      });
+
+      it("fills an item that has no duration yet", () => {
+        const unresolved = createPlaylistItem("unresolved", undefined);
+
+        const merged = mergeResolvedSonglengthDurations([unresolved], [createPlaylistItem("unresolved", 42_000)]);
+
+        expect(merged[0]).toEqual({ ...unresolved, durationMs: 42_000, durationSource: null });
+      });
     });
   });
 

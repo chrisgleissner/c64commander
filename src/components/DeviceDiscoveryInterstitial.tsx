@@ -30,7 +30,7 @@ import { isAuthRequiredError } from "@/lib/c64api/transportErrors";
 import { probeDeviceReachability, type ProbeInfoResult } from "@/lib/connection/connectionManager";
 import { acknowledgeDeviceDiscoveryResults, persistDiscoveredDevice } from "@/lib/deviceDiscovery/discoveryManager";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
-import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
+import { isAutomaticDiscoveryTrigger, type DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 import { splitSavedDeviceHostAndHttpPort } from "@/lib/savedDevices/host";
 import { addSavedDevice, resolveCanonicalProductFamilyCode, updateSavedDevice } from "@/lib/savedDevices/store";
 import { setPasswordForDevice } from "@/lib/secureStorage";
@@ -41,8 +41,6 @@ const DEFAULT_TELNET_PORT = 23;
 
 const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null } =>
   typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
-
-const isAutomaticDiscoveryTrigger = (trigger: string | null) => trigger === "startup" || trigger === "resume";
 
 const buildDiscoveryDialogKey = (completedAt: string | null, candidates: DeviceDiscoveryCandidate[]) =>
   `${completedAt ?? "unknown"}:${candidates.map((candidate) => candidate.id).join("|")}`;
@@ -581,7 +579,7 @@ export function DeviceDiscoveryInterstitial() {
           </div>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter className="px-4 pt-3">
           {/* Connect lives in the footer, not inside the form it submits. The footer sits outside
               that form's scroll container, so the dialog's primary action cannot be pushed below
               the fold on a short viewport, and it sits beside "Not now" where the focus ring

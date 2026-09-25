@@ -13,6 +13,11 @@ const appListenerState = vi.hoisted(() => ({
   remove: vi.fn(),
 }));
 
+const targetDevice = vi.hoisted(() => ({
+  current: { deviceId: "d1", multiDevice: false, fullLabel: "c64u", shortLabel: "c64u" },
+}));
+vi.mock("@/hooks/useTargetDeviceIdentity", () => ({ useTargetDeviceIdentity: () => targetDevice.current }));
+
 vi.mock("@capacitor/app", () => ({
   App: {
     addListener: appListenerState.addListener,
@@ -121,7 +126,7 @@ describe("MachineControls", () => {
       }
       return { remove: appListenerState.remove };
     });
-    uninstallDeviceBackButton = installDeviceBackButton();
+    uninstallDeviceBackButton = installDeviceBackButton(() => undefined);
   });
 
   it("keeps the canonical primary quick actions in a two-column compact grid", () => {
@@ -192,6 +197,32 @@ describe("MachineControls", () => {
 
     expect(screen.getByTestId("home-save-ram")).toHaveTextContent("Backup");
     expect(screen.getByTestId("home-load-ram")).toHaveTextContent("Restore");
+  });
+
+  it("names the device the Power actions go to when more than one device is saved", () => {
+    targetDevice.current = { ...targetDevice.current, multiDevice: true, fullLabel: "Workshop" };
+    try {
+      render(<MachineControls {...defaultProps} />);
+      fireEvent.click(screen.getByTestId("home-power-actions"));
+
+      expect(screen.getByTestId("home-power-sheet")).toHaveTextContent("interrupts whatever Workshop is doing");
+    } finally {
+      targetDevice.current = { ...targetDevice.current, multiDevice: false, fullLabel: "c64u" };
+    }
+  });
+
+  it("names the model the device reports in the Power actions, not the C64 Ultimate", () => {
+    const cartridge = { ...defaultProps.status, deviceInfo: { product: "Ultimate II+L" } };
+    render(<MachineControls {...defaultProps} status={cartridge} />);
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+
+    expect(screen.getByTestId("home-power-sheet")).toHaveTextContent(
+      "Reboots the Ultimate II+L and interrupts the current session.",
+    );
+    fireEvent.click(screen.getByTestId("home-power-action-reboot"));
+    expect(screen.getByRole("dialog", { name: "Reboot?" })).toHaveTextContent(
+      "This reboots the Ultimate II+L and interrupts the current session.",
+    );
   });
 
   it("opens Reboot confirmation before executing the REST reboot mutation", () => {

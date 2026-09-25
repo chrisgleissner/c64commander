@@ -8,6 +8,7 @@
 import { App } from "@capacitor/app";
 
 import { addLog } from "@/lib/logging";
+import { isAnyOverlayOpen } from "@/lib/input/eventTargets";
 
 /**
  * Turn Android's hardware Back key into a key event the app can act on.
@@ -17,14 +18,21 @@ import { addLog } from "@/lib/logging";
  * Back did nothing: the keypad guidance bar said "Back — Exit", and a user who had pressed OK into
  * a card on Home could not get out of it again, which put the rest of the page out of reach.
  *
- * The event carries no key code, which is what `isDeviceBackKey` recognises it by.
+ * The event carries no key code, which is what `isDeviceBackKey` recognises it by. It is dispatched
+ * at the focused element, as a real key would be, so a focused text field or dialog sees it as its
+ * own. `onUnhandled` runs when nothing consumed it, which is what happens with keypad navigation
+ * turned off: no dialog closed, so Back leaves the route as it would without this listener.
  */
-export const installDeviceBackButton = (): (() => void) => {
+export const installDeviceBackButton = (onUnhandled: () => void): (() => void) => {
   let removed = false;
   let remove: (() => Promise<void>) | null = null;
 
   void App.addListener("backButton", () => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+    // An overlay the key closed is the whole answer, whether or not it cancelled the event.
+    const overlayWasOpen = isAnyOverlayOpen();
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" });
+    (document.activeElement ?? document).dispatchEvent(event);
+    if (!event.defaultPrevented && !overlayWasOpen) onUnhandled();
   })
     .then((handle) => {
       if (removed) void handle.remove();

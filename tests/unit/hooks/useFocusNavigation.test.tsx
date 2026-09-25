@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -17,6 +18,7 @@ import {
 import { NavigationController, resetInputModality, setInputModality } from "@/lib/input";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const SELECTED = "data-key-selected";
 
@@ -244,14 +246,75 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     const input = getByLabelText("host") as HTMLInputElement;
     input.focus();
-    // The field keeps the key (default not prevented) and focus does not move to A.
-    expect(fireEvent.keyDown(input, { code: "ArrowDown" })).toBe(true);
+    // The field keeps its typing and caret keys (default not prevented) and focus stays.
+    expect(fireEvent.keyDown(input, { code: "ArrowLeft" })).toBe(true);
+    expect(fireEvent.keyDown(input, { key: "a" })).toBe(true);
     expect(document.activeElement).toBe(input);
 
     const note = getByLabelText("note") as HTMLDivElement;
     note.focus();
     expect(fireEvent.keyDown(note, { code: "ArrowDown" })).toBe(true);
     expect(document.activeElement).toBe(note);
+  });
+
+  it("moves the ring on when Down is pressed in a single-line field on a page", () => {
+    const FieldThenButton = () => {
+      const fieldRef = useFocusItem<HTMLInputElement>({ id: "field", order: 10 });
+      const nextRef = useFocusItem<HTMLButtonElement>({ id: "next", order: 20 });
+      return (
+        <>
+          <input ref={fieldRef} aria-label="Search categories" />
+          <button ref={nextRef} onClick={() => {}}>
+            Next
+          </button>
+        </>
+      );
+    };
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <FieldThenButton />
+      </FocusNavigationProvider>,
+    );
+    const field = getByLabelText("Search categories") as HTMLInputElement;
+    // The ring starts on the field; OK is the explicit "go in" that focuses it for typing.
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(document.activeElement).toBe(field);
+
+    expect(fireEvent.keyDown(field, { code: "ArrowDown" })).toBe(false);
+
+    expect(document.activeElement).toBe(button("Next"));
+    expect(button("Next").getAttribute(SELECTED)).toBe("true");
+  });
+
+  it("continues from a field the user tapped into when Down leaves it", () => {
+    const FieldBetweenButtons = () => {
+      const beforeRef = useFocusItem<HTMLButtonElement>({ id: "before", order: 10 });
+      const fieldRef = useFocusItem<HTMLInputElement>({ id: "field", order: 20 });
+      const afterRef = useFocusItem<HTMLButtonElement>({ id: "after", order: 30 });
+      return (
+        <>
+          <button ref={beforeRef} onClick={() => {}}>
+            Before
+          </button>
+          <input ref={fieldRef} aria-label="Search categories" />
+          <button ref={afterRef} onClick={() => {}}>
+            After
+          </button>
+        </>
+      );
+    };
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <FieldBetweenButtons />
+      </FocusNavigationProvider>,
+    );
+    setInputModality("pointer");
+    const field = getByLabelText("Search categories") as HTMLInputElement;
+    field.focus();
+
+    fireEvent.keyDown(field, { code: "ArrowDown" });
+
+    expect(button("After").getAttribute(SELECTED)).toBe("true");
   });
 
   /*
@@ -422,6 +485,35 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     expect(document.activeElement).toBe(button("Card"));
     expect(button("Card")).toHaveAttribute(SELECTED, "true");
+  });
+
+  it("leaves the route on the device's own Back key once nothing on the page is left to close", () => {
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider onNavigateBack={onNavigateBack}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the device's own Back key to an open dialog instead of leaving the route", () => {
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider onNavigateBack={onNavigateBack}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+        <div role="dialog" aria-label="Settings" />
+      </FocusNavigationProvider>,
+    );
+
+    const event = fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(onNavigateBack).not.toHaveBeenCalled();
+    expect(event).toBe(true);
   });
 
   it("exposes the controller via useFocusNavigation (null outside a provider)", () => {
@@ -655,6 +747,28 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(openDeviceSwitcher).toHaveBeenCalledTimes(1);
   });
 
+  it("lands on the page's first control after a tab jump made while the ring was on the tab bar", async () => {
+    const jumpToTab = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ jumpToTab }}>
+        <button type="button">Page first</button>
+        <button type="button">Page second</button>
+        <nav data-focus-scope="tabbar">
+          <button type="button">Play tab</button>
+        </nav>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    button("Play tab").focus();
+    await waitFor(() => expect(button("Play tab").getAttribute(SELECTED)).toBe("true"));
+
+    fireEvent.keyDown(document.body, { code: "Digit4" });
+
+    expect(jumpToTab).toHaveBeenCalledWith(3);
+    await waitFor(() => expect(button("Page first").getAttribute(SELECTED)).toBe("true"));
+    resetInputModality();
+  });
+
   /*
    * 8 and 9 exist because the same two actions cost ten and eight presses through Home's Quick
    * Actions grid from a cold arrival, measured on the handset. The grid is not moving; these are a
@@ -780,6 +894,57 @@ describe("FocusNavigationProvider global shortcuts", () => {
     fireEvent.keyDown(document.body, { code: "ContextMenu" });
     expect(openQuickMenu).toHaveBeenCalledTimes(1);
   });
+
+  it("opens the focused item's own menu from the Menu key rather than the quick menu", () => {
+    const openQuickMenu = vi.fn();
+    const openRowActions = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <button type="button" aria-haspopup="menu" onClick={openRowActions}>
+          Item actions
+        </button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+
+    expect(openRowActions).toHaveBeenCalledTimes(1);
+    expect(openQuickMenu).not.toHaveBeenCalled();
+  });
+
+  it("opens the quick menu from the Menu key on a page with nothing to select", () => {
+    const openQuickMenu = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <p>Nothing here</p>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+
+    expect(openQuickMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the quick menu from the Menu key on a card, not the first row's actions inside it", () => {
+    const openQuickMenu = vi.fn();
+    const openRowActions = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <section data-section-label="Playlist">
+          <button type="button">Tune one</button>
+          <button type="button" aria-haspopup="menu" onClick={openRowActions}>
+            Item actions
+          </button>
+        </section>
+        <button type="button">After</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+
+    expect(openRowActions).not.toHaveBeenCalled();
+    expect(openQuickMenu).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
@@ -821,6 +986,23 @@ describe("vertical keys escape a single-line field inside an overlay", () => {
     fireEvent.keyDown(host, { code: "ArrowUp" });
 
     expect(document.activeElement).toBe(button("Not now"));
+  });
+
+  it("moves focus off a number field on Down, whose own Up/Down would otherwise trap the keypad", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Lighting Studio">
+          <input type="number" aria-label="Red" defaultValue="10" />
+          <button type="button">Apply</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const red = screen.getByLabelText("Red");
+    red.focus();
+
+    fireEvent.keyDown(red, { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(button("Apply"));
   });
 
   it("leaves a textarea alone, where Up and Down move the caret", () => {
@@ -871,6 +1053,17 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
     expect(document.activeElement).toBe(button("Close"));
   });
 
+  it("goes into the dialog on OK while the dialog itself holds focus", () => {
+    render(<Dialog />);
+    const dialog = screen.getByRole("dialog");
+    dialog.tabIndex = -1;
+    dialog.focus();
+
+    fireEvent.keyDown(dialog, { key: "Enter", code: "Enter" });
+
+    expect(document.activeElement).toBe(button("Close"));
+  });
+
   it("reaches the last control on Up when nothing in the dialog is focused yet", () => {
     render(<Dialog />);
     fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowUp" });
@@ -893,6 +1086,214 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
 
     fireEvent.keyDown(button("Continue in Demo Mode"), { code: "ArrowDown" });
     expect(document.activeElement).toBe(button("Close"));
+  });
+
+  it("draws the steady keypad highlight on the dialog control that Down moved to", () => {
+    // The dialog's content is a ring group of its own, as a sheet or modal surface is.
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Demo Mode">
+          <div data-section-label="Demo Mode">
+            <button type="button">Close</button>
+            <button type="button">Retry connection</button>
+            <button type="button">Continue in Demo Mode</button>
+          </div>
+        </div>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowDown" });
+    fireEvent.keyDown(button("Close"), { code: "ArrowDown" });
+
+    expect(button("Retry connection").getAttribute(SELECTED)).toBe("true");
+    expect(document.querySelectorAll(`[${SELECTED}="true"]`)).toHaveLength(1);
+  });
+});
+
+describe("the keypad highlight follows focus that a menu moves itself", () => {
+  afterEach(() => resetInputModality());
+
+  it("highlights and reveals the menu item that received focus", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="menu" aria-label="Item actions">
+          <div role="menuitem" tabIndex={-1}>
+            Review playback config
+          </div>
+          <div role="menuitem" tabIndex={-1}>
+            Remove
+          </div>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    const remove = screen.getByRole("menuitem", { name: "Remove" });
+    const scrollIntoView = vi.fn();
+    remove.scrollIntoView = scrollIntoView;
+
+    remove.focus();
+
+    expect(remove.getAttribute(SELECTED)).toBe("true");
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+});
+
+describe("the keypad highlight follows focus moved to a control the ring has not scanned yet", () => {
+  afterEach(() => resetInputModality());
+
+  it("highlights a control that received focus in the same task that added it", async () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="From C64U" data-section-label="From C64U">
+          <button type="button">Close</button>
+          <div data-testid="entries">
+            <button type="button">Open Demos</button>
+          </div>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    button("Open Demos").focus();
+    await waitFor(() => expect(button("Open Demos").getAttribute(SELECTED)).toBe("true"));
+
+    // A folder view replaces its entries and focuses the first one before the ring rescans.
+    const entries = screen.getByTestId("entries");
+    const firstEntry = document.createElement("button");
+    firstEntry.type = "button";
+    firstEntry.textContent = "Open Collection";
+    entries.replaceChildren(firstEntry);
+    firstEntry.focus();
+
+    await waitFor(() => expect(firstEntry.getAttribute(SELECTED)).toBe("true"));
+  });
+});
+
+describe("the keypad highlight follows focus handed back to a menu trigger", () => {
+  afterEach(() => resetInputModality());
+
+  it("moves the ring onto the trigger a closing menu returns focus to", () => {
+    const onActions = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <button type="button">Card action</button>
+        <button type="button" aria-haspopup="menu" onClick={onActions}>
+          Item actions
+        </button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+    expect(button("Card action").getAttribute(SELECTED)).toBe("true");
+
+    button("Item actions").focus();
+
+    expect(button("Item actions").getAttribute(SELECTED)).toBe("true");
+    expect(button("Card action").getAttribute(SELECTED)).toBeNull();
+  });
+
+  it("goes into a card on the second OK after the first OK opened it", async () => {
+    const Card = () => {
+      const [open, setOpen] = useState(false);
+      return (
+        <section data-section-label="Memory">
+          <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+            Memory
+          </button>
+          {open ? <button type="button">Kernal ROM</button> : null}
+        </section>
+      );
+    };
+    render(
+      <FocusNavigationProvider>
+        <Card />
+        <button type="button">Next section</button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { code: "Enter" });
+    await waitFor(() => expect(button("Kernal ROM")).toBeInTheDocument());
+    fireEvent.keyDown(document.activeElement ?? document.body, { code: "Enter" });
+
+    await waitFor(() => expect(button("Memory").getAttribute(SELECTED)).toBe("true"));
+    expect(button("Memory")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("stays on a single-control card after OK activates that control, so Down moves on", () => {
+    const onToggle = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <section data-section-label="Appearance">
+          <button type="button" onClick={onToggle}>
+            Appearance
+          </button>
+        </section>
+        <button type="button">Next section</button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(button("Next section").getAttribute(SELECTED)).toBe("true");
+  });
+});
+
+describe("OK toggles a checkbox inside a dialog", () => {
+  it("checks a focused checkbox on Enter, which the checkbox itself ignores", () => {
+    const onCheckedChange = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Add items">
+          <Checkbox aria-label="Select Usb0" onCheckedChange={onCheckedChange} />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const checkbox = screen.getByRole("checkbox", { name: "Select Usb0" });
+    checkbox.focus();
+
+    fireEvent.keyDown(checkbox, { key: "Enter", code: "", keyCode: 13 });
+
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("the first-run tour owns the keys", () => {
+  afterEach(() => document.documentElement.removeAttribute("data-tour-active"));
+
+  it("does not activate the ring's item on OK while the tour is up", () => {
+    const onA = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <Toolbar onA={onA} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    document.documentElement.setAttribute("data-tour-active", "true");
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+
+    expect(onA).not.toHaveBeenCalled();
+  });
+});
+
+describe("one-shot keypad commands ignore key repeat", () => {
+  it("pauses once for a held 8, not once per repeat", () => {
+    const machinePauseResume = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ machinePauseResume }}>
+        <button type="button">A</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56 });
+    fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56, repeat: true });
+    fireEvent.keyDown(document.body, { key: "8", code: "", keyCode: 56, repeat: true });
+
+    expect(machinePauseResume).toHaveBeenCalledTimes(1);
   });
 });
 

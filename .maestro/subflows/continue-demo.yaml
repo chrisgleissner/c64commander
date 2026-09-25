@@ -6,6 +6,8 @@ tags:
 ---
 - tapOn:
     text: "Continue in Demo Mode"
+# The first-run tour opens once the Demo Mode offer is answered, over the whole screen.
+- runFlow: dismiss-tour.yaml
 - extendedWaitUntil:
     visible:
       text: "Home"

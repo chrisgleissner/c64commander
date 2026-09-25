@@ -17,11 +17,7 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
-import {
-  buildDeviceHostWithHttpPort,
-  hasPersistedDeviceHostConfig,
-  stripPortFromDeviceHost,
-} from "@/lib/c64api/hostConfig";
+import { buildDeviceHostWithHttpPort, hasPersistedDeviceHostConfig } from "@/lib/c64api/hostConfig";
 import { getPassword as loadStoredPassword, getPasswordForDevice } from "@/lib/secureStorage";
 import {
   clearRuntimeFtpPasswordOverride,
@@ -50,7 +46,6 @@ import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/lib/fuzz/fuzzMode";
 import { addLog } from "@/lib/logging";
-import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -60,6 +55,11 @@ import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/trans
 import { notifyAuthRequired } from "@/lib/auth/authChallenge";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
+import {
+  getActiveReachabilityHosts,
+  isActiveMockHost,
+  normalizeReachabilityHost,
+} from "@/lib/connection/activeReachabilityHosts";
 import {
   completeSavedDeviceVerification,
   getSavedDevicesSnapshot,
@@ -77,6 +77,7 @@ import {
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demoOfferMemory";
 import { isNativePlatform } from "@/lib/native/platform";
+import { clearProbeFailureLog, isNewProbeFailure, noteProbeAnswered } from "@/lib/connection/probeFailureLog";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -259,6 +260,7 @@ const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): Pr
   const authRequired = isAuthRequiredError(error);
   const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
   if (authRequired || /^HTTP\s+\d+/.test(message)) {
+    noteProbeAnswered(config.deviceHost);
     return {
       kind: authRequired ? "auth" : "http",
       result: { ok: false, deviceInfo: null, error: message, authRequired },
@@ -268,13 +270,15 @@ const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): Pr
   // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
   // see a user-friendly message instead of the raw fetch error text.
   const failure = normalizeTransportError(error, { host: config.deviceHost });
-  addLog("info", "Probe request failed", {
-    baseUrl: config.baseUrl,
-    deviceHost: config.deviceHost,
-    class: failure.class,
-    userMessage: failure.userMessage,
-    error: failure.rawMessage,
-  });
+  if (isNewProbeFailure(config.deviceHost, failure.class)) {
+    addLog("info", "Probe request failed", {
+      baseUrl: config.baseUrl,
+      deviceHost: config.deviceHost,
+      class: failure.class,
+      userMessage: failure.userMessage,
+      error: failure.rawMessage,
+    });
+  }
   return {
     kind: "transport",
     result: { ok: false, deviceInfo: null, error: failure.userMessage, authRequired: false },
@@ -292,6 +296,7 @@ const runProbeInfo = async (
       signal: options.signal,
       ...PROBE_REQUEST_OPTIONS,
     });
+    noteProbeAnswered(config.deviceHost);
     const healthy = isProbePayloadHealthy(response);
     return {
       kind: healthy ? "ok" : "payload",
@@ -547,37 +552,6 @@ export function subscribeConnection(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-const normalizeReachabilityHost = (value: string | null | undefined): string | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  const stripScheme = () => stripPortFromDeviceHost(trimmed.replace(/^https?:\/\//, "")).toLowerCase();
-  // Most callers pass a bare host such as `c64u`, which `new URL` rejects. Only try the URL parse
-  // when the value actually carries a scheme, so the catch below reports a genuinely malformed
-  // value rather than the common case.
-  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return stripScheme();
-  try {
-    return stripPortFromDeviceHost(new URL(trimmed).host).toLowerCase();
-  } catch (error) {
-    reportFallback("connectionManager.normalizeReachabilityHost", error);
-    return stripScheme();
-  }
-};
-
-const getActiveReachabilityHosts = () => {
-  const config = getC64APIConfigSnapshot();
-  const hosts = [
-    normalizeReachabilityHost(config.deviceHost),
-    normalizeReachabilityHost(config.baseUrl),
-    normalizeReachabilityHost(resolveDeviceHostFromStorage()),
-  ].filter((host): host is string => host !== null);
-  return new Set(hosts);
-};
-
-const isActiveMockHost = (normalizedHost: string) => {
-  const mockBaseUrl = getActiveMockBaseUrl();
-  return Boolean(mockBaseUrl) && normalizeReachabilityHost(mockBaseUrl) === normalizedHost;
-};
-
 export const noteReachable = (host: string, source: ReachabilitySource, deviceInfo: DeviceInfo | null = null): void => {
   const normalizedHost = normalizeReachabilityHost(host);
   if (!normalizedHost) return;
@@ -684,6 +658,8 @@ const clearPinnedDemoMode = () => {
  * and it lifts an earlier decline.
  */
 export async function pinDemoModeByUserChoice() {
+  // A discovery still running would otherwise finish by going offline and clear this choice.
+  discoveryRunToken += 1;
   demoModePinnedByUser = true;
   demoModePinnedWithoutNetwork = isNetworkKnownOffline();
   persistDemoModeSessionFlag(DEMO_MODE_PINNED_SESSION_KEY, true);
@@ -746,7 +722,12 @@ const stopDemoServer = async () => {
   }
 };
 
+let connectionTransitionCount = 0;
+/** Changes with every state transition, so work that spans awaits can tell the connection moved on under it. */
+export const getConnectionTransitionCount = () => connectionTransitionCount;
+
 const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) => {
+  connectionTransitionCount += 1;
   setSnapshot({
     state,
     lastDiscoveryTrigger: trigger,
@@ -908,6 +889,7 @@ const tryReachableSavedDeviceFallback = async (
   // switch's cross-device hygiene BEFORE re-selecting, while the runtime API still targets the old
   // device; otherwise device A's paused state, health verdict and watchdogs leaked onto device B.
   const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id);
+  if (!isCurrentRun()) return false;
   // HARD16-001: select the reachable device BEFORE verifying (as executeSavedDeviceSwitch does):
   // verification stamps whichever device is selected, and verifying first wrote this identity onto
   // the powered-off original. The HARD12-011 window guards against a late /v1/info from that host.
@@ -1036,6 +1018,14 @@ const transitionToDemoActive = async (
     await transitionToOfflineNoDemo(trigger);
     return;
   }
+  const fuzzBaseUrl = isFuzzModeEnabled() ? getFuzzMockBaseUrl() : null;
+  if (!fuzzBaseUrl && !isSimulatedDeviceAvailable()) {
+    // HARD27-027: without a simulated device there is nothing to demonstrate, so neither the offer nor a
+    // server start: the start can only fail, and DEMO_ACTIVE would send every card to the unreachable host.
+    addLog("info", "Demo mode has no simulated device on this platform; staying offline", { trigger });
+    await transitionToOfflineNoDemo(trigger);
+    return;
+  }
   if (options.bypassStickyRealDeviceLock) stickyRealDeviceLock = false;
   cancelActiveDiscovery();
   resetInteractionState("transition-demo-active");
@@ -1056,19 +1046,16 @@ const transitionToDemoActive = async (
   // triggered by the DEMO_ACTIVE re-render already target the mock server
   // instead of the unreachable real-device hostname.
 
-  if (isFuzzModeEnabled()) {
-    const fuzzBaseUrl = getFuzzMockBaseUrl();
-    if (fuzzBaseUrl) {
-      const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
-      applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
-      addLog("info", "Fuzz mode using forced mock base URL", {
-        trigger,
-        baseUrl: fuzzBaseUrl,
-      });
-      transitionTo("DEMO_ACTIVE", trigger);
-      logDiscoveryDecision("DEMO_ACTIVE", trigger, { mode: "demo" });
-      return;
-    }
+  if (fuzzBaseUrl) {
+    const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
+    applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
+    addLog("info", "Fuzz mode using forced mock base URL", {
+      trigger,
+      baseUrl: fuzzBaseUrl,
+    });
+    transitionTo("DEMO_ACTIVE", trigger);
+    logDiscoveryDecision("DEMO_ACTIVE", trigger, { mode: "demo" });
+    return;
   }
 
   const hasMockServerOverride =
@@ -1076,22 +1063,29 @@ const transitionToDemoActive = async (
     Boolean((window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl);
   const shouldStartDemoServer = !demoServerStartedThisSession && (!isTestProbeEnabled() || hasMockServerOverride);
 
+  const transitionsAtEntry = connectionTransitionCount;
+  let startedMock: Awaited<ReturnType<typeof startMockServer>> | null = null;
   if (shouldStartDemoServer) {
     try {
-      const { baseUrl, ftpPort } = await startMockServer();
-      demoServerStartedThisSession = true;
-      const mockHost = getDeviceHostFromBaseUrl(baseUrl);
-      applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
-      if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
-      // The token is applied below, once the active server is known.
+      startedMock = await startMockServer();
     } catch (error) {
-      // On non-native platforms the internal demo servers may be unavailable.
-      // Still enter DEMO_ACTIVE for deterministic UI/state behavior.
+      // A simulated device that fails to start still enters DEMO_ACTIVE for deterministic UI/state behavior.
       setSnapshot({ lastProbeError: (error as Error).message });
       addLog("info", "Demo mode mock server unavailable", {
         error: (error as Error).message,
       });
     }
+  }
+  // A switch or reconnect that completed while the simulated device was starting owns the connection now.
+  if (connectionTransitionCount !== transitionsAtEntry) {
+    addLog("info", "Demo Mode entry abandoned: the connection changed while it started", { trigger });
+    return;
+  }
+  if (startedMock) {
+    demoServerStartedThisSession = true;
+    applyC64APIRuntimeConfig(startedMock.baseUrl, undefined, getDeviceHostFromBaseUrl(startedMock.baseUrl));
+    if (startedMock.ftpPort) setRuntimeFtpPortOverride(startedMock.ftpPort);
+    // The token is applied below, once the active server is known.
   }
 
   const activeMockUrl = getActiveMockBaseUrl();
@@ -1106,14 +1100,6 @@ const transitionToDemoActive = async (
       trigger,
       baseUrl: activeMockUrl,
     });
-  } else if (!isSimulatedDeviceAvailable()) {
-    // HARD27-027: without a simulated device there is nothing to demonstrate.
-    // Entering DEMO_ACTIVE anyway counted as connected, so every card queried
-    // the stored real host - powered off, which is why demo was offered - and
-    // failed, while the badge read Demo. Offline is the honest state.
-    addLog("info", "Demo mode has no simulated device on this platform; staying offline", { trigger });
-    await transitionToOfflineNoDemo(trigger);
-    return;
   } else {
     const fallbackHost = resolveDeviceHostFromStorage();
     const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);
@@ -1467,6 +1453,7 @@ export async function initializeConnectionManager() {
   activeManualDiscovery = null;
   lastManualDiscoveryFallbackAtMs = 0;
   backgroundProbeSuppressedWhileOffline = false;
+  clearProbeFailureLog();
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();

@@ -97,6 +97,12 @@ describe("QuickKeysBar", () => {
     }
   });
 
+  it("prints key labels at the 14 px text floor at the default control size", () => {
+    render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+
+    expect(Number.parseFloat(screen.getByTestId("remote-input-key-return").style.fontSize)).toBeGreaterThanOrEqual(14);
+  });
+
   it("exposes all eight function keys, printed lower-case with a space (f 1 … f 8)", () => {
     render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
     for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) {
@@ -323,6 +329,19 @@ describe("QuickKeysBar", () => {
     const mediumRunStop = screen.getByTestId("remote-input-key-run-stop");
     expect(mediumRunStop).toHaveTextContent("RUN/STOP");
     expect(mediumRunStop).toHaveAttribute("aria-label", "Run Stop");
+  });
+
+  it("prints RETURN short on the compact profile only, and keeps its accessible name", () => {
+    renderAtProfile("compact", <QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+    const compactReturn = screen.getByTestId("remote-input-key-return");
+    expect(compactReturn).toHaveTextContent("RTRN");
+    expect(compactReturn).toHaveAttribute("aria-label", "Return");
+
+    cleanup();
+    renderAtProfile("medium", <QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+    const mediumReturn = screen.getByTestId("remote-input-key-return");
+    expect(mediumReturn).toHaveTextContent("RETURN");
+    expect(mediumReturn).toHaveAttribute("aria-label", "Return");
   });
 
   it("colours both SHIFT keys with the shared primary shift treatment", () => {

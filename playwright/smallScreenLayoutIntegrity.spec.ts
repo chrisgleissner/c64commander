@@ -53,9 +53,9 @@ const compactViewport = DISPLAY_PROFILE_VIEWPORTS.compact.viewport;
  */
 const IGNORED_SURFACES = ["[data-testid=av-mirror-immersive]", "[data-testid=av-mirror-canvas]"];
 
-const settle = async (page: Page) => {
+const settle = async (page: Page, profile = "compact") => {
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+  await page.waitForFunction((expected) => document.documentElement.dataset.displayProfile === expected, profile);
   // The tab bar only exists once the launch sequence has handed over to a real page.
   // Without this the measurement can land on the startup screen and report that
   // everything is fine because almost nothing is on screen yet.
@@ -220,6 +220,71 @@ test.describe("Small screen layout integrity", () => {
       await auditAndAssert(page, `${route.label} in developer mode (every section open)`);
     });
   }
+
+  /**
+   * With two devices saved, the badge names the connected one by a short label of up to ten
+   * characters. The longest label must still leave every page title whole on the smallest screen.
+   */
+  test("the header fits a ten-character device name beside every page title @layout", async ({ page }) => {
+    await setup(page, server.baseUrl);
+    await page.addInitScript((host: string) => {
+      const device = (id: string, name: string, deviceHost: string) => ({
+        id,
+        name,
+        nameSource: "USER",
+        host: deviceHost,
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 23,
+        lastSuccessfulConnectionAt: null,
+        lastUsedAt: null,
+        hasPassword: false,
+      });
+      localStorage.setItem(
+        "c64u_saved_devices:v1",
+        JSON.stringify({
+          version: 1,
+          selectedDeviceId: "device-a",
+          devices: [device("device-a", "Workshop 2", host), device("device-b", "Living rm", "c64u-other")],
+          summaries: {},
+          summaryLru: [],
+          hasEverHadMultipleDevices: true,
+        }),
+      );
+    }, new URL(server.baseUrl).host);
+
+    // The compact screen, then a 393 px phone on the medium profile, whose header type is larger.
+    for (const profile of ["compact", "medium"] as const) {
+      if (profile === "medium") {
+        await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "medium"));
+        await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.medium.viewport);
+      }
+      for (const route of TAB_ROUTES) {
+        await page.goto(route.path, { waitUntil: "domcontentloaded" });
+        await settle(page, profile);
+        await expect(page.getByTestId("unified-health-badge-device").first()).toHaveText("Workshop 2");
+        await auditAndAssert(page, `${route.label} (${profile}) with a named device in the header`);
+        // The badge gives way to the title: a title may wrap between words, never inside one.
+        const splitWords = await page
+          .locator("header .c64-header")
+          .first()
+          .evaluate((title) => {
+            const text = title.textContent ?? "";
+            const node = title.firstChild;
+            if (!node) return [];
+            const split: string[] = [];
+            for (const match of text.matchAll(/\S+/g)) {
+              const range = document.createRange();
+              range.setStart(node, match.index ?? 0);
+              range.setEnd(node, (match.index ?? 0) + match[0].length);
+              if (range.getClientRects().length > 1) split.push(match[0]);
+            }
+            return split;
+          });
+        expect(splitWords, `${route.label} (${profile}): title words split across lines`).toEqual([]);
+      }
+    }
+  });
 
   /**
    * The page title's descenders.

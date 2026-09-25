@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -114,7 +115,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       setHole(null);
       return;
     }
-    let current = true;
+    const stepChange = new AbortController();
     const { path, scope, sectionId, testIds } = step.anchor;
     void navigateToSearchTarget(
       scope && sectionId ? { kind: "control", path, scope, sectionId, testId: testIds[0] } : { kind: "route", path },
@@ -125,17 +126,16 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         // A step whose anchors never appear degrades to the caption alone, so the toast the
         // resolver would raise for search is deliberately swallowed here.
         onToast: () => undefined,
+        signal: stepChange.signal,
       },
     ).then(() => {
       // The resolver waits up to two seconds for the anchor. Measuring on a shorter fixed delay
       // decided a slow step had failed while the element was still on its way, so it is measured
       // again here, once the resolver knows the answer either way.
-      if (current) setAnchorResolved((count) => count + 1);
+      if (!stepChange.signal.aborted) setAnchorResolved((count) => count + 1);
     });
     if (!isConnectedRef.current && step.requiresDevice) ranWithoutDeviceRef.current = true;
-    return () => {
-      current = false;
-    };
+    return () => stepChange.abort();
   }, [step, navigate]);
 
   /*
@@ -283,7 +283,9 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const placement = captionPlacement(hole, viewport.height);
   const showBody = showsCaptionBody({ captionHeight, viewportHeight: viewport.height, idleMs });
 
-  return (
+  // On the body, like every other dialog. Mounted inside the app shell, the overlay never reached
+  // Android's accessibility view of a page that had already been read, so Maestro could not find Skip.
+  return createPortal(
     <div
       className="fixed inset-0 z-[80]"
       role="dialog"
@@ -364,7 +366,8 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

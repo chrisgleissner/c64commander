@@ -9,6 +9,7 @@
 import {
   discoverConnection,
   getConnectionSnapshot,
+  getConnectionTransitionCount,
   noteDeviceUnreachable,
   probeOnce,
   releaseDemoModeChosenWithoutNetwork,
@@ -30,6 +31,7 @@ import { stopLeftoverDeviceStreams } from "@/lib/streams/leftoverDeviceStreams";
 import { isNetworkKnownOffline, recordNetworkStatus, subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
 import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
 import { registerUnreachableListener } from "@/lib/connection/reachabilityEvents";
+import { isActiveReachabilityHost } from "@/lib/connection/activeReachabilityHosts";
 import { addLog } from "@/lib/logging";
 import { DeviceDiscovery } from "@/lib/native/deviceDiscovery";
 
@@ -138,13 +140,17 @@ export const confirmDeviceUnreachable = async () => {
     await showDeviceOffline("network-lost");
     return;
   }
+  // A probe that outlives a switch to another device must not report that device offline.
+  const transitionsAtStart = getConnectionTransitionCount();
+  const connectionMovedOn = () => getConnectionTransitionCount() !== transitionsAtStart;
   confirmingUnreachable = true;
   try {
     for (const delayMs of UNREACHABLE_CONFIRM_DELAYS_MS) {
       if (delayMs > 0) await wait(delayMs);
-      if (getConnectionSnapshot().state !== "REAL_CONNECTED") return;
+      if (connectionMovedOn()) return;
       if (await probeOnce()) return;
     }
+    if (connectionMovedOn()) return;
     await showDeviceOffline("not-answering");
   } finally {
     confirmingUnreachable = false;
@@ -200,8 +206,9 @@ export const installNetworkTransitions = () => {
   const unsubscribeEdges = subscribeNetworkEdges(handleNetworkEdge);
   const unsubscribeConnection = subscribeConnection(resumeMirrorAfterOutage);
   const unsubscribeMirror = avMirrorSession.subscribe(trackMirror);
-  const unregisterUnreachable = registerUnreachableListener(() => {
-    void confirmDeviceUnreachable();
+  // Health checks probe the other saved devices too; one of those not answering says nothing about this one.
+  const unregisterUnreachable = registerUnreachableListener((host) => {
+    if (isActiveReachabilityHost(host)) void confirmDeviceUnreachable();
   });
   let removeNativeListener: (() => void) | null = null;
   let disposed = false;

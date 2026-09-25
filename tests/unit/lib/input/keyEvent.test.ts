@@ -111,19 +111,23 @@ describe("keypad profile", () => {
   it("maps the d-pad and center", () => {
     expect(resolve({ code: "DpadUp" })).toBe("dpadUp");
     expect(resolve({ code: "DpadCenter" })).toBe("center");
-    expect(resolve({ keyCode: 23 })).toBe("center");
+  });
+
+  it("does not read Android key codes as DOM key codes, where they name other keys", () => {
+    expect(resolve({ key: "Control", code: "ControlLeft", keyCode: 17 })).toBeNull();
+    expect(resolve({ key: "Alt", code: "AltLeft", keyCode: 18 })).toBeNull();
+    expect(resolve({ key: "CapsLock", code: "CapsLock", keyCode: 20 })).toBeNull();
+    expect(resolve({ key: "r", code: "KeyR", keyCode: 82 })).toBeNull();
   });
 
   it("maps star/hash/soft keys/back/call/menu", () => {
     expect(resolve({ code: "Star" })).toBe("star");
-    expect(resolve({ keyCode: 17 })).toBe("star");
     expect(resolve({ code: "Pound" })).toBe("hash");
     expect(resolve({ code: "SoftLeft" })).toBe("softLeft");
     expect(resolve({ code: "SoftRight" })).toBe("softRight");
     expect(resolve({ code: "GoBack" })).toBe("back");
-    expect(resolve({ keyCode: 4 })).toBe("back");
     expect(resolve({ code: "Call" })).toBe("activate");
-    expect(resolve({ keyCode: 82 })).toBe("openMenu");
+    expect(resolve({ code: "ContextMenu" })).toBe("openMenu");
   });
 
   it("inherits desktop bindings from the base profile", () => {

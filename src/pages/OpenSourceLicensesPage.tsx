@@ -7,7 +7,6 @@
  */
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { App } from "@capacitor/app";
 import { addErrorLog } from "@/lib/logging";
 import { StatefulButton } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -243,29 +242,24 @@ export default function OpenSourceLicensesPage() {
     };
   }, []);
 
+  // Escape, and the Android Back key the app delivers as one, close the overlay. A second native
+  // Back listener here would run alongside the app's own, so Back did two things at once.
   useEffect(() => {
-    let removed = false;
-    let removeListener: (() => Promise<void>) | undefined;
-
-    void App.addListener("backButton", () => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
       navigate("/settings");
-    }).then((handle) => {
-      if (removed) {
-        void handle.remove();
-        return;
-      }
-      removeListener = () => handle.remove();
-    });
-
-    return () => {
-      removed = true;
-      void removeListener?.();
     };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
   }, [navigate]);
 
   const content = (
     <div
       data-testid="open-source-licenses-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Open source licenses"
       className="fixed inset-0 z-[1100] overflow-hidden bg-background/96 backdrop-blur-sm supports-[backdrop-filter]:bg-background/88"
     >
       <div className="mx-auto flex h-full w-full max-w-6xl min-w-0 flex-col px-3 py-3 sm:px-6 sm:py-4">

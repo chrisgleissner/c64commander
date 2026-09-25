@@ -10,6 +10,8 @@ import {
   tryFetchUltimateSidBlob,
 } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
+import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { getSidRadioStats, resetSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -20,7 +22,11 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
-import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
+import {
+  isRemotePlaybackActive,
+  markRemotePlaybackStarted,
+  markRemotePlaybackStopped,
+} from "@/lib/playback/activePlaybackSession";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
@@ -2899,6 +2905,52 @@ describe("usePlaybackController", () => {
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 
+    it("says so when a tune set to play on this device cannot be read off the Ultimate", async () => {
+      enableLocal();
+      const controller = fakeController();
+      vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(null);
+      const playlist = [
+        createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+      ];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ description: ENGINE_FALLBACK_MESSAGES["sid-unreadable-on-c64"] }),
+      );
+    });
+
+    // The simulated device has no C64 to read the tune from, so "cannot be read off the Ultimate" would be wrong.
+    it("does not say a tune cannot be read off the Ultimate when the device is simulated", async () => {
+      enableLocal();
+      connectionStateOverride.current = "DEMO_ACTIVE";
+      const controller = fakeController();
+      vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(null);
+      const playlist = [
+        createPlaylistItem({
+          path: "/Usb0/Demos/demo.sid",
+          request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" },
+          category: "sid",
+        }),
+      ];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      try {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      } finally {
+        connectionStateOverride.current = null;
+      }
+
+      expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/Usb0/Demos/demo.sid");
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(toast)).not.toHaveBeenCalledWith(
+        expect.objectContaining({ description: ENGINE_FALLBACK_MESSAGES["sid-unreadable-on-c64"] }),
+      );
+    });
+
     it("plays a SID on this device, without trying to connect, when no C64 Ultimate is connected", async () => {
       // Engine left on "C64" (the default). Offline with Demo Mode declined, this failed with two
       // "Device not connected" errors instead of playing a tune the phone can play itself.
@@ -3099,6 +3151,112 @@ describe("usePlaybackController", () => {
 
       expect(controller.play).not.toHaveBeenCalled();
       expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    // With "This device" selected, an RSID falls back to the C64 and the next PSID plays here: the C64
+    // kept looping the RSID underneath, and Stop skipped it because the current tune was local.
+    it("stops the C64 tune when the next tune plays on this device", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+      expect(isRemotePlaybackActive()).toBe(true);
+      expect(machineReset).not.toHaveBeenCalled();
+
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(machineReset.mock.invocationCallOrder[0]).toBeLessThan(controller.play.mock.invocationCallOrder[0]);
+      expect(isRemotePlaybackActive()).toBe(false);
+    });
+
+    // A paused tune leaves the C64 frozen; the reset that stops it has to reach a running machine.
+    it("resumes a paused C64 before resetting it for a tune that plays on this device", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineResume = vi.fn().mockResolvedValue(undefined);
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineResume, machineReset } as any);
+      markRemotePlaybackStarted();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        isPlaying: true,
+        isPaused: true,
+      });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(machineResume).toHaveBeenCalledTimes(1);
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(machineResume.mock.invocationCallOrder[0]).toBeLessThan(machineReset.mock.invocationCallOrder[0]);
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(isRemotePlaybackActive()).toBe(false);
+    });
+
+    it("restores the C64's volume after stopping its tune for one that plays on this device", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
+      const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        restoreVolumeOverrides,
+      });
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      restoreVolumeOverrides.mockClear();
+
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+
+      expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
+      expect(machineReset.mock.invocationCallOrder[0]).toBeLessThan(restoreVolumeOverrides.mock.invocationCallOrder[0]);
+    });
+
+    // Carrying a tune on to the phone when the C64 goes out of reach must leave the tune marked as playing
+    // there, so it is reset when the device comes back instead of looping on.
+    it("leaves the C64 tune to the reconnect path when the C64 is out of reach", async () => {
+      enableLocal();
+      connectionStateOverride.current = "OFFLINE_NO_DEMO";
+      const controller = fakeController();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      markRemotePlaybackStarted();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      try {
+        await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(machineReset).not.toHaveBeenCalled();
+        expect(isRemotePlaybackActive()).toBe(true);
+      } finally {
+        connectionStateOverride.current = null;
+      }
+    });
+
+    it("does not reset the C64 again once the stop has failed", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineReset = vi.fn().mockRejectedValue(new Error("Reset timed out"));
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(isRemotePlaybackActive()).toBe(false);
     });
 
     it("routes a non-SID item to the C64 with a notice when the local engine is selected", async () => {
@@ -3316,6 +3474,29 @@ describe("usePlaybackController", () => {
         expect(machineReset).toHaveBeenCalled();
       });
 
+      it("resets the C64 once when the user moves its tune to 'This device'", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const machineReset = vi.fn().mockResolvedValue(undefined);
+        vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(machineReset).toHaveBeenCalledTimes(1);
+        expect(isRemotePlaybackActive()).toBe(false);
+      });
+
       // The Listen-on chip reads "Here" while a tune carried on from the C64 plays on the phone, inviting this pick.
       it("keeps a tune that already plays on the device playing when the user picks 'This device'", async () => {
         localStorage.setItem("c64u_local_engine_enabled", "1");
@@ -3494,6 +3675,125 @@ describe("scrubbing a tune this page did not start", () => {
 
     result.current.seekToFraction(0.5, 60_000);
     await vi.waitFor(() => expect(seekTo).toHaveBeenCalled());
+  });
+});
+
+// SID Radio claims its station before starting the playlist, so it has to learn when the start was dropped.
+describe("startPlaylist reports whether it started", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("resolves false when another play start holds playback and true once it started", async () => {
+    const playStartInFlightRef = { current: true };
+    const playlist = [createPlaylistItem()];
+    const { result } = renderPlaybackController(playlist, { playStartInFlightRef });
+
+    await expect(result.current.startPlaylist(playlist)).resolves.toBe(false);
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+
+    playStartInFlightRef.current = false;
+    await expect(result.current.startPlaylist(playlist)).resolves.toBe(true);
+  });
+
+  it("resolves false for an empty playlist without claiming the play start or showing loading", async () => {
+    const playStartInFlightRef = { current: false };
+    const setIsPlaylistLoading = vi.fn();
+    const { result } = renderPlaybackController([], { playStartInFlightRef, setIsPlaylistLoading });
+
+    await expect(result.current.startPlaylist([])).resolves.toBe(false);
+
+    expect(playStartInFlightRef.current).toBe(false);
+    expect(setIsPlaylistLoading).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+  });
+});
+
+describe("a launch that outlasts a playlist edit", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("selects the launched tune where it sits after an earlier row was removed during the launch", async () => {
+    let finishLaunch: () => void = () => {};
+    vi.mocked(executePlayPlan).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLaunch = resolve;
+        }),
+    );
+    const setCurrentIndex = vi.fn();
+    const playlist = [
+      createPlaylistItem({ id: "first", label: "first.prg" }),
+      createPlaylistItem({ id: "second", label: "second.prg" }),
+      createPlaylistItem({ id: "third", label: "third.prg" }),
+    ];
+    const { result } = renderPlaybackController(playlist, { setCurrentIndex });
+
+    const launch = result.current.playItem(playlist[2], { playlistIndex: 2 });
+    await vi.waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalled());
+    playlist.splice(0, 1);
+    finishLaunch();
+    await launch;
+
+    expect(setCurrentIndex).toHaveBeenLastCalledWith(1);
+  });
+});
+
+// "Remaining" subtracts the played clock from the whole playlist's length, so a seek has to move that clock
+// by the distance seeked. Setting it to the position within the current tune dropped every earlier tune's
+// time from it, and "Remaining" jumped up by that much.
+describe("a seek keeps the time played by earlier tunes", () => {
+  const seekingController = (fromSeconds: number, toSeconds: number) => {
+    let position = fromSeconds;
+    return {
+      positionSeconds: vi.fn(() => position),
+      seekBy: vi.fn(async () => {
+        position = toSeconds;
+      }),
+      seekTo: vi.fn(async (seconds: number) => {
+        position = seconds;
+      }),
+    };
+  };
+
+  it("moves the played clock by the distance of a relative seek", async () => {
+    const now = Date.now();
+    const clock = new PlaybackClock();
+    clock.hydrate(250_000, now);
+    const setPlayedMs = vi.fn();
+    const playlist = [createPlaylistItem({ category: "sid" })];
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      playedClockRef: { current: clock } as any,
+      trackStartedAtRef: { current: now - 10_000 },
+      setPlayedMs,
+      localSidPlaybackController: seekingController(10, 40),
+    });
+
+    await result.current.handleSeekBy(30);
+
+    const playedMs = setPlayedMs.mock.calls.at(-1)?.[0] as number;
+    expect(playedMs).toBeGreaterThanOrEqual(280_000);
+    expect(playedMs).toBeLessThan(281_000);
+  });
+
+  it("moves the played clock by the distance of a scrub while paused", async () => {
+    const clock = new PlaybackClock();
+    clock.hydrate(250_000, null);
+    const setPlayedMs = vi.fn();
+    const playlist = [createPlaylistItem({ category: "sid" })];
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 10_000,
+      playedClockRef: { current: clock } as any,
+      trackStartedAtRef: { current: 0 },
+      setPlayedMs,
+      localSidPlaybackController: seekingController(10, 10),
+    } as any);
+
+    result.current.seekToFraction(0.5, 60_000);
+
+    await vi.waitFor(() => expect(setPlayedMs).toHaveBeenCalled());
+    expect(setPlayedMs).toHaveBeenLastCalledWith(270_000);
+    expect(clock.current(Date.now() + 5_000)).toBe(270_000);
   });
 });
 

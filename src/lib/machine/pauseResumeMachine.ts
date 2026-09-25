@@ -22,14 +22,29 @@ export type PauseResumeMachineInput = {
   resume: () => Promise<unknown>;
 };
 
+let inFlight: Promise<"paused" | "running"> | null = null;
+
 /**
  * Pause or resume the machine, whichever the shared execution store says is next.
  *
  * It lives here rather than in Home's actions because the keypad's own shortcut has to do exactly
  * the same thing from any page, and a second copy would be a second set of rules about the SID
  * mixer. Returns the state it moved to, so a caller can word its own message.
+ *
+ * A call made while one is running joins it rather than starting another: two overlapping pauses
+ * made the second capture the mixer the first had already muted, record that no mute was pending,
+ * and so leave the SID silent after the resume.
  */
-export const pauseResumeMachine = async (input: PauseResumeMachineInput): Promise<"paused" | "running"> => {
+export const pauseResumeMachine = (input: PauseResumeMachineInput): Promise<"paused" | "running"> => {
+  if (!inFlight) {
+    inFlight = runPauseResume(input).finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+};
+
+const runPauseResume = async (input: PauseResumeMachineInput): Promise<"paused" | "running"> => {
   const target = getMachineExecutionSnapshot().state === "running" ? "paused" : "running";
   // Read before the store is written below: a pause taken on another page may have muted the SID
   // mixer and left a snapshot that only this resume can put back.

@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { shouldEnterGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
+import { reportUserError } from "@/lib/uiErrors";
 import {
   addThenMaybeLaunch,
   PICKER_ADD_LABEL,
@@ -15,6 +16,11 @@ import {
   resolvePickerConfirm,
 } from "@/pages/playFiles/playFilesUtils";
 import { resolveGuidanceLabels, type GuidanceState } from "@/lib/input/guidance";
+
+vi.mock("@/lib/uiErrors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/uiErrors")>()),
+  reportUserError: vi.fn(),
+}));
 
 const launch = (overrides: Partial<Parameters<typeof shouldEnterGameModeOnLaunch>[0]> = {}) =>
   shouldEnterGameModeOnLaunch({
@@ -172,6 +178,24 @@ describe("addThenMaybeLaunch", () => {
     await expect(
       addThenMaybeLaunch(stub({ launch: () => Promise.reject(new Error("Host unreachable")) })),
     ).resolves.toBe(true);
+  });
+
+  // The launch does not report every failure itself (an unreadable local file, a failed launch
+  // request), and swallowing the rejection here left the user with a queued item and no playback.
+  it("reports a launch failure to the user as a playback failure", async () => {
+    vi.mocked(reportUserError).mockClear();
+    const failure = new Error("Local file unavailable. Re-add it to the playlist.");
+
+    await addThenMaybeLaunch(stub({ launch: () => Promise.reject(failure) }));
+
+    expect(reportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
+        description: failure.message,
+        error: failure,
+      }),
+    );
   });
 
   it("does nothing beyond the add when there is no item to launch", async () => {

@@ -11,6 +11,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { resolveSafeAreaCollisionPadding } from "@/lib/ui/popperCollisionPadding";
 import { usePopoverBackDismissRoot } from "@/components/ui/interstitial-state";
 import { wrapUserEvent, wrapValueChange } from "@/lib/tracing/userTrace";
 
@@ -87,6 +88,33 @@ const DropdownMenuSubContent = React.forwardRef<
 ));
 DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
+/**
+ * Keep the focused item on screen while the menu settles: it is focused before the popper sizes
+ * the menu, and a tall menu then scrolled with its focused item out of sight.
+ */
+const useKeepFocusedItemInView = (forwardedRef: React.ForwardedRef<HTMLDivElement>) => {
+  const [node, setNode] = React.useState<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && focused !== node && node.contains(focused)) {
+        focused.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+  return React.useCallback(
+    (element: HTMLDivElement | null) => {
+      setNode(element);
+      if (typeof forwardedRef === "function") forwardedRef(element);
+      else if (forwardedRef) forwardedRef.current = element;
+    },
+    [forwardedRef],
+  );
+};
+
 /*
  * The menu is bounded by the space available beside its trigger, not just by the viewport.
  *
@@ -99,12 +127,14 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, children, ...props }, ref) => {
+>(({ className, sideOffset = 4, collisionPadding, children, ...props }, ref) => {
+  const contentRef = useKeepFocusedItemInView(ref);
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
-        ref={ref}
+        ref={contentRef}
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding ?? resolveSafeAreaCollisionPadding()}
         className={cn(
           "z-50 min-w-[8rem] max-w-[calc(100vw-2rem-var(--safe-area-inset-left)-var(--safe-area-inset-right))] max-h-[min(var(--radix-dropdown-menu-content-available-height,100dvh),calc(100dvh-2rem-var(--safe-area-inset-top)-var(--safe-area-inset-bottom)))] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-elev-2 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           className,

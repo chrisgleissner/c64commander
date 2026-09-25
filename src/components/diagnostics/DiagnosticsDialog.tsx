@@ -58,6 +58,8 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { useOnOpen } from "@/hooks/useOnOpen";
+import { DEMO_MODE_CONNECTION_LABEL } from "@/lib/connection/demoModeLabels";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
@@ -1248,8 +1250,7 @@ export function DiagnosticsDialog({
   }, [allEntries]);
   const showDeviceFilter = showDeviceUi && deviceFilterOptions.length > 0;
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setHeaderExpanded(false);
     setSelectedTypes(defaultEvidenceTypes ?? new Set(DEFAULT_TYPES));
     setContributor("All");
@@ -1286,7 +1287,7 @@ export function DiagnosticsDialog({
             snapshot.host,
           ),
     );
-  }, [defaultEvidenceTypes, healthState.connectedDeviceLabel, open, selectedSavedDevice]);
+  });
 
   useEffect(() => {
     if (deviceFilter !== null && !deviceFilterOptions.some((option) => option.id === deviceFilter)) {
@@ -1379,15 +1380,13 @@ export function DiagnosticsDialog({
   const connectionDisplayName = selectedSavedDevice
     ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
     : connectionDraft.name || healthState.connectedDeviceLabel || connectionDraft.host;
-  const connectionLabel = buildConnectionLabel(
-    selectedSavedDevice
-      ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
-      : (healthState.connectedDeviceLabel ?? "C64U"),
-    selectedProductCode,
-  );
+  const connectionState = useConnectionState();
+  const connectionLabel =
+    connectionState.state === "DEMO_ACTIVE"
+      ? DEMO_MODE_CONNECTION_LABEL
+      : buildConnectionLabel(connectionDisplayName, selectedProductCode);
   // Offered only where it is the answer: the app is not talking to a device, and Demo Mode is
   // available. In Demo Mode already, or connected to real hardware, it would be noise.
-  const connectionState = useConnectionState();
   const showSimulatedDeviceOffer =
     (connectionState.state === "OFFLINE_NO_DEMO" || connectionState.state === "UNKNOWN") &&
     featureFlagManager.getSnapshot().flags.demo_mode_enabled;
@@ -1519,7 +1518,7 @@ export function DiagnosticsDialog({
       <p className="px-3 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           openConnectionView();
@@ -1530,7 +1529,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           handleManageDevices();
@@ -1542,7 +1541,7 @@ export function DiagnosticsDialog({
       <div className="my-1 border-t border-border" />
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setConfigDriftOpen(true);
@@ -1553,7 +1552,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setDecisionStateOpen(true);
@@ -1564,7 +1563,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setLatencyOpen(true);
@@ -1575,7 +1574,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setKeyExplorerOpen(true);
@@ -1586,7 +1585,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHistoryOpen(true);
@@ -1597,7 +1596,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHeatMapVariant("REST");
@@ -1608,7 +1607,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHeatMapVariant("FTP");
@@ -1619,7 +1618,7 @@ export function DiagnosticsDialog({
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
           setHeatMapVariant("CONFIG");
@@ -1636,7 +1635,7 @@ export function DiagnosticsDialog({
       >
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+          className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
           onClick={() => {
             setOverflowOpen(false);
             void onShareAll();
@@ -1648,7 +1647,7 @@ export function DiagnosticsDialog({
         </button>
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+          className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
           onClick={() => {
             setOverflowOpen(false);
             handleShareFiltered();
@@ -1662,7 +1661,7 @@ export function DiagnosticsDialog({
           <AlertDialogTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
+              className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-destructive whitespace-normal hover:bg-muted"
               data-testid="diagnostics-clear-all-trigger"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1790,7 +1789,7 @@ export function DiagnosticsDialog({
                   </p>
                   <button
                     type="button"
-                    className="block truncate text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                    className="flex min-h-11 w-full items-center text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
                     data-testid="diagnostics-device-line"
                     onPointerDown={handleDevicePointerDown}
                     onPointerUp={handleDevicePointerUp}
@@ -1807,7 +1806,7 @@ export function DiagnosticsDialog({
                       }
                     }}
                   >
-                    {connectionLabel}
+                    <span className="min-w-0 truncate">{connectionLabel}</span>
                   </button>
                   <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
                     {formatRelativeTime(lastCheckTimestamp)}
@@ -1880,7 +1879,7 @@ export function DiagnosticsDialog({
             {/* The whole bar opens the editor: its chips look tappable, and the funnel alone was a 24 px target. */}
             <button
               type="button"
-              className="mt-3 flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-left text-xs"
+              className="mt-3 flex min-h-11 w-full shrink-0 flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-left text-xs"
               data-testid="filters-collapsed-bar"
               aria-label="Edit filters"
               onClick={() => setFiltersOpen(true)}
@@ -1905,7 +1904,7 @@ export function DiagnosticsDialog({
             </button>
 
             {/* Phase 2: Evidence list (immediately visible) */}
-            <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
+            <section className="mt-2 shrink-0" data-testid="evidence-panel">
               <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
               </p>

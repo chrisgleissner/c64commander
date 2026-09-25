@@ -42,13 +42,10 @@ const NO_NETWORK_MESSAGE =
 /*
  * Shorter copy for the compact profile, saying the same thing.
  *
- * This is the first screen most people see, and on a 320x427 panel the full wording ran to nine
- * lines and pushed "Continue in Demo Mode" below the fold. The dialog scrolls, so the button was
- * reachable, but a first-run offer whose primary action needs a scroll to find is a poor way to
- * meet the app. Both buttons fit above the fold with this.
+ * On a 320x427 panel above a gesture bar the offer has about 330px. Five lines of prose left the
+ * second button half off screen, and a tap on its hidden half reached the backdrop, which declines.
  */
-const NO_NETWORK_MESSAGE_COMPACT =
-  "No network, so no C64U can be reached. Demo Mode runs the app against a simulated device on this phone.";
+const NO_NETWORK_MESSAGE_COMPACT = "No network, so no C64U can be reached. Demo Mode simulates one.";
 const NOT_FOUND_SUFFIX_COMPACT = ". Demo Mode runs the app against a simulated device on this phone.";
 
 export function DemoModeInterstitial() {
@@ -132,22 +129,12 @@ export function DemoModeInterstitial() {
             ) : null}
           </div>
         )}
-        <DialogFooter>
-          <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
-            <Button
-              variant="outline"
-              data-testid="demo-interstitial-retry"
-              onClick={() => {
-                void declineDemoMode({ retry: "manual" });
-              }}
-            >
-              {noNetwork ? "Try again" : "Retry connection"}
-            </Button>
-            {noNetwork ? null : (
-              <Button variant="secondary" data-testid="demo-interstitial-save-retry" onClick={handleSaveAndRetry}>
-                Save & retry
-              </Button>
-            )}
+        {/* No field to type into, so the buttons can stay put while prose that wraps further scrolls under them. */}
+        <DialogFooter
+          className={noNetwork ? "sticky bottom-0 z-10 border-t border-border bg-background pt-3" : undefined}
+        >
+          {/* Primary first: stacked on a phone it is the one action sure to be on screen when the offer opens. */}
+          <div className="flex flex-col gap-2 w-full sm:flex-row-reverse sm:justify-start">
             <Button
               variant="default"
               data-testid="demo-interstitial-continue"
@@ -156,6 +143,20 @@ export function DemoModeInterstitial() {
               }}
             >
               Continue in Demo Mode
+            </Button>
+            {noNetwork ? null : (
+              <Button variant="secondary" data-testid="demo-interstitial-save-retry" onClick={handleSaveAndRetry}>
+                Save & retry
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              data-testid="demo-interstitial-retry"
+              onClick={() => {
+                void declineDemoMode({ retry: "manual" });
+              }}
+            >
+              {noNetwork ? "Try again" : "Retry connection"}
             </Button>
           </div>
         </DialogFooter>

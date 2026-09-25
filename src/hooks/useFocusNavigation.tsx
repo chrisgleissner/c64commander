@@ -46,11 +46,11 @@ import {
 } from "react";
 
 import {
-  CONTEXT_MENU_SELECTOR,
   FocusDiscoveryEngine,
   INTERACTIVE_SELECTOR,
   NavigationController,
   digitForAction,
+  findContextMenuTrigger,
   getInputModality,
   isFocusDisabled,
   isFocusVisible,
@@ -66,11 +66,12 @@ import {
 import { useInputProfile } from "@/hooks/useInputProfile";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
-import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
@@ -103,10 +104,16 @@ const FocusNavigationContext = createContext<FocusNavigationContextValue | null>
  * built-in cursor; Radix gives it only a Tab focus trap, which a keypad handset cannot use.
  */
 const DIALOG_ANCESTOR_SELECTOR = '[role="dialog"],[role="alertdialog"]';
-/** Single-line text fields: Up/Down cannot move the caret, so they are free to move focus. */
-const SINGLE_LINE_TEXT_TYPES = new Set(["text", "search", "url", "tel", "email", "password"]);
-const isSingleLineTextField = (target: EventTarget | null): boolean =>
-  target instanceof HTMLInputElement && SINGLE_LINE_TEXT_TYPES.has(target.type);
+/** Controls that ignore Enter by design and toggle only on Space or a click. */
+const ENTER_IGNORING_CONTROL_SELECTOR = '[role="checkbox"],[role="radio"]';
+/**
+ * Single-line fields, where Up/Down move focus. The caret cannot move vertically in them, and a
+ * number field's own Up/Down step left a dialog's number field with no key that reached anything
+ * else: digits type its value, and Back closes the dialog.
+ */
+const SINGLE_LINE_FIELD_TYPES = new Set(["text", "search", "url", "tel", "email", "password", "number"]);
+const isSingleLineField = (target: EventTarget | null): boolean =>
+  target instanceof HTMLInputElement && SINGLE_LINE_FIELD_TYPES.has(target.type);
 
 /**
  * Move focus to the next/previous tabbable inside `overlay`, wrapping at the ends.
@@ -271,61 +278,63 @@ export const FocusNavigationProvider = ({
   const scopeElementRef = useRef<HTMLElement | null>(null);
   const ringListenersRef = useRef(new Set<() => void>());
   const engineRef = useRef<FocusDiscoveryEngine | null>(null);
+  const dispatchingRef = useRef(false);
 
-  const openContextMenuFor = useCallback((element: HTMLElement | null): boolean => {
-    if (!element) return false;
-    const host = element.closest("[data-key-nav-menu-host]") ?? element;
-    const trigger = element.matches(CONTEXT_MENU_SELECTOR) ? element : host.querySelector(CONTEXT_MENU_SELECTOR);
-    if (trigger instanceof HTMLElement) {
-      trigger.click();
-      return true;
-    }
-    return false;
+  const openContextMenuFor = useCallback((element: HTMLElement | null, isGroup: boolean): boolean => {
+    const trigger = findContextMenuTrigger(element, isGroup);
+    trigger?.click();
+    return trigger !== null;
   }, []);
 
-  const controller = useMemo(
-    () =>
-      new NavigationController({
-        callbacks: {
-          onFocus: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
-          // After activation, keep the ring element focused — BUT respect an
-          // activation that intentionally moved focus into the item's own subtree
-          // (the field-row pattern focuses its inner <input> for editing). Yanking
-          // focus back to the row there would break OK-to-edit; the synchronous
-          // `contains` check lets that focus stand while still re-anchoring a plain
-          // button/control that did not move focus.
-          onActivate: (item) => {
-            const element = engineRef.current?.elementForId(item.id) ?? null;
-            if (element && element.contains(document.activeElement)) return;
-            // Activating a bare text field is the explicit "go in" that starts
-            // editing, so it is the one place the field does take real DOM focus.
-            // `focusRingElement` deliberately withholds focus from editables on
-            // arrival (that is what stops the ring being trapped), so focus it
-            // here instead of going through it. A synthetic click would not:
-            // `.click()` does not move focus the way a real pointer press does.
-            if (element && isEditableTarget(element)) {
-              element.focus({ preventScroll: true });
-              element.scrollIntoView({ block: "nearest", inline: "nearest" });
-              return;
-            }
-            focusRingElement(element);
-          },
-          onNavigateBack: () => onNavigateBackRef.current?.(),
-          onOpenMenu: (item) => {
-            const opened = openContextMenuFor(item ? (engineRef.current?.elementForId(item.id) ?? null) : null);
-            if (opened) return true;
-            // No context menu for this item: fall back to the global quick menu. Report
-            // whether we actually handled the key (a quick-menu handler exists) so the
-            // navigation controller consumes the open-menu key instead of letting it
-            // fall through as `ignored` (the callback contract returns boolean).
-            const quickMenu = shortcutsRef.current.openQuickMenu;
-            quickMenu?.();
-            return Boolean(quickMenu);
-          },
+  const ringElementFor = useCallback((id: string) => engineRef.current?.elementForId(id) ?? null, []);
+
+  const controller = useMemo(() => {
+    const created: NavigationController = new NavigationController({
+      callbacks: {
+        onFocus: (item) => focusRingElement(ringElementFor(item.id)),
+        // After activation, keep the ring element focused — BUT respect an
+        // activation that intentionally moved focus into the item's own subtree
+        // (the field-row pattern focuses its inner <input> for editing). Yanking
+        // focus back to the row there would break OK-to-edit; the synchronous
+        // `contains` check lets that focus stand while still re-anchoring a plain
+        // button/control that did not move focus.
+        onActivate: (item) => {
+          // Anchored on the ring's item, which for a single-control card is the card: DOM focus
+          // left on the control it clicked took the next OK from the ring, and a card header's
+          // toggle then closed the card it had just opened instead of going into it.
+          const element = ringElementFor(created.focus.current()?.id ?? item.id);
+          if (element && element.contains(document.activeElement)) return;
+          // Activating a bare text field is the explicit "go in" that starts
+          // editing, so it is the one place the field does take real DOM focus.
+          // `focusRingElement` deliberately withholds focus from editables on
+          // arrival (that is what stops the ring being trapped), so focus it
+          // here instead of going through it. A synthetic click would not:
+          // `.click()` does not move focus the way a real pointer press does.
+          if (element && isEditableTarget(element)) {
+            element.focus({ preventScroll: true });
+            element.scrollIntoView({ block: "nearest", inline: "nearest" });
+            return;
+          }
+          focusRingElement(element);
         },
-      }),
-    [openContextMenuFor],
-  );
+        onNavigateBack: () => onNavigateBackRef.current?.(),
+        onOpenMenu: (item) => {
+          const opened = item
+            ? openContextMenuFor(ringElementFor(item.id), created.focus.hasEnabledChildren(item.id))
+            : openContextMenuFor(null, false);
+          if (opened) return true;
+          // No context menu for this item: fall back to the global quick menu. Report
+          // whether we actually handled the key (a quick-menu handler exists) so the
+          // navigation controller consumes the open-menu key instead of letting it
+          // fall through as `ignored` (the callback contract returns boolean).
+          const quickMenu = shortcutsRef.current.openQuickMenu;
+          quickMenu?.();
+          return Boolean(quickMenu);
+        },
+      },
+    });
+    return created;
+  }, [openContextMenuFor, ringElementFor]);
 
   /**
    * Applies the selected-control highlight imperatively: `data-key-selected` sits
@@ -358,13 +367,19 @@ export const FocusNavigationProvider = ({
     ringListenersRef.current.forEach((listener) => listener());
   }, [refreshHighlight]);
 
+  // Focus moved by a component's effect lands before the ring has scanned the control it moved to.
+  const focusAwaitingRingRef = useRef<HTMLElement | null>(null);
+  const adoptFocusAwaitingRingRef = useRef<() => void>(() => undefined);
   const engine = useMemo(
     () =>
       new FocusDiscoveryEngine({
         controller: controller.focus,
         listExplicit: () => Array.from(descriptorsRef.current.values()),
         freezeDuringTransientLayer: () => controller.layerDepth > 0,
-        onAfterAssemble: () => notifyRing(),
+        onAfterAssemble: () => {
+          adoptFocusAwaitingRingRef.current();
+          notifyRing();
+        },
       }),
     [controller, notifyRing],
   );
@@ -432,19 +447,27 @@ export const FocusNavigationProvider = ({
   const adoptActiveElement = useCallback(() => {
     const active = document.activeElement;
     if (!(active instanceof HTMLElement)) return;
+    // The innermost item holding focus: a card or dialog surface is an item too, and it is
+    // listed before the control inside it that actually has focus.
+    let innermost: { id: string; element: HTMLElement } | null = null;
     for (const item of controller.focus.list()) {
       const element = engineRef.current?.elementForId(item.id);
-      if (element && (element === active || element.contains(active))) {
-        controller.focus.setCurrent(item.id);
-        return;
-      }
+      if (!element?.contains(active)) continue;
+      if (!innermost || innermost.element.contains(element)) innermost = { id: item.id, element };
     }
+    if (innermost) controller.focus.setCurrent(innermost.id);
+    return innermost?.element === active;
   }, [controller]);
+  adoptFocusAwaitingRingRef.current = () => {
+    const awaiting = focusAwaitingRingRef.current;
+    focusAwaitingRingRef.current = null;
+    if (awaiting && awaiting === document.activeElement) adoptActiveElement();
+  };
 
   // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
-  // handler below already knows how to read. Its own effect, because registering with the native
-  // bridge is asynchronous and the handler's effect re-runs whenever the keymap or controller does.
-  useEffect(() => (enabled ? installDeviceBackButton() : undefined), [enabled]);
+  // handler below already knows how to read. Installed whether or not keypad navigation is on,
+  // because the listener replaces Android's own Back handling for the whole app.
+  useEffect(() => installDeviceBackButton(() => onNavigateBackRef.current?.()), []);
 
   useEffect(() => {
     if (!enabled) {
@@ -461,13 +484,28 @@ export const FocusNavigationProvider = ({
       setInputModality("pointer");
       return;
     }
+    // Up/Down inside a dialog move DOM focus, not the ring, and a button's own focus style fades
+    // after 160 ms. Moving the ring onto the same control keeps the steady highlight on it.
+    const followDialogFocus = () => {
+      setInputModality("key-navigation");
+      adoptActiveElement();
+      notifyRing();
+    };
     const handleKeyDown = (event: KeyboardEvent) => {
+      // The tour owns every key while it is up. Its listener is registered after this one, so
+      // stopping propagation there cannot keep OK from also activating the ring's item here. The
+      // guidance bar is still refreshed, which is how it learns to stay hidden during the tour.
+      if (document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE)) {
+        notifyRing();
+        return;
+      }
       const normalized = normalizeKeyEvent(event, keymap);
-      // Android's hardware Back carries no key code, so it matches no keymap binding and used to
-      // fall through the `action === null` return below without ascending. It means what Escape
-      // means here: dismiss, disengage, come back out of the card.
+      // Android's hardware Back carries no key code, so it matches no keymap binding. With an
+      // overlay open it means Escape, which the overlay closes on; otherwise it is the hardware
+      // `back`: disengage, come out of the card, and once nothing is left, leave the route.
       const isDeviceBackButton = isDeviceBackKey(event);
-      const action = normalized.action ?? (isDeviceBackButton ? "escape" : null);
+      const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
+      const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
       // Before any branch below reads the ring, so the first key navigates.
       if (action !== null) startEngine();
       // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
@@ -483,16 +521,28 @@ export const FocusNavigationProvider = ({
           return;
         }
       }
+      // Up/Down in a single-line field on a page leave the field and move the ring on from the
+      // field's own stop: the caret cannot move vertically, and left to the WebView, spatial
+      // navigation moved DOM focus to an arbitrary control while the highlight stayed on the field.
+      const leavesPageField =
+        (action === "dpadUp" || action === "dpadDown") &&
+        isSingleLineField(event.target) &&
+        !(event.target as Element).closest(`${OPEN_OVERLAY_ANCESTOR_SELECTOR},[${SKIP_ATTR}]`);
+      if (leavesPageField) {
+        // A field the user tapped into is where the ring continues from, so it is adopted first.
+        if (getInputModality() === "pointer") adoptActiveElement();
+        (event.target as HTMLElement).blur();
+      }
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
-      if (isEditableTarget(event.target)) {
+      if (isEditableTarget(event.target) && !leavesPageField) {
         // Up/Down inside a SINGLE-LINE field move focus rather than being swallowed. The caret
         // cannot move vertically there, so the key would otherwise do nothing at all — and inside
         // an overlay that is a dead end, because the ring is inert there and Escape belongs to the
         // dialog. A keypad user who landed in the host field of the discovery dialog could reach
-        // nothing else, including its own Connect button. Textareas, selects, contenteditable and
-        // the stepper inputs keep their vertical keys, which do mean something in those.
-        if ((action === "dpadUp" || action === "dpadDown") && isSingleLineTextField(event.target)) {
+        // nothing else, including its own Connect button. Textareas, selects and contenteditable
+        // keep their vertical keys, which do mean something in those.
+        if ((action === "dpadUp" || action === "dpadDown") && isSingleLineField(event.target)) {
           const overlay = (event.target as Element).closest(OPEN_OVERLAY_ANCESTOR_SELECTOR);
           // Except where the overlay has opted out with `data-key-nav-skip`, which says it drives
           // its own keys. The search overlay does: its Up/Down move an aria-activedescendant while
@@ -504,6 +554,7 @@ export const FocusNavigationProvider = ({
             overlay &&
             stepFocusWithinOverlay(overlay, event.target as Element, action === "dpadDown")
           ) {
+            followDialogFocus();
             event.preventDefault();
             return;
           }
@@ -540,11 +591,35 @@ export const FocusNavigationProvider = ({
         if (overlay) {
           const from = document.activeElement instanceof Element ? document.activeElement : (event.target as Element);
           if (stepFocusWithinOverlay(overlay, from, action === "dpadDown")) {
+            followDialogFocus();
             event.preventDefault();
             return;
           }
           return;
         }
+      }
+      // OK arrives as Enter, and checkboxes and radios follow WAI-ARIA in ignoring Enter; a keypad
+      // has no Space key. Click them instead, or no key can toggle one that holds DOM focus.
+      if (
+        (action === "enter" || action === "center" || action === "activate") &&
+        event.target instanceof HTMLElement &&
+        event.target.matches(ENTER_IGNORING_CONTROL_SELECTOR)
+      ) {
+        event.target.click();
+        event.preventDefault();
+        return;
+      }
+      // Radix focuses the dialog itself on open, and the ring shows it as a group whose OK opens
+      // it. Nothing inside the dialog answers OK on the dialog itself, so OK goes in here.
+      if (
+        (action === "enter" || action === "center" || action === "activate") &&
+        event.target instanceof Element &&
+        event.target.matches(DIALOG_ANCESTOR_SELECTOR) &&
+        stepFocusWithinOverlay(event.target, event.target, true)
+      ) {
+        followDialogFocus();
+        event.preventDefault();
+        return;
       }
       if (isWithinOpenOverlay(event.target)) return;
       const activeElement = document.activeElement;
@@ -580,8 +655,12 @@ export const FocusNavigationProvider = ({
       const shortcuts = shortcutsRef.current;
       const shortcutDigit = digitForAction(action);
       if (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) {
+        // The tab bar stays in the ring across routes, so a ring standing on it would stay there;
+        // a jump lands on the page it opened instead.
+        controller.focus.resetToDefault();
         shortcuts.jumpToTab(shortcutDigit - 1);
         setInputModality("key-navigation");
+        notifyRing();
         event.preventDefault();
         return;
       }
@@ -592,6 +671,14 @@ export const FocusNavigationProvider = ({
       // 8 and 9: the two machine controls this user opens the app for. They sit in Home's Quick
       // Actions grid, which is where they read best and is not moving; these are a shorter way to
       // the same actions. 7 is search and 0 is Game Mode, so these were the digits going spare.
+      // A held key repeats. The one-shot commands below must run once per press, or holding 8
+      // toggles pause and resume for as long as the key is down.
+      const isOneShotCommand =
+        action === "digit8" || action === "digit9" || action === "digit0" || action === "star" || action === "hash";
+      if (isOneShotCommand && event.repeat) {
+        event.preventDefault();
+        return;
+      }
       if (action === "digit8" && shortcuts.machinePauseResume) {
         shortcuts.machinePauseResume();
         setInputModality("key-navigation");
@@ -652,7 +739,15 @@ export const FocusNavigationProvider = ({
       // Seamless pointer → key hand-off: start the move from where the user is.
       if (getInputModality() === "pointer") adoptActiveElement();
 
-      const handled = controller.dispatch(action).type !== "ignored";
+      // Focus the ring moves itself during a dispatch is already where the ring wants it; adopting
+      // it again would, for one, descend into a card whose single control OK just activated.
+      dispatchingRef.current = true;
+      let handled = false;
+      try {
+        handled = controller.dispatch(action).type !== "ignored";
+      } finally {
+        dispatchingRef.current = false;
+      }
       if (handled) {
         setInputModality("key-navigation");
         notifyRing();
@@ -673,13 +768,27 @@ export const FocusNavigationProvider = ({
     // Pointer/touch always wins: capture-phase so it flips modality (and clears
     // the highlight + guidance bar via the subscription) before any other handler.
     const handlePointer = () => setInputModality("pointer");
+    // Focus the app moves by itself is where the user is: menus and listboxes move it on Up/Down,
+    // and a closing menu hands it back to its trigger. The highlight follows it, or OK would act on
+    // the focused control while the highlight showed another. A menu also focuses its first item on
+    // open without scrolling to it, so inside an overlay the item is brought into view: on a short
+    // screen a tall menu opened with the focused item below the fold.
+    const handleFocusIn = (event: FocusEvent) => {
+      if (dispatchingRef.current) return;
+      if (getInputModality() !== "key-navigation" || !(event.target instanceof HTMLElement)) return;
+      focusAwaitingRingRef.current = adoptActiveElement() ? null : event.target;
+      notifyRing();
+      if (isWithinOpenOverlay(event.target)) event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pointerdown", handlePointer, true);
     window.addEventListener("touchstart", handlePointer, true);
+    window.addEventListener("focusin", handleFocusIn, true);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
+      window.removeEventListener("focusin", handleFocusIn, true);
     };
   }, [adoptActiveElement, controller, enabled, keymap, notifyRing, startEngine]);
 

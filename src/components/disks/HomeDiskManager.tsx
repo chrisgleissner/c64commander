@@ -145,6 +145,7 @@ import {
   resolveSoftIecServiceError,
   resolveSoftIecDefaultPath,
   type DriveKey,
+  isSoftIecDefaultPathConfigurable,
 } from "@/components/disks/HomeDiskManagerSupport";
 
 const isTestEnvironment =
@@ -2309,7 +2310,9 @@ export const HomeDiskManager = () => {
                   size="sm"
                   className="h-11 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
                   onClick={() => setSoftIecDirectoryBrowserOpen(true)}
-                  disabled={!status.isConnected || softIecConfigPending}
+                  disabled={
+                    !status.isConnected || softIecConfigPending || !isSoftIecDefaultPathConfigurable(softIecConfig)
+                  }
                   data-testid="drive-default-path-select-soft-iec"
                   aria-label="Select directory for Soft IEC Default Path"
                 >

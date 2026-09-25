@@ -8,7 +8,7 @@ tags:
   - ci-critical-ios
 ---
 # "Connection.*", not "Connection": the section header is one <button> whose whole text is
-# "Connection Saved devices, discovery, passwords, demo mode".
+# "Connection Saved devices, discovery, passwords, Demo Mode".
 # See subflows/ios-open-settings-tab.yaml.
 #
 # Play anchor is an alternation, not "Playlist": PlaylistPanel's title sits below the fold on
@@ -18,6 +18,7 @@ tags:
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: subflows/launch-and-wait.yaml
 - assertVisible: "Home"
+- runFlow: subflows/dismiss-tour.yaml
 - tapOn:
     id: "tab-settings"
     optional: true
@@ -32,6 +33,7 @@ tags:
     timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
 - assertVisible: "Connection.*"
+- runFlow: subflows/dismiss-tour.yaml
 - tapOn:
     id: "tab-play"
     optional: true

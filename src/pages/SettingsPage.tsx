@@ -216,6 +216,7 @@ import {
   pinDemoModeByUserChoice,
 } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
+import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useNavigate } from "react-router-dom";
@@ -1425,7 +1426,7 @@ export default function SettingsPage() {
                     </p>
                   )
                 ) : (
-                  <HelperText>Styles are curated colour palettes; pick one to preview it immediately.</HelperText>
+                  <HelperText>Styles are curated color palettes; pick one to preview it immediately.</HelperText>
                 )}
               </div>
 
@@ -1585,7 +1586,7 @@ export default function SettingsPage() {
             <SettingsSection
               id="connection"
               title="Connection"
-              summary="Saved devices, discovery, passwords, demo mode"
+              summary="Saved devices, discovery, passwords, Demo Mode"
               icon={Wifi}
               defaultOpen
             >
@@ -1668,7 +1669,7 @@ export default function SettingsPage() {
                                 ? detail
                                 : [productCode, detail].filter(Boolean).join(" · ");
                               return secondary ? (
-                                <p className="break-all text-xs text-muted-foreground">{secondary}</p>
+                                <p className="break-words text-xs text-muted-foreground">{secondary}</p>
                               ) : null;
                             })()}
                           </div>
@@ -2068,7 +2069,7 @@ export default function SettingsPage() {
                   : status.isConnected
                     ? `Connected to ${baseUrl}`
                     : isDemoActive
-                      ? `Demo mode — ${baseUrl}`
+                      ? `${DEMO_MODE_DEVICE_LABEL} — ${baseUrl}`
                       : status.error || "Not connected"}
               </div>
             </SettingsSection>

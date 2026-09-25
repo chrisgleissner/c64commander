@@ -38,8 +38,10 @@ import {
   getInputModality,
   hasContextMenu,
   resolveGuidanceLabels,
+  SKIP_ATTR,
   type GuidanceState,
 } from "@/lib/input";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
 const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortcut: boolean): GuidanceState => {
@@ -65,7 +67,7 @@ const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortc
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged,
     layerOpen: controller.layerDepth > 0,
-    hasMenu: hasContextMenu(currentElement),
+    hasMenu: hasContextMenu(currentElement, isGroup),
     gameModeShortcut,
   };
 };
@@ -127,6 +129,8 @@ const reserveGuidanceHeight = (reserved: boolean): void => {
   const next = reserved ? "var(--keypad-guidance-bar-height)" : "0px";
   if (root.style.getPropertyValue("--keypad-guidance-reserved-height") === next) return;
   root.style.setProperty("--keypad-guidance-reserved-height", next);
+  // Dialogs are placed in JavaScript and have to be placed again when the bar appears under them.
+  window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
 };
 
 /**
@@ -199,7 +203,10 @@ export const KeypadGuidanceBar = () => {
      * one swipe navigation and Home read.
      */
     const duringTour = document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE);
-    if (!labels.visible || duringTour) {
+    // Search is a dialog that drives its own keys, so the ring's labels behind it (the control the
+    // search was opened from) say nothing about what the keys do there.
+    const keysOwnedByDialog = document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
+    if (!labels.visible || duringTour || keysOwnedByDialog) {
       setAttrIfChanged(root, "data-visible", "false");
       reserveGuidanceHeight(false);
       return;

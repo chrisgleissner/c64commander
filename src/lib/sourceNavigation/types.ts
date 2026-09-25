@@ -62,6 +62,8 @@ export type SourceLocation = {
   name: string;
   rootPath: string;
   isAvailable: boolean;
+  /** Keeps the last folder apart per device where one source stands for whichever device is connected. */
+  navigationScope?: () => string;
   listEntries: (path: string) => Promise<SourceEntry[]>;
   listEntriesPage?: (options: {
     path: string;

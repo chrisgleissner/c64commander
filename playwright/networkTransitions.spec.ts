@@ -85,7 +85,22 @@ test.describe("Network transitions", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(badge).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
-    await page.waitForLoadState("networkidle");
+    // The page's network-idle state is reached before the app connects, so it says nothing about the
+    // reads that follow; a request still in flight when the network drops is logged as a failed load.
+    let seen = server.requests.length;
+    let quietSince = Date.now();
+    await expect
+      .poll(
+        () => {
+          if (server.requests.length !== seen) {
+            seen = server.requests.length;
+            quietSince = Date.now();
+          }
+          return Date.now() - quietSince >= 750;
+        },
+        { timeout: 15000, intervals: [100] },
+      )
+      .toBe(true);
     await page.context().setOffline(true);
 
     // Driven by the offline event itself: a device probe timing out would take several seconds.

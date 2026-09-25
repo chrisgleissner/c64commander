@@ -36,9 +36,15 @@ The device is assumed to have a D-pad + numeric-T9 remote. Its physical keys emi
 standard Android key codes; the app's `keypad` input profile
 (`src/lib/input/profiles/keypad.ts`, merged over `defaultKeyboard`) normalises
 them to **semantic actions** (`src/lib/input/keyEvent.ts`). The exact
-`KeyboardEvent` codes an Android WebView surfaces for these keys vary by host,
-so each key is bound by several plausible aliases (named code, Arrow/Enter
-fallback, and the legacy Android key code).
+`KeyboardEvent` an Android WebView surfaces for a key is not its Android key
+code. Measured on a Pixel 4: the D-pad arrives as ArrowUp/Down/Left/Right, OK as
+Enter (13), the digits as `"0"`–`"9"` with an empty `code`, and ✱ / # as `"*"` /
+`"#"` with key code 0. The soft keys arrive as `"Unidentified"` and Menu not at
+all, so the native shell forwards those three with the codes `SoftLeft`,
+`SoftRight` and `ContextMenu`. Back never reaches the page: the app's own Back
+listener delivers it as an Escape keydown with no key code at the focused
+element. Android key codes are never bound as DOM key codes, where 17, 18, 20
+and 82 mean Ctrl, Alt, Caps Lock and R.
 
 | Physical key          | Android keycode      | Semantic action   | Behaviour in app                                                                                                                                                                                                                                                  |
 | --------------------- | -------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,12 +53,12 @@ fallback, and the legacy Android key code).
 | D-pad **Left**        | `DPAD_LEFT` 21       | `dpadLeft`        | On a value control (slider/tabs/segmented): **decrement / previous**. Otherwise previous sibling.                                                                                                                                                                 |
 | D-pad **Right**       | `DPAD_RIGHT` 22      | `dpadRight`       | On a value control: **increment / next**. Otherwise next sibling.                                                                                                                                                                                                 |
 | D-pad **OK / Center** | `DPAD_CENTER` 23     | `center`          | **"OK goes in":** descend into the focused group, or activate the focused leaf. On a Select: opens the dropdown.                                                                                                                                                  |
-| **Back / Clear**      | `BACK` 4             | `back`            | **"Back goes out":** dismiss overlay → leave field → ascend group → finally route back. (Capacitor may intercept hardware Back; see §6.)                                                                                                                          |
+| **Back / Clear**      | `BACK` 4             | `back`            | **"Back goes out":** dismiss overlay → leave field → ascend group → finally the previous route, or, on the first route of the session, send the app to the background as Android's own Back does. Works with `keypad_input_enabled` off too.                    |
 | **Call / Send**       | `CALL` 5             | `activate`        | Primary activate of the focused leaf.                                                                                                                                                                                                                             |
-| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device).                                                                                                                             |
-| **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done).                                                                                                                                                                                                                    |
-| **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Opens current item/scope menu.                                                                                                                                                                                                                                    |
-| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; 8–9 unbound at app level.                                                                                                                                 |
+| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": the focused control's own context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device). A card or other group has no menu of its own, even when a row inside it does.                                     |
+| **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done). Forwarded by the native shell.                                                                                                                                                                                      |
+| **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Same as Menu. Forwarded by the native shell.                                                                                                                                                                                                                      |
+| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱ and # ignore key repeat.                                                                                                                                 |
 | **0**                 | `KEYCODE_0` 7        | `digit0`          | In a text field: T9 entry. Outside a field: **enter Game Mode** (starts the remembered Watch/Listen and opens the sheet ready to play). Inside the Remote Input sheet it is a joystick direction, which the open-overlay exclusion keeps this shortcut away from. |
 | **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise **open Diagnostics**.                                                                                                                                                                                |
 | **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise **open the Device Switcher** (= badge long-press).                                                                                                                                                                     |
@@ -63,7 +69,8 @@ fallback, and the legacy Android key code).
 
 Desktop/Bluetooth-keyboard equivalents (`defaultKeyboard` profile): Arrows =
 D-pad, Space = OK/center, Enter = enter, Tab/Shift+Tab = next/previous field,
-Backspace = delete, Esc = back, F1/F2 = soft keys, number row + `*`/`#` = T9.
+Backspace = delete, Esc = back, F2 = right soft key, number row + `*`/`#` = T9.
+F1 is the neutral `function1` action (see the F1 row).
 
 ### Persistent affordances while in key-navigation modality
 
@@ -71,9 +78,11 @@ Backspace = delete, Esc = back, F1/F2 = soft keys, number row + `*`/`#` = T9.
   current ring item (a steady ring), only while `keypad_input_enabled` is on and
   modality is `key-navigation`. Touch/click returns to pointer modality and
   clears it the same frame.
-- **Guidance bar:** a fixed bar above the TabBar showing the breadcrumb plus the
-  contextual soft-key labels — left = Back/Exit, center = Open/Select/Adjust/
-  Activate (by control kind), right = Menu. On Home and Play with a device
+- **Guidance bar:** a fixed bar above the TabBar (at the screen edge while a
+  dialog or sheet hides the TabBar) showing the breadcrumb plus the contextual
+  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate (by
+  control kind), right = Menu only where the focused control has a menu of its
+  own. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
   exactly when the user is driving by keys.
 - **Group scope outline:** `data-key-scope` dashed outline around the enclosing
@@ -239,6 +248,7 @@ not-connected / empty / single-device).
   - Serial Bus Mode — select — `home-serial-bus-mode` — R✅ I✅
   - Cartridge Preference — select — `home-cartridge-preference` — R✅ I✅
   - User Port Power — checkbox — `home-user-port-power` — R✅ I✅
+  - _Every Quick Config row (`SummaryConfigControlRow`) whose item the connected device does not have — an Ultimate-II+ has no `U64 Specific Settings` — reads "Not available" and is disabled, and the focus ring skips it. A checkbox row shows the words instead of a box, so it is neither on nor off._
 - **Quick Config → Video** (`home-video-summary`)
   - Screen colors — button — `home-video-screen-colors` — R✅ I✅ — first in the card, because it is the one row here people actually change; opens the **Screen colors sheet** (below) _(needs no device connection: the app's own palette is a local rendering choice, so the row stays usable while the rest of the card is disabled. The 16-swatch strip beneath it, `home-video-screen-colors-preview`, is display-only)_
   - **Screen colors sheet** (`screen-colors-*`, opened by `home-video-screen-colors`)
@@ -922,9 +932,9 @@ available on this device", with no REST/firmware jargon]`
   each appear as two distinct keys (`remote-input-key-space` /
   `remote-input-key-space-bottom`, `remote-input-key-shift-left` /
   `remote-input-key-shift-right`). On the compact display profile RUN/STOP is
-  printed `RSTOP` (and, on the Keys tab, RESTORE is printed `RSTR`), because at
-  320 CSS px the full names are wider than the keys that carry them; both keep
-  their full accessible names on every profile. — buttons —
+  printed `RSTOP` and RETURN `RTRN` (and, on the Keys tab, RESTORE is printed
+  `RSTR`), because at 320 CSS px the full names are wider than the keys that
+  carry them; all keep their full accessible names on every profile. — buttons —
   `remote-input-key-{run-stop,ctrl,space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,commodore,shift-left,space-bottom,shift-right}`
   — R✅ I✅ (hidden in Game mode and Type mode). The modifier keys (RUN/STOP,
   CTRL, C=, both SHIFTs) have no kernal-buffer equivalent so are `[disabled off
@@ -1215,7 +1225,17 @@ their feature flag and library state allow it.
 - Select all (N) — button — `archive-select-all` `[only once there are results]`
 - Clear selection — button — `archive-clear-selection` `[only once something is
   selected]`
-- Result row — `archive-result-row` — the checkbox in the row carries the selection
+- Result row — `archive-result-row` — the checkbox in the row carries the selection; the
+  row is its label, so a tap anywhere on it toggles the checkbox. The checkbox is the only
+  keypad stop in the row
+
+**Import progress** (`add-items-overlay` on Play, `add-disks-overlay` on Disks) — shown
+while a confirmed selection is scanned and added. It is a modal dialog scope, so the
+keypad ring holds only its one control while it is up; the page and the hidden tab bar
+are out of reach.
+
+- Cancel — button — no testid — stops the import. Escape and the device Back key do the
+  same
 
 ---
 
@@ -1240,9 +1260,9 @@ their feature flag and library state allow it.
    badge (→ device switcher; now also keypad `#`) and the Diagnostics device line
    (long-press → connection _edit_; tap → _view_). The Diagnostics-line _edit_
    gesture still has no keypad equivalent.
-5. **Hardware Back** may be intercepted by Capacitor before reaching the WebView
-   key handler; Esc (`escape`) reliably dismisses overlays / ascends without
-   navigating.
+5. **Hardware Back** reaches Capacitor, not the WebView. The app registers one
+   Back listener for the whole app, which delivers the key to the page as an
+   Escape keydown at the focused element (see §1).
 
 ---
 

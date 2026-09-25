@@ -7,11 +7,19 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const connectionRef = vi.hoisted(() => ({ current: { isConnected: false } }));
 vi.mock("@/hooks/useC64Connection", () => ({ useC64Connection: () => ({ status: connectionRef.current }) }));
+
+const connectionStateRef = vi.hoisted(() => ({
+  current: { state: "REAL_CONNECTED", lastDiscoveryTrigger: "startup" as string | null },
+}));
+vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => connectionStateRef.current }));
+
+const discoveryRef = vi.hoisted(() => ({ current: { phase: "idle", trigger: null as string | null } }));
+vi.mock("@/hooks/useDeviceDiscovery", () => ({ useDeviceDiscovery: () => discoveryRef.current }));
 
 const interstitialActiveRef = vi.hoisted(() => ({ current: false }));
 vi.mock("@/components/ui/interstitial-state", () => ({
@@ -61,6 +69,11 @@ const mountAnchor = (testId: string, rect = { top: 100, left: 20, width: 80, hei
 };
 
 describe("TourDriver", () => {
+  // Loaded up front, so a test that waits for the tour not to appear is not simply outwaited by its chunk.
+  beforeAll(async () => {
+    await import("@/components/tour/TourDriver");
+  });
+
   beforeEach(() => {
     localStorage.clear();
     // Production samples this once, when the module is first imported, before anything the app
@@ -68,6 +81,8 @@ describe("TourDriver", () => {
     resamplePriorAppStateForTests();
     connectionRef.current = { isConnected: false };
     interstitialActiveRef.current = false;
+    connectionStateRef.current = { state: "REAL_CONNECTED", lastDiscoveryTrigger: "startup" };
+    discoveryRef.current = { phase: "idle", trigger: null };
     document.documentElement.removeAttribute(TOUR_ACTIVE_ATTRIBUTE);
     Element.prototype.scrollIntoView = vi.fn();
   });
@@ -87,17 +102,43 @@ describe("TourDriver", () => {
      * first. A tour that began under one of them would spotlight a page nobody could see.
      */
     it("does not start while an interstitial is on screen", async () => {
-      vi.useFakeTimers();
-      try {
-        interstitialActiveRef.current = true;
-        renderDriver();
-        await act(async () => {
-          vi.advanceTimersByTime(10_000);
-        });
-        expect(screen.queryByTestId("tour-overlay")).toBeNull();
-      } finally {
-        vi.useRealTimers();
-      }
+      interstitialActiveRef.current = true;
+      renderDriver();
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      });
+      expect(screen.queryByTestId("tour-overlay")).toBeNull();
+    });
+
+    it.each([
+      ["before the first connection attempt", { state: "UNKNOWN", lastDiscoveryTrigger: null }, "idle"],
+      [
+        "while the app looks for its device at launch",
+        { state: "DISCOVERING", lastDiscoveryTrigger: "startup" },
+        "idle",
+      ],
+      [
+        "while the launch scan searches the network",
+        { state: "OFFLINE_NO_DEMO", lastDiscoveryTrigger: "startup" },
+        "scanning",
+      ],
+    ])("does not start %s, which can end in a device picker", async (_when, connection, phase) => {
+      connectionStateRef.current = connection;
+      discoveryRef.current = { phase, trigger: "startup" };
+      renderDriver();
+      // Real time, twice the settle window: under fake timers the lazily loaded driver never
+      // arrives, so a tour that did start would not be seen.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      });
+      expect(screen.queryByTestId("tour-overlay")).toBeNull();
+    });
+
+    it("starts while a device the user asked for is being looked up", async () => {
+      connectionStateRef.current = { state: "DISCOVERING", lastDiscoveryTrigger: "manual" };
+      renderDriver();
+
+      await screen.findByTestId("tour-overlay", undefined, { timeout: 5_000 });
     });
 
     it("starts once every interstitial has gone and the app has settled", async () => {
@@ -310,6 +351,15 @@ describe("TourDriver", () => {
       await waitFor(() => expect(loadTourState().skippedAt).not.toBeNull());
       expect(loadTourState().deviceStepsPending).toBe(false);
     });
+  });
+
+  it("mounts the tour on the body, outside the app it is rendered from", async () => {
+    const { container } = renderDriver();
+    await startTour();
+
+    const overlay = screen.getByTestId("tour-overlay");
+    expect(overlay.parentElement).toBe(document.body);
+    expect(container.contains(overlay)).toBe(false);
   });
 
   /*

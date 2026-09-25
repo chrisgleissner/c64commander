@@ -349,6 +349,11 @@ test.describe("UI coverage", () => {
     await expect(page.getByTestId("add-items-progress")).toBeVisible();
     await snap(page, testInfo, "progress-visible");
     await expect(page.getByTestId("playlist-list")).toContainText("Disk 1.d64");
+    // With one item selected the confirm button is Play, so the disk is also launched. Closing the
+    // servers while that launch is still running fails it, and the failure is reported.
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("c64u_app_logs") ?? ""), { timeout: 20000 })
+      .toContain("Playback: tune launched on the C64");
     await ftpServers.close();
   });
 

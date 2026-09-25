@@ -1209,6 +1209,84 @@ describe("useSavedDeviceSwitching", () => {
     });
   });
 
+  it("closes the switch attempt as an error when retargeting throws before verification", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    metrics.clearSavedDeviceSwitchMetrics();
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockSetStoredFtpPort.mockImplementationOnce(() => {
+      throw new Error("QuotaExceededError");
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/settings"),
+    });
+
+    await expect(
+      act(async () => {
+        await result.current("device-backup");
+      }),
+    ).rejects.toThrow("QuotaExceededError");
+
+    expect(mockVerifyCurrentConnectionTarget).not.toHaveBeenCalled();
+    expect(metrics.getSavedDeviceSwitchMetricsSnapshot().activeAttemptId).toBeNull();
+    expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
+      fromDeviceId: initialDeviceId,
+      toDeviceId: "device-backup",
+      outcome: "error",
+      errorMessage: "QuotaExceededError",
+    });
+  });
+
+  it("records a nullish throw before verification as an unknown switch failure", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
+    metrics.clearSavedDeviceSwitchMetrics();
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockSetStoredFtpPort.mockImplementationOnce(() => {
+      throw undefined;
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), {
+      wrapper: createWrapper("/settings"),
+    });
+
+    await expect(
+      act(async () => {
+        await result.current("device-backup");
+      }),
+    ).rejects.toBeUndefined();
+
+    expect(mockAddLog).toHaveBeenCalledWith("warn", "Saved-device switch failed before verification", {
+      deviceId: "device-backup",
+      error: "Unknown switch failure",
+    });
+    expect(metrics.getSavedDeviceSwitchMetricsSnapshot().attempts[0]).toMatchObject({
+      toDeviceId: "device-backup",
+      outcome: "error",
+      errorMessage: "Unknown switch failure",
+    });
+  });
+
   it("captures thrown verification failures as error attempts", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");

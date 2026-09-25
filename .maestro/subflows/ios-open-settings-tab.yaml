@@ -9,7 +9,7 @@ tags:
 # "Connection.*", not "Connection". CollapsibleSection renders the header as one <button>
 # holding the <h2> title and the summary, which stays in the tree as sr-only text when
 # descriptions are off, so the button is a single accessibility leaf named
-# "Connection Saved devices, discovery, passwords, demo mode". Maestro matches a text selector
+# "Connection Saved devices, discovery, passwords, Demo Mode". Maestro matches a text selector
 # against an element's whole text, so the bare title matched nothing while the section was open
 # on screen. The trailing `.*` also absorbs whatever separator WebKit joins the two with.
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
@@ -17,6 +17,8 @@ tags:
 - retry:
     maxRetries: 3
     commands:
+      # The first-run tour covers the tab bar until it is dismissed.
+      - runFlow: dismiss-tour.yaml
       - tapOn:
           id: "tab-settings"
           optional: true

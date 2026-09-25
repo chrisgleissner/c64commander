@@ -43,6 +43,26 @@ describe("pauseResumeMachine, the one implementation the tile and the keypad key
     restoreMock.mockResolvedValue(undefined);
   });
 
+  it("joins a pause already in flight instead of capturing the mixer a second time", async () => {
+    let releasePause: () => void = () => undefined;
+    const pause = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releasePause = resolve;
+        }),
+    );
+    const harness = run(pause);
+
+    const first = harness.call();
+    const second = harness.call();
+    await vi.waitFor(() => expect(pause).toHaveBeenCalledTimes(1));
+    releasePause();
+
+    await expect(Promise.all([first, second])).resolves.toEqual(["paused", "paused"]);
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(pause).toHaveBeenCalledTimes(1);
+  });
+
   it("mutes the SID mixer before it pauses a running machine", async () => {
     const harness = run();
 

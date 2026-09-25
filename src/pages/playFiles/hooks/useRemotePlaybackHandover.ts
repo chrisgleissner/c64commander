@@ -37,7 +37,9 @@ const readSidBytes = async (
   item: PlaylistItem,
   resolveHvscRuntimeRequest: (item: PlaylistItem) => Promise<{ request: PlayRequest } | null>,
 ): Promise<ArrayBuffer | null> => {
-  if (item.request.source === "ultimate") return (await tryFetchUltimateSidBlob(item.path))?.arrayBuffer() ?? null;
+  if (item.request.source === "ultimate") {
+    return (await tryFetchUltimateSidBlob(item.path, item.request.origin))?.arrayBuffer() ?? null;
+  }
   const file = item.request.file ?? (await resolveHvscRuntimeRequest(item))?.request.file;
   return file ? file.arrayBuffer() : null;
 };
@@ -97,7 +99,9 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
           index = current.resolveNextIndex(index);
           const upcoming = index === null ? undefined : current.playlistRef.current[index];
           if (upcoming?.category !== "sid" || upcoming.request.source !== "ultimate") continue;
-          if (!getRememberedUltimateSidBlob(upcoming.path)) await tryFetchUltimateSidBlob(upcoming.path);
+          if (!getRememberedUltimateSidBlob(upcoming.path, upcoming.request.origin)) {
+            await tryFetchUltimateSidBlob(upcoming.path, upcoming.request.origin);
+          }
         }
       } catch (error) {
         addLog("debug", "Playback: could not read ahead for carrying on without the C64", {

@@ -51,3 +51,20 @@ export class PlaybackClock {
     return this.baseMs + Math.max(0, now - this.startedAt);
   }
 }
+
+/**
+ * Moves both playback clocks to `positionMs` within the current track after a seek, and returns the new
+ * played total. The played clock spans the whole playlist and drives "Remaining", so it moves by the
+ * distance seeked rather than being set to the position in this track.
+ */
+export const seekPlaybackClocks = (
+  playedClock: Pick<PlaybackClock, "current" | "hydrate">,
+  trackStartedAtRef: { current: number | null },
+  { positionMs, elapsedMs, paused, now }: { positionMs: number; elapsedMs: number; paused: boolean; now: number },
+): number => {
+  const fromPositionMs = paused || trackStartedAtRef.current === null ? elapsedMs : now - trackStartedAtRef.current;
+  const playedMs = Math.max(0, playedClock.current(now) + positionMs - fromPositionMs);
+  trackStartedAtRef.current = now - positionMs;
+  playedClock.hydrate(playedMs, paused ? null : now);
+  return playedMs;
+};

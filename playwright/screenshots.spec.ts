@@ -1068,6 +1068,8 @@ const waitForOverlaysToClear = async (page: Page) => {
   const notificationRegion = page.locator('[aria-label="Notifications (F8)"]');
   const openToasts = notificationRegion.locator('[data-state="open"], [role="status"]');
   await expect(openToasts).toHaveCount(0, { timeout: 10000 });
+  // The badge names the device for a few seconds after connecting; a page is documented without it.
+  await expect(page.getByTestId("unified-health-badge-announcement")).toHaveCount(0, { timeout: 10000 });
 };
 
 const seedLightingStudioState = async (page: Page, state: unknown) => {

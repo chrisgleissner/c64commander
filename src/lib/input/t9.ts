@@ -16,7 +16,7 @@
  * ──────────────────────────────────────────────────────────────────────────
  *  Multi-tap table (mode "multitap", general text)
  * ──────────────────────────────────────────────────────────────────────────
- *   1 → . , ? ! - _ : /        6 → m n o 6
+ *   1 → . , ? ! - _ : / 1      6 → m n o 6
  *   2 → a b c 2                7 → p q r s 7
  *   3 → d e f 3                8 → t u v 8
  *   4 → g h i 4                9 → w x y z 9
@@ -77,7 +77,7 @@ export const STAR_KEY = -1;
 /** General-text multi-tap candidates, indexed by digit. */
 export const MULTITAP_CANDIDATES: Readonly<Record<number, readonly string[]>> = {
   0: [" ", "0"],
-  1: [".", ",", "?", "!", "-", "_", ":", "/"],
+  1: [".", ",", "?", "!", "-", "_", ":", "/", "1"],
   2: ["a", "b", "c", "2"],
   3: ["d", "e", "f", "3"],
   4: ["g", "h", "i", "4"],

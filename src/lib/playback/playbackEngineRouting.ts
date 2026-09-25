@@ -42,7 +42,8 @@ export type EngineFallbackNotice =
   | "local-unavailable"
   | "rom-lite-engine"
   | "simulated-device-local-sid"
-  | "no-device-local-sid";
+  | "no-device-local-sid"
+  | "sid-unreadable-on-c64";
 
 export interface EngineRouteInput {
   category: PlayFileCategory;
@@ -145,4 +146,5 @@ export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
   "no-device-local-sid":
     "No C64 Ultimate is connected, so this tune is playing on your phone. Programs, cartridges and " +
     "disks need a connected C64 Ultimate.",
+  "sid-unreadable-on-c64": "This tune could not be read from the C64, so it plays on the C64 instead.",
 };

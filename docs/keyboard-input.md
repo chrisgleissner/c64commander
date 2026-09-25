@@ -183,8 +183,8 @@ Both need a debuggable build, because they go through `run-as`. Then open
   key-repeat write path.
 - **Dropdowns** (`ConfigItemRow` Radix `Select`): `center`/`enter` opens it; Radix
   then owns option `Up`/`Down`, typeahead, `Enter` (confirm) and `Escape` (close).
-  While open, the global ring does not move underneath it. Keypad `back`
-  (Android keyCode 4, which Radix does not recognize) closes it.
+  While open, the global ring does not move underneath it. The Android Back key,
+  which the app delivers as an Escape keydown at the focused element, closes it.
 - **Text fields (T9):** attach `useT9Input` to an `<input>`. Digit keys, `*`, and
   `#` are routed through the multi-tap / hostname composer; every other key
   (Backspace, arrows, Enter, Tab, letters) passes through untouched. Hostname
@@ -193,11 +193,13 @@ Both need a debuggable build, because they go through `run-as`. Then open
   When numeric-keypad T9 is active and the field has key-navigation modality, a
   small `T9 Hostname` / `T9 Multitap` indicator appears.
 - **Back / `navigate(-1)`:** the back chain is deterministic — dismiss overlay →
-  leave field → ascend group → route back. Keyboard **Escape never navigates**;
-  only the hardware Back key and left soft key navigate when the chain is
-  exhausted.
+  leave field → ascend group → route back, or on the first route of the session
+  send the app to the background. Keyboard **Escape never navigates**; only the
+  hardware Back key and left soft key navigate when the chain is exhausted.
 - **Guidance bar:** while key-navigation modality is active, a fixed bar above
-  the TabBar shows the current breadcrumb plus Back/OK/Menu labels. It clears in
+  the TabBar (at the screen edge while a dialog or sheet hides the TabBar) shows
+  the current breadcrumb plus Back/OK labels, and Menu where the focused control
+  has a menu of its own. Dialogs and sheets are placed above it. It clears in
   the same frame as the highlight when the user touches/clicks.
 - **Soft keys/Menu:** left soft key follows the back chain; right soft key/Menu
   opens the current item or scope's context menu when one exists, otherwise the

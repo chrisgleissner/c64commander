@@ -361,6 +361,35 @@ test.describe("Small screen ergonomics", () => {
     });
   }
 
+  test("diagnostics device line and overflow menu rows meet the target size @layout", async ({ page }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByTestId("diagnostics-overflow-menu").click();
+    const panel = page.getByTestId("diagnostics-overflow-panel");
+    await expect(panel).toBeVisible();
+
+    const measured = [
+      { label: "diagnostics-device-line", box: await dialog.getByTestId("diagnostics-device-line").boundingBox() },
+    ];
+    for (const row of await panel.getByRole("button").all()) {
+      measured.push({ label: (await row.textContent())?.trim() ?? "", box: await row.boundingBox() });
+    }
+
+    expect(measured.length).toBeGreaterThanOrEqual(10);
+    const undersized = measured.filter(
+      ({ box }) => !box || box.height < MIN_TARGET_PX - 0.5 || box.width < MIN_TARGET_PX - 0.5,
+    );
+    expect(
+      undersized.map(
+        ({ label, box }) => `${label}: ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : "?"}`,
+      ),
+      `Diagnostics controls below the ${MIN_TARGET_PX}px target size`,
+    ).toEqual([]);
+  });
+
   test("body text is not stepped down to fit the smallest screen @layout", async ({ page }) => {
     // Every tab, not just Home. Home renders no paragraph-like prose at all - it is tiles
     // and controls - so when this test only visited Home it inspected zero elements and

@@ -6,6 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+// First, before any module can write to storage: the first-run tour decides whether this is a new
+// installation from what storage held when it loaded, and a module evaluated earlier (the device
+// safety defaults read the saved devices, which saves them) made every launch look like an old one.
+import "./lib/tour/tourState";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { installAsyncContextPropagation } from "./lib/tracing/traceActionContextStore";

@@ -15,6 +15,7 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      - runFlow: dismiss-tour.yaml
       - tapOn:
           text: "Not now"
           optional: true
@@ -53,6 +54,8 @@ tags:
       - tapOn:
           text: "Not now"
           optional: true
+      # The first-run tour can also open after Home is on screen, and covers the tab bar.
+      - runFlow: dismiss-tour.yaml
       - waitForAnimationToEnd
       - tapOn:
           id: "tab-play"

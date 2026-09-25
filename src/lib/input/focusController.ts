@@ -57,6 +57,11 @@ export class FocusController {
   private seqCounter = 0;
   private currentId: string | null = null;
   private scopeParentId: string | null = null;
+  /**
+   * `current` is only the default first item, not one the user chose. A route change leaves just the
+   * tab bar for a render, so a default must follow the new page's first item when it arrives.
+   */
+  private currentIsDefault = false;
 
   /** Registers (or replaces) an item, keeping the registry ordered. */
   register(item: FocusItem): void {
@@ -116,8 +121,9 @@ export class FocusController {
     if (this.currentId !== null && !this.items.some((entry) => entry.id === this.currentId)) {
       this.currentId = null;
     }
-    if (this.currentId === null) {
+    if (this.currentId === null || this.currentIsDefault) {
       this.currentId = this.firstEnabledIdInScope(this.scopeParentId);
+      this.currentIsDefault = this.currentId !== null;
     }
   }
 
@@ -126,6 +132,14 @@ export class FocusController {
     this.items = [];
     this.currentId = null;
     this.scopeParentId = null;
+    this.currentIsDefault = false;
+  }
+
+  /** Returns to the default selection, which follows the first top-level item as items arrive. */
+  resetToDefault(): void {
+    this.scopeParentId = null;
+    this.currentId = this.firstEnabledIdInScope(null);
+    this.currentIsDefault = this.currentId !== null;
   }
 
   /** The ordered list of items (enabled and disabled), as plain FocusItems. */
@@ -135,6 +149,11 @@ export class FocusController {
 
   current(): FocusItem | null {
     return this.items.find((entry) => entry.id === this.currentId) ?? null;
+  }
+
+  /** True while `current` is the default first item rather than one the user or app chose. */
+  currentIsDefaultSelection(): boolean {
+    return this.currentIsDefault;
   }
 
   /** The parent id of the currently active nested scope, or null at root level. */
@@ -148,6 +167,7 @@ export class FocusController {
     if (!item) return false;
     this.scopeParentId = item.parentId ?? null;
     this.currentId = id;
+    this.currentIsDefault = false;
     return true;
   }
 
@@ -169,6 +189,7 @@ export class FocusController {
     if (!child) return null;
     this.scopeParentId = current.id;
     this.currentId = child.id;
+    this.currentIsDefault = false;
     return this.toFocusItem(child);
   }
 
@@ -183,6 +204,7 @@ export class FocusController {
     }
     this.scopeParentId = parent.parentId ?? null;
     this.currentId = parent.id;
+    this.currentIsDefault = false;
     return this.toFocusItem(parent);
   }
 
@@ -208,6 +230,7 @@ export class FocusController {
   activateCurrent(): boolean {
     const item = this.current();
     if (!item || !isEnabled(item)) return false;
+    this.currentIsDefault = false;
     item.activate();
     return true;
   }
@@ -230,6 +253,7 @@ export class FocusController {
       const candidate = scopedItems[index];
       if (isEnabled(candidate)) {
         this.currentId = candidate.id;
+        this.currentIsDefault = false;
         return this.toFocusItem(candidate);
       }
     }

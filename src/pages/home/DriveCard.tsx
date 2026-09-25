@@ -48,6 +48,8 @@ export interface DriveCardProps {
   mountedPath?: string;
   mountedPathLabel?: string;
   onMountedPathClick?: () => void;
+  /** False where the device reports the path but offers no way to change it. */
+  pathEditable?: boolean;
   statusSummary: string;
   statusSeverity?: DiagnosticsDisplaySeverity;
   onStatusClick?: () => void;
@@ -90,6 +92,7 @@ export function DriveCard({
   mountedPath,
   mountedPathLabel,
   onMountedPathClick,
+  pathEditable = true,
   statusSummary,
   statusSeverity = "INFO",
   onStatusClick,
@@ -152,7 +155,7 @@ export function DriveCard({
           <button
             type="button"
             onClick={onMountedPathClick || onPathClick}
-            disabled={!isConnected || pathPending}
+            disabled={!isConnected || pathPending || !pathEditable}
             className={cn(
               "min-h-11 min-w-0 flex-1 text-left font-medium text-foreground hover:underline",
               profile === "expanded" ? "basis-auto" : "basis-full",

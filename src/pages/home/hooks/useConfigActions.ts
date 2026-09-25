@@ -12,6 +12,7 @@ import { useActionTrace } from "@/hooks/useActionTrace";
 import { getC64API } from "@/lib/c64api";
 import { buildConfigKey, readItemValue } from "../utils/HomeConfigUtils";
 import { reportUserError } from "@/lib/uiErrors";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { toast } from "@/hooks/use-toast";
 import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
 import { getActiveBaseUrl, updateHasChanges } from "@/lib/config/appConfigStore";
@@ -67,11 +68,19 @@ export function useConfigActions() {
           Array.isArray(query.queryKey) && query.queryKey[0] === "c64-config-items" && query.queryKey[1] === category,
       });
       if (options.refreshDrives) {
-        await queryClient.fetchQuery({
-          queryKey: ["c64-drives"],
-          queryFn: () => api.getDrives(),
-          staleTime: 0,
-        });
+        try {
+          await queryClient.fetchQuery({
+            queryKey: ["c64-drives"],
+            queryFn: () => api.getDrives(),
+            staleTime: 0,
+          });
+        } catch (error) {
+          addLog(
+            "warn",
+            "Drive refresh after config write failed",
+            buildErrorLogDetails(error as Error, { category, item: itemName, value }),
+          );
+        }
       }
       if (options.clearPendingOnSuccess) {
         authoritativeValues.clearEntry(key);

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -36,6 +36,18 @@ vi.mock("@/lib/tracing/traceFormatter", async () => {
 
 // The connection editor surface reads the keypad/T9 flag; default it off so
 // digit keys insert literal digits (the touch / hardware-keyboard path).
+const connectionStateOverride = vi.hoisted(() => ({ state: null as string | null }));
+vi.mock("@/hooks/useConnectionState", async () => {
+  const actual = await vi.importActual<typeof import("@/hooks/useConnectionState")>("@/hooks/useConnectionState");
+  return {
+    ...actual,
+    useConnectionState: () => {
+      const snapshot = actual.useConnectionState();
+      return connectionStateOverride.state ? { ...snapshot, state: connectionStateOverride.state } : snapshot;
+    },
+  };
+});
+
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlagValue: () => false,
   useFeatureFlags: () => ({ flags: { keypad_input_enabled: false } }),
@@ -612,6 +624,18 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByText("Switch saved devices from diagnostics.")).toBeNull();
   });
 
+  it("names Demo Mode on the device line instead of the saved device the simulated one answers as", () => {
+    setViewportWidth(600);
+    connectionStateOverride.state = "DEMO_ACTIVE";
+    try {
+      renderDialog();
+
+      expect(screen.getByTestId("diagnostics-device-line")).toHaveTextContent("Demo Mode · simulated device");
+    } finally {
+      connectionStateOverride.state = null;
+    }
+  });
+
   it("opens connection view on tap and connection edit on long press", async () => {
     setViewportWidth(600);
     vi.useFakeTimers();
@@ -718,6 +742,24 @@ describe("DiagnosticsDialog", () => {
       ftpPort: 2121,
       telnetPort: 2323,
     });
+  });
+
+  it("keeps an in-progress connection edit when the selected saved device is updated while the dialog stays open", async () => {
+    setViewportWidth(600);
+    const store = await import("@/lib/savedDevices/store");
+    const selectedDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+
+    renderDialog();
+
+    fireEvent.contextMenu(screen.getByTestId("diagnostics-device-line"));
+    fireEvent.change(screen.getByTestId("connection-edit-host"), { target: { value: "draft-host.local" } });
+
+    act(() => {
+      store.updateSavedDevice(selectedDeviceId, { lastSuccessfulConnectionAt: new Date(0).toISOString() });
+    });
+
+    expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
+    expect(screen.getByTestId("connection-edit-host")).toHaveValue("draft-host.local");
   });
 
   it("does not repeat the product code when the saved device name already matches it", async () => {

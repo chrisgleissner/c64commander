@@ -878,12 +878,14 @@ function HomePageContent() {
   const hdmiScanOptions = readItemOptions(u64Category, "U64 Specific Settings", "HDMI Scan lines").map((value) =>
     String(value),
   );
-  const hdmiScanValue = String(resolveConfigValue(u64Category, "U64 Specific Settings", "HDMI Scan lines", "Disabled"));
+  const hdmiScanValue = String(
+    resolveConfigValue(u64Category, "U64 Specific Settings", "HDMI Scan lines", unavailableLabel),
+  );
   const joystickSwapOptions = readItemOptions(u64Category, "U64 Specific Settings", "Joystick Swapper").map((value) =>
     String(value),
   );
   const joystickSwapValue = String(
-    resolveConfigValue(u64Category, "U64 Specific Settings", "Joystick Swapper", "Normal"),
+    resolveConfigValue(u64Category, "U64 Specific Settings", "Joystick Swapper", unavailableLabel),
   );
   const serialBusModeOptions = readItemOptions(u64Category, "U64 Specific Settings", "Serial Bus Mode").map((value) =>
     String(value),
@@ -895,12 +897,12 @@ function HomePageContent() {
     String(value),
   );
   const turboControlValue = String(
-    resolveConfigValue(u64Category, "U64 Specific Settings", "Turbo Control", turboControlOptions[0] ?? "Manual"),
+    resolveConfigValue(u64Category, "U64 Specific Settings", "Turbo Control", unavailableLabel),
   );
   const cpuSpeedOptions = readItemOptions(u64Category, "U64 Specific Settings", "CPU Speed").map((value) =>
     String(value),
   );
-  const cpuSpeedValue = String(resolveConfigValue(u64Category, "U64 Specific Settings", "CPU Speed", "1"));
+  const cpuSpeedValue = String(resolveConfigValue(u64Category, "U64 Specific Settings", "CPU Speed", unavailableLabel));
   const badlineTimingOptions = readItemOptions(u64Category, "U64 Specific Settings", "Badline Timing").map((value) =>
     String(value),
   );

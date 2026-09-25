@@ -54,8 +54,8 @@ export interface ActiveStation {
 export interface UseSidRadioParams {
   /** Whether SID Radio is enabled (sidRadioEnabled). */
   enabled: boolean;
-  /** Start a fresh playlist (replaces the queue) and begin playing. */
-  startPlaylist: (items: PlaylistItem[]) => void | Promise<void>;
+  /** Start a fresh playlist (replaces the queue) and begin playing; resolves false when the start was dropped. */
+  startPlaylist: (items: PlaylistItem[]) => void | Promise<boolean>;
   /** Append refill items to the tail of the current playlist. */
   appendItems: (items: PlaylistItem[]) => void;
   /** Advance to the next track (used by ✕ skip). */
@@ -467,7 +467,15 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       };
       setStation(activeStation);
       persistSession(activeStation, seed);
-      await startPlaylist(items);
+      const playlistStarted = await startPlaylist(items);
+      // Another start still held playback, so none of these tracks were queued: claim no station.
+      if (playlistStarted === false && stationGenerationRef.current === generation) {
+        stop();
+        addLog("warn", "SID Radio: the station did not start because another playback start was in progress", {
+          service: "sid-radio",
+          seedKind,
+        });
+      }
     },
     [enabled, ensureClient, rememberStylePopulations, randomSeed, buildProvider, startPlaylist, persistSession, stop],
   );

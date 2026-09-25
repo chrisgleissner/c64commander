@@ -16,7 +16,7 @@ export const ANCHOR_WAIT_CEILING_MS = 2_000;
 /** How long the landing outline stays on the element that was searched for. */
 export const LANDING_HIGHLIGHT_MS = 1_200;
 
-export type NavigateResult = "landed" | "blocked" | "not-found" | "handled";
+export type NavigateResult = "landed" | "blocked" | "not-found" | "handled" | "cancelled";
 
 export interface NavigateOptions {
   /** react-router's navigate, narrowed to what the resolver needs. */
@@ -27,6 +27,8 @@ export interface NavigateOptions {
   onToast: (message: string) => void;
   /** Resolves an `action` target. Supplied by the caller, because the map needs app services. */
   runAction?: (handlerId: string) => void | Promise<void>;
+  /** Stops the wait for an anchor and leaves the page alone once the caller has moved on. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -36,8 +38,12 @@ export interface NavigateOptions {
  * all DOM writes, so the observer fires on the commit that actually produces the anchor instead of
  * on a timer that is either too eager or too slow.
  */
-export const waitForElement = (selector: string, ceilingMs = ANCHOR_WAIT_CEILING_MS): Promise<HTMLElement | null> => {
-  if (typeof document === "undefined") return Promise.resolve(null);
+export const waitForElement = (
+  selector: string,
+  ceilingMs = ANCHOR_WAIT_CEILING_MS,
+  signal?: AbortSignal,
+): Promise<HTMLElement | null> => {
+  if (typeof document === "undefined" || signal?.aborted) return Promise.resolve(null);
   const found = document.querySelector<HTMLElement>(selector);
   if (found) return Promise.resolve(found);
 
@@ -48,14 +54,17 @@ export const waitForElement = (selector: string, ceilingMs = ANCHOR_WAIT_CEILING
       settled = true;
       observer.disconnect();
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       resolve(element);
     };
+    const onAbort = () => finish(null);
     const observer = new MutationObserver(() => {
       const element = document.querySelector<HTMLElement>(selector);
       if (element) finish(element);
     });
     observer.observe(document.body, { childList: true, subtree: true });
     const timer = setTimeout(() => finish(document.querySelector<HTMLElement>(selector)), ceilingMs);
+    signal?.addEventListener("abort", onAbort);
   });
 };
 
@@ -109,7 +118,10 @@ export const navigateToSearchTarget = async (
     requestConfigItemFocus(target.category, target.itemName);
     const anchor = await waitForElement(
       `[data-config-item="${CSS.escape(target.itemName)}"][data-config-category="${CSS.escape(target.category)}"]`,
+      ANCHOR_WAIT_CEILING_MS,
+      options.signal,
     );
+    if (options.signal?.aborted) return "cancelled";
     if (!anchor) {
       options.onToast(`Could not reach ${options.label}`);
       return "not-found";
@@ -126,7 +138,12 @@ export const navigateToSearchTarget = async (
   }
 
   const sectionId = target.kind === "section" ? target.id : target.sectionId;
-  const section = await waitForElement(sectionSelector(target.scope, sectionId));
+  const section = await waitForElement(
+    sectionSelector(target.scope, sectionId),
+    ANCHOR_WAIT_CEILING_MS,
+    options.signal,
+  );
+  if (options.signal?.aborted) return "cancelled";
   if (!section) {
     options.onToast(`Could not reach ${options.label}`);
     return "not-found";
@@ -139,7 +156,8 @@ export const navigateToSearchTarget = async (
   }
 
   requestSectionOpen(target.scope, target.sectionId);
-  const control = await waitForElement(testIdSelector(target.testId));
+  const control = await waitForElement(testIdSelector(target.testId), ANCHOR_WAIT_CEILING_MS, options.signal);
+  if (options.signal?.aborted) return "cancelled";
   if (!control) {
     options.onToast(`Could not reach ${options.label}`);
     return "not-found";

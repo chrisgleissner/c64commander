@@ -164,7 +164,7 @@ test.describe("Config visibility across modes", () => {
     }
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
     const indicator = await waitForConnectivityReady(page);
-    await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo mode)/);
+    await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo Mode)/);
 
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
     // C64U device → menu-aligned hierarchy. The Audio Mixer page keeps its specialized

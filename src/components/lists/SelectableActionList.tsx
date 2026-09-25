@@ -116,6 +116,7 @@ const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_
 
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
   const { profile } = useDisplayProfile();
+  const [actionsOpen, setActionsOpen] = useState(false);
   // On a 320px screen the row's three controls - the selection circle, the actions
   // kebab and the play button - take about 150px of the 256px available, all of it at
   // the 44px target size, and the name was left a 96px ribbon in which most words of
@@ -145,7 +146,10 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-2 rounded-md px-1 py-[0.44rem] min-w-0 max-w-full",
+        "flex flex-wrap items-center gap-x-2 rounded-md px-1 min-w-0 max-w-full",
+        // The stacked title is a 44 px target on its own line, so the row gives back its own
+        // vertical padding and line gap to stay the height it was.
+        stackTitle ? "gap-y-0 py-0" : "gap-y-2 py-[0.44rem]",
         item.isDimmed
           ? "opacity-40"
           : isPlaying
@@ -176,17 +180,24 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
     >
       <div className="flex items-center gap-1 shrink-0">
         {item.showSelection !== false ? (
-          <Checkbox
-            checked={item.selected}
-            onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
+          // A 44 px label around the 16 px box takes the tap. The margins keep the row's layout close
+          // to the bare box and stop short of the actions button, so the two targets do not overlap.
+          <label
+            className="-ml-[14px] -mr-1 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center"
             onClick={(event) => event.stopPropagation()}
-            aria-label={`Select ${item.title}`}
-            id={selectionTestId}
-            data-testid={selectionTestId}
-          />
+          >
+            <Checkbox
+              checked={item.selected}
+              onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={`Select ${item.title}`}
+              id={selectionTestId}
+              data-testid={selectionTestId}
+            />
+          </label>
         ) : null}
         {item.showMenu === false ? null : (
-          <DropdownMenu modal={false}>
+          <DropdownMenu modal={false} open={actionsOpen} onOpenChange={setActionsOpen}>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -194,7 +205,12 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
                 className="h-9 w-9 min-h-[44px] min-w-[44px]"
                 aria-label="Item actions"
                 disabled={item.disableActions}
-                onClick={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  // The trigger opens on pointer-down or its own Enter; the keypad ring activates it
+                  // with a click, which carries no pointer (detail 0) and would otherwise do nothing.
+                  if (event.detail === 0) setActionsOpen(true);
+                }}
                 id={actionMenuTestId}
                 data-testid={actionMenuTestId}
               >
@@ -238,7 +254,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
+            className="text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex items-center gap-1"
             onClick={wrapUserEvent(
               (event) => {
                 event.stopPropagation();

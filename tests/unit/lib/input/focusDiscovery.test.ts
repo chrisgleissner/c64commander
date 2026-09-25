@@ -229,6 +229,35 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("names a dialog group by its visible title rather than its presentation attribute", () => {
+    mount(`
+      <div role="dialog" id="dialog" aria-labelledby="title" data-sheet-presentation="sheet">
+        <h2 id="title">Diagnostics</h2>
+        <button id="run">Run health check</button>
+        <button id="close">Close</button>
+      </div>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(controller.current()?.group).toBe("Diagnostics");
+    engine.stop();
+  });
+
+  it("names a dialog by the labels that exist when one of its labelled-by ids does not", () => {
+    mount(`
+      <div role="dialog" aria-labelledby="gone title" data-sheet-presentation="sheet">
+        <h2 id="title">Diagnostics</h2>
+        <button id="run">Run health check</button>
+      </div>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(controller.current()?.group).toBe("Diagnostics");
+    engine.stop();
+  });
+
   it("shims tabindex on non-natively-focusable elements while running and removes it on stop", () => {
     mount(`<div data-focus-group="card" id="card"><button id="btn">b</button></div>`);
     const { engine } = makeEngine();
@@ -367,6 +396,51 @@ describe("FocusDiscoveryEngine", () => {
       expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
       engine.stop();
     });
+  });
+
+  it("returns to the opener when the page behind a closed dialog reappears a scan later", () => {
+    // Radix unhides the page behind a dialog after the dialog has gone, so the first scan
+    // afterwards sees only what was never hidden.
+    const page = mount(`<div id="page"><button id="first">first</button><button id="opener">opener</button></div>`);
+    mount(`<button id="tab">tab</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const dialog = mount(`<div role="dialog"><button id="ok">OK</button></div>`);
+    engine.refresh();
+    page.setAttribute("aria-hidden", "true");
+    dialog.remove();
+    engine.refresh();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
+  it("keeps the selection on a card whose own stop moves inside it as it opens", () => {
+    // Only the innermost labelled container is a group, so opening a card that renders a labelled
+    // group of rows takes the card itself out of the ring.
+    mount(`<button id="first">first</button>`);
+    const card = mount(`<section data-section-label="Ports" id="card"><button id="toggle">Ports</button></section>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const cardId = controller.list().find((item) => engine.elementForId(item.id)?.id === "card")!.id;
+    controller.setCurrent(cardId);
+
+    card
+      .querySelector("#card")!
+      .insertAdjacentHTML(
+        "beforeend",
+        `<div data-section-label="Ports rows" id="rows"><button id="joystick">Joystick</button><button id="bus">Bus</button></div>`,
+      );
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).not.toBe("first");
+    expect(card.querySelector("#card")!.contains(engine.elementForId(controller.current()!.id))).toBe(true);
+    engine.stop();
   });
 
   it("does not restore a remembered item that the page no longer has", () => {

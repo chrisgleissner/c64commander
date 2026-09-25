@@ -14,3 +14,19 @@ export const shouldOpenHvscPreparation = (
 
 export const shouldCancelHvscLifecycleOnDisable = (hvscEnabled: boolean, preparationState: HvscPreparationState) =>
   !hvscEnabled && (preparationState === "DOWNLOADING" || preparationState === "INGESTING");
+
+/**
+ * Whether the open preparation sheet should start or continue the work by itself. A failed attempt
+ * waits for the sheet's Retry button: starting again on its own repeated the failure in a loop.
+ */
+export const shouldAutoRunHvscPreparation = ({
+  enabled,
+  sheetOpen,
+  updating,
+  preparationState,
+}: {
+  enabled: boolean;
+  sheetOpen: boolean;
+  updating: boolean;
+  preparationState: HvscPreparationState;
+}) => enabled && sheetOpen && !updating && preparationState !== "READY" && preparationState !== "ERROR";

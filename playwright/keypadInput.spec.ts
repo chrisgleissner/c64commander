@@ -143,6 +143,67 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "cta-activated");
   });
 
+  test("closing a dialog returns the ring to the control that opened it", async ({ page }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/play");
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
+    const addItems = page.getByTestId("add-items-to-playlist");
+    expect(await ringFocus(page, addItems)).toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog", { name: "Add items" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Add items" })).toBeHidden();
+
+    await expect(addItems).toHaveAttribute(SELECTED, "true");
+    await snap(page, testInfo, "ring-back-on-opener");
+  });
+
+  test("the guidance bar stays visible above an open sheet, which stands on it", async ({ page }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/");
+    await expect(page.getByTestId("tab-home")).toBeVisible();
+    // The launch fade still animates the shell's opacity; what is asserted is the app once it is up.
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+
+    await page.keyboard.press("*");
+    const sheet = page.getByTestId("diagnostics-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+
+    await sheet.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
+    const layout = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]');
+      const reserveProbe = document.createElement("div");
+      reserveProbe.style.height = "var(--keypad-guidance-reserved-height)";
+      document.body.appendChild(reserveProbe);
+      const reservedHeight = reserveProbe.getBoundingClientRect().height;
+      reserveProbe.remove();
+      const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"]');
+      const surface = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
+      return {
+        shellWillChange: shell ? getComputedStyle(shell).willChange : null,
+        barTop: bar?.getBoundingClientRect().top ?? 0,
+        barBottom: bar?.getBoundingClientRect().bottom ?? 0,
+        barHeight: bar?.getBoundingClientRect().height ?? 0,
+        reservedHeight,
+        sheetBottom: surface?.getBoundingClientRect().bottom ?? 0,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    // A `will-change: opacity` shell is a stacking context that every dialog outranks, which hid the
+    // bar under each one.
+    expect(layout.shellWillChange).toBe("auto");
+    expect(layout.reservedHeight).toBeGreaterThanOrEqual(layout.barHeight - 0.5);
+    expect(layout.sheetBottom).toBeLessThanOrEqual(layout.barTop + 1);
+    expect(layout.barBottom).toBeGreaterThan(layout.viewportHeight - 60);
+    // The sheet itself has no context menu of its own, so the Menu legend is not offered.
+    await expect(page.getByTestId("keypad-guidance-right")).toBeHidden();
+    await snap(page, testInfo, "guidance-bar-over-sheet");
+  });
+
   test("HAZARD 1: a focused slider — Left/Right change the value, Up/Down move focus", async ({ page }, testInfo) => {
     await enableKeypad(page);
     await page.goto("/");
@@ -259,13 +320,13 @@ test.describe("Keypad / T9 input", () => {
     await expect(trigger).toBeFocused();
     await snap(page, testInfo, "dropdown-closed");
 
-    // Keypad back (Android keyCode 4) also closes the dropdown via the layer.
+    // The Android Back key also closes the dropdown. It reaches the page the way the app's native
+    // Back listener delivers it: an Escape keydown with no key code, at the focused element.
     await page.keyboard.press("Enter");
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await page.evaluate(() => {
-      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "keyCode", { get: () => 4 });
-      window.dispatchEvent(event);
+      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" });
+      (document.activeElement ?? document).dispatchEvent(event);
     });
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
     await snap(page, testInfo, "dropdown-keypad-back-closed");
@@ -278,6 +339,8 @@ test.describe("Keypad / T9 input", () => {
     await page.getByTestId("tab-config").click();
     await expect(page).toHaveURL(/\/config/);
     await page.getByTestId("config-menu-page-video-setup").click();
+    // A list that opens under the pointer highlights the option there, which a keypad user never has.
+    await page.mouse.move(0, 0);
 
     const trigger = page.locator('[data-testid^="config-select-trigger:"]').first();
     await expect(trigger).toBeVisible();
@@ -286,7 +349,12 @@ test.describe("Keypad / T9 input", () => {
 
     await page.keyboard.press("Enter");
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    // The list moves focus to the current option only once it has been positioned, and moves it on
+    // Down in a timer: a key sent before either lands on the option it was meant to leave.
+    const current = page.getByRole("option", { name: before, exact: true });
+    await expect(current).toBeFocused();
     await page.keyboard.press("ArrowDown");
+    await expect(current).not.toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listbox")).toHaveCount(0);
     await expect(trigger).not.toHaveText(before);

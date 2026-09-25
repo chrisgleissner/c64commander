@@ -245,7 +245,7 @@ describe("GlobalDiagnosticsOverlay", () => {
         __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
       }
     ).__c64uDiagnosticsTestBridge;
-    uninstallDeviceBackButton = installDeviceBackButton();
+    uninstallDeviceBackButton = installDeviceBackButton(() => undefined);
   });
 
   it("opens from a pending diagnostics request and shares all diagnostics", async () => {

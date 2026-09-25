@@ -32,6 +32,7 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
+import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import {
   MachineActionConfirmationDialog,
@@ -72,7 +73,7 @@ export interface MachineControlsProps {
    */
   forceClosed?: boolean;
 
-  status: { isConnected: boolean; isConnecting: boolean };
+  status: { isConnected: boolean; isConnecting: boolean; deviceInfo?: { product?: string } | null };
   machineTaskBusy: boolean;
   machineExecutionState: "running" | "paused" | "unknown";
   controls: {
@@ -140,6 +141,10 @@ export function MachineControls({
   const effectiveBusy = machineTaskBusy || telnetBusy;
   const [pendingDestructiveAction, setPendingDestructiveAction] = useState<PendingDestructiveAction | null>(null);
   const [powerSheetOpen, setPowerSheetOpen] = useState(false);
+  const targetDevice = useTargetDeviceIdentity();
+  const powerTarget = targetDevice.multiDevice && targetDevice.fullLabel ? targetDevice.fullLabel : "the C64";
+  const reportedProduct = status.deviceInfo?.product?.trim();
+  const machine = reportedProduct ? `the ${reportedProduct}` : "the C64";
   const machineGuardsRef = useRef({ isConnected: status.isConnected, effectiveBusy: false, powerCycleDisabled: true });
   const canRunPowerCycle = typeof onPowerCycle === "function";
   const showPowerCycle = powerCycleVisible ?? canRunPowerCycle;
@@ -229,13 +234,13 @@ export function MachineControls({
       id: "reboot",
       label: "Reboot",
       icon: Power,
-      consequence: "Reboots the C64 Ultimate and interrupts the current session.",
+      consequence: `Reboots ${machine} and interrupts the current session.`,
       disabled: !status.isConnected || effectiveBusy,
       loading: rebootLoading,
       activate: () =>
         openDestructiveConfirmation({
           actionName: "Reboot",
-          consequence: "This reboots the C64 Ultimate and interrupts the current session.",
+          consequence: `This reboots ${machine} and interrupts the current session.`,
           run: onReboot,
           isDisabled: () => !machineGuardsRef.current.isConnected || machineGuardsRef.current.effectiveBusy,
         }),
@@ -245,7 +250,7 @@ export function MachineControls({
       label: action.label,
       icon: action.icon ?? RefreshCw,
       consequence: REBOOT_CLEAR_MEMORY_ACTION_IDS.has(action.id)
-        ? "Reboots the C64 Ultimate, clears memory, and interrupts the current session."
+        ? `Reboots ${machine}, clears memory, and interrupts the current session.`
         : (action.reason ?? "Interrupts whatever the C64 is doing."),
       disabled: Boolean(action.disabled),
       loading: Boolean(action.loading),
@@ -256,7 +261,7 @@ export function MachineControls({
         }
         openDestructiveConfirmation({
           actionName: action.label,
-          consequence: "This reboots the C64 Ultimate, clears memory, and interrupts the current session.",
+          consequence: `This reboots ${machine}, clears memory, and interrupts the current session.`,
           run: action.onSelect,
           isDisabled: () => Boolean(action.disabled),
         });
@@ -274,7 +279,7 @@ export function MachineControls({
             activate: () =>
               openDestructiveConfirmation({
                 actionName: "Power Cycle",
-                consequence: "This power-cycles the C64 Ultimate and interrupts the current session.",
+                consequence: `This power-cycles ${machine} and interrupts the current session.`,
                 run: () => onPowerCycle?.(),
                 isDisabled: () => machineGuardsRef.current.powerCycleDisabled,
               }),
@@ -287,7 +292,7 @@ export function MachineControls({
             id: "power-off",
             label: "Power Off",
             icon: PowerOff,
-            consequence: "Turns the C64 Ultimate off. It has to be switched on by hand afterwards.",
+            consequence: `Turns ${machine} off. It has to be switched on by hand afterwards.`,
             disabled: !status.isConnected || effectiveBusy,
             loading: controls.powerOff.isPending,
             activate: () => void onPowerOff(),
@@ -315,7 +320,7 @@ export function MachineControls({
           }
           openDestructiveConfirmation({
             actionName: action.label,
-            consequence: "This reboots the C64 Ultimate, clears memory, and interrupts the current session.",
+            consequence: `This reboots ${machine}, clears memory, and interrupts the current session.`,
             run: action.onSelect,
             isDisabled: () => Boolean(action.disabled),
           });
@@ -485,7 +490,7 @@ export function MachineControls({
           <AppSheetHeader>
             <AppSheetTitle>Power</AppSheetTitle>
             <AppSheetDescription>
-              Each of these interrupts whatever the C64 is doing. You are asked to confirm first.
+              Each of these interrupts whatever {powerTarget} is doing. You are asked to confirm first.
             </AppSheetDescription>
           </AppSheetHeader>
           <AppSheetBody className="space-y-2 px-4 py-4 sm:px-5">

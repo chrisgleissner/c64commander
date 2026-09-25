@@ -28,9 +28,10 @@ type HarnessProps = {
   onValueChange?: (values: number[]) => void;
   onValueCommit?: (values: number[]) => void;
   enabled?: boolean;
+  nativeInputMode?: "none" | "overlay";
 };
 
-const Harness = ({ onValueChange, onValueCommit, enabled = true }: HarnessProps) => {
+const Harness = ({ onValueChange, onValueCommit, enabled = true, nativeInputMode = "none" }: HarnessProps) => {
   const [value, setValue] = useState(2);
   return (
     <FocusNavigationProvider enabled={enabled}>
@@ -46,6 +47,8 @@ const Harness = ({ onValueChange, onValueCommit, enabled = true }: HarnessProps)
         onValueCommit={onValueCommit}
         keypadFocusId="kp-slider"
         keypadFocusOrder={0}
+        nativeInputMode={nativeInputMode}
+        nativeInputAriaLabel="Native test slider"
         aria-label="Test slider"
         data-testid="kp-slider"
       />
@@ -83,6 +86,20 @@ describe("Slider — keypad navigation (HAZARD 1)", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Next CTA" }));
     expect(onValueChange).not.toHaveBeenCalled();
     expect(thumb).toHaveAttribute("aria-valuenow", "2");
+  });
+
+  it("keeps the transparent touch overlay input out of the keypad ring, so Up from the next stop lands on the thumb", () => {
+    render(<Harness nativeInputMode="overlay" />);
+    const thumb = screen.getByLabelText("Test slider").querySelector<HTMLElement>("[role='slider']:not(input)")!;
+    const nativeInput = screen.getByLabelText("Native test slider");
+    const nextCta = screen.getByRole("button", { name: "Next CTA" });
+
+    fireEvent.keyDown(thumb, { key: "ArrowDown", code: "ArrowDown" });
+    expect(document.activeElement).toBe(nextCta);
+    fireEvent.keyDown(nextCta, { key: "ArrowUp", code: "ArrowUp" });
+    expect(document.activeElement).toBe(thumb);
+    fireEvent.keyDown(thumb, { key: "ArrowUp", code: "ArrowUp" });
+    expect(document.activeElement).not.toBe(nativeInput);
   });
 
   it("coalesces a key-repeat burst into exactly one commit (one device write)", () => {

@@ -26,6 +26,11 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => mockUseC64Connection(),
 }));
 
+const mockConnectionState = vi.hoisted(() => ({ state: "REAL_CONNECTED" }));
+vi.mock("@/hooks/useConnectionState", () => ({
+  useConnectionState: () => mockConnectionState,
+}));
+
 vi.mock("@/lib/buildInfo", () => ({
   getBuildInfo: () => mockGetBuildInfo(),
 }));
@@ -42,6 +47,20 @@ vi.mock("framer-motion", () => ({
 }));
 
 describe("SystemInfo", () => {
+  it("names Demo Mode as the device instead of the host name the simulated device reports", () => {
+    mockConnectionState.state = "DEMO_ACTIVE";
+    mockUseC64Connection.mockReturnValue({
+      status: { isConnected: true, deviceInfo: { hostname: "c64u", product: "C64 Ultimate" } },
+    });
+    try {
+      render(<SystemInfo />);
+
+      expect(screen.getByTestId("home-system-device")).toHaveTextContent("Demo Mode");
+    } finally {
+      mockConnectionState.state = "REAL_CONNECTED";
+    }
+  });
+
   it("displays versionLabel as the app version", () => {
     mockUseC64Connection.mockReturnValue({
       status: { isConnected: false, deviceInfo: null },

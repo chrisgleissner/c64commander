@@ -272,6 +272,16 @@ describe("ArchiveSelectionView", () => {
     expect(onToggleSelect).toHaveBeenCalledWith(result);
   });
 
+  it("selects a result from a tap on its name, not only on the 16 px checkbox", () => {
+    const result = makeResult({ name: "Unique Title" });
+    const { onToggleSelect } = renderView({}, { phase: "results", params: {}, results: [result] });
+
+    fireEvent.click(screen.getByText("Unique Title"));
+
+    expect(onToggleSelect).toHaveBeenCalledTimes(1);
+    expect(onToggleSelect).toHaveBeenCalledWith(result);
+  });
+
   it("calls reportUserError and clearError when phase is error", async () => {
     const clearError = vi.fn();
     vi.mocked(useOnlineArchive).mockReturnValue({

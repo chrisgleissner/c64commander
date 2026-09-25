@@ -11,7 +11,7 @@ import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
 import { useFocusItem, useFocusNavigationContext } from "@/hooks/useFocusNavigation";
-import { normalizeKeyEvent, setInputModality } from "@/lib/input";
+import { SKIP_ATTR, normalizeKeyEvent, setInputModality } from "@/lib/input";
 import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
@@ -488,6 +488,10 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
             aria-label={nativeInputAriaLabel}
             data-testid={nativeInputTestId}
             disabled={props.disabled}
+            // Touch-only: this transparent input sits over the thumb, which is the keyboard stop.
+            // As a second stop it drew no visible highlight and its native arrow keys trapped focus.
+            tabIndex={-1}
+            {...{ [SKIP_ATTR]: "true" }}
             className={cn(
               "absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0",
               nativeInputClassName,
@@ -511,6 +515,8 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         ) : null}
         <SliderPrimitive.Thumb
           ref={keypadThumbRef}
+          // The primitive marks a disabled thumb only with data-disabled, so it read as a usable slider.
+          aria-disabled={props.disabled ? true : undefined}
           className={cn(
             "block h-5 w-5 rounded-full shadow-[inset_0_0_0_2px_hsl(var(--primary))] bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
             thumbClassName,

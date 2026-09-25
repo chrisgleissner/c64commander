@@ -23,6 +23,7 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      - runFlow: dismiss-tour.yaml
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:

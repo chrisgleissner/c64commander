@@ -18,6 +18,7 @@ import {
 import { persistPauseMuteSnapshot } from "@/lib/playback/playbackSessionPersistence";
 
 type PauseMuteCaptureApi = {
+  getCategories: (options?: { __c64uIntent?: "user" }) => Promise<{ categories?: string[] }>;
   getCategory: (category: string, options?: { __c64uIntent?: "user" }) => Promise<Record<string, unknown>>;
   updateConfigBatch: (
     payload: Record<string, Record<string, string | number>>,
@@ -40,17 +41,21 @@ type PauseMuteCaptureApi = {
  * `pauseMutePending`). Best-effort: logs and returns false on any read/write failure
  * rather than blocking the pause.
  */
+const SID_MUTE_CATEGORIES = ["Audio Mixer", "SID Sockets Configuration", "SID Addressing"] as const;
+
 export const capturePauseMuteToPersistedSnapshot = async (
   api: PauseMuteCaptureApi,
   deviceId: string | null | undefined,
 ): Promise<boolean> => {
   if (!deviceId) return false;
   try {
-    const [audioMixer, sidSockets, sidAddressing] = await Promise.all([
-      api.getCategory("Audio Mixer", { __c64uIntent: "user" }),
-      api.getCategory("SID Sockets Configuration", { __c64uIntent: "user" }),
-      api.getCategory("SID Addressing", { __c64uIntent: "user" }),
-    ]);
+    // An Ultimate-II+ cartridge has no mixer to mute, and asking it for one only logs three 404s.
+    const { categories = [] } = await api.getCategories({ __c64uIntent: "user" });
+    if (!SID_MUTE_CATEGORIES.every((category) => categories.includes(category))) return false;
+
+    const [audioMixer, sidSockets, sidAddressing] = await Promise.all(
+      SID_MUTE_CATEGORIES.map((category) => api.getCategory(category, { __c64uIntent: "user" })),
+    );
 
     const sidItems = extractAudioMixerItems(audioMixer).filter((item) => isSidVolumeName(item.name));
     const enablement = buildSidEnablement(sidSockets, sidAddressing);

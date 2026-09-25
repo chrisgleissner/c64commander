@@ -11,6 +11,7 @@ import { isConfigFileName } from "@/lib/config/configFileReferenceSelection";
 import { buildConfigReferenceFromSourceEntry } from "@/lib/config/configFileReferenceSelection";
 import { dedupeConfigCandidates, type ConfigCandidate } from "@/lib/config/playbackConfig";
 import { firmwareAssociatedConfigFor } from "@/lib/config/firmwareAssociatedConfig";
+import { addLog } from "@/lib/logging";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -67,7 +68,13 @@ const resolveEntriesForPath = async (
   const normalizedPath = normalizeSourcePath(path);
   const prefetched = prefetchedEntriesByPath?.get(normalizedPath);
   if (prefetched) return prefetched;
-  const entries = await listEntries(normalizedPath).catch(() => [] as SourceEntry[]);
+  const entries = await listEntries(normalizedPath).catch((error: unknown) => {
+    addLog("warn", "Config discovery: could not list a folder; looking for no settings file there", {
+      path: normalizedPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [] as SourceEntry[];
+  });
   prefetchedEntriesByPath?.set(normalizedPath, entries);
   return entries;
 };

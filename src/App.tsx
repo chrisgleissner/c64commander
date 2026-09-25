@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import React, { Suspense, lazy, useCallback, useEffect, useMemo } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppStyleProvider } from "@/components/AppStyleProvider";
 import { TabBar } from "@/components/TabBar";
@@ -56,6 +56,7 @@ import {
 } from "@/lib/diagnostics/diagnosticsReconciler";
 import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
+import { navigateBackOrLeave } from "@/lib/navigation/navigateBack";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
 import { variant } from "@/generated/variant";
@@ -74,8 +75,7 @@ const describeUnhandledRejectionReason = (error: unknown) => {
 };
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
-import { LightingStudioProvider } from "@/hooks/useLightingStudio";
-import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
+import { LightingStudioProvider, useLightingStudio } from "@/hooks/useLightingStudio";
 import { StartupLaunchSequence } from "@/components/StartupLaunchSequence";
 import {
   markStartupLaunchSequenceComplete,
@@ -86,6 +86,24 @@ import {
 } from "@/lib/startup/launchSequence";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
+const LightingStudioDialog = lazy(async () => ({
+  default: (await import("@/components/lighting/LightingStudioDialog")).LightingStudioDialog,
+}));
+
+/** Loaded on first open rather than at startup: the startup bundle has a size budget, and most sessions never open it. */
+const LightingStudioDialogHost = () => {
+  const { studioOpen, contextLensOpen } = useLightingStudio();
+  const [requested, setRequested] = useState(false);
+  useEffect(() => {
+    if (studioOpen || contextLensOpen) setRequested(true);
+  }, [studioOpen, contextLensOpen]);
+  if (!requested && !studioOpen && !contextLensOpen) return null;
+  return (
+    <Suspense fallback={null}>
+      <LightingStudioDialog />
+    </Suspense>
+  );
+};
 const AppStylesGalleryPage = lazy(() => import("./pages/AppStylesGalleryPage"));
 
 export const shouldBundleCoverageProbeModules = () =>
@@ -308,7 +326,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
     <FocusNavigationProvider
       enabled={flags.keypad_input_enabled}
       profileId={KEYPAD_FOCUS_PROFILE_ID}
-      onNavigateBack={() => navigate(-1)}
+      onNavigateBack={() => navigateBackOrLeave(navigate)}
       shortcuts={shortcuts}
     >
       {children}
@@ -348,7 +366,7 @@ const AppRoutes = () => {
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />
             <DeviceAuthChallengeDialog />
-            <LightingStudioDialog />
+            <LightingStudioDialogHost />
             {coverageProbeEnabled && TestHeartbeat ? (
               <Suspense fallback={null}>
                 <TestHeartbeat />
@@ -512,17 +530,18 @@ const DiagnosticsRuntimeBridge = () => {
 
     const startDeferredBridges = async () => {
       if (started || disposed) return;
-      if (getPlatform() === "web") return;
       started = true;
-      const [diagnosticsBridgeModule, nativeDebugSnapshotsModule, webServerLogsModule] = await Promise.all([
+      const webServerLogsModule = await import("@/lib/diagnostics/webServerLogs");
+      if (disposed) return;
+      stopWebServerLogBridge = webServerLogsModule.startWebServerLogBridge();
+      if (getPlatform() === "web") return;
+      const [diagnosticsBridgeModule, nativeDebugSnapshotsModule] = await Promise.all([
         import("@/lib/native/diagnosticsBridge"),
         import("@/lib/diagnostics/nativeDebugSnapshots"),
-        import("@/lib/diagnostics/webServerLogs"),
       ]);
       if (disposed) return;
       stopNativeDiagnosticsBridge = diagnosticsBridgeModule.stopNativeDiagnosticsBridge;
       stopDebugSnapshotPublisher = nativeDebugSnapshotsModule.startNativeDebugSnapshotPublisher();
-      stopWebServerLogBridge = webServerLogsModule.startWebServerLogBridge();
       await diagnosticsBridgeModule.startNativeDiagnosticsBridge();
     };
 

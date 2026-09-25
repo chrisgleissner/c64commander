@@ -523,10 +523,22 @@ test.describe("The Demo Mode offer on a small screen", () => {
     { name: "callback-480x640", width: 320, height: 427 },
     { name: "narrow-320x480", width: 320, height: 480 },
   ]) {
-    test(`fits ${viewport.name} without horizontal overflow`, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    test(`fits ${viewport.name} with every action whole on screen`, async ({
+      page,
+    }: { page: Page }, testInfo: TestInfo) => {
       await startStrictUiMonitoring(page, testInfo);
       allowWarnings(testInfo, "Reads in flight when Demo Mode re-routes the API are aborted by design.");
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      // The Pixel 4's gesture bar, which the dialog keeps clear of, and the widest fallback font a runner
+      // has: Inter is not bundled, and under DejaVu Sans both the message and the primary label wrap further.
+      await page.addInitScript(() => {
+        document.addEventListener("DOMContentLoaded", () => {
+          const style = document.createElement("style");
+          style.textContent =
+            ":root { --safe-area-inset-bottom: 24px !important; } * { font-family: 'DejaVu Sans', sans-serif !important; }";
+          document.head.append(style);
+        });
+      });
 
       await seedHandset(page, {
         deviceHost: new URL(device.baseUrl).host,
@@ -555,6 +567,20 @@ test.describe("The Demo Mode offer on a small screen", () => {
         dialogBox!.x + dialogBox!.width,
         `${viewport.name}: the dialog runs past the right edge`,
       ).toBeLessThanOrEqual(viewport.width + 1);
+
+      // A tap on the part of a button the dialog has scrolled out of view lands on the backdrop, and
+      // the backdrop declines the offer, so every action has to be whole on screen as the offer opens.
+      const unreachable = await dialog.evaluate((surface) =>
+        [...surface.querySelectorAll<HTMLButtonElement>("button[data-testid^='demo-interstitial-']")]
+          .filter((button) => {
+            const box = button.getBoundingClientRect();
+            const top = document.elementFromPoint(box.left + box.width / 2, box.top + 2);
+            const bottom = document.elementFromPoint(box.left + box.width / 2, box.bottom - 2);
+            return !button.contains(top) || !button.contains(bottom);
+          })
+          .map((button) => button.textContent?.trim()),
+      );
+      expect(unreachable, `${viewport.name}: actions the offer shows only in part`).toEqual([]);
 
       await snap(page, testInfo, `offer-${viewport.name}`);
     });

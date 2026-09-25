@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 
 interface PowerOffDialogProps {
   open: boolean;
@@ -24,13 +25,15 @@ interface PowerOffDialogProps {
 }
 
 export function PowerOffDialog({ open, onOpenChange, onConfirm, isPending }: PowerOffDialogProps) {
+  const targetDevice = useTargetDeviceIdentity();
+  const machine = targetDevice.multiDevice && targetDevice.fullLabel ? targetDevice.fullLabel : "this machine";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Confirm power off</DialogTitle>
           <DialogDescription>
-            Once powered off, this machine cannot be powered on again via software. Use the physical power button on the
+            Once powered off, {machine} cannot be powered on again via software. Use the physical power button on the
             device to power it back on.
           </DialogDescription>
         </DialogHeader>

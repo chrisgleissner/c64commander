@@ -9,6 +9,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getBuildInfo } from "@/lib/buildInfo";
 import { cn } from "@/lib/utils";
@@ -21,12 +23,15 @@ import { cn } from "@/lib/utils";
 export function SystemInfo({ appVersionOnly = false }: { appVersionOnly?: boolean } = {}) {
   const [expanded, setExpanded] = useState(false);
   const { status } = useC64Connection();
+  const { state: connectionState } = useConnectionState();
   const { profile } = useDisplayProfile();
   const buildInfo = getBuildInfo();
   const disconnected = !status.isConnected;
   const deviceValue = disconnected
     ? "Not connected"
-    : status.deviceInfo?.hostname || status.deviceInfo?.product || "Not available";
+    : connectionState === "DEMO_ACTIVE"
+      ? DEMO_MODE_DEVICE_LABEL
+      : status.deviceInfo?.hostname || status.deviceInfo?.product || "Not available";
   const firmwareValue = disconnected ? "Not connected" : status.deviceInfo?.firmware_version || "Not available";
 
   return (

@@ -1076,8 +1076,8 @@ describe("getBadgeAriaLabel", () => {
     expect(getBadgeAriaLabel("Degraded", "Online", 1)).toBe("Connected to C64U, system degraded, 1 problem");
   });
 
-  it("Demo + Unhealthy → Demo mode label", () => {
-    expect(getBadgeAriaLabel("Unhealthy", "Demo", 5)).toBe("Demo mode, system unhealthy, 5 problems");
+  it("Demo + Unhealthy → Demo Mode label", () => {
+    expect(getBadgeAriaLabel("Unhealthy", "Demo", 5)).toBe("Demo Mode, system unhealthy, 5 problems");
   });
 
   it("Online + Unhealthy 1 → singular problem", () => {

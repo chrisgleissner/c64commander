@@ -1,6 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { resetInputModality, setInputModality } from "@/lib/input/inputModality";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import {
   AppDialog,
@@ -67,13 +69,18 @@ describe("App surface primitives", () => {
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
     expect(dialog.className).toContain("rounded-t-[var(--interstitial-radius)]");
-    expect(dialog.className).toContain("pb-[var(--app-sheet-bottom-clearance)]");
+    // The tab bar hides under a sheet, so the sheet only clears the navigation bar...
+    expect(dialog.className).toContain("pb-[max(1rem,var(--safe-area-inset-bottom))]");
+    expect(dialog.className).not.toContain("pb-[var(--app-sheet-bottom-clearance)]");
+    // ...and stands on the keypad guidance bar while that shows.
+    expect(dialog.className).toContain("bottom-[var(--keypad-guidance-reserved-height,0px)]");
+    // Game Mode still opts in to the old 5rem clearance for its edge-anchored controls.
     expect(dialog.getAttribute("style")).toContain(
       "--app-sheet-bottom-clearance: calc(5rem + var(--safe-area-inset-bottom))",
     );
     expect(dialog.getAttribute("style")).toContain(`top: ${resolveAppSheetTopClearancePx()}px`);
     // Published as well as applied. `top` is explicit, so a caller that sets its own height
-    // measures downwards from it and `bottom-0` stops bounding the sheet; the caller subtracts
+    // measures downwards from it and `bottom` stops bounding the sheet; the caller subtracts
     // this variable to keep the bottom edge on screen.
     expect(dialog.getAttribute("style")).toContain(`--app-sheet-top-clearance: ${resolveAppSheetTopClearancePx()}px`);
     expect(dialog.getAttribute("style")).toContain("z-index: 210");
@@ -107,7 +114,7 @@ describe("App surface primitives", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(dialog.className).toContain("bottom-0");
+    expect(dialog.className).toContain("bottom-[var(--keypad-guidance-reserved-height,0px)]");
     expect(dialog.className).toContain("sm:w-[min(100vw-2rem,56rem)]");
   });
 
@@ -143,6 +150,72 @@ describe("App surface primitives", () => {
     );
     expect(overlay?.className).toContain(APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0]);
     expect(screen.getByText("Choose a mode").parentElement).toHaveClass("flex-1", "overflow-y-auto");
+  });
+
+  it("places an open dialog again when the keypad guidance bar appears under it", async () => {
+    localStorage.clear();
+    setViewportWidth(360);
+    renderWithProviders(
+      <AppDialog open>
+        <AppDialogContent>
+          <AppDialogHeader>
+            <AppDialogTitle>Demo Mode</AppDialogTitle>
+          </AppDialogHeader>
+        </AppDialogContent>
+      </AppDialog>,
+    );
+    const dialog = screen.getByRole("dialog");
+    const topBefore = Number.parseFloat(dialog.style.maxHeight);
+    const bar = document.createElement("div");
+    bar.setAttribute("data-testid", "keypad-guidance-bar");
+    bar.setAttribute("data-visible", "true");
+    bar.getBoundingClientRect = () => ({ height: 26 }) as DOMRect;
+    document.body.appendChild(bar);
+    try {
+      act(() => {
+        document.documentElement.style.setProperty(
+          "--keypad-guidance-reserved-height",
+          "var(--keypad-guidance-bar-height)",
+        );
+        window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+      });
+
+      await waitFor(() => expect(Number.parseFloat(dialog.style.maxHeight)).toBeLessThan(topBefore));
+    } finally {
+      bar.remove();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
+  });
+
+  it("keeps the control a keypad user is on in view when the dialog is placed again", async () => {
+    localStorage.clear();
+    setViewportWidth(360);
+    setInputModality("key-navigation");
+    renderWithProviders(
+      <AppDialog open>
+        <AppDialogContent>
+          <AppDialogHeader>
+            <AppDialogTitle>Demo Mode</AppDialogTitle>
+          </AppDialogHeader>
+          <AppDialogFooter>
+            <button type="button">Continue in Demo Mode</button>
+          </AppDialogFooter>
+        </AppDialogContent>
+      </AppDialog>,
+    );
+    const primary = screen.getByRole("button", { name: "Continue in Demo Mode" });
+    const scrollIntoView = vi.fn();
+    primary.scrollIntoView = scrollIntoView;
+    primary.focus();
+    try {
+      act(() => {
+        window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+      });
+
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    } finally {
+      resetInputModality();
+    }
   });
 
   // The centred layout already keeps a dialog above the navigation bar. The footer added the bar's
@@ -380,6 +453,28 @@ describe("App surface primitives", () => {
 
     expect(layout.top).toBe(390);
     expect(layout.maxHeight).toBe(498);
+  });
+
+  it("centres a dialog in the space above the keypad guidance bar while that bar shows", () => {
+    document.documentElement.style.setProperty("--app-bar-height", "88px");
+    const bar = document.createElement("div");
+    bar.setAttribute("data-testid", "keypad-guidance-bar");
+    bar.setAttribute("data-visible", "true");
+    bar.getBoundingClientRect = () => ({ height: 26 }) as DOMRect;
+    document.body.appendChild(bar);
+    document.documentElement.style.setProperty(
+      "--keypad-guidance-reserved-height",
+      "var(--keypad-guidance-bar-height)",
+    );
+    try {
+      const layout = resolveCenteredOverlayLayout(120, 900);
+
+      expect(layout.top).toBe(377);
+      expect(layout.maxHeight).toBe(485);
+    } finally {
+      bar.remove();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
   });
 
   it("enforces a minimum centered overlay max height in cramped viewports", () => {

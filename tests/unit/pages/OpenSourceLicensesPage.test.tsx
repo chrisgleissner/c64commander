@@ -11,14 +11,6 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OpenSourceLicensesPage from "@/pages/OpenSourceLicensesPage";
 
-vi.mock("@capacitor/app", () => ({
-  App: {
-    addListener: vi.fn(async () => ({
-      remove: vi.fn(async () => undefined),
-    })),
-  },
-}));
-
 describe("OpenSourceLicensesPage", () => {
   const originalFetch = globalThis.fetch;
 
@@ -41,6 +33,38 @@ describe("OpenSourceLicensesPage", () => {
       </MemoryRouter>,
     );
   };
+
+  it("is a modal dialog, so the keypad focus ring stays inside it", async () => {
+    renderLicensesRoute();
+
+    await screen.findByText("Third-Party Notices");
+
+    expect(screen.getByRole("dialog", { name: "Open source licenses" })).toHaveAttribute("aria-modal", "true");
+  });
+
+  it("closes on Escape, which is also how the Android Back key arrives", async () => {
+    renderLicensesRoute();
+    await screen.findByText("Third-Party Notices");
+
+    fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    await waitFor(() => expect(screen.getByText("Settings Page")).toBeInTheDocument());
+  });
+
+  it("stays open on other keys, and on an Escape something inside it has already handled", async () => {
+    renderLicensesRoute();
+    await screen.findByText("Third-Party Notices");
+    const overlay = screen.getByTestId("open-source-licenses-overlay");
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") event.preventDefault();
+    });
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown", code: "ArrowDown" });
+    fireEvent.keyDown(overlay, { key: "Escape", code: "Escape" });
+
+    expect(screen.queryByText("Settings Page")).not.toBeInTheDocument();
+    expect(screen.getByTestId("open-source-licenses-overlay")).toBeInTheDocument();
+  });
 
   it("does not close on touch pointer-up before the synthesized click", async () => {
     renderLicensesRoute();

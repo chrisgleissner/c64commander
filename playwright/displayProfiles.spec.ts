@@ -545,7 +545,8 @@ test.describe("display profiles", () => {
     await dialog.getByTestId("import-option-hvsc").click();
     await expect(dialog.getByTestId("source-file-picker")).toBeVisible();
 
-    const title = dialog.getByText("Add items", { exact: true });
+    // On the compact profile the header names the chosen source ("From HVSC") rather than "Add items".
+    const title = dialog.getByTestId("add-items-title");
     const filterInput = dialog.getByTestId("add-items-filter");
     await expect(filterInput).toBeVisible();
     await filterInput.focus();

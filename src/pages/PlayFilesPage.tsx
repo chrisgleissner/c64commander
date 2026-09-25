@@ -134,6 +134,7 @@ import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layo
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { useDemoPlaylistCleanup } from "@/pages/playFiles/hooks/useDemoPlaylistCleanup";
 import {
+  shouldAutoRunHvscPreparation,
   shouldCancelHvscLifecycleOnDisable,
   shouldIncludeHvscSource,
   shouldOpenHvscPreparation,
@@ -187,6 +188,7 @@ import {
   canAdvancePrevious,
   shouldDetachPlaybackOnSavedDeviceSwitch,
   applyDurationOverrideToPlaylist,
+  mergeResolvedSonglengthDurations,
   clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
@@ -917,10 +919,13 @@ export default function PlayFilesPage() {
   }, [browserOpen]);
 
   useEffect(() => {
-    if (!hvscControlsEnabled || !hvscPreparationOpen) return;
-    if (hvsc.hvscPreparationState === "READY") return;
-    if (hvsc.hvscUpdating) return;
-    void hvsc.runHvscPreparation();
+    const autoRun = shouldAutoRunHvscPreparation({
+      enabled: hvscControlsEnabled,
+      sheetOpen: hvscPreparationOpen,
+      updating: hvsc.hvscUpdating,
+      preparationState: hvsc.hvscPreparationState,
+    });
+    if (autoRun) void hvsc.runHvscPreparation();
   }, [hvsc.hvscPreparationState, hvsc.hvscUpdating, hvsc.runHvscPreparation, hvscControlsEnabled, hvscPreparationOpen]);
 
   useEffect(() => {
@@ -1614,10 +1619,8 @@ export default function PlayFilesPage() {
   );
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
-    startPlaylist: (items) => {
-      // Replace, never merge: the station owns the queue for as long as it runs.
-      void startPlaylist(items, 0, { replaceQueue: true });
-    },
+    // Replace, never merge: the station owns the queue for as long as it runs.
+    startPlaylist: (items) => startPlaylist(items, 0, { replaceQueue: true }),
     appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
     advanceToNext: handleNext,
     currentIndex,
@@ -2261,19 +2264,7 @@ export default function PlayFilesPage() {
     const applyUpdates = async () => {
       const updated = await applySonglengthsToItems(snapshot);
       if (cancelled) return;
-      // ID-based merge: apply enriched durations to items still in the playlist even
-      // if the playlist reference changed (e.g. new items added) during async enrichment.
-      // Only overwrites durations that were absent (null/undefined) to avoid stale clobber.
-      setPlaylist((prev) => {
-        const durationById = new Map(updated.map((item) => [item.id, item.durationMs]));
-        const merged = prev.map((item) => {
-          if (item.durationMs !== undefined && item.durationMs !== null) return item;
-          const enrichedDuration = durationById.get(item.id);
-          if (enrichedDuration === undefined || enrichedDuration === null) return item;
-          return { ...item, durationMs: enrichedDuration };
-        });
-        return merged.some((item, index) => item !== prev[index]) ? merged : prev;
-      });
+      setPlaylist((prev) => mergeResolvedSonglengthDurations(prev, updated));
     };
     void applyUpdates();
     return () => {

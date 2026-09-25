@@ -19,6 +19,13 @@ type FakeIndexedDbOptions = {
   failPut?: boolean;
   failGetWithoutError?: boolean;
   failPutWithoutError?: boolean;
+  abortCommit?: boolean;
+  abortDeleteCommit?: boolean;
+  abortCommitWithoutError?: boolean;
+  failDelete?: boolean;
+  failDeleteWithoutError?: boolean;
+  bubbleRequestErrors?: boolean;
+  commitDespiteFailedRequest?: boolean;
   preExistingStore?: boolean;
   initialPersistedState?: unknown;
 };
@@ -45,58 +52,98 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       ensureStore(name);
       return {};
     },
-    transaction: (storeName: string) => ({
-      objectStore: () => ({
+    transaction: (storeName: string) => {
+      const tx: Record<string, unknown> = { error: null };
+      let pendingRequests = 0;
+      let failedRequest: Record<string, unknown> | null = null;
+      let deletes = 0;
+      const finishTransaction = () => {
+        if (failedRequest && options.commitDespiteFailedRequest) {
+          (tx.oncomplete as (() => void) | undefined)?.();
+          return;
+        }
+        if (failedRequest) {
+          tx.error = failedRequest.error;
+          (tx.onabort as (() => void) | undefined)?.();
+          return;
+        }
+        if (options.abortCommit || (options.abortDeleteCommit && deletes > 0)) {
+          tx.error = options.abortCommitWithoutError ? null : new Error("fake commit quota exceeded");
+          (tx.onabort as (() => void) | undefined)?.();
+          return;
+        }
+        (tx.oncomplete as (() => void) | undefined)?.();
+      };
+      const runRequest = (request: Record<string, unknown>, settle: () => boolean) => {
+        pendingRequests += 1;
+        queueMicrotask(() => {
+          if (!settle()) {
+            failedRequest = request;
+            if (options.bubbleRequestErrors) (tx.onerror as (() => void) | undefined)?.();
+          }
+          pendingRequests -= 1;
+          if (pendingRequests === 0) queueMicrotask(finishTransaction);
+        });
+        return request;
+      };
+      tx.objectStore = () => ({
         get: (key: string) => {
           const request: Record<string, unknown> = {};
-          queueMicrotask(() => {
+          return runRequest(request, () => {
             if (options.failGet) {
               request.error = options.failGetWithoutError ? null : new Error("fake get failure");
               (request.onerror as (() => void) | undefined)?.();
-              return;
+              return false;
             }
             request.result = ensureStore(storeName).get(key);
             (request.onsuccess as (() => void) | undefined)?.();
+            return true;
           });
-          return request;
         },
         put: (value: unknown, key: string) => {
           const request: Record<string, unknown> = {};
-          queueMicrotask(() => {
+          return runRequest(request, () => {
             if (options.failPut) {
               request.error = options.failPutWithoutError ? null : new Error("fake put failure");
               (request.onerror as (() => void) | undefined)?.();
-              return;
+              return false;
             }
             ensureStore(storeName).set(key, value);
             request.result = key;
             (request.onsuccess as (() => void) | undefined)?.();
+            return true;
           });
-          return request;
         },
         delete: (key: string) => {
+          deletes += 1;
           const request: Record<string, unknown> = {};
-          queueMicrotask(() => {
+          return runRequest(request, () => {
+            if (options.failDelete) {
+              request.error = options.failDeleteWithoutError ? null : new Error("fake delete failure");
+              (request.onerror as (() => void) | undefined)?.();
+              return false;
+            }
             ensureStore(storeName).delete(key);
             (request.onsuccess as (() => void) | undefined)?.();
+            return true;
           });
-          return request;
         },
         getAllKeys: () => {
           const request: Record<string, unknown> = {};
-          queueMicrotask(() => {
+          return runRequest(request, () => {
             if (options.failGet) {
               request.error = options.failGetWithoutError ? null : new Error("fake getAllKeys failure");
               (request.onerror as (() => void) | undefined)?.();
-              return;
+              return false;
             }
             request.result = [...ensureStore(storeName).keys()];
             (request.onsuccess as (() => void) | undefined)?.();
+            return true;
           });
-          return request;
         },
-      }),
-    }),
+      });
+      return tx;
+    },
     close: () => {},
   };
 
@@ -341,6 +388,34 @@ describe("indexedDB playlist repository", () => {
     // (Orphaned tracks are reclaimed later by the debounced GC; see below.)
     expect(storeAfterSecond?.has("track:track-a")).toBe(true);
     expect(storeAfterSecond?.has("track:track-b")).toBe(true);
+  });
+
+  it("warns when deleting stale playlist-item records aborts at commit even though every delete succeeded", async () => {
+    const fakeOptions: FakeIndexedDbOptions = {};
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb(fakeOptions),
+      configurable: true,
+      writable: true,
+    });
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-a", "track-a", "0001"), buildItem("item-b", "track-b", "0002")],
+    });
+
+    fakeOptions.abortDeleteCommit = true;
+    await repository.replacePlaylistSnapshot?.("playlist-default", {
+      tracks: [buildTrack({ trackId: "track-b" })],
+      playlistItems: [buildItem("item-b", "track-b", "0001")],
+    });
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Failed to delete stale playlist-item records from IndexedDB",
+      expect.objectContaining({ playlistId: "playlist-default", staleCount: 1 }),
+    );
   });
 
   it("garbage-collects orphaned track records while preserving cross-playlist shared tracks (HARD10-009)", async () => {
@@ -648,6 +723,55 @@ describe("indexedDB playlist repository", () => {
     await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
   });
 
+  it("retries initialization on the next call after a failed initialization instead of failing until relaunch", async () => {
+    const fakeOptions: FakeIndexedDbOptions = { failPut: true };
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb(fakeOptions),
+      configurable: true,
+      writable: true,
+    });
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+
+    await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
+
+    fakeOptions.failPut = false;
+    await expect(repository.upsertTracks([buildTrack({ trackId: "track-after-recovery" })])).resolves.toBeUndefined();
+    expect((await repository.getTracksByIds(["track-after-recovery"])).has("track-after-recovery")).toBe(true);
+  });
+
+  it("rejects a write whose transaction aborts at commit even though every put succeeded", async () => {
+    const fakeOptions: FakeIndexedDbOptions = {};
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb(fakeOptions),
+      configurable: true,
+      writable: true,
+    });
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    await repository.getSession("playlist-default");
+
+    fakeOptions.abortCommit = true;
+    await expect(
+      repository.saveSession({
+        playlistId: "playlist-default",
+        currentPlaylistItemId: null,
+        isPlaying: false,
+        isPaused: false,
+        elapsedMs: 0,
+        playedMs: 0,
+        shuffleEnabled: false,
+        repeatEnabled: false,
+        randomSeed: null,
+        randomCursor: null,
+        activeQuery: "",
+        updatedAt: "2026-02-12T00:00:00.000Z",
+      }),
+    ).rejects.toThrow("fake commit quota exceeded");
+  });
+
   it("normalizes partial persisted state fields to defaults", async () => {
     Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({
@@ -870,5 +994,67 @@ describe("indexedDB playlist repository", () => {
       preferDurableStorage: false,
     });
     await expect(failingWriteRepository.upsertTracks([buildTrack()])).rejects.toThrow("IndexedDB write failed");
+  });
+
+  describe("transaction settlement", () => {
+    const installFakeIndexedDb = (fakeOptions: FakeIndexedDbOptions) => {
+      Object.defineProperty(globalThis, "indexedDB", {
+        value: createFakeIndexedDb(fakeOptions),
+        configurable: true,
+        writable: true,
+      });
+      return getIndexedDbPlaylistDataRepository({ preferDurableStorage: false });
+    };
+
+    const replaceLeavingOneStaleItem = async (fakeOptions: FakeIndexedDbOptions, failure: FakeIndexedDbOptions) => {
+      const repository = installFakeIndexedDb(fakeOptions);
+      await repository.replacePlaylistSnapshot?.("playlist-default", {
+        tracks: [buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-b" })],
+        playlistItems: [buildItem("item-a", "track-a", "0001"), buildItem("item-b", "track-b", "0002")],
+      });
+      Object.assign(fakeOptions, failure);
+      await repository.replacePlaylistSnapshot?.("playlist-default", {
+        tracks: [buildTrack({ trackId: "track-b" })],
+        playlistItems: [buildItem("item-b", "track-b", "0001")],
+      });
+    };
+
+    const staleDeleteWarning = () =>
+      vi
+        .mocked(addLog)
+        .mock.calls.find(([, message]) => message === "Failed to delete stale playlist-item records from IndexedDB");
+
+    it("reports the failed delete request's error when the transaction error event bubbles after it", async () => {
+      await replaceLeavingOneStaleItem({}, { failDelete: true, bubbleRequestErrors: true });
+
+      const details = staleDeleteWarning()?.[2] as { error: Error } | undefined;
+      expect(details?.error.message).toBe("fake delete failure");
+    });
+
+    it("reports a delete transaction that aborts without an error as an aborted delete", async () => {
+      await replaceLeavingOneStaleItem({}, { abortDeleteCommit: true, abortCommitWithoutError: true });
+
+      const details = staleDeleteWarning()?.[2] as { error: Error } | undefined;
+      expect(details?.error.message).toBe("IndexedDB delete transaction aborted");
+    });
+
+    it("keeps a delete failed when its transaction reports completion after a failed delete request", async () => {
+      await replaceLeavingOneStaleItem({}, { failDelete: true, commitDespiteFailedRequest: true });
+
+      const details = staleDeleteWarning()?.[2] as { error: Error } | undefined;
+      expect(details?.error.message).toBe("fake delete failure");
+    });
+
+    it("rejects a write with the failed put's error when the transaction error event bubbles after it", async () => {
+      const repository = installFakeIndexedDb({ failPut: true, bubbleRequestErrors: true });
+
+      await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
+    });
+
+    it("keeps a write rejected when its transaction reports completion after a failed put", async () => {
+      const repository = installFakeIndexedDb({ failPut: true, commitDespiteFailedRequest: true });
+
+      await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
+    });
   });
 });

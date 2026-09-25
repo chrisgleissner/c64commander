@@ -39,8 +39,8 @@ import {
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
 import {
-  getLocalFilePath,
   isSongCategory,
+  resolveLaunchedItemIndex,
   resolvePlayTargetIndex,
   tryAcquireSingleFlight,
   releaseSingleFlight,
@@ -63,6 +63,7 @@ import {
   isLocalPlaybackActive,
   markRemotePlaybackStarted,
   markRemotePlaybackStopped,
+  stopRemoteTuneBeforeLocalPlayback,
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { hasCompleteRomSet } from "@/lib/roms/romStore";
@@ -71,6 +72,7 @@ import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
+import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
@@ -87,11 +89,8 @@ import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
-import {
-  resolveHvscDurationSecondsForSongNr,
-  resolveUltimateSidDurationByMd5,
-  warmNeighbouringLeadIns,
-} from "@/pages/playFiles/sidBytesAhead";
+import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
+import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
 import {
   applyConfigFileReference,
@@ -630,57 +629,8 @@ export function usePlaybackController({
   );
 
   const resolveSidMetadata = useCallback(
-    async (file?: LocalPlayFile, songNr?: number | null) => {
-      if (!file)
-        return {
-          durationMs: undefined,
-          subsongCount: undefined,
-          readable: false,
-        } as const;
-      let buffer: ArrayBuffer;
-      try {
-        buffer = await file.arrayBuffer();
-      } catch (error) {
-        addErrorLog("Failed to read local SID file", {
-          error: (error as Error).message,
-        });
-        return {
-          durationMs: durationFallbackMs,
-          subsongCount: undefined,
-          readable: false,
-        } as const;
-      }
-      const { getSidSongCount } = await import("@/lib/sid/sidUtils");
-      const subsongCount = getSidSongCount(buffer);
-
-      try {
-        const filePath = getLocalFilePath(file);
-        const localDurationMs = await resolveSonglengthDurationMsForPath(filePath, file, songNr ?? null);
-        if (localDurationMs !== null) {
-          return {
-            durationMs: localDurationMs,
-            subsongCount,
-            readable: true,
-          } as const;
-        }
-
-        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
-        const md5 = await computeSidMd5(buffer);
-        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
-        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
-        return { durationMs, subsongCount, readable: true } as const;
-      } catch (error) {
-        addErrorLog("Failed to resolve SID metadata", {
-          error: (error as Error).message,
-          file: file.name,
-        });
-        return {
-          durationMs: durationFallbackMs,
-          subsongCount,
-          readable: true,
-        } as const;
-      }
-    },
+    (file?: LocalPlayFile, songNr?: number | null) =>
+      resolveLocalSidMetadata(file, songNr, durationFallbackMs, resolveSonglengthDurationMsForPath),
     [durationFallbackMs, resolveSonglengthDurationMsForPath],
   );
 
@@ -910,7 +860,7 @@ export function usePlaybackController({
         if (
           effectiveRequest.source === "ultimate" &&
           deviceOutOfReach &&
-          !getRememberedUltimateSidBlob(effectivePath)
+          !getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
         ) {
           throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
         }
@@ -984,13 +934,17 @@ export function usePlaybackController({
             // could only ever catch something it does not throw — and the log inside it read as though
             // it were the place a failed fetch is reported, which it was not.
             const remembered =
-              noDeviceConnected || deviceOutOfReach ? getRememberedUltimateSidBlob(effectivePath) : null;
-            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath));
+              noDeviceConnected || deviceOutOfReach
+                ? getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
+                : null;
+            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath, effectiveRequest.origin));
             if (blob) {
               effectiveRequest = {
                 ...effectiveRequest,
                 file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
               };
+            } else if (!noMachineForRoms) {
+              emitEngineNotice("sid-unreadable-on-c64");
             }
           }
           if (selection.route === "local" && effectiveRequest.file) {
@@ -1037,6 +991,17 @@ export function usePlaybackController({
           localSidPlaybackRef.current.stop();
         }
         const api = getC64API();
+        const c64PlaysCurrentTune = !currentPlaybackIsLocalRef.current && !isLocalPlaybackActive();
+        if (routeToLocal && c64PlaysCurrentTune && !isDeviceOutOfReach()) {
+          // Out of reach, the tune left on the C64 is stopped when it returns (see remoteTuneHandover).
+          await stopRemoteTuneBeforeLocalPlayback(async () => {
+            if (isPausedRef.current) await resumeMachineWithRetry(api);
+            await stopMachineWithGracePeriod(api, false);
+            // As Stop does: a paused tune muted the C64, and nothing on this path would unmute it.
+            writeMachineExecutionFromPlay("running");
+            await restoreVolumeOverrides("stop");
+          });
+        }
         if (!routeToLocal) {
           try {
             await ensurePlaybackConnection();
@@ -1311,7 +1276,7 @@ export function usePlaybackController({
           setCurrentSubsongCount(null);
         }
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
-          setVisibleCurrentIndex(options.playlistIndex);
+          setVisibleCurrentIndex(resolveLaunchedItemIndex(playlistRef.current, item.id, options.playlistIndex));
         }
         trackStartedAtRef.current = now;
         // HARD12-007: do NOT pass reset=true here — `startPlaylist`'s explicit
@@ -1397,6 +1362,7 @@ export function usePlaybackController({
       resolveSonglengthDurationMsForPath,
       resolveUltimateSidDurationByMd5,
       resumeMachineWithRetry,
+      stopMachineWithGracePeriod,
       pauseMuteSnapshotRef,
       pausingFromPauseRef,
       resumingFromPauseRef,
@@ -1479,6 +1445,7 @@ export function usePlaybackController({
         } else {
           try {
             await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+            markRemotePlaybackStopped();
           } catch (error) {
             addErrorLog("Stopping the C64 for a playback-engine switch failed", {
               error: (error as Error).message,
@@ -1509,14 +1476,14 @@ export function usePlaybackController({
   }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS]);
 
   const startPlaylist = useCallback(
-    async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }) => {
-      if (!items.length) return;
+    async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }): Promise<boolean> => {
+      if (!items.length) return false;
       // Playlist row/title taps call this directly, so it needs the same
       // duplicate-start drop as handlePlay, and it must invalidate the
       // previous track's auto-advance guard before isPaused flips false —
       // a stale overdue guard otherwise fires on timeline reconciliation
       // and starts the previous playlist's next item over this fresh start.
-      if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
+      if (!tryAcquireSingleFlight(playStartInFlightRef)) return false;
       setIsPlaylistLoading(true);
       try {
         cancelAutoAdvance();
@@ -1553,6 +1520,7 @@ export function usePlaybackController({
         releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
       }
+      return true;
     },
     [
       applySonglengthsToItems,
@@ -2329,7 +2297,6 @@ export function usePlaybackController({
    */
   const scrubTargetMsRef = useRef<number | null>(null);
   const [scrubTargetMs, setScrubTargetMs] = useState<number | null>(null);
-  const scrubSeekInFlightRef = useRef(false);
   const scrubTimerRef = useRef<number | null>(null);
   const scrubDurationMsRef = useRef<number | undefined>(undefined);
   const scrubEndingRef = useRef(false);
@@ -2381,13 +2348,6 @@ export function usePlaybackController({
       scrubEndingRef.current = false;
       return;
     }
-    // Land exactly where the user let go, even if a catch-up seek was still in
-    // flight for an older target. Bounded: a catch-up seek that never settles
-    // must delay the release, not hold it forever — the release is what takes
-    // the UI out of the scrub and hands playback back.
-    for (let waited = 0; scrubSeekInFlightRef.current && waited < SCRUB_RELEASE_WAIT_MS; waited += 20) {
-      await new Promise((r) => setTimeout(r, 20));
-    }
     // Rebase the clocks to the TARGET *before* awaiting the seek.
     //
     // Two reasons, both learned the hard way. Reading the position back after
@@ -2399,10 +2359,9 @@ export function usePlaybackController({
     // rewind takes to re-render. Rebasing first means there is no stale value to
     // reveal, whatever order the rest completes in.
     const positionMs = Math.max(0, target);
-    const now = Date.now();
-    trackStartedAtRef.current = now - positionMs;
-    playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
-    setPlayedMs(positionMs);
+    const paused = isPausedRef.current;
+    const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };
+    setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
     rescheduleAutoAdvance(positionMs);
     try {
       // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
@@ -2479,15 +2438,10 @@ export function usePlaybackController({
       // and the displayed time carries on from where it was, which reads as the
       // seek having done nothing.
       const positionMs = Math.max(0, controller.positionSeconds() * 1000);
-      const now = Date.now();
-      // Two independent clocks drive the UI and neither knows about the engine,
-      // so both have to be rebased or the audio jumps while the display carries
-      // on from the old spot — which reads as the seek having done nothing.
-      // `elapsedMs` (the big timer) is `now - trackStartedAt`, so shifting the
-      // start point is what moves it.
-      trackStartedAtRef.current = now - positionMs;
-      playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
-      setPlayedMs(positionMs);
+      // Two independent clocks drive the UI and neither knows about the engine, so both have to be
+      // rebased or the audio jumps while the display carries on from the old spot.
+      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
+      setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
       rescheduleAutoAdvance(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },

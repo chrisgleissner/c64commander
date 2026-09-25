@@ -217,21 +217,32 @@ export const FolderPicker: FolderPickerPlugin = {
  * Whether this device can put a document picker in front of the user.
  *
  * Asked once and remembered: the answer is a property of the installed system apps and cannot
- * change while the app is running. A platform without the native plugin - the browser build, iOS
- * before this method existed - answers yes, because there the picker is the file input and the
- * old behaviour is correct. A plugin that cannot answer also answers yes: offering a source that
- * turns out to be unavailable is a worse failure than the toast, but hiding one that works is
- * worse still.
+ * change while the app is running. The browser build has no native plugin and answers yes, because
+ * there the picker is the file input. A plugin call that fails also answers yes, but is logged and
+ * not remembered, so the next call asks again: hiding a source that works is worse than offering
+ * one that turns out to be unavailable.
  */
-let documentPickerSupport: Promise<{ directories: boolean; files: boolean }> | null = null;
+type DocumentPickerSupport = { directories: boolean; files: boolean };
+const ASSUMED_DOCUMENT_PICKER_SUPPORT: DocumentPickerSupport = { directories: true, files: true };
+let documentPickerSupport: Promise<DocumentPickerSupport> | null = null;
 
-export const canPickDocuments = (): Promise<{ directories: boolean; files: boolean }> => {
-  if (!documentPickerSupport) {
-    documentPickerSupport = FolderPicker.canPickDocuments()
-      .then((result) => ({ directories: result?.directories !== false, files: result?.files !== false }))
-      .catch(() => ({ directories: true, files: true }));
+export const canPickDocuments = (): Promise<DocumentPickerSupport> => {
+  if (documentPickerSupport) return documentPickerSupport;
+  if (getPlatform() === "web" && !resolveOverride()?.canPickDocuments) {
+    documentPickerSupport = Promise.resolve(ASSUMED_DOCUMENT_PICKER_SUPPORT);
+    return documentPickerSupport;
   }
-  return documentPickerSupport;
+  const query: Promise<DocumentPickerSupport> = FolderPicker.canPickDocuments()
+    .then((result) => ({ directories: result?.directories !== false, files: result?.files !== false }))
+    .catch((error: unknown) => {
+      if (documentPickerSupport === query) documentPickerSupport = null;
+      addLog("warn", "Document picker support check failed; offering local sources anyway", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return ASSUMED_DOCUMENT_PICKER_SUPPORT;
+    });
+  documentPickerSupport = query;
+  return query;
 };
 
 /** Test seam: the cached answer is per process, and a test needs to change the device under it. */

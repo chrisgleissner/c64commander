@@ -558,7 +558,7 @@ class MockC64UServer(
       if (bytes.size > MAX_WRITEMEM_BYTES) {
         return errorResponse(413, "Too many bytes")
       }
-      bytes.forEachIndexed { idx, value -> state.memory[address + idx] = value }
+      bytes.forEachIndexed { idx, value -> state.writeMemoryByte(address + idx, value) }
       return okResponse()
     }
 

@@ -97,6 +97,19 @@ describe("useSidRadio", () => {
     expect(result.current.station).toMatchObject({ seedKind: "song", seedLabel: "Commando", shuffleSeed: 12345 });
   });
 
+  it("claims no station when the playlist start was dropped because another start held playback", async () => {
+    const client = makeClient();
+    const params = baseParams(client, { startPlaylist: vi.fn(async () => false) });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    expect(params.startPlaylist).toHaveBeenCalledTimes(1);
+    expect(result.current.active).toBe(false);
+    expect(result.current.station).toBeNull();
+    expect(loadSidRadioSession()).toBeNull();
+  });
+
   it("does nothing when disabled", async () => {
     const client = makeClient();
     const params = baseParams(client, { enabled: false });

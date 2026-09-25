@@ -27,7 +27,7 @@ export const isDeviceOutOfReach = () =>
 /** Whether a track can play on the phone while the Ultimate is out of reach. */
 export const canPlayWithoutDevice = (item: PlaylistItem | undefined): boolean => {
   if (item?.category !== "sid" || !LocalSidPlaybackController.isSupported()) return false;
-  if (item.request.source === "ultimate") return getRememberedUltimateSidBlob(item.path) !== null;
+  if (item.request.source === "ultimate") return getRememberedUltimateSidBlob(item.path, item.request.origin) !== null;
   if (item.request.source !== "commoserve" || item.request.file || !isNetworkKnownOffline()) return true;
   return Boolean(item.archiveRef && getCachedArchivePlayback(item.archiveRef));
 };

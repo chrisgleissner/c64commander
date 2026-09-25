@@ -168,6 +168,20 @@ const mergeDeviceState = (
   return next;
 };
 
+// A cancelled check returns without reaching the code that clears its running flag, so the device would show
+// "Verifying" until a later check happened to run.
+const settleCancelledChecks = (
+  previous: Record<string, SavedDeviceHealthSnapshot>,
+): Record<string, SavedDeviceHealthSnapshot> => {
+  if (!Object.values(previous).some((snapshot) => snapshot.running)) return previous;
+  return Object.fromEntries(
+    Object.entries(previous).map(([deviceId, snapshot]) => [
+      deviceId,
+      snapshot.running ? { ...snapshot, running: false, liveProbes: null } : snapshot,
+    ]),
+  );
+};
+
 const normalizeSeedSnapshot = (snapshot: SavedDeviceHealthSeedSnapshot): SavedDeviceHealthSnapshot => ({
   ...buildIdleSnapshot(),
   ...snapshot,
@@ -310,6 +324,7 @@ export function useSavedDeviceHealthChecks(
     cycleRunningRef.current = false;
     controllersRef.current.forEach((controller) => controller.abort(reason));
     controllersRef.current.clear();
+    setByDeviceId(settleCancelledChecks);
   }, []);
 
   const runForegroundCycle = useCallback(

@@ -94,6 +94,10 @@ const safeSerializeDetails = (details: unknown): unknown => {
         if (typeof value === "object" && value !== null) {
           if (seen.has(value)) return "[Circular]";
           seen.add(value);
+          // An Error's name, message and stack are not enumerable, so JSON.stringify alone reduces it to {}.
+          if (value instanceof Error) {
+            return { ...value, name: value.name, message: value.message, stack: trimStack(value.stack) };
+          }
         }
         return value;
       }),
@@ -108,7 +112,10 @@ const readLogsFromStorage = (): LogEntry[] => {
   const raw = localStorage.getItem(LOG_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as LogEntry[];
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as LogEntry[];
+    console.warn("Discarded stored logs that are not a list", { type: parsed === null ? "null" : typeof parsed });
+    return [];
   } catch (error) {
     console.warn("Failed to parse stored logs", { error });
     return [];
