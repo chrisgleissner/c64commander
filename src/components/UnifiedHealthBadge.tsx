@@ -367,16 +367,26 @@ export const CONNECTED_DEVICE_ANNOUNCEMENT_MS = 3_000;
  * The full name of the device, for a few seconds after the app connects to it or switches to it,
  * when more than one device is saved. The badge itself has room only for a short label on a phone.
  */
+// Shared by every page's badge: each tab mounts its own, and moving to another tab is not a new connection.
+let announcedDeviceId: string | null = null;
+
+export const forgetConnectedDeviceAnnouncementForTests = () => {
+  announcedDeviceId = null;
+};
+
 const useConnectedDeviceAnnouncement = (
   target: ReturnType<typeof useTargetDeviceIdentity>,
   connected: boolean,
 ): string | null => {
   const [announcement, setAnnouncement] = useState<string | null>(null);
-  const announcedDeviceIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!connected || !target.multiDevice || !target.deviceId || !target.fullLabel) return undefined;
-    if (announcedDeviceIdRef.current === target.deviceId) return undefined;
-    announcedDeviceIdRef.current = target.deviceId;
+    if (!connected) {
+      announcedDeviceId = null;
+      return undefined;
+    }
+    if (!target.multiDevice || !target.deviceId || !target.fullLabel) return undefined;
+    if (announcedDeviceId === target.deviceId) return undefined;
+    announcedDeviceId = target.deviceId;
     setAnnouncement(target.fullLabel);
     const timer = window.setTimeout(() => setAnnouncement(null), CONNECTED_DEVICE_ANNOUNCEMENT_MS);
     return () => window.clearTimeout(timer);

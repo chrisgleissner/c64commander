@@ -8,7 +8,11 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CONNECTED_DEVICE_ANNOUNCEMENT_MS, UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
+import {
+  CONNECTED_DEVICE_ANNOUNCEMENT_MS,
+  UnifiedHealthBadge,
+  forgetConnectedDeviceAnnouncementForTests,
+} from "@/components/UnifiedHealthBadge";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
 
@@ -237,6 +241,7 @@ const defaultSavedDeviceHealthByDeviceId = structuredClone(mockState.savedDevice
 
 describe("UnifiedHealthBadge", () => {
   beforeEach(() => {
+    forgetConnectedDeviceAnnouncementForTests();
     mockState.currentProfile = "compact";
     (mockState.healthState as { state: string }).state = "Degraded";
     (mockState.healthState as { connectivity: string }).connectivity = "Online";
@@ -308,6 +313,18 @@ describe("UnifiedHealthBadge", () => {
       act(() => {
         vi.advanceTimersByTime(CONNECTED_DEVICE_ANNOUNCEMENT_MS + 1);
       });
+      expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
+    });
+
+    it("does not say it again when another page mounts its own badge for the same connection", () => {
+      vi.useFakeTimers();
+      mockState.currentProfile = "compact";
+      const firstPage = render(<UnifiedHealthBadge />);
+      expect(screen.getByTestId("unified-health-badge-announcement")).toBeInTheDocument();
+      firstPage.unmount();
+
+      render(<UnifiedHealthBadge />);
+
       expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
     });
 
