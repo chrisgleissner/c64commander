@@ -1426,7 +1426,7 @@ export default function SettingsPage() {
                     </p>
                   )
                 ) : (
-                  <HelperText>Styles are curated colour palettes; pick one to preview it immediately.</HelperText>
+                  <HelperText>Styles are curated color palettes; pick one to preview it immediately.</HelperText>
                 )}
               </div>
 

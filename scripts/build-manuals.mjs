@@ -1065,7 +1065,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     table(
       ["Style", "What it is"],
       [
-        ["Cool Grey", "Neutral, with a cool blue lean. The one the app starts with."],
+        ["Cool Gray", "Neutral, with a cool blue lean. The one the app starts with."],
         ["Breadbin Beige", "The warm beige of the original case."],
         ["Ocean Teal", "Deep blue-green with a warm coral highlight."],
         ["Neon Pop", "Translucent covers by day, arcade cabinet by night."],

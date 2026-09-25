@@ -112,7 +112,7 @@ a real device in a session, it never falls back to the simulator.
 
 Home opens on search, then **Quick Actions** — one grid in four bands: watch (Live, Game, Input), listen (Radio, Last, Recent), operate (Menu, Pause, Backup, Restore), and last the ones that interrupt the machine: Reset, and a Power tile holding Reboot, Power Cycle and Power Off. Every tile is one word on one line, so the grid is three rows rather than four. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
 
-With nothing connected, Home does not become a wall of "Not available": search stays where it is, the promoted tiles are drawn on their own — Radio, Last and Recent need no machine at all, and Live is listed greyed with the reason rather than hidden — a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
+With nothing connected, Home does not become a wall of "Not available": search stays where it is, the promoted tiles are drawn on their own — Radio, Last and Recent need no machine at all, and Live is listed grayed out with the reason rather than hidden — a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
 
 <table>
   <tr>
@@ -332,13 +332,13 @@ Pick one of seven color styles under **Settings > Appearance > Style**, on top o
 <table>
   <thead>
     <tr>
-      <th align="left">Cool Grey (default)</th>
+      <th align="left">Cool Gray (default)</th>
       <th align="left">Breadbin Beige</th>
       <th align="left">Vault Black (dark only)</th>
     </tr>
   </thead>
   <tr>
-    <td><img src="docs/img/app/styles/showcase-cool-grey-light.png" alt="Home in Cool Grey, the default style" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-cool-grey-light.png" alt="Home in Cool Gray, the default style" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-breadbin-beige-light.png" alt="Home in Breadbin Beige" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-vault-black-dark.png" alt="Home in Vault Black, one of the two dark-only styles" width="360"/></td>
   </tr>

@@ -64,8 +64,8 @@ export interface AppStyle {
 export const APP_STYLES: readonly AppStyle[] = [
   {
     id: "cool-grey",
-    name: "Cool Grey",
-    description: "Neutral, blue-leaning grey. The app's default.",
+    name: "Cool Gray",
+    description: "Neutral, blue-leaning gray. The app's default.",
     modes: ["light", "dark"] as const,
     light: {
       radius: "12px",

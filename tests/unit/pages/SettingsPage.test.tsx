@@ -1981,7 +1981,7 @@ describe("SettingsPage", () => {
       renderSettingsPage();
 
       expect(screen.getByTestId("settings-app-style-match-status")).toHaveTextContent(
-        /The device hasn't reported a Color Scheme yet — using Cool Grey until it connects or you refresh the connection\./,
+        /The device hasn't reported a Color Scheme yet — using Cool Gray until it connects or you refresh the connection\./,
       );
     });
 
