@@ -1201,7 +1201,9 @@ their feature flag and library state allow it.
 
 **Header**
 
-- Confirm — button — `add-items-confirm` — labelled by the caller ("Add", "Mount");
+- Confirm — button — `add-items-confirm` — labelled by the caller ("Add to playlist",
+  "Mount"); the compact header copy shows only the first word, with the full label as its
+  accessible name;
   disabled while nothing is selected or a confirm is already running. It is rendered
   **twice**: in the header on the compact profile (`showCompactHeaderConfirm`) and in
   the footer otherwise, so exactly one is on screen at a time

@@ -269,6 +269,22 @@ describe("ItemSelectionDialog display profiles", () => {
     vi.useRealTimers();
   });
 
+  it("keeps the source title readable on the smallest screen by naming only the confirm verb", async () => {
+    localStorage.clear();
+    setViewportWidth(320);
+
+    render(
+      <DisplayProfileProvider>
+        <Harness />
+      </DisplayProfileProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    const confirm = await screen.findByTestId("add-items-confirm");
+    expect(confirm).toHaveTextContent(/^Add$/);
+    expect(confirm).toHaveAccessibleName("Add to playlist");
+  });
+
   it("keeps the browser as a sheet across profile changes while preserving selection and filter state", async () => {
     localStorage.clear();
     setViewportWidth(360);

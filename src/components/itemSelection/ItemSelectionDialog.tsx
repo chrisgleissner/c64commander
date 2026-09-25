@@ -44,6 +44,7 @@ const isLocalAutoConfirmDisabled = () =>
   typeof window !== "undefined" &&
   Boolean((window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm);
 
+const firstWord = (label: string): string => label.split(" ")[0];
 export type SourceGroup = {
   label: string;
   sources: SourceLocation[];
@@ -617,6 +618,8 @@ export const ItemSelectionDialog = ({
     </p>
   );
 
+  // The header shares one line with the source title on a 320 px screen, where "Add to playlist"
+  // left the title as "Fro…". The verb says what the button does; the page says where to.
   const headerConfirmButton = showCompactHeaderConfirm ? (
     <Button
       variant="default"
@@ -624,9 +627,10 @@ export const ItemSelectionDialog = ({
       onClick={handleConfirm}
       disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
       data-testid="add-items-confirm"
+      aria-label={resolvedConfirmLabel}
       className="shrink-0"
     >
-      {resolvedConfirmLabel}
+      {firstWord(resolvedConfirmLabel)}
     </Button>
   ) : null;
 

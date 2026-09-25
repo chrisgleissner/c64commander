@@ -383,7 +383,7 @@ To search instead of browsing, type in the box at the top and choose **Everywher
 
 Some sources have to be read one folder at a time, such as a folder on your device or the card in your C64. These offer a **Scan** button instead of searching as you type.
 
-![Searching the whole of HVSC rather than one folder](../../img/app/play/import/profiles/medium/09-hvsc-search-scope.png)
+![Choosing whether a search covers this folder or the whole of HVSC](../../img/app/play/import/profiles/medium/09-hvsc-search-scope.png)
 
 Preferred path: add a whole folder first, then filter the playlist to pick what plays next.
 

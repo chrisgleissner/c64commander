@@ -1198,7 +1198,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "Some sources have to be read one folder at a time, such as a folder on your device or the card in your C64. These offer a **Scan** button instead of searching as you type.",
     "",
     image(
-      "Searching the whole of HVSC rather than one folder",
+      "Choosing whether a search covers this folder or the whole of HVSC",
       profile,
       "play/import/profiles/{profile}/09-hvsc-search-scope.png",
     ),
