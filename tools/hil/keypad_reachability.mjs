@@ -131,7 +131,8 @@ const STATE_EXPR = String.raw`(() => {
   };
   const idOf = (e) => {
     const t = e.getAttribute('data-testid');
-    if (t) return '#' + t;
+    // A test id shared by every row of a list (Config's rows all carry one) is not an identity.
+    if (t) return document.querySelectorAll('[data-testid="' + CSS.escape(t) + '"]').length === 1 ? '#' + t : '#' + t + '@' + pathOf(e);
     const txt = (e.innerText || e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 32);
     return e.tagName.toLowerCase() + (txt ? ':' + txt : '') + '@' + pathOf(e);
   };
@@ -323,7 +324,7 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
     // Per card, so a child this sweep already saw under a different card does not end the descent
     // before it has started.
     const seenHere = new Set();
-    for (let child = 0; child < 40; child += 1) {
+    for (let child = 0; child < MAX_STEPS; child += 1) {
       const current = await evaluate(STATE_EXPR);
       if (current.current?.id) {
         reached.add(current.current.id);
