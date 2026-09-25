@@ -860,7 +860,7 @@ export function usePlaybackController({
         if (
           effectiveRequest.source === "ultimate" &&
           deviceOutOfReach &&
-          !getRememberedUltimateSidBlob(effectivePath)
+          !getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
         ) {
           throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
         }
@@ -934,8 +934,10 @@ export function usePlaybackController({
             // could only ever catch something it does not throw — and the log inside it read as though
             // it were the place a failed fetch is reported, which it was not.
             const remembered =
-              noDeviceConnected || deviceOutOfReach ? getRememberedUltimateSidBlob(effectivePath) : null;
-            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath));
+              noDeviceConnected || deviceOutOfReach
+                ? getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
+                : null;
+            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath, effectiveRequest.origin));
             if (blob) {
               effectiveRequest = {
                 ...effectiveRequest,

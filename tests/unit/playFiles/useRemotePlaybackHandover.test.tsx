@@ -147,10 +147,30 @@ describe("useRemotePlaybackHandover", () => {
     await waitFor(() => expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledTimes(3));
     expect(engine.prerender).toHaveBeenCalledWith(expect.stringMatching(/^one#0@/), expect.anything(), 0, 180);
     expect(engine.preload).toHaveBeenCalled();
-    expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/USB2/MUSICIANS/three.sid");
+    expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/USB2/MUSICIANS/three.sid", undefined);
     // Described for the case where the page is closed when the device goes.
     expect(rememberRemoteTune).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: "one", startedAt, durationMs: 180_000 }),
+    );
+  });
+
+  it("reads a tune added from another Ultimate, and the ones after it, from the device each came from", async () => {
+    const withOrigin = (id: string) => {
+      const item = ultimateSid(id);
+      const origin = { sourceKind: "ultimate", originDeviceId: "c64u-device", originPath: item.path };
+      return { ...item, request: { ...item.request, origin } } as unknown as PlaylistItem;
+    };
+    const playlist = [withOrigin("one"), withOrigin("two")];
+    renderHandover(playlist, Date.now());
+
+    await waitFor(() => expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith(
+      "/USB2/MUSICIANS/one.sid",
+      playlist[0].request.origin,
+    );
+    expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith(
+      "/USB2/MUSICIANS/two.sid",
+      playlist[1].request.origin,
     );
   });
 

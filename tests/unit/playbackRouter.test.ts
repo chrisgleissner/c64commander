@@ -945,6 +945,30 @@ describe("playbackRouter", () => {
     expect(vi.mocked(readFtpFile)).toHaveBeenCalledWith(expect.objectContaining({ path: "/MUSIC/DEMO.SID" }));
   });
 
+  it("reads a tune that was added from another Ultimate from that device, not from the one connected now", async () => {
+    const origin = {
+      sourceKind: "ultimate" as const,
+      originDeviceId: "c64u-device",
+      originDeviceLastKnownUniqueId: null,
+      originPath: "/USB2/C64Music/Little_Dragon.sid",
+      importedAt: "2026-09-25T12:47:07.801Z",
+    };
+    const fromOrigin = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])]);
+    mockIsOriginOnSelectedDevice.mockReturnValue(false);
+    mockFetchUltimateOriginBlob.mockResolvedValue(fromOrigin);
+    try {
+      const result = await tryFetchUltimateSidBlob(origin.originPath, origin);
+
+      expect(result).toBe(fromOrigin);
+      expect(mockFetchUltimateOriginBlob).toHaveBeenCalledWith(origin);
+      expect(readFtpFile).not.toHaveBeenCalled();
+      expect(getRememberedUltimateSidBlob(origin.originPath, origin)).toBe(fromOrigin);
+    } finally {
+      mockIsOriginOnSelectedDevice.mockReset();
+      mockFetchUltimateOriginBlob.mockReset();
+    }
+  });
+
   it("tryFetchUltimateSidBlob returns null on FTP failure", async () => {
     vi.mocked(readFtpFile).mockRejectedValue(new Error("connection refused"));
     const result = await tryFetchUltimateSidBlob("MUSIC/DEMO.SID");
