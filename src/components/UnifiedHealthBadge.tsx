@@ -412,6 +412,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedDeviceIds, setExpandedDeviceIds] = useState<string[]>([]);
   const [pendingSwitch, setPendingSwitch] = useState<PendingSwitchState | null>(null);
+  const badgeRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -520,7 +521,10 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   // Keypad equivalent of the long-press: `#` and the search action open the same Device Switcher.
   // With one saved device there is nothing to switch to, and a key that did nothing said nothing.
+  // Every page has its own badge, and a swipe keeps neighboring pages mounted but inert. Only the
+  // badge on the page in view answers, or one # opened a picker or a message per mounted page.
   const openSwitchPickerOnRequest = useCallback(() => {
+    if (badgeRef.current?.closest("[inert]")) return;
     if (canSwitchDevices) {
       openSwitchPicker();
       return;
@@ -528,6 +532,7 @@ export function UnifiedHealthBadge({ className }: Props) {
     toast({
       title: "No other device to switch to",
       description: "Add another device in Settings, under Saved devices.",
+      alwaysVisible: true,
     });
   }, [canSwitchDevices, openSwitchPicker]);
   useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPickerOnRequest), [openSwitchPickerOnRequest]);
@@ -621,6 +626,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   return (
     <>
       <button
+        ref={badgeRef}
         type="button"
         role="button"
         aria-label={ariaLabel}

@@ -58,6 +58,22 @@ class SoftKeyRoutingTest {
   }
 
   @Test
+  fun decidesAfreshForARepeatThatArrivesAfterThePressWasForgotten() {
+    route(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER), editingText = true)
+    router.reset()
+    route(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 3), editingText = false)
+
+    assertEquals(listOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER), dispatched.map { it.keyCode })
+  }
+
+  @Test
+  fun decidesForARepeatWhoseFirstDownEventNeverArrived() {
+    route(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 2), editingText = true)
+
+    assertEquals(KeyEvent.KEYCODE_ENTER, dispatched.single().keyCode)
+  }
+
+  @Test
   fun leavesOkAloneOutsideTextFields() {
     val ok = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)
 

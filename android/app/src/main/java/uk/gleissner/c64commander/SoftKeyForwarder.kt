@@ -47,7 +47,16 @@ object SoftKeyForwarder {
  * down event, so the press's repeats and its up event are the same key as its down event.
  */
 class SoftKeyRouter {
+  private var okPressInProgress = false
   private var okPressGoesOnAsEnter = false
+
+  /**
+   * Forgets the press in progress, for when the window loses focus and its down events may stop
+   * arriving. The next down event decides afresh; an up event that still arrives keeps its pair.
+   */
+  fun reset() {
+    okPressInProgress = false
+  }
 
   fun route(
     event: KeyEvent,
@@ -56,9 +65,12 @@ class SoftKeyRouter {
     runScript: (String) -> Unit,
   ): Boolean {
     if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-      if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) okPressGoesOnAsEnter = editingText()
+      if (event.action == KeyEvent.ACTION_DOWN && (event.repeatCount == 0 || !okPressInProgress)) {
+        okPressInProgress = true
+        okPressGoesOnAsEnter = editingText()
+      }
       val sendAsEnter = okPressGoesOnAsEnter
-      if (event.action == KeyEvent.ACTION_UP) okPressGoesOnAsEnter = false
+      if (event.action == KeyEvent.ACTION_UP) reset()
       return dispatch(if (sendAsEnter) asEnter(event) else event)
     }
     val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return dispatch(event)

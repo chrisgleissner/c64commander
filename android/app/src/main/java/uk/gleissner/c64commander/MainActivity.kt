@@ -250,6 +250,11 @@ open class MainActivity : BridgeActivity() {
 
   private val softKeyRouter = SoftKeyRouter()
 
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (!hasFocus) softKeyRouter.reset()
+  }
+
   override fun dispatchKeyEvent(event: KeyEvent): Boolean =
     softKeyRouter.route(
       event,

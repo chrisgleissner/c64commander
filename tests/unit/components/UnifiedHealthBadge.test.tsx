@@ -708,10 +708,25 @@ describe("UnifiedHealthBadge", () => {
       act(() => requestDeviceSwitcherOpen());
 
       expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
-      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "No other device to switch to" }));
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "No other device to switch to", alwaysVisible: true }),
+      );
     } finally {
       mockState.savedDevices.devices = originalDevices;
     }
+  });
+
+  it("leaves # to the badge on the page in view, not one on an inert page kept mounted by a swipe", () => {
+    mockToast.mockClear();
+    render(
+      <div inert="">
+        <UnifiedHealthBadge />
+      </div>,
+    );
+
+    act(() => requestDeviceSwitcherOpen());
+
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
   });
 
   it("opens the switch picker when # is pressed with several saved devices", () => {
