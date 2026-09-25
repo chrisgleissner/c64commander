@@ -67,4 +67,25 @@ describe("navigateBackOrLeave", () => {
       error: "not implemented",
     });
   });
+
+  it("treats a history entry without a router index as the first route", () => {
+    window.history.replaceState(null, "");
+    const navigate = vi.fn();
+
+    navigateBackOrLeave(navigate);
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(minimizeApp).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a rejection that is not an Error by its text", async () => {
+    minimizeApp.mockRejectedValueOnce("plugin missing");
+
+    navigateBackOrLeave(vi.fn());
+    await flush();
+
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to send the app to the background on Back", {
+      error: "plugin missing",
+    });
+  });
 });

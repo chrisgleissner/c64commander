@@ -162,6 +162,33 @@ describe("FolderPicker", () => {
       expect(mocks.canPickDocuments).toHaveBeenCalledTimes(2);
     });
 
+    it("keeps a newer cached answer when a superseded support check fails, and logs a non-Error failure as text", async () => {
+      vi.mocked(getPlatform).mockReturnValue("android");
+      let rejectFirstCheck: (reason: unknown) => void = () => {};
+      mocks.canPickDocuments
+        .mockReturnValueOnce(
+          new Promise((_, reject) => {
+            rejectFirstCheck = reject;
+          }),
+        )
+        .mockResolvedValueOnce({ directories: false, files: true });
+
+      const supersededCheck = canPickDocuments();
+      resetDocumentPickerSupport();
+      await expect(canPickDocuments()).resolves.toEqual({ directories: false, files: true });
+
+      rejectFirstCheck("bridge detached");
+      await expect(supersededCheck).resolves.toEqual({ directories: true, files: true });
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Document picker support check failed; offering local sources anyway",
+        { error: "bridge detached" },
+      );
+
+      await expect(canPickDocuments()).resolves.toEqual({ directories: false, files: true });
+      expect(mocks.canPickDocuments).toHaveBeenCalledTimes(2);
+    });
+
     it("answers yes on the web build without calling the plugin", async () => {
       vi.mocked(getPlatform).mockReturnValue("web");
 

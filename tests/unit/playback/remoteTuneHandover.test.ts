@@ -352,6 +352,21 @@ describe("carrying a tune from the C64 on to the phone", () => {
     expect(engine.play).not.toHaveBeenCalled();
   });
 
+  it("logs a failed read of the tune's bytes that is not an Error by its text, with no stack", async () => {
+    rememberRemoteTune(tune({ readBytes: vi.fn(() => Promise.reject("FTP session closed")) }));
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Playback: could not read the tune's bytes to carry it on this phone",
+        { item: "Waltz.sid", error: "FTP session closed", stack: undefined },
+      ),
+    );
+    expect(engine.play).not.toHaveBeenCalled();
+  });
+
   it("does not reset a different device the app reconnected to", async () => {
     noteTuneHandedOver(Date.now() - 10_000);
     setConnection("OFFLINE_NO_DEMO");

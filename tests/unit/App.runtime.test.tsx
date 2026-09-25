@@ -365,6 +365,18 @@ describe("App runtime wiring", () => {
     });
   });
 
+  it("returns to the previous page on the Back key once nothing on the page is left to close", async () => {
+    mocks.extraFlags = { keypad_input_enabled: true };
+    render(<App />);
+    await screen.findByText("Home Page");
+    fireEvent.keyDown(document.body, { key: "5", code: "Digit5" });
+    await waitFor(() => expect(window.location.pathname).toBe("/settings"));
+
+    fireEvent.keyDown(document.body, { key: "BrowserBack", code: "BrowserBack" });
+
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+  });
+
   it("renders the coverage probe route and heartbeat when the runtime probe flag is enabled", async () => {
     Object.defineProperty(window, "__c64uTestProbeEnabled", {
       configurable: true,
@@ -885,6 +897,21 @@ describe("App runtime wiring", () => {
     expect(mocks.startNativeDiagnosticsBridge).not.toHaveBeenCalled();
     expect(mocks.debugSnapshotCleanup).not.toHaveBeenCalled();
     expect(mocks.stopNativeDiagnosticsBridge).not.toHaveBeenCalled();
+  });
+
+  it("does not start the web server log bridge when the app unmounts while its module loads", async () => {
+    const { unmount } = render(<App />);
+    await screen.findByText("Home Page");
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-startup-milestone", { detail: { name: "first-meaningful-interaction" } }),
+      );
+    });
+    unmount();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.startWebServerLogBridge).not.toHaveBeenCalled();
   });
 
   it("starts deferred diagnostics bridges on native after first meaningful interaction and cleans them up on unmount", async () => {

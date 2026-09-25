@@ -175,4 +175,22 @@ describe("AddItemsProgressOverlay", () => {
 
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("cancels the import on a keyboard's Back key", () => {
+    const onCancel = vi.fn();
+    render(<AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />);
+
+    fireEvent.keyDown(document, { key: "BrowserBack", code: "BrowserBack" });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves other keys to the controls of the overlay", () => {
+    const onCancel = vi.fn();
+    render(<AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />);
+
+    fireEvent.keyDown(document, { key: "ArrowDown", code: "ArrowDown" });
+
+    expect(onCancel).not.toHaveBeenCalled();
+  });
 });

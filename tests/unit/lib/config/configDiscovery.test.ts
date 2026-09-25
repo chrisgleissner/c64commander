@@ -174,4 +174,23 @@ describe("discoverConfigCandidates", () => {
       { path: "/Games/", error: "permission denied" },
     );
   });
+
+  it("logs a non-Error listing rejection as its string form", async () => {
+    vi.mocked(addLog).mockClear();
+    const listEntries = vi.fn(() => Promise.reject("SAF grant revoked"));
+
+    await discoverConfigCandidates({
+      sourceType: "local",
+      sourceId: "phone",
+      sourceRootPath: "/Games",
+      targetFile: { name: "Game.prg", path: "/Games/Game.prg" },
+      listEntries,
+    });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Config discovery: could not list a folder; looking for no settings file there",
+      { path: "/Games/", error: "SAF grant revoked" },
+    );
+  });
 });

@@ -2923,6 +2923,34 @@ describe("usePlaybackController", () => {
       );
     });
 
+    // The simulated device has no C64 to read the tune from, so "cannot be read off the Ultimate" would be wrong.
+    it("does not say a tune cannot be read off the Ultimate when the device is simulated", async () => {
+      enableLocal();
+      connectionStateOverride.current = "DEMO_ACTIVE";
+      const controller = fakeController();
+      vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(null);
+      const playlist = [
+        createPlaylistItem({
+          path: "/Usb0/Demos/demo.sid",
+          request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" },
+          category: "sid",
+        }),
+      ];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      try {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      } finally {
+        connectionStateOverride.current = null;
+      }
+
+      expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/Usb0/Demos/demo.sid");
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(toast)).not.toHaveBeenCalledWith(
+        expect.objectContaining({ description: ENGINE_FALLBACK_MESSAGES["sid-unreadable-on-c64"] }),
+      );
+    });
+
     it("plays a SID on this device, without trying to connect, when no C64 Ultimate is connected", async () => {
       // Engine left on "C64" (the default). Offline with Demo Mode declined, this failed with two
       // "Device not connected" errors instead of playing a tune the phone can play itself.
@@ -3145,6 +3173,30 @@ describe("usePlaybackController", () => {
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(machineReset).toHaveBeenCalledTimes(1);
       expect(machineReset.mock.invocationCallOrder[0]).toBeLessThan(controller.play.mock.invocationCallOrder[0]);
+      expect(isRemotePlaybackActive()).toBe(false);
+    });
+
+    // A paused tune leaves the C64 frozen; the reset that stops it has to reach a running machine.
+    it("resumes a paused C64 before resetting it for a tune that plays on this device", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineResume = vi.fn().mockResolvedValue(undefined);
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineResume, machineReset } as any);
+      markRemotePlaybackStarted();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        isPlaying: true,
+        isPaused: true,
+      });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(machineResume).toHaveBeenCalledTimes(1);
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(machineResume.mock.invocationCallOrder[0]).toBeLessThan(machineReset.mock.invocationCallOrder[0]);
+      expect(controller.play).toHaveBeenCalledTimes(1);
       expect(isRemotePlaybackActive()).toBe(false);
     });
 
@@ -3640,6 +3692,18 @@ describe("startPlaylist reports whether it started", () => {
 
     playStartInFlightRef.current = false;
     await expect(result.current.startPlaylist(playlist)).resolves.toBe(true);
+  });
+
+  it("resolves false for an empty playlist without claiming the play start or showing loading", async () => {
+    const playStartInFlightRef = { current: false };
+    const setIsPlaylistLoading = vi.fn();
+    const { result } = renderPlaybackController([], { playStartInFlightRef, setIsPlaylistLoading });
+
+    await expect(result.current.startPlaylist([])).resolves.toBe(false);
+
+    expect(playStartInFlightRef.current).toBe(false);
+    expect(setIsPlaylistLoading).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 });
 

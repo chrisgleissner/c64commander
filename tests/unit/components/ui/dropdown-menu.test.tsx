@@ -47,4 +47,26 @@ describe("DropdownMenuContent", () => {
 
     expect(scrollIntoView).toHaveBeenCalled();
   });
+
+  it("hands its element to a callback ref and to an object ref", () => {
+    const callbackRef = vi.fn();
+    const objectRef = { current: null as HTMLDivElement | null };
+    render(
+      <>
+        <DropdownMenu open modal={false}>
+          <DropdownMenuContent ref={callbackRef} data-testid="with-callback">
+            <DropdownMenuItem>One</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu open modal={false}>
+          <DropdownMenuContent ref={objectRef} data-testid="with-object">
+            <DropdownMenuItem>Two</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>,
+    );
+
+    expect(callbackRef).toHaveBeenCalledWith(screen.getByTestId("with-callback"));
+    expect(objectRef.current).toBe(screen.getByTestId("with-object"));
+  });
 });

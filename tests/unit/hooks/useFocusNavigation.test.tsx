@@ -895,6 +895,36 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(openQuickMenu).toHaveBeenCalledTimes(1);
   });
 
+  it("opens the focused item's own menu from the Menu key rather than the quick menu", () => {
+    const openQuickMenu = vi.fn();
+    const openRowActions = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <button type="button" aria-haspopup="menu" onClick={openRowActions}>
+          Item actions
+        </button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+
+    expect(openRowActions).toHaveBeenCalledTimes(1);
+    expect(openQuickMenu).not.toHaveBeenCalled();
+  });
+
+  it("opens the quick menu from the Menu key on a page with nothing to select", () => {
+    const openQuickMenu = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openQuickMenu }}>
+        <p>Nothing here</p>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ContextMenu" });
+
+    expect(openQuickMenu).toHaveBeenCalledTimes(1);
+  });
+
   it("opens the quick menu from the Menu key on a card, not the first row's actions inside it", () => {
     const openQuickMenu = vi.fn();
     const openRowActions = vi.fn();

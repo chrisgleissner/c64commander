@@ -141,6 +141,30 @@ describe("ItemSelectionView", () => {
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open Collection" }));
     });
 
+    it("leaves focus alone when the folder was opened by a key while focus was elsewhere", () => {
+      setInputModality("key-navigation");
+      const outside = document.createElement("button");
+      document.body.appendChild(outside);
+      const view = render(<Browser path="/Usb0" entries={usb0} isLoading={false} />);
+      outside.focus();
+      fireEvent.click(screen.getByRole("button", { name: "Open Demos" }));
+      view.rerender(<Browser path="/Usb0/Demos" entries={demos} isLoading={false} />);
+
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
+    });
+
+    it("keeps focus on a control of the view that still holds it once the folder has loaded", () => {
+      setInputModality("key-navigation");
+      const view = render(<Browser path="/Usb0/Demos" entries={demos} isLoading={false} />);
+      const refresh = screen.getByRole("button", { name: /refresh/i });
+      refresh.focus();
+      fireEvent.click(screen.getByRole("button", { name: /^up$/i }));
+      view.rerender(<Browser path="/Usb0" entries={usb0} isLoading={false} />);
+
+      expect(document.activeElement).toBe(refresh);
+    });
+
     it("leaves focus alone when the folder was opened by touch", () => {
       setInputModality("pointer");
       openDemos();

@@ -51,6 +51,21 @@ describe("OpenSourceLicensesPage", () => {
     await waitFor(() => expect(screen.getByText("Settings Page")).toBeInTheDocument());
   });
 
+  it("stays open on other keys, and on an Escape something inside it has already handled", async () => {
+    renderLicensesRoute();
+    await screen.findByText("Third-Party Notices");
+    const overlay = screen.getByTestId("open-source-licenses-overlay");
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") event.preventDefault();
+    });
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown", code: "ArrowDown" });
+    fireEvent.keyDown(overlay, { key: "Escape", code: "Escape" });
+
+    expect(screen.queryByText("Settings Page")).not.toBeInTheDocument();
+    expect(screen.getByTestId("open-source-licenses-overlay")).toBeInTheDocument();
+  });
+
   it("does not close on touch pointer-up before the synthesized click", async () => {
     renderLicensesRoute();
 

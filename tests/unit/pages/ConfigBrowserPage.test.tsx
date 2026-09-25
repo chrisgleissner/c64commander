@@ -587,6 +587,54 @@ describe("ConfigBrowserPage", () => {
     );
   });
 
+  it("restores the other SID volumes once and turns Solo off when the Audio Mixer card is closed while Solo is on", async () => {
+    sessionStorage.clear();
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: audioMixerItems } },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    renderConfigBrowserPage();
+
+    const cardToggle = screen.getByRole("button", { name: /audio mixer/i });
+    ensureCardOpen(cardToggle);
+    fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+    await waitFor(() =>
+      expect(updateConfigBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "OFF" }) }),
+      ),
+    );
+    updateConfigBatch.mockClear();
+
+    fireEvent.click(cardToggle);
+
+    await waitFor(() =>
+      expect(updateConfigBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "0 dB" }) }),
+      ),
+    );
+    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+
+    ensureCardOpen(cardToggle);
+    expect(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1")).not.toBeChecked();
+    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+  });
+
   it("discards a stale audio mixer solo snapshot instead of auto-restoring it (HARD9-054)", async () => {
     // Regression: the mount-time restore effect used to read the solo
     // snapshot from sessionStorage unconditionally and write those old

@@ -426,6 +426,22 @@ describe("AvMirrorSession", () => {
       });
     });
 
+    it("logs a non-Error audio focus failure as its string form without a stack", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      vi.mocked(addLog).mockClear();
+      audio.stop.mockRejectedValueOnce("native audio track already released");
+
+      interruptPhoneAudio();
+      await vi.waitFor(() => {
+        expect(addLog).toHaveBeenCalledWith("warn", "A/V mirror: audio focus pause failed", {
+          service: "streams",
+          error: "native audio track already released",
+          stack: undefined,
+        });
+      });
+    });
+
     it("logs rather than throwing when the eviction stop fails", async () => {
       const { session, audio } = makeSession();
       await session.startAudio();

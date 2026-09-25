@@ -67,6 +67,22 @@ describe("the Android Back key", () => {
     uninstall();
   });
 
+  it("delivers the key to the document when nothing holds focus", async () => {
+    const uninstall = installDeviceBackButton(vi.fn());
+    await flush();
+    const activeElement = vi.spyOn(document, "activeElement", "get").mockReturnValue(null);
+    const seen: EventTarget[] = [];
+    const handler = (event: Event) => seen.push(event.target as EventTarget);
+    document.addEventListener("keydown", handler);
+
+    appListener.backButton?.();
+
+    document.removeEventListener("keydown", handler);
+    activeElement.mockRestore();
+    expect(seen).toEqual([document]);
+    uninstall();
+  });
+
   it("falls back to leaving the route when nothing on the page consumed the key", async () => {
     const onUnhandled = vi.fn();
     const uninstall = installDeviceBackButton(onUnhandled);

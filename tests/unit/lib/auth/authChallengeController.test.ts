@@ -234,6 +234,21 @@ describe("submitAuthChallengePassword", () => {
     expect(JSON.stringify(addLog.mock.calls)).not.toContain(SECRET);
   });
 
+  it("logs a non-Error thrown by a captured retry as its string form, with no stack, and treats it as unreachable", async () => {
+    const retry = vi.fn(() => Promise.reject("socket closed"));
+    notifyAuthRequired({ host: "192.168.1.167", retry });
+
+    const recovered = await submitAuthChallengePassword(SECRET);
+
+    expect(recovered).toBe(false);
+    expect(addLog).toHaveBeenCalledWith("warn", "Auth challenge: retrying the original request failed", {
+      authRequired: false,
+      error: "socket closed",
+      stack: undefined,
+    });
+    expect(getAuthChallengeSnapshot()?.errorMessage ?? "").toMatch(/didn't respond|busy/i);
+  });
+
   it("is a no-op when no challenge is open", async () => {
     const recovered = await submitAuthChallengePassword(SECRET);
     expect(recovered).toBe(false);
