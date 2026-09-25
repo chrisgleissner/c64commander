@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
@@ -24,6 +25,8 @@ import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
 import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
@@ -357,6 +360,30 @@ type PendingSwitchState = {
   toDeviceId: string;
 };
 
+/** How long the device the app has just connected to is named under the badge. */
+export const CONNECTED_DEVICE_ANNOUNCEMENT_MS = 3_000;
+
+/**
+ * The full name of the device, for a few seconds after the app connects to it or switches to it,
+ * when more than one device is saved. The badge itself has room only for a short label on a phone.
+ */
+const useConnectedDeviceAnnouncement = (
+  target: ReturnType<typeof useTargetDeviceIdentity>,
+  connected: boolean,
+): string | null => {
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const announcedDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!connected || !target.multiDevice || !target.deviceId || !target.fullLabel) return undefined;
+    if (announcedDeviceIdRef.current === target.deviceId) return undefined;
+    announcedDeviceIdRef.current = target.deviceId;
+    setAnnouncement(target.fullLabel);
+    const timer = window.setTimeout(() => setAnnouncement(null), CONNECTED_DEVICE_ANNOUNCEMENT_MS);
+    return () => window.clearTimeout(timer);
+  }, [connected, target.deviceId, target.fullLabel, target.multiDevice]);
+  return announcement;
+};
+
 /**
  * Unified header badge (§8).
  *
@@ -421,6 +448,15 @@ export function UnifiedHealthBadge({ className }: Props) {
     [healthState.connectivity, healthState.problemCount, healthState.state, selectedDeviceHealthSnapshot],
   );
   const { connectedDeviceLabel } = healthState;
+  const targetDevice = useTargetDeviceIdentity();
+  // Matches the width at which src/index.css drops the host and status words from the header.
+  const narrowHeader = useMediaQuery("(max-width: 430px)") || profile === "compact";
+  const showShortDeviceLabel =
+    narrowHeader &&
+    targetDevice.multiDevice &&
+    targetDevice.shortLabel !== null &&
+    (connectivity === "Online" || connectivity === "Checking");
+  const connectedAnnouncement = useConnectedDeviceAnnouncement(targetDevice, rawConnectionState === "REAL_CONNECTED");
 
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
@@ -618,7 +654,7 @@ export function UnifiedHealthBadge({ className }: Props) {
               (`app-chrome-badge-host`) so the breakpoint lives beside the other header rules
               instead of being duplicated as a width listener here.
             */}
-            {profile === "compact" && connectivity === "Demo" ? (
+            {narrowHeader && connectivity === "Demo" ? (
               // Not a host name, so not dropped with one: on a narrow screen this word is the only
               // sign that nothing real is connected.
               <>
@@ -634,7 +670,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                 </span>
               </>
             ) : null}
-            {profile === "compact" ? null : (
+            {narrowHeader ? null : (
               <>
                 <span
                   className="app-chrome-badge-host truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
@@ -647,6 +683,20 @@ export function UnifiedHealthBadge({ className }: Props) {
                 </span>
               </>
             )}
+            {showShortDeviceLabel ? (
+              <>
+                <span
+                  className="min-w-0 truncate text-xs font-semibold text-foreground"
+                  data-overlay-critical="badge"
+                  data-testid="unified-health-badge-device"
+                >
+                  {targetDevice.shortLabel}
+                </span>
+                <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                  {" "}
+                </span>
+              </>
+            ) : null}
             <HealthStateShape state={state} className="text-[1rem]" overlayCritical />
             {badgeText.countLabel ? (
               <>
@@ -685,6 +735,20 @@ export function UnifiedHealthBadge({ className }: Props) {
           </span>
         </span>
       </button>
+      {narrowHeader && connectedAnnouncement && typeof document !== "undefined"
+        ? // The header is its own containing block for fixed elements, so the note is placed from the body.
+          createPortal(
+            <span
+              role="status"
+              className="pointer-events-none fixed right-2 z-[60] max-w-[calc(100vw-1rem)] truncate rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-[var(--interstitial-shadow)]"
+              style={{ top: "calc(var(--safe-area-inset-top, 0px) + var(--app-bar-height, 72px))" }}
+              data-testid="unified-health-badge-announcement"
+            >
+              Connected to {connectedAnnouncement}
+            </span>,
+            document.body,
+          )
+        : null}
 
       <AppSheet open={pickerOpen} onOpenChange={handlePickerOpenChange}>
         <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]" data-testid="switch-device-sheet">

@@ -13,6 +13,11 @@ const appListenerState = vi.hoisted(() => ({
   remove: vi.fn(),
 }));
 
+const targetDevice = vi.hoisted(() => ({
+  current: { deviceId: "d1", multiDevice: false, fullLabel: "c64u", shortLabel: "c64u" },
+}));
+vi.mock("@/hooks/useTargetDeviceIdentity", () => ({ useTargetDeviceIdentity: () => targetDevice.current }));
+
 vi.mock("@capacitor/app", () => ({
   App: {
     addListener: appListenerState.addListener,
@@ -192,6 +197,18 @@ describe("MachineControls", () => {
 
     expect(screen.getByTestId("home-save-ram")).toHaveTextContent("Backup");
     expect(screen.getByTestId("home-load-ram")).toHaveTextContent("Restore");
+  });
+
+  it("names the device the Power actions go to when more than one device is saved", () => {
+    targetDevice.current = { ...targetDevice.current, multiDevice: true, fullLabel: "Workshop" };
+    try {
+      render(<MachineControls {...defaultProps} />);
+      fireEvent.click(screen.getByTestId("home-power-actions"));
+
+      expect(screen.getByTestId("home-power-sheet")).toHaveTextContent("interrupts whatever Workshop is doing");
+    } finally {
+      targetDevice.current = { ...targetDevice.current, multiDevice: false, fullLabel: "c64u" };
+    }
   });
 
   it("opens Reboot confirmation before executing the REST reboot mutation", () => {

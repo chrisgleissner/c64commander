@@ -869,7 +869,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### The Header Badge",
     "",
-    "The badge at the top right tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries to connect again. With more than one device saved, long-press it, or press `#`, to open **Switch device**.",
+    "The badge at the top right tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries to connect again. With more than one device saved, long-press it, or press `#`, to open **Switch device**. With more than one device saved, the badge also shows the name of the one you are using, and for a few seconds after the app connects or switches it says which device it connected to.",
     "",
     "### Finding Your Way",
     "",

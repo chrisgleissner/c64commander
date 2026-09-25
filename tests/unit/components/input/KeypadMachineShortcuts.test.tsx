@@ -19,6 +19,10 @@ const toastMock = vi.hoisted(() => vi.fn());
 const reportUserErrorMock = vi.hoisted(() => vi.fn());
 const addErrorLogMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/hooks/useTargetDeviceIdentity", () => ({
+  useTargetDeviceIdentity: () => ({ deviceId: "device-1", multiDevice: false, fullLabel: "c64u", shortLabel: "c64u" }),
+}));
+
 vi.mock("@/lib/c64api", () => ({ getC64API: () => ({}) }));
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({ status: statusState }),

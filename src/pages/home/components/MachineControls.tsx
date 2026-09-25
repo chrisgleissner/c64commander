@@ -32,6 +32,7 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
+import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import {
   MachineActionConfirmationDialog,
@@ -140,6 +141,8 @@ export function MachineControls({
   const effectiveBusy = machineTaskBusy || telnetBusy;
   const [pendingDestructiveAction, setPendingDestructiveAction] = useState<PendingDestructiveAction | null>(null);
   const [powerSheetOpen, setPowerSheetOpen] = useState(false);
+  const targetDevice = useTargetDeviceIdentity();
+  const powerTarget = targetDevice.multiDevice && targetDevice.fullLabel ? targetDevice.fullLabel : "the C64";
   const machineGuardsRef = useRef({ isConnected: status.isConnected, effectiveBusy: false, powerCycleDisabled: true });
   const canRunPowerCycle = typeof onPowerCycle === "function";
   const showPowerCycle = powerCycleVisible ?? canRunPowerCycle;
@@ -485,7 +488,7 @@ export function MachineControls({
           <AppSheetHeader>
             <AppSheetTitle>Power</AppSheetTitle>
             <AppSheetDescription>
-              Each of these interrupts whatever the C64 is doing. You are asked to confirm first.
+              Each of these interrupts whatever {powerTarget} is doing. You are asked to confirm first.
             </AppSheetDescription>
           </AppSheetHeader>
           <AppSheetBody className="space-y-2 px-4 py-4 sm:px-5">

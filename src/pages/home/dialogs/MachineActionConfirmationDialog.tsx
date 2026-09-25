@@ -9,6 +9,7 @@
 import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import {
   AppDialog,
   AppDialogBody,
@@ -39,6 +40,9 @@ export function MachineActionConfirmationDialog({
   onConfirm,
 }: MachineActionConfirmationDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const targetDevice = useTargetDeviceIdentity();
+  // With more than one device saved, the one the action goes to is named: it may not be the one in front of you.
+  const onDevice = targetDevice.multiDevice && targetDevice.fullLabel ? ` on ${targetDevice.fullLabel}` : "";
 
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
@@ -59,7 +63,7 @@ export function MachineActionConfirmationDialog({
         <AppDialogHeader>
           <AppDialogTitle>{action ? `${action.actionName}?` : "Confirm action?"}</AppDialogTitle>
           <AppDialogDescription>
-            {action ? `Confirm ${action.actionName}.` : "Confirm the selected machine action."}
+            {action ? `Confirm ${action.actionName}${onDevice}.` : `Confirm the selected machine action${onDevice}.`}
           </AppDialogDescription>
         </AppDialogHeader>
         <AppDialogBody>

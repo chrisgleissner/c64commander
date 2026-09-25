@@ -8,7 +8,7 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
+import { CONNECTED_DEVICE_ANNOUNCEMENT_MS, UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
 
@@ -277,6 +277,55 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.getByTestId("unified-health-badge").textContent).not.toContain("C64U");
   });
 
+  describe("naming the device on a phone", () => {
+    it("names the device by its short label when more than one device is saved", () => {
+      mockState.currentProfile = "compact";
+      render(<UnifiedHealthBadge />);
+
+      expect(screen.getByTestId("unified-health-badge-device")).toHaveTextContent("Office U64");
+    });
+
+    it("leaves the name out for a user with one device, who has nothing to tell it apart from", () => {
+      mockState.currentProfile = "compact";
+      const saved = mockState.savedDevices as { devices: unknown[]; hasEverHadMultipleDevices?: boolean };
+      const devices = saved.devices;
+      saved.devices = devices.slice(0, 1);
+      saved.hasEverHadMultipleDevices = false;
+      try {
+        render(<UnifiedHealthBadge />);
+        expect(screen.queryByTestId("unified-health-badge-device")).toBeNull();
+      } finally {
+        saved.devices = devices;
+      }
+    });
+
+    it("says which device it connected to for a few seconds, then stops", () => {
+      vi.useFakeTimers();
+      mockState.currentProfile = "compact";
+      render(<UnifiedHealthBadge />);
+
+      expect(screen.getByTestId("unified-health-badge-announcement")).toHaveTextContent("Connected to Office U64");
+      act(() => {
+        vi.advanceTimersByTime(CONNECTED_DEVICE_ANNOUNCEMENT_MS + 1);
+      });
+      expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
+    });
+
+    it("says so again after a switch to another device", () => {
+      vi.useFakeTimers();
+      mockState.currentProfile = "compact";
+      const view = render(<UnifiedHealthBadge />);
+      act(() => {
+        vi.advanceTimersByTime(CONNECTED_DEVICE_ANNOUNCEMENT_MS + 1);
+      });
+
+      mockState.savedDevices.selectedDeviceId = "device-backup";
+      view.rerender(<UnifiedHealthBadge />);
+
+      expect(screen.getByTestId("unified-health-badge-announcement")).toHaveTextContent("Connected to Backup Lab");
+    });
+  });
+
   it("renders capped counts exactly once on compact and medium profiles", () => {
     mockState.healthState.problemCount = 1000;
 
@@ -288,9 +337,9 @@ describe("UnifiedHealthBadge", () => {
 
       expect(textContent).toContain("999+");
       // Compact drops the host label: at 320 px it took 48% of the header to render a truncated IP.
-      // The shape and the count stay, which is what the badge is for. The shape is an <svg>, so it
-      // is asserted as an element rather than as a character in the text between the two labels.
-      expect(textContent).toMatch(profile === "compact" ? /^\s*999\+/ : /C64U\s+999\+/);
+      // With two devices saved it names the device by its short label instead. The shape is an
+      // <svg>, so it is asserted as an element rather than as a character between the two labels.
+      expect(textContent).toMatch(profile === "compact" ? /^\s*Office U64\s+999\+/ : /C64U\s+999\+/);
       expect(badge.querySelector("svg[data-health-shape]")).not.toBeNull();
       expect(textContent).not.toContain("1000");
       expect(textContent.match(/999\+/g)).toHaveLength(1);
