@@ -46,6 +46,22 @@ describe("T9FieldListener", () => {
     expect(screen.getByLabelText("Search")).toHaveValue("p");
   });
 
+  it("starts a new letter when the field is entered again", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <SearchField />
+      </>,
+    );
+    const field = screen.getByLabelText("Search");
+    typeDigit(2);
+
+    fireEvent.focusOut(field);
+    typeDigit(2);
+
+    expect(field).toHaveValue("aa");
+  });
+
   it("stays out of the way in an edition that does not type T9 by default", () => {
     t9.editionDefault = false;
     render(

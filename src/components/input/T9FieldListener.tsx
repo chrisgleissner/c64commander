@@ -10,7 +10,7 @@ import { useEffect } from "react";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { resolveInputProfile } from "@/lib/input/profiles";
 import { setInputModality } from "@/lib/input/inputModality";
-import { composeT9Key } from "@/lib/input/t9FieldComposer";
+import { composeT9Key, endT9Composition } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 
 /** Bubble phase on the document, so a field that composes for itself has already had the key. */
@@ -24,8 +24,13 @@ export const T9FieldListener = () => {
       event.preventDefault();
       setInputModality("key-navigation");
     };
+    const onFocusOut = (event: FocusEvent) => endT9Composition(event.target);
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("focusout", onFocusOut);
+    };
   }, [enabled]);
   return null;
 };

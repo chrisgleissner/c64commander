@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { resolveInputProfile } from "@/lib/input/profiles";
-import { composeT9Key, isT9Field } from "@/lib/input/t9FieldComposer";
+import { composeT9Key, endT9Composition, isT9Field } from "@/lib/input/t9FieldComposer";
 
 const keypad = resolveInputProfile("keypad");
 
@@ -108,6 +108,29 @@ describe("composeT9Key", () => {
     });
 
     expect(input.value).toBe("B");
+  });
+
+  it("keeps a letter another input method re-cased while one is being cycled", () => {
+    const input = field();
+    press(input, digit(2), 1000);
+    input.value = "A";
+
+    press(input, digit(2), 1010);
+
+    expect(input.value).toBe("b");
+    input.value = "B";
+    press(input, digit(2), 5000);
+    expect(input.value).toBe("Ba");
+  });
+
+  it("starts a new letter after the field was left and entered again", () => {
+    const input = field();
+    press(input, digit(2), 1000);
+
+    endT9Composition(input);
+    press(input, digit(2), 1010);
+
+    expect(input.value).toBe("aa");
   });
 
   it("adopts text another input method put in the field", () => {

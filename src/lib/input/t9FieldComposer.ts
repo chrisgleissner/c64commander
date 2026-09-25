@@ -10,6 +10,7 @@ import type { Keymap } from "@/lib/input/keymap";
 import { normalizeKeyEvent, type SemanticAction } from "@/lib/input/keyEvent";
 import {
   applySemanticAction,
+  commitPending,
   createT9State,
   DEFAULT_T9_CONFIG,
   setText,
@@ -68,14 +69,22 @@ const composerFor = (field: T9Field): FieldComposer => {
     composer = { state: createT9State({ text: field.value, mode }), emitted: field.value };
     composers.set(field, composer);
   } else if (field.value !== composer.emitted) {
-    // A field that only re-cases what was typed (a hex address upper-cases it) is echoing it, and
-    // adopting the echo as an outside edit would drop the letter being cycled.
-    if (field.value.toLowerCase() !== composer.emitted.toLowerCase()) {
-      composer.state = setText(composer.state, field.value);
-    }
+    // A field that only re-cases what was typed (a hex address upper-cases it) keeps the letter
+    // being cycled; resetting the composer would drop it. The field's casing still wins.
+    composer.state =
+      field.value.toLowerCase() === composer.emitted.toLowerCase()
+        ? { ...composer.state, text: field.value }
+        : setText(composer.state, field.value);
     composer.emitted = field.value;
   }
   return composer;
+};
+
+/** Leaving a field ends the letter being cycled, so the next press there starts a new one. */
+export const endT9Composition = (target: EventTarget | null): void => {
+  if (!isT9Field(target)) return;
+  const composer = composers.get(target);
+  if (composer) composer.state = commitPending(composer.state);
 };
 
 /** Writes through the native setter and fires `input`, so a React-controlled field sees an ordinary edit. */
