@@ -23,6 +23,11 @@ class SoftKeyForwarderTest {
   }
 
   @Test
+  fun keepsTheCallKeyInTheAppInsteadOfLettingAndroidOpenTheDialer() {
+    assertEquals("Call", SoftKeyForwarder.domCodeFor(KeyEvent.KEYCODE_CALL))
+  }
+
+  @Test
   fun leavesKeysTheWebViewDeliversItselfAlone() {
     assertNull(SoftKeyForwarder.domCodeFor(KeyEvent.KEYCODE_DPAD_CENTER))
     assertNull(SoftKeyForwarder.domCodeFor(KeyEvent.KEYCODE_BACK))
