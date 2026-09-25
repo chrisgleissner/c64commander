@@ -27,7 +27,8 @@ export type CompactDefectKind =
   | "starved-body"
   | "overlapping-controls"
   | "text-below-floor"
-  | "small-target";
+  | "small-target"
+  | "under-system-bar";
 
 export type CompactDefect = {
   kind: CompactDefectKind;
@@ -247,6 +248,30 @@ const MEASURE = ({ rootSelector, bodyShareFloor, textFloor, targetFloor }: Measu
           kind: "overlapping-controls",
           what: `${describe(a)} over ${describe(b)}`,
           detail: `${round(overlapX)}x${round(overlapY)}px of shared area on screen`,
+        });
+      }
+    }
+  }
+
+  // The app draws under the status and navigation bars; nothing it shows may sit beneath them.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const insetTop = Number.parseFloat(rootStyle.getPropertyValue("--safe-area-inset-top")) || 0;
+  const insetBottom = Number.parseFloat(rootStyle.getPropertyValue("--safe-area-inset-bottom")) || 0;
+  if (insetTop > 0 || insetBottom > 0) {
+    for (const element of all) {
+      const isText = element.children.length === 0 && (element.textContent ?? "").trim().length > 0;
+      const isControl = element.matches("button, a[href], input, select, textarea, [role=button], [tabindex]");
+      if (!isText && !isControl) continue;
+      const rect = element.getBoundingClientRect();
+      const clip = clipRect(element);
+      const top = Math.max(rect.top, clip.top);
+      const bottom = Math.min(rect.bottom, clip.bottom);
+      if (bottom <= top) continue;
+      if (top < insetTop - 1 || bottom > viewport.height - insetBottom + 1) {
+        defects.push({
+          kind: "under-system-bar",
+          what: describe(element),
+          detail: `visible ${round(top)}..${round(bottom)} with bars at 0..${insetTop} and ${round(viewport.height - insetBottom)}..${viewport.height}`,
         });
       }
     }
