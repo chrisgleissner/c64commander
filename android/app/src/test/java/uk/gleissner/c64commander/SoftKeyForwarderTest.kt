@@ -35,19 +35,6 @@ class SoftKeyForwarderTest {
   }
 
   @Test
-  fun forwardsOkAsEnterWhileATextFieldIsBeingEdited() {
-    assertEquals("Enter" to "DpadCenter", SoftKeyForwarder.editingKeyFor(KeyEvent.KEYCODE_DPAD_CENTER))
-    assertNull(SoftKeyForwarder.editingKeyFor(KeyEvent.KEYCODE_ENTER))
-  }
-
-  @Test
-  fun dispatchesTheForwardedKeyWithItsOwnKeyAndCode() {
-    val script = SoftKeyForwarder.keydownScript("Enter", "DpadCenter", false)
-
-    assertTrue(script.contains("key:'Enter',code:'DpadCenter'"))
-  }
-
-  @Test
   fun dispatchesAKeydownAtTheFocusedElementWithTheCodeAndRepeatFlag() {
     val script = SoftKeyForwarder.keydownScript("SoftLeft", true)
 

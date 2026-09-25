@@ -30,18 +30,45 @@ object SoftKeyForwarder {
 
   fun domCodeFor(keyCode: Int): String? = DOM_CODES[keyCode]
 
-  /**
-   * OK while a text field is being edited. The WebView keeps D-pad Center for itself there, so the
-   * page never learned that OK was pressed and a keypad user had no OK in any text field. It is
-   * forwarded as Enter, which is what OK means to a field, with the D-pad code the keymap binds.
-   */
-  fun editingKeyFor(keyCode: Int): Pair<String, String>? =
-    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) "Enter" to "DpadCenter" else null
-
-  fun keydownScript(domCode: String, repeat: Boolean): String = keydownScript(domCode, domCode, repeat)
-
-  fun keydownScript(key: String, domCode: String, repeat: Boolean): String =
+  fun keydownScript(domCode: String, repeat: Boolean): String =
     "(function(){var t=document.activeElement||document;" +
       "t.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true," +
-      "key:'$key',code:'$domCode',repeat:$repeat}));})()"
+      "key:'$domCode',code:'$domCode',repeat:$repeat}));})()"
+
+  /**
+   * Routes one key event from the activity. [dispatch] is the normal view dispatch, [runScript]
+   * evaluates JavaScript in the page, and [editingText] says whether a text field in the WebView
+   * has the input method.
+   *
+   * OK arrives as D-pad Center, which the WebView keeps for itself while a text field has focus:
+   * the page never learned that OK was pressed. It goes on as a real Enter instead, so the page
+   * gets a trusted keydown and a form still submits on it.
+   */
+  fun route(
+    event: KeyEvent,
+    editingText: () -> Boolean,
+    dispatch: (KeyEvent) -> Boolean,
+    runScript: (String) -> Unit,
+  ): Boolean {
+    if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER && editingText()) {
+      return dispatch(asEnter(event))
+    }
+    val domCode = domCodeFor(event.keyCode) ?: return dispatch(event)
+    if (event.action == KeyEvent.ACTION_DOWN) runScript(keydownScript(domCode, event.repeatCount > 0))
+    return true
+  }
+
+  private fun asEnter(event: KeyEvent): KeyEvent =
+    KeyEvent(
+      event.downTime,
+      event.eventTime,
+      event.action,
+      KeyEvent.KEYCODE_ENTER,
+      event.repeatCount,
+      event.metaState,
+      event.deviceId,
+      event.scanCode,
+      event.flags,
+      event.source,
+    )
 }

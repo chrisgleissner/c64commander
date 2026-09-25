@@ -248,21 +248,13 @@ open class MainActivity : BridgeActivity() {
     }
   }
 
-  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-    val editingKey = SoftKeyForwarder.editingKeyFor(event.keyCode)
-    if (editingKey != null && isEditingTextInWebView()) {
-      if (event.action == KeyEvent.ACTION_DOWN) {
-        val (key, domCode) = editingKey
-        bridge?.webView?.evaluateJavascript(SoftKeyForwarder.keydownScript(key, domCode, event.repeatCount > 0), null)
-      }
-      return true
-    }
-    val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return super.dispatchKeyEvent(event)
-    if (event.action == KeyEvent.ACTION_DOWN) {
-      bridge?.webView?.evaluateJavascript(SoftKeyForwarder.keydownScript(domCode, event.repeatCount > 0), null)
-    }
-    return true
-  }
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+    SoftKeyForwarder.route(
+      event,
+      editingText = ::isEditingTextInWebView,
+      dispatch = { super.dispatchKeyEvent(it) },
+      runScript = { bridge?.webView?.evaluateJavascript(it, null) },
+    )
 
   /** The WebView holds the input method only while a text field in it has focus. */
   private fun isEditingTextInWebView(): Boolean {
