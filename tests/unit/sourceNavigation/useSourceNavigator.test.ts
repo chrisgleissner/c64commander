@@ -504,4 +504,35 @@ describe("useSourceNavigator whole-source search", () => {
     await waitFor(() => expect(result.current.entries[0]?.name).toBe("in-folder.sid"));
     expect(result.current.query).toBe("");
   });
+
+  it("remembers the last folder per device for a source that stands for whichever device is connected", async () => {
+    let host = "u2";
+    const listEntries = vi.fn().mockResolvedValue([]);
+    const source: SourceLocation = {
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      navigationScope: () => host,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+    const onU2 = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(listEntries).toHaveBeenCalled());
+    await act(async () => {
+      onU2.result.current.navigateTo("/USB0/test-data/d64");
+    });
+    expect(onU2.result.current.path).toBe("/USB0/test-data/d64");
+    onU2.unmount();
+
+    host = "c64u";
+    listEntries.mockClear();
+    const onC64u = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(listEntries).toHaveBeenCalled());
+    expect(onC64u.result.current.path).toBe("/");
+    expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64", expect.anything());
+    expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64");
+  });
 });

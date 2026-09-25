@@ -66,7 +66,10 @@ export type SourceNavigatorState = {
   refresh: () => void;
 };
 
-const buildNavKey = (source: SourceLocation) => `c64u_source_nav:${source.type}:${source.id}`;
+const buildNavKey = (source: SourceLocation) => {
+  const scope = source.navigationScope?.();
+  return `c64u_source_nav:${source.type}:${source.id}${scope ? `:${scope}` : ""}`;
+};
 
 const getStoredPath = (source: SourceLocation) => {
   if (typeof localStorage === "undefined") return null;

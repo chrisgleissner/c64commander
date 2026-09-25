@@ -334,6 +334,8 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   name: options?.name?.trim() || SOURCE_LABELS.c64u,
   rootPath: "/",
   isAvailable: true,
+  // One source for whichever Ultimate is connected: a folder on one device is usually absent on another.
+  navigationScope: () => normalizeFtpHost(getC64APIConfigSnapshot().deviceHost),
   listEntries,
   listFilesRecursive,
   // A walk over FTP, so it runs only when asked for — never per keystroke.
