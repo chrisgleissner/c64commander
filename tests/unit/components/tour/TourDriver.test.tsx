@@ -353,6 +353,15 @@ describe("TourDriver", () => {
     });
   });
 
+  it("mounts the tour on the body, outside the app it is rendered from", async () => {
+    const { container } = renderDriver();
+    await startTour();
+
+    const overlay = screen.getByTestId("tour-overlay");
+    expect(overlay.parentElement).toBe(document.body);
+    expect(container.contains(overlay)).toBe(false);
+  });
+
   /*
    * The opening step points at nothing, and the viewport is only measured by the effect that draws
    * the hole. Skipping that effect for an anchor-less step left the scrim as one empty rectangle,
