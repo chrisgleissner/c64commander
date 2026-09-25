@@ -286,10 +286,12 @@ export const FocusNavigationProvider = ({
     return trigger !== null;
   }, []);
 
+  const ringElementFor = useCallback((id: string) => engineRef.current?.elementForId(id) ?? null, []);
+
   const controller = useMemo(() => {
     const created: NavigationController = new NavigationController({
       callbacks: {
-        onFocus: (item) => focusRingElement(engineRef.current?.elementForId(item.id) ?? null),
+        onFocus: (item) => focusRingElement(ringElementFor(item.id)),
         // After activation, keep the ring element focused — BUT respect an
         // activation that intentionally moved focus into the item's own subtree
         // (the field-row pattern focuses its inner <input> for editing). Yanking
@@ -300,7 +302,7 @@ export const FocusNavigationProvider = ({
           // Anchored on the ring's item, which for a single-control card is the card: DOM focus
           // left on the control it clicked took the next OK from the ring, and a card header's
           // toggle then closed the card it had just opened instead of going into it.
-          const element = engineRef.current?.elementForId(created.focus.current()?.id ?? item.id) ?? null;
+          const element = ringElementFor(created.focus.current()?.id ?? item.id);
           if (element && element.contains(document.activeElement)) return;
           // Activating a bare text field is the explicit "go in" that starts
           // editing, so it is the one place the field does take real DOM focus.
@@ -317,10 +319,9 @@ export const FocusNavigationProvider = ({
         },
         onNavigateBack: () => onNavigateBackRef.current?.(),
         onOpenMenu: (item) => {
-          const opened = openContextMenuFor(
-            item ? (engineRef.current?.elementForId(item.id) ?? null) : null,
-            item ? created.focus.hasEnabledChildren(item.id) : false,
-          );
+          const opened = item
+            ? openContextMenuFor(ringElementFor(item.id), created.focus.hasEnabledChildren(item.id))
+            : openContextMenuFor(null, false);
           if (opened) return true;
           // No context menu for this item: fall back to the global quick menu. Report
           // whether we actually handled the key (a quick-menu handler exists) so the
@@ -333,7 +334,7 @@ export const FocusNavigationProvider = ({
       },
     });
     return created;
-  }, [openContextMenuFor]);
+  }, [openContextMenuFor, ringElementFor]);
 
   /**
    * Applies the selected-control highlight imperatively: `data-key-selected` sits

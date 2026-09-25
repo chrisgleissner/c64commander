@@ -25,7 +25,6 @@ let cached: { at: number; reserveKey: string; padding: CollisionPadding } | null
  * y=0, under the status bar, with a height that counted space the user cannot read.
  */
 export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
-  if (typeof document === "undefined") return { top: 0, right: 0, bottom: 0, left: 0 };
   const reserveKey = document.documentElement.style.getPropertyValue("--keypad-guidance-reserved-height");
   const now = Date.now();
   if (cached && cached.reserveKey === reserveKey && now - cached.at < CACHE_MS) return cached.padding;

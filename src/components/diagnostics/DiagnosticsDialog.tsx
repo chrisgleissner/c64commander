@@ -1384,12 +1384,7 @@ export function DiagnosticsDialog({
   const connectionLabel =
     connectionState.state === "DEMO_ACTIVE"
       ? DEMO_MODE_CONNECTION_LABEL
-      : buildConnectionLabel(
-          selectedSavedDevice
-            ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
-            : (healthState.connectedDeviceLabel ?? "C64U"),
-          selectedProductCode,
-        );
+      : buildConnectionLabel(connectionDisplayName, selectedProductCode);
   // Offered only where it is the answer: the app is not talking to a device, and Demo Mode is
   // available. In Demo Mode already, or connected to real hardware, it would be noise.
   const showSimulatedDeviceOffer =

@@ -2295,7 +2295,6 @@ export function usePlaybackController({
    */
   const scrubTargetMsRef = useRef<number | null>(null);
   const [scrubTargetMs, setScrubTargetMs] = useState<number | null>(null);
-  const scrubSeekInFlightRef = useRef(false);
   const scrubTimerRef = useRef<number | null>(null);
   const scrubDurationMsRef = useRef<number | undefined>(undefined);
   const scrubEndingRef = useRef(false);
@@ -2346,13 +2345,6 @@ export function usePlaybackController({
       setScrubTargetMs(null);
       scrubEndingRef.current = false;
       return;
-    }
-    // Land exactly where the user let go, even if a catch-up seek was still in
-    // flight for an older target. Bounded: a catch-up seek that never settles
-    // must delay the release, not hold it forever — the release is what takes
-    // the UI out of the scrub and hands playback back.
-    for (let waited = 0; scrubSeekInFlightRef.current && waited < SCRUB_RELEASE_WAIT_MS; waited += 20) {
-      await new Promise((r) => setTimeout(r, 20));
     }
     // Rebase the clocks to the TARGET *before* awaiting the seek.
     //
