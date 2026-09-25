@@ -18,6 +18,7 @@ tags:
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: subflows/launch-and-wait.yaml
 - assertVisible: "Home"
+- runFlow: subflows/dismiss-tour.yaml
 - tapOn:
     id: "tab-settings"
     optional: true
@@ -32,6 +33,7 @@ tags:
     timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
 - assertVisible: "Connection.*"
+- runFlow: subflows/dismiss-tour.yaml
 - tapOn:
     id: "tab-play"
     optional: true

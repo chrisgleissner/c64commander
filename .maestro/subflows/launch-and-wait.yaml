@@ -153,3 +153,4 @@ tags:
     timeout: 20000
     optional: true
 - waitForAnimationToEnd
+- runFlow: dismiss-tour.yaml
