@@ -1549,6 +1549,18 @@ describe("HomePage SID status", () => {
     }
   });
 
+  it("shows Turbo Control and CPU Speed as not available on a device without them", () => {
+    // An Ultimate-II+ cartridge has no U64 Specific Settings category at all.
+    u64SettingsPayloadRef.current = undefined;
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({ ramExpansionUnit: "Disabled", reuSize: "2 MB" });
+
+    renderHomePage();
+
+    expect(screen.getByTestId("home-cpu-turbo-control")).toHaveTextContent("Not available");
+    expect(screen.getByTestId("home-cpu-speed-value")).toHaveTextContent("Not available");
+    expect(screen.getByTestId("home-joystick-swapper")).toHaveTextContent("Not available");
+  });
+
   it("renders CPU, Ports, and Video cards with the expected controls in page order", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload();
     c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
