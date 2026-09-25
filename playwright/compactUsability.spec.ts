@@ -993,6 +993,9 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
         localStorage.setItem("c64u_demo_mode_enabled", "0");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "0");
         localStorage.setItem("c64u_display_profile_override", "compact");
+        // The suite's short budgets are for hosts that never answer; on a slow runner the 401 lands after them.
+        localStorage.setItem("c64u_startup_discovery_window_ms", "8000");
+        localStorage.setItem("c64u_discovery_probe_timeout_ms", "5000");
       });
       // Every route answers 401 while this is set (`mockC64Server.ts:371`).
       server.setFaultMode("auth");

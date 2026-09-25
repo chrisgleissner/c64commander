@@ -165,7 +165,7 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED");
     await seedVerifiedMockIdentity(page);
     await expect(indicator).toHaveAttribute("data-health-state", "Healthy");
-    await expect(indicator).toContainText("C64U");
+    await expect(indicator).toHaveAttribute("aria-label", /^Connected to C64U, system healthy$/);
     await snap(page, testInfo, "real-connected-indicator");
   });
 
