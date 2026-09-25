@@ -93,6 +93,10 @@ describe("resolveGuidanceLabels — center / OK key", () => {
     expect(resolveGuidanceLabels(state({ currentKind: kind })).center).toBe(label);
   });
 
+  it("offers no OK action on a status, such as a page that is still loading", () => {
+    expect(resolveGuidanceLabels(state({ currentKind: "status" })).center).toBeNull();
+  });
+
   it("'Done' while a field is engaged (OK commits/leaves)", () => {
     expect(resolveGuidanceLabels(state({ fieldEngaged: true, currentKind: "field" })).center).toBe("Done");
   });

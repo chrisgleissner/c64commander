@@ -28,7 +28,7 @@ import {
   resolveRunwayTranslatePercent,
   type RunwayPanelIndexes,
 } from "@/lib/navigation/swipeNavigationModel";
-import { t } from "@/lib/i18n";
+import { PageLoadingFallback } from "@/components/PageLoadingFallback";
 
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const PlayFilesPage = lazy(() => import("@/pages/PlayFilesPage"));
@@ -114,12 +114,6 @@ const didWrapAround = (fromIndex: number, toIndex: number, direction: -1 | 0 | 1
   if (direction === -1) return toIndex > fromIndex;
   return false;
 };
-
-const SlotLoadingFallback = () => (
-  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    {t("app.loadingScreen", "Loading screen...")}
-  </div>
-);
 
 const readRuntimeMotionMode = (): RuntimeMotionMode => {
   if (typeof document === "undefined") return "standard";
@@ -534,7 +528,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
               data-panel-position={panelPosition}
             >
               <PageErrorBoundary active={isActive}>
-                <Suspense fallback={<SlotLoadingFallback />}>
+                <Suspense fallback={<PageLoadingFallback />}>
                   <ScreenActivityProvider active={isActive}>
                     <AppChromeModeProvider mode="sticky">
                       <Component />

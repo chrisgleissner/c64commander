@@ -29,7 +29,8 @@
 import type { InputModality } from "./inputModality";
 
 /** What the current ring item is, for choosing the OK-key label. */
-export type FocusKind = "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "none";
+export type FocusKind =
+  "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "status" | "none";
 
 /** A plain, DOM-free snapshot of the ring the bar needs to choose its labels. */
 export interface GuidanceState {
@@ -87,6 +88,7 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   switch: "Toggle",
   slider: "Adjust",
   tab: "Switch",
+  status: "",
   none: "",
 };
 
@@ -116,7 +118,7 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   let center: string | null;
   if (state.layerOpen) center = "Select";
   else if (state.fieldEngaged) center = "Done";
-  else if (!state.hasCurrent) center = null;
+  else if (!state.hasCurrent || state.currentKind === "status") center = null;
   else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
 
   let right: string | null = null;
@@ -140,6 +142,7 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   const role = element.getAttribute("role");
   const tag = element.tagName;
   if (role === "slider") return "slider";
+  if (role === "status") return "status";
   if (role === "tab") return "tab";
   if (
     role === "switch" ||

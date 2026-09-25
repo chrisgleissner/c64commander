@@ -86,6 +86,11 @@ F1 is the neutral `function1` action (see the F1 row).
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
   exactly when the user is driving by keys.
+- **Page loading stop:** while a page's code loads, `page-loading` (a
+  `role="status"` "Loading screen..." message) is the only ring stop above the
+  tab bar. It takes the default selection, the guidance bar shows it with no OK
+  action, and OK does nothing; the page's own first control takes over once it
+  registers.
 - **Group scope outline:** `data-key-scope` dashed outline around the enclosing
   group while the ring is descended inside it.
 
