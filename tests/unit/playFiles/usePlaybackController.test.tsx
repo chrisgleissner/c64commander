@@ -2761,6 +2761,7 @@ describe("usePlaybackController", () => {
       dispose: vi.fn(),
       warmLeadIn: vi.fn(),
       prerender: vi.fn(),
+      isActive: vi.fn(() => false),
     });
 
     const enableLocal = () => {
@@ -3472,6 +3473,30 @@ describe("usePlaybackController", () => {
         // The C64 is stopped before the tune restarts on the device.
         await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
         expect(machineReset).toHaveBeenCalled();
+      });
+
+      // The Play page remounts on every tab change, and the new instance has not started the tune the
+      // phone is playing. Moving it to the C64 reset the C64 and left the phone playing, so both sounded.
+      it("stops the phone's tune, not the C64, when a remounted page moves it to the C64", async () => {
+        enableLocal();
+        const controller = fakeController();
+        controller.isActive.mockReturnValue(true);
+        const machineReset = vi.fn().mockResolvedValue(undefined);
+        vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+        const playlist = [sidItem(psid)];
+        renderPlaybackController(playlist, {
+          localSidPlaybackController: controller as any,
+          isPlaying: true,
+          currentIndex: 0,
+        });
+
+        await act(async () => {
+          savePlaybackEngine("c64");
+        });
+
+        await waitFor(() => expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1));
+        expect(controller.stop).toHaveBeenCalled();
+        expect(machineReset).not.toHaveBeenCalled();
       });
 
       it("resets the C64 once when the user moves its tune to 'This device'", async () => {
