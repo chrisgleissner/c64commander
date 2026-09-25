@@ -515,6 +515,8 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         ) : null}
         <SliderPrimitive.Thumb
           ref={keypadThumbRef}
+          // The primitive marks a disabled thumb only with data-disabled, so it read as a usable slider.
+          aria-disabled={props.disabled ? true : undefined}
           className={cn(
             "block h-5 w-5 rounded-full shadow-[inset_0_0_0_2px_hsl(var(--primary))] bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
             thumbClassName,

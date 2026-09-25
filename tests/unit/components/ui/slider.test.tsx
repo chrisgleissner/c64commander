@@ -12,6 +12,20 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { Slider } from "@/components/ui/slider";
 import { SLIDER_POPUP_IDLE_CLOSE_MS, SLIDER_POPUP_MIN_VISIBLE_MS } from "@/lib/ui/sliderPopupStateMachine";
 
+describe("Slider disabled state", () => {
+  it("tells assistive technology and the keypad ring that a disabled slider cannot be used", () => {
+    render(<Slider value={[1]} min={0} max={15} step={1} disabled aria-label="CPU speed" />);
+
+    expect(screen.getByRole("slider")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("does not mark an enabled slider as disabled", () => {
+    render(<Slider value={[1]} min={0} max={15} step={1} aria-label="CPU speed" />);
+
+    expect(screen.getByRole("slider")).not.toHaveAttribute("aria-disabled");
+  });
+});
+
 describe("Slider value display", () => {
   it("shows value on pointer down and keeps it visible for minimum duration", () => {
     vi.useFakeTimers();
