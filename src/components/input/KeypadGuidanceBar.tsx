@@ -245,7 +245,9 @@ export const KeypadGuidanceBar = () => {
     if (!context) return;
     refresh();
     // Typing into a field is not a ring change, but it decides whether the right soft key deletes.
-    const fieldEvents = ["input", "focusin", "focusout"] as const;
+    // A field whose own T9 composer sets its value through React state fires no input event, so
+    // the key itself is listened for too. The native shell forwards the soft keys as a keydown only.
+    const fieldEvents = ["input", "keydown", "focusin", "focusout"] as const;
     fieldEvents.forEach((type) => document.addEventListener(type, refresh));
     const unsubscribe = context.subscribeRingChange(refresh);
     return () => {

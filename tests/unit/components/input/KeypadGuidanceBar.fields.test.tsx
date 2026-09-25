@@ -66,6 +66,17 @@ describe("KeypadGuidanceBar while a text field has focus", () => {
     expect(actionOf("keypad-guidance-center")).toBe("Done");
   });
 
+  it("drops Delete once a field that sets its value without an input event is emptied", () => {
+    const field = renderWithField();
+    act(() => field.focus());
+    typeInto(field, "s");
+    (field as HTMLInputElement).value = "";
+
+    fireEvent.keyDown(field, { key: "SoftRight", code: "SoftRight" });
+
+    expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
   it("does not offer Delete in an edition that types digits literally", () => {
     t9.editionDefault = false;
     const field = renderWithField();
