@@ -89,7 +89,9 @@ Let's take a walk through the app, one page at a time. First come two things you
 
 ### The Header Badge
 
-The badge at the top right tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries to connect again. With more than one device saved, long-press it, or press `#`, to open **Switch device**. With more than one device saved, the badge also shows the name of the one you are using, and for a few seconds after the app connects or switches it says which device it connected to.
+The badge in the top right corner tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. If the app is offline, the same tap also tries to reconnect.
+
+If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
 
 ### Finding Your Way
 
