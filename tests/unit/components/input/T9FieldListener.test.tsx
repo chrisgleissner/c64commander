@@ -62,6 +62,17 @@ describe("T9FieldListener", () => {
     expect(field).toHaveValue("aa");
   });
 
+  it("lets a number key outside a text field keep its own meaning", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <button type="button">Play</button>
+      </>,
+    );
+
+    expect(fireEvent.keyDown(screen.getByText("Play"), { key: "7", code: "Digit7" })).toBe(true);
+  });
+
   it("stays out of the way in an edition that does not type T9 by default", () => {
     t9.editionDefault = false;
     render(

@@ -377,6 +377,21 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(document.activeElement).not.toBe(input);
   });
 
+  it("leaves Back in a field inside an open dialog to the dialog", () => {
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <div role="dialog">
+          <input aria-label="Password" />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const input = getByLabelText("Password") as HTMLInputElement;
+    input.focus();
+
+    expect(fireEvent.keyDown(input, { key: "Escape", code: "", keyCode: 0 })).toBe(true);
+    expect(document.activeElement).toBe(input);
+  });
+
   it("prevents default only for actions it consumes", () => {
     const Custom = () => {
       const ref = useFocusItem<HTMLButtonElement>({ id: "x", order: 10 });

@@ -143,6 +143,40 @@ describe("composeT9Key", () => {
     expect(input.value).toBe("c64u ");
   });
 
+  it("composes into a textarea the same way", () => {
+    const area = document.createElement("textarea");
+    document.body.appendChild(area);
+    area.focus();
+    let consumed = false;
+    const listener = (event: KeyboardEvent) => {
+      consumed = composeT9Key(event, keypad, 1000);
+    };
+    document.addEventListener("keydown", listener);
+    area.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...digit(2) }));
+    document.removeEventListener("keydown", listener);
+
+    expect(consumed).toBe(true);
+    expect(area.value).toBe("a");
+  });
+
+  it("leaves keys that are not T9 keys to the field", () => {
+    const input = field();
+
+    expect(press(input, { key: "Shift", code: "ShiftLeft" }, 1000)).toBe(false);
+    expect(press(input, { key: "ArrowDown", code: "ArrowDown" }, 1010)).toBe(false);
+    expect(input.value).toBe("");
+  });
+
+  it("ignores leaving an element that is not a T9 field, or a field nothing was typed into", () => {
+    const button = document.createElement("button");
+    const input = field();
+
+    expect(() => endT9Composition(button)).not.toThrow();
+    expect(() => endT9Composition(input)).not.toThrow();
+    press(input, digit(2), 1000);
+    expect(input.value).toBe("a");
+  });
+
   it("does not compose a key a field already handled itself", () => {
     const input = field();
     input.addEventListener("keydown", (event) => event.preventDefault());

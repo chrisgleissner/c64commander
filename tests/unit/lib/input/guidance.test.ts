@@ -204,6 +204,15 @@ describe("accessibleLabelFor", () => {
     expect(accessibleLabelFor(toggle)).toBe("Connection");
   });
 
+  it("reads the text of an element that is not an HTML element, such as an SVG label", () => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.textContent = "Joystick";
+    svg.appendChild(text);
+
+    expect(accessibleLabelFor(svg)).toBe("Joystick");
+  });
+
   it("falls back to placeholder, then title", () => {
     expect(accessibleLabelFor(make('<input placeholder="Host or IP" />'))).toBe("Host or IP");
     expect(accessibleLabelFor(make('<div title="Tooltip"></div>'))).toBe("Tooltip");
