@@ -211,6 +211,20 @@ describe("MachineControls", () => {
     }
   });
 
+  it("names the model the device reports in the Power actions, not the C64 Ultimate", () => {
+    const cartridge = { ...defaultProps.status, deviceInfo: { product: "Ultimate II+L" } };
+    render(<MachineControls {...defaultProps} status={cartridge} />);
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+
+    expect(screen.getByTestId("home-power-sheet")).toHaveTextContent(
+      "Reboots the Ultimate II+L and interrupts the current session.",
+    );
+    fireEvent.click(screen.getByTestId("home-power-action-reboot"));
+    expect(screen.getByRole("dialog", { name: "Reboot?" })).toHaveTextContent(
+      "This reboots the Ultimate II+L and interrupts the current session.",
+    );
+  });
+
   it("opens Reboot confirmation before executing the REST reboot mutation", () => {
     render(<MachineControls {...defaultProps} />);
 
