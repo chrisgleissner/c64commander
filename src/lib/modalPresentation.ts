@@ -107,7 +107,8 @@ const secondaryEditorClass = `${centeredBaseClass} max-w-[var(--display-profile-
  */
 const fullScreenClass = [
   "fixed inset-0 flex h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-none flex-col overflow-hidden",
-  "rounded-none border-0 bg-background p-0 shadow-none outline-none",
+  // The panel runs under the status bar like the app does, so the title starts below it.
+  "rounded-none border-0 bg-background p-0 pt-[var(--safe-area-inset-top,0px)] shadow-none outline-none",
   "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out",
   "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
   "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",

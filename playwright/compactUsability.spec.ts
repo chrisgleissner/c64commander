@@ -973,9 +973,22 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
       };
     });
 
+    // A phone's status bar: a full-screen surface starts under it, so its title has to clear it.
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        const style = document.createElement("style");
+        style.textContent = ":root { --safe-area-inset-top: 30px !important; }";
+        document.head.append(style);
+      });
+    });
+
     await openCompact(page, "/");
     const picker = page.getByRole("dialog", { name: /Choose your C64/i });
     await auditOne(page, "Device discovery", picker, "list");
+
+    const titleBox = await picker.getByRole("heading", { name: /Choose your C64/i }).boundingBox();
+    expect(titleBox, "the picker has no title").not.toBeNull();
+    expect(titleBox!.y, "the picker's title is under the status bar").toBeGreaterThanOrEqual(30);
 
     // The footer had no side padding, so "Not now" sat on the dialog's edge.
     const dialogBox = await picker.boundingBox();
