@@ -245,13 +245,19 @@ export const KeypadGuidanceBar = () => {
     if (!context) return;
     refresh();
     // Typing into a field is not a ring change, but it decides whether the right soft key deletes.
-    // A field whose own T9 composer sets its value through React state fires no input event, so
-    // the key itself is listened for too. The native shell forwards the soft keys as a keydown only.
-    const fieldEvents = ["input", "keydown", "focusin", "focusout"] as const;
+    // A field whose own T9 composer sets its value through React state fires no input event, so a
+    // key pressed in a field is listened for too. The native shell forwards the soft keys as a
+    // keydown only. Keys elsewhere already refresh the bar through the ring.
+    const fieldEvents = ["input", "focusin", "focusout"] as const;
+    const refreshAfterFieldKey = (event: KeyboardEvent) => {
+      if (isT9Field(event.target)) refresh();
+    };
     fieldEvents.forEach((type) => document.addEventListener(type, refresh));
+    document.addEventListener("keydown", refreshAfterFieldKey);
     const unsubscribe = context.subscribeRingChange(refresh);
     return () => {
       fieldEvents.forEach((type) => document.removeEventListener(type, refresh));
+      document.removeEventListener("keydown", refreshAfterFieldKey);
       unsubscribe();
     };
   }, [context, refresh]);
