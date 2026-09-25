@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useConnectionState } from "@/hooks/useConnectionState";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { buildDeviceShortLabel } from "@/lib/savedDevices/shortLabel";
 import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
@@ -21,9 +22,12 @@ export type TargetDeviceIdentity = {
 /** The device the app's commands go to, named for the places that have to say which one it is. */
 export const useTargetDeviceIdentity = (): TargetDeviceIdentity => {
   const savedDevices = useSavedDevices();
+  const connection = useConnectionState();
   const device =
     savedDevices.devices.find((entry) => entry.id === savedDevices.selectedDeviceId) ?? savedDevices.devices[0];
-  if (!device) return { deviceId: null, multiDevice: false, fullLabel: null, shortLabel: null };
+  if (!device || connection.state === "DEMO_ACTIVE") {
+    return { deviceId: null, multiDevice: false, fullLabel: null, shortLabel: null };
+  }
   const product = savedDevices.verifiedByDeviceId[device.id]?.product ?? null;
   const fullLabel = buildSavedDevicePrimaryLabel(device);
   return {
