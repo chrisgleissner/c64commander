@@ -44,7 +44,8 @@ const isLocalAutoConfirmDisabled = () =>
   typeof window !== "undefined" &&
   Boolean((window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm);
 
-const firstWord = (label: string): string => label.split(" ")[0];
+/** "Add to playlist" and "Add to library" name the page the picker was opened from; the verb is the news. */
+const compactConfirmLabel = (label: string): string => (label.startsWith("Add to ") ? "Add" : label);
 export type SourceGroup = {
   label: string;
   sources: SourceLocation[];
@@ -619,7 +620,7 @@ export const ItemSelectionDialog = ({
   );
 
   // The header shares one line with the source title on a 320 px screen, where "Add to playlist"
-  // left the title as "Fro…". The verb says what the button does; the page says where to.
+  // left the title as "Fro…".
   const headerConfirmButton = showCompactHeaderConfirm ? (
     <Button
       variant="default"
@@ -630,7 +631,7 @@ export const ItemSelectionDialog = ({
       aria-label={resolvedConfirmLabel}
       className="shrink-0"
     >
-      {firstWord(resolvedConfirmLabel)}
+      {compactConfirmLabel(resolvedConfirmLabel)}
     </Button>
   ) : null;
 
