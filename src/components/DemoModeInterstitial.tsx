@@ -129,7 +129,10 @@ export function DemoModeInterstitial() {
             ) : null}
           </div>
         )}
-        <DialogFooter>
+        {/* No field to type into, so the buttons can stay put while prose that wraps further scrolls under them. */}
+        <DialogFooter
+          className={noNetwork ? "sticky bottom-0 z-10 border-t border-border bg-background pt-3" : undefined}
+        >
           {/* Primary first: stacked on a phone it is the one action sure to be on screen when the offer opens. */}
           <div className="flex flex-col gap-2 w-full sm:flex-row-reverse sm:justify-start">
             <Button

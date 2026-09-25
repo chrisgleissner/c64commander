@@ -529,11 +529,13 @@ test.describe("The Demo Mode offer on a small screen", () => {
       await startStrictUiMonitoring(page, testInfo);
       allowWarnings(testInfo, "Reads in flight when Demo Mode re-routes the API are aborted by design.");
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      // The Pixel 4's gesture bar; the dialog keeps clear of it, which costs the offer that much height.
+      // The Pixel 4's gesture bar, which the dialog keeps clear of, and the widest fallback font a runner
+      // has: Inter is not bundled, and under DejaVu Sans both the message and the primary label wrap further.
       await page.addInitScript(() => {
         document.addEventListener("DOMContentLoaded", () => {
           const style = document.createElement("style");
-          style.textContent = ":root { --safe-area-inset-bottom: 24px !important; }";
+          style.textContent =
+            ":root { --safe-area-inset-bottom: 24px !important; } * { font-family: 'DejaVu Sans', sans-serif !important; }";
           document.head.append(style);
         });
       });
