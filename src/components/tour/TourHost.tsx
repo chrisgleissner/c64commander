@@ -9,6 +9,9 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
+import { isAutomaticDiscoveryTrigger } from "@/lib/deviceDiscovery/types";
 import {
   loadTourState,
   shouldOfferTourOnLaunch,
@@ -37,20 +40,28 @@ const SETTLE_MS = 900;
 
 export const TourHost = () => {
   const interstitialActive = useInterstitialActive();
+  // Finding a device can end in a device picker seconds after launch; a tour begun meanwhile ran under it.
+  const connection = useConnectionState();
+  const discovery = useDeviceDiscovery();
+  const findingDevice =
+    connection.state === "UNKNOWN" ||
+    (connection.state === "DISCOVERING" && isAutomaticDiscoveryTrigger(connection.lastDiscoveryTrigger)) ||
+    (discovery.phase === "scanning" && isAutomaticDiscoveryTrigger(discovery.trigger));
+  const launchBusy = interstitialActive || findingDevice;
   const [request, setRequest] = useState<TourStartRequest | null>(null);
   const offeredRef = useRef(false);
 
   useEffect(() => subscribeTourStart(setRequest), []);
 
   useEffect(() => {
-    if (request !== null || offeredRef.current || interstitialActive) return undefined;
+    if (request !== null || offeredRef.current || launchBusy) return undefined;
     if (!shouldOfferTourOnLaunch(loadTourState())) return undefined;
     const timer = setTimeout(() => {
       offeredRef.current = true;
       setRequest({});
     }, SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [interstitialActive, request]);
+  }, [launchBusy, request]);
 
   if (request === null) return null;
 

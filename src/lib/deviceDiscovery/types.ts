@@ -10,6 +10,10 @@ import type { NativeDeviceDiscoverySource } from "@/lib/native/deviceDiscovery";
 
 export type DeviceDiscoveryTrigger = "startup" | "settings" | "manual" | "resume";
 
+/** A scan the app started by itself, whose results it offers without being asked. */
+export const isAutomaticDiscoveryTrigger = (trigger: string | null | undefined): boolean =>
+  trigger === "startup" || trigger === "resume";
+
 export type DeviceDiscoveryCandidate = {
   id: string;
   address: string;
