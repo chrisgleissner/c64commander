@@ -57,11 +57,11 @@ and 82 mean Ctrl, Alt, Caps Lock and R.
 | **Call / Send**       | `CALL` 5             | `activate`        | Primary activate of the focused leaf.                                                                                                                                                                                                                             |
 | **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": the focused control's own context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device). A card or other group has no menu of its own, even when a row inside it does.                                     |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done). Forwarded by the native shell.                                                                                                                                                                                      |
-| **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Same as Menu. Forwarded by the native shell.                                                                                                                                                                                                                      |
-| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱ and # ignore key repeat.                                                                                                                                 |
+| **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Same as Menu. In a text field that holds text, **deletes the last character** (T9 editions; the guidance bar labels it Delete). Forwarded by the native shell. |
+| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱, # and Call ignore key repeat.                                                                                                                                 |
 | **0**                 | `KEYCODE_0` 7        | `digit0`          | In a text field: T9 entry. Outside a field: **enter Game Mode** (starts the remembered Watch/Listen and opens the sheet ready to play). Inside the Remote Input sheet it is a joystick direction, which the open-overlay exclusion keeps this shortcut away from. |
-| **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise **open Diagnostics**.                                                                                                                                                                                |
-| **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise **open the Device Switcher** (= badge long-press).                                                                                                                                                                     |
+| **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. In another text field: switch the case of the last letter. Otherwise **open Diagnostics**. |
+| **# (pound)**         | `POUND` 18           | `hash`            | In a text field: switch between letters and digits. Otherwise **open the Device Switcher** (= badge long-press). |
 | (desktop equiv.)      | `ESCAPE` 111 / `Esc` | `escape`          | Dismiss overlay / ascend — **never navigates the route** (only Back/soft-left do).                                                                                                                                                                                |
 | **F1**                | verified WebView key | `function1`       | Neutral function action. In C64U Remote normal navigation it runs the persisted F1 assignment (default **Play/Pause**); C64 Commander retains its transport shortcut. On an intentional C64 input surface it sends literal C64 F1. Dialogs, capture, text entry, and View consume it. |
 | **F3**                | verified WebView key | `function3`       | Neutral function action. In C64U Remote normal navigation it runs the persisted F3 assignment (default **Next tune**); C64 Commander retains its transport shortcut. On an intentional C64 input surface it sends literal C64 F3. Dialogs, capture, text entry, and View consume it. |
@@ -82,7 +82,8 @@ F1 is the neutral `function1` action (see the F1 row).
   dialog or sheet hides the TabBar) showing the breadcrumb plus the contextual
   soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate (by
   control kind), right = Menu only where the focused control has a menu of its
-  own. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
+  own. While a single-line field on a page has focus, left and center read Done;
+  while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
   exactly when the user is driving by keys.
 - **Group scope outline:** `data-key-scope` dashed outline around the enclosing
@@ -96,6 +97,8 @@ F1 is the neutral `function1` action (see the F1 row).
   active scope and wrap.
 - **OK/Center/Call** descend into a group (a container with ≥1 enabled child) or
   activate a leaf. A group with a single enabled leaf activates it directly.
+- **OK** in a single-line field on a page leaves the field after the field has
+  handled its own Enter, as Back does.
 - **Back/Esc/left-soft** dismiss the top overlay, then leave a focused field,
   then ascend one group level; only the hardware Back key / left soft key
   navigate the route when the chain is exhausted. **Esc never navigates.**
