@@ -190,6 +190,20 @@ describe("accessibleLabelFor", () => {
     expect(accessibleLabelFor(make("<button>  Save   config </button>"))).toBe("Save config");
   });
 
+  it("names a titled button by the title it shows, not the description the layout hides", () => {
+    const toggle = make("<button><span>Connection</span><span>Saved devices, discovery</span></button>");
+    Object.defineProperty(toggle, "innerText", { value: "Connection" });
+
+    expect(accessibleLabelFor(toggle)).toBe("Connection");
+  });
+
+  it("keeps a title and the description under it apart, naming the title", () => {
+    const toggle = make("<button><span>Connection</span><span>Saved devices</span></button>");
+    Object.defineProperty(toggle, "innerText", { value: "Connection\nSaved devices" });
+
+    expect(accessibleLabelFor(toggle)).toBe("Connection");
+  });
+
   it("falls back to placeholder, then title", () => {
     expect(accessibleLabelFor(make('<input placeholder="Host or IP" />'))).toBe("Host or IP");
     expect(accessibleLabelFor(make('<div title="Tooltip"></div>'))).toBe("Tooltip");

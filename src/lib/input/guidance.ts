@@ -174,6 +174,23 @@ const tidyLabel = (raw: string): string => {
 };
 
 /**
+ * The first line of what the element shows. `textContent` joins a title and the description
+ * under it without a space, and includes text the layout hides: a section header read
+ * "ConnectionSaved devices, discov…". The rendered text keeps lines apart and leaves hidden text
+ * out, and its first line is the title. Environments without layout fall back to `textContent`.
+ */
+const renderedFirstLine = (element: Element): string | null => {
+  const rendered = element instanceof HTMLElement ? element.innerText : undefined;
+  const text = typeof rendered === "string" ? rendered : element.textContent;
+  return (
+    text
+      ?.split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? null
+  );
+};
+
+/**
  * A short human label for the current element, for the breadcrumb tail. Prefers
  * an explicit accessible name (`aria-label`), then visible text, then
  * placeholder/title. Returns `null` when nothing readable is found.
@@ -182,8 +199,8 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
   if (!element) return null;
   const ariaLabel = element.getAttribute("aria-label");
   if (ariaLabel && ariaLabel.trim()) return tidyLabel(ariaLabel);
-  const text = element.textContent;
-  if (text && text.trim()) return tidyLabel(text);
+  const text = renderedFirstLine(element);
+  if (text) return tidyLabel(text);
   const placeholder = element.getAttribute("placeholder");
   if (placeholder && placeholder.trim()) return tidyLabel(placeholder);
   const title = element.getAttribute("title");
