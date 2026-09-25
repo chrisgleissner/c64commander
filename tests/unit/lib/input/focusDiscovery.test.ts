@@ -406,6 +406,29 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("keeps the selection on a card whose own stop moves inside it as it opens", () => {
+    // Only the innermost labelled container is a group, so opening a card that renders a labelled
+    // group of rows takes the card itself out of the ring.
+    mount(`<button id="first">first</button>`);
+    const card = mount(`<section data-section-label="Ports" id="card"><button id="toggle">Ports</button></section>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const cardId = controller.list().find((item) => engine.elementForId(item.id)?.id === "card")!.id;
+    controller.setCurrent(cardId);
+
+    card
+      .querySelector("#card")!
+      .insertAdjacentHTML(
+        "beforeend",
+        `<div data-section-label="Ports rows" id="rows"><button id="joystick">Joystick</button><button id="bus">Bus</button></div>`,
+      );
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).not.toBe("first");
+    expect(card.querySelector("#card")!.contains(engine.elementForId(controller.current()!.id))).toBe(true);
+    engine.stop();
+  });
+
   it("does not restore a remembered item that the page no longer has", () => {
     const page = mount(`<button id="first">first</button><button id="opener">opener</button>`);
     const { controller, engine } = makeEngine();

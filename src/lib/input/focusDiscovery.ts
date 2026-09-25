@@ -269,6 +269,7 @@ export class FocusDiscoveryEngine {
     const previousScope = this.lastScope;
     const scopeChanged = previousScope !== scope.element;
     const leavingId = this.controller.current()?.id;
+    const leavingElement = leavingId ? this.elementForId(leavingId) : null;
     if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
     const nodes = this.collectRingNodes(scope);
@@ -290,6 +291,7 @@ export class FocusDiscoveryEngine {
         until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
       };
     } else if (!scopeChanged) {
+      this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers);
       this.retryPendingReturn(scope.element);
     }
     this.scopeChain = this.computeScopeChain();
@@ -298,6 +300,29 @@ export class FocusDiscoveryEngine {
     // already reflected in this scan, so reacting to them would loop.
     this.observer?.takeRecords();
     this.onAfterAssemble?.();
+  }
+
+  /**
+   * A card stops being a ring stop when it opens and a labelled group appears inside it, because
+   * only the innermost group container is one. The selection then fell to the page's first item;
+   * it moves instead to the outermost stop inside the element it was on.
+   */
+  private followReplacedStop(
+    leavingId: string | undefined,
+    leavingElement: HTMLElement | null,
+    focusItems: readonly FocusItem[],
+    resolvers: Map<string, () => HTMLElement | null>,
+  ): void {
+    if (!leavingId || !leavingElement?.isConnected || focusItems.some((item) => item.id === leavingId)) return;
+    const inside: Array<{ id: string; element: HTMLElement }> = [];
+    for (const item of focusItems) {
+      const element = resolvers.get(item.id)?.() ?? null;
+      if (element && leavingElement.contains(element)) inside.push({ id: item.id, element });
+    }
+    const outermost = inside.find(
+      (entry) => !inside.some((other) => other !== entry && other.element.contains(entry.element)),
+    );
+    if (outermost) this.controller.setCurrent(outermost.id);
   }
 
   private retryPendingReturn(scope: Element): void {
