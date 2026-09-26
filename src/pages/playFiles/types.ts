@@ -144,5 +144,7 @@ export type StoredPlaybackSession = {
   playingOnPhone?: boolean;
   /** Restored paused after such a restart and not resumed since, so Resume starts the tune again. */
   resumeStartsAgain?: boolean;
+  /** The saved device selected while the session was stored; absent in sessions stored before it was recorded. */
+  playbackDeviceId?: string;
   updatedAt: string;
 };

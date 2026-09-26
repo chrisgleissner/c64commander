@@ -11,7 +11,7 @@ import { extractAudioMixerItems as extractAudioMixerItemsFromLib } from "@/lib/c
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import { reportUserError } from "@/lib/uiErrors";
-import type { PlaylistItem } from "./types";
+import type { PlaylistItem, StoredPlaybackSession } from "./types";
 // Re-exported from its owning store so the key and the storage it lives in
 // cannot drift apart. See src/lib/playback/playbackSessionStore.ts.
 export { PLAYBACK_SESSION_KEY } from "@/lib/playback/playbackSessionStore";
@@ -269,6 +269,21 @@ export const shouldDetachPlaybackOnSavedDeviceSwitch = ({
   if (previousDeviceId === null || previousDeviceId === nextDeviceId) return false;
   return isPlaying || isPaused;
 };
+
+/**
+ * True when a stored session belongs to a C64 other than the selected one, so it is restored stopped.
+ * The switch away from that C64 reset it while Play was not mounted to detach (HARD11-002 only runs
+ * there). A tune on the phone is tied to no C64, and a session stored before the device was recorded
+ * restores as it always did.
+ */
+export const isStoredSessionFromAnotherDevice = (
+  session: Pick<StoredPlaybackSession, "isPlaying" | "isPaused" | "playingOnPhone" | "playbackDeviceId">,
+  selectedDeviceId: string,
+): boolean =>
+  (session.isPlaying || session.isPaused) &&
+  session.playingOnPhone !== true &&
+  typeof session.playbackDeviceId === "string" &&
+  session.playbackDeviceId !== selectedDeviceId;
 
 /**
  * Builds the playlist item for a live subsong switch (the subsong picker

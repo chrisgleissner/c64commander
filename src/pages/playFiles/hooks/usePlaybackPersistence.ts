@@ -13,6 +13,7 @@ import {
   buildPlaylistStorageKey,
   isPlaybackSessionRestoreStale,
   isSongCategory,
+  isStoredSessionFromAnotherDevice,
   parseModifiedAt,
 } from "../playFilesUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -29,6 +30,7 @@ import {
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
@@ -456,13 +458,23 @@ export function usePlaybackPersistence({
       return;
     }
     const now = Date.now();
+    const otherDeviceRestore = isStoredSessionFromAnotherDevice(pending, getSavedDevicesSnapshot().selectedDeviceId);
+    if (otherDeviceRestore) {
+      addLog("info", "Restored a session from another device as stopped; the device was switched while it played", {
+        playlistStorageKey,
+        playbackDeviceId: pending.playbackDeviceId,
+      });
+    }
     // A restore claiming "isPlaying" whose last confirmed-live tick is too old
     // to trust (app suspended for a long time, or the C64 was reset/power-cycled
     // by other means while the process was dead) is downgraded to paused instead
     // of arming auto-advance and silently launching a new track on a machine the
     // user did not leave running. See HARD9-064.
     const staleActiveRestore =
-      pending.isPlaying && !pending.isPaused && isPlaybackSessionRestoreStale(pending.updatedAt, now);
+      !otherDeviceRestore &&
+      pending.isPlaying &&
+      !pending.isPaused &&
+      isPlaybackSessionRestoreStale(pending.updatedAt, now);
     // A tune rendering on the phone ends with the app's process; restored as playing, its clock ran over silence and
     // the next track launched by itself. A page that only remounted finds the phone still playing it.
     const endedWithTheApp = pending.isPlaying && !pending.isPaused && pending.playingOnPhone === true;
@@ -473,7 +485,8 @@ export function usePlaybackPersistence({
       });
     }
     // A second restart before Resume finds the session paused, and Resume must still start the tune again.
-    const resumeStartsAgain = phoneStoppedRestore || (pending.isPaused && pending.resumeStartsAgain === true);
+    const resumeStartsAgain =
+      phoneStoppedRestore || (!otherDeviceRestore && pending.isPaused && pending.resumeStartsAgain === true);
     noteRestartedPhoneTune(resumeStartsAgain ? pending.currentItemId : null);
     if (staleActiveRestore) {
       // The designed outcome for a session that is too old to trust, so not a warning.
@@ -490,16 +503,17 @@ export function usePlaybackPersistence({
     });
     setCurrentIndex(matchedIndex);
     // A session that was playing kept playing while the page was away: the stored clock is from the moment it was written.
-    const activeRestore = pending.isPlaying && !pending.isPaused && !staleActiveRestore && !phoneStoppedRestore;
+    const activeRestore =
+      pending.isPlaying && !pending.isPaused && !staleActiveRestore && !phoneStoppedRestore && !otherDeviceRestore;
     const savedAtMs = Date.parse(pending.updatedAt ?? "");
     const sinceSavedMs = activeRestore && Number.isFinite(savedAtMs) ? Math.max(0, now - savedAtMs) : 0;
-    const restoredElapsedMs = Math.max(0, pending.elapsedMs) + sinceSavedMs;
-    const restoredPlayedMs = Math.max(0, pending.playedMs) + sinceSavedMs;
+    const restoredElapsedMs = otherDeviceRestore ? 0 : Math.max(0, pending.elapsedMs) + sinceSavedMs;
+    const restoredPlayedMs = otherDeviceRestore ? 0 : Math.max(0, pending.playedMs) + sinceSavedMs;
     setElapsedMs(restoredElapsedMs);
     setPlayedMs(restoredPlayedMs);
     setDurationMs(pending.durationMs);
-    setIsPlaying(staleActiveRestore || phoneStoppedRestore ? true : pending.isPlaying);
-    setIsPaused(staleActiveRestore || phoneStoppedRestore ? true : pending.isPaused);
+    setIsPlaying(!otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPlaying));
+    setIsPaused(!otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPaused));
     const restoredItem = playlist[matchedIndex];
     if (restoredItem && isSongCategory(restoredItem.category)) {
       setCurrentSubsongCount(restoredItem.subsongCount ?? null);
@@ -531,7 +545,7 @@ export function usePlaybackPersistence({
       trackStartedAtRef.current = null;
       autoAdvanceGuardRef.current = null;
       setAutoAdvanceDueAtMs(null);
-      playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
+      playedClockRef.current.hydrate(restoredPlayedMs, null);
     }
     pendingPlaybackRestoreRef.current = null;
     markSessionRestoreSettled();
@@ -646,6 +660,7 @@ export function usePlaybackPersistence({
       randomSeed: shuffleSeed,
       playingOnPhone: isLocalPlaybackActive(),
       resumeStartsAgain: isPaused && peekRestartedPhoneTune() === currentPlaylistItemId,
+      playbackDeviceId: getSavedDevicesSnapshot().selectedDeviceId,
       updatedAt: new Date().toISOString(),
     };
     writeStoredPlaybackSession(payload);
