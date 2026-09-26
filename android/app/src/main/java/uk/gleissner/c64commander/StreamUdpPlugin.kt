@@ -86,33 +86,11 @@ class StreamUdpPlugin : Plugin() {
   private val streamSenders = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
 
   /**
-   * The only machine whose packets a stream will accept, per stream name.
-   *
-   * Recording the senders (above) makes two-sender interference visible, but it does not make the
-   * picture right: the assembler still sees two independent frame-number spaces interleaved, so
-   * partial frames from one Ultimate are completed with lines from the other. Measured on the wire
-   * with both machines streaming into 239.0.1.64: 20446 and 20436 packets in the same six seconds,
-   * which is what a viewer sees as violent flicker between two different screens.
-   *
-   * Filtering here, before any sequence or frame accounting, is what makes the app show the right
-   * frames on its own rather than depending on the other machine being stopped. Empty means accept
-   * everything, which is also the state while a host name is still being resolved — failing open
-   * for a moment is better than a black screen.
+   * Accepts each stream's packets only from the selected machine. Measured on the wire with two
+   * Ultimates streaming into 239.0.1.64, an unfiltered assembler completed one machine's frames with
+   * the other's lines, which a viewer sees as violent flicker between two screens.
    */
-  private val expectedSource = ConcurrentHashMap<String, InetAddress>()
-
-  /** Packets dropped because they came from a machine other than [expectedSource], per stream. */
-  private val rejectedPackets = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
-
-  /**
-   * The machine whose packets were dropped most recently, per stream.
-   *
-   * Without it a filter mismatch is indistinguishable from a dead stream: the socket receives at
-   * full rate, every packet is dropped, and eight seconds later the card says the stream stopped
-   * arriving. Naming the address the packets DID come from is what turns that into a diagnosis the
-   * user can act on, so it is reported to JS rather than only logged.
-   */
-  private val lastRejectedSource = ConcurrentHashMap<String, InetAddress>()
+  private val senderFilter = StreamSenderFilter(runInBackground = { executor.execute(it) }, logEvery = FOREIGN_LOG_EVERY)
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -266,7 +244,7 @@ class StreamUdpPlugin : Plugin() {
       call.reject("name is required")
       return
     }
-    applyExpectedSource(name, call.getString("host"))
+    senderFilter.retarget(name, call.getString("host"))
     call.resolve(JSObject())
   }
 
@@ -286,9 +264,9 @@ class StreamUdpPlugin : Plugin() {
       return
     }
     val result = JSObject()
-    result.put("rejectedPackets", rejectedPackets[name]?.get() ?: 0L)
-    result.put("lastRejectedSource", lastRejectedSource[name]?.hostAddress)
-    result.put("expectedSource", expectedSource[name]?.hostAddress)
+    result.put("rejectedPackets", senderFilter.rejectedPackets(name))
+    result.put("lastRejectedSource", senderFilter.lastRejectedSource(name)?.hostAddress)
+    result.put("expectedSource", senderFilter.expectedSource(name)?.hostAddress)
     val senders = JSArray()
     streamSenders[name]?.forEach { senders.put(it) }
     result.put("senders", senders)
@@ -303,55 +281,17 @@ class StreamUdpPlugin : Plugin() {
     executor.execute {
       try {
         val identity = UltimateIdent.query(host, timeoutMs)
-        call.resolve(JSObject().put("uniqueId", identity?.uniqueId).put("replyFrom", identity?.replyFrom))
+        call.resolve(
+          JSObject()
+            .put("uniqueId", identity?.uniqueId)
+            .put("hostname", identity?.hostname)
+            .put("replyFrom", identity?.replyFrom),
+        )
       } catch (error: Exception) {
         Log.w(logTag, "Ident query to $host failed", error)
         call.reject("Ident query to $host failed: ${error.message}", error)
       }
     }
-  }
-
-  private fun applyExpectedSource(name: String, host: String?) {
-    // A new filter identity makes the old rejection count a statement about a question nobody is
-    // asking any more, so adopting a sender (or rebinding) starts the diagnosis from zero.
-    rejectedPackets.remove(name)
-    lastRejectedSource.remove(name)
-    val trimmed = host?.trim()?.substringBefore(':')?.takeIf { it.isNotEmpty() }
-    if (trimmed == null) {
-      expectedSource.remove(name)
-      return
-    }
-    executor.execute {
-      try {
-        val resolved = InetAddress.getByName(trimmed)
-        expectedSource[name] = resolved
-        Log.i(logTag, "stream $name: accepting packets only from $trimmed (${resolved.hostAddress})")
-      } catch (error: Exception) {
-        // Leave the filter open rather than dropping every packet for an unresolvable name.
-        expectedSource.remove(name)
-        Log.w(logTag, "stream $name: could not resolve expected sender $trimmed; accepting all", error)
-      }
-    }
-  }
-
-  /**
-   * True when this packet came from a machine the stream was not told to listen to.
-   *
-   * Called per packet on both hot paths, so the common case — filter unset, or the address object
-   * the socket reuses for the same peer — costs a reference compare.
-   */
-  private fun isForeign(name: String, source: InetAddress?): Boolean {
-    val expected = expectedSource[name] ?: return false
-    if (source === expected || source == expected) return false
-    // Reference compare first: the socket reuses one address object per peer, so the common case of
-    // a steady foreign stream costs no map write on a path that runs ~3400 times a second.
-    if (source != null && lastRejectedSource[name] !== source) lastRejectedSource[name] = source
-    val counter = rejectedPackets.getOrPut(name) { java.util.concurrent.atomic.AtomicLong() }
-    val n = counter.incrementAndGet()
-    if (n == 1L || n % FOREIGN_LOG_EVERY == 0L) {
-      Log.w(logTag, "stream $name: dropped $n packet(s) from ${source?.hostAddress} (expected ${expected.hostAddress})")
-    }
-    return true
   }
 
   @PluginMethod
@@ -370,7 +310,7 @@ class StreamUdpPlugin : Plugin() {
     val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
-      applyExpectedSource(name, call.getString("source"))
+      senderFilter.retarget(name, call.getString("source"))
       val socket: DatagramSocket =
         if (group != null) {
           acquireMulticastLock()
@@ -422,8 +362,7 @@ class StreamUdpPlugin : Plugin() {
     }
     closeSocket(name)
     streamSenders.remove(name)
-    rejectedPackets.remove(name)
-    lastRejectedSource.remove(name)
+    senderFilter.clearDiagnostics(name)
     call.resolve(JSObject())
   }
 
@@ -572,8 +511,8 @@ class StreamUdpPlugin : Plugin() {
     result.put("senders", senders)
     // What the sender filter refused, beside what it let through. A stream can look perfectly dead
     // here while the socket is busy; these two say which of the two it is.
-    result.put("rejectedPackets", rejectedPackets["audio"]?.get() ?: 0L)
-    result.put("lastRejectedSource", lastRejectedSource["audio"]?.hostAddress)
+    result.put("rejectedPackets", senderFilter.rejectedPackets("audio"))
+    result.put("lastRejectedSource", senderFilter.lastRejectedSource("audio")?.hostAddress)
     return result
   }
 
@@ -815,7 +754,7 @@ class StreamUdpPlugin : Plugin() {
         }
         // Before any sequence or loss accounting: a foreign packet must not enter this stream's
         // state at all, or it is counted as our sender's loss and mixed into our playback.
-        if (isForeign(name, source)) continue
+        if (senderFilter.isForeign(name, source)) continue
         // PLAYBACK FIRST, telemetry second — the order matters on this thread.
         //
         // This is the URGENT_AUDIO receive thread and it is the real-time path. The base64 encode +
@@ -944,7 +883,7 @@ class StreamUdpPlugin : Plugin() {
             Log.i(logTag, "stream $name: sender $ip (distinct senders now ${assemblySenders.size})")
           }
         }
-        if (isForeign(name, source)) continue
+        if (senderFilter.isForeign(name, source)) continue
         val data = packet.data
         val off = packet.offset
         val len = packet.length
