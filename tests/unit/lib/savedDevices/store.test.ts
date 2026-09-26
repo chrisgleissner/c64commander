@@ -534,6 +534,31 @@ describe("savedDevices store", () => {
     expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(false);
   });
 
+  it("forgets the machine identity when the selected entry's host changes through the connection settings", async () => {
+    const store = await loadStore();
+    const { areSavedEntriesSameDevice } = await import("@/lib/savedDevices/sameDevice");
+    const base = { httpPort: 80, ftpPort: 21, telnetPort: 23, lastKnownProduct: "C64U" as const, hasPassword: false };
+    store.addSavedDevice({ ...base, id: "wired", name: "Wired", host: "192.0.2.46" });
+    store.addSavedDevice({
+      ...base,
+      id: "wireless",
+      name: "Wireless",
+      host: "192.0.2.47",
+      type: "Lab",
+      typeSource: "USER",
+    });
+    for (const id of ["wired", "wireless"]) {
+      store.completeSavedDeviceVerification(id, { product: "C64 Ultimate", hostname: "c64u", unique_id: "5D0464" });
+    }
+    store.selectSavedDevice("wireless");
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(true);
+
+    store.updateSelectedSavedDeviceConnection({ deviceHost: "198.51.100.30", passwordPresent: false });
+
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(false);
+    expect(store.getSelectedSavedDevice()).toMatchObject({ type: "Lab", lastKnownUniqueId: null });
+  });
+
   it("updates inferred type from successful verification after a host change", async () => {
     const store = await loadStore();
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -704,8 +729,8 @@ describe("savedDevices store", () => {
       type: "Lab Ultimate",
       typeSource: "USER",
       lastKnownProduct: "U64E",
-      lastKnownHostname: "u64",
-      lastKnownUniqueId: "UID-U64",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
     });
     expect(store.getSavedDeviceSwitchSummary(initialDeviceId)).toMatchObject({
       verifiedAt: null,

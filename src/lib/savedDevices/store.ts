@@ -787,6 +787,14 @@ export const addSavedDevice = (
   });
 };
 
+const forgetVerifiedIdentityAfterHostEdit = (updated: SavedDevicesSnapshot, deviceId: string | null) =>
+  deviceId === null
+    ? updated
+    : updateRuntime((current) => ({
+        ...current,
+        verifiedByDeviceId: { ...current.verifiedByDeviceId, [deviceId]: null },
+      }));
+
 export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDevice, "id">>) => {
   let hostEdited = false;
   const updated = updateSnapshot((envelope) => {
@@ -841,11 +849,7 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
         : envelope.summaries,
     };
   });
-  if (!hostEdited) return updated;
-  return updateRuntime((current) => ({
-    ...current,
-    verifiedByDeviceId: { ...current.verifiedByDeviceId, [deviceId]: null },
-  }));
+  return forgetVerifiedIdentityAfterHostEdit(updated, hostEdited ? deviceId : null);
 };
 
 export const updateSelectedSavedDeviceConnection = (update: {
@@ -853,7 +857,8 @@ export const updateSelectedSavedDeviceConnection = (update: {
   passwordPresent: boolean;
   httpPort?: number;
 }) => {
-  return updateSnapshot((envelope) => {
+  let hostEditedId: string | null = null;
+  const updated = updateSnapshot((envelope) => {
     let clearSummary = false;
     const selectedDeviceId = envelope.selectedDeviceId;
     const nextDevices = envelope.devices.map((device) =>
@@ -861,6 +866,7 @@ export const updateSelectedSavedDeviceConnection = (update: {
         ? (() => {
             const nextHost = stripSavedDeviceHttpPort(update.deviceHost);
             const hostChanged = nextHost !== device.host;
+            if (hostChanged) hostEditedId = device.id;
             clearSummary = hostChanged && Boolean(envelope.summaries[selectedDeviceId]);
             const nextName = resolveSavedDeviceStoredName(device.name, nextHost, device.nameSource);
             return {
@@ -871,10 +877,8 @@ export const updateSelectedSavedDeviceConnection = (update: {
               type: device.typeSource === "USER" ? device.type : hostChanged ? "" : device.type,
               lastKnownProduct:
                 device.typeSource === "USER" ? device.lastKnownProduct : hostChanged ? null : device.lastKnownProduct,
-              lastKnownHostname:
-                device.typeSource === "USER" ? device.lastKnownHostname : hostChanged ? null : device.lastKnownHostname,
-              lastKnownUniqueId:
-                device.typeSource === "USER" ? device.lastKnownUniqueId : hostChanged ? null : device.lastKnownUniqueId,
+              lastKnownHostname: hostChanged ? null : device.lastKnownHostname,
+              lastKnownUniqueId: hostChanged ? null : device.lastKnownUniqueId,
               httpPort: update.httpPort ?? splitSavedDeviceHostAndHttpPort(update.deviceHost).httpPort,
               hasPassword: update.passwordPresent,
             };
@@ -893,6 +897,7 @@ export const updateSelectedSavedDeviceConnection = (update: {
         : envelope.summaries,
     };
   });
+  return forgetVerifiedIdentityAfterHostEdit(updated, hostEditedId);
 };
 
 export const updateSelectedSavedDevicePorts = (update: { ftpPort?: number; telnetPort?: number }) => {
