@@ -590,7 +590,7 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(button.textContent).toContain("U64");
   });
 
-  it("disables the C64U source and says why while no C64 Ultimate is connected", () => {
+  it("disables the Ultimate source and says a device is needed, without naming one model, while none is connected", () => {
     // Offline this opened an empty browser that said only "No matching items in this folder".
     render(
       <DisplayProfileProvider>
@@ -622,7 +622,8 @@ describe("ItemSelectionDialog display profiles", () => {
     );
 
     expect(screen.getByTestId("import-option-c64u")).toBeDisabled();
-    expect(screen.getByTestId("import-option-c64u-unavailable")).toHaveTextContent("Needs a connected C64 Ultimate");
+    expect(screen.getByTestId("import-option-c64u-unavailable")).toHaveTextContent("Needs a connected device");
+    expect(screen.getByTestId("import-option-c64u-unavailable")).not.toHaveTextContent("C64 Ultimate");
   });
 
   it("shows the local source label in the selection heading", async () => {

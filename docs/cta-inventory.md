@@ -450,7 +450,7 @@ Disk library: New disk — button — `new-disk-open` — R✅ I✅ _(flag `new_
 
 Per-disk overflow menu (Set group / Rename / Remove) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
 
-Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / C64U / CommoServe — buttons — `import-option-*` — R✅ I✅.
+Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / connected Ultimate (named after its product: C64U, U64, U64E, U64E2 or U2) / CommoServe — buttons — `import-option-*` — R✅ I✅.
 
 ### 4.4 Config (`/config`)
 
@@ -1207,7 +1207,9 @@ The sheet has three stages: pick a source, browse or search it, confirm the sele
 
 **Source picker** — Local / C64U / HVSC / CommoServe — buttons — `import-option-*`
 (`import-option-{local,c64u,hvsc,commoserve}`). HVSC and CommoServe appear only when
-their feature flag and library state allow it.
+their feature flag and library state allow it. The Ultimate button is named after the connected
+product (C64U, U64, U64E, U64E2 or U2; C64U when the product is unknown), and while no device is
+connected it is disabled with the reason `import-option-c64u-unavailable` ("Needs a connected device").
 
 **Header**
 

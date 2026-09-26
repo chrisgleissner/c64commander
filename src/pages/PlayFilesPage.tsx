@@ -53,6 +53,7 @@ import {
 } from "@/lib/playback/fileTypes";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { useUltimateSourceLocation } from "@/lib/sourceNavigation/useUltimateSourceLocation";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { getHvscSubsongDurationsSeconds, getHvscSubsongTitles } from "@/lib/hvsc";
@@ -1016,8 +1017,8 @@ export default function PlayFilesPage() {
     });
   }, [addItemsProgress.status, browserOpen]);
 
+  const ultimateSource = useUltimateSourceLocation(status.deviceInfo?.product, status.state !== "OFFLINE_NO_DEMO");
   const sourceGroups: SourceGroup[] = useMemo(() => {
-    const ultimateSource = { ...createUltimateSourceLocation(), isAvailable: status.state !== "OFFLINE_NO_DEMO" };
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
@@ -1036,7 +1037,7 @@ export default function PlayFilesPage() {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources, status.state]);
+  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources, ultimateSource]);
 
   const updatePlaylistItemConfigRef = useCallback(
     (
@@ -1262,12 +1263,12 @@ export default function PlayFilesPage() {
   const configPickerSourceGroups = useMemo((): SourceGroup[] => {
     if (!configPickerState) return [];
     if (configPickerState.sourceType === "ultimate") {
-      return [{ label: SOURCE_LABELS.c64u, sources: [createUltimateSourceLocation()] }];
+      return [{ label: SOURCE_LABELS.c64u, sources: [createUltimateSourceLocation({ name: ultimateSource.name })] }];
     }
     const source = localSources.find((entry) => entry.id === configPickerState.sourceId);
     if (!source) return [];
     return [{ label: SOURCE_LABELS.local, sources: [createLocalSourceLocation(source)] }];
-  }, [configPickerState, localSources]);
+  }, [configPickerState, localSources, ultimateSource.name]);
 
   const configPickerInitialSourceId = configPickerSourceGroups[0]?.sources[0]?.id ?? null;
 

@@ -528,7 +528,7 @@ export const ItemSelectionDialog = ({
                           className="whitespace-normal text-left text-xs text-muted-foreground"
                           data-testid="import-option-c64u-unavailable"
                         >
-                          Needs a connected C64 Ultimate
+                          Needs a connected device
                         </span>
                       )}
                     </span>

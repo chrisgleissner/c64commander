@@ -6,6 +6,7 @@ import path from "node:path";
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlagsRegistry.generated";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { resolveUltimateSourceName } from "@/lib/sourceNavigation/useUltimateSourceLocation";
 
 /*
  * The iOS Maestro flows failed on three text anchors that production has never presented as a
@@ -605,9 +606,9 @@ describe("iOS CI flow anchors are all bound to production", () => {
     expect(unbound, "a CI flow steers on an anchor no test binds to production").toEqual([]);
   });
 
-  it("proves the C64U source anchor falls back to the static label", () => {
-    // ItemSelectionDialog names the button after the source's own name, so the anchor is only
-    // "C64U" while the Play page builds that source without one.
+  it("proves the C64U source anchor matches the name the Play page gives the mock's product", () => {
+    // ItemSelectionDialog names the button after the source's own name, and the Play page names the
+    // source after the connected product, so the anchor holds only while the iOS mock reports a C64U.
     const dialog = readSource("src/components/itemSelection/ItemSelectionDialog.tsx");
     expect(dialog).toContain(
       "aria-label={`Add file / folder from ${c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}`}",
@@ -615,7 +616,10 @@ describe("iOS CI flow anchors are all bound to production", () => {
     expect(SOURCE_LABELS.c64u).toBe("C64U");
 
     const playPage = readSource("src/pages/PlayFilesPage.tsx");
-    expect(playPage).toContain("createUltimateSourceLocation()");
-    expect(playPage).not.toContain("createUltimateSourceLocation({");
+    expect(playPage).toContain("useUltimateSourceLocation(status.deviceInfo?.product,");
+    const mockProduct = /product:\s*"([^"]+)"/.exec(readSource("scripts/maestro-external-mock.mjs"))?.[1];
+    expect(mockProduct).toBe("C64 Ultimate");
+    expect(resolveUltimateSourceName(mockProduct)).toBe("C64U");
+    expect(resolveUltimateSourceName(null)).toBe("C64U");
   });
 });

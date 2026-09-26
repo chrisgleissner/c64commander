@@ -93,6 +93,7 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { useUltimateSourceLocation } from "@/lib/sourceNavigation/useUltimateSourceLocation";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { getLocalSourceListingMode, requireLocalSourceEntries } from "@/lib/sourceNavigation/localSourcesStore";
@@ -392,8 +393,8 @@ export const HomeDiskManager = () => {
 
   const localSourcesById = useMemo(() => new Map(localSources.map((source) => [source.id, source])), [localSources]);
 
+  const ultimateSource = useUltimateSourceLocation(status.deviceInfo?.product, status.state !== "OFFLINE_NO_DEMO");
   const sourceGroups: SourceGroup[] = useMemo(() => {
-    const ultimateSource = { ...createUltimateSourceLocation(), isAvailable: status.state !== "OFFLINE_NO_DEMO" };
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
@@ -406,7 +407,7 @@ export const HomeDiskManager = () => {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, localSources, status.state]);
+  }, [archiveConfig, commoserveEnabled, localSources, ultimateSource]);
   const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
     if (!commoserveEnabled) return {};
     return { [archiveConfig.id]: archiveConfig };
