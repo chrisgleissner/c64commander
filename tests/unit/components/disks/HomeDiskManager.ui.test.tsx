@@ -41,9 +41,11 @@ const createMockDrive = (overrides: any = {}) => ({
 });
 
 // Mocks
+const routingEpochRef = vi.hoisted(() => ({ current: 0 }));
+
 vi.mock("@/hooks/useC64Connection", () => ({
-  useConnectionRoutingEpoch: () => 0,
-  getC64DrivesQueryKey: () => ["c64-drives", 0],
+  useConnectionRoutingEpoch: () => routingEpochRef.current,
+  getC64DrivesQueryKey: () => ["c64-drives", routingEpochRef.current],
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",
@@ -613,6 +615,33 @@ describe("HomeDiskManager UI & Interactions", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
     await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
+    mockApi.driveOn.mockReset();
+    (mountDiskToDrive as any).mockReset();
+  });
+
+  it("does not carry a drive the last device's mount turned on over to the next device", async () => {
+    const disk = createMockDisk({ id: "game", name: "Game", path: "/game.d64" });
+    mockApi.driveOn.mockResolvedValue(undefined);
+    (mountDiskToDrive as any).mockResolvedValue({ persistence: "device-native" });
+    (useDiskLibrary as any).mockReturnValue({ disks: [disk], runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    let drivesResult: { data?: unknown; dataUpdatedAt: number } = {
+      data: { drives: [{ a: createMockDrive({ bus_id: 8, enabled: false }) }, { b: createMockDrive({ bus_id: 9 }) }] },
+      dataUpdatedAt: 1,
+    };
+    (useC64Drives as any).mockImplementation(() => drivesResult);
+
+    const view = render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /Drive A/i }));
+    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
+
+    routingEpochRef.current = 1;
+    drivesResult = { data: undefined, dataUpdatedAt: 0 };
+    view.rerender(<HomeDiskManager />);
+
+    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toBeDisabled());
+    expect(screen.getByTestId("drive-power-toggle-a")).not.toHaveTextContent("Turn Off");
+    routingEpochRef.current = 0;
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
   });

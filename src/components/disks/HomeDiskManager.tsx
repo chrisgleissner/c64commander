@@ -45,7 +45,13 @@ import {
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { toast } from "@/hooks/use-toast";
-import { getC64DrivesQueryKey, useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
+import {
+  getC64DrivesQueryKey,
+  useC64ConfigItems,
+  useC64Connection,
+  useC64Drives,
+  useConnectionRoutingEpoch,
+} from "@/hooks/useC64Connection";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -278,6 +284,16 @@ export const HomeDiskManager = () => {
   const mountCompletionGenerationRef = useRef<Record<DriveKey, number>>({ a: 0, b: 0 });
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
   const drivePowerOverrideSetAtRef = useRef<Record<string, number>>({});
+  const routingEpoch = useConnectionRoutingEpoch();
+  // What this page assumed about the last device's drives must not stand for the next one's.
+  useEffect(() => {
+    const generations = mountCompletionGenerationRef.current;
+    mountCompletionGenerationRef.current = { a: generations.a + 1, b: generations.b + 1 };
+    mountedByDriveSetAtRef.current = {};
+    drivePowerOverrideSetAtRef.current = {};
+    setMountedByDrive({});
+    setDrivePowerOverride({});
+  }, [routingEpoch]);
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [driveResetPending, setDriveResetPending] = useState<Record<string, boolean>>({});
   const [driveMutationPending, setDriveMutationPending] = useState<Record<string, boolean>>({});
