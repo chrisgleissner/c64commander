@@ -750,6 +750,7 @@ beforeEach(() => {
   userInterfacePayloadRef.current = undefined;
   keyboardLightingPayloadRef.current = undefined;
   c64ApiMockRef.current = {
+    getDeviceHost: () => "c64u",
     setConfigValue: vi.fn().mockResolvedValue({}),
     resetDrive: vi.fn().mockResolvedValue({}),
     writeMemory: vi.fn().mockResolvedValue({}),

@@ -279,7 +279,7 @@ vi.mock("@/lib/logging", async () => {
 });
 
 vi.mock("@/lib/c64api", () => ({
-  getC64API: () => ({}),
+  getC64API: () => ({ getDeviceHost: () => "c64u" }),
   resolveDeviceHostFromStorage: () => "c64u",
 }));
 
@@ -754,7 +754,7 @@ describe("HomePage RAM actions", () => {
 
     await waitFor(() =>
       expect(createSnapshotSpy).toHaveBeenCalledWith(
-        {},
+        expect.objectContaining({ getDeviceHost: expect.any(Function) }),
         {
           type: "program",
           customRanges: undefined,
