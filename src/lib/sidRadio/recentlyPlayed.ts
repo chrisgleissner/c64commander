@@ -20,6 +20,7 @@
  */
 
 import { addErrorLog } from "@/lib/logging";
+import { withoutUnknownPlaceholder } from "@/lib/sid/unknownPlaceholder";
 
 /** What kind of thing was opened. v1 held tunes only; the Home Recent tile shows all three. */
 export type RecentlyPlayedCategory = "sid" | "disk" | "program";
@@ -86,6 +87,10 @@ export const withRecentlyPlayed = (
   return [entry, ...withoutDuplicate].slice(0, Math.max(1, limit));
 };
 
+/** Rows stored before the header parser dropped HVSC's "<?>" placeholder still carry it. */
+const knownAuthor = (value: unknown): string | null =>
+  (typeof value === "string" && withoutUnknownPlaceholder(value)) || null;
+
 /** Build an entry from what the transport knows about the track it just started. */
 export const toRecentlyPlayedEntry = (input: {
   virtualPath: string;
@@ -101,7 +106,7 @@ export const toRecentlyPlayedEntry = (input: {
 }): RecentlyPlayedEntry => ({
   virtualPath: input.virtualPath,
   title: input.title,
-  author: input.author ?? null,
+  author: knownAuthor(input.author),
   folder: folderOf(input.virtualPath),
   category: input.category ?? "sid",
   ...(input.source === undefined ? {} : { source: input.source }),
@@ -125,7 +130,7 @@ const parseEntry = (value: unknown): RecentlyPlayedEntry | null => {
   return {
     virtualPath: row.virtualPath,
     title: typeof row.title === "string" ? row.title : row.virtualPath,
-    author: typeof row.author === "string" ? row.author : null,
+    author: knownAuthor(row.author),
     folder: typeof row.folder === "string" ? row.folder : folderOf(row.virtualPath),
     // Absent on every v1 row, which held tunes only.
     category: typeof row.category === "string" && CATEGORIES.has(row.category) ? row.category : "sid",

@@ -9,6 +9,7 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
+import { withoutUnknownPlaceholder } from "@/lib/sid/unknownPlaceholder";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
 import { readDataFileText, resolveLibraryPath, writeDataFileText } from "./hvscFilesystem";
@@ -133,7 +134,7 @@ const normalizeFolderPath = (path: string) => {
 };
 
 const normalizeDisplayValue = (value: string | null | undefined) =>
-  value?.replace(/_/g, " ").replace(/\s+/g, " ").trim() || null;
+  (value && withoutUnknownPlaceholder(value.replace(/_/g, " ").replace(/\s+/g, " ").trim())) || null;
 
 /**
  * Strip accents, so a phone keyboard can find "Öörni" by typing "oorni".

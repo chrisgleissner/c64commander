@@ -31,6 +31,7 @@ import {
   buildHvscBrowseIndexFromSonglengthSnapshot,
   buildHvscBrowseIndexFromEntries,
   clearHvscBrowseIndexSnapshot,
+  getHvscDisplayAuthor,
   getHvscFoldersWithParent,
   getHvscSongFromBrowseIndex,
   listFolderFromBrowseIndex,
@@ -49,6 +50,11 @@ const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 describe("hvscBrowseIndexStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("falls back to the folder-derived author when an indexed author is HVSC's <?> placeholder", () => {
+    expect(getHvscDisplayAuthor({ canonicalAuthor: "<?>", displayAuthorSeed: "Rob Hubbard" })).toBe("Rob Hubbard");
+    expect(getHvscDisplayAuthor({ canonicalAuthor: "<?>", displayAuthorSeed: null })).toBeNull();
   });
 
   it("builds folder adjacency and lists children without full scan", () => {
