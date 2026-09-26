@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { HvscPreparationPhase, HvscPreparationState } from "@/lib/hvsc";
 import type { HvscStageId } from "@/lib/hvsc/hvscStageModel";
 import { HvscStageSteps } from "./HvscStageSteps";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 
 /** How long the finished steps stay on screen, so the completion is actually seen. */
 const COMPLETION_HOLD_MS = 4000;
@@ -99,6 +100,7 @@ export const HvscControls = ({
   // instant the state left DOWNLOADING/INGESTING, so the completion the user had been waiting for was
   // the one frame never rendered — measured on the device, it went from 73% straight to gone.
   const [justCompleted, setJustCompleted] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const wasWorkingRef = useRef(false);
   useEffect(() => {
     if (working) {
@@ -265,10 +267,25 @@ export const HvscControls = ({
             >
               Reindex HVSC
             </Button>
-            <Button id="hvsc-reset" variant="ghost" size="sm" onClick={onReset} disabled={hvscUpdating}>
+            <Button
+              id="hvsc-reset"
+              variant="ghost"
+              size="sm"
+              onClick={() => setResetConfirmOpen(true)}
+              disabled={hvscUpdating}
+            >
               Reset HVSC
             </Button>
           </div>
+          <ConfirmDestructiveDialog
+            open={resetConfirmOpen}
+            onOpenChange={setResetConfirmOpen}
+            onConfirm={onReset}
+            title="Reset HVSC?"
+            description="This removes the HVSC library installed in the app. Downloading and preparing it again takes a while."
+            confirmLabel="Reset"
+            idPrefix="hvsc-reset"
+          />
         </div>
       ) : null}
     </CollapsibleSection>

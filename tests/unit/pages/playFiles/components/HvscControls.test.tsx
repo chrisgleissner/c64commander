@@ -245,6 +245,9 @@ describe("HvscControls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ingest HVSC" }));
     fireEvent.click(screen.getByRole("button", { name: "Reindex HVSC" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset HVSC" }));
+    expect(onReset).not.toHaveBeenCalled();
+    expect(screen.getByTestId("hvsc-reset-cancel")).toHaveFocus();
+    fireEvent.click(screen.getByTestId("hvsc-reset-confirm"));
 
     expect(onInstall).toHaveBeenCalledTimes(1);
     expect(onIngest).toHaveBeenCalledTimes(1);
