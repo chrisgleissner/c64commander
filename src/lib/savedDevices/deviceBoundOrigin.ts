@@ -11,6 +11,7 @@ import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getPasswordForDevice } from "@/lib/secureStorage";
 import { getSavedDeviceById, getSelectedSavedDevice } from "./store";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
+import { getConnectedDeviceUniqueId } from "@/lib/connection/connectedDeviceIdentity";
 
 export type OriginDeviceUnavailableReason =
   "origin-device-unreachable" | "origin-device-removed" | "origin-device-mismatch" | "origin-file-missing";
@@ -83,19 +84,17 @@ export const buildSelectedDeviceBoundOrigin = (originPath: string): DeviceBoundC
   };
 };
 
+// A selected entry not yet stamped with an id (a second address of a known device) is identified by
+// what the connected device reports, so its files are not treated as another machine's.
+const selectedDeviceUniqueId = (storedUniqueId: string | null) => storedUniqueId || getConnectedDeviceUniqueId();
+
 export const isOriginOnSelectedDevice = (origin?: DeviceBoundContentOrigin | null) => {
   if (!origin || origin.sourceKind !== "ultimate") return true;
   const selectedDevice = getSelectedSavedDevice();
   if (!selectedDevice) return false;
   if (origin.originDeviceId === selectedDevice.id) return true;
-  if (
-    origin.originDeviceLastKnownUniqueId &&
-    selectedDevice.lastKnownUniqueId &&
-    origin.originDeviceLastKnownUniqueId === selectedDevice.lastKnownUniqueId
-  ) {
-    return true;
-  }
-  return false;
+  if (!origin.originDeviceLastKnownUniqueId) return false;
+  return origin.originDeviceLastKnownUniqueId === selectedDeviceUniqueId(selectedDevice.lastKnownUniqueId);
 };
 
 export const getOriginDeviceUnavailableReason = (origin?: DeviceBoundContentOrigin | null) => {

@@ -78,6 +78,7 @@ import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demoOfferMemory";
 import { isNativePlatform } from "@/lib/native/platform";
 import { clearProbeFailureLog, isNewProbeFailure, noteProbeAnswered } from "@/lib/connection/probeFailureLog";
+import { setConnectedDeviceUniqueId } from "@/lib/connection/connectedDeviceIdentity";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -526,6 +527,7 @@ export const setSavedDeviceSwitchProbeWindow = (open: boolean) => {
 
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
   snapshot = Object.freeze({ ...snapshot, ...patch });
+  setConnectedDeviceUniqueId(snapshot.state === "REAL_CONNECTED" ? snapshot.deviceInfo?.unique_id : null);
   // The simulated device's identity is not the saved device's: stamping it there made the user's
   // real device read as a mismatch the next time it answered.
   if (patch.deviceInfo && snapshot.state !== "DEMO_ACTIVE" && !isSimulatedDeviceTarget()) {

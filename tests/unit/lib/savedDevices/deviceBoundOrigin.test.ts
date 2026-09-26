@@ -2,18 +2,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fetchUltimateOriginBlob,
   getOriginDeviceUnavailableReason,
+  isOriginOnSelectedDevice,
   OriginContentUnavailableError,
   type DeviceBoundContentOrigin,
 } from "@/lib/savedDevices/deviceBoundOrigin";
 
-const { mockReadFtpFile, mockListFtpDirectory, mockGetPasswordForDevice, storeState } = vi.hoisted(() => ({
-  mockReadFtpFile: vi.fn(),
-  mockListFtpDirectory: vi.fn(),
-  mockGetPasswordForDevice: vi.fn(async () => "secret"),
-  storeState: {
-    selectedDevice: null as Record<string, unknown> | null,
-    devicesById: {} as Record<string, Record<string, unknown>>,
-  },
+const { mockReadFtpFile, mockListFtpDirectory, mockGetPasswordForDevice, storeState, connectionState } = vi.hoisted(
+  () => ({
+    mockReadFtpFile: vi.fn(),
+    mockListFtpDirectory: vi.fn(),
+    mockGetPasswordForDevice: vi.fn(async () => "secret"),
+    storeState: {
+      selectedDevice: null as Record<string, unknown> | null,
+      devicesById: {} as Record<string, Record<string, unknown>>,
+    },
+    connectionState: { uniqueId: null as string | null },
+  }),
+);
+
+vi.mock("@/lib/connection/connectedDeviceIdentity", () => ({
+  getConnectedDeviceUniqueId: () => connectionState.uniqueId,
 }));
 
 vi.mock("@/lib/ftp/ftpClient", () => ({
@@ -56,6 +64,36 @@ describe("deviceBoundOrigin", () => {
         lastKnownUniqueId: "UID-1",
       },
     };
+  });
+
+  describe("isOriginOnSelectedDevice", () => {
+    beforeEach(() => {
+      connectionState.uniqueId = null;
+    });
+
+    // The same Ultimate saved a second time under its other network address, not yet stamped with an id.
+    const secondAddressEntry = { id: "device-2", host: "198.51.100.20", ftpPort: 21, lastKnownUniqueId: null };
+
+    it("treats a file from the same machine as local when the selected entry has no stored id yet", () => {
+      storeState.selectedDevice = secondAddressEntry;
+      connectionState.uniqueId = "UID-1";
+
+      expect(isOriginOnSelectedDevice(origin)).toBe(true);
+    });
+
+    it("keeps a file from another machine remote when the connected device reports a different id", () => {
+      storeState.selectedDevice = secondAddressEntry;
+      connectionState.uniqueId = "UID-9";
+
+      expect(isOriginOnSelectedDevice(origin)).toBe(false);
+    });
+
+    it("prefers the stored id over the connected device's report", () => {
+      storeState.selectedDevice = { ...secondAddressEntry, lastKnownUniqueId: "UID-2" };
+      connectionState.uniqueId = "UID-1";
+
+      expect(isOriginOnSelectedDevice(origin)).toBe(false);
+    });
   });
 
   it("returns origin-device-removed when the saved origin device no longer exists", () => {
