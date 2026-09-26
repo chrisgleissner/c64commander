@@ -6,7 +6,7 @@ describe("LAN host policy", () => {
   // HARD27-030: `u64` is the second name the app's own discovery probes for, and
   // the previous fixed allow-list refused it.
   it("accepts a LAN name whose addresses are all private", async () => {
-    const resolve = vi.fn(async () => ["192.168.1.64"]);
+    const resolve = vi.fn(async () => ["192.168.0.10"]);
     const policy = createLanHostPolicy({ resolve });
 
     await expect(policy.isLanHost("u64")).resolves.toBe(true);
@@ -20,7 +20,7 @@ describe("LAN host policy", () => {
   });
 
   it("refuses a name whose addresses are only partly private", async () => {
-    const policy = createLanHostPolicy({ resolve: async () => ["192.168.1.64", "93.184.216.34"] });
+    const policy = createLanHostPolicy({ resolve: async () => ["192.168.0.10", "93.184.216.34"] });
     await expect(policy.isLanHost("rebind.example.com")).resolves.toBe(false);
   });
 
@@ -40,7 +40,7 @@ describe("LAN host policy", () => {
     const resolve = vi.fn(async () => []);
     const policy = createLanHostPolicy({ resolve });
 
-    await expect(policy.isLanHost("192.168.1.64")).resolves.toBe(true);
+    await expect(policy.isLanHost("192.168.0.10")).resolves.toBe(true);
     await expect(policy.isLanHost("c64u")).resolves.toBe(true);
     await expect(policy.isLanHost("ultimate.local")).resolves.toBe(true);
     await expect(policy.isLanHost("[fe80::1]:80")).resolves.toBe(true);
