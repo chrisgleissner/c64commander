@@ -43,6 +43,7 @@ const createMockDrive = (overrides: any = {}) => ({
 // Mocks
 vi.mock("@/hooks/useC64Connection", () => ({
   useConnectionRoutingEpoch: () => 0,
+  getC64DrivesQueryKey: () => ["c64-drives", 0],
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",
@@ -591,6 +592,27 @@ describe("HomeDiskManager UI & Interactions", () => {
         expect.objectContaining({ description: "Game mounted in Drive B, which was off and is now on" }),
       ),
     );
+    mockApi.driveOn.mockReset();
+    (mountDiskToDrive as any).mockReset();
+  });
+
+  it("shows a drive that a mount turned on as on before the next drive poll reports it", async () => {
+    const disk = createMockDisk({ id: "game", name: "Game", path: "/game.d64" });
+    mockApi.driveOn.mockResolvedValue(undefined);
+    (mountDiskToDrive as any).mockResolvedValue({ persistence: "device-native" });
+    (useDiskLibrary as any).mockReturnValue({ disks: [disk], runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: createMockDrive({ bus_id: 8, enabled: false }) }, { b: createMockDrive({ bus_id: 9 }) }] },
+      dataUpdatedAt: 1,
+    });
+
+    render(<HomeDiskManager />);
+    expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn On");
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+
+    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
   });

@@ -45,7 +45,7 @@ import {
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { toast } from "@/hooks/use-toast";
-import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
+import { getC64DrivesQueryKey, useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -321,7 +321,7 @@ export const HomeDiskManager = () => {
   const [softIecConfigPending, setSoftIecConfigPending] = useState(false);
   const refreshDrivesFromDevice = useCallback(async () => {
     await queryClient.fetchQuery({
-      queryKey: ["c64-drives"],
+      queryKey: getC64DrivesQueryKey(),
       queryFn: () => api.getDrives(),
       staleTime: 0,
     });
@@ -699,6 +699,10 @@ export const HomeDiskManager = () => {
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
+      if (poweredOn) {
+        drivePowerOverrideSetAtRef.current[drive] = Date.now();
+        setDrivePowerOverride((prev) => ({ ...prev, [drive]: true }));
+      }
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk mounted",

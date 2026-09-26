@@ -454,6 +454,9 @@ const getConnectionRoutingEpoch = () => connectionRoutingEpoch;
 export const useConnectionRoutingEpoch = () =>
   useSyncExternalStore(subscribeConnectionRoutingEpoch, getConnectionRoutingEpoch, getConnectionRoutingEpoch);
 
+/** Drive state belongs to one device: keyed by routing epoch, a switch never shows or reuses the last device's. */
+export const getC64DrivesQueryKey = () => ["c64-drives", getConnectionRoutingEpoch()] as const;
+
 export function useC64ConfigItems(category: string, items: string[], enabled = true, options: C64QueryOptions = {}) {
   const itemKey = items.join("|");
   const routingEpoch = useConnectionRoutingEpoch();
@@ -652,8 +655,10 @@ export function useC64Drives(options: C64QueryOptions = {}) {
     void queryClient.cancelQueries({ queryKey: ["c64-drives"], type: "active" });
   }, [pollingPaused, queryClient]);
 
+  const routingEpoch = useConnectionRoutingEpoch();
+
   return useQuery({
-    queryKey: ["c64-drives"],
+    queryKey: ["c64-drives", routingEpoch],
     queryFn: async () => {
       const api = getC64API();
       return api.getDrives({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
