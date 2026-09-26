@@ -14,9 +14,9 @@ type ListDirectory = (path: string) => Promise<{ entries: DirectoryEntry[] }>;
 /**
  * The device's top-level storage folders that hold something.
  *
- * An Ultimate lists a card slot as a root even with no card in it (a C64 Ultimate lists "SD" empty and
- * refuses writes there), so a root chosen by name alone can be one nothing can be written to. Empty
- * roots are left out unless every root is empty.
+ * An Ultimate lists a card slot as a root even with no card in it, and refuses writes there. Listing
+ * such a slot answers with nothing or, from a C64 Ultimate, with one entry echoing the slot's own name
+ * ("/SD" lists "SD"). Roots like that are left out unless every root is.
  */
 export const listPopulatedStorageRoots = async (listDirectory: ListDirectory): Promise<string[]> => {
   const root = await listDirectory("/");
@@ -25,7 +25,7 @@ export const listPopulatedStorageRoots = async (listDirectory: ListDirectory): P
   for (const name of names) {
     try {
       const listing = await listDirectory(`/${name}`);
-      if (listing.entries.length > 0) populated.push(name);
+      if (listing.entries.some((entry) => entry.name !== name)) populated.push(name);
     } catch (error) {
       addLog("warn", "Could not list a storage root; leaving it out of the storage choice", {
         root: name,

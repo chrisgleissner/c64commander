@@ -30,7 +30,7 @@ describe("buildDiskWriteBackDependencies", () => {
         { name: "Temp", type: "dir" },
         { name: "USB2", type: "dir" },
       ],
-      "/SD": [],
+      "/SD": [{ name: "SD", type: "dir" }],
       "/Temp": [],
       "/USB2": [{ name: "Games", type: "dir" }],
     };

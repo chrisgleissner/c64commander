@@ -39,6 +39,20 @@ describe("listPopulatedStorageRoots", () => {
     expect(pickNewDiskFolder(roots)).toBe("/USB2");
   });
 
+  it("treats a card slot whose listing only echoes its own name as empty", async () => {
+    const listDirectory = device({
+      "/": [dir("SD"), dir("Temp"), dir("USB2")],
+      "/SD": [dir("SD")],
+      "/Temp": [],
+      "/USB2": [dir("Games")],
+    });
+
+    const roots = await listPopulatedStorageRoots(listDirectory);
+
+    expect(roots).toEqual(["USB2"]);
+    expect(pickNewDiskFolder(roots)).toBe("/USB2");
+  });
+
   it("keeps every root when all of them are empty", async () => {
     const listDirectory = device({ "/": [dir("SD"), dir("Temp")], "/SD": [], "/Temp": [] });
 
