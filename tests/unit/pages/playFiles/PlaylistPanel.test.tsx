@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -53,6 +53,7 @@ type HarnessProps = {
   playlistTypeFilters?: PlayFileCategory[];
   playlistFilterText?: string;
   hiddenItemCount?: number;
+  playlistItemCount?: number;
 };
 
 const PlaylistPanelHarness = ({
@@ -65,6 +66,7 @@ const PlaylistPanelHarness = ({
   playlistTypeFilters = ["sid", "mod", "prg", "crt", "disk"],
   playlistFilterText = "",
   hiddenItemCount = 0,
+  playlistItemCount = items.length,
 }: HarnessProps) => {
   const { setOverride } = useDisplayProfilePreference();
 
@@ -96,6 +98,7 @@ const PlaylistPanelHarness = ({
         })[category] ?? category
       }
       hasPlaylist={hasPlaylist}
+      playlistItemCount={playlistItemCount}
       onAddItems={onAddItems}
       onClearPlaylist={onClearPlaylist}
       playlistFilterText={playlistFilterText}
@@ -178,10 +181,9 @@ describe("PlaylistPanel", () => {
     expect(screen.getByTestId("playlist-remove-selected-label")).toHaveTextContent("Remove selected items");
 
     fireEvent.click(screen.getByRole("button", { name: "Add items to playlist" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear playlist" }));
 
     expect(onAddItems).toHaveBeenCalledTimes(1);
-    expect(onClearPlaylist).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Clear playlist" })).toBeVisible();
 
     rerender(
       <DisplayProfileProvider>
@@ -199,7 +201,7 @@ describe("PlaylistPanel", () => {
     expect(screen.queryByRole("button", { name: "Clear playlist" })).not.toBeInTheDocument();
   });
 
-  it("registers playlist header CTAs into the keypad focus ring", () => {
+  it("registers playlist header CTAs into the keypad focus ring, and OK twice on Clear playlist cancels", async () => {
     const onAddItems = vi.fn();
     const onClearPlaylist = vi.fn();
 
@@ -227,6 +229,48 @@ describe("PlaylistPanel", () => {
     expect(clearPlaylist).toHaveFocus();
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(await screen.findByTestId("clear-playlist-dialog")).toBeVisible();
+    expect(onClearPlaylist).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId("clear-playlist-cancel")).toHaveFocus());
+
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    await waitFor(() => expect(screen.queryByTestId("clear-playlist-dialog")).not.toBeInTheDocument());
+    expect(onClearPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("asks before clearing, naming how many items go, and does not clear on the first press", async () => {
+    const onClearPlaylist = vi.fn();
+    renderPanel({ onClearPlaylist, playlistItemCount: 350 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear playlist" }));
+
+    const dialog = await screen.findByTestId("clear-playlist-dialog");
+    expect(dialog).toHaveTextContent("This removes all 350 items from the playlist. It cannot be undone.");
+    expect(onClearPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("clears the playlist once when the confirmation's Clear is pressed", async () => {
+    const onClearPlaylist = vi.fn();
+    renderPanel({ onClearPlaylist, playlistItemCount: 350 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear playlist" }));
+    fireEvent.click(await screen.findByTestId("clear-playlist-confirm"));
+
     expect(onClearPlaylist).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("clear-playlist-dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps the playlist when the confirmation is cancelled", async () => {
+    const onClearPlaylist = vi.fn();
+    renderPanel({ onClearPlaylist });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear playlist" }));
+    expect(await screen.findByTestId("clear-playlist-dialog")).toHaveTextContent(
+      "This removes the 1 item in the playlist.",
+    );
+    fireEvent.click(screen.getByTestId("clear-playlist-cancel"));
+
+    await waitFor(() => expect(screen.queryByTestId("clear-playlist-dialog")).not.toBeInTheDocument());
+    expect(onClearPlaylist).not.toHaveBeenCalled();
   });
 });

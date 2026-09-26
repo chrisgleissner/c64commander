@@ -2841,6 +2841,7 @@ export default function PlayFilesPage() {
                 onToggleFilter={togglePlaylistTypeFilter}
                 formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
+                playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
                 onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
                 playlistFilterText={playlistFilterInputText}

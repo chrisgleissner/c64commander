@@ -356,6 +356,13 @@ not-connected / empty / single-device).
 - Filter files — text — `list-filter-input` — R✅ I✅
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
+- Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
+  **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
+  how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,
+  not yet enumerated on hardware:
+  - Cancel — button — `clear-playlist-cancel` — takes focus when the dialog opens, so OK pressed twice
+    keeps the playlist
+  - Clear — button (danger) — `clear-playlist-confirm` — removes every playlist item
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
 - HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
 - **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
