@@ -126,6 +126,7 @@ export class AudioMirrorController {
     now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
     pollArrival: () => this.nativeArrivalAdvanced(),
     onStale: (silentMs) => this.reportStreamWentSilent(silentMs),
+    onQuietStart: () => void this.lookForRefusedSender(),
   });
   private batcher = new AudioBatcher();
   private playbackBuffer: AudioPlaybackBuffer | null = null;
@@ -385,6 +386,21 @@ export class AudioMirrorController {
       rejectedPackets: mismatch.rejectedPackets,
     });
     this.update({ error: describeSenderMismatch(mismatch, "audio"), senderMismatch: mismatch });
+  }
+
+  /** Nothing has arrived since the start: report a refused sender now rather than after the full timeout. */
+  private async lookForRefusedSender(): Promise<void> {
+    const receiver = this.receiver;
+    const diagnostics = (await receiver?.readDiagnostics?.()) ?? null;
+    if (this.receiver !== receiver || this.snapshot.state !== "live") return;
+    const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
+    if (!mismatch) return;
+    addLog("info", "Audio Mirror: a new stream is arriving from an address the sender filter refuses", {
+      source: mismatch.source,
+      expected: mismatch.expected,
+      rejectedPackets: mismatch.rejectedPackets,
+    });
+    this.update({ senderMismatch: mismatch });
   }
 
   /**

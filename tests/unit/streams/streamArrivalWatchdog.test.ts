@@ -111,4 +111,43 @@ describe("StreamArrivalWatchdog", () => {
     await advance(30_000);
     expect(onStale).not.toHaveBeenCalled();
   });
+
+  describe("quiet start", () => {
+    const makeQuietWatchdog = (onQuietStart: () => void) =>
+      new StreamArrivalWatchdog({ onStale: vi.fn(), onQuietStart, now, timeoutMs: 8000, checkIntervalMs: 1000 });
+
+    it("reports once, about two seconds in, when nothing has arrived since the start", async () => {
+      const onQuietStart = vi.fn();
+      makeQuietWatchdog(onQuietStart).start();
+
+      await advance(1000);
+      expect(onQuietStart).not.toHaveBeenCalled();
+      await advance(1000);
+      expect(onQuietStart).toHaveBeenCalledTimes(1);
+      await advance(3000);
+      expect(onQuietStart).toHaveBeenCalledTimes(1);
+    });
+
+    it("stays quiet when something arrived after the start", async () => {
+      const onQuietStart = vi.fn();
+      const watchdog = makeQuietWatchdog(onQuietStart);
+      watchdog.start();
+
+      watchdog.noteArrival();
+      await advance(5000);
+
+      expect(onQuietStart).not.toHaveBeenCalled();
+    });
+
+    it("reports again after a restart", async () => {
+      const onQuietStart = vi.fn();
+      const watchdog = makeQuietWatchdog(onQuietStart);
+      watchdog.start();
+      await advance(2000);
+      watchdog.start();
+      await advance(2000);
+
+      expect(onQuietStart).toHaveBeenCalledTimes(2);
+    });
+  });
 });
