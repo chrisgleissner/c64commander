@@ -37,7 +37,7 @@ npm run scope:preflight
 npm run scope:preflight -- --dry-run
 
 # With specific device and C64U host
-ANDROID_SERIAL=<serial from src/deviceRegistry.ts> C64U_HOST=192.168.1.13 npm run scope:preflight
+ANDROID_SERIAL=<serial from src/deviceRegistry.ts> C64U_HOST=192.0.2.64 npm run scope:preflight
 ```
 
 Preflight verifies: Node.js version, adb availability, Android device connected, C64U reachable, app installed.
