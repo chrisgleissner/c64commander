@@ -956,16 +956,10 @@ export const mountDiskToDrive = async (
 ): Promise<DiskMountOutcome> => {
   const startedAt = Date.now();
   const startHost = options.deviceHost ?? api.getDeviceHost();
-  const currentHost = () => api.getDeviceHost();
-  const operation = `mounting ${disk.name}`;
-  const writeBack = options.writeBack && bindCallsToDevice(options.writeBack, startHost, currentHost, operation);
-  const outcome = await mountDiskToDriveUnrecorded(
-    bindCallsToDevice(api, startHost, currentHost, operation),
-    drive,
-    disk,
-    runtimeFile,
-    { ...options, writeBack },
-  );
+  const bind = <T extends object>(target: T) =>
+    bindCallsToDevice(target, startHost, () => api.getDeviceHost(), `mounting ${disk.name}`);
+  const writeBack = options.writeBack && bind(options.writeBack);
+  const outcome = await mountDiskToDriveUnrecorded(bind(api), drive, disk, runtimeFile, { ...options, writeBack });
   noteDiskMountOutcome(startHost, drive, disk.id, outcome.persistence, disk.name, startedAt);
   return outcome;
 };
