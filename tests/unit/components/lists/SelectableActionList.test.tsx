@@ -350,6 +350,17 @@ describe("SelectableActionList", () => {
     expect(screen.queryByText("1 items")).not.toBeInTheDocument();
   });
 
+  it("lets a row's path break after a separator, not inside a word", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    renderList([{ ...items[0]!, subtitle: "/Local/Demos/intro.sid", subtitleTestId: "row-path" }]);
+
+    const path = screen.getByTestId("row-path");
+    expect(path).toHaveTextContent("/Local/Demos/intro.sid");
+    expect(path.querySelectorAll("wbr")).toHaveLength(4);
+  });
+
   it("says an empty list is empty once", () => {
     localStorage.clear();
     setViewportWidth(393);

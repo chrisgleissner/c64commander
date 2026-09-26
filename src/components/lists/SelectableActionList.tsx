@@ -293,7 +293,7 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
               )}
               data-testid={item.subtitleTestId}
             >
-              {item.subtitle}
+              <NameWrap name={item.subtitle} />
             </div>
           ) : null}
           {item.meta ? (
