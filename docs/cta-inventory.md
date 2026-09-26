@@ -772,8 +772,10 @@ ordinary focus-ring CTAs in both output modes.
 
 - Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
-  `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
-  devices/firmware without `machine:input` (kernal-fallback tier); hidden in
+  `remote-input-mode-type` — R✅ I✅ ; Joystick disabled on devices/firmware
+  without `machine:input` (kernal-fallback tier), with the reason shown as text
+  under the toggle row in Type mode (`remote-input-joystick-unavailable-reason`,
+  not interactive, also the Joystick button's accessible description); hidden in
   Game mode. Pinned in a non-scrolling chrome region at the top of the sheet
   (outside the scrollable body) so it is always visible, with Release All
   right-aligned on the same row (see below)

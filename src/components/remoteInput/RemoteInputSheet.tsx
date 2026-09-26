@@ -77,6 +77,7 @@ export type RemoteInputSheetProps = {
 
 /** How long a summoned Game Mode overlay waits, with no interaction at all, before it goes. */
 const GAME_MODE_CHROME_HIDE_MS = 6000;
+const JOYSTICK_UNAVAILABLE_REASON_ID = "remote-input-joystick-unavailable-reason";
 
 const ROTATION_CHOICES: ReadonlyArray<{ label: string; value: DeviceRotation | "auto" }> = [
   { label: "Auto", value: "auto" },
@@ -101,6 +102,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // is wrong on this tier specifically.
   const joystickUnavailableHint =
     tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
+  const showJoystickUnavailableReason = resolved && !tierLoading && !joystickAvailable && session.outputMode === "type";
   // On a compact (small) display the Joystick / Keys / Release All buttons are
   // too wide to share one non-scrolling row, so drop the leading icons on the
   // toggle buttons there (text-only) to reclaim the width.
@@ -551,6 +553,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                     data-testid="remote-input-mode-joystick"
                     disabled={!joystickAvailable}
                     title={!joystickAvailable ? joystickUnavailableHint : undefined}
+                    aria-describedby={showJoystickUnavailableReason ? JOYSTICK_UNAVAILABLE_REASON_ID : undefined}
                     onClick={() => handleOutputModeChange("joystick")}
                   >
                     {isCompactDisplay ? null : <Joystick className="mr-1.5 h-4 w-4" />}
@@ -582,6 +585,15 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   is deliberately absent in Game Mode, so this row has the space. */}
               {exitGameModeToggle}
             </div>
+            {showJoystickUnavailableReason ? (
+              <p
+                id={JOYSTICK_UNAVAILABLE_REASON_ID}
+                className="text-sm text-muted-foreground"
+                data-testid="remote-input-joystick-unavailable-reason"
+              >
+                {joystickUnavailableHint}
+              </p>
+            ) : null}
             {session.outputMode === "joystick" ? (
               // flex-wrap, like the two rows below it: on a 320px screen the stepper
               // and the Game mode button together are wider than the row, and without
