@@ -8,6 +8,9 @@
 
 package uk.gleissner.c64commander
 
+import android.app.ForegroundServiceStartNotAllowedException
+import android.app.Notification
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
@@ -24,7 +27,9 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
+import org.robolectric.shadows.ShadowLog
 import org.robolectric.shadows.ShadowLooper
+import org.robolectric.shadows.ShadowService
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
@@ -50,6 +55,15 @@ class RecordingMediaSessionShadow {
     @Implementation
     protected fun setMetadata(metadata: MediaMetadata?) {
         lastMetadata = metadata
+    }
+}
+
+/** What Android 12+ does when a service calls startForeground() while its app is in the background. */
+@Implements(Service::class)
+class ForegroundStartRefusedShadow : ShadowService() {
+    @Implementation
+    override fun startForeground(id: Int, notification: Notification) {
+        throw ForegroundServiceStartNotAllowedException("startForeground() not allowed from the background")
     }
 }
 
@@ -287,23 +301,48 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
-    fun nullIntentStickyRestartSatisfiesForegroundContractBeforeStopping() {
+    fun nullIntentStickyRestartStopsWithoutCallingStartForeground() {
         controller.create()
 
-        service.onStartCommand(null, 0, 1)
+        val result = service.onStartCommand(null, 0, 1)
 
-        // On O+, this dispatch may have originated from startForegroundService(); failing to
-        // call startForeground() before stopping risks a RemoteServiceException crash
-        // (HARD9-042). A throwaway notification satisfies the contract, then is torn back down —
-        // ShadowService.stopForeground(true) clears lastForegroundNotification but not
-        // lastForegroundNotificationId, so checking the id (>0 = startForeground was called)
-        // together with isForegroundStopped proves the full sequence ran.
         val shadowService = Shadows.shadowOf(service)
-        assertTrue(
-            "Null sticky-restart dispatch must call startForeground before stopping",
-            shadowService.lastForegroundNotificationId > 0,
+        assertEquals(android.app.Service.START_NOT_STICKY, result)
+        assertEquals(
+            "A sticky restart from the background must not call startForeground",
+            0,
+            shadowService.lastForegroundNotificationId,
         )
-        assertTrue("Foreground must be torn back down immediately", shadowService.isForegroundStopped)
+        assertTrue("A sticky restart must stop the service", shadowService.isStoppedBySelf)
+    }
+
+    @Test
+    @Config(shadows = [ForegroundStartRefusedShadow::class])
+    fun nullIntentStickyRestartSurvivesAPlatformThatRefusesForegroundStarts() {
+        controller.create()
+
+        val result = service.onStartCommand(null, 0, 1)
+
+        assertEquals(android.app.Service.START_NOT_STICKY, result)
+        assertTrue(Shadows.shadowOf(service).isStoppedBySelf)
+    }
+
+    @Test
+    @Config(shadows = [ForegroundStartRefusedShadow::class])
+    fun staleGenerationIntentLogsARefusedForegroundStartAndStillStops() {
+        controller.create()
+        setCompanionField("commandGeneration", 5L)
+        ShadowLog.clear()
+
+        val staleIntent = Intent(service, BackgroundExecutionService::class.java)
+        staleIntent.putExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 3L)
+        val result = service.onStartCommand(staleIntent, 0, 7)
+
+        assertEquals(android.app.Service.START_NOT_STICKY, result)
+        assertTrue(Shadows.shadowOf(service).isStoppedBySelf)
+        val logged = ShadowLog.getLogsForTag("BgExecService").single { it.type == android.util.Log.ERROR }
+        assertTrue(logged.msg.contains("startId=7"))
+        assertTrue(logged.throwable is ForegroundServiceStartNotAllowedException)
     }
 
     @Test

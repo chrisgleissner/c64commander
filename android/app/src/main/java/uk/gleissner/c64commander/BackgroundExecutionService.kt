@@ -284,7 +284,9 @@ class BackgroundExecutionService : Service() {
                     "Ignoring sticky restart without command; JS must explicitly re-register background execution",
                     "BackgroundExecutionService"
             )
-            satisfyForegroundContractAndStop(startId)
+            // A sticky restart is not a startForegroundService() call, so there is no foreground
+            // contract to satisfy, and startForeground() from the background throws on Android 12+.
+            stopSelf(startId)
             return START_NOT_STICKY
         }
         val action = intent.action
@@ -545,17 +547,24 @@ class BackgroundExecutionService : Service() {
 
     /**
      * Every start() / updateDueAt() call reaches us via startForegroundService() on O+, which
-     * obligates the service to call startForeground() promptly regardless of which onStartCommand
-     * branch handles it. The stale-generation and null-intent (sticky restart) branches used to
-     * stopSelf() without ever doing so, risking a RemoteServiceException crash (HARD9-042). Satisfy
-     * the contract with a throwaway notification, then immediately tear it back down — but only
-     * when the service isn't already legitimately in the foreground under a newer generation;
-     * otherwise this would tear down that still-active notification out from under it.
+     * obligates the service to call startForeground() promptly even when the command is stale
+     * (HARD9-042). Satisfy it with a throwaway notification unless a newer generation already
+     * holds the foreground, whose notification this would otherwise tear down.
      */
     private fun satisfyForegroundContractAndStop(startId: Int) {
         if (!isRunning) {
-            startForeground(NOTIFICATION_ID, buildNotification())
-            stopForegroundCompat()
+            try {
+                startForeground(NOTIFICATION_ID, buildNotification())
+                stopForegroundCompat()
+            } catch (e: IllegalStateException) {
+                AppLogger.error(
+                        this,
+                        TAG,
+                        "Could not satisfy the foreground contract for a stale command (startId=$startId); stopping",
+                        "BackgroundExecutionService",
+                        e
+                )
+            }
         }
         stopSelf(startId)
     }
