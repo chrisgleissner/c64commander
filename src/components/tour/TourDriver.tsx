@@ -43,6 +43,14 @@ const measureAnchors = (testIds: readonly string[]): Rect[] => {
     .filter((rect) => rect.width > 0 && rect.height > 0);
 };
 
+const hideAppFromAssistiveTech = (): (() => void) | undefined => {
+  const root = document.getElementById("root");
+  if (!root) return undefined;
+  const previous = root.getAttribute("aria-hidden");
+  root.setAttribute("aria-hidden", "true");
+  return () => (previous === null ? root.removeAttribute("aria-hidden") : root.setAttribute("aria-hidden", previous));
+};
+
 export interface TourDriverProps {
   /** Where to start. A new object per request, so a second request restarts the walk. */
   readonly request: TourStartRequest;
@@ -89,6 +97,10 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
     document.documentElement.setAttribute(TOUR_ACTIVE_ATTRIBUTE, "true");
     return () => document.documentElement.removeAttribute(TOUR_ACTIVE_ATTRIBUTE);
   }, []);
+
+  // aria-modal alone does not take the page out of Android's accessibility tree, so TalkBack could
+  // reach controls under the caption. Pointer input still reaches the spotlighted control.
+  useEffect(() => hideAppFromAssistiveTech(), []);
 
   // Read from a ref rather than a dependency: the path changes as a RESULT of this effect, and
   // depending on it would re-run the resolver on its own navigation.
