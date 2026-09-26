@@ -135,6 +135,7 @@ export function DriveManager({
   }, [connectionStatus.deviceInfo?.product]);
 
   const {
+    drivesLoading,
     refetchDrives,
     driveASettingsCategory,
     driveBSettingsCategory,
@@ -427,6 +428,7 @@ export function DriveManager({
             <DriveCard
               key={spec.class}
               name={label}
+              loading={drivesLoading}
               enabled={enabled}
               onToggle={() => void handleEnabledToggle(label, spec, enabled)}
               togglePending={pendingEnabled}

@@ -69,6 +69,7 @@ export function useDriveData(isConnected: boolean) {
 
   return {
     drivesData,
+    drivesLoading: isConnected && drivesData === undefined,
     refetchDrives,
     driveASettingsCategory,
     driveBSettingsCategory,

@@ -111,11 +111,13 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
 // Mock useDriveData
 const refetchDrivesSpy = vi.fn().mockResolvedValue(undefined);
 const driveData = vi.hoisted(() => ({
+  drivesLoading: false,
   softIecConfig: undefined as unknown,
   drivesByClass: new Map<string, unknown>(),
 }));
 vi.mock("@/pages/home/hooks/useDriveData", () => ({
   useDriveData: () => ({
+    drivesLoading: driveData.drivesLoading,
     refetchDrives: refetchDrivesSpy,
     driveASettingsCategory: undefined,
     driveBSettingsCategory: undefined,
@@ -145,6 +147,7 @@ vi.mock("@/pages/home/DriveCard", () => ({
     <div data-testid={`drive-card-${props.testIdSuffix}`}>
       <span data-testid="drive-name">{props.name}</span>
       <span data-testid="drive-enabled">{props.enabled ? "Enabled" : "Disabled"}</span>
+      <span data-testid="drive-loading">{String(Boolean(props.loading))}</span>
       <span data-testid="drive-bus">{props.busIdValue}</span>
       {props.typeValue && <span data-testid="drive-type">{props.typeValue}</span>}
       <span data-testid="drive-mounted" data-editable={String(props.pathEditable ?? true)}>
@@ -311,6 +314,16 @@ describe("DriveManager", () => {
     } finally {
       driveData.drivesByClass = new Map();
       resolveConfigValueSpy.mockImplementation((_payload, _category, _itemName, fallback) => fallback);
+    }
+  });
+
+  it("tells every drive card to show a placeholder until the drive data has loaded", () => {
+    driveData.drivesLoading = true;
+    try {
+      render(<DriveManager {...defaultProps} />);
+      expect(screen.getAllByTestId("drive-loading").map((node) => node.textContent)).toEqual(["true", "true", "true"]);
+    } finally {
+      driveData.drivesLoading = false;
     }
   });
 
