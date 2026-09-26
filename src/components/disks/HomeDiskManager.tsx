@@ -14,6 +14,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Button } from "@/components/ui/button";
 import { ResponsivePathText } from "@/components/ResponsivePathText";
+import { NameWrap } from "@/components/NameWrap";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -167,17 +168,21 @@ const NO_DISK_LABEL = "No disk mounted";
  * nothing is mounted.
  *
  * ResponsivePathText elides the middle of a long path, which is right for a path and wrong for a
- * sentence: the row it sits in leaves the label 137 CSS px at the Large text size, two short of
- * what "No disk mounted" needs, so it drew "No disk mounte…". A sentence wraps instead, and the
- * row already has flex-wrap for exactly this.
+ * sentence, so a sentence wraps instead. A mounted disk's name takes a full line of its own: sharing
+ * it with the group, swap and power controls left it one letter wide on a 393 px screen.
  */
 const MountedLabel = ({ label, className, dataTestId }: { label: string; className?: string; dataTestId: string }) =>
   label === NO_DISK_LABEL ? (
-    <span className={cn(className, "break-words")} data-testid={dataTestId}>
+    <span className={cn(className, "flex-1 break-words")} data-testid={dataTestId}>
       {label}
     </span>
   ) : (
-    <ResponsivePathText path={label} mode="start-and-filename" className={className} dataTestId={dataTestId} />
+    <ResponsivePathText
+      path={label}
+      mode="start-and-filename"
+      className={cn(className, "basis-full")}
+      dataTestId={dataTestId}
+    />
   );
 
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1807,7 +1812,9 @@ export const HomeDiskManager = () => {
         const groupMeta = disk.group ? (
           <span className="flex items-center gap-1 min-w-0">
             <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
-            <span className={cn(groupColor?.text, "break-words min-w-0")}>Group: {disk.group}</span>
+            <span className={cn(groupColor?.text, "break-words min-w-0")}>
+              Group: <NameWrap name={disk.group} />
+            </span>
           </span>
         ) : null;
         acc.push({
@@ -2075,19 +2082,14 @@ export const HomeDiskManager = () => {
                     </Select>
                   </div>
 
-                  <div
-                    className={cn(
-                      "min-w-0 justify-between gap-2",
-                      profile === "compact" ? "grid" : "flex items-center",
-                    )}
-                  >
-                    <div className={cn("min-w-0 items-center gap-1.5", profile === "compact" ? "grid" : "flex")}>
-                      <MountedLabel
-                        label={mountedLabel}
-                        className="min-w-0 flex-1 text-xs text-muted-foreground"
-                        dataTestId={`drive-mounted-label-${key}`}
-                      />
-                      {mountedDisk?.group ? (
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <MountedLabel
+                      label={mountedLabel}
+                      className="min-w-0 text-xs text-muted-foreground"
+                      dataTestId={`drive-mounted-label-${key}`}
+                    />
+                    {mountedDisk?.group ? (
+                      <div className="flex min-w-0 items-center gap-1.5">
                         <span
                           className={cn(
                             "h-2 w-2 shrink-0 rounded-full border",
@@ -2095,42 +2097,40 @@ export const HomeDiskManager = () => {
                           )}
                           aria-hidden="true"
                         />
-                      ) : null}
-                      {mountedDisk?.group ? (
                         <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-xs")}>
                           {mountedDisk.group}
                         </span>
-                      ) : null}
-                      {canRotate ? (
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          <FocusableDiskButton
-                            focusId={`disks-drive-${key}-rotate-previous`}
-                            focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 20)}
-                            variant="ghost"
-                            size="sm"
-                            className="h-11 w-11 p-0"
-                            onClick={() => void handleRotate(key, -1)}
-                            disabled={!status.isConnected || configPending || mountPending}
-                            aria-label={`${driveLabel} previous disk`}
-                          >
-                            <ArrowRightLeft className="h-3.5 w-3.5" />
-                          </FocusableDiskButton>
-                          <FocusableDiskButton
-                            focusId={`disks-drive-${key}-rotate-next`}
-                            focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 30)}
-                            variant="ghost"
-                            size="sm"
-                            className="h-11 w-11 p-0"
-                            onClick={() => void handleRotate(key, 1)}
-                            disabled={!status.isConnected || configPending || mountPending}
-                            aria-label={`${driveLabel} next disk`}
-                          >
-                            <ArrowLeftRight className="h-3.5 w-3.5" />
-                          </FocusableDiskButton>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
+                        {canRotate ? (
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <FocusableDiskButton
+                              focusId={`disks-drive-${key}-rotate-previous`}
+                              focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 20)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0"
+                              onClick={() => void handleRotate(key, -1)}
+                              disabled={!status.isConnected || configPending || mountPending}
+                              aria-label={`${driveLabel} previous disk`}
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </FocusableDiskButton>
+                            <FocusableDiskButton
+                              focusId={`disks-drive-${key}-rotate-next`}
+                              focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 30)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0"
+                              onClick={() => void handleRotate(key, 1)}
+                              disabled={!status.isConnected || configPending || mountPending}
+                              aria-label={`${driveLabel} next disk`}
+                            >
+                              <ArrowLeftRight className="h-3.5 w-3.5" />
+                            </FocusableDiskButton>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
                       <FocusableDiskButton
                         focusId={`disks-drive-${key}-reset`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 40)}
@@ -2312,10 +2312,10 @@ export const HomeDiskManager = () => {
               >
                 <MountedLabel
                   label={softIecMountedLabel}
-                  className="min-w-0 flex-1 text-xs text-muted-foreground"
+                  className="min-w-0 text-xs text-muted-foreground"
                   dataTestId="drive-mounted-label-soft-iec"
                 />
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
                   <FocusableDiskButton
                     focusId="disks-soft-iec-reset"
                     focusOrder={340}
@@ -2388,6 +2388,7 @@ export const HomeDiskManager = () => {
             <SelectableActionList
               title="Disk list"
               selectionLabel="items"
+              stackTitleProfiles={["compact", "medium"]}
               items={buildDiskListItems(sortedDisks, {
                 onMount: (entry) => {
                   if (!status.isConnected) {
@@ -2512,7 +2513,9 @@ export const HomeDiskManager = () => {
       <Dialog open={Boolean(activeDisk)} onOpenChange={(open) => !open && setActiveDisk(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Mount {activeDisk?.name}</DialogTitle>
+            <DialogTitle>
+              <NameWrap name={`Mount ${activeDisk?.name ?? ""}`} />
+            </DialogTitle>
             <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
