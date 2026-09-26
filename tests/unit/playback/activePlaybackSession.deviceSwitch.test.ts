@@ -33,6 +33,12 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 import { addLog } from "@/lib/logging";
 import {
+  addSavedDevice,
+  completeSavedDeviceVerification,
+  getSavedDevicesSnapshot,
+  selectSavedDevice,
+} from "@/lib/savedDevices/store";
+import {
   isRemotePlaybackActive,
   markRemotePlaybackStarted,
   stopActivePlaybackBeforeDeviceSwitch,
@@ -68,6 +74,33 @@ describe("stopping the tune on the device a switch leaves", () => {
       service: "playback",
       deviceHost: "c64u",
     });
+  });
+
+  // A switch to the same Ultimate's other address leaves no device behind: resetting "the old
+  // host" would stop the tune the user now controls through the new address.
+  it("does not reset the device left behind when the switch selected the same device at another address", async () => {
+    const leftBehindId = getSavedDevicesSnapshot().selectedDeviceId;
+    completeSavedDeviceVerification(leftBehindId, { product: "Ultimate 64 Elite", unique_id: "DUAL01" });
+    addSavedDevice({
+      id: "same-device-other-address",
+      name: "Desk wired",
+      host: "192.0.2.10",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "ultimate",
+      lastKnownUniqueId: "DUAL01",
+      hasPassword: false,
+    });
+    device.activeReset.mockRejectedValueOnce(new Error("Host unreachable"));
+
+    await stopActivePlaybackBeforeDeviceSwitch();
+    selectSavedDevice("same-device-other-address");
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(device.leftBehindReset).not.toHaveBeenCalled();
+    selectSavedDevice(leftBehindId);
   });
 
   it("warns only when the device left behind answers none of the resets", async () => {

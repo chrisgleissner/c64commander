@@ -581,6 +581,51 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
   });
 
+  // One Ultimate saved under its Ethernet and its Wi-Fi address: the tune, the pause state and
+  // background playback belong to the machine, which the switch does not leave.
+  it("keeps playback, pause state and background playback when switching to the same device's other address", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const playback = await import("@/lib/playback/activePlaybackSession");
+    vi.mocked(playback.hasActivePlaybackToStop).mockReturnValue(true);
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, { host: "198.51.100.20" });
+    store.completeSavedDeviceVerification(initialDeviceId, { product: "Ultimate 64 Elite", unique_id: "DUAL01" });
+    store.addSavedDevice({
+      id: "device-ethernet",
+      name: "Desk wired",
+      host: "192.0.2.10",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "ultimate",
+      lastKnownUniqueId: "DUAL01",
+      hasPassword: false,
+    });
+    mockIsBackgroundExecutionActive.mockReturnValue(true);
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "Ultimate 64 Elite", hostname: "ultimate", unique_id: "DUAL01" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    try {
+      await act(async () => {
+        await result.current("device-ethernet");
+      });
+    } finally {
+      vi.mocked(playback.hasActivePlaybackToStop).mockReturnValue(false);
+    }
+
+    expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-ethernet");
+    expect(playback.stopActivePlaybackBeforeDeviceSwitch).not.toHaveBeenCalled();
+    expect(mockResetMachineExecution).not.toHaveBeenCalled();
+    expect(mockStopBackgroundExecution).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
+  });
+
   it("HARD18-011: does not touch background execution when none is active", async () => {
     const store = await import("@/lib/savedDevices/store");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;

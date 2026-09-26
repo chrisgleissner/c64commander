@@ -256,10 +256,32 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     // HARD19-012: the fallback runs the shared cross-device hygiene BEFORE
     // re-selecting, so it cannot silently miss remote-input release / health
     // clear / machine-execution reset / background stop / query invalidation.
-    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other");
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other", { sameDevice: false });
     const retargetOrder = prepareForDeviceRetargetMock.mock.invocationCallOrder[0];
     const selectOrder = selectSavedDeviceMock.mock.invocationCallOrder[0];
     expect(retargetOrder).toBeLessThan(selectOrder);
+  });
+
+  // One Ultimate on Ethernet (192.0.2.0/24) and Wi-Fi (198.51.100.0/24), saved under both addresses.
+  it("prefers the selected device's other address and switches to it as the same device", async () => {
+    const dualHomed = { product: "Ultimate-64", unique_id: "DUAL01" };
+    getInfoMock
+      .mockResolvedValueOnce({ product: "Ultimate-64", unique_id: "OTHER1" })
+      .mockResolvedValueOnce(dualHomed)
+      .mockResolvedValueOnce(dualHomed);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "198.51.100.20", httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01" },
+        { id: "another-device", host: "203.0.113.30", httpPort: 80, hasPassword: false, lastKnownUniqueId: "OTHER1" },
+        { id: "other-address", host: "192.0.2.10", httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01" },
+      ]),
+    );
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    expect(selectSavedDeviceMock).toHaveBeenCalledWith("other-address");
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other-address", { sameDevice: true });
   });
 
   // HARD27-010: before this, the fallback never stopped or restarted the mirror, so Live View

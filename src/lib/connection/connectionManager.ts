@@ -79,6 +79,7 @@ import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demo
 import { isNativePlatform } from "@/lib/native/platform";
 import { clearProbeFailureLog, isNewProbeFailure, noteProbeAnswered } from "@/lib/connection/probeFailureLog";
 import { setConnectedDeviceUniqueId } from "@/lib/connection/connectedDeviceIdentity";
+import { savedEntryHasUniqueId } from "@/lib/savedDevices/sameDevice";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -875,12 +876,15 @@ const tryReachableSavedDeviceFallback = async (
       const probe = await probeInfoWithConnectionConfig(loadSwitchConnectionConfig({ deviceHost, password }), {
         timeoutMs: SAVED_DEVICE_SWEEP_TIMEOUT_MS,
       });
-      return probe.ok ? { device, deviceHost, password } : null;
+      return probe.ok ? { device, deviceHost, password, uniqueId: probe.deviceInfo?.unique_id } : null;
     }),
   );
 
   if (!isCurrentRun()) return false;
-  const reachable = probes.find((entry): entry is NonNullable<typeof entry> => entry !== null);
+  const answered = probes.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  // The selected device's other address, when saved, is the same machine and wins over another device.
+  const isSameMachine = (entry: (typeof answered)[number]) => savedEntryHasUniqueId(selectedId, entry.uniqueId);
+  const reachable = answered.find(isSameMachine) ?? answered[0];
   if (!reachable) return false;
 
   addLog("info", "Startup found a reachable configured device; connecting without discovery", {
@@ -890,7 +894,8 @@ const tryReachableSavedDeviceFallback = async (
   // HARD19-012/HARD27-010: this fallback is a second device-switch path, so it runs the canonical
   // switch's cross-device hygiene BEFORE re-selecting, while the runtime API still targets the old
   // device; otherwise device A's paused state, health verdict and watchdogs leaked onto device B.
-  const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id);
+  const sameDevice = isSameMachine(reachable);
+  const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id, { sameDevice });
   if (!isCurrentRun()) return false;
   // HARD16-001: select the reachable device BEFORE verifying (as executeSavedDeviceSwitch does):
   // verification stamps whichever device is selected, and verifying first wrote this identity onto

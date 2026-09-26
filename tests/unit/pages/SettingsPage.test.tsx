@@ -1204,6 +1204,24 @@ describe("SettingsPage", () => {
     expect(backupRow).not.toHaveTextContent("U64E · c64u");
   });
 
+  // One Ultimate saved under its Ethernet and its Wi-Fi address is listed twice.
+  it("marks a saved device row that is the same device as another saved entry", () => {
+    const base = savedDevicesRef.current.devices[0];
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      selectedDeviceId: "saved-wired",
+      devices: [
+        { ...base, id: "saved-wired", name: "Desk eth", host: "192.0.2.10", lastKnownUniqueId: "DUAL01" },
+        { ...base, id: "saved-wireless", name: "Desk wifi", host: "198.51.100.20", lastKnownUniqueId: "DUAL01" },
+      ],
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-device-row-saved-wireless")).toHaveTextContent("Same device as Desk eth");
+    expect(screen.getByTestId("settings-device-row-saved-wired")).toHaveTextContent("Same device as Desk wifi");
+  });
+
   it("offers Friendly SID names in Play and Disk, reflecting the stored preference and writing it back", () => {
     renderSettingsPage();
 

@@ -49,6 +49,7 @@ import {
 } from "@/lib/connection/deviceRetarget";
 import { toast } from "@/hooks/use-toast";
 import { hasActivePlaybackToStop, stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
+import { areSavedEntriesSameDevice } from "@/lib/savedDevices/sameDevice";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
 
@@ -63,6 +64,14 @@ export function useSavedDeviceSwitching() {
       if (!device) {
         throw new Error(`Unknown saved device: ${deviceId}`);
       }
+      // One machine saved under two addresses: what runs on it is still the app's to control.
+      const sameDevice = areSavedEntriesSameDevice(fromDeviceId, deviceId);
+      if (sameDevice) {
+        addLog("info", "Switching to another address of the same device; playback, input and pause state stay", {
+          fromDeviceId,
+          toDeviceId: deviceId,
+        });
+      }
 
       // HARD13-001 residual (E1): release any Remote Input held on the OLD
       // device FIRST, while `getC64API()` still targets it - otherwise the
@@ -72,7 +81,7 @@ export function useSavedDeviceSwitching() {
       // this is the one deliberately fail-safe step allowed ahead of the
       // HARD12-003 password resolve below. Skip the await entirely when no
       // session is mounted - nothing to release, no reason to suspend.
-      if (hasActiveInputRelease()) {
+      if (!sameDevice && hasActiveInputRelease()) {
         await releaseActiveRemoteInput();
       }
 
@@ -80,7 +89,7 @@ export function useSavedDeviceSwitching() {
       // injections so remaining PETSCII writes cannot land on the new device.
       // (prepareForDeviceRetarget does this for the fallback switch path; the
       // canonical switch keeps its own bespoke ordering, so it drains here too.)
-      drainKernalFallbackInjectionQueue();
+      if (!sameDevice) drainKernalFallbackInjectionQueue();
 
       // HARD12-003: resolve the password (the only fallible step before the API
       // retarget) BEFORE any selection/port/verification mutation. A native
@@ -99,7 +108,7 @@ export function useSavedDeviceSwitching() {
       // Skip the await entirely when nothing is playing — the switch path
       // deliberately does not suspend on work it does not have to do (see
       // hasActiveInputRelease above, same reasoning).
-      if (hasActivePlaybackToStop()) {
+      if (!sameDevice && hasActivePlaybackToStop()) {
         await stopActivePlaybackBeforeDeviceSwitch();
       }
 
@@ -150,7 +159,7 @@ export function useSavedDeviceSwitching() {
         // Play and Home) must not carry device A's pause state onto device B
         // — Home may be the only mounted page during a switch, so this is the
         // single choke point that always runs regardless of which page is up.
-        resetMachineExecution();
+        if (!sameDevice) resetMachineExecution();
 
         // HARD18-011: a saved-device switch while Play is unmounted (idle
         // placeholder) left no code path allowed to stop the foreground
@@ -160,7 +169,7 @@ export function useSavedDeviceSwitching() {
         // mounted, mirroring resetMachineExecution above. Fixed here in the
         // switch flow, not by relaxing PlayFilesPage's
         // hasObservedActivePlaybackRef guard (BUG-040/025 stay intact).
-        if (fromDevice && isBackgroundExecutionActive()) {
+        if (fromDevice && !sameDevice && isBackgroundExecutionActive()) {
           try {
             await stopBackgroundExecution({ source: "saved-device-switch", reason: "saved-device-switch" });
           } catch (error) {

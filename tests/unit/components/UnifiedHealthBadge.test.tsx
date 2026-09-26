@@ -1009,6 +1009,32 @@ describe("UnifiedHealthBadge", () => {
     expect(row).not.toContain("616m");
   });
 
+  // One Ultimate saved under its Ethernet and its Wi-Fi address shows up twice in the switcher.
+  it("marks a switcher row that is the same device as another saved entry", async () => {
+    vi.useFakeTimers();
+    const backup = mockState.savedDevices.devices[1];
+    backup.lastKnownUniqueId = "UID-OFFICE";
+    try {
+      render(<UnifiedHealthBadge />);
+      fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+      await vi.advanceTimersByTimeAsync(450);
+
+      expect(screen.getByTestId("switch-device-same-as-device-backup").textContent).toBe("Same device as Office U64");
+      expect(screen.getByTestId("switch-device-same-as-device-office").textContent).toBe("Same device as Backup Lab");
+    } finally {
+      backup.lastKnownUniqueId = "UID-BACKUP";
+    }
+  });
+
+  it("does not mark switcher rows for different devices", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+    fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+    await vi.advanceTimersByTimeAsync(450);
+
+    expect(screen.queryByTestId("switch-device-same-as-device-backup")).toBeNull();
+  });
+
   it("reconciles switcher row labels with fresh health before persisted switch status", async () => {
     vi.useFakeTimers();
     mockState.switchStatuses["device-office"] = "offline";

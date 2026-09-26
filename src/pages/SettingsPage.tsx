@@ -250,6 +250,7 @@ import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import { variant } from "@/generated/variant";
 import { persistDiscoveredDevice, startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import { describeSameDeviceEntry } from "@/lib/savedDevices/sameDevice";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
 import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 import { isSimulatedDeviceAvailable } from "@/lib/mock/mockServer";
@@ -1661,9 +1662,10 @@ export default function SettingsPage() {
                               const name = buildSavedDevicePrimaryLabel(device).trim().toLowerCase();
                               const host = device.host.trim();
                               const detail = host.toLowerCase() === name ? "" : host;
+                              const sameAs = describeSameDeviceEntry(device.id, savedDevices);
                               const secondary = isCompactProfile
-                                ? detail
-                                : [productCode, detail].filter(Boolean).join(" · ");
+                                ? [detail, sameAs].filter(Boolean).join(" · ")
+                                : [productCode, detail, sameAs].filter(Boolean).join(" · ");
                               return secondary ? (
                                 <p className="break-words text-xs text-muted-foreground">{secondary}</p>
                               ) : null;

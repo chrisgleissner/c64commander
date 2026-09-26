@@ -46,6 +46,7 @@ import {
   getSavedDeviceSwitchStatus,
   type DeviceSwitchStatus,
 } from "@/lib/savedDevices/store";
+import { describeSameDeviceEntry } from "@/lib/savedDevices/sameDevice";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { formatElapsedAgo } from "@/lib/ui/elapsedAgo";
 import { cn } from "@/lib/utils";
@@ -784,6 +785,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                 : (resolveDeviceSwitchStatusFromHealth(healthSnapshot) ?? getSavedDeviceSwitchStatus(device.id));
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
               const isExpanded = expandedDeviceIdSet.has(device.id);
+              const sameDeviceNote = describeSameDeviceEntry(device.id, savedDevices);
 
               return (
                 <div
@@ -822,6 +824,14 @@ export function UnifiedHealthBadge({ className }: Props) {
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
                         </span>
+                        {sameDeviceNote ? (
+                          <span
+                            className="mt-1 block text-xs text-muted-foreground"
+                            data-testid={`switch-device-same-as-${device.id}`}
+                          >
+                            {sameDeviceNote}
+                          </span>
+                        ) : null}
                       </span>
                       {pickerBadgeOwnLine ? (
                         <span className="flex min-w-0 max-w-full items-start">

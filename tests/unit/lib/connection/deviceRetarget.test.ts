@@ -182,6 +182,20 @@ describe("prepareForDeviceRetarget (HARD19-012)", () => {
     );
   });
 
+  // One Ultimate saved under its Ethernet and its Wi-Fi address: switching entries changes the address only.
+  it("keeps input, playback, pause state and background playback when both entries are the same device", async () => {
+    await prepareForDeviceRetarget("device-a", "device-b", { sameDevice: true });
+
+    expect(mocks.releaseActiveRemoteInput).not.toHaveBeenCalled();
+    expect(mocks.drainKernalFallbackInjectionQueue).not.toHaveBeenCalled();
+    expect(mocks.stopActivePlaybackBeforeDeviceSwitch).not.toHaveBeenCalled();
+    expect(mocks.resetMachineExecution).not.toHaveBeenCalled();
+    expect(mocks.stopBackgroundExecution).not.toHaveBeenCalled();
+    expect(mocks.toast).not.toHaveBeenCalled();
+    // Cached answers from the old address are still refetched through the new one.
+    expect(mocks.invalidateForSavedDeviceSwitch).toHaveBeenCalledTimes(1);
+  });
+
   it("skips remote-input release when nothing is holding input", async () => {
     mocks.hasActiveInputRelease.mockReturnValue(false);
 
