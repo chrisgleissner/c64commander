@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Loader2, Search, X } from "lucide-react";
 
@@ -362,7 +363,10 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
     listRef.current?.querySelector(`#${CSS.escape(activeStopId)}`)?.scrollIntoView({ block: "nearest" });
   }, [activeStopId]);
 
-  return (
+  // On the body, like the tour and every Radix dialog. Mounted inside the app root, it opened after
+  // Android's accessibility view of the page had been read and stayed out of it, so UI automation
+  // could not find its controls while the overlay covered the page.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -551,7 +555,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
           ))
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

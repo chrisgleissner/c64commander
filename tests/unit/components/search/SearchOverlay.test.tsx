@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -102,9 +102,20 @@ describe("SearchOverlay", () => {
   });
 
   afterEach(() => {
+    // Unmounted first: the overlay is portaled to the body, and clearing the body before React
+    // unmounts removes the node React still owns.
+    cleanup();
     document.body.innerHTML = "";
   });
 
+  it("mounts on the body, outside the app it is rendered from", async () => {
+    const { container } = renderOverlay();
+    await open();
+
+    const overlay = screen.getByTestId("search-overlay");
+    expect(overlay.parentElement).toBe(document.body);
+    expect(container.contains(overlay)).toBe(false);
+  });
   it("is not on screen until a door asks for it", () => {
     renderOverlay();
     expect(screen.queryByTestId("search-overlay")).toBeNull();
