@@ -84,7 +84,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
           // audibly underneath the newly started local engine (HARD25-007) - log it
           // the same way the "both"/"c64" branch below logs its own stopAudio()/
           // startAudio() failure, instead of discarding it silently.
-          addLog("warn", "Playback: could not stop the Live View audio route", {
+          addLog("warn", "Playback: could not stop Live View audio", {
             service: "playback",
             error: error instanceof Error ? error.message : String(error),
           });
@@ -104,7 +104,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
       // A start that fails means this device cannot stream its audio here, so
       // stop offering the option rather than leaving a button that does nothing.
       if (wantMirror) setStreamingFailed(true);
-      addLog("warn", "Playback: could not change the Live View audio route", {
+      addLog("warn", "Playback: could not switch Live View audio", {
         service: "playback",
         wantMirror,
         error: error instanceof Error ? error.message : String(error),
