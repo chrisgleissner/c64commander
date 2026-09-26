@@ -348,11 +348,11 @@ describe("AvMirrorSession", () => {
   it("accepts the stream on its own when the refused sender is the selected device on another address", async () => {
     audioInstances.length = 0;
     videoInstances.length = 0;
-    const isSelectedDeviceSender = vi.fn(async () => true);
+    const judgeStreamSender = vi.fn(async () => "same" as const);
     const session = new AvMirrorSession({
       startStream: vi.fn(async () => ({})),
       stopStream: vi.fn(async () => ({})),
-      isSelectedDeviceSender,
+      judgeStreamSender,
     });
     const [audio, video] = [audioInstances[0]!, videoInstances[0]!];
     const refused = { source: "192.0.2.46", expected: "c64u", rejectedPackets: 12 };
@@ -370,18 +370,18 @@ describe("AvMirrorSession", () => {
     await vi.waitFor(() => expect(audio.adoptSender).toHaveBeenCalledWith("192.0.2.46"));
 
     expect(video.adoptSender).toHaveBeenCalledWith("192.0.2.46");
-    expect(isSelectedDeviceSender).toHaveBeenCalledTimes(1);
+    expect(judgeStreamSender).toHaveBeenCalledTimes(1);
     expect(session.getSnapshot().audio.senderMismatch).toEqual(refused);
   });
 
   it("leaves a refused sender that is a different device for the user to decide", async () => {
     audioInstances.length = 0;
     videoInstances.length = 0;
-    const isSelectedDeviceSender = vi.fn(async () => false);
+    const judgeStreamSender = vi.fn(async (): Promise<"same" | "different" | "unknown"> => "different");
     new AvMirrorSession({
       startStream: vi.fn(async () => ({})),
       stopStream: vi.fn(async () => ({})),
-      isSelectedDeviceSender,
+      judgeStreamSender,
     });
     const audio = audioInstances[0]!;
     (audio.deps.onChange as (s: unknown) => void)({
@@ -392,7 +392,7 @@ describe("AvMirrorSession", () => {
       senderMismatch: { source: "198.51.100.13", expected: "c64u", rejectedPackets: 3 },
     });
 
-    await vi.waitFor(() => expect(isSelectedDeviceSender).toHaveBeenCalled());
+    await vi.waitFor(() => expect(judgeStreamSender).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(audio.adoptSender).not.toHaveBeenCalled();
   });
@@ -418,11 +418,11 @@ describe("AvMirrorSession", () => {
   it("checks a refused sender again after an earlier check found it was not the selected device", async () => {
     audioInstances.length = 0;
     videoInstances.length = 0;
-    const isSelectedDeviceSender = vi.fn(async () => false);
+    const judgeStreamSender = vi.fn(async (): Promise<"same" | "different" | "unknown"> => "different");
     new AvMirrorSession({
       startStream: vi.fn(async () => ({})),
       stopStream: vi.fn(async () => ({})),
-      isSelectedDeviceSender,
+      judgeStreamSender,
     });
     const audio = audioInstances[0]!;
     const report = () =>
@@ -435,28 +435,33 @@ describe("AvMirrorSession", () => {
       });
 
     report();
-    await vi.waitFor(() => expect(isSelectedDeviceSender).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(judgeStreamSender).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    isSelectedDeviceSender.mockResolvedValueOnce(true);
+    judgeStreamSender.mockResolvedValueOnce("same");
     report();
 
     await vi.waitFor(() => expect(audio.adoptSender).toHaveBeenCalledWith("192.0.2.47"));
-    expect(isSelectedDeviceSender).toHaveBeenCalledTimes(2);
+    expect(judgeStreamSender).toHaveBeenCalledTimes(2);
   });
 
-  it("asks the uninvited-sender guard to spare a sender that is the selected device", async () => {
+  it("lets the uninvited-sender guard stop only a sender proven to be another machine", async () => {
     audioInstances.length = 0;
     videoInstances.length = 0;
-    const isSelectedDeviceSender = vi.fn(async (source: string) => source === "192.0.2.47");
+    const judgeStreamSender = vi.fn(
+      async (source: string) =>
+        (source === "192.0.2.47" ? "same" : source === "192.0.2.48" ? "unknown" : "different") as
+          "same" | "different" | "unknown",
+    );
     new AvMirrorSession({
       startStream: vi.fn(async () => ({})),
       stopStream: vi.fn(async () => ({})),
-      isSelectedDeviceSender,
+      judgeStreamSender,
     });
-    const deps = audioInstances[0]!.deps as { isSelectedDevice: (host: string) => Promise<boolean> };
+    const deps = audioInstances[0]!.deps as { isForeignSender: (host: string) => Promise<boolean> };
 
-    expect(await deps.isSelectedDevice("192.0.2.47")).toBe(true);
-    expect(await deps.isSelectedDevice("198.51.100.13")).toBe(false);
+    expect(await deps.isForeignSender("192.0.2.47")).toBe(false);
+    expect(await deps.isForeignSender("192.0.2.48")).toBe(false);
+    expect(await deps.isForeignSender("198.51.100.13")).toBe(true);
   });
 
   it("adopts on the stream that can, when the other refuses", async () => {

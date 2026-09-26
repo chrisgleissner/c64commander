@@ -473,6 +473,30 @@ describe("AudioMirrorController foreign-sender notice", () => {
     expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
   });
 
+  it("does not stop a sender whose identity could not be established", async () => {
+    const receiver = new FakeReceiver();
+    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const isForeignSender = vi.fn(async () => false);
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sinkWithSenders(["192.0.2.47", "198.51.100.13"]),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "192.0.2.46",
+      stopStreamAt,
+      isForeignSender,
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.getSignals();
+
+    await vi.waitFor(() => expect(isForeignSender).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(stopStreamAt).not.toHaveBeenCalled();
+  });
+
   it("does not stop the selected device when it streams from its other address alongside an uninvited machine", async () => {
     const receiver = new FakeReceiver();
     const ownOtherAddress = "192.0.2.47";
@@ -485,7 +509,7 @@ describe("AudioMirrorController foreign-sender notice", () => {
       stopStream: vi.fn(async () => ({ errors: [] })),
       expectedSenderHost: () => "192.0.2.46",
       stopStreamAt,
-      isSelectedDevice: async (host) => host === ownOtherAddress,
+      isForeignSender: async (host) => host === uninvited,
       onChange: vi.fn(),
     });
     await controller.start();

@@ -93,8 +93,8 @@ export interface AudioMirrorDeps {
   expectedSenderHost?: () => string | null;
   /** Ask ONE specific machine (by host/IP) to stop streaming. */
   stopStreamAt?: (host: string, name: "audio" | "video") => Promise<unknown>;
-  /** Whether a sender is the selected device on its other network address, which must not be stopped. */
-  isSelectedDevice?: (host: string) => Promise<boolean>;
+  /** Whether a sender is proven to be another machine; the selected device on another address is not. */
+  isForeignSender?: (host: string) => Promise<boolean>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
@@ -311,9 +311,9 @@ export class AudioMirrorController {
     );
     if (pending.length === 0) return;
     pending.forEach((host) => this.foreignHandled.add(host));
-    const isSelectedDevice = this.deps.isSelectedDevice ?? (async () => false);
-    const selected = await Promise.all(pending.map(isSelectedDevice));
-    const foreign = pending.filter((_, index) => !selected[index]);
+    const isForeignSender = this.deps.isForeignSender ?? (async () => true);
+    const proven = await Promise.all(pending.map(isForeignSender));
+    const foreign = pending.filter((_, index) => proven[index]);
     if (foreign.length === 0) return;
     const { failed } = await stopForeignSenders({
       senders: foreign,

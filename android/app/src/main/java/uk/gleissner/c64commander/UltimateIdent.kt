@@ -28,7 +28,7 @@ object UltimateIdent {
   private const val logTag = "UltimateIdent"
   private const val MAX_REPLY_BYTES = 2048
 
-  data class Identity(val uniqueId: String, val replyFrom: String)
+  data class Identity(val uniqueId: String, val hostname: String?, val replyFrom: String)
 
   fun query(host: String, timeoutMs: Int, port: Int = PORT): Identity? {
     val target = InetAddress.getByName(host)
@@ -44,14 +44,19 @@ object UltimateIdent {
         Log.i(logTag, "No ident reply from $host within $timeoutMs ms", timeout)
         return null
       }
-      val uniqueId = parseUniqueId(String(reply.data, 0, reply.length, Charsets.UTF_8)) ?: return null
-      return Identity(uniqueId, reply.address.hostAddress ?: "")
+      val body = String(reply.data, 0, reply.length, Charsets.UTF_8)
+      val uniqueId = parseUniqueId(body) ?: return null
+      return Identity(uniqueId, parseHostname(body), reply.address.hostAddress ?: "")
     }
   }
 
-  fun parseUniqueId(reply: String): String? =
+  fun parseUniqueId(reply: String): String? = field(reply, "unique_id")
+
+  fun parseHostname(reply: String): String? = field(reply, "hostname")
+
+  private fun field(reply: String, name: String): String? =
     try {
-      JSONObject(reply).optString("unique_id").trim().ifEmpty { null }
+      JSONObject(reply).optString(name).trim().ifEmpty { null }
     } catch (error: JSONException) {
       throw IllegalArgumentException("Ident reply is not JSON: ${reply.take(80)}", error)
     }

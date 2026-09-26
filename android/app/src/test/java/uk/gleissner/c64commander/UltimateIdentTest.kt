@@ -45,6 +45,7 @@ class UltimateIdentTest {
     val identity = UltimateIdent.query("127.0.0.1", timeoutMs = 2000, port = port)
 
     assertEquals("38C1BA", identity?.uniqueId)
+    assertEquals("u64", identity?.hostname)
     assertEquals("127.0.0.2", identity?.replyFrom)
   }
 
