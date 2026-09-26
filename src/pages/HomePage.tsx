@@ -80,6 +80,7 @@ import { saveRemoteReuFromTemp, restoreRemoteReu } from "@/lib/reu/reuTelnetWork
 import type { ReuProgressState, ReuRestoreMode } from "@/lib/reu/reuSnapshotTypes";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { listPopulatedStorageRoots } from "@/lib/ftp/storageRoots";
 import { getPassword } from "@/lib/secureStorage";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
@@ -425,8 +426,7 @@ function HomePageContent() {
       },
       listRemoteStorageRoots: async () => {
         const ftpOptions = await resolveFtpOptions();
-        const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
-        return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
+        return listPopulatedStorageRoots((path) => listFtpDirectory({ ...ftpOptions, path }));
       },
       readRemoteFile: async (path) => {
         const ftpOptions = await resolveFtpOptions();

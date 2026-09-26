@@ -8,6 +8,7 @@
 
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
+import { listPopulatedStorageRoots } from "@/lib/ftp/storageRoots";
 import { base64ToUint8, uint8ToBase64 } from "@/lib/sid/sidUtils";
 import type { DiskMountWriteBackDependencies } from "@/lib/disks/diskMount";
 
@@ -24,8 +25,7 @@ import type { DiskMountWriteBackDependencies } from "@/lib/disks/diskMount";
 export const buildDiskWriteBackDependencies = (): DiskMountWriteBackDependencies => ({
   listRemoteStorageRoots: async () => {
     const ftpOptions = await resolveFtpConnectionOptions();
-    const result = await listFtpDirectory({ ...ftpOptions, path: "/" });
-    return result.entries.filter((entry) => entry.type === "dir").map((entry) => entry.name);
+    return listPopulatedStorageRoots((path) => listFtpDirectory({ ...ftpOptions, path }));
   },
   readRemoteFile: async (path) => {
     const ftpOptions = await resolveFtpConnectionOptions();
