@@ -28,7 +28,11 @@ import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
 import { isAuthRequiredError } from "@/lib/c64api/transportErrors";
 import { probeDeviceReachability, type ProbeInfoResult } from "@/lib/connection/connectionManager";
-import { acknowledgeDeviceDiscoveryResults, persistDiscoveredDevice } from "@/lib/deviceDiscovery/discoveryManager";
+import {
+  acknowledgeDeviceDiscoveryResults,
+  persistDiscoveredDevice,
+  resolveDiscoveredCandidateIdentity,
+} from "@/lib/deviceDiscovery/discoveryManager";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
 import { isAutomaticDiscoveryTrigger, type DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 import { splitSavedDeviceHostAndHttpPort } from "@/lib/savedDevices/host";
@@ -139,7 +143,7 @@ export function DeviceDiscoveryInterstitial() {
   };
 
   const saveCandidate = async (candidate: DeviceDiscoveryCandidate, password?: string) => {
-    const persisted = persistDiscoveredDevice(candidate, {
+    const persisted = persistDiscoveredDevice(await resolveDiscoveredCandidateIdentity(candidate, password), {
       select: false,
       passwordPresent: Boolean(password),
     });
@@ -181,7 +185,7 @@ export function DeviceDiscoveryInterstitial() {
       // keystore write that can throw) BEFORE switching. switchSavedDevice selects
       // and verifies the device anyway, so a keystore failure here cannot strand a
       // half-selected device — the user stays on their current device.
-      const persisted = persistDiscoveredDevice(candidate, {
+      const persisted = persistDiscoveredDevice(await resolveDiscoveredCandidateIdentity(candidate, password), {
         select: false,
         passwordPresent: Boolean(password),
       });

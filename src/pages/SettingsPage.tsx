@@ -249,7 +249,11 @@ import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/feat
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import { variant } from "@/generated/variant";
-import { persistDiscoveredDevice, startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import {
+  persistDiscoveredDevice,
+  resolveDiscoveredCandidateIdentity,
+  startDeviceDiscovery,
+} from "@/lib/deviceDiscovery/discoveryManager";
 import { describeSameDeviceEntry } from "@/lib/savedDevices/sameDevice";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
 import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
@@ -1013,7 +1017,7 @@ export default function SettingsPage() {
     if (discoverySwitchBusyId) return;
     setDiscoverySwitchBusyId(candidate.id);
     try {
-      const persisted = persistDiscoveredDevice(candidate, {
+      const persisted = persistDiscoveredDevice(await resolveDiscoveredCandidateIdentity(candidate, suppliedPassword), {
         select: true,
         passwordPresent: Boolean(suppliedPassword),
       });

@@ -17,6 +17,7 @@ const persistDiscoveredDevice = vi.fn(() => ({
   httpPort: 80,
   deviceHost: "192.168.1.13",
 }));
+const resolveDiscoveredCandidateIdentity = vi.fn(async (candidate: unknown, _password?: string) => candidate);
 const setPasswordForDevice = vi.fn(async () => undefined);
 const switchSavedDevice = vi.fn(async () => ({ ok: true, deviceInfo: { product: "Ultimate 64 Elite" } }));
 const probeDeviceReachability = vi.fn(async () => ({
@@ -61,6 +62,8 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   persistDiscoveredDevice: (...args: unknown[]) => persistDiscoveredDevice(...args),
+  resolveDiscoveredCandidateIdentity: (candidate: unknown, password?: string) =>
+    resolveDiscoveredCandidateIdentity(candidate, password),
   acknowledgeDeviceDiscoveryResults: (...args: unknown[]) => acknowledgeDeviceDiscoveryResults(...args),
 }));
 
@@ -130,6 +133,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     connectionState = { state: "OFFLINE_NO_DEMO" };
     savedDevices = { selectedDeviceId: "device-1", devices: [] };
     persistDiscoveredDevice.mockClear();
+    resolveDiscoveredCandidateIdentity.mockClear();
     acknowledgeDeviceDiscoveryResults.mockClear();
     setPasswordForDevice.mockClear();
     switchSavedDevice.mockClear();
@@ -422,6 +426,24 @@ describe("DeviceDiscoveryInterstitial", () => {
         passwordPresent: false,
       });
       expect(switchSavedDevice).toHaveBeenCalledWith("saved-device");
+    });
+  });
+
+  // A protected Ultimate on Ethernet and Wi-Fi is listed once per address with no unique id. With the
+  // password typed, its identity is read first so it lands on the saved entry it already has.
+  it("saves a password-protected device under the identity read with the typed password", async () => {
+    const identified = { ...candidate(true), uniqueId: "DUAL01", alreadySavedDeviceId: "known" };
+    resolveDiscoveredCandidateIdentity.mockResolvedValueOnce(identified);
+    discoveryState = { ...discoveryState, candidates: [candidate(true)] };
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.168.1.14"));
+    fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByTestId("startup-device-password-confirm"));
+
+    await waitFor(() => {
+      expect(resolveDiscoveredCandidateIdentity).toHaveBeenCalledWith(discoveryState.candidates[0], "secret");
+      expect(persistDiscoveredDevice).toHaveBeenCalledWith(identified, { select: false, passwordPresent: true });
     });
   });
 

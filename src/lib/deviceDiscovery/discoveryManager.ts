@@ -8,7 +8,13 @@
 
 import { DeviceDiscovery, type NativeDeviceDiscoveryCandidate } from "@/lib/native/deviceDiscovery";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
-import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { C64API } from "@/lib/c64api";
+import {
+  buildBaseUrlFromDeviceHost,
+  buildDeviceHostWithHttpPort,
+  getDeviceHostHttpPort,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
 import { stripSavedDeviceHttpPort } from "@/lib/savedDevices/host";
 import {
   addSavedDevice,
@@ -121,7 +127,13 @@ const candidateKey = (candidate: NativeDeviceDiscoveryCandidate) => {
 const candidateAddresses = (candidate: { address: string; addresses?: string[] }) =>
   Array.from(new Set([candidate.address, ...(candidate.addresses ?? [])].map((value) => value.trim()).filter(Boolean)));
 
-const findSavedDeviceId = (candidate: NativeDeviceDiscoveryCandidate) => {
+type SavedDeviceMatchInput = Pick<NativeDeviceDiscoveryCandidate, "address" | "addresses"> & {
+  host?: string | null;
+  hostname?: string | null;
+  uniqueId?: string | null;
+};
+
+const findSavedDeviceId = (candidate: SavedDeviceMatchInput) => {
   const savedDevices = getSavedDevicesSnapshot();
   const uniqueId = normalizeToken(candidate.uniqueId);
   if (uniqueId) {
@@ -362,6 +374,56 @@ export async function startDeviceDiscovery(
 
   return activeDiscovery;
 }
+
+const PASSWORD_IDENTITY_TIMEOUT_MS = 3000;
+
+const readUniqueIdWithPassword = async (host: string, httpPort: number, password: string) => {
+  const deviceHost = buildDeviceHostWithHttpPort(host, httpPort);
+  try {
+    const info = await new C64API(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost).getInfo({
+      timeoutMs: PASSWORD_IDENTITY_TIMEOUT_MS,
+    });
+    return { info, uniqueId: info?.unique_id?.trim() || null };
+  } catch (error) {
+    addLog("warn", "Could not read the identity of a password-protected device", {
+      deviceHost,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { info: null, uniqueId: null };
+  }
+};
+
+/**
+ * A password-protected Ultimate hides its unique id from discovery, so one device on Ethernet and
+ * Wi-Fi is listed once per address. With the password in hand its identity is read before saving,
+ * so it lands on the saved entry it already has instead of a second one; that entry's own address
+ * is kept when it answers with the same id.
+ */
+export const resolveDiscoveredCandidateIdentity = async (
+  candidate: DeviceDiscoveryCandidate,
+  password?: string | null,
+): Promise<DeviceDiscoveryCandidate> => {
+  if (!candidate.requiresPassword || candidate.uniqueId || !password) return candidate;
+  const { info, uniqueId } = await readUniqueIdWithPassword(candidate.address, candidate.httpPort, password);
+  if (!info || !uniqueId) return candidate;
+  const identified = {
+    ...candidate,
+    id: `id:${normalizeToken(uniqueId)}`,
+    uniqueId,
+    hostname: info.hostname?.trim() || candidate.hostname,
+    product: info.product?.trim() || candidate.product,
+    firmwareVersion: info.firmware_version?.trim() || candidate.firmwareVersion,
+  };
+  const savedDeviceId = findSavedDeviceId(identified) ?? candidate.alreadySavedDeviceId;
+  const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === savedDeviceId) ?? null;
+  const savedHost = saved ? stripSavedDeviceHttpPort(saved.host) : null;
+  const addresses = candidateAddresses(identified);
+  if (saved && savedHost && !addresses.map(normalizeToken).includes(normalizeToken(savedHost))) {
+    const savedAnswer = await readUniqueIdWithPassword(savedHost, saved.httpPort, password);
+    if (normalizeToken(savedAnswer.uniqueId) === normalizeToken(uniqueId)) addresses.push(savedHost);
+  }
+  return { ...identified, addresses, alreadySavedDeviceId: savedDeviceId };
+};
 
 const isIpAddressLiteral = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
 

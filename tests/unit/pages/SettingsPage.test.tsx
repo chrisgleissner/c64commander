@@ -116,6 +116,7 @@ const {
   mockEvaluateNewDeviceReachability,
   mockStartDeviceDiscovery,
   mockPersistDiscoveredDevice,
+  mockResolveDiscoveredCandidateIdentity,
   mockGetConnectionSnapshot,
   connectionPayloadRef,
   connectionStateRef,
@@ -155,6 +156,7 @@ const {
     elapsedMs: 0,
     unsupported: false,
   })),
+  mockResolveDiscoveredCandidateIdentity: vi.fn(async (candidate: unknown, _password?: string) => candidate),
   mockPersistDiscoveredDevice: vi.fn((candidate: { address: string; httpPort: number }) => ({
     deviceId: "discovered-device",
     host: candidate.address,
@@ -282,6 +284,7 @@ vi.mock("@/hooks/useDeviceDiscovery", () => ({
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   startDeviceDiscovery: mockStartDeviceDiscovery,
   persistDiscoveredDevice: mockPersistDiscoveredDevice,
+  resolveDiscoveredCandidateIdentity: mockResolveDiscoveredCandidateIdentity,
 }));
 
 vi.mock("@/components/ThemeProvider", () => ({
@@ -1158,6 +1161,7 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByTestId("settings-device-password-confirm"));
 
     await waitFor(() => {
+      expect(mockResolveDiscoveredCandidateIdentity).toHaveBeenCalledWith(candidate, "secret");
       expect(mockPersistDiscoveredDevice).toHaveBeenCalledWith(candidate, { select: true, passwordPresent: true });
       expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("discovered-device", "secret");
       expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device");
