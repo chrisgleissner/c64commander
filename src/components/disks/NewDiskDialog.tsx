@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import { HardDriveDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,6 +95,7 @@ export function NewDiskDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const routingEpoch = useConnectionRoutingEpoch();
   useEffect(() => {
     if (!open || defaultFolder !== undefined) return undefined;
     let cancelled = false;
@@ -111,7 +113,7 @@ export function NewDiskDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, defaultFolder, listStorageRoots]);
+  }, [open, defaultFolder, listStorageRoots, routingEpoch]);
 
   const args = useMemo<CreateDiskArgs>(
     () => ({

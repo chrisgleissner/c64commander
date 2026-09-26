@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 
@@ -93,6 +93,20 @@ describe("NewDiskDialog", () => {
     view.rerender(<NewDiskDialog open={false} {...props} />);
     roots = ["Flash", "USB0"];
     view.rerender(<NewDiskDialog open {...props} />);
+
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB0"));
+  });
+
+  it("offers the new device's storage when the connected device changes while the dialog is open", async () => {
+    let roots = ["SD", "USB2"];
+    const listStorageRoots = vi.fn(async () => roots);
+    setup(undefined, listStorageRoots);
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/SD"));
+
+    roots = ["Flash", "USB0"];
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-connection-change", { detail: { baseUrl: "http://u64" } }));
+    });
 
     await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB0"));
   });
