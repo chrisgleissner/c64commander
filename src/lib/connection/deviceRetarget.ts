@@ -129,26 +129,35 @@ function startAvMirrorStreams(state: AvMirrorRetargetState, toDeviceId: string):
  *
  * @param fromDeviceId the previously-selected device id (may be null on cold start)
  * @param toDeviceId   the device being retargeted to
+ * @param options.sameDevice both entries are one machine at two addresses, so what runs on it stays
  * @returns what the A/V mirror was doing, for the caller to restart after verification
  */
 export async function prepareForDeviceRetarget(
   fromDeviceId: string | null,
   toDeviceId: string,
+  options: { sameDevice: boolean } = { sameDevice: false },
 ): Promise<AvMirrorRetargetState> {
+  const { sameDevice } = options;
+  if (sameDevice) {
+    addLog("info", "Switching to another address of the same device; playback, input and pause state stay", {
+      fromDeviceId,
+      toDeviceId,
+    });
+  }
   // 1. Release any Remote Input held on the OLD device FIRST, while the runtime
   //    API still targets it. Internally time-bounded and caught, so a dead old
   //    device cannot stall the retarget.
-  if (hasActiveInputRelease()) {
+  if (!sameDevice && hasActiveInputRelease()) {
     await releaseActiveRemoteInput();
   }
 
   // 1b. HARD19-017: cancel any queued/in-flight kernal-fallback keyboard-buffer
   //     injections so remaining PETSCII writes do not land on the new device.
-  drainKernalFallbackInjectionQueue();
+  if (!sameDevice) drainKernalFallbackInjectionQueue();
 
   // 1c. HARD27-010: silence the tune and stop the mirror while the runtime API still targets the
   //     old device, exactly as the canonical switch does. Skip the await when nothing is playing.
-  if (hasActivePlaybackToStop()) {
+  if (!sameDevice && hasActivePlaybackToStop()) {
     await stopActivePlaybackBeforeDeviceSwitch();
   }
   const mirrorState = readAvMirrorRetargetState();
@@ -169,12 +178,12 @@ export async function prepareForDeviceRetarget(
 
   // 4. HARD12-020: clear the shared machine pause/resume state so device A's
   //    "paused" state does not render for device B.
-  resetMachineExecution();
+  if (!sameDevice) resetMachineExecution();
 
   // 5. HARD18-011: stop any orphaned foreground background-execution service and
   //    clear the native auto-skip watchdog, so device A's watchdog cannot fire an
   //    auto-advance launch on device B.
-  if (fromDevice && isBackgroundExecutionActive()) {
+  if (fromDevice && !sameDevice && isBackgroundExecutionActive()) {
     try {
       await stopBackgroundExecution({ source: "device-retarget", reason: "device-retarget" });
     } catch (error) {

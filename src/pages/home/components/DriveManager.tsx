@@ -44,6 +44,7 @@ import {
   type DeviceConfigItemRef,
 } from "../hooks/useDeviceConfigOptionDomains";
 import { isSoftIecDefaultPathConfigurable, resolveSoftIecDefaultPath } from "@/components/disks/HomeDiskManagerSupport";
+import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
   const message = value?.trim() ?? "";
@@ -135,6 +136,7 @@ export function DriveManager({
   }, [connectionStatus.deviceInfo?.product]);
 
   const {
+    drivesLoading,
     refetchDrives,
     driveASettingsCategory,
     driveBSettingsCategory,
@@ -168,6 +170,7 @@ export function DriveManager({
   const [mountTarget, setMountTarget] = useState<{
     spec: DriveControlSpec;
     currentPath?: string;
+    enabled: boolean;
   } | null>(null);
   const [statusDetailsDialog, setStatusDetailsDialog] = useState<{
     driveLabel: string;
@@ -191,8 +194,8 @@ export function DriveManager({
     return groups;
   }, [isConnected, localSources, ultimateSourceName]);
 
-  const handleMountClick = (spec: DriveControlSpec, currentPath?: string) => {
-    setMountTarget({ spec, currentPath });
+  const handleMountClick = (spec: DriveControlSpec, currentPath: string | undefined, enabled: boolean) => {
+    setMountTarget({ spec, currentPath, enabled });
   };
 
   const handleAddLocalSource = async () => {
@@ -201,6 +204,7 @@ export function DriveManager({
   };
 
   const mountLocalImageOnPhysicalDrive = async (
+    deviceApi: Pick<typeof api, "mountDriveUpload">,
     driveId: "a" | "b",
     source: SourceLocation,
     selectedPath: string,
@@ -217,13 +221,13 @@ export function DriveManager({
       sourceId: source.id,
     });
     const blob = runtimeFile ?? (await resolveLocalDiskBlob(diskEntry));
-    await api.mountDriveUpload(driveId, blob, mountType, "readwrite", { filename: selectedName });
+    await deviceApi.mountDriveUpload(driveId, blob, mountType, "readwrite", { filename: selectedName });
   };
 
   const handleMountSelection = async (source: unknown, selections: { path: string; name?: string }[]) => {
     if (!mountTarget || selections.length === 0) return false;
     const selected = selections[0];
-    const { spec } = mountTarget;
+    const { spec, enabled } = mountTarget;
     const sourceLocation = source as SourceLocation | null;
 
     if (spec.class === "SOFT_IEC_DRIVE") {
@@ -237,14 +241,34 @@ export function DriveManager({
     } else if (spec.class === "PHYSICAL_DRIVE_A" || spec.class === "PHYSICAL_DRIVE_B") {
       const driveId = spec.class === "PHYSICAL_DRIVE_A" ? "a" : "b";
       const description = `Mounted to Drive ${driveId.toUpperCase()}`;
+      // Bound before the drive is turned on, so a device switch meanwhile cannot move the mount elsewhere.
+      const deviceHost = api.getDeviceHost();
+      const deviceApi = bindCallsToDevice(api, deviceHost, () => api.getDeviceHost(), description.toLowerCase());
+      const driveOn =
+        enabled ||
+        (await updateConfigValue(
+          spec.category,
+          spec.enabledItem,
+          "Enabled",
+          "HOME_DRIVE_ENABLED",
+          `${spec.label} turned on to mount the disk`,
+          { refreshDrives: true },
+        ));
+      if (!driveOn) return false;
       if (sourceLocation?.type === "local") {
         await handleAction(async () => {
-          await mountLocalImageOnPhysicalDrive(driveId, sourceLocation, selected.path, selected.name ?? selected.path);
+          await mountLocalImageOnPhysicalDrive(
+            deviceApi,
+            driveId,
+            sourceLocation,
+            selected.path,
+            selected.name ?? selected.path,
+          );
           await refetchDrives();
         }, description);
       } else {
         await handleAction(async () => {
-          await api.mountDrive(driveId, selected.path);
+          await deviceApi.mountDrive(driveId, selected.path);
           await refetchDrives();
         }, description);
       }
@@ -334,7 +358,7 @@ export function DriveManager({
           const busOptions = buildBusIdOptions(busDefaults, Number.isFinite(busValue) ? busValue : null);
 
           const typeValue = spec.typeItem
-            ? String(resolveConfigValue(payload, spec.category, spec.typeItem, device?.type ?? "1541"))
+            ? (device?.type ?? String(resolveConfigValue(payload, spec.category, spec.typeItem, "1541")))
             : (device?.type ?? "DOS emulation");
 
           const rawTypeOptions = spec.typeItem
@@ -415,6 +439,7 @@ export function DriveManager({
             <DriveCard
               key={spec.class}
               name={label}
+              loading={drivesLoading}
               enabled={enabled}
               onToggle={() => void handleEnabledToggle(label, spec, enabled)}
               togglePending={pendingEnabled}
@@ -451,7 +476,7 @@ export function DriveManager({
               typePending={!isSoftIec ? pendingType : undefined}
               mountedPath={mountedPath}
               mountedPathLabel={mountedPathLabel}
-              onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel)}
+              onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel, enabled)}
               pathEditable={!isSoftIec || isSoftIecDefaultPathConfigurable(softIecConfig)}
               statusSummary={statusSummary}
               statusSeverity={statusSeverity}

@@ -10,6 +10,8 @@ import { addLog } from "@/lib/logging";
 import { C64API, getC64API, getC64APIConfigSnapshot } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getSharedLocalSidPlaybackController } from "./localSidPlaybackController";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { areSavedEntriesSameDevice } from "@/lib/savedDevices/sameDevice";
 import { notifyPlaybackActivityChanged, subscribePlaybackActivity } from "./playbackActivitySignal";
 
 /**
@@ -147,6 +149,7 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
   });
   if (!remotePlaybackActive) return;
   const { deviceHost, password } = getC64APIConfigSnapshot();
+  const leftBehindDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
   try {
     // A reset is what the app's own stop does, and it verifiably silences the
     // Ultimate's SID player.
@@ -160,17 +163,25 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
       service: "playback",
       error: error instanceof Error ? error.message : String(error),
     });
-    void resetDeviceLeftBehind(deviceHost, password);
+    void resetDeviceLeftBehind(deviceHost, password, leftBehindDeviceId);
   }
 };
 
 const RESET_RETRY_DELAYS_MS = [1000, 3000];
 
 // On a Pixel 4 the c64u once took over 1.5 s to answer the reset, and the C64 left behind kept playing.
-const resetDeviceLeftBehind = async (deviceHost: string, password?: string) => {
+const resetDeviceLeftBehind = async (deviceHost: string, password: string | undefined, leftBehindDeviceId: string) => {
   const api = new C64API(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost);
   for (const [attempt, delayMs] of RESET_RETRY_DELAYS_MS.entries()) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
+    // The switch may prove the old entry is the new device at another address; resetting it then would stop that device.
+    if (areSavedEntriesSameDevice(leftBehindDeviceId, getSavedDevicesSnapshot().selectedDeviceId)) {
+      addLog("info", "Playback: the device left behind is the device now selected; not resetting it", {
+        service: "playback",
+        deviceHost,
+      });
+      return;
+    }
     try {
       await api.machineReset();
       addLog("info", "Playback: reset the device left behind by the switch", { service: "playback", deviceHost });

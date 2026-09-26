@@ -24,6 +24,7 @@ const {
     reportUserErrorSpy: vi.fn(),
     c64ApiMockRef: {
       current: {
+        getDeviceHost: vi.fn(() => "c64u"),
         setConfigValue: vi.fn().mockResolvedValue({}),
         mountDrive: vi.fn().mockResolvedValue({}),
         getDrives: vi.fn().mockResolvedValue({ drives: [] }),
@@ -35,7 +36,7 @@ const {
         fetchQuery: vi.fn().mockResolvedValue(undefined),
       },
     },
-    updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
+    updateConfigValueSpy: vi.fn().mockResolvedValue(true),
     resolveConfigValueSpy: vi.fn(
       (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
     ),
@@ -111,11 +112,13 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
 // Mock useDriveData
 const refetchDrivesSpy = vi.fn().mockResolvedValue(undefined);
 const driveData = vi.hoisted(() => ({
+  drivesLoading: false,
   softIecConfig: undefined as unknown,
   drivesByClass: new Map<string, unknown>(),
 }));
 vi.mock("@/pages/home/hooks/useDriveData", () => ({
   useDriveData: () => ({
+    drivesLoading: driveData.drivesLoading,
     refetchDrives: refetchDrivesSpy,
     driveASettingsCategory: undefined,
     driveBSettingsCategory: undefined,
@@ -145,6 +148,7 @@ vi.mock("@/pages/home/DriveCard", () => ({
     <div data-testid={`drive-card-${props.testIdSuffix}`}>
       <span data-testid="drive-name">{props.name}</span>
       <span data-testid="drive-enabled">{props.enabled ? "Enabled" : "Disabled"}</span>
+      <span data-testid="drive-loading">{String(Boolean(props.loading))}</span>
       <span data-testid="drive-bus">{props.busIdValue}</span>
       {props.typeValue && <span data-testid="drive-type">{props.typeValue}</span>}
       <span data-testid="drive-mounted" data-editable={String(props.pathEditable ?? true)}>
@@ -297,6 +301,31 @@ describe("DriveManager", () => {
     expect(screen.getByTestId("drive-card-a")).toBeDefined();
     expect(screen.getByTestId("drive-card-b")).toBeDefined();
     expect(screen.getByTestId("drive-card-soft-iec")).toBeDefined();
+  });
+
+  it("shows the drive type the drive reports after a mount switched it away from the configured type", () => {
+    resolveConfigValueSpy.mockImplementation((_payload, _category, itemName, fallback) =>
+      itemName === "Drive Type" ? "1541" : fallback,
+    );
+    driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_A", { type: "1581", enabled: true }]]);
+    try {
+      render(<DriveManager {...defaultProps} />);
+      expect(within(screen.getByTestId("drive-card-a")).getByTestId("drive-type")).toHaveTextContent("1581");
+      expect(within(screen.getByTestId("drive-card-b")).getByTestId("drive-type")).toHaveTextContent("1541");
+    } finally {
+      driveData.drivesByClass = new Map();
+      resolveConfigValueSpy.mockImplementation((_payload, _category, _itemName, fallback) => fallback);
+    }
+  });
+
+  it("tells every drive card to show a placeholder until the drive data has loaded", () => {
+    driveData.drivesLoading = true;
+    try {
+      render(<DriveManager {...defaultProps} />);
+      expect(screen.getAllByTestId("drive-loading").map((node) => node.textContent)).toEqual(["true", "true", "true"]);
+    } finally {
+      driveData.drivesLoading = false;
+    }
   });
 
   describe("Soft IEC path", () => {
@@ -555,6 +584,77 @@ describe("DriveManager", () => {
       await vi.waitFor(() => {
         expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("b", "/USB0/games/test.d64");
       });
+    });
+  });
+
+  describe("mounting onto a drive that is off", () => {
+    afterEach(() => {
+      driveData.drivesByClass = new Map();
+    });
+
+    it("turns the drive on through its Drive config item before mounting", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_B", { enabled: false }]]);
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => {
+        expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("b", "/USB0/games/test.d64");
+      });
+      expect(updateConfigValueSpy).toHaveBeenCalledWith(
+        "Drive B Settings",
+        "Drive",
+        "Enabled",
+        "HOME_DRIVE_ENABLED",
+        "Drive B turned on to mount the disk",
+        { refreshDrives: true },
+      );
+      expect(updateConfigValueSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        c64ApiMockRef.current.mountDrive.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("does not mount on another device when the device changes while the drive is being turned on", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_B", { enabled: false }]]);
+      updateConfigValueSpy.mockImplementationOnce(async () => {
+        c64ApiMockRef.current.getDeviceHost.mockReturnValue("u64");
+        return true;
+      });
+      const reported: string[] = [];
+      const reportingHandleAction = vi.fn(async (action: () => Promise<void>) => {
+        try {
+          await action();
+        } catch (error) {
+          reported.push((error as Error).message);
+        }
+      });
+      render(<DriveManager {...defaultProps} handleAction={reportingHandleAction} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => expect(reported).toHaveLength(1));
+      expect(reported[0]).toBe(
+        "The connected device changed from c64u to u64 while mounted to drive b; nothing more was sent.",
+      );
+      expect(c64ApiMockRef.current.mountDrive).not.toHaveBeenCalled();
+      c64ApiMockRef.current.getDeviceHost.mockReturnValue("c64u");
+    });
+
+    it("does not mount when the drive could not be turned on", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_B", { enabled: false }]]);
+      updateConfigValueSpy.mockResolvedValueOnce(false);
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => expect(updateConfigValueSpy).toHaveBeenCalled());
+      expect(c64ApiMockRef.current.mountDrive).not.toHaveBeenCalled();
+    });
+
+    it("does not touch the power of a drive that is on", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_A", { enabled: true }]]);
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[0]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalled());
+      expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -27,8 +27,8 @@ describe("recoveryEvidence", () => {
       kind: "switch-device",
       outcome: "failure",
       contributor: "REST",
-      target: "192.168.1.42:80",
-      message: "Could not reach 192.168.1.42:80",
+      target: "192.0.2.42:80",
+      message: "Could not reach 192.0.2.42:80",
     });
 
     expect(first.id).toMatch(/^recovery-/);

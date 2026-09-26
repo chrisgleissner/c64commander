@@ -65,10 +65,10 @@ describe("createTelnetClient", () => {
     it("connects via TelnetSocket plugin for real-device targets", async () => {
       const client = createTelnetClient();
 
-      await client.connect("192.168.1.10", 23);
+      await client.connect("192.0.2.10", 23);
 
       expect(mockConnect).toHaveBeenCalledWith({
-        host: "192.168.1.10",
+        host: "192.0.2.10",
         port: 23,
         timeoutMs: 5000,
       });

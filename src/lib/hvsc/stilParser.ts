@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { withoutUnknownPlaceholder } from "@/lib/sid/unknownPlaceholder";
+
 /**
  * The SID Tune Information List, parsed.
  *
@@ -178,7 +180,7 @@ export const parseStil = (text: string): Map<string, StilEntry> => {
       closeComment();
       const [, field, value] = fieldMatch as unknown as [string, string, string];
       const info = target();
-      const trimmed = value.trim();
+      const trimmed = field === "COMMENT" ? value.trim() : withoutUnknownPlaceholder(value.trim());
       switch (field) {
         case "TITLE":
           // Opens a credit; a following ARTIST attaches to it.
@@ -187,6 +189,7 @@ export const parseStil = (text: string): Map<string, StilEntry> => {
         case "ARTIST": {
           const credits = info.credits;
           const open = credits?.[credits.length - 1];
+          if (!trimmed) break;
           if (open && open.artist === undefined) {
             open.artist = trimmed;
           } else {
@@ -196,10 +199,10 @@ export const parseStil = (text: string): Map<string, StilEntry> => {
           break;
         }
         case "NAME":
-          info.name = trimmed;
+          if (trimmed) info.name = trimmed;
           break;
         case "AUTHOR":
-          info.author = trimmed;
+          if (trimmed) info.author = trimmed;
           break;
         case "COMMENT":
           commentLines = [trimmed];

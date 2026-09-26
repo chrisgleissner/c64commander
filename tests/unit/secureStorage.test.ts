@@ -180,7 +180,7 @@ describe("secureStorage", () => {
     addSavedDevice({
       id: "device-b",
       name: "B",
-      host: "192.168.1.20",
+      host: "192.0.2.20",
       type: "C64U",
       typeSource: "INFERRED",
       httpPort: 80,
@@ -221,7 +221,7 @@ describe("secureStorage", () => {
     addSavedDevice({
       id: "device-a",
       name: "A",
-      host: "192.168.1.10",
+      host: "192.0.2.10",
       type: "C64U",
       typeSource: "INFERRED",
       httpPort: 80,
@@ -264,7 +264,7 @@ describe("secureStorage", () => {
     addSavedDevice({
       id: "device-a",
       name: "A",
-      host: "192.168.1.10",
+      host: "192.0.2.10",
       type: "C64U",
       typeSource: "INFERRED",
       httpPort: 80,
@@ -301,7 +301,7 @@ describe("secureStorage", () => {
     addSavedDevice({
       id: "device-a",
       name: "A",
-      host: "192.168.1.10",
+      host: "192.0.2.10",
       type: "C64U",
       typeSource: "INFERRED",
       httpPort: 80,

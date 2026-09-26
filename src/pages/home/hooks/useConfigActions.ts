@@ -16,7 +16,7 @@ import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { toast } from "@/hooks/use-toast";
 import { useAuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
 import { getActiveBaseUrl, updateHasChanges } from "@/lib/config/appConfigStore";
-import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { getC64DrivesQueryKey, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 
 export function useConfigActions() {
   const api = getC64API();
@@ -70,7 +70,7 @@ export function useConfigActions() {
       if (options.refreshDrives) {
         try {
           await queryClient.fetchQuery({
-            queryKey: ["c64-drives"],
+            queryKey: getC64DrivesQueryKey(),
             queryFn: () => api.getDrives(),
             staleTime: 0,
           });

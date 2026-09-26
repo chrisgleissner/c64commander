@@ -23,7 +23,7 @@ vi.mock("@capacitor/core", () => ({
 
 // Non-local host so the request takes the native direct-device transport branch
 // (127.0.0.1 / localhost are treated as the web proxy).
-const DEVICE_BASE = "http://192.168.1.50";
+const DEVICE_BASE = "http://192.0.2.50";
 const infoPayload = { product: "C64 Ultimate", firmware_version: "1.1.0", errors: [] };
 
 describe("C64API native device transport (BUG-066: reboot stale-connection recovery)", () => {
@@ -56,7 +56,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
       url: `${DEVICE_BASE}/v1/info`,
     } as never);
 
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     const info = await api.getInfo({ timeoutMs: 1500, __c64uIntent: "system", __c64uBypassCache: true } as never);
 
     expect(info.firmware_version).toBe("1.1.0");
@@ -81,7 +81,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
         url: `${DEVICE_BASE}/v1/info`,
       } as never);
 
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
 
     // First probe reuses the dead pooled connection -> native read timeout -> rejects
     // (instead of hanging forever as it did with the patched fetch + infinite timeout).
@@ -116,7 +116,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
       };
     }) as never);
 
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     const controller = new AbortController();
     const aborted = api.getInfo({
       timeoutMs: 5000,
@@ -150,7 +150,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
       url: `${DEVICE_BASE}/v1/machine:readmem`,
     } as never);
 
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     const result = await api.readMemory("0400", bytes.length, { timeoutMs: 1500, __c64uIntent: "system" } as never);
 
     expect(Array.from(result)).toEqual(Array.from(bytes));
@@ -171,21 +171,21 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
       url: `${DEVICE_BASE}/v1/machine:readmem`,
     } as never);
 
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     const result = await api.readMemory("0400", bytes.length, { timeoutMs: 1500, __c64uIntent: "system" } as never);
     expect(Array.from(result)).toEqual(Array.from(bytes));
   });
 
   it("readMemory fails fast on a native socket timeout (does not hang)", async () => {
     vi.mocked(CapacitorHttp.request).mockRejectedValue(new Error("Read timed out"));
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     await expect(api.readMemory("0400", 4, { timeoutMs: 1500, __c64uIntent: "system" } as never)).rejects.toThrow();
   });
 
   it("does NOT reroute body-carrying writes — writeMemoryBlock stays on the patched fetch", async () => {
     // Guard the conservative scope: only bodyless readMemory uses CapacitorHttp.request.
     // Binary-body marshalling must remain on the battle-tested fetch path.
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     await api.writeMemoryBlock("0400", new Uint8Array([1, 2, 3]), { __c64uIntent: "system" } as never);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(CapacitorHttp.request).not.toHaveBeenCalled();
@@ -195,7 +195,7 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     delete (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__;
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
 
-    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
     await api.getInfo({ timeoutMs: 1500, __c64uIntent: "system", __c64uBypassCache: true } as never);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);

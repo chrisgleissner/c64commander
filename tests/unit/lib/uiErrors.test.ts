@@ -556,7 +556,7 @@ describe("uiErrors", () => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ alwaysVisible: true }));
       expect(vi.mocked(toast).mock.calls[0][0]).not.toHaveProperty("variant", "destructive");
 
-      clearConnectivityErrorToastsForHost("192.168.1.146");
+      clearConnectivityErrorToastsForHost("192.0.2.146");
       reportUserError({ operation: "PLAYBACK_NEXT", title: "Playback next failed", description: "Host unreachable" });
 
       expect(toast).toHaveBeenCalledTimes(2);

@@ -32,17 +32,14 @@ import {
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
-  loadStreamAudioRoute,
-  type StreamAudioRoute,
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
-import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
-import { resolveVideoStartAction, shouldReturnAudioToWifi, shouldUseWifiForAudio } from "./audioRoute";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { stopStreamAtForeignHost } from "./foreignSenderStop";
 import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
+import { judgeStreamSender, type SenderVerdict } from "./sameDeviceSender";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
 import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -180,7 +177,7 @@ export const chooseAudioBufferSignals = (input: {
 };
 
 export interface AvMirrorSessionDeps {
-  startStream?: (name: "audio" | "video", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
+  startStream?: (name: "audio" | "video", destination: string) => Promise<unknown>;
   stopStream?: (name: "audio" | "video") => Promise<unknown>;
   createAudioReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
   createVideoReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
@@ -189,6 +186,8 @@ export interface AvMirrorSessionDeps {
   now?: () => number;
   /** Present scheduler for the video mirror (defaults to requestAnimationFrame where it exists). */
   schedulePresent?: (present: () => void) => void;
+  /** Whether a sender the address filter refused is the selected device on another of its addresses. */
+  judgeStreamSender?: (source: string, selectedHost: string) => Promise<SenderVerdict>;
 }
 
 /**
@@ -234,10 +233,6 @@ export const INPUT_PRIORITY_TAIL_MS = 350;
  */
 export const DEFAULT_INPUT_PRIORITY_FRACTION = 0.2;
 
-/** Shown on the video pane when the `wifi` audio policy keeps audio on Wi‑Fi, which video can't join. */
-export const WIFI_AUDIO_BLOCKS_VIDEO =
-  "Audio is streaming over Wi‑Fi, which can't run together with video. Switch the audio route to Ethernet or Dynamic in Settings, or stop the audio, to watch.";
-
 export class AvMirrorSession {
   private snapshot: AvMirrorSnapshot = INITIAL;
   private readonly listeners = new Set<AvMirrorListener>();
@@ -252,6 +247,7 @@ export class AvMirrorSession {
   private readonly governor: StreamGovernor;
   private readonly telemetry = new StreamTelemetry();
   private readonly now: () => number;
+  private readonly judgeStreamSender: (source: string, selectedHost: string) => Promise<SenderVerdict>;
   /** Last observed cumulative player-underrun count, for per-tick delta. */
   private lastAudioUnderruns = 0;
   private lastLocalAudioUnderruns = 0;
@@ -261,9 +257,7 @@ export class AvMirrorSession {
   private inputPriorityFraction = DEFAULT_INPUT_PRIORITY_FRACTION;
   /** Whether input-priority shedding is enabled (Settings; read at session start). Default on. */
   private inputPriorityEnabled = true;
-  /** True when starting video moved a Wi‑Fi audio stream onto Ethernet (dynamic policy) — so it can move back on video stop. */
-  private audioForcedToEthernet = false;
-  /** Serializes audio/video start/stop so a route conversion (stop+start) can't interleave with another toggle. */
+  /** Serializes audio/video start/stop and sender adoption so they never interleave. */
   private opChain: Promise<unknown> = Promise.resolve();
 
   constructor(deps: AvMirrorSessionDeps = {}) {
@@ -273,8 +267,8 @@ export class AvMirrorSession {
     // behaviour and record nothing.
     const startStream =
       deps.startStream ??
-      (async (name, destination, options) => {
-        const result = await getC64API().startStream(name, destination, options);
+      (async (name, destination) => {
+        const result = await getC64API().startStream(name, destination);
         recordDeviceStreamStarted(name, getC64API().getDeviceHost());
         return result;
       });
@@ -286,13 +280,14 @@ export class AvMirrorSession {
         return result;
       });
     this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+    this.judgeStreamSender = deps.judgeStreamSender ?? judgeStreamSender;
     // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
     // construction — the app-wide singleton is built at import time, before localStorage-backed
     // settings are safe to read under test, so reading here would couple every importer to the setting.
     this.governor = new StreamGovernor("auto");
 
     this.audio = new AudioMirrorController({
-      startStream: (_name, destination, options) => startStream("audio", destination, options),
+      startStream: (_name, destination) => startStream("audio", destination),
       stopStream: () => stopStream("audio"),
       onChange: (s) =>
         this.update({
@@ -310,7 +305,7 @@ export class AvMirrorSession {
           createStreamReceiver({
             ...opts,
             port: loadStreamAudioPort(),
-            expectedSource: getC64API().getDeviceHost(),
+            expectedSource: this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       createPlayer: deps.createPlayer,
@@ -324,8 +319,10 @@ export class AvMirrorSession {
       // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
       // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
       // earlier session sends straight into ours.
-      expectedSenderHost: () => getC64API().getDeviceHost(),
+      expectedSenderHost: () => this.expectedSender(),
       stopStreamAt: (host, name) => stopStreamAtForeignHost(host, name),
+      isForeignSender: async (host) =>
+        (await this.judgeStreamSender(host, getC64API().getDeviceHost())) === "different",
     });
 
     this.video = new VideoMirrorController({
@@ -343,7 +340,7 @@ export class AvMirrorSession {
             senderMismatch: s.senderMismatch,
           },
         }),
-      expectedSenderHost: () => getC64API().getDeviceHost(),
+      expectedSenderHost: () => this.expectedSender(),
       createReceiver:
         deps.createVideoReceiver ??
         ((opts) =>
@@ -353,7 +350,7 @@ export class AvMirrorSession {
             nativeVideoAssembly: loadStreamNativeVideoAssembly(),
             // Accept video only from the selected machine. Every Ultimate defaults to the same
             // multicast group, so a second one streaming into it is assembled into our frames.
-            expectedSource: getC64API().getDeviceHost(),
+            expectedSource: this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
@@ -371,6 +368,48 @@ export class AvMirrorSession {
   private update(patch: Partial<AvMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
     this.listeners.forEach((listener) => listener(this.snapshot));
+    const refused = patch.audio?.senderMismatch?.source ?? patch.video?.senderMismatch?.source;
+    if (refused) this.adoptIfSelectedDevice(refused);
+  }
+
+  /** Senders being checked right now; a negative answer is not kept, so a later refusal is checked again. */
+  private readonly checkingSenders = new Set<string>();
+  /** Per selected host, the address its streams actually arrive from, kept across receiver rebuilds. */
+  private readonly adoptedSenders = new Map<string, string>();
+
+  private expectedSender(): string {
+    const selectedHost = getC64API().getDeviceHost();
+    return this.adoptedSenders.get(selectedHost) ?? selectedHost;
+  }
+
+  /** A refused sender that proves to be the selected device on another address is accepted without asking. */
+  private adoptIfSelectedDevice(source: string) {
+    const selectedHost = getC64API().getDeviceHost();
+    const key = `${selectedHost}|${source}`;
+    if (this.checkingSenders.has(key)) return;
+    this.checkingSenders.add(key);
+    void this.judgeStreamSender(source, selectedHost)
+      .then((verdict) => {
+        addLog(
+          verdict === "same" ? "info" : "debug",
+          "Live View: checked a refused stream sender against the selected device",
+          {
+            service: "streams",
+            source,
+            selectedHost,
+            verdict,
+          },
+        );
+        if (verdict === "same" && getC64API().getDeviceHost() === selectedHost) return this.adoptSender(source);
+      })
+      .catch((error: unknown) => {
+        addLog("warn", "Live View: could not accept the selected device's stream from its other address", {
+          service: "streams",
+          source,
+          error: (error as Error)?.message ?? String(error),
+        });
+      })
+      .finally(() => this.checkingSenders.delete(key));
   }
 
   private emitFrame(frame: Uint8Array, height: number, arrivalMs: number) {
@@ -645,16 +684,7 @@ export class AvMirrorSession {
     this.applyKeepFraction(state.effectiveFraction);
   }
 
-  /**
-   * The audio route in effect. The Wi‑Fi route (firmware PR #732) does not exist
-   * in released firmware yet, so it is a **developer-mode-only** capability:
-   * outside developer mode the route is always Ethernet, whatever is persisted.
-   */
-  private effectiveAudioRoute(): StreamAudioRoute {
-    return getDeveloperModeEnabled() ? loadStreamAudioRoute() : "ethernet";
-  }
-
-  /** Run `op` after any in-flight transport op completes, so route conversions never interleave. */
+  /** Run `op` after any in-flight transport op completes, so transport changes never interleave. */
   private serialize<T>(op: () => Promise<T>): Promise<T> {
     const run = this.opChain.then(op, op);
     this.opChain = run.then(
@@ -693,11 +723,8 @@ export class AvMirrorSession {
           resume: () => void this.startAudio().catch((error) => warnAudioFocusFailure("resume", error)),
         },
       );
-      // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
-      // the controller falls back to Ethernet if Wi‑Fi isn't available.
-      const wifi = shouldUseWifiForAudio({ policy: this.effectiveAudioRoute(), videoActive: this.videoLive });
       try {
-        await this.audio.start({ wifi });
+        await this.audio.start();
       } catch (error) {
         // Nothing is playing, so do not keep holding the speaker against a
         // local tune that could otherwise start.
@@ -709,7 +736,6 @@ export class AvMirrorSession {
 
   stopAudio(): Promise<void> {
     return this.serialize(async () => {
-      this.audioForcedToEthernet = false;
       releasePhoneAudio(this);
       await this.audio.stop();
     });
@@ -721,21 +747,6 @@ export class AvMirrorSession {
 
   startVideo(): Promise<void> {
     return this.serialize(async () => {
-      // Wi‑Fi audio can't share a route with video. Depending on the policy, move
-      // the audio to Ethernet first (dynamic) or refuse the video (wifi).
-      const action = resolveVideoStartAction({
-        policy: this.effectiveAudioRoute(),
-        audioOnWifi: this.audio.isOnWifi(),
-      });
-      if (action === "blocked") {
-        this.update({ video: { ...this.snapshot.video, error: WIFI_AUDIO_BLOCKS_VIDEO } });
-        return;
-      }
-      if (action === "convert-audio-then-start") {
-        await this.audio.stop();
-        await this.audio.start({ wifi: false }); // Ethernet, so both share one route
-        this.audioForcedToEthernet = true;
-      }
       this.beginSessionIfIdle();
       await this.video.start();
     });
@@ -745,19 +756,6 @@ export class AvMirrorSession {
     return this.serialize(async () => {
       await this.video.stop();
       this.latestFrame = null;
-      // Dynamic policy: return audio to Wi‑Fi now that it is alone again, but only
-      // if starting video is what moved it off Wi‑Fi in the first place.
-      if (
-        this.audioLive &&
-        shouldReturnAudioToWifi({
-          policy: this.effectiveAudioRoute(),
-          audioForcedToEthernet: this.audioForcedToEthernet,
-        })
-      ) {
-        this.audioForcedToEthernet = false;
-        await this.audio.stop();
-        await this.audio.start({ wifi: true });
-      }
     });
   }
 
@@ -773,6 +771,7 @@ export class AvMirrorSession {
    * other, and a user who has been told which address to use should not have to be told twice.
    */
   adoptSender(source: string): Promise<void> {
+    this.adoptedSenders.set(getC64API().getDeviceHost(), source);
     return this.serialize(async () => {
       addLog("info", "Live View: accepting the stream from the address it is actually arriving from", {
         service: "streams",

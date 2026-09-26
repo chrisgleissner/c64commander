@@ -19,7 +19,7 @@ const seedSelectedDevice = (lastSuccessfulConnectionAt: string | null) => {
     JSON.stringify({
       version: 1,
       selectedDeviceId: "home",
-      devices: [{ id: "home", host: "192.168.1.146", httpPort: 80, lastSuccessfulConnectionAt }],
+      devices: [{ id: "home", host: "192.0.2.146", httpPort: 80, lastSuccessfulConnectionAt }],
       summaries: {},
       summaryLru: [],
     }),

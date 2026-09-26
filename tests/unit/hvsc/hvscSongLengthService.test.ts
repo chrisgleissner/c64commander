@@ -10,6 +10,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
+  Encoding: { UTF8: "utf8" },
   Filesystem: {
     mkdir: vi.fn(),
     stat: vi.fn(),

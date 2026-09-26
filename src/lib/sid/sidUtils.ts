@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { withoutUnknownPlaceholder } from "./unknownPlaceholder";
+
 export type SidClock = "unknown" | "pal" | "ntsc" | "pal_ntsc";
 export type SidModel = "unknown" | "mos6581" | "mos8580" | "both";
 
@@ -149,9 +151,9 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
   const startSong = startSongRaw > 0 ? Math.min(startSongRaw, songs) : 1;
   const speedBits = view.getUint32(18, false);
 
-  const name = decodeWindows1252(bytes.subarray(22, 54));
-  const author = decodeWindows1252(bytes.subarray(54, 86));
-  const released = decodeWindows1252(bytes.subarray(86, 118));
+  const name = withoutUnknownPlaceholder(decodeWindows1252(bytes.subarray(22, 54)));
+  const author = withoutUnknownPlaceholder(decodeWindows1252(bytes.subarray(54, 86)));
+  const released = withoutUnknownPlaceholder(decodeWindows1252(bytes.subarray(86, 118)));
 
   const flags = version >= 2 && view.byteLength >= 120 ? view.getUint16(118, false) : null;
   const clockBits = flags !== null ? (flags >> 2) & 0b11 : 0;

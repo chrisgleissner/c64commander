@@ -27,7 +27,7 @@ const streamUdp = vi.hoisted(() => {
   };
   const remove = vi.fn().mockResolvedValue(undefined);
   return {
-    bind: vi.fn().mockResolvedValue({ localIp: "192.168.1.206", port: 11000 }),
+    bind: vi.fn().mockResolvedValue({ localIp: "192.0.2.206", port: 11000 }),
     close: vi.fn().mockResolvedValue(undefined),
     readStreamDiagnostics: vi.fn().mockResolvedValue({ rejectedPackets: 0 }),
     setExpectedSource: vi.fn().mockResolvedValue(undefined),
@@ -63,7 +63,7 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     streamUdp.remove.mockClear();
     streamUdp.readStreamDiagnostics.mockClear().mockResolvedValue({ rejectedPackets: 0 });
     streamUdp.setExpectedSource.mockClear().mockResolvedValue(undefined);
-    streamUdp.bind.mockResolvedValue({ localIp: "192.168.1.206", port: 11000 });
+    streamUdp.bind.mockResolvedValue({ localIp: "192.0.2.206", port: 11000 });
   });
 
   it("is selected by createStreamReceiver on native", () => {
@@ -81,9 +81,9 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
    * be told which machine to accept.
    */
   it("tells the plugin which machine to accept packets from", async () => {
-    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: "192.168.1.15" });
+    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: "192.0.2.15" });
     await receiver.ready?.();
-    expect(streamUdp.bind).toHaveBeenCalledWith(expect.objectContaining({ name: "video", source: "192.168.1.15" }));
+    expect(streamUdp.bind).toHaveBeenCalledWith(expect.objectContaining({ name: "video", source: "192.0.2.15" }));
     receiver.close();
   });
 
@@ -201,15 +201,15 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
   it("reads the plugin's sender-filter counters", async () => {
     streamUdp.readStreamDiagnostics.mockResolvedValue({
       rejectedPackets: 812,
-      lastRejectedSource: "192.168.1.131",
-      expectedSource: "192.168.1.148",
+      lastRejectedSource: "192.0.2.131",
+      expectedSource: "192.0.2.148",
     });
     const receiver = createStreamReceiver({ name: "video", port: 11000 });
 
     await expect(receiver.readDiagnostics?.()).resolves.toEqual({
       rejectedPackets: 812,
-      lastRejectedSource: "192.168.1.131",
-      expectedSource: "192.168.1.148",
+      lastRejectedSource: "192.0.2.131",
+      expectedSource: "192.0.2.148",
     });
     expect(streamUdp.readStreamDiagnostics).toHaveBeenCalledWith({ name: "video" });
     receiver.close();
@@ -226,12 +226,12 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
   });
 
   it("retargets the sender filter on the socket it already bound", async () => {
-    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: "192.168.1.148" });
+    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: "192.0.2.148" });
     await receiver.ready?.();
 
-    await receiver.setExpectedSource?.("192.168.1.131");
+    await receiver.setExpectedSource?.("192.0.2.131");
 
-    expect(streamUdp.setExpectedSource).toHaveBeenCalledWith({ name: "video", host: "192.168.1.131" });
+    expect(streamUdp.setExpectedSource).toHaveBeenCalledWith({ name: "video", host: "192.0.2.131" });
     // The socket is not rebound: staying in the multicast group is the point of the retarget.
     expect(streamUdp.bind).toHaveBeenCalledTimes(1);
     receiver.close();

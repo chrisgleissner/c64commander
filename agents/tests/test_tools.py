@@ -152,14 +152,14 @@ def test_resolve_c64u_host_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("C64U_HOST", raising=False)
     import openhands.tools as tools
 
-    monkeypatch.setattr(tools, "DEFAULT_C64U_HOST", "192.168.1.13")
+    monkeypatch.setattr(tools, "DEFAULT_C64U_HOST", "192.0.2.13")
     host = resolve_c64u_host()
-    assert host == "192.168.1.13"
+    assert host == "192.0.2.13"
 
 
 def test_resolve_c64u_host_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("C64U_HOST", "10.0.0.5")
-    assert resolve_c64u_host() == "10.0.0.5"
+    monkeypatch.setenv("C64U_HOST", "198.51.100.5")
+    assert resolve_c64u_host() == "198.51.100.5"
 
 
 # ---------------------------------------------------------------------------

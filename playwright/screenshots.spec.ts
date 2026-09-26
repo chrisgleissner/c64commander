@@ -4181,10 +4181,11 @@ test.describe("App screenshots", () => {
       allowWarnings(testInfo, "Expected probe failures while the selected device is unreachable during discovery.");
 
       // Injected so the web discovery facade returns candidates (a browser cannot
-      // LAN-scan). Mirrors the two real lab devices so the dialog reads naturally.
+      // LAN-scan). Two typical devices on RFC 5737 documentation addresses, so the
+      // published screenshot shows no real network.
       const discoveryCandidates = [
         {
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           host: "u64",
           httpPort: 80,
           source: ["lan-scan"],
@@ -4194,7 +4195,7 @@ test.describe("App screenshots", () => {
           uniqueId: "38C1BA",
         },
         {
-          address: "192.168.1.167",
+          address: "192.0.2.167",
           host: "c64u",
           httpPort: 80,
           source: ["lan-scan"],

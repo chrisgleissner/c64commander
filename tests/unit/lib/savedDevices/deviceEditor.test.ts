@@ -85,7 +85,7 @@ describe("isLocalOnlySavedDeviceEdit (HARD27-037)", () => {
   });
 
   it("is not local-only when the host changed", () => {
-    expect(isLocalOnlySavedDeviceEdit(current, { host: "192.168.1.15", httpPort: 80 }, false, true)).toBe(false);
+    expect(isLocalOnlySavedDeviceEdit(current, { host: "192.0.2.15", httpPort: 80 }, false, true)).toBe(false);
   });
 
   it("is not local-only when the HTTP port changed", () => {

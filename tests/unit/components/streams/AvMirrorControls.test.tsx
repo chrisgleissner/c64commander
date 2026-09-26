@@ -66,15 +66,15 @@ describe("AvMirrorControls", () => {
     mirror.state.video = {
       state: "error",
       error:
-        "Video packets are arriving from 192.168.1.148 and being dropped — the app is only accepting packets from 192.168.1.9.",
-      senderMismatch: { source: "192.168.1.148", expected: "192.168.1.9", rejectedPackets: 27400 },
+        "Video packets are arriving from 192.0.2.148 and being dropped — the app is only accepting packets from 192.0.2.9.",
+      senderMismatch: { source: "192.0.2.148", expected: "192.0.2.9", rejectedPackets: 27400 },
     };
     render(<AvMirrorControls />);
     const adopt = screen.getByTestId("av-mirror-adopt-sender");
-    expect(adopt).toHaveTextContent("Use 192.168.1.148");
+    expect(adopt).toHaveTextContent("Use 192.0.2.148");
 
     fireEvent.click(adopt);
-    expect(mirror.adoptSender).toHaveBeenCalledWith("192.168.1.148");
+    expect(mirror.adoptSender).toHaveBeenCalledWith("192.0.2.148");
   });
 
   it("offers no recovery when no sender mismatch was diagnosed", () => {
@@ -90,13 +90,12 @@ describe("AvMirrorControls", () => {
     mirror.state.audio = {
       state: "live",
       error: null,
-      foreignSenderNotice:
-        "Another Ultimate at 192.168.1.15 is also streaming into this group; stop it on that machine.",
+      foreignSenderNotice: "Another Ultimate at 192.0.2.15 is also streaming into this group; stop it on that machine.",
       senderMismatch: null,
     };
     render(<AvMirrorControls />);
     const notice = screen.getByTestId("av-mirror-foreign-sender-notice");
-    expect(notice).toHaveTextContent("192.168.1.15");
+    expect(notice).toHaveTextContent("192.0.2.15");
     expect(notice).toHaveAttribute("role", "status");
     expect(screen.queryByTestId("av-mirror-error")).toBeNull();
   });

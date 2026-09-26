@@ -116,6 +116,7 @@ const {
   mockEvaluateNewDeviceReachability,
   mockStartDeviceDiscovery,
   mockPersistDiscoveredDevice,
+  mockResolveDiscoveredCandidateIdentity,
   mockGetConnectionSnapshot,
   connectionPayloadRef,
   connectionStateRef,
@@ -155,6 +156,7 @@ const {
     elapsedMs: 0,
     unsupported: false,
   })),
+  mockResolveDiscoveredCandidateIdentity: vi.fn(async (candidate: unknown, _password?: string) => candidate),
   mockPersistDiscoveredDevice: vi.fn((candidate: { address: string; httpPort: number }) => ({
     deviceId: "discovered-device",
     host: candidate.address,
@@ -282,6 +284,7 @@ vi.mock("@/hooks/useDeviceDiscovery", () => ({
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   startDeviceDiscovery: mockStartDeviceDiscovery,
   persistDiscoveredDevice: mockPersistDiscoveredDevice,
+  resolveDiscoveredCandidateIdentity: mockResolveDiscoveredCandidateIdentity,
 }));
 
 vi.mock("@/components/ThemeProvider", () => ({
@@ -585,8 +588,6 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveStreamVideoBadges: vi.fn(),
   loadStreamNativeAudio: vi.fn(() => true),
   saveStreamNativeAudio: vi.fn(),
-  loadStreamAudioRoute: vi.fn(() => "dynamic"),
-  saveStreamAudioRoute: vi.fn(),
   loadArchiveClientIdOverride: vi.fn(() => ""),
   loadArchiveHostOverride: vi.fn(() => ""),
   loadArchiveUserAgentOverride: vi.fn(() => ""),
@@ -839,7 +840,7 @@ describe("SettingsPage", () => {
   it("blocks the save and calmly suggests the IP when a hostname is unreachable but found on the LAN", async () => {
     mockEvaluateNewDeviceReachability.mockResolvedValue({
       status: "unreachable",
-      suggestedAddress: "192.168.1.167",
+      suggestedAddress: "192.0.2.167",
       suggestedHostname: "c64u",
     });
 
@@ -855,7 +856,7 @@ describe("SettingsPage", () => {
 
     // Tapping the calm suggestion fills the host field with the working IP.
     fireEvent.click(screen.getByTestId("settings-device-use-suggested-address"));
-    expect((screen.getByTestId("settings-device-host") as HTMLInputElement).value).toBe("192.168.1.167");
+    expect((screen.getByTestId("settings-device-host") as HTMLInputElement).value).toBe("192.0.2.167");
     expect(screen.queryByTestId("settings-device-reachability-suggestion")).toBeNull();
   }, 15000);
 
@@ -875,7 +876,7 @@ describe("SettingsPage", () => {
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
-  // Typing 192.168.1.248 was answered with "or enter its IP address", which the user had just done.
+  // Typing 192.0.2.248 was answered with "or enter its IP address", which the user had just done.
   it("does not suggest entering an IP address when the unreachable host already is one", async () => {
     mockEvaluateNewDeviceReachability.mockResolvedValue({
       status: "unreachable",
@@ -884,11 +885,11 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPage();
-    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.168.1.248" } });
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.0.2.248" } });
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn’t reach “192\.168\.1\.248”/i)).toBeInTheDocument();
+      expect(screen.getByText(/couldn’t reach “192\.0\.2\.248”/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/enter its IP address/i)).not.toBeInTheDocument();
   }, 15000);
@@ -1029,7 +1030,7 @@ describe("SettingsPage", () => {
   it("selects a discovered device through the saved-device switching path", async () => {
     const candidate = {
       id: "id:38c1ba",
-      address: "192.168.1.13",
+      address: "192.0.2.13",
       host: null,
       httpPort: 80,
       source: ["lan-scan"],
@@ -1081,7 +1082,7 @@ describe("SettingsPage", () => {
   it("locks the Use control while a discovered-device switch is in flight (no double-submit)", async () => {
     const candidate = {
       id: "id:busy",
-      address: "192.168.1.30",
+      address: "192.0.2.30",
       host: null,
       httpPort: 80,
       source: ["lan-scan"],
@@ -1122,8 +1123,8 @@ describe("SettingsPage", () => {
 
   it("asks for a password before selecting a password-protected discovered device", async () => {
     const candidate = {
-      id: "address:192.168.1.14",
-      address: "192.168.1.14",
+      id: "address:192.0.2.14",
+      address: "192.0.2.14",
       host: null,
       httpPort: 80,
       source: ["lan-scan"],
@@ -1160,6 +1161,7 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByTestId("settings-device-password-confirm"));
 
     await waitFor(() => {
+      expect(mockResolveDiscoveredCandidateIdentity).toHaveBeenCalledWith(candidate, "secret");
       expect(mockPersistDiscoveredDevice).toHaveBeenCalledWith(candidate, { select: true, passwordPresent: true });
       expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("discovered-device", "secret");
       expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device");
@@ -1204,6 +1206,38 @@ describe("SettingsPage", () => {
     const backupRow = screen.getByTestId("settings-device-row-saved-device-2");
     expect(backupRow).toHaveTextContent("Unknown · c64u");
     expect(backupRow).not.toHaveTextContent("U64E · c64u");
+  });
+
+  // One Ultimate saved under its Ethernet and its Wi-Fi address is listed twice.
+  it("marks a saved device row that is the same device as another saved entry", () => {
+    const base = savedDevicesRef.current.devices[0];
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      selectedDeviceId: "saved-wired",
+      devices: [
+        {
+          ...base,
+          id: "saved-wired",
+          name: "Desk eth",
+          host: "192.0.2.10",
+          lastKnownHostname: "desk-ultimate",
+          lastKnownUniqueId: "DUAL01",
+        },
+        {
+          ...base,
+          id: "saved-wireless",
+          name: "Desk wifi",
+          host: "198.51.100.20",
+          lastKnownHostname: "desk-ultimate",
+          lastKnownUniqueId: "DUAL01",
+        },
+      ],
+    };
+
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-device-row-saved-wireless")).toHaveTextContent("Same device as Desk eth");
+    expect(screen.getByTestId("settings-device-row-saved-wired")).toHaveTextContent("Same device as Desk wifi");
   });
 
   it("offers Friendly SID names in Play and Disk, reflecting the stored preference and writing it back", () => {
@@ -2209,13 +2243,13 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/no real device detected in recent probe/i)).toBeInTheDocument();
   });
 
-  // On a Pixel 4 Demo Mode read "Currently using: 192.168.1.146 · HTTP 43499 · FTP 38389 · Telnet 23 (Demo mock)":
+  // On a Pixel 4 Demo Mode read "Currently using: 192.0.2.146 · HTTP 43499 · FTP 38389 · Telnet 23 (Demo mock)":
   // the saved device's address beside the simulated device's ports.
   it("shows the simulated device's address in Demo Mode rather than the saved device's", () => {
     connectionPayloadRef.current = {
       ...connectionPayloadRef.current,
       status: { state: "DEMO_ACTIVE", isConnected: true, isConnecting: false, error: null, deviceInfo: null },
-      deviceHost: "192.168.1.146",
+      deviceHost: "192.0.2.146",
       runtimeBaseUrl: "http://127.0.0.1:43499",
     };
 
@@ -2224,7 +2258,7 @@ describe("SettingsPage", () => {
     const line = screen.getByText(/Currently using:/);
     expect(line.querySelector("span")).toHaveTextContent("127.0.0.1");
     expect(line).toHaveTextContent("HTTP 43499");
-    expect(line).not.toHaveTextContent("192.168.1.146");
+    expect(line).not.toHaveTextContent("192.0.2.146");
     expect(line).not.toHaveTextContent("Telnet");
   });
 
@@ -2958,7 +2992,7 @@ describe("SettingsPage", () => {
       renderSettingsPage();
 
       const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
-      fireEvent.change(input, { target: { value: "192.168.1.42" } });
+      fireEvent.change(input, { target: { value: "192.0.2.42" } });
       fireEvent.blur(input);
 
       await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());

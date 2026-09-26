@@ -32,7 +32,7 @@ vi.mock("@/lib/secureStorage", () => ({
 }));
 
 const { mockResolveDeviceHostFromStorage, mockStripPortFromDeviceHost } = vi.hoisted(() => ({
-  mockResolveDeviceHostFromStorage: vi.fn(() => "192.168.1.50:8080"),
+  mockResolveDeviceHostFromStorage: vi.fn(() => "192.0.2.50:8080"),
   mockStripPortFromDeviceHost: vi.fn((host: string) => host.split(":")[0]),
 }));
 
@@ -234,9 +234,9 @@ describe("ftpConfig", () => {
       const options = await resolveFtpConnectionOptions();
 
       expect(mockResolveDeviceHostFromStorage).toHaveBeenCalled();
-      expect(mockStripPortFromDeviceHost).toHaveBeenCalledWith("192.168.1.50:8080");
+      expect(mockStripPortFromDeviceHost).toHaveBeenCalledWith("192.0.2.50:8080");
       expect(options).toEqual({
-        host: "192.168.1.50",
+        host: "192.0.2.50",
         port: 2121,
         username: "user",
         password: "secret",

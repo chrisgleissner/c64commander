@@ -9,8 +9,10 @@
 import { listFtpDirectory, readFtpFile } from "@/lib/ftp/ftpClient";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getPasswordForDevice } from "@/lib/secureStorage";
-import { getSavedDeviceById, getSelectedSavedDevice } from "./store";
+import { getSavedDeviceById, getSelectedSavedDevice, type SavedDevice } from "./store";
+import { isSameMachine, type MachineIdentity } from "./machineIdentity";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
+import { getConnectedDeviceIdentity } from "@/lib/connection/connectedDeviceIdentity";
 
 export type OriginDeviceUnavailableReason =
   "origin-device-unreachable" | "origin-device-removed" | "origin-device-mismatch" | "origin-file-missing";
@@ -83,19 +85,24 @@ export const buildSelectedDeviceBoundOrigin = (originPath: string): DeviceBoundC
   };
 };
 
+const originMachineIdentity = (origin: DeviceBoundContentOrigin): MachineIdentity => ({
+  uniqueId: origin.originDeviceLastKnownUniqueId,
+  hostname: getSavedDeviceById(origin.originDeviceId)?.lastKnownHostname ?? null,
+});
+
+// A selected entry not yet stamped with an id (a second address of a known device) is identified by
+// what the connected device reports, so its files are not treated as another machine's.
+const selectedMachineIdentity = (selected: SavedDevice): MachineIdentity =>
+  selected.lastKnownUniqueId
+    ? { uniqueId: selected.lastKnownUniqueId, hostname: selected.lastKnownHostname }
+    : getConnectedDeviceIdentity();
+
 export const isOriginOnSelectedDevice = (origin?: DeviceBoundContentOrigin | null) => {
   if (!origin || origin.sourceKind !== "ultimate") return true;
   const selectedDevice = getSelectedSavedDevice();
   if (!selectedDevice) return false;
   if (origin.originDeviceId === selectedDevice.id) return true;
-  if (
-    origin.originDeviceLastKnownUniqueId &&
-    selectedDevice.lastKnownUniqueId &&
-    origin.originDeviceLastKnownUniqueId === selectedDevice.lastKnownUniqueId
-  ) {
-    return true;
-  }
-  return false;
+  return isSameMachine(originMachineIdentity(origin), selectedMachineIdentity(selectedDevice));
 };
 
 export const getOriginDeviceUnavailableReason = (origin?: DeviceBoundContentOrigin | null) => {

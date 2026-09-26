@@ -14,6 +14,7 @@ const writeFileMock = vi.fn();
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
+  Encoding: { UTF8: "utf8" },
   Filesystem: {
     mkdir: (...args: unknown[]) => mkdirMock(...args),
     readFile: (...args: unknown[]) => readFileMock(...args),
@@ -117,27 +118,13 @@ describe("FilesystemMediaIndexStorage", () => {
       }
     });
 
-    it("uses Buffer fallback for encoding when btoa is unavailable", async () => {
-      // Covers the typeof btoa !== 'function' branch in encodeUtf8Base64
+    it("writes the JSON text itself with UTF-8 encoding, so no base64 copy is built", async () => {
       const snapshot = makeSnapshot();
-      const storage = new FilesystemMediaIndexStorage();
+      await new FilesystemMediaIndexStorage().write(snapshot);
 
-      let capturedData = "";
-      writeFileMock.mockImplementation(async (args: { data: string }) => {
-        capturedData = args.data;
-      });
-
-      const originalBtoa = globalThis.btoa;
-      (globalThis as any).btoa = undefined;
-      try {
-        await storage.write(snapshot);
-      } finally {
-        (globalThis as any).btoa = originalBtoa;
-      }
-
-      // capturedData should be valid base64 produced by Buffer.from
-      const decoded = Buffer.from(capturedData, "base64").toString("utf-8");
-      expect(JSON.parse(decoded)).toEqual(snapshot);
+      expect(writeFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({ data: JSON.stringify(snapshot), encoding: "utf8" }),
+      );
     });
   });
 });

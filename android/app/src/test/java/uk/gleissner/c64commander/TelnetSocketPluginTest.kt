@@ -17,6 +17,8 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.ConnectException
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketAddress
@@ -44,6 +46,8 @@ import org.robolectric.shadows.ShadowLog
 
 @RunWith(RobolectricTestRunner::class)
 class TelnetSocketPluginTest {
+  private val ethernetAddress = InetAddress.getByAddress(byteArrayOf(192.toByte(), 0, 2, 10))
+  private val wifiAddress = InetAddress.getByAddress(byteArrayOf(198.toByte(), 51, 100, 20))
   private lateinit var plugin: TelnetSocketPlugin
   private lateinit var context: Context
 
@@ -52,6 +56,9 @@ class TelnetSocketPluginTest {
     context = ApplicationProvider.getApplicationContext()
     plugin = TelnetSocketPlugin()
     plugin.runTask = { runnable -> runnable.run() }
+    plugin.hostResolver = HostAddressResolver { host ->
+      if (host == "ultimate.example") listOf(ethernetAddress) else throw java.net.UnknownHostException(host)
+    }
     injectBridge(plugin, context)
     ShadowLog.clear()
   }
@@ -72,7 +79,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val call = mock(PluginCall::class.java)
-    `when`(call.getString("host")).thenReturn("c64u")
+    `when`(call.getString("host")).thenReturn("ultimate.example")
     `when`(call.getInt("port")).thenReturn(null)
     `when`(call.getInt("timeoutMs")).thenReturn(null)
     var connectResolved: JSObject? = null
@@ -87,7 +94,7 @@ class TelnetSocketPluginTest {
 
     verify(call).resolve(any())
     assertEquals(0, connectResolved?.length())
-    assertEquals("c64u", socket.connectedHost)
+    assertEquals("192.0.2.10", socket.connectedHost)
     assertEquals(23, socket.connectedPort)
     assertEquals(5_000, socket.connectTimeoutMs)
     assertEquals(500, socket.soTimeoutValue)
@@ -111,7 +118,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { FakeSocket(connectFailure = RuntimeException("boom")) }
 
     val call = mock(PluginCall::class.java)
-    `when`(call.getString("host")).thenReturn("c64u")
+    `when`(call.getString("host")).thenReturn("ultimate.example")
     `when`(call.getInt("port")).thenReturn(6400)
     `when`(call.getInt("timeoutMs")).thenReturn(250)
 
@@ -126,12 +133,86 @@ class TelnetSocketPluginTest {
   }
 
   @Test
+  fun connectFallsBackToTheNextResolvedAddressWhenTheFirstRefusesWithinOneBudget() {
+    plugin.hostResolver = HostAddressResolver { listOf(wifiAddress, ethernetAddress) }
+    val refusing = FakeSocket(connectFailure = ConnectException("Connection refused"))
+    val accepting = FakeSocket()
+    val sockets = ArrayDeque(listOf(refusing, accepting))
+    plugin.socketFactory = { sockets.removeFirst() }
+    val call = connectCall("ultimate.example", timeoutMs = 4_000)
+
+    plugin.connect(call)
+
+    verify(call).resolve(any())
+    assertEquals("198.51.100.20", refusing.connectedHost)
+    assertTrue("the failed attempt's socket is closed", refusing.closed)
+    assertEquals("192.0.2.10", accepting.connectedHost)
+    assertEquals(2_000, refusing.connectTimeoutMs)
+    // A quick refusal leaves nearly the whole budget to the next address, never more than all of it.
+    assertTrue((accepting.connectTimeoutMs ?: 0) in 3_900..4_000)
+    val logs = ShadowLog.getLogsForTag("TelnetSocketPlugin").map { it.msg.orEmpty() }
+    assertTrue(logs.any { it.contains("Telnet connect to ultimate.example via 198.51.100.20:23 failed within 2000ms") })
+    assertTrue(logs.any { it.contains("Telnet connected to ultimate.example:23 via 192.0.2.10 (2 addresses resolved)") })
+  }
+
+  @Test
+  fun connectTriesResolvedIpv4AddressesBeforeIpv6() {
+    val ipv6 = InetAddress.getByAddress(ByteArray(16).also { it[0] = 0x20; it[1] = 0x01; it[2] = 0x0d; it[3] = 0xb8.toByte(); it[15] = 1 })
+    plugin.hostResolver = HostAddressResolver { listOf(ipv6, ethernetAddress) }
+    val socket = FakeSocket()
+    plugin.socketFactory = { socket }
+
+    plugin.connect(connectCall("ultimate.example", timeoutMs = 4_000))
+
+    assertEquals("192.0.2.10", socket.connectedHost)
+    assertEquals(2_000, socket.connectTimeoutMs)
+  }
+
+  @Test
+  fun connectRejectsWithTheLastFailureWhenEveryResolvedAddressFails() {
+    plugin.hostResolver = HostAddressResolver { listOf(wifiAddress, ethernetAddress) }
+    val sockets =
+            ArrayDeque(
+                    listOf(
+                            FakeSocket(connectFailure = SocketTimeoutException("first timed out")),
+                            FakeSocket(connectFailure = ConnectException("second refused")),
+                    ),
+            )
+    plugin.socketFactory = { sockets.removeFirst() }
+    val call = connectCall("ultimate.example", timeoutMs = 4_000)
+
+    plugin.connect(call)
+
+    verify(call).reject(org.mockito.ArgumentMatchers.eq("Connection failed: second refused"), any(Exception::class.java))
+  }
+
+  @Test
+  fun connectUsesALiteralIpAddressAsGivenWithoutResolvingIt() {
+    plugin.hostResolver = HostAddressResolver { host -> throw AssertionError("resolved literal $host") }
+    val socket = FakeSocket()
+    plugin.socketFactory = { socket }
+
+    plugin.connect(connectCall("203.0.113.7", timeoutMs = 4_000))
+
+    assertEquals("203.0.113.7", socket.connectedHost)
+    assertEquals(4_000, socket.connectTimeoutMs)
+  }
+
+  private fun connectCall(host: String, timeoutMs: Int): PluginCall {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn(host)
+    `when`(call.getInt("port")).thenReturn(null)
+    `when`(call.getInt("timeoutMs")).thenReturn(timeoutMs)
+    return call
+  }
+
+  @Test
   fun disconnectClosesResourcesAndClearsConnectionState() {
     val socket = FakeSocket()
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val disconnectCall = mock(PluginCall::class.java)
@@ -175,7 +256,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val disconnectCall = mock(PluginCall::class.java)
@@ -248,7 +329,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val sendCall = mock(PluginCall::class.java)
@@ -279,7 +360,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val sendCall = mock(PluginCall::class.java)
@@ -319,7 +400,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val readCall = mock(PluginCall::class.java)
@@ -348,7 +429,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val readCall = mock(PluginCall::class.java)
@@ -391,7 +472,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val readCall = mock(PluginCall::class.java)
@@ -437,7 +518,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val readCall = mock(PluginCall::class.java)
@@ -466,7 +547,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val readCall = mock(PluginCall::class.java)
@@ -492,7 +573,7 @@ class TelnetSocketPluginTest {
     plugin.socketFactory = { socket }
 
     val connectCall = mock(PluginCall::class.java)
-    `when`(connectCall.getString("host")).thenReturn("c64u")
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
     plugin.connect(connectCall)
 
     val readCall = mock(PluginCall::class.java)
@@ -523,7 +604,7 @@ class TelnetSocketPluginTest {
     realPlugin.socketFactory = { socket }
 
     val call = mock(PluginCall::class.java)
-    `when`(call.getString("host")).thenReturn("c64u")
+    `when`(call.getString("host")).thenReturn("192.0.2.10")
     realPlugin.connect(call)
 
     assertTrue("connect() task did not start on the executor thread", startedLatch.await(1, TimeUnit.SECONDS))
@@ -576,11 +657,11 @@ private class FakeSocket(
   private var connected = false
 
   override fun connect(endpoint: SocketAddress?, timeout: Int) {
-    connectFailure?.let { throw it }
     val address = endpoint as InetSocketAddress
     connectedHost = address.hostString
     connectedPort = address.port
     connectTimeoutMs = timeout
+    connectFailure?.let { throw it }
     connected = true
     closed = false
   }

@@ -2685,18 +2685,10 @@ export class C64API {
 
   /**
    * Tell the device to start streaming `stream` to `ip` (host:port).
-   *
-   * `options.wifi` adds `&wifi=true`, asking the firmware to deliver the stream
-   * over its **Wi‑Fi** interface instead of Ethernet (1541ultimate PR #732).
-   * This is **audio-only** — the firmware relays a single audio stream over
-   * Wi‑Fi to the caller-specified (unicast) `ip`. If Wi‑Fi is unavailable the
-   * call FAILS (no silent Ethernet fallback), so callers requesting Wi‑Fi must
-   * be ready to retry over Ethernet.
    */
-  async startStream(stream: string, ip: string, options?: { wifi?: boolean }): Promise<{ errors: string[] }> {
-    const query = `ip=${encodeURIComponent(ip)}${options?.wifi ? "&wifi=true" : ""}`;
+  async startStream(stream: string, ip: string): Promise<{ errors: string[] }> {
     const response = await this.request<{ errors: string[] }>(
-      `/v1/streams/${encodeURIComponent(stream)}:start?${query}`,
+      `/v1/streams/${encodeURIComponent(stream)}:start?ip=${encodeURIComponent(ip)}`,
       {
         method: "PUT",
         timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,

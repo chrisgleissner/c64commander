@@ -600,6 +600,8 @@ final class FtpSession {
      * it in `readFile` (HARD27-012).
      */
     var transferTimeout: TimeInterval?
+    /* The address the control connection reached. */
+    private(set) var controlAddress: String?
 
     init(host: String, port: Int, timeout: TimeInterval = 30, connectTimeout: TimeInterval? = nil) {
         self.host = host
@@ -610,9 +612,47 @@ final class FtpSession {
     }
 
     func connect() throws {
+        let candidates = HostAddressCandidates.resolve(host)
+        let connected = try HostAddressCandidates.connectFirstReachable(
+            candidates,
+            totalTimeout: connectTimeout,
+            attempt: { address, attemptTimeout -> (code: Int, message: String) in
+                try openControlStreams(to: address)
+                return try readResponse(timeout: attemptTimeout)
+            },
+            onAttemptFailed: { address, attemptTimeout, error in
+                disconnect()
+                if candidates.count > 1 {
+                    IOSDiagnostics.log(.warn, "FTP connect attempt failed", details: [
+                        "origin": "native",
+                        "host": host,
+                        "address": address,
+                        "port": "\(port)",
+                        "attemptTimeoutMs": Int(attemptTimeout * 1_000),
+                        "addressCount": candidates.count,
+                    ], error: error)
+                }
+            }
+        )
+        controlAddress = connected.address
+        if candidates.count > 1 {
+            IOSDiagnostics.log(.debug, "FTP connected", details: [
+                "origin": "native",
+                "host": host,
+                "address": connected.address,
+                "port": "\(port)",
+                "addressCount": candidates.count,
+            ])
+        }
+        guard connected.value.code == 220 else {
+            throw NativePluginError.operationFailed("FTP command failed (\(connected.value.code))")
+        }
+    }
+
+    private func openControlStreams(to address: String) throws {
         var readStream: Unmanaged<CFReadStream>?
         var writeStream: Unmanaged<CFWriteStream>?
-        CFStreamCreatePairWithSocketToHost(nil, host as CFString, UInt32(port), &readStream, &writeStream)
+        CFStreamCreatePairWithSocketToHost(nil, address as CFString, UInt32(port), &readStream, &writeStream)
 
         guard let read = readStream?.takeRetainedValue(),
               let write = writeStream?.takeRetainedValue() else {
@@ -623,8 +663,6 @@ final class FtpSession {
         outputStream = write
         inputStream?.open()
         outputStream?.open()
-
-        _ = try readResponse(expectPrefix: [220], timeout: connectTimeout)
     }
 
     func disconnect() {
@@ -770,8 +808,17 @@ final class FtpSession {
         guard numbers.count == 6 else {
             throw NativePluginError.operationFailed("Invalid FTP PASV address payload")
         }
-        let dataHost = "\(numbers[0]).\(numbers[1]).\(numbers[2]).\(numbers[3])"
+        let advertisedHost = "\(numbers[0]).\(numbers[1]).\(numbers[2]).\(numbers[3])"
         let dataPort = numbers[4] * 256 + numbers[5]
+        // A dual-homed device must get its data connection on the address the control connection reached.
+        let dataHost = controlAddress ?? host
+        if advertisedHost != dataHost {
+            IOSDiagnostics.log(.debug, "FTP PASV named another address; using the control connection's", details: [
+                "origin": "native",
+                "advertisedHost": advertisedHost,
+                "dataHost": dataHost,
+            ])
+        }
         return (dataHost, dataPort)
     }
 
@@ -1098,5 +1145,92 @@ final class FtpSession {
             return "\(base)\(name)"
         }
         return "\(base)/\(name)"
+    }
+}
+
+/*
+ * An Ultimate on Ethernet and Wi-Fi at once answers at two addresses, and the one a resolver
+ * returns first can belong to an interface that is down. Mirrors Android's HostAddressConnector;
+ * `ios/native-tests` holds a byte-identical copy of this enum and tests it.
+ */
+enum HostAddressCandidates {
+    enum Failure: Error {
+        case noAddresses
+    }
+
+    static func orderIpv4First(_ addresses: [String]) -> [String] {
+        var unique: [String] = []
+        for address in addresses where !unique.contains(address) {
+            unique.append(address)
+        }
+        return unique.filter { !$0.contains(":") } + unique.filter { $0.contains(":") }
+    }
+
+    /** Splits what is left of the budget evenly over the addresses not yet tried. */
+    static func attemptTimeout(remaining: TimeInterval, remainingCandidates: Int) -> TimeInterval {
+        max(remaining / Double(max(remainingCandidates, 1)), 0.001)
+    }
+
+    static func connectFirstReachable<T>(
+        _ candidates: [String],
+        totalTimeout: TimeInterval,
+        now: () -> Date = { Date() },
+        attempt: (_ address: String, _ timeout: TimeInterval) throws -> T,
+        onAttemptFailed: (_ address: String, _ timeout: TimeInterval, _ error: Error) -> Void
+    ) throws -> (address: String, value: T) {
+        let deadline = now().addingTimeInterval(totalTimeout)
+        var lastError: Error?
+        for (index, candidate) in candidates.enumerated() {
+            let remaining = deadline.timeIntervalSince(now())
+            if remaining <= 0 && lastError != nil {
+                break
+            }
+            let timeout = attemptTimeout(remaining: remaining, remainingCandidates: candidates.count - index)
+            do {
+                return (candidate, try attempt(candidate, timeout))
+            } catch {
+                lastError = error
+                onAttemptFailed(candidate, timeout, error)
+            }
+        }
+        throw lastError ?? Failure.noAddresses
+    }
+}
+
+extension HostAddressCandidates {
+    static func isIpLiteral(_ host: String) -> Bool {
+        var ipv4 = in_addr()
+        var ipv6 = in6_addr()
+        return inet_pton(AF_INET, host, &ipv4) == 1 || inet_pton(AF_INET6, host, &ipv6) == 1
+    }
+
+    /** Every numeric address `host` resolves to, IPv4 first. A literal, or a name that does not resolve, is returned as given. */
+    static func resolve(_ host: String) -> [String] {
+        if isIpLiteral(host) {
+            return [host]
+        }
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        var result: UnsafeMutablePointer<addrinfo>?
+        let status = getaddrinfo(host, nil, &hints, &result)
+        guard status == 0, let first = result else {
+            IOSDiagnostics.log(.warn, "Host name did not resolve; connecting by name", details: [
+                "origin": "native",
+                "host": host,
+                "status": Int(status),
+            ])
+            return [host]
+        }
+        defer { freeaddrinfo(first) }
+        var addresses: [String] = []
+        var cursor: UnsafeMutablePointer<addrinfo>? = first
+        while let info = cursor {
+            var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            if getnameinfo(info.pointee.ai_addr, info.pointee.ai_addrlen, &buffer, socklen_t(buffer.count), nil, 0, NI_NUMERICHOST) == 0 {
+                addresses.append(String(cString: buffer))
+            }
+            cursor = info.pointee.ai_next
+        }
+        return addresses.isEmpty ? [host] : orderIpv4First(addresses)
     }
 }

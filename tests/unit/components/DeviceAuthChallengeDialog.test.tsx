@@ -12,8 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const snapshot = {
   selectedDeviceId: "dev-c64u",
   devices: [
-    { id: "dev-c64u", name: "Living Room C64U", host: "192.168.1.167" },
-    { id: "dev-u64", name: "Studio U64", host: "192.168.1.13" },
+    { id: "dev-c64u", name: "Living Room C64U", host: "192.0.2.167" },
+    { id: "dev-u64", name: "Studio U64", host: "192.0.2.13" },
   ],
 };
 
@@ -55,10 +55,10 @@ describe("DeviceAuthChallengeDialog", () => {
   it("opens a single popup naming the affected device on Forbidden", () => {
     render(<DeviceAuthChallengeDialog />);
     act(() => {
-      notifyAuthRequired({ host: "192.168.1.167" });
+      notifyAuthRequired({ host: "192.0.2.167" });
       // Burst of Forbidden responses must coalesce into one popup.
-      notifyAuthRequired({ host: "192.168.1.167" });
-      notifyAuthRequired({ host: "192.168.1.13" });
+      notifyAuthRequired({ host: "192.0.2.167" });
+      notifyAuthRequired({ host: "192.0.2.13" });
     });
     expect(screen.getByText(/network password required/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Living Room C64U/i).length).toBeGreaterThan(0);
@@ -68,14 +68,14 @@ describe("DeviceAuthChallengeDialog", () => {
 
   it("masks the password input", () => {
     render(<DeviceAuthChallengeDialog />);
-    act(() => notifyAuthRequired({ host: "192.168.1.167" }));
+    act(() => notifyAuthRequired({ host: "192.0.2.167" }));
     const input = screen.getByTestId("device-auth-challenge-input");
     expect(input).toHaveAttribute("type", "password");
   });
 
   it("submits the entered password to the controller", async () => {
     render(<DeviceAuthChallengeDialog />);
-    act(() => notifyAuthRequired({ host: "192.168.1.167" }));
+    act(() => notifyAuthRequired({ host: "192.0.2.167" }));
     fireEvent.change(screen.getByTestId("device-auth-challenge-input"), { target: { value: "pwd" } });
     fireEvent.click(screen.getByTestId("device-auth-challenge-submit"));
     await waitFor(() => expect(submitAuthChallengePassword).toHaveBeenCalledWith("pwd"));
@@ -88,7 +88,7 @@ describe("DeviceAuthChallengeDialog", () => {
       return false;
     });
     render(<DeviceAuthChallengeDialog />);
-    act(() => notifyAuthRequired({ host: "192.168.1.167" }));
+    act(() => notifyAuthRequired({ host: "192.0.2.167" }));
     fireEvent.change(screen.getByTestId("device-auth-challenge-input"), { target: { value: "nope" } });
     fireEvent.click(screen.getByTestId("device-auth-challenge-submit"));
 
@@ -99,7 +99,7 @@ describe("DeviceAuthChallengeDialog", () => {
 
   it("cancels via the Cancel button", () => {
     render(<DeviceAuthChallengeDialog />);
-    act(() => notifyAuthRequired({ host: "192.168.1.167" }));
+    act(() => notifyAuthRequired({ host: "192.0.2.167" }));
     fireEvent.click(screen.getByTestId("device-auth-challenge-cancel"));
     expect(cancelAuthChallenge).toHaveBeenCalledTimes(1);
   });

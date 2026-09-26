@@ -135,7 +135,7 @@ describe("savedDevices store", () => {
           id: "debug-u64",
           name: "u64",
           nameSource: "USER",
-          host: "192.168.1.13",
+          host: "192.0.2.13",
           httpPort: 80,
           ftpPort: 21,
           telnetPort: 23,
@@ -145,7 +145,7 @@ describe("savedDevices store", () => {
           id: "debug-c64u",
           name: "c64u",
           nameSource: "USER",
-          host: "192.168.1.167",
+          host: "192.0.2.167",
           httpPort: 80,
           ftpPort: 21,
           telnetPort: 23,
@@ -164,7 +164,7 @@ describe("savedDevices store", () => {
         id: "debug-u64",
         name: "u64",
         nameSource: "USER",
-        host: "192.168.1.13",
+        host: "192.0.2.13",
         httpPort: 80,
         ftpPort: 21,
         telnetPort: 23,
@@ -174,7 +174,7 @@ describe("savedDevices store", () => {
         id: "debug-c64u",
         name: "c64u",
         nameSource: "USER",
-        host: "192.168.1.167",
+        host: "192.0.2.167",
         httpPort: 80,
         ftpPort: 21,
         telnetPort: 23,
@@ -265,7 +265,7 @@ describe("savedDevices store", () => {
             lastVerifiedProduct: "U64E",
             lastVerifiedHostname: "u64",
             lastVerifiedUniqueId: "UID-U64",
-            lastResolvedAddress: "192.168.1.13",
+            lastResolvedAddress: "192.0.2.13",
           },
         },
         summaryLru: ["device-u64"],
@@ -286,7 +286,7 @@ describe("savedDevices store", () => {
       lastVerifiedProduct: "U64E",
       lastVerifiedHostname: "u64",
       lastVerifiedUniqueId: "UID-U64",
-      lastResolvedAddress: "192.168.1.13",
+      lastResolvedAddress: "192.0.2.13",
     });
     expect(reloadedSnapshot.summaryLru).toEqual(["device-u64"]);
   });
@@ -513,9 +513,50 @@ describe("savedDevices store", () => {
       type: "Lab Ultimate",
       typeSource: "USER",
       lastKnownProduct: "U64E",
-      lastKnownHostname: "u64",
-      lastKnownUniqueId: "UID-U64",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
     });
+  });
+
+  it("forgets the machine identity of an entry whose host is edited, so it is not taken for the old machine", async () => {
+    const store = await loadStore();
+    const { areSavedEntriesSameDevice } = await import("@/lib/savedDevices/sameDevice");
+    const base = { httpPort: 80, ftpPort: 21, telnetPort: 23, lastKnownProduct: "C64U" as const, hasPassword: false };
+    store.addSavedDevice({ ...base, id: "wired", name: "Wired", host: "192.0.2.46" });
+    store.addSavedDevice({ ...base, id: "wireless", name: "Wireless", host: "192.0.2.47" });
+    for (const id of ["wired", "wireless"]) {
+      store.completeSavedDeviceVerification(id, { product: "C64 Ultimate", hostname: "c64u", unique_id: "5D0464" });
+    }
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(true);
+
+    store.updateSavedDevice("wireless", { host: "198.51.100.30" });
+
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(false);
+  });
+
+  it("forgets the machine identity when the selected entry's host changes through the connection settings", async () => {
+    const store = await loadStore();
+    const { areSavedEntriesSameDevice } = await import("@/lib/savedDevices/sameDevice");
+    const base = { httpPort: 80, ftpPort: 21, telnetPort: 23, lastKnownProduct: "C64U" as const, hasPassword: false };
+    store.addSavedDevice({ ...base, id: "wired", name: "Wired", host: "192.0.2.46" });
+    store.addSavedDevice({
+      ...base,
+      id: "wireless",
+      name: "Wireless",
+      host: "192.0.2.47",
+      type: "Lab",
+      typeSource: "USER",
+    });
+    for (const id of ["wired", "wireless"]) {
+      store.completeSavedDeviceVerification(id, { product: "C64 Ultimate", hostname: "c64u", unique_id: "5D0464" });
+    }
+    store.selectSavedDevice("wireless");
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(true);
+
+    store.updateSelectedSavedDeviceConnection({ deviceHost: "198.51.100.30", passwordPresent: false });
+
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(false);
+    expect(store.getSelectedSavedDevice()).toMatchObject({ type: "Lab", lastKnownUniqueId: null });
   });
 
   it("updates inferred type from successful verification after a host change", async () => {
@@ -551,7 +592,7 @@ describe("savedDevices store", () => {
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
 
     store.updateSavedDevice(initialDeviceId, {
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       name: "c64u",
       nameSource: "USER",
       type: "",
@@ -595,7 +636,7 @@ describe("savedDevices store", () => {
         hostname: "u64",
         unique_id: "UID-U64",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     store.updateSavedDevice(initialDeviceId, {
@@ -630,7 +671,7 @@ describe("savedDevices store", () => {
         hostname: "u64",
         unique_id: "UID-U64",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     store.updateSelectedSavedDeviceConnection({
@@ -672,7 +713,7 @@ describe("savedDevices store", () => {
         hostname: "u64",
         unique_id: "UID-U64",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     store.updateSelectedSavedDeviceConnection({
@@ -688,8 +729,8 @@ describe("savedDevices store", () => {
       type: "Lab Ultimate",
       typeSource: "USER",
       lastKnownProduct: "U64E",
-      lastKnownHostname: "u64",
-      lastKnownUniqueId: "UID-U64",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
     });
     expect(store.getSavedDeviceSwitchSummary(initialDeviceId)).toMatchObject({
       verifiedAt: null,

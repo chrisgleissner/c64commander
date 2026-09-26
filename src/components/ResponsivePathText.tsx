@@ -8,6 +8,7 @@
 
 import { useResponsivePathLabel, type PathDisplayMode } from "@/lib/ui/pathDisplay";
 import { cn } from "@/lib/utils";
+import { NameWrap } from "@/components/NameWrap";
 
 type ResponsivePathTextProps = {
   path: string;
@@ -30,7 +31,7 @@ export const ResponsivePathText = ({ path, mode, className, fallback = "—", da
       title={source}
       data-testid={dataTestId}
     >
-      {label || fallback}
+      <NameWrap name={label || fallback} />
     </span>
   );
 };

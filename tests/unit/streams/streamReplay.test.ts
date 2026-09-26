@@ -57,7 +57,7 @@ const toBytes = (p: Packet): Uint8Array => {
 class FakeReceiver implements StreamReceiver {
   datagram: ((d: Uint8Array, t: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
-  readonly destination = "10.0.0.5:11000";
+  readonly destination = "198.51.100.5:11000";
   onDatagram(h: (d: Uint8Array, t: number) => void) {
     this.datagram = h;
   }

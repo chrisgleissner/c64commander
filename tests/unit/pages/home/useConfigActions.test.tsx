@@ -61,6 +61,7 @@ vi.mock("@/lib/logging", async () => {
 
 vi.mock("@/hooks/useC64Connection", () => ({
   useConnectionRoutingEpoch: () => routingEpochRef.current,
+  getC64DrivesQueryKey: () => ["c64-drives", routingEpochRef.current],
 }));
 
 import { useConfigActions } from "@/pages/home/hooks/useConfigActions";

@@ -45,13 +45,13 @@ describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
 
     [1, 9, 2].forEach(digit);
     dot();
-    [1, 6, 8].forEach(digit);
+    digit(0);
     dot();
-    digit(1);
+    digit(2);
     dot();
     [1, 3].forEach(digit);
 
-    expect(screen.getByTestId("host-value").textContent).toBe("192.168.1.13");
+    expect(screen.getByTestId("host-value").textContent).toBe("192.0.2.13");
   });
 
   it("enters digits into the host field via keypad even though it is a plain input", () => {
@@ -126,7 +126,7 @@ describe("SavedDeviceEditorFields — physical T9 / keypad entry", () => {
           draft={{ ...INITIAL, host: "c64u" }}
           onChange={() => {}}
           idPrefix="t9"
-          reachabilitySuggestion={{ address: "192.168.1.50" }}
+          reachabilitySuggestion={{ address: "192.0.2.50" }}
           onUseSuggestedAddress={() => {}}
         />
       </FocusNavigationProvider>,

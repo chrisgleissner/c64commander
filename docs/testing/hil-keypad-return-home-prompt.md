@@ -241,7 +241,7 @@ Method: repeat S1 ten times, then count host-side Telnet sockets and ask the dev
 once.
 
 ```bash
-ss -tn "dst 192.168.1.146:23" | tail -n +2 | wc -l
+ss -tn "dst $(getent ahostsv4 c64u | awk 'NR==1{print $1}'):23" | tail -n +2 | wc -l
 ```
 
 Pass: no growth across the ten cycles, and config apply still works at the end.

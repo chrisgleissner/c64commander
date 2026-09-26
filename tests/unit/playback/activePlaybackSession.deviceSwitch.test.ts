@@ -33,6 +33,12 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 import { addLog } from "@/lib/logging";
 import {
+  addSavedDevice,
+  completeSavedDeviceVerification,
+  getSavedDevicesSnapshot,
+  selectSavedDevice,
+} from "@/lib/savedDevices/store";
+import {
   isRemotePlaybackActive,
   markRemotePlaybackStarted,
   stopActivePlaybackBeforeDeviceSwitch,
@@ -68,6 +74,67 @@ describe("stopping the tune on the device a switch leaves", () => {
       service: "playback",
       deviceHost: "c64u",
     });
+  });
+
+  // A switch to the same Ultimate's other address leaves no device behind: resetting "the old
+  // host" would stop the tune the user now controls through the new address.
+  it("does not reset the device left behind when the switch selected the same device at another address", async () => {
+    const leftBehindId = getSavedDevicesSnapshot().selectedDeviceId;
+    completeSavedDeviceVerification(leftBehindId, {
+      product: "Ultimate 64 Elite",
+      hostname: "ultimate",
+      unique_id: "DUAL01",
+    });
+    addSavedDevice({
+      id: "same-device-other-address",
+      name: "Desk wired",
+      host: "192.0.2.10",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "ultimate",
+      lastKnownUniqueId: "DUAL01",
+      hasPassword: false,
+    });
+    device.activeReset.mockRejectedValueOnce(new Error("Host unreachable"));
+
+    await stopActivePlaybackBeforeDeviceSwitch();
+    selectSavedDevice("same-device-other-address");
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(device.leftBehindReset).not.toHaveBeenCalled();
+    selectSavedDevice(leftBehindId);
+  });
+
+  // The unique id is user-configurable: a different Ultimate reporting the same one is still left behind.
+  it("resets the device left behind when the switch selected a different device that shares the custom unique id but not the hostname", async () => {
+    const leftBehindId = getSavedDevicesSnapshot().selectedDeviceId;
+    completeSavedDeviceVerification(leftBehindId, {
+      product: "Ultimate 64 Elite",
+      hostname: "ultimate",
+      unique_id: "DUAL01",
+    });
+    addSavedDevice({
+      id: "different-device-same-custom-id",
+      name: "Attic",
+      host: "192.0.2.40",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "ultimate-attic",
+      lastKnownUniqueId: "DUAL01",
+      hasPassword: false,
+    });
+    device.activeReset.mockRejectedValueOnce(new Error("Host unreachable"));
+
+    await stopActivePlaybackBeforeDeviceSwitch();
+    selectSavedDevice("different-device-same-custom-id");
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(device.leftBehindReset).toHaveBeenCalled();
+    selectSavedDevice(leftBehindId);
   });
 
   it("warns only when the device left behind answers none of the resets", async () => {

@@ -38,7 +38,7 @@ describe("device discovery manager", () => {
     discover.mockResolvedValueOnce({
       candidates: [
         {
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           host: "u64",
           httpPort: 80,
           source: ["hostname"],
@@ -50,7 +50,7 @@ describe("device discovery manager", () => {
           uniqueId: "38C1BA",
         },
         {
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           httpPort: 80,
           source: ["lan-scan"],
           product: "Ultimate 64 Elite",
@@ -61,7 +61,7 @@ describe("device discovery manager", () => {
           uniqueId: "38C1BA",
         },
         {
-          address: "192.168.1.20",
+          address: "192.0.2.20",
           httpPort: 80,
           source: ["lan-scan"],
           product: "Printer",
@@ -84,7 +84,7 @@ describe("device discovery manager", () => {
     );
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
-      address: "192.168.1.13",
+      address: "192.0.2.13",
       product: "Ultimate 64 Elite",
       hostname: "u64",
       uniqueId: "38C1BA",
@@ -103,7 +103,7 @@ describe("device discovery manager", () => {
     discover.mockResolvedValueOnce({
       candidates: [
         {
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           httpPort: 80,
           source: ["lan-scan"],
           product: "Ultimate 64 Elite",
@@ -122,7 +122,7 @@ describe("device discovery manager", () => {
 
     // The candidates still come back to the caller (used by the save-time IP rescue)...
     expect(result.candidates).toHaveLength(1);
-    expect(result.candidates[0]).toMatchObject({ address: "192.168.1.13", uniqueId: "38C1BA" });
+    expect(result.candidates[0]).toMatchObject({ address: "192.0.2.13", uniqueId: "38C1BA" });
     // ...but the shared store is never touched, so a Save-triggered rescue can't flip the
     // Settings "Discover devices" UI into a scanning/complete state the user never started.
     expect(getDeviceDiscoveryState()).toMatchObject({ phase: "idle", candidates: [], trigger: null });
@@ -132,7 +132,7 @@ describe("device discovery manager", () => {
     discover.mockResolvedValue({
       candidates: [
         {
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           httpPort: 80,
           source: ["lan-scan"],
           product: "Ultimate 64 Elite",
@@ -176,7 +176,7 @@ describe("device discovery manager", () => {
     const persisted = persistDiscoveredDevice(
       {
         id: "id:5d4e12",
-        address: "192.168.1.167",
+        address: "192.0.2.167",
         host: null,
         httpPort: 80,
         source: ["lan-scan"],
@@ -198,7 +198,7 @@ describe("device discovery manager", () => {
     const saved = snapshot.devices.find((device) => device.id === persisted.deviceId);
 
     expect(saved).toMatchObject({
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -223,7 +223,7 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "known-1",
       name: "My C64U",
-      host: "192.168.1.50",
+      host: "192.0.2.50",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -238,7 +238,7 @@ describe("device discovery manager", () => {
     const persisted = persistDiscoveredDevice(
       {
         id: "id:5d4e12",
-        address: "192.168.1.167",
+        address: "192.0.2.167",
         host: null,
         httpPort: 80,
         source: ["lan-scan"],
@@ -246,7 +246,7 @@ describe("device discovery manager", () => {
         firmwareVersion: "1.1.0",
         fpgaVersion: "122",
         coreVersion: "1.49",
-        hostname: "c64u-new",
+        hostname: "c64u",
         uniqueId: "5D4E12",
         requiresPassword: false,
         alreadySavedDeviceId: null,
@@ -260,7 +260,7 @@ describe("device discovery manager", () => {
     // The existing entry is reused (matched by unique id) and its host updated — no duplicate.
     expect(persisted.deviceId).toBe("known-1");
     expect(snapshot.devices).toHaveLength(countBefore);
-    expect(snapshot.devices.find((device) => device.id === "known-1")?.host).toBe("192.168.1.167");
+    expect(snapshot.devices.find((device) => device.id === "known-1")?.host).toBe("192.0.2.167");
     expect(snapshot.devices.find((device) => device.id === "known-1")?.lastKnownUniqueId).toBe("5D4E12");
   });
 
@@ -268,7 +268,7 @@ describe("device discovery manager", () => {
     discover.mockResolvedValueOnce({
       candidates: [
         {
-          address: "192.168.1.42",
+          address: "192.0.2.42",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -292,7 +292,7 @@ describe("device discovery manager", () => {
     // Survives discovery with its raw product string preserved for display.
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
-      address: "192.168.1.42",
+      address: "192.0.2.42",
       product: "Ultimate II+",
       hostname: "ultimate-ii",
       uniqueId: "A1B2C3",
@@ -303,7 +303,7 @@ describe("device discovery manager", () => {
     const persisted = persistDiscoveredDevice(result.candidates[0], { select: true });
     const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === persisted.deviceId);
     expect(saved).toMatchObject({
-      host: "192.168.1.42",
+      host: "192.0.2.42",
       lastKnownProduct: "U2",
       lastKnownHostname: "ultimate-ii",
       lastKnownUniqueId: "A1B2C3",
@@ -315,7 +315,7 @@ describe("device discovery manager", () => {
     discover.mockResolvedValueOnce({
       candidates: [
         {
-          address: "192.168.1.14",
+          address: "192.0.2.14",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -335,7 +335,7 @@ describe("device discovery manager", () => {
 
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
-      address: "192.168.1.14",
+      address: "192.0.2.14",
       product: "C64 Ultimate",
       requiresPassword: true,
     });
@@ -344,7 +344,7 @@ describe("device discovery manager", () => {
     const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === persisted.deviceId);
 
     expect(saved).toMatchObject({
-      host: "192.168.1.14",
+      host: "192.0.2.14",
       hasPassword: true,
       lastKnownProduct: "C64U",
     });
@@ -439,7 +439,7 @@ describe("device discovery manager", () => {
     expect(discover).toHaveBeenCalledTimes(2);
   });
 
-  it("matches a discovered candidate to an existing saved device by unique id, hostname, then address", async () => {
+  it("matches a discovered candidate to an existing saved device by unique id and hostname, hostname, then address", async () => {
     const { addSavedDevice } = await import("@/lib/savedDevices/store");
     const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
 
@@ -447,17 +447,18 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "by-unique-id",
       name: "By Unique Id",
-      host: "10.0.0.1",
+      host: "198.51.100.1",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
+      lastKnownHostname: "ultimate-aabbcc",
       lastKnownUniqueId: "AABBCC",
       hasPassword: false,
     });
     addSavedDevice({
       id: "by-hostname",
       name: "By Hostname",
-      host: "10.0.0.2",
+      host: "198.51.100.2",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -467,7 +468,7 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "by-address",
       name: "By Address",
-      host: "192.168.5.55",
+      host: "203.0.113.55",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -478,16 +479,17 @@ describe("device discovery manager", () => {
       candidates: [
         // Matched by lastKnownUniqueId (line 106).
         {
-          address: "192.168.1.91",
+          address: "192.0.2.91",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
           product: "C64 Ultimate",
+          hostname: "ultimate-aabbcc",
           uniqueId: "AABBCC",
         },
         // No uniqueId; matched by lastKnownHostname (line 113).
         {
-          address: "192.168.1.92",
+          address: "192.0.2.92",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -496,7 +498,7 @@ describe("device discovery manager", () => {
         },
         // No uniqueId and no hostname match; matched by address against device.host (line 120).
         {
-          address: "192.168.5.55",
+          address: "203.0.113.55",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -510,9 +512,9 @@ describe("device discovery manager", () => {
 
     const result = await startDeviceDiscovery({ trigger: "settings" });
 
-    const byUnique = result.candidates.find((candidate) => candidate.address === "192.168.1.91");
-    const byHostname = result.candidates.find((candidate) => candidate.address === "192.168.1.92");
-    const byAddress = result.candidates.find((candidate) => candidate.address === "192.168.5.55");
+    const byUnique = result.candidates.find((candidate) => candidate.address === "192.0.2.91");
+    const byHostname = result.candidates.find((candidate) => candidate.address === "192.0.2.92");
+    const byAddress = result.candidates.find((candidate) => candidate.address === "203.0.113.55");
     expect(byUnique?.alreadySavedDeviceId).toBe("by-unique-id");
     expect(byHostname?.alreadySavedDeviceId).toBe("by-hostname");
     expect(byAddress?.alreadySavedDeviceId).toBe("by-address");
@@ -524,7 +526,7 @@ describe("device discovery manager", () => {
         // No product and httpPort 0: product falls back to "C64 Ultimate" (line 133) and
         // httpPort falls back to DEFAULT_HTTP_PORT (line 142).
         {
-          address: "192.168.1.77",
+          address: "192.0.2.77",
           host: null,
           httpPort: 0,
           source: ["lan-scan"],
@@ -533,7 +535,7 @@ describe("device discovery manager", () => {
         // No product and not password-gated: product resolves to `undefined` (line 133 else arm),
         // so the candidate is dropped entirely.
         {
-          address: "192.168.1.78",
+          address: "192.0.2.78",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -548,10 +550,10 @@ describe("device discovery manager", () => {
     const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
     const result = await startDeviceDiscovery({ trigger: "startup" });
 
-    expect(result.candidates.map((candidate) => candidate.address)).not.toContain("192.168.1.78");
+    expect(result.candidates.map((candidate) => candidate.address)).not.toContain("192.0.2.78");
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
-      address: "192.168.1.77",
+      address: "192.0.2.77",
       product: "C64 Ultimate",
       httpPort: 80,
       requiresPassword: true,
@@ -565,10 +567,11 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "known-pw",
       name: "Known",
-      host: "192.168.1.50",
+      host: "192.0.2.50",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
+      lastKnownHostname: "c64u",
       lastKnownUniqueId: "DEADBE",
       hasPassword: false,
     });
@@ -577,7 +580,7 @@ describe("device discovery manager", () => {
     const persisted = persistDiscoveredDevice(
       {
         id: "id:deadbe",
-        address: "192.168.1.167",
+        address: "192.0.2.167",
         host: null,
         httpPort: 80,
         source: ["lan-scan"],
@@ -597,7 +600,7 @@ describe("device discovery manager", () => {
 
     expect(persisted.deviceId).toBe("known-pw");
     const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === "known-pw");
-    expect(saved).toMatchObject({ host: "192.168.1.167", hasPassword: true });
+    expect(saved).toMatchObject({ host: "192.0.2.167", hasPassword: true });
   });
 
   it("persists a brand-new device with a default http port and empty type when the product is unrecognized", async () => {
@@ -607,7 +610,7 @@ describe("device discovery manager", () => {
     // New device, httpPort 0 → DEFAULT_HTTP_PORT (line 306); unrecognized product → "" type (line 322).
     const persisted = persistDiscoveredDevice({
       id: "id:unknown",
-      address: "192.168.1.200",
+      address: "192.0.2.200",
       host: null,
       httpPort: 0,
       source: ["lan-scan"],
@@ -625,7 +628,7 @@ describe("device discovery manager", () => {
 
     expect(persisted.httpPort).toBe(80);
     const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === persisted.deviceId);
-    expect(saved).toMatchObject({ host: "192.168.1.200", httpPort: 80, type: "" });
+    expect(saved).toMatchObject({ host: "192.0.2.200", httpPort: 80, type: "" });
   });
 
   it("uses a timestamp-derived device id when crypto.randomUUID is unavailable", async () => {
@@ -638,7 +641,7 @@ describe("device discovery manager", () => {
 
       const persisted = persistDiscoveredDevice({
         id: "id:nocrypto",
-        address: "192.168.1.210",
+        address: "192.0.2.210",
         host: null,
         httpPort: 80,
         source: ["lan-scan"],
@@ -656,7 +659,7 @@ describe("device discovery manager", () => {
 
       expect(persisted.deviceId).toMatch(/^discovered-/);
       const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === persisted.deviceId);
-      expect(saved).toMatchObject({ host: "192.168.1.210" });
+      expect(saved).toMatchObject({ host: "192.0.2.210" });
     } finally {
       Object.defineProperty(globalThis, "crypto", { value: originalCrypto, configurable: true });
     }
@@ -668,7 +671,7 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "sel",
       name: "Selected",
-      host: "192.168.1.50",
+      host: "192.0.2.50",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -696,19 +699,19 @@ describe("device discovery manager", () => {
     });
 
     const ranked = rankDiscoveredCandidates([
-      make({ address: "192.168.1.9" }),
-      make({ address: "192.168.1.2", uniqueId: "ZZ", hostname: "h", source: ["hostname"] }),
-      make({ address: "192.168.1.3", alreadySavedDeviceId: "other" }),
-      make({ address: "192.168.1.4", alreadySavedDeviceId: "sel" }),
-      make({ address: "192.168.1.1" }),
+      make({ address: "192.0.2.9" }),
+      make({ address: "192.0.2.2", uniqueId: "ZZ", hostname: "h", source: ["hostname"] }),
+      make({ address: "192.0.2.3", alreadySavedDeviceId: "other" }),
+      make({ address: "192.0.2.4", alreadySavedDeviceId: "sel" }),
+      make({ address: "192.0.2.1" }),
     ]);
 
     expect(ranked.map((candidate) => candidate.address)).toEqual([
-      "192.168.1.4", // selected saved device (+1000 +500)
-      "192.168.1.3", // saved but not selected (+500)
-      "192.168.1.2", // unique id + hostname + hostname source
-      "192.168.1.1", // address tiebreak before .9
-      "192.168.1.9",
+      "192.0.2.4", // selected saved device (+1000 +500)
+      "192.0.2.3", // saved but not selected (+500)
+      "192.0.2.2", // unique id + hostname + hostname source
+      "192.0.2.1", // address tiebreak before .9
+      "192.0.2.9",
     ]);
   });
 
@@ -724,7 +727,7 @@ describe("device discovery manager", () => {
     const existing = persistDiscoveredDevice(
       {
         id: "id:aaaaaaaa",
-        address: "192.168.1.20",
+        address: "192.0.2.20",
         host: null,
         httpPort: 80,
         source: ["lan-scan"],
@@ -746,7 +749,7 @@ describe("device discovery manager", () => {
     const incoming = persistDiscoveredDevice(
       {
         id: "id:bbbbbbbb",
-        address: "192.168.1.21",
+        address: "192.0.2.21",
         host: null,
         httpPort: 80,
         source: ["lan-scan"],
@@ -768,8 +771,8 @@ describe("device discovery manager", () => {
     const snapshot = getSavedDevicesSnapshot();
     const firstSaved = snapshot.devices.find((device) => device.id === existing.deviceId);
     const secondSaved = snapshot.devices.find((device) => device.id === incoming.deviceId);
-    expect(firstSaved).toMatchObject({ host: "192.168.1.20", lastKnownUniqueId: "AAAAAAAA" });
-    expect(secondSaved).toMatchObject({ host: "192.168.1.21", lastKnownUniqueId: "BBBBBBBB" });
+    expect(firstSaved).toMatchObject({ host: "192.0.2.20", lastKnownUniqueId: "AAAAAAAA" });
+    expect(secondSaved).toMatchObject({ host: "192.0.2.21", lastKnownUniqueId: "BBBBBBBB" });
   });
   it("sends a saved device's custom HTTP port to the native scan so it can be rediscovered", async () => {
     const { addSavedDevice } = await import("@/lib/savedDevices/store");
@@ -777,7 +780,7 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "custom-port-1",
       name: "Forwarded C64U",
-      host: "192.168.1.50",
+      host: "192.0.2.50",
       httpPort: 8080,
       ftpPort: 21,
       telnetPort: 23,
@@ -792,11 +795,11 @@ describe("device discovery manager", () => {
     await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
 
     const knownHosts = discover.mock.calls[0][0].knownHosts as string[];
-    expect(knownHosts).toContain("192.168.1.50:8080");
+    expect(knownHosts).toContain("192.0.2.50:8080");
     expect(knownHosts).toContain("c64u-fwd:8080");
     // The stock product hostnames stay on the default port and carry no suffix.
     expect(knownHosts).toContain("c64u");
-    expect(knownHosts).not.toContain("192.168.1.50");
+    expect(knownHosts).not.toContain("192.0.2.50");
   });
 
   it("leaves a saved device on the default HTTP port as a bare host", async () => {
@@ -804,7 +807,7 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "default-port-1",
       name: "Plain C64U",
-      host: "192.168.1.51",
+      host: "192.0.2.51",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -819,8 +822,8 @@ describe("device discovery manager", () => {
     await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
 
     const knownHosts = discover.mock.calls[0][0].knownHosts as string[];
-    expect(knownHosts).toContain("192.168.1.51");
-    expect(knownHosts).not.toContain("192.168.1.51:80");
+    expect(knownHosts).toContain("192.0.2.51");
+    expect(knownHosts).not.toContain("192.0.2.51:80");
   });
 
   it("uses the port embedded in a saved host string when the httpPort field disagrees", async () => {
@@ -828,7 +831,7 @@ describe("device discovery manager", () => {
     addSavedDevice({
       id: "embedded-port-1",
       name: "Embedded C64U",
-      host: "192.168.1.52:9090",
+      host: "192.0.2.52:9090",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
@@ -843,6 +846,6 @@ describe("device discovery manager", () => {
     await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
 
     const knownHosts = discover.mock.calls[0][0].knownHosts as string[];
-    expect(knownHosts).toContain("192.168.1.52:9090");
+    expect(knownHosts).toContain("192.0.2.52:9090");
   });
 });

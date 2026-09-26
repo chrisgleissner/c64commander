@@ -21,9 +21,7 @@ import {
 class FakeReceiver implements StreamReceiver {
   datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
-  readonly destination = "10.0.0.5:11001";
-  /** Set by tests exercising the Wi‑Fi audio path; undefined = no Wi‑Fi transport. */
-  wifiDestination: string | undefined = undefined;
+  readonly destination = "198.51.100.5:11001";
   closed = false;
   private clock = 0;
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
@@ -190,7 +188,7 @@ describe("AudioMirrorController", () => {
     });
 
     await controller.start();
-    expect(startStream).toHaveBeenCalledWith("audio", "10.0.0.5:11001");
+    expect(startStream).toHaveBeenCalledWith("audio", "198.51.100.5:11001");
     receiver.emitState("open");
     expect(controller.getSnapshot().state).toBe("live");
 
@@ -355,65 +353,6 @@ describe("AudioMirrorController", () => {
     receiver.emitState("error");
     expect(controller.getSnapshot().state).toBe("error");
   });
-
-  it("streams over Wi‑Fi to the phone's unicast address when requested and available", async () => {
-    const receiver = new FakeReceiver();
-    receiver.wifiDestination = "192.168.1.185:11001";
-    const startStream = vi.fn(async () => ({ errors: [] }));
-    const controller = new AudioMirrorController({
-      createReceiver: () => receiver,
-      createPlayer: () => fakePlayer(true),
-      startStream,
-      stopStream: vi.fn(async () => ({ errors: [] })),
-      onChange: vi.fn(),
-    });
-
-    await controller.start({ wifi: true });
-    expect(startStream).toHaveBeenCalledWith("audio", "192.168.1.185:11001", { wifi: true });
-    expect(controller.isOnWifi()).toBe(true);
-    expect(controller.getSnapshot().route).toBe("wifi");
-  });
-
-  it("falls back to the Ethernet multicast destination when the Wi‑Fi start fails", async () => {
-    const receiver = new FakeReceiver();
-    receiver.wifiDestination = "192.168.1.185:11001";
-    const startStream = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("Network Host Resolve Error")) // Wi‑Fi attempt fails
-      .mockResolvedValueOnce({ errors: [] }); // Ethernet succeeds
-    const stopStream = vi.fn(async () => ({ errors: [] }));
-    const controller = new AudioMirrorController({
-      createReceiver: () => receiver,
-      createPlayer: () => fakePlayer(true),
-      startStream,
-      stopStream,
-      onChange: vi.fn(),
-    });
-
-    await controller.start({ wifi: true });
-    expect(startStream).toHaveBeenNthCalledWith(1, "audio", "192.168.1.185:11001", { wifi: true });
-    // The failed Wi‑Fi attempt is torn down before the Ethernet start (no two overlapping starts).
-    expect(stopStream).toHaveBeenCalledWith("audio");
-    expect(startStream).toHaveBeenNthCalledWith(2, "audio", "10.0.0.5:11001");
-    expect(controller.isOnWifi()).toBe(false);
-    expect(controller.getSnapshot().route).toBe("ethernet");
-  });
-
-  it("uses Ethernet when Wi‑Fi is requested but the transport has no Wi‑Fi address", async () => {
-    const receiver = new FakeReceiver(); // wifiDestination undefined (e.g. web/docker)
-    const startStream = vi.fn(async () => ({ errors: [] }));
-    const controller = new AudioMirrorController({
-      createReceiver: () => receiver,
-      createPlayer: () => fakePlayer(true),
-      startStream,
-      stopStream: vi.fn(async () => ({ errors: [] })),
-      onChange: vi.fn(),
-    });
-
-    await controller.start({ wifi: true });
-    expect(startStream).toHaveBeenCalledWith("audio", "10.0.0.5:11001");
-    expect(controller.isOnWifi()).toBe(false);
-  });
 });
 
 class MockSocket implements WebSocketLike {
@@ -496,23 +435,24 @@ describe("AudioMirrorController foreign-sender notice", () => {
       },
     }) as unknown as NativeAudioSink;
 
-  const startWithForeignSender = async (stopStreamAt: (host: string, name: "audio" | "video") => Promise<unknown>) => {
+  const startWithForeignSender = async (stop: (host: string, name: "audio" | "video") => Promise<unknown>) => {
+    const stopStreamAt = vi.fn(stop);
     const receiver = new FakeReceiver();
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
-      createNativeSink: () => sinkWithSenders(["10.0.0.7", "192.168.1.15"]),
+      createNativeSink: () => sinkWithSenders(["198.51.100.7", "192.0.2.15"]),
       startStream: vi.fn(async () => ({ errors: [] })),
       stopStream: vi.fn(async () => ({ errors: [] })),
-      expectedSenderHost: () => "10.0.0.7",
+      expectedSenderHost: () => "198.51.100.7",
       stopStreamAt,
       onChange: vi.fn(),
     });
     await controller.start();
     receiver.emitState("open");
     controller.getSignals();
-    // The eviction is fire-and-forget from getSignals; let its promise chain settle.
-    await Promise.resolve();
-    await Promise.resolve();
+    // The eviction is fire-and-forget from getSignals; wait until it has asked the machine to stop.
+    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     return controller;
   };
 
@@ -522,7 +462,7 @@ describe("AudioMirrorController foreign-sender notice", () => {
     });
 
     expect(controller.getSnapshot().foreignSenderNotice).toBe(
-      "Another Ultimate at 192.168.1.15 is also streaming into this group; stop it on that machine.",
+      "Another Ultimate at 192.0.2.15 is also streaming into this group; stop it on that machine.",
     );
     expect(controller.getSnapshot().error).toBeNull();
     expect(controller.getSnapshot().state).toBe("live");
@@ -531,5 +471,53 @@ describe("AudioMirrorController foreign-sender notice", () => {
   it("stays silent when the uninvited machine obeys", async () => {
     const controller = await startWithForeignSender(async () => ({ errors: [] }));
     expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
+  });
+
+  it("does not stop a sender whose identity could not be established", async () => {
+    const receiver = new FakeReceiver();
+    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const isForeignSender = vi.fn(async () => false);
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sinkWithSenders(["192.0.2.47", "198.51.100.13"]),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "192.0.2.46",
+      stopStreamAt,
+      isForeignSender,
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.getSignals();
+
+    await vi.waitFor(() => expect(isForeignSender).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(stopStreamAt).not.toHaveBeenCalled();
+  });
+
+  it("does not stop the selected device when it streams from its other address alongside an uninvited machine", async () => {
+    const receiver = new FakeReceiver();
+    const ownOtherAddress = "192.0.2.47";
+    const uninvited = "198.51.100.13";
+    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sinkWithSenders([ownOtherAddress, uninvited]),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "192.0.2.46",
+      stopStreamAt,
+      isForeignSender: async (host) => host === uninvited,
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.getSignals();
+
+    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledWith(uninvited, "audio"));
+    expect(stopStreamAt).not.toHaveBeenCalledWith(ownOtherAddress, expect.anything());
   });
 });

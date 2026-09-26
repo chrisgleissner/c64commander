@@ -172,6 +172,11 @@ export interface StreamUdpPlugin {
    * machine to stop. Called again on a device switch.
    */
   setExpectedSource(options: { name: string; host: string | null }): Promise<void>;
+  /** Ask `host`'s ident service (UDP 64) for its unique id; no password is sent. Null when nothing answers. */
+  identify(options: {
+    host: string;
+    timeoutMs?: number;
+  }): Promise<{ uniqueId: string | null; hostname: string | null; replyFrom: string | null }>;
   /**
    * Set the native keep-rate for an assembled video stream, in permille (0–1000; 1000 = present
    * every frame). The assembler decimates natively — skipping the Base64 encode + bridge of frames

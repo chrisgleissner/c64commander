@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { addLog } from "@/lib/logging";
+import { reportStationNotStarted, type SidRadioNotice } from "@/pages/playFiles/sidRadioNotices";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
 import { getMd548PathIndexStats, resolveVirtualPath } from "@/lib/sidRadio/md5PathIndex";
@@ -113,7 +114,7 @@ export interface UseSidRadioResult {
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
   /** A transient empty/degraded notice (spec §5.2 Q5), or null. */
-  notice: "no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | null;
+  notice: SidRadioNotice | null;
   dismissNotice: () => void;
 }
 
@@ -242,7 +243,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const randomSeed = params.randomSeed ?? defaultRandomSeed;
 
   const [station, setStation] = useState<ActiveStation | null>(null);
-  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | null>(null);
+  const [notice, setNotice] = useState<SidRadioNotice | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
@@ -384,9 +385,17 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
   }, []);
 
-  const start = useCallback(
+  const refuseStart = useCallback((refusal: SidRadioNotice, context: Record<string, unknown>) => {
+    setNotice(refusal);
+    reportStationNotStarted(refusal, context);
+  }, []);
+
+  const startUnguarded = useCallback(
     async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
-      if (!enabled) return;
+      if (!enabled) {
+        addLog("warn", "SID Radio: a station start was ignored because SID Radio is disabled", { seedKind });
+        return;
+      }
       const client = ensureClient();
       const readyStats = await client.load();
       rememberStylePopulations(readyStats.stylePopulations);
@@ -397,7 +406,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       // whether it is seeded by the style or filtered over Likes: refuse the
       // station rather than starting one that can only report itself empty.
       if (styleFilter !== null && !isStyleBitPopulated(readyStats.stylePopulations, styleFilter)) {
-        setNotice("no-radio");
+        refuseStart("no-radio", { seedKind, styleFilter, reason: "style has no members" });
         return;
       }
       // Past this point the previous station is being replaced, so it is retired here rather than
@@ -453,8 +462,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         // usual wording then sends the user somewhere that cannot help: there is nothing installed
         // to like, and liking would not make a station playable. Name the real blocker. Once music
         // is installed, an empty station is a genuine one and keeps its taste/tune wording.
-        if (getMd548PathIndexStats().size === 0) setNotice("no-hvsc");
-        else setNotice(seedKind === "song" ? "no-radio-for-tune" : "no-radio");
+        const hvscMissing = getMd548PathIndexStats().size === 0;
+        const refusal = hvscMissing ? "no-hvsc" : seedKind === "song" ? "no-radio-for-tune" : "no-radio";
+        refuseStart(refusal, { seedKind, styleFilter, reason: "no playable tracks" });
         return;
       }
       setNotice(null);
@@ -477,7 +487,35 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         });
       }
     },
-    [enabled, ensureClient, rememberStylePopulations, randomSeed, buildProvider, startPlaylist, persistSession, stop],
+    [
+      enabled,
+      ensureClient,
+      rememberStylePopulations,
+      randomSeed,
+      buildProvider,
+      startPlaylist,
+      persistSession,
+      stop,
+      refuseStart,
+    ],
+  );
+
+  // Every caller fires and forgets, so a rejection here would otherwise surface nowhere.
+  const start = useCallback(
+    async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
+      try {
+        await startUnguarded(seed, styleFilter, seedKind, seedLabel);
+      } catch (error) {
+        addLog("error", "SID Radio: starting a station failed", {
+          seedKind,
+          styleFilter,
+          error: (error as Error)?.message ?? String(error),
+          stack: (error as Error)?.stack,
+        });
+        refuseStart("start-failed", { seedKind, styleFilter, reason: "error" });
+      }
+    },
+    [startUnguarded, refuseStart],
   );
 
   const startSongRadio = useCallback(
@@ -505,12 +543,12 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     const populations = await ensureStylePopulations();
     const candidates = SID_RADIO_STYLE_TILES.filter((tile) => isStylePopulated(populations, tile.key));
     if (candidates.length === 0) {
-      setNotice("no-radio");
+      refuseStart("no-radio", { seedKind: "style", reason: "no style has members" });
       return;
     }
     const tile = candidates[randomSeed() % candidates.length];
     await start({ kind: "style", styleBit: tile.bit }, tile.bit, "style", tile.label);
-  }, [start, randomSeed, ensureStylePopulations]);
+  }, [start, randomSeed, ensureStylePopulations, refuseStart]);
 
   // Resume the chip after an app restart (D15): rebuild the provider with the
   // saved exclude set so the next refill continues the identical sequence.

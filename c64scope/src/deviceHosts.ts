@@ -8,8 +8,8 @@
 /**
  * Bench hardware is addressed by host name, never by address. Name resolution is
  * whatever the machine running the test already uses, so a device that moves under
- * DHCP keeps working. A baked address does not: 192.168.1.13 was the default here
- * and had stopped pointing at either machine.
+ * DHCP keeps working. A baked address does not: a fixed default address here had
+ * stopped pointing at either machine.
  */
 export const DEVICE_HOSTS = {
   /** Commodore 64 Ultimate. */

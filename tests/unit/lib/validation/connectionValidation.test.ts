@@ -31,7 +31,7 @@ describe("validateDeviceHost", () => {
   });
 
   it("returns null for a valid IPv4 address", () => {
-    expect(validateDeviceHost("192.168.1.100")).toBeNull();
+    expect(validateDeviceHost("192.0.2.100")).toBeNull();
   });
 
   it("returns null for boundary IPv4 addresses", () => {
@@ -40,7 +40,7 @@ describe("validateDeviceHost", () => {
   });
 
   it("returns an error for an IPv4 address with out-of-range octet", () => {
-    expect(validateDeviceHost("192.168.1.256")).not.toBeNull();
+    expect(validateDeviceHost("192.0.2.256")).not.toBeNull();
   });
 
   it("returns an error for an IPv4 address with a negative-looking octet pattern", () => {
@@ -75,7 +75,7 @@ describe("validateDeviceHost", () => {
 
   it("returns null for an IPv4 address with a valid port", () => {
     expect(validateDeviceHost("127.0.0.1:12345")).toBeNull();
-    expect(validateDeviceHost("192.168.1.100:80")).toBeNull();
+    expect(validateDeviceHost("192.0.2.100:80")).toBeNull();
     expect(validateDeviceHost("127.0.0.1:1")).toBeNull();
   });
 

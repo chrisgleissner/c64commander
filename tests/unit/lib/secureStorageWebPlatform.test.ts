@@ -70,7 +70,7 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("sends the selected device's plaintext password to the server, not the envelope", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
 
     await secureStorage.setPasswordForDevice("device-a", "plain-secret");
 
@@ -80,9 +80,9 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("keeps the multi-device envelope in localStorage", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     await secureStorage.setPasswordForDevice("device-a", "secret-a");
-    await addAndSelectDevice(savedDevices, "device-b", "192.168.1.20");
+    await addAndSelectDevice(savedDevices, "device-b", "192.0.2.20");
     await secureStorage.setPasswordForDevice("device-b", "secret-b");
 
     const envelope = JSON.parse(localStorage.getItem(WEB_ENVELOPE_KEY) ?? "null") as {
@@ -97,9 +97,9 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("re-sends the newly selected device's password when the device is switched", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     await secureStorage.setPasswordForDevice("device-a", "secret-a");
-    await addAndSelectDevice(savedDevices, "device-b", "192.168.1.20");
+    await addAndSelectDevice(savedDevices, "device-b", "192.0.2.20");
     await secureStorage.setPasswordForDevice("device-b", "secret-b");
     await secureStorage.primeStoredPassword();
     vi.mocked(SecureStorage.setPassword).mockClear();
@@ -111,7 +111,7 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("recovers a server that still holds the pre-fix envelope and rewrites it as plaintext", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
     vi.mocked(SecureStorage.getPassword).mockResolvedValue({
       value: JSON.stringify({
@@ -128,7 +128,7 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("clears the server password when the selected device's password is removed", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     await secureStorage.setPasswordForDevice("device-a", "secret-a");
     vi.mocked(SecureStorage.clearPassword).mockClear();
 
@@ -141,7 +141,7 @@ describe("secureStorage on the web platform", () => {
   // envelope. It belongs to whichever device is selected, because that is the only device the
   // server was ever able to talk to.
   it("adopts a plain server password as the selected device's", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
     vi.mocked(SecureStorage.getPassword).mockResolvedValue({ value: "legacy-plain" });
 
@@ -162,7 +162,7 @@ describe("secureStorage on the web platform", () => {
   // Storage can be unavailable in a private-browsing context. The selected device's password still
   // lives on the server, so the session keeps working and only the other devices' entries are lost.
   it("survives a localStorage that refuses to be read", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
     vi.mocked(SecureStorage.getPassword).mockResolvedValue({ value: "server-secret" });
     const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation((key: string) => {
@@ -178,7 +178,7 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("survives a localStorage that refuses to be written", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation((key: string) => {
       if (key === WEB_ENVELOPE_KEY) throw new DOMException("quota", "QuotaExceededError");
     });
@@ -198,7 +198,7 @@ describe("secureStorage on the web platform", () => {
   });
 
   it("clears the server password and the envelope together", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     await secureStorage.setPasswordForDevice("device-a", "secret-a");
     vi.mocked(SecureStorage.clearPassword).mockClear();
 
@@ -211,9 +211,9 @@ describe("secureStorage on the web platform", () => {
   // The re-send happens outside any caller's await, so a rejection has nowhere to go but the log.
   // It must not become an unhandled rejection, and the next explicit write has to still be tried.
   it("logs a failed re-send when the device is switched", async () => {
-    await addAndSelectDevice(savedDevices, "device-a", "192.168.1.10");
+    await addAndSelectDevice(savedDevices, "device-a", "192.0.2.10");
     await secureStorage.setPasswordForDevice("device-a", "secret-a");
-    await addAndSelectDevice(savedDevices, "device-b", "192.168.1.20");
+    await addAndSelectDevice(savedDevices, "device-b", "192.0.2.20");
     await secureStorage.setPasswordForDevice("device-b", "secret-b");
     await secureStorage.primeStoredPassword();
     vi.mocked(SecureStorage.setPassword).mockRejectedValueOnce(new Error("server unreachable"));

@@ -347,7 +347,7 @@ describe("startup with no network on the device", () => {
       JSON.stringify({
         version: 1,
         selectedDeviceId: "home-u64",
-        devices: [{ id: "home-u64", host: "192.168.1.13", name: "u64", nameSource: "USER", httpPort: 80 }],
+        devices: [{ id: "home-u64", host: "192.0.2.13", name: "u64", nameSource: "USER", httpPort: 80 }],
         summaries: {},
         summaryLru: [],
       }),
@@ -496,7 +496,7 @@ describe("startup with no network on the device", () => {
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
 
     setNetwork(true);
-    localStorage.setItem("c64u_device_host", "192.168.1.64");
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
     vi.mocked(fetch).mockResolvedValue(respondWithDevice());
     void discoverConnection("settings");
     await vi.advanceTimersByTimeAsync(50);
@@ -551,7 +551,7 @@ describe("startup with a network on the device", () => {
   });
 
   it("claims the discovering state before its first await, so a second trigger cannot strand it", async () => {
-    localStorage.setItem("c64u_device_host", "192.168.1.64");
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
 
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
@@ -568,7 +568,7 @@ describe("startup with a network on the device", () => {
 
   it("connects to a reachable real device instead of the simulated one", async () => {
     vi.mocked(fetch).mockResolvedValue(respondWithDevice());
-    localStorage.setItem("c64u_device_host", "192.168.1.64");
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
 
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
@@ -582,7 +582,7 @@ describe("startup with a network on the device", () => {
   });
 
   it("reports an unreachable device as offline rather than presenting a simulated one", async () => {
-    localStorage.setItem("c64u_device_host", "192.168.1.64");
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
 
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
@@ -598,7 +598,7 @@ describe("startup with a network on the device", () => {
 
   it("does not replace a connected real device with the simulated one when the network drops", async () => {
     vi.mocked(fetch).mockResolvedValue(respondWithDevice());
-    localStorage.setItem("c64u_device_host", "192.168.1.64");
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
 
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
@@ -682,7 +682,7 @@ describe("startup away from a device that has connected before", () => {
       JSON.stringify({
         version: 1,
         selectedDeviceId: "home-c64u",
-        devices: [{ id: "home-c64u", host: "192.168.1.146", httpPort: 80, lastSuccessfulConnectionAt }],
+        devices: [{ id: "home-c64u", host: "192.0.2.146", httpPort: 80, lastSuccessfulConnectionAt }],
         summaries: {},
         summaryLru: [],
       }),
@@ -726,7 +726,7 @@ describe("startup away from a device that has connected before", () => {
   it("stays quiet when the network is up but the device does not answer", async () => {
     seedSavedDevice("2026-09-15T10:00:00.000Z");
     localStorage.setItem("c64u_demo_offer_seen", "1");
-    localStorage.setItem("c64u_device_host", "192.168.1.146");
+    localStorage.setItem("c64u_device_host", "192.0.2.146");
     setNetwork(true);
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

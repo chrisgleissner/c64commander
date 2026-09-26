@@ -35,6 +35,7 @@ import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
+import { describeStreamStartFailure } from "./streamStartFailure";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -140,6 +141,7 @@ export class VideoMirrorController {
   private readonly arrivalWatchdog = new StreamArrivalWatchdog({
     now: () => this.now(),
     onStale: (silentMs) => this.reportStreamWentSilent(silentMs),
+    onQuietStart: () => void this.lookForRefusedSender(),
   });
   private assembler = new VicStreamAssembler();
   private snapshot: VideoMirrorSnapshot = {
@@ -437,7 +439,7 @@ export class VideoMirrorController {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: "Could not tell the device to start streaming video." });
+      this.update({ state: "error", error: describeStreamStartFailure(error, "video") });
     }
   }
 
@@ -479,6 +481,21 @@ export class VideoMirrorController {
       rejectedPackets: mismatch.rejectedPackets,
     });
     this.update({ error: describeSenderMismatch(mismatch, "video"), senderMismatch: mismatch });
+  }
+
+  /** Nothing has arrived since the start: report a refused sender now rather than after the full timeout. */
+  private async lookForRefusedSender(): Promise<void> {
+    const receiver = this.receiver;
+    const diagnostics = (await receiver?.readDiagnostics?.()) ?? null;
+    if (this.receiver !== receiver || this.snapshot.state !== "live") return;
+    const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
+    if (!mismatch) return;
+    addLog("info", "Video Mirror: a new stream is arriving from an address the sender filter refuses", {
+      source: mismatch.source,
+      expected: mismatch.expected,
+      rejectedPackets: mismatch.rejectedPackets,
+    });
+    this.update({ senderMismatch: mismatch });
   }
 
   /**

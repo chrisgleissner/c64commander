@@ -23,6 +23,19 @@ import java.lang.reflect.Field
 import java.net.CookieHandler
 
 open class MainActivity : BridgeActivity() {
+  private var webViewDiscarded = false
+
+  internal val renderProcessGoneRecovery =
+    RenderProcessGoneRecovery(
+      context = this,
+      recreate = ::recreate,
+      finish = ::finish,
+      discardWebView = { webView ->
+        webViewDiscarded = true
+        discardDeadWebView(webView)
+      },
+    )
+
   internal fun ensureCapacitorPluginAssetPath(
     filesDirectory: File = filesDir,
     launchOrphanCleanup: (Runnable) -> Unit = { task -> Thread(task, "PluginAssetOrphanCleanup").start() },
@@ -142,6 +155,7 @@ open class MainActivity : BridgeActivity() {
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(StreamUdpPlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
+    bridgeBuilder.addWebViewListener(renderProcessGoneRecovery)
     super.onCreate(savedInstanceState)
     applySystemFontScale()
     installLanCookieBypassIfNeeded()
@@ -228,7 +242,7 @@ open class MainActivity : BridgeActivity() {
       bridge.webView.resumeTimers()
     },
   ) {
-    if (!BackgroundExecutionService.isRunning) return
+    if (!BackgroundExecutionService.isRunning || webViewDiscarded) return
     try {
       resumeWebView()
       AppLogger.debug(

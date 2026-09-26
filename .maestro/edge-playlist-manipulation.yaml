@@ -60,6 +60,12 @@ env:
     timeout: ${TIMEOUT}
 - tapOn: "Clear playlist"
 - extendedWaitUntil:
+    visible:
+      id: "clear-playlist-confirm"
+    timeout: ${SHORT_TIMEOUT}
+- tapOn:
+    id: "clear-playlist-confirm"
+- extendedWaitUntil:
     visible: "No tracks in playlist yet."
     timeout: ${TIMEOUT}
 - assertVisible: "No tracks in playlist yet."

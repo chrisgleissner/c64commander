@@ -27,6 +27,7 @@ import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
 import type { DiskEntryAction } from "@/components/disks/DiskContentsDialog";
 
 const EXPLORABLE_TYPES = new Set<DiskImageType>(["d64", "d71", "d81"]);
@@ -36,8 +37,12 @@ export const diskTypeForPath = (path: string): DiskImageType | null => {
   return EXPLORABLE_TYPES.has(ext as DiskImageType) ? (ext as DiskImageType) : null;
 };
 
-/** Load a disk image's raw bytes: local via resolveLocalDiskBlob, ultimate via FTP. */
+/** Load a disk image's raw bytes: local via resolveLocalDiskBlob, ultimate via FTP from the device holding it. */
 export const loadDiskImageBytes = async (disk: DiskEntry, runtimeFile?: File): Promise<Uint8Array> => {
+  if (disk.location === "ultimate" && disk.origin && !isOriginOnSelectedDevice(disk.origin)) {
+    const blob = await fetchUltimateOriginBlob(disk.origin);
+    return new Uint8Array(await blob.arrayBuffer());
+  }
   if (disk.location === "ultimate") {
     const { deviceHost, password = "" } = getC64APIConfigSnapshot();
     const path = disk.path.startsWith("/") ? disk.path : `/${disk.path}`;

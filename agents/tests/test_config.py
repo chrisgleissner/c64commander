@@ -1,7 +1,10 @@
 """Tests for openhands.config."""
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -62,6 +65,30 @@ def test_iteration_directory(tmp_paths: RuntimePaths) -> None:
 def test_app_constants() -> None:
     assert APP_PACKAGE == "uk.gleissner.c64commander"
     assert APP_ACTIVITY == f"{APP_PACKAGE}/.MainActivity"
+
+
+def _default_c64u_host(env: dict[str, str]) -> str:
+    import openhands
+
+    src_root = str(Path(openhands.__file__).resolve().parents[1])
+    result = subprocess.run(
+        [sys.executable, "-c", "from openhands.config import DEFAULT_C64U_HOST; print(DEFAULT_C64U_HOST)"],
+        env={**env, "PYTHONPATH": src_root},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def test_default_c64u_host_is_the_host_name_not_a_fixed_address() -> None:
+    env = {key: value for key, value in os.environ.items() if key != "C64U_HOST"}
+    assert _default_c64u_host(env) == "c64u"
+
+
+def test_default_c64u_host_follows_the_environment() -> None:
+    env = {key: value for key, value in os.environ.items() if key != "C64U_HOST"}
+    assert _default_c64u_host({**env, "C64U_HOST": "ultimate.example"}) == "ultimate.example"
 
 
 def test_default_max_iterations_positive() -> None:

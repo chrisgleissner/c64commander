@@ -10,6 +10,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
+const mockConnectedProduct = vi.hoisted(() => ({ value: undefined as string | undefined }));
+
 const mockArchiveClient = vi.hoisted(() => ({
   getEntries: vi.fn(),
   downloadBinary: vi.fn(),
@@ -110,7 +112,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
     refetchOnMount: "always",
   },
   useC64Connection: () => ({
-    status: { isConnected: true, deviceInfo: { unique_id: "test" } },
+    status: { isConnected: true, deviceInfo: { unique_id: "test", product: mockConnectedProduct.value } },
   }),
   useC64Drives: () => ({ data: { drives: [] } }),
   useC64ConfigItems: () => ({ data: undefined }),
@@ -280,6 +282,21 @@ describe("HomeDiskManager Dialogs", () => {
     fireEvent.click(within(dialogList).getByRole("button", { name: "Add disks" }));
 
     expect(screen.getByTestId("item-selection-dialog")).toBeInTheDocument();
+  });
+
+  it("names the Ultimate source in the Add disks picker after the connected product instead of always C64U", () => {
+    mockDiskLibrary.disks = [];
+    mockConnectedProduct.value = "Ultimate II+L";
+    try {
+      render(<HomeDiskManager />);
+      fireEvent.click(screen.getByRole("button", { name: "Add disks" }));
+
+      const dialog = screen.getByTestId("item-selection-dialog");
+      expect(within(dialog).getByText("U2")).toBeInTheDocument();
+      expect(within(dialog).queryByText("C64U")).toBeNull();
+    } finally {
+      mockConnectedProduct.value = undefined;
+    }
   });
 
   it("shows CommoServe in the Disks Add items picker and imports archive disk images", async () => {

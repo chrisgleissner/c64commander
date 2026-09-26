@@ -214,7 +214,7 @@ afterEach(() => {
 describe("probeDeviceReachability (lines 262-267)", () => {
   it("returns a healthy probe result for a reachable arbitrary host", async () => {
     getInfoMock.mockResolvedValueOnce(HEALTHY);
-    const result = await probeDeviceReachability({ deviceHost: "192.168.1.50:80", password: "secret" });
+    const result = await probeDeviceReachability({ deviceHost: "192.0.2.50:80", password: "secret" });
     expect(result.ok).toBe(true);
     expect(result.deviceInfo).toEqual(HEALTHY);
     expect(getInfoMock).toHaveBeenCalledTimes(1);
@@ -229,7 +229,7 @@ describe("probeDeviceReachability (lines 262-267)", () => {
 
   it("reports unreachable when the host does not answer /v1/info", async () => {
     getInfoMock.mockRejectedValueOnce(new Error("no route to host"));
-    const result = await probeDeviceReachability({ deviceHost: "10.0.0.9:80" });
+    const result = await probeDeviceReachability({ deviceHost: "198.51.100.9:80" });
     expect(result.ok).toBe(false);
     expect(result.deviceInfo).toBeNull();
   });
@@ -242,7 +242,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -256,10 +256,58 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     // HARD19-012: the fallback runs the shared cross-device hygiene BEFORE
     // re-selecting, so it cannot silently miss remote-input release / health
     // clear / machine-execution reset / background stop / query invalidation.
-    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other");
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other", { sameDevice: false });
     const retargetOrder = prepareForDeviceRetargetMock.mock.invocationCallOrder[0];
     const selectOrder = selectSavedDeviceMock.mock.invocationCallOrder[0];
     expect(retargetOrder).toBeLessThan(selectOrder);
+  });
+
+  // One Ultimate on Ethernet (192.0.2.0/24) and Wi-Fi (198.51.100.0/24), saved under both addresses.
+  it("prefers the selected device's other address and switches to it as the same device", async () => {
+    const dualHomed = { product: "Ultimate-64", hostname: "ultimate-desk", unique_id: "DUAL01" };
+    getInfoMock
+      .mockResolvedValueOnce({ product: "Ultimate-64", hostname: "ultimate-attic", unique_id: "OTHER1" })
+      .mockResolvedValueOnce(dualHomed)
+      .mockResolvedValueOnce(dualHomed);
+    const desk = { httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01", lastKnownHostname: "ultimate-desk" };
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { ...desk, id: "selected", host: "198.51.100.20" },
+        { id: "another-device", host: "203.0.113.30", httpPort: 80, hasPassword: false, lastKnownUniqueId: "OTHER1" },
+        { ...desk, id: "other-address", host: "192.0.2.10" },
+      ]),
+    );
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    expect(selectSavedDeviceMock).toHaveBeenCalledWith("other-address");
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other-address", { sameDevice: true });
+  });
+
+  // The unique id is user-configurable, so a different Ultimate can report the selected device's id.
+  it("switches to a different device that shares the selected device's custom unique id but not its hostname as a different device", async () => {
+    const attic = { product: "Ultimate-64", hostname: "ultimate-attic", unique_id: "DUAL01" };
+    getInfoMock.mockResolvedValueOnce(attic).mockResolvedValueOnce(attic);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        {
+          id: "selected",
+          host: "198.51.100.20",
+          httpPort: 80,
+          hasPassword: false,
+          lastKnownUniqueId: "DUAL01",
+          lastKnownHostname: "ultimate-desk",
+        },
+        { id: "attic", host: "203.0.113.40", httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01" },
+      ]),
+    );
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    expect(selectSavedDeviceMock).toHaveBeenCalledWith("attic");
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "attic", { sameDevice: false });
   });
 
   // HARD27-010: before this, the fallback never stopped or restarted the mirror, so Live View
@@ -272,7 +320,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -297,7 +345,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false },
+        { id: "flaky", host: "192.0.2.80", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -314,7 +362,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "secured", host: "192.168.1.70", httpPort: 8080, hasPassword: true },
+        { id: "secured", host: "192.0.2.70", httpPort: 8080, hasPassword: true },
       ]),
     );
 
@@ -337,7 +385,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false, ftpPort: 21, telnetPort: 23 },
+        { id: "flaky", host: "192.0.2.80", httpPort: 80, hasPassword: false, ftpPort: 21, telnetPort: 23 },
       ]),
     );
 
@@ -367,7 +415,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     };
     const deviceB = {
       id: "other",
-      host: "192.168.1.60",
+      host: "192.0.2.60",
       httpPort: 80,
       hasPassword: false,
       lastKnownUniqueId: "uidB",
@@ -430,7 +478,7 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -449,7 +497,7 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -464,7 +512,7 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -511,7 +559,7 @@ describe("a user choice made while a discovery is still running", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
     const release = deferred<{ videoWasLive: boolean; audioWasLive: boolean }>();
@@ -519,12 +567,12 @@ describe("a user choice made while a discovery is still running", () => {
 
     const discovery = discoverConnection("manual");
     await vi.waitFor(() => expect(prepareForDeviceRetargetMock).toHaveBeenCalled());
-    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.70" });
+    await verifyCurrentConnectionTarget({ deviceHost: "192.0.2.70" });
     release.resolve({ videoWasLive: false, audioWasLive: false });
     await discovery;
 
     expect(selectSavedDeviceMock).not.toHaveBeenCalled();
-    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.70", undefined, "192.168.1.70");
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.0.2.70", undefined, "192.0.2.70");
   });
 
   it("does not enter Demo Mode over a device the user switched to while the simulated device was starting", async () => {
@@ -534,12 +582,12 @@ describe("a user choice made while a discovery is still running", () => {
     vi.mocked(startMockServer).mockReturnValueOnce(mockStart.promise);
 
     const choosingDemo = pinDemoModeByUserChoice();
-    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.60" });
+    await verifyCurrentConnectionTarget({ deviceHost: "192.0.2.60" });
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     mockStart.resolve({ baseUrl: "http://127.0.0.1:45999" });
     await choosingDemo;
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
-    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.60", undefined, "192.168.1.60");
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.0.2.60", undefined, "192.0.2.60");
   });
 });

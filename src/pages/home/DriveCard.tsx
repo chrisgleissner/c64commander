@@ -21,12 +21,15 @@ import {
   type DiagnosticsDisplaySeverity,
 } from "@/lib/diagnostics/diagnosticsSeverity";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "./inlineControlStyles";
+import { CONFIG_PENDING_LABEL as LOADING_LABEL } from "./utils/HomeConfigUtils";
 
 export interface DriveCardProps {
   name: string;
   enabled: boolean;
   onToggle: () => void;
   togglePending?: boolean;
+  /** Drive data has not arrived yet: power, disk and status show a placeholder instead of defaults. */
+  loading?: boolean;
 
   busIdValue: string;
   busIdOptions: string[];
@@ -78,6 +81,7 @@ export function DriveCard({
   enabled,
   onToggle,
   togglePending,
+  loading = false,
   busIdValue,
   busIdOptions,
   onBusIdChange,
@@ -113,8 +117,9 @@ export function DriveCard({
     id: focusId ?? "",
     order: focusOrder,
     group: "home-drives",
-    disabled: !isConnected || Boolean(togglePending),
+    disabled: !isConnected || Boolean(togglePending) || loading,
   });
+  const shownPath = loading ? LOADING_LABEL : (mountedPath ?? pathValue);
 
   return (
     <CollapsibleSection
@@ -136,11 +141,11 @@ export function DriveCard({
           variant="outline"
           size="sm"
           onClick={onToggle}
-          disabled={!isConnected || togglePending}
-          className={cn("px-3 text-xs", getOnOffButtonClass(enabled), "min-h-11 min-w-11")}
+          disabled={!isConnected || togglePending || loading}
+          className={cn("px-3 text-xs", getOnOffButtonClass(enabled && !loading), "min-h-11 min-w-11")}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
         >
-          {enabled ? "ON" : "OFF"}
+          {loading ? LOADING_LABEL : enabled ? "ON" : "OFF"}
         </Button>
       }
     >
@@ -155,7 +160,7 @@ export function DriveCard({
           <button
             type="button"
             onClick={onMountedPathClick || onPathClick}
-            disabled={!isConnected || pathPending || !pathEditable}
+            disabled={!isConnected || pathPending || !pathEditable || loading}
             className={cn(
               "min-h-11 min-w-0 flex-1 text-left font-medium text-foreground hover:underline",
               profile === "expanded" ? "basis-auto" : "basis-full",
@@ -169,11 +174,11 @@ export function DriveCard({
                * sentence fits on one line. `MountedLabel` in HomeDiskManager already draws this
                * same distinction for the row below.
                */
-              (mountedPath ?? pathValue)?.includes("/") ? "truncate" : "whitespace-normal break-words",
+              shownPath?.includes("/") ? "truncate" : "whitespace-normal break-words",
             )}
             data-testid={`home-drive-mounted-${testIdSuffix}`}
           >
-            {(mountedPath ?? pathValue) || "Select..."}
+            {shownPath || "Select..."}
           </button>
         </div>
       )}
@@ -265,7 +270,7 @@ export function DriveCard({
           )}
           data-testid={`home-drive-status-${testIdSuffix}`}
         >
-          {statusSummary}
+          {loading ? LOADING_LABEL : statusSummary}
         </button>
       </div>
 

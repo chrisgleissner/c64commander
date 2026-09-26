@@ -1425,7 +1425,8 @@ export function usePlaybackController({
       if (nextEngine === selectedEngineRef.current) return;
       selectedEngineRef.current = nextEngine;
       // A tune playing here would only start again here, or not at all with the C64 out of reach; the next tune moves.
-      const playsHere = currentPlaybackIsLocalRef.current || isLocalPlaybackActive();
+      // The phone's engine is shared, so a page that remounted is playing on it without having started it.
+      const playsHere = currentPlaybackIsLocalRef.current || getLocalSidPlayback().isActive();
       if (playsHere && (nextEngine === "local" || isDeviceOutOfReach())) return;
       const index = currentIndexRef.current;
       const item = playlistRef.current[index];
@@ -1434,7 +1435,7 @@ export function usePlaybackController({
       if (!isPlayingRef.current || !item || item.category !== "sid") return;
       const startedAt = performance.now();
       void (async () => {
-        if (currentPlaybackIsLocalRef.current) {
+        if (playsHere) {
           // getLocalSidPlayback(), never the raw ref: the ref is per-page and
           // starts null, so a page that adopted an already-running session (a
           // remount, or the transient second instance a tab switch creates)
@@ -1473,7 +1474,7 @@ export function usePlaybackController({
     };
     window.addEventListener("c64u-app-settings-updated", onSettingsUpdated);
     return () => window.removeEventListener("c64u-app-settings-updated", onSettingsUpdated);
-  }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS]);
+  }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS, getLocalSidPlayback]);
 
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }): Promise<boolean> => {

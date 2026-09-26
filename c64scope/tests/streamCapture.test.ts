@@ -142,7 +142,7 @@ describe("stream capture", () => {
         c64uHost: "c64u",
         artifactDir,
         durationMs: 20,
-        destinationIp: "192.168.1.50:not-a-port",
+        destinationIp: "192.0.2.50:not-a-port",
       });
       const rejection = expect(pending).rejects.toThrow(/No UDP packets captured for video stream/);
       await vi.advanceTimersByTimeAsync(30);

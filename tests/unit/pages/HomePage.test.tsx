@@ -693,7 +693,7 @@ const seedPreviouslyConnectedDevice = () => {
           id: "seeded",
           name: "Test C64",
           nameSource: "USER",
-          host: "192.168.1.64",
+          host: "192.0.2.64",
           type: "",
           typeSource: "USER",
           httpPort: 80,
@@ -750,6 +750,7 @@ beforeEach(() => {
   userInterfacePayloadRef.current = undefined;
   keyboardLightingPayloadRef.current = undefined;
   c64ApiMockRef.current = {
+    getDeviceHost: () => "c64u",
     setConfigValue: vi.fn().mockResolvedValue({}),
     resetDrive: vi.fn().mockResolvedValue({}),
     writeMemory: vi.fn().mockResolvedValue({}),

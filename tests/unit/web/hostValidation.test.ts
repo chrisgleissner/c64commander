@@ -17,7 +17,7 @@ describe("hostValidation", () => {
     expect(isTrustedInsecureHost("10.0.0.5")).toBe(true);
     expect(isTrustedInsecureHost("172.16.0.1")).toBe(true);
     expect(isTrustedInsecureHost("172.31.255.255")).toBe(true);
-    expect(isTrustedInsecureHost("192.168.1.25:8080")).toBe(true);
+    expect(isTrustedInsecureHost("192.168.0.10:8080")).toBe(true);
     expect(isTrustedInsecureHost("169.254.1.20")).toBe(true);
     expect(isTrustedInsecureHost("[::1]")).toBe(true);
     expect(isTrustedInsecureHost("[fe80::1]:8080")).toBe(true);
@@ -66,12 +66,12 @@ describe("hostValidation", () => {
     expect(isConfiguredDeviceHost("c64u", "c64u:80")).toBe(true);
     expect(isConfiguredDeviceHost("C64U:80", "c64u")).toBe(true);
     expect(isConfiguredDeviceHost("[fe80::1]", "[FE80::1]:80")).toBe(true);
-    expect(isConfiguredDeviceHost("192.168.1.64:8080", "192.168.1.64:8080")).toBe(true);
+    expect(isConfiguredDeviceHost("192.0.2.64:8080", "192.0.2.64:8080")).toBe(true);
   });
 
   it("does not treat another host, port or empty value as the configured device", () => {
-    expect(isConfiguredDeviceHost("10.0.0.9", "192.168.1.64")).toBe(false);
-    expect(isConfiguredDeviceHost("192.168.1.64:8080", "192.168.1.64")).toBe(false);
+    expect(isConfiguredDeviceHost("198.51.100.9", "192.0.2.64")).toBe(false);
+    expect(isConfiguredDeviceHost("192.0.2.64:8080", "192.0.2.64")).toBe(false);
     expect(isConfiguredDeviceHost("localhost", "c64u")).toBe(false);
     expect(isConfiguredDeviceHost("", "c64u")).toBe(false);
     expect(isConfiguredDeviceHost("c64u", "")).toBe(false);

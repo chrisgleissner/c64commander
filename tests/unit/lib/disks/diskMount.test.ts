@@ -81,6 +81,7 @@ import {
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { getUploadMountedDiskName, resetUploadMountsForTests } from "@/lib/disks/uploadMountRegistry";
 import {
   buildDiskMountType,
   resolveLocalDiskBlob,
@@ -88,6 +89,7 @@ import {
   resolveDiskWriteBackTarget,
   finalizeDiskWriteBack,
   discardDiskWriteBack,
+  resetMaterializedMountsForTests,
   saveArchiveDiskCopyToLocalFolder,
   type DiskMountWriteBackDependencies,
 } from "@/lib/disks/diskMount";
@@ -127,8 +129,7 @@ describe("diskMount", () => {
     // materializedMounts is a module singleton (by design - drive occupancy
     // outlives any one test's mountDiskToDrive call); drop any leftovers so
     // tests don't see a prior test's pending write-back entry.
-    discardDiskWriteBack("a");
-    discardDiskWriteBack("b");
+    resetMaterializedMountsForTests();
     mockResolvePersistentReuStorageRoot.mockImplementation(
       (names: string[]) => names.find((n) => n.toLowerCase() !== "temp") ?? null,
     );
@@ -775,6 +776,59 @@ describe("diskMount", () => {
       );
       expect(outcome.persistence).toBe("transient");
       expect(mockApi.mountDriveUpload).toHaveBeenCalled();
+    });
+
+    it("sends nothing when the device the caller started on is no longer the connected one", async () => {
+      const file = new File(["test"], "Game.d64");
+      const api = { ...mockApi, getDeviceHost: vi.fn(() => "u64"), mountDriveUpload: vi.fn(), mountDrive: vi.fn() };
+      await expect(
+        mountDiskToDrive(
+          api as any,
+          "a",
+          { id: "g", name: "Game.d64", path: "/Game.d64", location: "local" } as any,
+          file,
+          { deviceHost: "c64u" },
+        ),
+      ).rejects.toThrow("The connected device changed from c64u to u64 while mounting Game.d64");
+      expect(api.mountDriveUpload).not.toHaveBeenCalled();
+    });
+
+    it("sends nothing more once the connected device changes while a mount is being prepared", async () => {
+      const file = new File(["test"], "Game.d64");
+      const switchingApi = {
+        ...mockApi,
+        getDeviceHost: vi.fn().mockReturnValueOnce("c64u").mockReturnValue("u64"),
+        mountDriveUpload: vi.fn(),
+        mountDrive: vi.fn(),
+      };
+      await expect(
+        mountDiskToDrive(
+          switchingApi as any,
+          "a",
+          { id: "g", name: "Game.d64", path: "/Game.d64", location: "local" } as any,
+          file,
+        ),
+      ).rejects.toThrow("The connected device changed from c64u to u64 while mounting Game.d64");
+      expect(switchingApi.mountDriveUpload).not.toHaveBeenCalled();
+      expect(switchingApi.mountDrive).not.toHaveBeenCalled();
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "Disk mount failed",
+        expect.objectContaining({ error: expect.stringContaining("changed from c64u to u64") }),
+      );
+    });
+
+    it("records a buffer-mounted disk's name so the drive cards can name it after the device reports its upload file", async () => {
+      resetUploadMountsForTests();
+      const file = new File(["test"], "Frogger.d64");
+      await mountDiskToDrive(
+        mockApi as any,
+        "b",
+        { id: "frogger", name: "Frogger.d64", path: "/Frogger.d64", location: "local" } as any,
+        file,
+      );
+      expect(
+        getUploadMountedDiskName(mockApi.getDeviceHost(), "b", "/Temp/cache/upload/temp0082", Date.now() + 1),
+      ).toBe("Frogger.d64");
     });
   });
 

@@ -28,6 +28,11 @@ Prerequisites: the branch's APK installed and foregrounded on the attached Pixel
 pointed at its WebView (the `hil-attach` skill), the Ultimate reachable, and a microphone in front
 of the phone for the audible stages.
 
+`--iface` names the local address the wire stages join the multicast groups on. Without it,
+`av_stream_flow.py` joins on the default interface and `mirror_audio_latency_hil.py` uses the
+source address of this host's IPv4 default route (`tools/hil/lan_iface.py`). Pass it when that
+route leaves through a different interface than the one on the Ultimate's LAN, for example a VPN.
+
 ## When it is mandatory
 
 Whenever the user asks to **complete a PR**, **converge a PR**, get something **merge-ready**,

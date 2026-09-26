@@ -437,6 +437,31 @@ describe("connectionManager", () => {
     expect(getSelectedSavedDeviceProductFamilySync()).toBe("U64E");
   });
 
+  // A saved entry for a device's second address has no stored id yet; files it owns are matched by this.
+  it("publishes the connected device's unique id and hostname while really connected", async () => {
+    const { discoverConnection, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { getConnectedDeviceIdentity } = await import("../../../src/lib/connection/connectedDeviceIdentity");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ product: "Ultimate 64 Elite", hostname: "ultimate.example", unique_id: "38C1BA", errors: [] }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectedDeviceIdentity()).toEqual({ uniqueId: "38C1BA", hostname: "ultimate.example" });
+  });
+
   it("traffic-derived promotion without identity fetches device identity once", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, noteReachable } =
       await import("../../../src/lib/connection/connectionManager");
@@ -1172,7 +1197,7 @@ describe("connectionManager", () => {
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
-    localStorage.setItem("c64u_device_host", "192.168.1.42");
+    localStorage.setItem("c64u_device_host", "192.0.2.42");
     localStorage.removeItem("c64u_has_password");
 
     await initializeConnectionManager();
@@ -1433,7 +1458,7 @@ describe("connectionManager", () => {
     startMockServer.mockRejectedValue(new Error("not available"));
     getActiveMockBaseUrl.mockReturnValue(null);
 
-    localStorage.setItem("c64u_device_host", "192.168.1.100");
+    localStorage.setItem("c64u_device_host", "192.0.2.100");
     localStorage.removeItem("c64u_has_password");
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
@@ -1447,11 +1472,7 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     // Should fallback to stored host-based URL
-    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith(
-      "http://192.168.1.100",
-      undefined,
-      "192.168.1.100",
-    );
+    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith("http://192.0.2.100", undefined, "192.0.2.100");
   });
 
   it("demo fallback applies FTP port override when mock server provides one", async () => {

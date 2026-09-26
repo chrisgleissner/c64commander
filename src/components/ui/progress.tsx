@@ -16,16 +16,18 @@ const Progress = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>
 >(({ className, value, ...props }, ref) => {
   const isIndeterminate = value === null || value === undefined;
+  const clampedValue = isIndeterminate ? null : Math.min(100, Math.max(0, value));
   return (
     <ProgressPrimitive.Root
       ref={ref}
+      value={clampedValue}
       className={cn("relative h-4 w-full overflow-hidden rounded-full bg-secondary", className)}
       data-indeterminate={isIndeterminate ? "true" : "false"}
       {...props}
     >
       <ProgressPrimitive.Indicator
         className={cn("h-full w-full flex-1 bg-primary transition-all", isIndeterminate && "progress-indeterminate")}
-        style={isIndeterminate ? undefined : { transform: `translateX(-${100 - (value || 0)}%)` }}
+        style={isIndeterminate ? undefined : { transform: `translateX(-${100 - (clampedValue ?? 0)}%)` }}
       />
     </ProgressPrimitive.Root>
   );

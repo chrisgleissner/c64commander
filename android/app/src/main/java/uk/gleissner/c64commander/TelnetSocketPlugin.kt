@@ -32,6 +32,7 @@ class TelnetSocketPlugin : Plugin() {
   private val readDrainSliceTimeoutMs = 25
 
   internal var socketFactory: () -> Socket = { Socket() }
+  internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
   // Written only on the single-thread executor, but isConnected() (below) reads
@@ -60,8 +61,7 @@ class TelnetSocketPlugin : Plugin() {
                 // Close existing connection
                 closeSocket()
 
-                val sock = socketFactory()
-                sock.connect(InetSocketAddress(host, port), timeoutMs)
+                val (sock, connectedVia) = openSocket(host, port, timeoutMs)
                 sock.soTimeout = defaultReadTimeoutMs
                 socket = sock
                 inputStream = sock.getInputStream()
@@ -70,7 +70,7 @@ class TelnetSocketPlugin : Plugin() {
                 AppLogger.info(
                         context,
                         logTag,
-                        "Telnet connected to $host:$port",
+                        "Telnet connected to $host:$port$connectedVia",
                         "TelnetSocketPlugin",
                 )
                 call.resolve(JSObject())
@@ -86,6 +86,61 @@ class TelnetSocketPlugin : Plugin() {
               }
             }
     )
+  }
+
+  /**
+   * A literal IP address is connected exactly as given; a host name is tried at every address it
+   * resolves to, IPv4 first, within [timeoutMs] overall. Returns the socket and a log suffix.
+   */
+  private fun openSocket(host: String, port: Int, timeoutMs: Int): Pair<Socket, String> {
+    if (HostAddressConnector.isIpLiteral(host)) {
+      val sock = socketFactory()
+      sock.connect(InetSocketAddress(host, port), timeoutMs)
+      return sock to ""
+    }
+    val addresses = HostAddressConnector.resolveIpv4First(hostResolver, host)
+    val (address, sock) =
+            HostAddressConnector.connectFirstReachable(
+                    addresses,
+                    timeoutMs,
+                    attempt = { address, attemptTimeoutMs ->
+                      val sock = socketFactory()
+                      try {
+                        sock.connect(InetSocketAddress(address, port), attemptTimeoutMs)
+                      } catch (error: Exception) {
+                        closeFailedAttemptSocket(sock, host)
+                        throw error
+                      }
+                      sock
+                    },
+                    onAttemptFailed = { failure ->
+                      if (addresses.size > 1) {
+                        AppLogger.warn(
+                                context,
+                                logTag,
+                                "Telnet connect to $host via ${failure.address.hostAddress}:$port failed within " +
+                                        "${failure.timeoutMs}ms of ${timeoutMs}ms (${addresses.size} addresses resolved)",
+                                "TelnetSocketPlugin",
+                                failure.error,
+                        )
+                      }
+                    },
+            )
+    return sock to " via ${address.hostAddress} (${addresses.size} addresses resolved)"
+  }
+
+  private fun closeFailedAttemptSocket(sock: Socket, host: String) {
+    try {
+      sock.close()
+    } catch (error: Exception) {
+      AppLogger.warn(
+              context,
+              logTag,
+              "Failed to close Telnet socket after a failed connect attempt to $host: ${error.message}",
+              "TelnetSocketPlugin",
+              error,
+      )
+    }
   }
 
   @PluginMethod

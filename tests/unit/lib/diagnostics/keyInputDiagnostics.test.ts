@@ -139,9 +139,9 @@ describe("buildKeyInputDetails", () => {
     });
     // Simulate a hypothetical host-bearing field nested in details — the recursive
     // export redactor must sanitize it by key name.
-    const withHost = { ...details, activeElement: { hostname: "192.168.1.50" } };
+    const withHost = { ...details, activeElement: { hostname: "192.0.2.50" } };
     const redacted = redactExportValue(withHost) as { activeElement: { hostname: string } };
-    expect(redacted.activeElement.hostname).not.toContain("192.168");
+    expect(redacted.activeElement.hostname).not.toContain("192.0.2.50");
   });
 });
 

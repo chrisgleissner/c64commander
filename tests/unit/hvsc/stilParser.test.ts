@@ -104,6 +104,27 @@ COMMENT: "The laughing is ME and my BROTHER, just before we hit town.
     expect(entry?.credits).toEqual([{ title: "", artist: "Jean-Michel Jarre" }]);
   });
 
+  it("drops HVSC's <?> unknown-title placeholder and keeps the rest of the title", () => {
+    const entry = parseStil(COMMANDO).get("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
+    expect(primaryCredit(entry?.subsongs?.[3])).toEqual({
+      title: "[from the arcade game Commando]",
+      artist: "Tamayo Kawamoto",
+    });
+  });
+
+  it("treats a <?> artist, author or name as unknown rather than as a name", () => {
+    const text = `/DEMOS/X/Unknown.sid
+   NAME: <?>
+ AUTHOR: <?>
+  TITLE: Volo Calabrone
+ ARTIST: <?>
+`;
+    const entry = parseStil(text).get("/DEMOS/X/Unknown.sid");
+    expect(entry?.name).toBeUndefined();
+    expect(entry?.author).toBeUndefined();
+    expect(entry?.credits).toEqual([{ title: "Volo Calabrone" }]);
+  });
+
   it("tolerates CRLF line endings", () => {
     const entry = parseStil("/DEMOS/X/A.sid\r\n  TITLE: Hello\r\n ARTIST: Someone\r\n").get("/DEMOS/X/A.sid");
     expect(primaryCredit(entry)).toEqual({ title: "Hello", artist: "Someone" });

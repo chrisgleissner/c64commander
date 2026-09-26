@@ -58,6 +58,8 @@ export class SongLengthServiceFacade {
   private lastLoadedAtIso: string | null = null;
   private loadDurationMs: number | null = null;
   private configuredPathOrDefault: string | null = null;
+  private lastLoggedStrategy: string | null = null;
+  private resolvesSinceLastLog = 0;
 
   constructor(
     private readonly backend: SongLengthStoreBackend,
@@ -178,9 +180,17 @@ export class SongLengthServiceFacade {
       };
     }
     const resolution = this.backend.resolve(query);
+    // Logged when the strategy changes, not per call: filling in song details resolves every tune
+    // of the library in a row, and one entry each put 500 of 500 log entries on this line in a second.
+    this.resolvesSinceLastLog += 1;
+    if (resolution.strategy === this.lastLoggedStrategy) return resolution;
+    this.lastLoggedStrategy = resolution.strategy;
+    const resolvesSincePrevious = this.resolvesSinceLastLog;
+    this.resolvesSinceLastLog = 0;
     safeAddLog("debug", "Songlengths resolve strategy", {
       service: this.options.serviceId,
       strategy: resolution.strategy,
+      resolvesSincePrevious,
       query: {
         virtualPath: query.virtualPath ?? null,
         fileName: query.fileName ?? null,

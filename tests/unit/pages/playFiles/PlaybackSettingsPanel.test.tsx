@@ -64,6 +64,12 @@ describe("PlaybackSettingsPanel", () => {
   // length — and it is covered by TuneListSheet's own tests. Two controls doing the same job, both
   // reading "Tune 1 of 19", was the redundancy this removed.
 
+  it("names the duration slider thumb Default duration for screen readers", () => {
+    render(<PlaybackSettingsPanel {...baseProps} />);
+
+    expect(screen.getByRole("slider", { name: "Default duration" })).toBeInTheDocument();
+  });
+
   it("displays songlengths error when provided", () => {
     render(<PlaybackSettingsPanel {...baseProps} songlengthsError="File not found" />);
     expect(screen.getByText("File not found")).toBeInTheDocument();

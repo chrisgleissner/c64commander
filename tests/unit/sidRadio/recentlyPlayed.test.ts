@@ -125,6 +125,14 @@ describe("storage", () => {
     expect(loadRecentlyPlayed().map((item) => item.virtualPath)).toEqual(["/good.sid"]);
   });
 
+  it("reads HVSC's <?> unknown-author placeholder stored by an older build as no author", () => {
+    localStorage.setItem(
+      "c64u_recently_played:v2",
+      JSON.stringify([{ ...entry("/MUSICIANS/X/Volo_Calabrone.sid"), author: "<?>" }]),
+    );
+    expect(loadRecentlyPlayed()[0]?.author).toBeNull();
+  });
+
   it("clears", () => {
     saveRecentlyPlayed([entry("/a.sid")]);
     clearRecentlyPlayed();

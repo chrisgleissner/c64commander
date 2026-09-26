@@ -365,16 +365,16 @@ describe("deriveAppContributorHealth", () => {
 describe("device-scoped contributor health (F-DIAG-1)", () => {
   const u64Event = (type: TraceEvent["type"], offsetMs: number, extra: Record<string, unknown> = {}) =>
     makeEvent(type, offsetMs, {
-      hostname: "192.168.1.13",
+      hostname: "192.0.2.13",
       ...extra,
     });
   const c64uEvent = (type: TraceEvent["type"], offsetMs: number, extra: Record<string, unknown> = {}) =>
     makeEvent(type, offsetMs, {
-      hostname: "192.168.1.167",
+      hostname: "192.0.2.167",
       ...extra,
     });
 
-  const u64Scope = { deviceId: "u64-saved-id", host: "192.168.1.13" };
+  const u64Scope = { deviceId: "u64-saved-id", host: "192.0.2.13" };
 
   it("REST: c64u failures do not degrade u64 contributor when scoped to u64", () => {
     const events = [
@@ -408,9 +408,9 @@ describe("device-scoped contributor health (F-DIAG-1)", () => {
 
   it("with no scope, behaviour matches unscoped legacy semantics", () => {
     const events = [
-      makeEvent("rest-response", 60_000, { hostname: "192.168.1.13", status: 200 }),
-      makeEvent("rest-response", 30_000, { hostname: "192.168.1.167", status: 500 }),
-      makeEvent("rest-response", 20_000, { hostname: "192.168.1.167", status: 500 }),
+      makeEvent("rest-response", 60_000, { hostname: "192.0.2.13", status: 200 }),
+      makeEvent("rest-response", 30_000, { hostname: "192.0.2.167", status: 500 }),
+      makeEvent("rest-response", 20_000, { hostname: "192.0.2.167", status: 500 }),
     ];
     // Without scope, all events count: latest success is the first event (oldest).
     // Trim keeps full window: 2 failed of 3 → Unhealthy.

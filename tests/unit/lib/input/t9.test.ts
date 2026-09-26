@@ -158,7 +158,7 @@ describe("T9 hostname mode", () => {
     expect(s.pending).toBeNull();
   });
 
-  it("enters 192.168.1.13", () => {
+  it("enters 192.0.2.13", () => {
     let s = createT9State({ mode: "hostname" });
     const digits = (value: string) => {
       for (const ch of value) {
@@ -167,15 +167,15 @@ describe("T9 hostname mode", () => {
     };
     digits("192");
     s = pressPunctuation(s, 100, cfg); // "."
-    digits("168");
+    digits("0");
     s = pressPunctuation(s, 200, cfg); // "."
-    digits("1");
+    digits("2");
     s = pressPunctuation(s, 300, cfg); // "."
     digits("13");
-    expect(s.text).toBe("192.168.1.13");
+    expect(s.text).toBe("192.0.2.13");
   });
 
-  it("enters 192.168.1.13:8080 (double star -> ':')", () => {
+  it("enters 192.0.2.13:8080 (double star -> ':')", () => {
     let s = createT9State({ mode: "hostname" });
     const digits = (value: string, base = 0) => {
       let i = 0;
@@ -185,16 +185,16 @@ describe("T9 hostname mode", () => {
     };
     digits("192");
     s = pressPunctuation(s, 100, cfg);
-    digits("168", 110);
+    digits("0", 110);
     s = pressPunctuation(s, 200, cfg);
-    digits("1", 210);
+    digits("2", 210);
     s = pressPunctuation(s, 300, cfg);
     digits("13", 310);
     // ":" = star twice within the window.
     s = pressPunctuation(s, 400, cfg); // "."
     s = pressPunctuation(s, 410, cfg); // ":"
     digits("8080", 500);
-    expect(s.text).toBe("192.168.1.13:8080");
+    expect(s.text).toBe("192.0.2.13:8080");
   });
 
   it("enters the c64u hostname via multitap", () => {

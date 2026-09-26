@@ -23,6 +23,7 @@ vi.mock("@capacitor/filesystem", () => ({
   Directory: {
     Data: "Data",
   },
+  Encoding: { UTF8: "utf8" },
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -142,23 +143,23 @@ describe("filesystemMediaIndex", () => {
       expect(addLog).not.toHaveBeenCalled();
     });
 
-    it("encodes using Buffer when btoa is unavailable", async () => {
-      vi.stubGlobal("btoa", undefined);
-
+    it("writes the snapshot to the bridge as UTF-8 JSON text rather than base64", async () => {
       const snapshot = {
         version: 1 as const,
         updatedAt: "2024-01-01T00:00:00.000Z",
-        entries: [],
+        entries: [{ path: "/a.sid", name: "Öörni.sid", type: "sid" as const }],
       };
       const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       await storage.write(snapshot);
 
-      expect(mockWriteFile).toHaveBeenCalled();
-      const writeArg = mockWriteFile.mock.calls[0][0];
-      expect(typeof writeArg.data).toBe("string");
-
-      vi.unstubAllGlobals();
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: "hvsc/index/media-index-v2.json",
+          data: JSON.stringify(snapshot),
+          encoding: "utf8",
+        }),
+      );
     });
 
     it("decodes using Buffer when atob is unavailable", async () => {

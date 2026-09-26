@@ -44,6 +44,13 @@ const resolvePlaylistFilterScenario = (totalMatchCount: number) => {
 
 const roundDurationMs = (durationMs: number) => Math.round(durationMs * 100) / 100;
 
+type RepositoryQueryInputs = {
+  playlist: PlaylistItem[];
+  playlistStorageKey: string;
+  playlistTypeFilters: PlayFileCategory[];
+  query: string;
+};
+
 export const useQueryFilteredPlaylist = ({
   playlist,
   playlistStorageKey,
@@ -62,6 +69,7 @@ export const useQueryFilteredPlaylist = ({
   const initialViewAllLimit = Math.max(previewLimit, viewAllPageSize);
   const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const [totalMatchCount, setTotalMatchCount] = useState(0);
+  const [repositoryResultInputs, setRepositoryResultInputs] = useState<RepositoryQueryInputs | null>(null);
   const [viewAllLimit, setViewAllLimit] = useState(initialViewAllLimit);
   const playlistRef = useRef(playlist);
   const queryRef = useRef(query);
@@ -97,10 +105,12 @@ export const useQueryFilteredPlaylist = ({
 
     const run = async () => {
       const currentPlaylist = playlistRef.current;
+      const inputs: RepositoryQueryInputs = { playlist, playlistStorageKey, playlistTypeFilters, query };
       if (!currentPlaylist.length) {
         if (!cancelled) {
           setQueryFilteredPlaylist([]);
           setTotalMatchCount(0);
+          setRepositoryResultInputs(inputs);
         }
         return;
       }
@@ -186,6 +196,7 @@ export const useQueryFilteredPlaylist = ({
       if (!cancelled) {
         setQueryFilteredPlaylist(nextFiltered);
         setTotalMatchCount(result.totalMatchCount);
+        setRepositoryResultInputs(inputs);
       }
     };
 
@@ -236,6 +247,7 @@ export const useQueryFilteredPlaylist = ({
         });
         setQueryFilteredPlaylist(nextFiltered.slice(0, viewAllLimit));
         setTotalMatchCount(nextFiltered.length);
+        setRepositoryResultInputs({ playlist, playlistStorageKey, playlistTypeFilters, query });
       }
     });
 
@@ -257,6 +269,14 @@ export const useQueryFilteredPlaylist = ({
 
   const activeViewAllPlaylist = repositoryReady ? queryFilteredPlaylist : memoryViewAllPlaylist;
   const activeTotalMatchCount = repositoryReady ? totalMatchCount : memoryFilteredPlaylist.length;
+  // A repository count left over from other inputs, or the 0 before the first query answers, is not a match count.
+  const matchCountIsCurrent =
+    !repositoryReady ||
+    (repositoryResultInputs?.playlist === playlist &&
+      repositoryResultInputs.playlistStorageKey === playlistStorageKey &&
+      repositoryResultInputs.playlistTypeFilters === playlistTypeFilters &&
+      repositoryResultInputs.query === query);
+  const hiddenByFilterCount = matchCountIsCurrent && activeTotalMatchCount === 0 ? playlist.length : 0;
   const previewPlaylist = useMemo(
     () => activeViewAllPlaylist.slice(0, previewLimit),
     [activeViewAllPlaylist, previewLimit],
@@ -266,6 +286,7 @@ export const useQueryFilteredPlaylist = ({
     previewPlaylist,
     viewAllPlaylist: activeViewAllPlaylist,
     totalMatchCount: activeTotalMatchCount,
+    hiddenByFilterCount,
     hasMoreViewAllResults: activeViewAllPlaylist.length < activeTotalMatchCount,
     loadMoreViewAllResults: () => setViewAllLimit((current) => current + viewAllPageSize),
   };

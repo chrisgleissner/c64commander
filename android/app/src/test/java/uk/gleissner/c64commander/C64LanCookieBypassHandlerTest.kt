@@ -21,7 +21,7 @@ class C64LanCookieBypassHandlerTest {
     assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://u64/v1/info")))
     assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://c64u/v1/info")))
     assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://ultimate64.local/v1/info")))
-    assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://192.168.1.13/v1/info")))
+    assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://192.168.0.10/v1/info")))
     assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://10.0.0.9/v1/info")))
     assertTrue(C64LanCookieBypassHandler.shouldBypass(URI("http://172.16.4.20/v1/info")))
     assertFalse(C64LanCookieBypassHandler.shouldBypass(URI("https://example.com")))
@@ -33,7 +33,7 @@ class C64LanCookieBypassHandlerTest {
     val delegate = RecordingCookieHandler()
     val handler = C64LanCookieBypassHandler(delegate)
 
-    val result = handler.get(URI("http://192.168.1.13/v1/info"), mutableMapOf("Cookie" to mutableListOf("a=b")))
+    val result = handler.get(URI("http://192.168.0.10/v1/info"), mutableMapOf("Cookie" to mutableListOf("a=b")))
 
     assertTrue(result.isEmpty())
     assertEquals(0, delegate.getCalls)

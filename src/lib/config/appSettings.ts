@@ -54,7 +54,6 @@ const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
 const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
 const STREAM_VIDEO_BADGES_KEY = "c64u_stream_video_badges";
-const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
 const VIC_PALETTE_KEY = "c64u_vic_palette";
 const PALETTE_TARGET_KEY = "c64u_palette_target";
 const PERSIST_CONFIG_TO_FLASH_KEY = "c64u_persist_config_to_flash";
@@ -494,30 +493,6 @@ export const DEFAULT_STREAM_VIDEO_BADGES = true;
 export const loadStreamVideoBadges = () => readBoolean(STREAM_VIDEO_BADGES_KEY, DEFAULT_STREAM_VIDEO_BADGES);
 
 export const saveStreamVideoBadges = (enabled: boolean) => writeBoolean(STREAM_VIDEO_BADGES_KEY, enabled);
-
-/**
- * Live View **audio route** — how Listen-only audio reaches the app (firmware
- * PR #732 `wifi=true`). The firmware can send **audio-only** over Wi‑Fi, which
- * never coexists with video, so this only governs audio-without-video:
- *
- * - `dynamic` (default) — Wi‑Fi while audio is the only stream; automatically
- *   moves to Ethernet when you add video so both share one route (and back to
- *   Wi‑Fi when video stops). "Just works."
- * - `wifi` — always prefer Wi‑Fi for audio. Because Wi‑Fi audio can't run with
- *   video, starting video is blocked while Wi‑Fi audio is live.
- * - `ethernet` — always use Ethernet for audio (the classic behaviour).
- *
- * Wi‑Fi is attempted, not pre-detected: if the device has no Wi‑Fi the start
- * fails and the app retries over Ethernet.
- */
-export type StreamAudioRoute = "dynamic" | "wifi" | "ethernet";
-export const DEFAULT_STREAM_AUDIO_ROUTE: StreamAudioRoute = "dynamic";
-const STREAM_AUDIO_ROUTES: readonly StreamAudioRoute[] = ["dynamic", "wifi", "ethernet"] as const;
-
-export const loadStreamAudioRoute = (): StreamAudioRoute =>
-  readEnum(STREAM_AUDIO_ROUTE_KEY, STREAM_AUDIO_ROUTES, DEFAULT_STREAM_AUDIO_ROUTE);
-
-export const saveStreamAudioRoute = (route: StreamAudioRoute) => writeString(STREAM_AUDIO_ROUTE_KEY, route);
 
 export const loadNotificationVisibility = (): NotificationVisibility =>
   readRawString(NOTIFICATION_VISIBILITY_KEY) === "all" ? "all" : DEFAULT_NOTIFICATION_VISIBILITY;

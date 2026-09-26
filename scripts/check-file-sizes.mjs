@@ -89,7 +89,7 @@ export const GRANDFATHERED = new Map([
   ["src/pages/playFiles/hooks/useVolumeOverride.ts", 1387],
   ["src/lib/playback/localSidNativeSink.ts", 1301],
   ["src/lib/hvsc/hvscBrowseIndexStore.ts", 1277],
-  ["android/app/src/main/java/uk/gleissner/c64commander/StreamUdpPlugin.kt", 1253],
+  ["android/app/src/main/java/uk/gleissner/c64commander/StreamUdpPlugin.kt", 1215],
   ["src/pages/playFiles/handlers/addFileSelections.ts", 1239],
   ["src/lib/savedDevices/store.ts", 1205],
   ["src/lib/deviceInteraction/deviceInteractionManager.ts", 1176],
@@ -97,7 +97,6 @@ export const GRANDFATHERED = new Map([
   ["src/lib/streams/subjectTracker.ts", 1150],
   ["android/app/src/main/java/uk/gleissner/c64commander/AudioPipeline.kt", 1113],
   ["android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt", 1061],
-  ["src/lib/disks/diskMount.ts", 1031],
 ]);
 
 const walk = (dir) => {

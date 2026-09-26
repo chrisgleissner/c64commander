@@ -590,7 +590,7 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(button.textContent).toContain("U64");
   });
 
-  it("disables the C64U source and says why while no C64 Ultimate is connected", () => {
+  it("disables the Ultimate source and says a device is needed, without naming one model, while none is connected", () => {
     // Offline this opened an empty browser that said only "No matching items in this folder".
     render(
       <DisplayProfileProvider>
@@ -622,7 +622,8 @@ describe("ItemSelectionDialog display profiles", () => {
     );
 
     expect(screen.getByTestId("import-option-c64u")).toBeDisabled();
-    expect(screen.getByTestId("import-option-c64u-unavailable")).toHaveTextContent("Needs a connected C64 Ultimate");
+    expect(screen.getByTestId("import-option-c64u-unavailable")).toHaveTextContent("Needs a connected device");
+    expect(screen.getByTestId("import-option-c64u-unavailable")).not.toHaveTextContent("C64 Ultimate");
   });
 
   it("shows the local source label in the selection heading", async () => {
@@ -1082,5 +1083,92 @@ describe("ItemSelectionDialog archive source buttons", () => {
     expect(selectionIcon?.getAttribute("class")).toContain("h-5");
     expect(selectionIcon?.getAttribute("class")).toContain("w-5");
     expect(selectionGlyph?.getAttribute("class") ?? "").not.toContain("scale-[1.22]");
+  });
+});
+
+describe("ItemSelectionDialog confirm in flight", () => {
+  const deferred = () => {
+    let resolve: (value: boolean) => void = () => undefined;
+    let reject: (error: Error) => void = () => undefined;
+    const promise = new Promise<boolean>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+
+  const renderOpenSource = (onConfirm: () => Promise<boolean>) =>
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Play"
+          initialSourceId="ultimate-1"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={onConfirm}
+        />
+      </DisplayProfileProvider>,
+    );
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ["footer", 1280],
+    ["compact header", 320],
+  ])("calls onConfirm once for two presses of the %s confirm while the first is still running", async (_, width) => {
+    setViewportWidth(width);
+    const pending = deferred();
+    const onConfirm = vi.fn(() => pending.promise);
+    renderOpenSource(onConfirm);
+
+    fireEvent.click(await screen.findByLabelText("Select Alpha.sid"));
+    const confirm = screen.getByTestId("add-items-confirm");
+    act(() => {
+      confirm.click();
+      confirm.click();
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAttribute("aria-busy", "true");
+
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending.resolve(false);
+    });
+  });
+
+  it("makes confirm available again after onConfirm fails", async () => {
+    setViewportWidth(1280);
+    const first = deferred();
+    const onConfirm = vi.fn(() => first.promise);
+    renderOpenSource(onConfirm);
+
+    fireEvent.click(await screen.findByLabelText("Select Alpha.sid"));
+    const confirm = screen.getByTestId("add-items-confirm");
+    fireEvent.click(confirm);
+    expect(confirm).toBeDisabled();
+
+    await act(async () => {
+      first.reject(new Error("launch failed"));
+    });
+
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(confirm).toHaveAttribute("aria-busy", "false");
+    expect(reportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Add items failed", description: "launch failed" }),
+    );
+
+    onConfirm.mockImplementation(async () => false);
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledTimes(2);
   });
 });

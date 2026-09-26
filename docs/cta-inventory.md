@@ -291,9 +291,10 @@ not-connected / empty / single-device).
 - **SID / Audio mixer** (`data-section-label="SID"`) — per socket/UltiSID:
   - Reset — button — `home-sid-reset` — R✅ I✅
   - Master volume — slider — `home-sid-volume-master` — R✅ I✅ when the live `Vol Master` item exists.
+    Left/Right (and PageUp/PageDown, ×10) move one mixer option per press; dragging keeps its fine step.
   - Enable toggle — button — `home-sid-toggle-*` — R✅ I✅
   - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅
-  - Volume, Pan — slider ×2 — R✅ I✅
+  - Volume, Pan — slider ×2 — `home-sid-volume-*`, `home-sid-pan-*` — R✅ I✅ — one mixer option per Left/Right press, like Master volume.
 - **Streams** (`home-stream-status`) — per VIC / Audio / Debug:
   - Edit target — button — `home-stream-edit-toggle-*` — R✅ I✅
   - Start — button — `home-stream-start-*` — R✅ I✅
@@ -356,7 +357,16 @@ not-connected / empty / single-device).
 - Filter files — text — `list-filter-input` — R✅ I✅
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
+- Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
+  **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
+  how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,
+  not yet enumerated on hardware:
+  - Cancel — button — `clear-playlist-cancel` — takes focus when the dialog opens, so OK pressed twice
+    keeps the playlist
+  - Clear — button (danger) — `clear-playlist-confirm` — removes every playlist item
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
+  - Reset HVSC confirmation — alert dialog — `hvsc-reset-dialog` — Cancel (`hvsc-reset-cancel`, takes focus
+    when the dialog opens) and Reset (`hvsc-reset-confirm`); Reset removes the installed library
 - HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
 - **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
@@ -377,10 +387,16 @@ Listed below in the order they are rendered and walked by the focus ring.
 
 - Start a station from the current tune — button — `sid-radio-start` — R✅ I✅ _(shown for a playing SID)_
 - Open the station launcher — button — `sid-radio-launcher` — R✅ I✅ ; sheet `sid-radio-launcher-sheet`
-  - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅ `[disabled: the export left this style with no tracks — see size `sid-radio-style-<bit>-size`]`
-  - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅
-  - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: not enough rankings yet — see hint `sid-radio-taste-hint`]`
-  - Surprise me — button — `sid-radio-surprise` — R✅ I✅
+  - Needs HVSC — focusable note (`tabindex=0`) — `sid-radio-needs-hvsc` — first ring stop in the
+    sheet `[shown only while no HVSC music is installed]` — code-verified, not yet enumerated on hardware
+  - Install HVSC — button — `sid-radio-install-hvsc` — closes the launcher and opens the HVSC
+    preparation sheet `[shown only while no HVSC music is installed and HVSC is enabled]` — code-verified,
+    not yet enumerated on hardware
+  - Song moods — button — `sid-radio-song-mood-<bit|all>` `[disabled: no HVSC installed, or the mood has no members]`
+  - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅ `[disabled: no HVSC installed, or the export left this style with no tracks — see size `sid-radio-style-<bit>-size`]`
+  - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅ `[disabled: no HVSC installed]`
+  - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: no HVSC installed, or not enough rankings yet — see hint `sid-radio-taste-hint`]`
+  - Surprise me — button — `sid-radio-surprise` — R✅ I✅ `[disabled: no HVSC installed]`
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
   top of the Now Playing card, beside the station it ends
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
@@ -442,7 +458,7 @@ Disk library: New disk — button — `new-disk-open` — R✅ I✅ _(flag `new_
 
 Per-disk overflow menu (Set group / Rename / Remove) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
 
-Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / C64U / CommoServe — buttons — `import-option-*` — R✅ I✅.
+Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / connected Ultimate (named after its product: C64U, U64, U64E, U64E2 or U2) / CommoServe — buttons — `import-option-*` — R✅ I✅.
 
 ### 4.4 Config (`/config`)
 
@@ -555,11 +571,7 @@ past it to anything below.
   preview and the immersive Remote Input view; off leaves the picture clear)_ ;
   Low-latency audio
   (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
-  Live View audio through a native low-latency track — Android only)_ ; Audio
-  streaming route — select — `settings-stream-audio-route` — R✅ I✅ _(default
-  Dynamic; firmware wifi=true — Wi‑Fi for audio-only, Ethernet with video, or
-  Always Wi‑Fi / Always Ethernet)_
-  `[developer-mode only — firmware wifi=true not yet in released firmware; the session forces Ethernet unless dev mode is on]`
+  Live View audio through a native low-latency track — Android only)_
 - **Remote Input** _(the Game Mode block, then autofire)_: Joystick keys — select —
   `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centred) / Classic T9 /
   Custom; per-variant default from `variant.runtime.defaultJoystickKeyLayout`)_ ;
@@ -764,8 +776,10 @@ ordinary focus-ring CTAs in both output modes.
 
 - Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
-  `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
-  devices/firmware without `machine:input` (kernal-fallback tier); hidden in
+  `remote-input-mode-type` — R✅ I✅ ; Joystick disabled on devices/firmware
+  without `machine:input` (kernal-fallback tier), with the reason shown as text
+  under the toggle row in Type mode (`remote-input-joystick-unavailable-reason`,
+  not interactive, also the Joystick button's accessible description); hidden in
   Game mode. Pinned in a non-scrolling chrome region at the top of the sheet
   (outside the scrollable body) so it is always visible, with Release All
   right-aligned on the same row (see below)
@@ -1197,7 +1211,9 @@ The sheet has three stages: pick a source, browse or search it, confirm the sele
 
 **Source picker** — Local / C64U / HVSC / CommoServe — buttons — `import-option-*`
 (`import-option-{local,c64u,hvsc,commoserve}`). HVSC and CommoServe appear only when
-their feature flag and library state allow it.
+their feature flag and library state allow it. The Ultimate button is named after the connected
+product (C64U, U64, U64E, U64E2 or U2; C64U when the product is unknown), and while no device is
+connected it is disabled with the reason `import-option-c64u-unavailable` ("Needs a connected device").
 
 **Header**
 

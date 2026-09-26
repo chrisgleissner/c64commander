@@ -7,7 +7,7 @@ Docs sections and open-source licenses rendering
 ## Preconditions
 
 - Android device connected and unlocked (`ANDROID_SERIAL=2113b87f`)
-- C64U reachable (`C64U_HOST=192.168.1.13`)
+- C64U reachable (`C64U_HOST`, default `c64u`)
 - C64 Commander installed (`uk.gleissner.c64commander`)
 - Start route target: `/docs`
 - Dependency features in terminal state: F002

@@ -1549,7 +1549,7 @@ describe("DiagnosticsDialog", () => {
       actionSummaries: [
         {
           correlationId: "health-check",
-          actionName: "click Connected to 192.168.1.13, system healthy",
+          actionName: "click Connected to 192.0.2.13, system healthy",
           origin: "system" as const,
           originalOrigin: "automatic" as const,
           startTimestamp: new Date(now).toISOString(),

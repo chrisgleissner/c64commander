@@ -190,3 +190,58 @@ describe("SidRadioLauncherSheet station populations", () => {
     }
   });
 });
+
+describe("SidRadioLauncherSheet without HVSC", () => {
+  const renderWithoutHvsc = (onInstallHvsc?: () => void) => {
+    const onStartStyle = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <SidRadioLauncherSheet
+        open
+        onOpenChange={onOpenChange}
+        likeCount={10}
+        onStartStyle={onStartStyle}
+        onStartTaste={vi.fn()}
+        onSurprise={vi.fn()}
+        songSeedLabel="Commando"
+        onStartSong={vi.fn()}
+        hvscMissing
+        onInstallHvsc={onInstallHvsc}
+      />,
+    );
+    return { onStartStyle, onOpenChange };
+  };
+
+  it("says inside the sheet that HVSC is needed, as a stop the keypad focus ring can land on", () => {
+    renderWithoutHvsc();
+    const reason = screen.getByTestId("sid-radio-needs-hvsc");
+    expect(reason).toHaveTextContent("none is installed yet");
+    expect(reason).toHaveAttribute("tabindex", "0");
+  });
+
+  it("disables every station while no HVSC music is installed", () => {
+    const { onStartStyle } = renderWithoutHvsc();
+    for (let bit = 0; bit < 9; bit += 1) {
+      expect(screen.getByTestId(`sid-radio-style-${bit}`)).toBeDisabled();
+    }
+    expect(screen.getByTestId("sid-radio-song-mood-all")).toBeDisabled();
+    expect(screen.getByTestId("sid-radio-likes-toggle")).toBeDisabled();
+    expect(screen.getByTestId("sid-radio-taste")).toBeDisabled();
+    expect(screen.getByTestId("sid-radio-surprise")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("sid-radio-style-0"));
+    expect(onStartStyle).not.toHaveBeenCalled();
+  });
+
+  it("offers Install HVSC, which closes the sheet and opens HVSC installation", () => {
+    const onInstallHvsc = vi.fn();
+    const { onOpenChange } = renderWithoutHvsc(onInstallHvsc);
+    fireEvent.click(screen.getByTestId("sid-radio-install-hvsc"));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onInstallHvsc).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no install button where HVSC cannot be installed from the Play page", () => {
+    renderWithoutHvsc();
+    expect(screen.queryByTestId("sid-radio-install-hvsc")).toBeNull();
+  });
+});

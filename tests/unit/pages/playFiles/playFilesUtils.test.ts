@@ -37,6 +37,7 @@ import {
   seededShuffleIds,
   generateShuffleSeed,
   resolveNextPlaylistIndex,
+  resolvePlayOrderIndices,
   resolvePreviousPlaylistIndex,
   canAdvanceNext,
   canAdvancePrevious,
@@ -61,10 +62,15 @@ describe("playFilesUtils", () => {
   });
 
   describe("formatTime", () => {
-    it("formats milliseconds to MM:SS", () => {
+    it("formats durations under an hour as m:ss", () => {
       expect(formatTime(1000)).toBe("0:01");
       expect(formatTime(65000)).toBe("1:05");
-      expect(formatTime(3600000)).toBe("60:00");
+      expect(formatTime(3599000)).toBe("59:59");
+    });
+    it("formats durations of an hour or more as h:mm:ss instead of counting minutes past 59", () => {
+      expect(formatTime(3600000)).toBe("1:00:00");
+      expect(formatTime((5 * 3600 + 26 * 60 + 56) * 1000)).toBe("5:26:56");
+      expect(formatTime((26 * 3600 + 5 * 60 + 7) * 1000)).toBe("26:05:07");
     });
     it("handles undefined", () => {
       expect(formatTime(undefined)).toBe("—:—");
@@ -487,6 +493,11 @@ describe("playFilesUtils", () => {
     it("formatDurationSeconds", () => {
       expect(formatDurationSeconds(60)).toBe("1:00");
     });
+
+    it("shows the one-hour maximum default duration as 60:00, which the field reads back as one hour", () => {
+      expect(formatDurationSeconds(DURATION_MAX_SECONDS)).toBe("60:00");
+      expect(parseDurationInput(formatDurationSeconds(DURATION_MAX_SECONDS))).toBe(DURATION_MAX_SECONDS * 1000);
+    });
   });
 
   describe("parseVolumeOption", () => {
@@ -665,6 +676,25 @@ describe("playFilesUtils", () => {
         const before = [...playlist];
         resolveNextPlaylistIndex(playlist, 0, false, true, 999);
         expect(playlist).toEqual(before);
+      });
+    });
+
+    describe("resolvePlayOrderIndices", () => {
+      it("lists the curated order when shuffle is off", () => {
+        expect(resolvePlayOrderIndices(playlist, false, 1234)).toEqual(playlist.map((_, index) => index));
+      });
+
+      it("lists indices in exactly the order Next walks them under shuffle", () => {
+        const seed = 1234;
+        const order = resolvePlayOrderIndices(playlist, true, seed);
+        const walked = [order[0]];
+        let next = resolveNextPlaylistIndex(playlist, order[0], false, true, seed);
+        while (next !== null) {
+          walked.push(next);
+          next = resolveNextPlaylistIndex(playlist, next, false, true, seed);
+        }
+        expect(order).toEqual(walked);
+        expect(order).not.toEqual(playlist.map((_, index) => index));
       });
     });
 

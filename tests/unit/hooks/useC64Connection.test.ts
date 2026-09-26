@@ -488,6 +488,25 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(result.current.data?.drives).toBeDefined());
   });
 
+  it("does not show the previous device's drives after a device switch", async () => {
+    const { wrapper } = createWrapper();
+    mockApi.getDrives.mockResolvedValueOnce({ drives: [{ a: { image_file: "/Temp/cache/upload/temp0082" } }] });
+    const { result, rerender } = renderHook(() => useC64Drives(), { wrapper });
+    await waitFor(() =>
+      expect(result.current.data?.drives?.[0]).toEqual({ a: { image_file: "/Temp/cache/upload/temp0082" } }),
+    );
+
+    let resolveNext: (value: unknown) => void = () => undefined;
+    mockApi.getDrives.mockImplementationOnce(() => new Promise((resolve) => (resolveNext = resolve)));
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-connection-change", { detail: { baseUrl: "http://u64" } }));
+    });
+    rerender();
+
+    expect(result.current.data).toBeUndefined();
+    resolveNext({ drives: [] });
+  });
+
   it("disables drive polling while diagnostics suppression is armed", async () => {
     vi.useFakeTimers();
     try {

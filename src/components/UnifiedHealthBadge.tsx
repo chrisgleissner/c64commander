@@ -46,7 +46,9 @@ import {
   getSavedDeviceSwitchStatus,
   type DeviceSwitchStatus,
 } from "@/lib/savedDevices/store";
+import { describeSameDeviceEntry } from "@/lib/savedDevices/sameDevice";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
+import { formatElapsedAgo } from "@/lib/ui/elapsedAgo";
 import { cn } from "@/lib/utils";
 
 const BADGE_LONG_PRESS_MS = 450;
@@ -57,17 +59,6 @@ const resolvePickerStatusLabel = (status: DeviceSwitchStatus, isSelected: boolea
   if (status === "mismatch") return "Mismatch";
   if (isSelected) return "Selected";
   return null;
-};
-
-const formatRelativeTime = (prefix: string, timestampMs: number | null) => {
-  if (timestampMs === null || Number.isNaN(timestampMs)) return `${prefix} -`;
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  if (minutes === 0) {
-    return `${prefix} ${seconds}s ago`;
-  }
-  return `${prefix} ${minutes}m ${seconds}s ago`;
 };
 
 const parseIsoTimestamp = (value: string | null) => {
@@ -106,25 +97,21 @@ const resolveDeviceHealthSummary = (
   const lastSeenAt = snapshot?.lastObservedAt ?? snapshot?.lastCompletedAt ?? device.lastSuccessfulConnectionAt ?? null;
 
   if (!snapshot) {
-    return [switchPrefix, formatRelativeTime("Last seen", parseIsoTimestamp(lastSeenAt))].filter(Boolean).join(" · ");
+    return [switchPrefix, formatElapsedAgo("Last seen", parseIsoTimestamp(lastSeenAt))].filter(Boolean).join(" · ");
   }
 
   if (snapshot.running) {
     return [
       switchPrefix,
       `${resolveCompletedProbeCount(snapshot)}/${totalProbeCount} probes`,
-      formatRelativeTime("Started", parseIsoTimestamp(snapshot.lastStartedAt)),
+      formatElapsedAgo("Started", parseIsoTimestamp(snapshot.lastStartedAt)),
     ]
       .filter(Boolean)
       .join(" · ");
   }
 
   if (snapshot.deferredReason === "freshness") {
-    return [
-      switchPrefix,
-      formatRelativeTime("Last seen", parseIsoTimestamp(lastSeenAt)),
-      isSelected ? "Deferred" : null,
-    ]
+    return [switchPrefix, formatElapsedAgo("Last seen", parseIsoTimestamp(lastSeenAt)), isSelected ? "Deferred" : null]
       .filter(Boolean)
       .join(" · ");
   }
@@ -133,7 +120,7 @@ const resolveDeviceHealthSummary = (
     return [
       switchPrefix,
       snapshot.deferredReason === "circuit-open" ? "Circuit open" : "Latest check failed",
-      formatRelativeTime(
+      formatElapsedAgo(
         snapshot.deferredReason === "circuit-open" ? "Last seen" : "Last check",
         parseIsoTimestamp(snapshot.deferredReason === "circuit-open" ? lastSeenAt : snapshot.lastCompletedAt),
       ),
@@ -142,7 +129,7 @@ const resolveDeviceHealthSummary = (
       .join(" · ");
   }
 
-  return [switchPrefix, formatRelativeTime("Last check", parseIsoTimestamp(snapshot.lastCompletedAt ?? lastSeenAt))]
+  return [switchPrefix, formatElapsedAgo("Last check", parseIsoTimestamp(snapshot.lastCompletedAt ?? lastSeenAt))]
     .filter(Boolean)
     .join(" · ");
 };
@@ -798,6 +785,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                 : (resolveDeviceSwitchStatusFromHealth(healthSnapshot) ?? getSavedDeviceSwitchStatus(device.id));
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
               const isExpanded = expandedDeviceIdSet.has(device.id);
+              const sameDeviceNote = describeSameDeviceEntry(device.id, savedDevices);
 
               return (
                 <div
@@ -836,6 +824,14 @@ export function UnifiedHealthBadge({ className }: Props) {
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
                         </span>
+                        {sameDeviceNote ? (
+                          <span
+                            className="mt-1 block text-xs text-muted-foreground"
+                            data-testid={`switch-device-same-as-${device.id}`}
+                          >
+                            {sameDeviceNote}
+                          </span>
+                        ) : null}
                       </span>
                       {pickerBadgeOwnLine ? (
                         <span className="flex min-w-0 max-w-full items-start">

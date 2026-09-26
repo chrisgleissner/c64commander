@@ -134,9 +134,42 @@ public final class TelnetSocketPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func openStreams(host: String, port: Int, timeout: TimeInterval) throws {
+        let candidates = HostAddressCandidates.resolve(host)
+        let connected = try HostAddressCandidates.connectFirstReachable(
+            candidates,
+            totalTimeout: timeout,
+            attempt: { address, attemptTimeout in
+                try openStreams(address: address, port: port, timeout: attemptTimeout)
+            },
+            onAttemptFailed: { address, attemptTimeout, error in
+                closeStreams()
+                if candidates.count > 1 {
+                    IOSDiagnostics.log(.warn, "Telnet connect attempt failed", details: [
+                        "origin": logOrigin,
+                        "host": host,
+                        "address": address,
+                        "port": port,
+                        "attemptTimeoutMs": Int(attemptTimeout * 1_000),
+                        "addressCount": candidates.count,
+                    ], error: error)
+                }
+            }
+        )
+        if candidates.count > 1 {
+            IOSDiagnostics.log(.debug, "Telnet connected via resolved address", details: [
+                "origin": logOrigin,
+                "host": host,
+                "address": connected.address,
+                "port": port,
+                "addressCount": candidates.count,
+            ])
+        }
+    }
+
+    private func openStreams(address: String, port: Int, timeout: TimeInterval) throws {
         var readStream: Unmanaged<CFReadStream>?
         var writeStream: Unmanaged<CFWriteStream>?
-        CFStreamCreatePairWithSocketToHost(nil, host as CFString, UInt32(port), &readStream, &writeStream)
+        CFStreamCreatePairWithSocketToHost(nil, address as CFString, UInt32(port), &readStream, &writeStream)
 
         guard let read = readStream?.takeRetainedValue(), let write = writeStream?.takeRetainedValue() else {
             throw NativePluginError.unavailable("Failed to create Telnet socket streams")

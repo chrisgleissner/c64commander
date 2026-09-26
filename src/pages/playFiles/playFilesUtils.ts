@@ -11,7 +11,7 @@ import { extractAudioMixerItems as extractAudioMixerItemsFromLib } from "@/lib/c
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import { reportUserError } from "@/lib/uiErrors";
-import type { PlaylistItem } from "./types";
+import type { PlaylistItem, StoredPlaybackSession } from "./types";
 // Re-exported from its owning store so the key and the storage it lives in
 // cannot drift apart. See src/lib/playback/playbackSessionStore.ts.
 export { PLAYBACK_SESSION_KEY } from "@/lib/playback/playbackSessionStore";
@@ -31,9 +31,10 @@ export const DURATION_SLIDER_STEPS = 1000;
 export const formatTime = (ms?: number) => {
   if (ms === undefined) return "—:—";
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return hours > 0 ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 };
 
 // A playlist row distinguishes a size it does not know from a file that really
@@ -151,7 +152,12 @@ export const normalizeDurationInputDraft = (value: string) => {
 export const clampDurationSeconds = (value: number) =>
   Math.min(DURATION_MAX_SECONDS, Math.max(DURATION_MIN_SECONDS, value));
 
-export const formatDurationSeconds = (seconds: number) => formatTime(seconds * 1000);
+// The Default duration field edits minutes and seconds, so it never shows hours: 3600 s reads "60:00",
+// which parseDurationInput reads back as the same value.
+export const formatDurationSeconds = (seconds: number) => {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
+};
 
 export const durationSecondsToSlider = (seconds: number) => {
   const clamped = clampDurationSeconds(seconds);
@@ -271,6 +277,21 @@ export const shouldDetachPlaybackOnSavedDeviceSwitch = ({
 };
 
 /**
+ * True when a stored session belongs to a C64 other than the selected one, so it is restored stopped.
+ * The switch away from that C64 reset it while Play was not mounted to detach (HARD11-002 only runs
+ * there). A tune on the phone is tied to no C64, and a session stored before the device was recorded
+ * restores as it always did.
+ */
+export const isStoredSessionFromAnotherDevice = (
+  session: Pick<StoredPlaybackSession, "isPlaying" | "isPaused" | "playingOnPhone" | "playbackDeviceId">,
+  selectedDeviceId: string,
+): boolean =>
+  (session.isPlaying || session.isPaused) &&
+  session.playingOnPhone !== true &&
+  typeof session.playbackDeviceId === "string" &&
+  session.playbackDeviceId !== selectedDeviceId;
+
+/**
  * Builds the playlist item for a live subsong switch (the subsong picker
  * shown while a multi-subsong SID is playing). Songlengths are resolved
  * per-subsong, so the previous subsong's `durationMs` must not carry over -
@@ -364,6 +385,23 @@ export const seededShuffleIds = (ids: string[], seed: number) => {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+};
+
+/** Playlist indices in the order Next walks them, from the same seeded order the resolvers below use. */
+export const resolvePlayOrderIndices = (
+  playlist: PlaylistItem[],
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+): number[] => {
+  if (!shuffleEnabled || shuffleSeed === null) return playlist.map((_, index) => index);
+  const indexById = new Map<string, number>();
+  playlist.forEach((item, index) => {
+    if (!indexById.has(item.id)) indexById.set(item.id, index);
+  });
+  return seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  ).map((id) => indexById.get(id) ?? -1);
 };
 
 const resolveShuffleOrderPosition = (playlist: PlaylistItem[], currentIndex: number, order: string[]) => {

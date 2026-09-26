@@ -14,6 +14,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Button } from "@/components/ui/button";
 import { ResponsivePathText } from "@/components/ResponsivePathText";
+import { NameWrap } from "@/components/NameWrap";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -44,7 +45,13 @@ import {
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { toast } from "@/hooks/use-toast";
-import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
+import {
+  getC64DrivesQueryKey,
+  useC64ConfigItems,
+  useC64Connection,
+  useC64Drives,
+  useConnectionRoutingEpoch,
+} from "@/hooks/useC64Connection";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -74,6 +81,9 @@ import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
 import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
+import { forgetUploadMount } from "@/lib/disks/uploadMountRegistry";
+import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
+import * as mountSupport from "@/components/disks/driveMountSupport";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
@@ -90,6 +100,7 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { useUltimateSourceLocation } from "@/lib/sourceNavigation/useUltimateSourceLocation";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { getLocalSourceListingMode, requireLocalSourceEntries } from "@/lib/sourceNavigation/localSourcesStore";
@@ -165,17 +176,21 @@ const NO_DISK_LABEL = "No disk mounted";
  * nothing is mounted.
  *
  * ResponsivePathText elides the middle of a long path, which is right for a path and wrong for a
- * sentence: the row it sits in leaves the label 137 CSS px at the Large text size, two short of
- * what "No disk mounted" needs, so it drew "No disk mounte…". A sentence wraps instead, and the
- * row already has flex-wrap for exactly this.
+ * sentence, so a sentence wraps instead. A mounted disk's name takes a full line of its own: sharing
+ * it with the group, swap and power controls left it one letter wide on a 393 px screen.
  */
 const MountedLabel = ({ label, className, dataTestId }: { label: string; className?: string; dataTestId: string }) =>
   label === NO_DISK_LABEL ? (
-    <span className={cn(className, "break-words")} data-testid={dataTestId}>
+    <span className={cn(className, "flex-1 break-words")} data-testid={dataTestId}>
       {label}
     </span>
   ) : (
-    <ResponsivePathText path={label} mode="start-and-filename" className={className} dataTestId={dataTestId} />
+    <ResponsivePathText
+      path={label}
+      mode="start-and-filename"
+      className={cn(className, "basis-full")}
+      dataTestId={dataTestId}
+    />
   );
 
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -270,6 +285,16 @@ export const HomeDiskManager = () => {
   const mountCompletionGenerationRef = useRef<Record<DriveKey, number>>({ a: 0, b: 0 });
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
   const drivePowerOverrideSetAtRef = useRef<Record<string, number>>({});
+  const routingEpoch = useConnectionRoutingEpoch();
+  // What this page assumed about the last device's drives must not stand for the next one's.
+  useEffect(() => {
+    const generations = mountCompletionGenerationRef.current;
+    mountCompletionGenerationRef.current = { a: generations.a + 1, b: generations.b + 1 };
+    mountedByDriveSetAtRef.current = {};
+    drivePowerOverrideSetAtRef.current = {};
+    setMountedByDrive({});
+    setDrivePowerOverride({});
+  }, [routingEpoch]);
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [driveResetPending, setDriveResetPending] = useState<Record<string, boolean>>({});
   const [driveMutationPending, setDriveMutationPending] = useState<Record<string, boolean>>({});
@@ -313,7 +338,7 @@ export const HomeDiskManager = () => {
   const [softIecConfigPending, setSoftIecConfigPending] = useState(false);
   const refreshDrivesFromDevice = useCallback(async () => {
     await queryClient.fetchQuery({
-      queryKey: ["c64-drives"],
+      queryKey: getC64DrivesQueryKey(),
       queryFn: () => api.getDrives(),
       staleTime: 0,
     });
@@ -385,8 +410,8 @@ export const HomeDiskManager = () => {
 
   const localSourcesById = useMemo(() => new Map(localSources.map((source) => [source.id, source])), [localSources]);
 
+  const ultimateSource = useUltimateSourceLocation(status.deviceInfo?.product, status.state !== "OFFLINE_NO_DEMO");
   const sourceGroups: SourceGroup[] = useMemo(() => {
-    const ultimateSource = { ...createUltimateSourceLocation(), isAvailable: status.state !== "OFFLINE_NO_DEMO" };
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
@@ -399,7 +424,7 @@ export const HomeDiskManager = () => {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, localSources, status.state]);
+  }, [archiveConfig, commoserveEnabled, localSources, ultimateSource]);
   const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
     if (!commoserveEnabled) return {};
     return { [archiveConfig.id]: archiveConfig };
@@ -479,45 +504,16 @@ export const HomeDiskManager = () => {
 
   useEffect(() => {
     if (!drivesData?.drives?.length || drivesDataUpdatedAt <= 0) return;
+    mountSupport.learnUploadMountsFromPoll(api.getDeviceHost(), drivesData, drivesDataUpdatedAt);
     setMountedByDrive((prev) => {
       let changed = false;
       const next = { ...prev };
       Object.keys(next).forEach((drive) => {
         const setAt = mountedByDriveSetAtRef.current[drive];
         if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
-        const overrideDiskId = next[drive];
-        if (overrideDiskId) {
-          const overriddenDisk = disksById[overrideDiskId];
-          if (overriddenDisk?.location === "local") {
-            // resolveMountedDiskId's poll-based fallback only ever matches
-            // "ultimate"-location disks (it compares image_path/image_file
-            // against disk.path), so a local (uploaded-blob) disk's mount can
-            // never be re-derived from the poll once this override is gone.
-            // Clearing it as soon as any poll lands (the original design,
-            // intended for error/power overrides) made rotation and
-            // eject-before-delete stop working the instant the mount
-            // succeeded. Keep the override while the poll still shows the
-            // same uploaded filename mounted; only clear when the drive
-            // genuinely reports something else (empty or a different
-            // image). See HARD9-038.
-            const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
-            const polledBasename = driveInfo?.image_file ? getDiskName(driveInfo.image_file) : null;
-            // HARD19-007: a materialized mount path-mounts an internal work file
-            // (c64commander-disk-work-<drive>.<type>), so the poll reports the work
-            // filename, never the original disk's basename — which cleared the
-            // override on the first poll, degrading the label to the work filename
-            // and losing rotation + delete-protection. Also keep the override when
-            // the poll shows the drive's expected work file.
-            const workPath = getMaterializedWorkPath(drive as "a" | "b");
-            const workBasename = workPath ? getDiskName(workPath) : null;
-            if (
-              polledBasename &&
-              (polledBasename === getDiskName(overriddenDisk.path) || polledBasename === workBasename)
-            ) {
-              return;
-            }
-          }
-        }
+        const polledImageFile = mountSupport.findPolledDrive(drivesData, drive as DriveKey)?.image_file;
+        const workPath = getMaterializedWorkPath(drive as DriveKey, api.getDeviceHost());
+        if (mountSupport.keepsLocalMountOverride(disksById[next[drive]], polledImageFile, workPath)) return;
         delete next[drive];
         delete mountedByDriveSetAtRef.current[drive];
         changed = true;
@@ -698,16 +694,18 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
-      // Match Play's mount mode (mountDiskToDrive/mountDriveUpload both
-      // default to "readwrite") so a disk mounted from the library behaves
-      // the same as one launched via Play - games saving high scores/state
-      // to the user's own D64s must not fail with DOS 26 "WRITE PROTECT ON".
-      // See HARD9-012.
-      const outcome = await runDriveMutationWithSettledPolling(() =>
-        mountDiskToDrive(api, drive, disk, runtimeFile, {
-          archiveConfigs,
-          writeBack: buildDiskWriteBackDependencies(),
-        }),
+      // Default "readwrite" mode, as Play mounts, so games can save to the user's own disks (HARD9-012).
+      const powerEnabled = drivePowerOverride[drive] ?? mountSupport.findPolledDrive(drivesData, drive)?.enabled;
+      const deviceHost = api.getDeviceHost();
+      const deviceApi = bindCallsToDevice(api, deviceHost, () => api.getDeviceHost(), `mounting ${disk.name}`);
+      const { outcome, poweredOn } = await runDriveMutationWithSettledPolling(() =>
+        mountSupport.mountOntoPoweredDrive(deviceApi, drive, powerEnabled, () =>
+          mountDiskToDrive(api, drive, disk, runtimeFile, {
+            archiveConfigs,
+            writeBack: buildDiskWriteBackDependencies(deviceHost),
+            deviceHost,
+          }),
+        ),
       );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
@@ -721,10 +719,14 @@ export const HomeDiskManager = () => {
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
+      if (poweredOn) {
+        drivePowerOverrideSetAtRef.current[drive] = Date.now();
+        setDrivePowerOverride((prev) => ({ ...prev, [drive]: true }));
+      }
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk mounted",
-        description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
+        description: mountSupport.describeDiskMounted(disk.name, drive, poweredOn),
       });
       // HARD18-025: only the residual case (materialization unavailable or
       // failed) risks silent save loss - device-native and materialized
@@ -832,7 +834,12 @@ export const HomeDiskManager = () => {
       // HARD19-005: pass the current device so a write-back only runs against the
       // device the disk was actually materialized on — never overwriting the local
       // source with a different device's stale work file.
-      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies(), api.getDeviceHost());
+      const writeBackResult = await finalizeDiskWriteBack(
+        drive,
+        buildDiskWriteBackDependencies(api.getDeviceHost()),
+        api.getDeviceHost(),
+      );
+      forgetUploadMount(api.getDeviceHost(), drive);
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
@@ -975,14 +982,18 @@ export const HomeDiskManager = () => {
     if (mountedOverride === "") return null;
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
-    // HARD19-007: a materialized mount path-mounts an internal work file, so the
-    // poll reports the work filename. Map it back to the materialized disk so
-    // rotation and delete-while-mounted protection keep working after the
-    // component's optimistic override is lost.
-    const workPath = getMaterializedWorkPath(drive);
+    // HARD19-007: the poll reports a materialized mount's internal work file, never the disk.
+    const workPath = getMaterializedWorkPath(drive, api.getDeviceHost());
     if (workPath && getDiskName(driveInfo.image_file) === getDiskName(workPath)) {
-      return getMaterializedDiskId(drive);
+      return getMaterializedDiskId(drive, api.getDeviceHost());
     }
+    const uploadedDiskId = mountSupport.resolveUploadMountedDiskId(
+      api.getDeviceHost(),
+      drive,
+      driveInfo,
+      drivesDataUpdatedAt,
+    );
+    if (uploadedDiskId && disksById[uploadedDiskId]) return uploadedDiskId;
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;
     const disk = diskLibrary.disks.find((entry) => entry.location === "ultimate" && entry.path === fullPath);
@@ -1179,7 +1190,7 @@ export const HomeDiskManager = () => {
         // HARD18-025: the disk is being removed from the library outright -
         // there is no source left to write back to, so drop any pending
         // materialized-mount entry instead of spending an FTP round trip.
-        mountedDrives.forEach((drive) => discardDiskWriteBack(drive));
+        mountedDrives.forEach((drive) => discardDiskWriteBack(drive, api.getDeviceHost()));
         setMountedByDrive((prev) => {
           const next = { ...prev };
           mountedDrives.forEach((drive) => {
@@ -1829,7 +1840,9 @@ export const HomeDiskManager = () => {
         const groupMeta = disk.group ? (
           <span className="flex items-center gap-1 min-w-0">
             <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
-            <span className={cn(groupColor?.text, "break-words min-w-0")}>Group: {disk.group}</span>
+            <span className={cn(groupColor?.text, "break-words min-w-0")}>
+              Group: <NameWrap name={disk.group} />
+            </span>
           </span>
         ) : null;
         acc.push({
@@ -2097,19 +2110,14 @@ export const HomeDiskManager = () => {
                     </Select>
                   </div>
 
-                  <div
-                    className={cn(
-                      "min-w-0 justify-between gap-2",
-                      profile === "compact" ? "grid" : "flex items-center",
-                    )}
-                  >
-                    <div className={cn("min-w-0 items-center gap-1.5", profile === "compact" ? "grid" : "flex")}>
-                      <MountedLabel
-                        label={mountedLabel}
-                        className="min-w-0 flex-1 text-xs text-muted-foreground"
-                        dataTestId={`drive-mounted-label-${key}`}
-                      />
-                      {mountedDisk?.group ? (
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <MountedLabel
+                      label={mountedLabel}
+                      className="min-w-0 text-xs text-muted-foreground"
+                      dataTestId={`drive-mounted-label-${key}`}
+                    />
+                    {mountedDisk?.group ? (
+                      <div className="flex min-w-0 items-center gap-1.5">
                         <span
                           className={cn(
                             "h-2 w-2 shrink-0 rounded-full border",
@@ -2117,42 +2125,40 @@ export const HomeDiskManager = () => {
                           )}
                           aria-hidden="true"
                         />
-                      ) : null}
-                      {mountedDisk?.group ? (
                         <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-xs")}>
                           {mountedDisk.group}
                         </span>
-                      ) : null}
-                      {canRotate ? (
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          <FocusableDiskButton
-                            focusId={`disks-drive-${key}-rotate-previous`}
-                            focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 20)}
-                            variant="ghost"
-                            size="sm"
-                            className="h-11 w-11 p-0"
-                            onClick={() => void handleRotate(key, -1)}
-                            disabled={!status.isConnected || configPending || mountPending}
-                            aria-label={`${driveLabel} previous disk`}
-                          >
-                            <ArrowRightLeft className="h-3.5 w-3.5" />
-                          </FocusableDiskButton>
-                          <FocusableDiskButton
-                            focusId={`disks-drive-${key}-rotate-next`}
-                            focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 30)}
-                            variant="ghost"
-                            size="sm"
-                            className="h-11 w-11 p-0"
-                            onClick={() => void handleRotate(key, 1)}
-                            disabled={!status.isConnected || configPending || mountPending}
-                            aria-label={`${driveLabel} next disk`}
-                          >
-                            <ArrowLeftRight className="h-3.5 w-3.5" />
-                          </FocusableDiskButton>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
+                        {canRotate ? (
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <FocusableDiskButton
+                              focusId={`disks-drive-${key}-rotate-previous`}
+                              focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 20)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0"
+                              onClick={() => void handleRotate(key, -1)}
+                              disabled={!status.isConnected || configPending || mountPending}
+                              aria-label={`${driveLabel} previous disk`}
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" />
+                            </FocusableDiskButton>
+                            <FocusableDiskButton
+                              focusId={`disks-drive-${key}-rotate-next`}
+                              focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 30)}
+                              variant="ghost"
+                              size="sm"
+                              className="h-11 w-11 p-0"
+                              onClick={() => void handleRotate(key, 1)}
+                              disabled={!status.isConnected || configPending || mountPending}
+                              aria-label={`${driveLabel} next disk`}
+                            >
+                              <ArrowLeftRight className="h-3.5 w-3.5" />
+                            </FocusableDiskButton>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
                       <FocusableDiskButton
                         focusId={`disks-drive-${key}-reset`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 40)}
@@ -2334,10 +2340,10 @@ export const HomeDiskManager = () => {
               >
                 <MountedLabel
                   label={softIecMountedLabel}
-                  className="min-w-0 flex-1 text-xs text-muted-foreground"
+                  className="min-w-0 text-xs text-muted-foreground"
                   dataTestId="drive-mounted-label-soft-iec"
                 />
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
                   <FocusableDiskButton
                     focusId="disks-soft-iec-reset"
                     focusOrder={340}
@@ -2410,6 +2416,7 @@ export const HomeDiskManager = () => {
             <SelectableActionList
               title="Disk list"
               selectionLabel="items"
+              stackTitleProfiles={["compact", "medium"]}
               items={buildDiskListItems(sortedDisks, {
                 onMount: (entry) => {
                   if (!status.isConnected) {
@@ -2534,11 +2541,13 @@ export const HomeDiskManager = () => {
       <Dialog open={Boolean(activeDisk)} onOpenChange={(open) => !open && setActiveDisk(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Mount {activeDisk?.name}</DialogTitle>
+            <DialogTitle>
+              <NameWrap name={`Mount ${activeDisk?.name ?? ""}`} />
+            </DialogTitle>
             <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {driveRows.map(({ key, busId, driveType, mounted, configPending, mountPending }) => (
+            {driveRows.map(({ key, busId, driveType, mounted, powerEnabled, configPending, mountPending }) => (
               <Button
                 key={key}
                 variant="outline"
@@ -2549,7 +2558,7 @@ export const HomeDiskManager = () => {
                 disabled={!status.isConnected || configPending || mountPending}
               >
                 <HardDrive className="h-4 w-4 mr-2" />
-                {buildDriveLabel(key)} (#{busId}, {driveType}) {mounted ? "• mounted" : ""}
+                {mountSupport.buildMountTargetLabel({ key, busId, driveType, mounted, powerEnabled })}
               </Button>
             ))}
           </div>

@@ -13,10 +13,11 @@ import type { DeviceDiscoveryState } from "@/lib/deviceDiscovery/types";
 
 const persistDiscoveredDevice = vi.fn(() => ({
   deviceId: "saved-device",
-  host: "192.168.1.13",
+  host: "192.0.2.13",
   httpPort: 80,
-  deviceHost: "192.168.1.13",
+  deviceHost: "192.0.2.13",
 }));
+const resolveDiscoveredCandidateIdentity = vi.fn(async (candidate: unknown, _password?: string) => candidate);
 const setPasswordForDevice = vi.fn(async () => undefined);
 const switchSavedDevice = vi.fn(async () => ({ ok: true, deviceInfo: { product: "Ultimate 64 Elite" } }));
 const probeDeviceReachability = vi.fn(async () => ({
@@ -61,6 +62,8 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   persistDiscoveredDevice: (...args: unknown[]) => persistDiscoveredDevice(...args),
+  resolveDiscoveredCandidateIdentity: (candidate: unknown, password?: string) =>
+    resolveDiscoveredCandidateIdentity(candidate, password),
   acknowledgeDeviceDiscoveryResults: (...args: unknown[]) => acknowledgeDeviceDiscoveryResults(...args),
 }));
 
@@ -89,8 +92,8 @@ vi.mock("@/lib/uiErrors", () => ({
 import { DeviceDiscoveryInterstitial } from "@/components/DeviceDiscoveryInterstitial";
 
 const candidate = (requiresPassword = false) => ({
-  id: requiresPassword ? "address:192.168.1.14" : "id:38c1ba",
-  address: requiresPassword ? "192.168.1.14" : "192.168.1.13",
+  id: requiresPassword ? "address:192.0.2.14" : "id:38c1ba",
+  address: requiresPassword ? "192.0.2.14" : "192.0.2.13",
   host: null,
   httpPort: 80,
   source: ["lan-scan" as const],
@@ -130,6 +133,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     connectionState = { state: "OFFLINE_NO_DEMO" };
     savedDevices = { selectedDeviceId: "device-1", devices: [] };
     persistDiscoveredDevice.mockClear();
+    resolveDiscoveredCandidateIdentity.mockClear();
     acknowledgeDeviceDiscoveryResults.mockClear();
     setPasswordForDevice.mockClear();
     switchSavedDevice.mockClear();
@@ -150,7 +154,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     expect(screen.getByText("Choose your C64")).toBeInTheDocument();
     expect(screen.getByText("Ultimate 64 Elite · u64")).toBeInTheDocument();
-    expect(screen.getByText("192.168.1.13 · fw 3.14e · ID 38C1BA")).toBeInTheDocument();
+    expect(screen.getByText("192.0.2.13 · fw 3.14e · ID 38C1BA")).toBeInTheDocument();
     expect(screen.getByTestId("startup-use-discovered-device-id:38c1ba")).toBeInTheDocument();
   });
 
@@ -248,7 +252,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     probeDeviceReachability.mockResolvedValueOnce({ ok: false, deviceInfo: null, error: "HTTP 403" });
     renderDialog();
 
-    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "192.168.1.14" } });
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "192.0.2.14" } });
     fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
 
     await waitFor(() => {
@@ -269,18 +273,18 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     await waitFor(() => {
       expect(probeDeviceReachability).toHaveBeenLastCalledWith({
-        deviceHost: "192.168.1.14",
+        deviceHost: "192.0.2.14",
         password: "secret",
       });
       expect(addSavedDevice).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: "manual-192-168-1-14-80",
-          host: "192.168.1.14",
+          id: "manual-192-0-2-14-80",
+          host: "192.0.2.14",
           hasPassword: true,
         }),
       );
-      expect(setPasswordForDevice).toHaveBeenCalledWith("manual-192-168-1-14-80", "secret");
-      expect(switchSavedDevice).toHaveBeenCalledWith("manual-192-168-1-14-80");
+      expect(setPasswordForDevice).toHaveBeenCalledWith("manual-192-0-2-14-80", "secret");
+      expect(switchSavedDevice).toHaveBeenCalledWith("manual-192-0-2-14-80");
     });
   });
 
@@ -425,6 +429,24 @@ describe("DeviceDiscoveryInterstitial", () => {
     });
   });
 
+  // A protected Ultimate on Ethernet and Wi-Fi is listed once per address with no unique id. With the
+  // password typed, its identity is read first so it lands on the saved entry it already has.
+  it("saves a password-protected device under the identity read with the typed password", async () => {
+    const identified = { ...candidate(true), uniqueId: "DUAL01", alreadySavedDeviceId: "known" };
+    resolveDiscoveredCandidateIdentity.mockResolvedValueOnce(identified);
+    discoveryState = { ...discoveryState, candidates: [candidate(true)] };
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.0.2.14"));
+    fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "secret" } });
+    fireEvent.click(screen.getByTestId("startup-device-password-confirm"));
+
+    await waitFor(() => {
+      expect(resolveDiscoveredCandidateIdentity).toHaveBeenCalledWith(discoveryState.candidates[0], "secret");
+      expect(persistDiscoveredDevice).toHaveBeenCalledWith(identified, { select: false, passwordPresent: true });
+    });
+  });
+
   it("asks for a password before using a password-protected discovered device", async () => {
     discoveryState = {
       ...discoveryState,
@@ -432,7 +454,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     };
     renderDialog();
 
-    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.168.1.14"));
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.0.2.14"));
 
     expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
     expect(persistDiscoveredDevice).not.toHaveBeenCalled();
@@ -461,7 +483,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     savedDevices = { selectedDeviceId: "device-1", devices: [{ id: "known", hasPassword: true }] };
     renderDialog();
 
-    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.168.1.14"));
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.0.2.14"));
 
     await waitFor(() => {
       expect(persistDiscoveredDevice).toHaveBeenCalledWith(discoveryState.candidates[0], {
@@ -477,7 +499,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     discoveryState = { ...discoveryState, candidates: [candidate(true)] };
     renderDialog();
 
-    fireEvent.click(screen.getByTestId("startup-save-discovered-device-address:192.168.1.14"));
+    fireEvent.click(screen.getByTestId("startup-save-discovered-device-address:192.0.2.14"));
     expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("startup-device-password-input"), { target: { value: "hunter2" } });
@@ -504,7 +526,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
-        expect.objectContaining({ operation: "DEVICE_DISCOVERY_SAVE", deviceHost: "192.168.1.13" }),
+        expect.objectContaining({ operation: "DEVICE_DISCOVERY_SAVE", deviceHost: "192.0.2.13" }),
       );
     });
     expect(screen.getByTestId("startup-save-discovered-device-id:38c1ba")).toHaveTextContent("Save");
@@ -518,7 +540,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
-        expect.objectContaining({ operation: "DEVICE_DISCOVERY_SELECT", deviceHost: "192.168.1.13" }),
+        expect.objectContaining({ operation: "DEVICE_DISCOVERY_SELECT", deviceHost: "192.0.2.13" }),
       );
     });
   });
@@ -527,7 +549,7 @@ describe("DeviceDiscoveryInterstitial", () => {
     discoveryState = { ...discoveryState, candidates: [candidate(true)] };
     renderDialog();
 
-    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.168.1.14"));
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-address:192.0.2.14"));
     expect(screen.getByTestId("startup-device-password-panel")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("startup-device-password-cancel"));

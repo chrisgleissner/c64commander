@@ -37,7 +37,7 @@ import {
 } from "../utils/uiLogic";
 import { buildConfigKey, readItemOptions } from "../utils/HomeConfigUtils";
 import { formatDbValue, formatPanValue } from "@/lib/ui/sliderValueFormat";
-import { SID_SLIDER_STEP } from "../constants";
+import { SID_SLIDER_KEYBOARD_STEP, SID_SLIDER_STEP } from "../constants";
 
 interface AudioMixerProps {
   /**
@@ -98,6 +98,7 @@ function MasterVolumeControl({
           min={0}
           max={max}
           step={SID_SLIDER_STEP}
+          keyboardStep={SID_SLIDER_KEYBOARD_STEP}
           onValueChange={slider.onValueChange}
           onValueCommit={slider.onValueCommit}
           valueFormatter={formatValue}
@@ -106,6 +107,7 @@ function MasterVolumeControl({
           }
           disabled={!isConnected || options.length === 0}
           className="flex-1"
+          aria-label="Master volume"
           data-testid="home-sid-volume-master"
         />
       </div>

@@ -4,7 +4,7 @@ import XCTest
 final class HostValidationTests: XCTestCase {
     func testSanitizeHostAcceptsSimpleHostnamesAndIps() {
         XCTAssertEqual(HostValidation.sanitizeHost("c64u"), "c64u")
-        XCTAssertEqual(HostValidation.sanitizeHost("192.168.1.20"), "192.168.1.20")
+        XCTAssertEqual(HostValidation.sanitizeHost("192.0.2.20"), "192.0.2.20")
         XCTAssertEqual(HostValidation.sanitizeHost(" host.local "), "host.local")
     }
 

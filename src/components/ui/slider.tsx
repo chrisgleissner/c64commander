@@ -17,6 +17,8 @@ import {
   clampSliderValue,
   resolveMidpointPercent,
   resolveMidpointSnap,
+  resolveSliderKeyStepDelta,
+  resolveSliderKeyStepSize,
   shouldTriggerMidpointHaptic,
 } from "@/lib/ui/sliderBehavior";
 import {
@@ -60,6 +62,11 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
   keypadFocusParentId?: string;
   /** Force the ring to skip this slider (in addition to `disabled`). */
   keypadFocusDisabled?: boolean;
+  /**
+   * Value change per arrow key press (x10 for PageUp/PageDown and Shift+arrow). Defaults to `step`.
+   * Set it when `step` is finer than the values the slider commits, or a key press rounds back.
+   */
+  keyboardStep?: number;
 };
 
 /**
@@ -107,6 +114,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       keypadFocusGroup,
       keypadFocusParentId,
       keypadFocusDisabled,
+      keyboardStep,
       onPointerDown,
       onPointerUp,
       onPointerCancel,
@@ -120,6 +128,8 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     const resolvedMax: number = Number.isFinite(props.max) ? Math.max(props.max as number, min) : Math.max(min, 100);
     const max = resolvedMax <= min ? min + 1 : resolvedMax;
     const step = props.step;
+    const { "aria-label": ariaLabel, "aria-labelledby": ariaLabelledBy, ...rootProps } = props;
+    const keyStepSize = resolveSliderKeyStepSize(keyboardStep, step);
     const [dragValue, setDragValue] = React.useState<number | null>(null);
     const [popupState, setPopupState] = React.useState<SliderPopupState>("Hidden");
     const popupStateRef = React.useRef<SliderPopupState>("Hidden");
@@ -392,46 +402,43 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       [clearKeyCommitTimer, flushKeyCommit],
     );
 
-    const handleKeypadKeyDown = React.useCallback(
+    const stepValueByKey = React.useCallback(
+      (event: React.KeyboardEvent<HTMLDivElement>, delta: number) => {
+        const base = keyDraftRef.current ?? displayValue;
+        const next = normalizeSliderValue(base + delta, min, max);
+        if (next === base) return; // at the edge → no effect → don't preventDefault / flip modality
+        event.preventDefault(); // we own the step; Radix skips its handler once default is prevented
+        keyDraftRef.current = next;
+        setInputModality("key-navigation");
+        handleValueChange([next]); // draft + popup + consumer onValueChange (label + aria-valuenow)
+        scheduleKeyCommit(next); // one coalesced commit per burst
+      },
+      [displayValue, handleValueChange, max, min, scheduleKeyCommit],
+    );
+
+    const handleKeyDown = React.useCallback(
       (event: React.KeyboardEvent<HTMLDivElement>) => {
         onKeyDown?.(event);
-        if (event.defaultPrevented) return;
-        if (!keypadActive || !focusNav || props.disabled) return;
-        const { action } = normalizeKeyEvent(event, focusNav.keymap);
-        if (action === "dpadUp" || action === "dpadDown") {
-          // Suppress Radix's value step on Up/Down (composeEventHandlers skips its
-          // internal handler once we preventDefault); the global handler still
-          // moves focus (Up/Down → focusPrevious/Next). Value-only ⊥ focus-only.
-          event.preventDefault();
-          flushKeyCommit();
-          return;
+        if (event.defaultPrevented || props.disabled) return;
+        if (keypadActive && focusNav) {
+          const { action } = normalizeKeyEvent(event, focusNav.keymap);
+          if (action === "dpadUp" || action === "dpadDown") {
+            // Suppress Radix's value step on Up/Down; the global handler still moves focus
+            // (Up/Down → focusPrevious/Next). Value-only ⊥ focus-only.
+            event.preventDefault();
+            flushKeyCommit();
+            return;
+          }
+          if (action === "dpadLeft" || action === "dpadRight") {
+            stepValueByKey(event, (action === "dpadRight" ? 1 : -1) * keyStepSize);
+            return;
+          }
         }
-        if (action === "dpadLeft" || action === "dpadRight") {
-          const stepSize = Number.isFinite(step) && step ? step : 1;
-          const base = keyDraftRef.current ?? displayValue;
-          const direction = action === "dpadRight" ? 1 : -1;
-          const next = normalizeSliderValue(base + direction * stepSize, min, max);
-          if (next === base) return; // at the edge → no effect → don't preventDefault / flip modality
-          event.preventDefault(); // we own horizontal stepping; routes through onValueChange/Commit
-          keyDraftRef.current = next;
-          setInputModality("key-navigation");
-          handleValueChange([next]); // draft + popup + consumer onValueChange (label + aria-valuenow)
-          scheduleKeyCommit(next); // one coalesced commit per burst
-        }
+        if (keyboardStep === undefined) return; // Radix steps by `step`
+        const delta = resolveSliderKeyStepDelta(event.key, event.shiftKey, keyStepSize);
+        if (delta !== null) stepValueByKey(event, delta);
       },
-      [
-        displayValue,
-        flushKeyCommit,
-        focusNav,
-        handleValueChange,
-        keypadActive,
-        max,
-        min,
-        onKeyDown,
-        props.disabled,
-        scheduleKeyCommit,
-        step,
-      ],
+      [flushKeyCommit, focusNav, keyStepSize, keyboardStep, keypadActive, onKeyDown, props.disabled, stepValueByKey],
     );
 
     React.useEffect(() => () => clearKeyCommitTimer(), [clearKeyCommitTimer]);
@@ -442,7 +449,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onValueChange={tracedChange}
         onValueCommit={tracedCommit}
         onBlur={handleBlur}
-        onKeyDown={handleKeypadKeyDown}
+        onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
@@ -456,7 +463,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         // vertical axis back to native scrolling and keeps only the horizontal drag.
         className={cn("relative flex w-full touch-pan-y select-none items-center", className)}
         data-swipe-exclude="true"
-        {...props}
+        {...rootProps}
         min={min}
         max={max}
         value={normalizedValue}
@@ -517,6 +524,8 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
           ref={keypadThumbRef}
           // The primitive marks a disabled thumb only with data-disabled, so it read as a usable slider.
           aria-disabled={props.disabled ? true : undefined}
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledBy}
           className={cn(
             "block h-5 w-5 rounded-full shadow-[inset_0_0_0_2px_hsl(var(--primary))] bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
             thumbClassName,

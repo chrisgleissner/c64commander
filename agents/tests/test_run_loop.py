@@ -512,7 +512,7 @@ def test_run_validate_success(
         lambda dest, before: [],
     )
 
-    result = run_validate(logger, tmp_path / "iter", "device-123", "192.168.1.1")
+    result = run_validate(logger, tmp_path / "iter", "device-123", "192.0.2.1")
     assert result == "success"
 
 
@@ -533,7 +533,7 @@ def test_run_validate_failure_raises(
     )
 
     with pytest.raises(CommandFailure):
-        run_validate(logger, tmp_path / "iter", "device-123", "192.168.1.1")
+        run_validate(logger, tmp_path / "iter", "device-123", "192.0.2.1")
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +543,7 @@ def test_run_validate_failure_raises(
 
 def _base_run_loop_mocks(monkeypatch: pytest.MonkeyPatch, patched_env: RuntimePaths) -> None:
     monkeypatch.setattr("openhands.run_loop.resolve_android_serial", lambda s: "device-123")
-    monkeypatch.setattr("openhands.run_loop.resolve_c64u_host", lambda: "192.168.1.1")
+    monkeypatch.setattr("openhands.run_loop.resolve_c64u_host", lambda: "192.0.2.1")
     monkeypatch.setattr("openhands.run_loop.snapshot_git_status", lambda: set())
     monkeypatch.setattr("openhands.run_loop.append_iteration_markdown", lambda lines: None)
 

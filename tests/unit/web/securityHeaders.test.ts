@@ -20,7 +20,7 @@ const createResponse = () =>
 
 describe("securityHeaders", () => {
   it("prefers the first forwarded client IP when a proxy is trusted", () => {
-    const req = createRequest({ "x-forwarded-for": "198.51.100.12, 10.0.0.7" }, "10.0.0.7");
+    const req = createRequest({ "x-forwarded-for": "198.51.100.12, 203.0.113.7" }, "203.0.113.7");
 
     expect(getClientIp(req, true)).toBe("198.51.100.12");
   });
@@ -29,14 +29,14 @@ describe("securityHeaders", () => {
   // fresh X-Forwarded-For per request, so without a trusted proxy the socket
   // address is the only key that cannot be varied at will.
   it("ignores the forwarded client IP when no proxy is trusted", () => {
-    const req = createRequest({ "x-forwarded-for": "198.51.100.12, 10.0.0.7" }, "10.0.0.7");
+    const req = createRequest({ "x-forwarded-for": "198.51.100.12, 203.0.113.7" }, "203.0.113.7");
 
-    expect(getClientIp(req, false)).toBe("10.0.0.7");
+    expect(getClientIp(req, false)).toBe("203.0.113.7");
     expect(getClientIp(createRequest({ "x-forwarded-for": "198.51.100.12" }, undefined), false)).toBe("unknown");
   });
 
   it("falls back to the socket address or unknown when no forwarded IP exists", () => {
-    expect(getClientIp(createRequest({}, "10.0.0.7"), true)).toBe("10.0.0.7");
+    expect(getClientIp(createRequest({}, "203.0.113.7"), true)).toBe("203.0.113.7");
     expect(getClientIp(createRequest({}, undefined), true)).toBe("unknown");
   });
 

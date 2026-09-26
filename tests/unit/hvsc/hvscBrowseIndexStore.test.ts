@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
+  Encoding: { UTF8: "utf8" },
   Filesystem: {
     stat: vi.fn(async () => ({ type: "file", size: 1 })),
     mkdir: vi.fn(async () => undefined),
@@ -30,6 +31,7 @@ import {
   buildHvscBrowseIndexFromSonglengthSnapshot,
   buildHvscBrowseIndexFromEntries,
   clearHvscBrowseIndexSnapshot,
+  getHvscDisplayAuthor,
   getHvscFoldersWithParent,
   getHvscSongFromBrowseIndex,
   listFolderFromBrowseIndex,
@@ -48,6 +50,11 @@ const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 describe("hvscBrowseIndexStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("falls back to the folder-derived author when an indexed author is HVSC's <?> placeholder", () => {
+    expect(getHvscDisplayAuthor({ canonicalAuthor: "<?>", displayAuthorSeed: "Rob Hubbard" })).toBe("Rob Hubbard");
+    expect(getHvscDisplayAuthor({ canonicalAuthor: "<?>", displayAuthorSeed: null })).toBeNull();
   });
 
   it("builds folder adjacency and lists children without full scan", () => {
@@ -517,7 +524,7 @@ describe("hvscBrowseIndexStore", () => {
       .mocked(Filesystem.writeFile)
       .mock.calls.find((call) => call[0]?.path === "hvsc/index/hvsc-browse-index-v1.json");
     expect(fullSnapshotWrite).toBeDefined();
-    const written = JSON.parse(Buffer.from(fullSnapshotWrite![0].data, "base64").toString("utf-8"));
+    const written = JSON.parse(fullSnapshotWrite![0].data as string);
     expect(written.folders).toEqual(staleFolders);
   });
 
@@ -535,7 +542,7 @@ describe("hvscBrowseIndexStore", () => {
     const fullSnapshotWrite = vi
       .mocked(Filesystem.writeFile)
       .mock.calls.find((call) => call[0]?.path === "hvsc/index/hvsc-browse-index-v1.json");
-    const written = JSON.parse(Buffer.from(fullSnapshotWrite![0].data, "base64").toString("utf-8"));
+    const written = JSON.parse(fullSnapshotWrite![0].data as string);
     expect(written.folders["/DEMOS/A"]).toBeDefined();
   });
 
@@ -662,7 +669,7 @@ describe("hvscBrowseIndexStore", () => {
       throw new Error("atob unavailable");
     });
     vi.mocked(Filesystem.readFile)
-      .mockResolvedValueOnce({ data: "not-base64" } as never)
+      .mockResolvedValueOnce({ data: "notbase64" } as never)
       .mockRejectedValueOnce(new Error("ENOENT: no such file"));
 
     const loaded = await loadHvscBrowseIndexSnapshot();

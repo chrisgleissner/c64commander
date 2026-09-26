@@ -8,6 +8,10 @@
 
 package uk.gleissner.c64commander
 
+import android.os.Build
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebView
+import android.widget.FrameLayout
 import com.getcapacitor.Bridge
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.JSObject
@@ -15,6 +19,7 @@ import com.getcapacitor.PluginCall
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -22,7 +27,9 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLog
 import java.lang.reflect.Field
 
@@ -309,5 +316,59 @@ class MainActivityTest {
         it.msg?.contains("Failed to keep WebView timers resumed for background playback") == true
       },
     )
+  }
+
+  private val rendererCrashed =
+    object : RenderProcessGoneDetail() {
+      override fun didCrash() = true
+
+      override fun rendererPriorityAtExit() = WebView.RENDERER_PRIORITY_IMPORTANT
+    }
+
+  @Test
+  @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+  fun onCreateHandsRenderProcessGoneRecoveryToTheBridgeBuilderBeforeTheBridgeIsBuilt() {
+    val controller = Robolectric.buildActivity(BridgeBuilderProbeActivity::class.java)
+
+    val stopped = runCatching { controller.create() }.exceptionOrNull()
+
+    assertTrue(generateSequence(stopped) { it.cause }.any { it is BridgeBuilderProbeActivity.BridgeNotBuilt })
+    val activity = controller.get()
+    assertTrue(
+      "Without the listener, Chromium aborts the app when the renderer dies",
+      activity.listenersAtBridgeCreation.contains(activity.renderProcessGoneRecovery),
+    )
+  }
+
+  @Test
+  @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+  fun aDeadRendererDetachesTheWebViewAndStopsBackgroundPlaybackFromResumingIt() {
+    RenderProcessGoneRecovery.processHistory.lastRecreateAtMs = null
+    val activity = Robolectric.buildActivity(MainActivity::class.java).get()
+    val deadWebView = WebView(activity)
+    FrameLayout(activity).addView(deadWebView)
+    setBackgroundExecutionRunning(true)
+
+    val handled = activity.renderProcessGoneRecovery.onRenderProcessGone(deadWebView, rendererCrashed)
+
+    var resumed = false
+    activity.keepWebViewPlaybackAliveDuringBackgroundExecution { resumed = true }
+    assertTrue(handled)
+    assertNull(deadWebView.parent)
+    assertFalse("The dead WebView must not be used again", resumed)
+  }
+}
+
+/** Robolectric cannot build a Capacitor bridge, so this stops onCreate where the bridge would be built. */
+class BridgeBuilderProbeActivity : MainActivity() {
+  class BridgeNotBuilt : RuntimeException()
+
+  var listenersAtBridgeCreation: List<*> = emptyList<Any>()
+
+  override fun load() {
+    val listenersField = Bridge.Builder::class.java.getDeclaredField("webViewListeners")
+    listenersField.isAccessible = true
+    listenersAtBridgeCreation = ArrayList(listenersField.get(bridgeBuilder) as List<*>)
+    throw BridgeNotBuilt()
   }
 }

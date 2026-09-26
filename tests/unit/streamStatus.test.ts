@@ -14,9 +14,9 @@ describe("streamStatus", () => {
     const result = buildStreamStatusEntries({
       "Data Streams": {
         items: {
-          "Stream VIC to": { selected: "192.168.1.20:11000" },
-          "Stream Audio to": { selected: "192.168.1.21:11001" },
-          "Stream Debug to": { selected: "192.168.1.22:11002" },
+          "Stream VIC to": { selected: "192.0.2.20:11000" },
+          "Stream Audio to": { selected: "192.0.2.21:11001" },
+          "Stream Debug to": { selected: "192.0.2.22:11002" },
         },
       },
     });
@@ -26,21 +26,21 @@ describe("streamStatus", () => {
         key: "vic",
         label: "VIC",
         state: "ON",
-        ip: "192.168.1.20",
+        ip: "192.0.2.20",
         port: "11000",
       },
       {
         key: "audio",
         label: "Audio",
         state: "ON",
-        ip: "192.168.1.21",
+        ip: "192.0.2.21",
         port: "11001",
       },
       {
         key: "debug",
         label: "Debug",
         state: "ON",
-        ip: "192.168.1.22",
+        ip: "192.0.2.22",
         port: "11002",
       },
     ]);
@@ -108,7 +108,7 @@ describe("streamStatus", () => {
   it("reads stream targets from flat payload without Data Streams wrapper", () => {
     // Exercises the `payload['Data Streams'] ?? payload` fallback branch
     const result = buildStreamStatusEntries({
-      "Stream VIC to": { selected: "10.0.0.1:11000" },
+      "Stream VIC to": { selected: "198.51.100.1:11000" },
       "Stream Audio to": { selected: "off" },
       "Stream Debug to": { selected: "0.0.0.0:0" },
     });
@@ -117,7 +117,7 @@ describe("streamStatus", () => {
       key: "vic",
       label: "VIC",
       state: "ON",
-      ip: "10.0.0.1",
+      ip: "198.51.100.1",
       port: "11000",
     });
     expect(result[1].state).toBe("OFF");
@@ -128,7 +128,7 @@ describe("streamStatus", () => {
     // Exercises the `category?.items ?? category` fallback branch
     const result = buildStreamStatusEntries({
       "Data Streams": {
-        "Stream VIC to": { selected: "192.168.0.5:11000" },
+        "Stream VIC to": { selected: "203.0.113.5:11000" },
         "Stream Audio to": { selected: "none" },
         "Stream Debug to": { selected: "0.0.0.0" },
       },
@@ -138,7 +138,7 @@ describe("streamStatus", () => {
       key: "vic",
       label: "VIC",
       state: "ON",
-      ip: "192.168.0.5",
+      ip: "203.0.113.5",
       port: "11000",
     });
     expect(result[1].state).toBe("OFF");

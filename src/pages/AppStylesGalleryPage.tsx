@@ -225,7 +225,7 @@ export default function AppStylesGalleryPage() {
             <Switch id="gallery-switch" defaultChecked />
             <label htmlFor="gallery-switch">Switch</label>
           </div>
-          <Slider value={sliderValue} onValueChange={setSliderValue} max={100} step={1} />
+          <Slider value={sliderValue} onValueChange={setSliderValue} max={100} step={1} aria-label="Example slider" />
           <InputOTP maxLength={4}>
             <InputOTPGroup>
               <InputOTPSlot index={0} />

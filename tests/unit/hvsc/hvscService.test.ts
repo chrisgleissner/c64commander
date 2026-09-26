@@ -801,13 +801,10 @@ describe("hvscService", () => {
       expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
     });
 
-    it("saves the first and final hydration chunks but throttles the ones in between", async () => {
-      // Root cause of a real-world bug: persisting to disk on every small
-      // hydration chunk turned a ~60k-song HVSC library scan into a multi-
-      // minute main-thread hog (observed as Remote Input stuck "Reconnecting"
-      // even with a fully healthy device). 17 pending songs / 8-per-chunk = 3
-      // chunks (8, 8, 1) - only the first (cold start) and the last (final-
-      // chunk guarantee) should reach disk; the middle one must be throttled.
+    it("persists a hydration run shorter than the persist interval once, at its final chunk", async () => {
+      // 17 pending songs at 8 per chunk is three chunks (8, 8, 1), all finished within milliseconds, far
+      // inside HYDRATION_PERSIST_INTERVAL_MS. Each save serializes the whole index, so only the final
+      // chunk may reach disk.
       const songs: Record<string, { virtualPath: string; fileName: string; metadataStatus: string }> = {};
       for (let index = 0; index < 17; index += 1) {
         const virtualPath = `/DEMOS/Song_${index}.sid`;
@@ -820,22 +817,11 @@ describe("hvscService", () => {
         folders: { "/": { path: "/", folders: [], songs: [] } },
       });
 
-      // No Date.now mocking: this test relies on real wall-clock time, which
-      // is the more robust choice here - the emitter/hydrator/throttle all
-      // read Date.now() independently and in varying counts per chunk, so
-      // pre-scripting a fixed mock-return sequence is brittle to reorder.
-      // Real chunk processing of in-memory mocks completes in low single-digit
-      // milliseconds, many orders of magnitude under the 5s throttle window,
-      // so the middle chunk is reliably (not just probabilistically) skipped.
       await ensureHvscMetadataHydration();
 
-      // 3 calls from onSnapshotUpdated (one per chunk) + 1 final
-      // hvscIndex.setBrowseSnapshot(hydratedSnapshot) after hydration returns.
+      // One per chunk, plus the hydrated snapshot adopted after the run returns.
       expect(mediaIndexMocks.setBrowseSnapshot).toHaveBeenCalledTimes(4);
-      // Only the first chunk (cold start: lastPersistedAtMs starts at 0) and
-      // the final chunk (always persists) reach disk; the middle chunk lands
-      // inside the throttle window and is skipped.
-      expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledTimes(1);
       expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledWith(expect.anything(), {
         foldersUnchanged: true,
       });

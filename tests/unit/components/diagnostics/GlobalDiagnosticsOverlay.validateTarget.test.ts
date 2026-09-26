@@ -83,14 +83,14 @@ describe("validateTarget", () => {
       return Promise.resolve({ model: "u64" } as never);
     });
 
-    await expect(validateTarget("10.0.0.2:8080", 80)).resolves.toEqual(
+    await expect(validateTarget("198.51.100.2:8080", 80)).resolves.toEqual(
       expect.objectContaining({
         ok: true,
-        normalizedHost: "10.0.0.2",
+        normalizedHost: "198.51.100.2",
       }),
     );
 
-    expect(capturedBaseUrl).toBe("http://10.0.0.2:8080");
+    expect(capturedBaseUrl).toBe("http://198.51.100.2:8080");
 
     getInfoSpy.mockRestore();
   });

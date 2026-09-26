@@ -244,7 +244,7 @@ describe("smokeMode", () => {
     vi.mocked(Filesystem.readFile).mockResolvedValue({
       data: JSON.stringify({
         target: "real",
-        host: "192.168.1.13",
+        host: "192.0.2.13",
         readOnly: true,
         debugLogging: false,
       }),
@@ -254,7 +254,7 @@ describe("smokeMode", () => {
 
     expect(config).toEqual({
       target: "real",
-      host: "192.168.1.13",
+      host: "192.0.2.13",
       readOnly: true,
       debugLogging: false,
     });

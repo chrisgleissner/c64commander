@@ -962,8 +962,8 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
         unsupported: false,
         candidates: [
           {
-            address: "192.168.1.64",
-            host: "192.168.1.64",
+            address: "192.0.2.64",
+            host: "192.0.2.64",
             httpPort: 80,
             source: ["lan-scan"],
             product: "C64 Ultimate",
@@ -972,8 +972,8 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
             uniqueId: "UID-DISCOVERED-1",
           },
           {
-            address: "192.168.1.65",
-            host: "192.168.1.65",
+            address: "192.0.2.65",
+            host: "192.0.2.65",
             httpPort: 80,
             source: ["lan-scan"],
             product: "Ultimate 64",

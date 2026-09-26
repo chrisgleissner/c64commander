@@ -54,7 +54,7 @@ describe("secureStorage composed with the real web adapter", () => {
     savedDevices.addSavedDevice({
       id: "device-1",
       name: "device-1",
-      host: "192.168.1.10",
+      host: "192.0.2.10",
       type: "C64U",
       typeSource: "INFERRED",
       httpPort: 80,

@@ -29,8 +29,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { PathWrap } from "@/components/PathWrap";
+import { NameWrap } from "@/components/NameWrap";
 import { AlphabetScrollbar } from "./AlphabetScrollbar";
-import { getDisplayProfileLayoutTokens } from "@/lib/displayProfiles";
+import { getDisplayProfileLayoutTokens, type DisplayProfile } from "@/lib/displayProfiles";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -84,6 +85,8 @@ export type SelectableActionListProps = {
   viewAllItems?: ActionListItem[];
   totalItemCount?: number;
   emptyLabel: string;
+  /** With `disableClientFiltering`: how many items the caller's filter left out of `items`. */
+  hiddenItemCount?: number;
   selectAllLabel?: string;
   deselectAllLabel?: string;
   removeSelectedLabel?: string;
@@ -110,19 +113,29 @@ export type SelectableActionListProps = {
   showSelectionControls?: boolean;
   selectionLabel?: string;
   viewAllMode?: "overflow" | "non-empty";
+  /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
+  stackTitleProfiles?: readonly DisplayProfile[];
 };
+
+const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
-const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
-  const { profile } = useDisplayProfile();
+const countNonHeaderItems = (list: ActionListItem[]) =>
+  list.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
+
+const resolveEmptyListLabel = (emptyLabel: string, hiddenItemCount: number) => {
+  if (hiddenItemCount <= 0) return emptyLabel;
+  return `No items match the filter. ${hiddenItemCount} ${hiddenItemCount === 1 ? "item is" : "items are"} hidden.`;
+};
+
+type ActionListRowProps = { item: ActionListItem; rowTestId?: string; stackTitle: boolean };
+
+// On a 320px screen the row's controls take about 150px of the 256px available, all at the 44px
+// target size, and left the name a 96px ribbon that broke most words in half. A stacked row gives
+// the name a line of its own, with the controls on the line below it.
+const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
   const [actionsOpen, setActionsOpen] = useState(false);
-  // On a 320px screen the row's three controls - the selection circle, the actions
-  // kebab and the play button - take about 150px of the 256px available, all of it at
-  // the 44px target size, and the name was left a 96px ribbon in which most words of
-  // an ordinary tune title were broken in half. The name therefore gets a line of its
-  // own there, with the controls on the line below it.
-  const stackTitle = profile === "compact";
   if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
@@ -267,7 +280,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             )}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span className={cn(item.titleClassName, "min-w-0 break-words whitespace-normal")}>{item.title}</span>
+            <NameWrap name={item.title} className={cn(item.titleClassName, "min-w-0 whitespace-normal")} />
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
@@ -280,7 +293,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
               )}
               data-testid={item.subtitleTestId}
             >
-              {item.subtitle}
+              <NameWrap name={item.subtitle} />
             </div>
           ) : null}
           {item.meta ? (
@@ -331,6 +344,7 @@ export const SelectableActionList = ({
   viewAllItems,
   totalItemCount,
   emptyLabel,
+  hiddenItemCount = 0,
   selectAllLabel = "Select all",
   deselectAllLabel = "Deselect all",
   removeSelectedLabel,
@@ -357,9 +371,11 @@ export const SelectableActionList = ({
   showSelectionControls = true,
   selectionLabel,
   viewAllMode = "overflow",
+  stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
+  const stackTitles = stackTitleProfiles.includes(profile);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
   const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
@@ -457,9 +473,14 @@ export const SelectableActionList = ({
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
-  const filteredVisibleCount = filteredItems.reduce(
-    (count, item) => (item.variant === "header" ? count : count + 1),
-    0,
+  const filteredVisibleCount = countNonHeaderItems(filteredItems);
+  const inlineEmptyLabel = resolveEmptyListLabel(
+    emptyLabel,
+    disableClientFiltering ? hiddenItemCount : countNonHeaderItems(items),
+  );
+  const viewAllEmptyLabel = resolveEmptyListLabel(
+    emptyLabel,
+    disableClientFiltering ? hiddenItemCount : countNonHeaderItems(effectiveViewAllItems),
   );
   const effectiveTotalItemCount =
     disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
@@ -490,9 +511,9 @@ export const SelectableActionList = ({
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
       {list.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+        <p className="text-xs text-muted-foreground">{inlineEmptyLabel}</p>
       ) : (
-        list.map((item) => <ActionListRow key={item.id} item={item} rowTestId={rowTestId} />)
+        list.map((item) => <ActionListRow key={item.id} item={item} rowTestId={rowTestId} stackTitle={stackTitles} />)
       )}
     </div>
   );
@@ -634,7 +655,7 @@ export const SelectableActionList = ({
                   )}
                 >
                   {viewAllFilteredItems.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+                    <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
                   ) : (
                     <Virtuoso
                       ref={virtuosoRef}
@@ -654,7 +675,7 @@ export const SelectableActionList = ({
                       }}
                       itemContent={(index, item) => (
                         <div className="mb-2 last:mb-0">
-                          <ActionListRow item={item} rowTestId={rowTestId} />
+                          <ActionListRow item={item} rowTestId={rowTestId} stackTitle={stackTitles} />
                         </div>
                       )}
                     />

@@ -182,28 +182,28 @@ export const safeCompare = (left: string, right: string): boolean => {
 // the REST proxy has to tell that device apart from any other LAN host before
 // attaching it. A missing port means the HTTP default: `c64u` and `c64u:80` are
 // the same device.
-export const isConfiguredDeviceHost = (candidate: string, configured: string): boolean => {
-  const split = (value: string): { host: string; port: number } | null => {
-    const trimmed = value.trim().toLowerCase();
-    if (!trimmed) return null;
-    if (trimmed.startsWith("[")) {
-      const closingBracketIndex = trimmed.indexOf("]");
-      if (closingBracketIndex <= 1) return null;
-      const host = trimmed.slice(1, closingBracketIndex);
-      const remainder = trimmed.slice(closingBracketIndex + 1);
-      if (!remainder) return { host, port: 80 };
-      const portMatch = /^:(\d{1,5})$/.exec(remainder);
-      return portMatch ? { host, port: Number(portMatch[1]) } : null;
-    }
-    if (trimmed.includes(":") && trimmed.indexOf(":") === trimmed.lastIndexOf(":")) {
-      const hostPort = /^([^:]+):(\d{1,5})$/.exec(trimmed);
-      if (hostPort) return { host: hostPort[1], port: Number(hostPort[2]) };
-    }
-    return { host: trimmed, port: 80 };
-  };
+export const splitDeviceHostValue = (value: string): { host: string; port: number } | null => {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("[")) {
+    const closingBracketIndex = trimmed.indexOf("]");
+    if (closingBracketIndex <= 1) return null;
+    const host = trimmed.slice(1, closingBracketIndex);
+    const remainder = trimmed.slice(closingBracketIndex + 1);
+    if (!remainder) return { host, port: 80 };
+    const portMatch = /^:(\d{1,5})$/.exec(remainder);
+    return portMatch ? { host, port: Number(portMatch[1]) } : null;
+  }
+  if (trimmed.includes(":") && trimmed.indexOf(":") === trimmed.lastIndexOf(":")) {
+    const hostPort = /^([^:]+):(\d{1,5})$/.exec(trimmed);
+    if (hostPort) return { host: hostPort[1], port: Number(hostPort[2]) };
+  }
+  return { host: trimmed, port: 80 };
+};
 
-  const left = split(candidate);
-  const right = split(configured);
+export const isConfiguredDeviceHost = (candidate: string, configured: string): boolean => {
+  const left = splitDeviceHostValue(candidate);
+  const right = splitDeviceHostValue(configured);
   if (!left || !right) return false;
   return left.host === right.host && left.port === right.port;
 };

@@ -581,6 +581,100 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
   });
 
+  // One Ultimate saved under its Ethernet and its Wi-Fi address: the tune, the pause state and
+  // background playback belong to the machine, which the switch does not leave.
+  it("keeps playback, pause state and background playback when switching to the same device's other address", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const playback = await import("@/lib/playback/activePlaybackSession");
+    vi.mocked(playback.hasActivePlaybackToStop).mockReturnValue(true);
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, { host: "198.51.100.20" });
+    store.completeSavedDeviceVerification(initialDeviceId, {
+      product: "Ultimate 64 Elite",
+      hostname: "ultimate",
+      unique_id: "DUAL01",
+    });
+    store.addSavedDevice({
+      id: "device-ethernet",
+      name: "Desk wired",
+      host: "192.0.2.10",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "ultimate",
+      lastKnownUniqueId: "DUAL01",
+      hasPassword: false,
+    });
+    mockIsBackgroundExecutionActive.mockReturnValue(true);
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "Ultimate 64 Elite", hostname: "ultimate", unique_id: "DUAL01" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    try {
+      await act(async () => {
+        await result.current("device-ethernet");
+      });
+    } finally {
+      vi.mocked(playback.hasActivePlaybackToStop).mockReturnValue(false);
+    }
+
+    expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-ethernet");
+    expect(playback.stopActivePlaybackBeforeDeviceSwitch).not.toHaveBeenCalled();
+    expect(mockResetMachineExecution).not.toHaveBeenCalled();
+    expect(mockStopBackgroundExecution).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Playback controls detached" }));
+  });
+
+  // The unique id is user-configurable, so a different Ultimate can report the same one.
+  it("stops playback and resets the machine when switching to a different device that shares the custom unique id but not the hostname", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const playback = await import("@/lib/playback/activePlaybackSession");
+    vi.mocked(playback.hasActivePlaybackToStop).mockReturnValue(true);
+    const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.updateSavedDevice(initialDeviceId, { host: "198.51.100.20" });
+    store.completeSavedDeviceVerification(initialDeviceId, {
+      product: "Ultimate 64 Elite",
+      hostname: "ultimate",
+      unique_id: "DUAL01",
+    });
+    store.addSavedDevice({
+      id: "device-attic",
+      name: "Attic",
+      host: "192.0.2.40",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "ultimate-attic",
+      lastKnownUniqueId: "DUAL01",
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "Ultimate 64 Elite", hostname: "ultimate-attic", unique_id: "DUAL01" },
+    });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    try {
+      await act(async () => {
+        await result.current("device-attic");
+      });
+    } finally {
+      vi.mocked(playback.hasActivePlaybackToStop).mockReturnValue(false);
+    }
+
+    expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-attic");
+    expect(playback.stopActivePlaybackBeforeDeviceSwitch).toHaveBeenCalled();
+    expect(mockResetMachineExecution).toHaveBeenCalled();
+  });
+
   it("HARD18-011: does not touch background execution when none is active", async () => {
     const store = await import("@/lib/savedDevices/store");
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
@@ -848,7 +942,7 @@ describe("useSavedDeviceSwitching", () => {
         hostname: "backup-lab",
         unique_id: "UID-BACKUP",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
@@ -859,7 +953,7 @@ describe("useSavedDeviceSwitching", () => {
         hostname: "backup-lab",
         unique_id: "UID-BACKUP",
       },
-      resolvedAddress: "192.168.1.13",
+      resolvedAddress: "192.0.2.13",
     });
 
     const { result } = renderHook(() => useSavedDeviceSwitching(), {
@@ -990,7 +1084,7 @@ describe("useSavedDeviceSwitching", () => {
     store.addSavedDevice({
       id: "device-c64u",
       name: "C64U",
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 64,
@@ -1059,7 +1153,7 @@ describe("useSavedDeviceSwitching", () => {
     store.addSavedDevice({
       id: "device-c64u",
       name: "C64U",
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 64,
@@ -1071,7 +1165,7 @@ describe("useSavedDeviceSwitching", () => {
     store.addSavedDevice({
       id: "device-c64u-backup",
       name: "Backup C64U",
-      host: "10.0.0.12",
+      host: "198.51.100.12",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 64,
@@ -1136,11 +1230,11 @@ describe("useSavedDeviceSwitching", () => {
     });
 
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(1, {
-      deviceHost: "192.168.1.167",
+      deviceHost: "192.0.2.167",
       password: null,
     });
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(2, {
-      deviceHost: "10.0.0.12",
+      deviceHost: "198.51.100.12",
       password: null,
     });
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-c64u-backup");

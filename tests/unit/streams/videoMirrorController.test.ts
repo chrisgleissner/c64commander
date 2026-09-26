@@ -16,7 +16,7 @@ import { buildTestPatternStream } from "@/lib/streams/vicTestPattern";
 class FakeReceiver implements StreamReceiver {
   datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
-  readonly destination = "10.0.0.5:11000";
+  readonly destination = "198.51.100.5:11000";
   closed = false;
   private clock = 0;
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
@@ -76,7 +76,7 @@ describe("VideoMirrorController", () => {
     });
 
     await controller.start();
-    expect(startStream).toHaveBeenCalledWith("video", "10.0.0.5:11000");
+    expect(startStream).toHaveBeenCalledWith("video", "198.51.100.5:11000");
     receiver.emitState("open");
     expect(controller.getSnapshot().state).toBe("live");
 
@@ -349,7 +349,7 @@ describe("VideoMirrorController", () => {
       frame: FrameHandler | null = null;
       datagram: ((d: Uint8Array, t: number) => void) | null = null;
       stateCb: ((s: StreamConnectionState) => void) | null = null;
-      readonly destination = "10.0.0.9:11000";
+      readonly destination = "198.51.100.9:11000";
       closed = false;
       nativeFraction: number | null = null;
       onDatagram(handler: (d: Uint8Array, t: number) => void) {
@@ -742,7 +742,7 @@ describe("VideoMirrorController — continuous fractional cadence (§11 governor
     class NativeReceiver implements StreamReceiver {
       frame: FrameHandler | null = null;
       stateCb: ((s: StreamConnectionState) => void) | null = null;
-      readonly destination = "10.0.0.9:11000";
+      readonly destination = "198.51.100.9:11000";
       nativeFraction = 1;
       onDatagram() {}
       onFrame(handler: FrameHandler) {

@@ -386,6 +386,7 @@ function SurfaceEditor({
           max={capability.intensityRange.max}
           step={1}
           onValueChange={(values) => onChange({ ...normalized, intensity: values[0] ?? capability.intensityRange.max })}
+          aria-label={`${surface === "case" ? "Case" : "Keys"} brightness`}
           data-testid={`lighting-${surface}-intensity`}
         />
       </div>

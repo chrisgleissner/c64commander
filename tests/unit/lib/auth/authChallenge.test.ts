@@ -11,8 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const defaultSnapshot = () => ({
   selectedDeviceId: "dev-c64u",
   devices: [
-    { id: "dev-c64u", name: "Living Room C64U", host: "192.168.1.167" },
-    { id: "dev-u64", name: "Studio U64", host: "192.168.1.13" },
+    { id: "dev-c64u", name: "Living Room C64U", host: "192.0.2.167" },
+    { id: "dev-u64", name: "Studio U64", host: "192.0.2.13" },
   ],
 });
 
@@ -58,12 +58,12 @@ describe("authChallenge store", () => {
     expect(challenge).not.toBeNull();
     expect(challenge?.deviceId).toBe("dev-c64u");
     expect(challenge?.deviceLabel).toBe("Living Room C64U");
-    expect(challenge?.host).toBe("192.168.1.167");
+    expect(challenge?.host).toBe("192.0.2.167");
     expect(challenge?.status).toBe("prompting");
   });
 
   it("attributes to the device the call hit (host match), not just the selected device", () => {
-    notifyAuthRequired({ host: "192.168.1.13" });
+    notifyAuthRequired({ host: "192.0.2.13" });
     const challenge = getAuthChallengeSnapshot();
     expect(challenge?.deviceId).toBe("dev-u64");
     expect(challenge?.deviceLabel).toBe("Studio U64");
@@ -72,9 +72,9 @@ describe("authChallenge store", () => {
   it("is single-flight: a burst of Forbidden responses raises exactly one popup", () => {
     const listener = vi.fn();
     subscribeAuthChallenge(listener);
-    notifyAuthRequired({ host: "192.168.1.167" });
-    notifyAuthRequired({ host: "192.168.1.167" });
-    notifyAuthRequired({ host: "192.168.1.13" });
+    notifyAuthRequired({ host: "192.0.2.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
+    notifyAuthRequired({ host: "192.0.2.13" });
     // Only the first notify changed state and emitted.
     expect(listener).toHaveBeenCalledTimes(1);
     expect(getAuthChallengeSnapshot()?.deviceId).toBe("dev-c64u");
@@ -82,9 +82,9 @@ describe("authChallenge store", () => {
 
   it("coalesces a retry closure onto an already-open challenge", () => {
     const retry = vi.fn();
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     expect(getAuthChallengeRetry()).toBeNull();
-    notifyAuthRequired({ host: "192.168.1.167", retry });
+    notifyAuthRequired({ host: "192.0.2.167", retry });
     expect(getAuthChallengeRetry()).toBe(retry);
   });
 
@@ -111,19 +111,19 @@ describe("authChallenge store", () => {
   });
 
   it("labels by host without claiming an unrelated selected device when host does not match a saved device", () => {
-    notifyAuthRequired({ host: "10.0.0.99" });
+    notifyAuthRequired({ host: "198.51.100.99" });
     const challenge = getAuthChallengeSnapshot();
     expect(challenge?.deviceId).toBeNull();
-    expect(challenge?.deviceLabel).toBe("10.0.0.99");
-    expect(challenge?.host).toBe("10.0.0.99");
+    expect(challenge?.deviceLabel).toBe("198.51.100.99");
+    expect(challenge?.host).toBe("198.51.100.99");
   });
 
   it("uses the host as a generic label when no devices are saved", () => {
     snapshot = { selectedDeviceId: "", devices: [] };
-    notifyAuthRequired({ host: "10.0.0.99" });
+    notifyAuthRequired({ host: "198.51.100.99" });
     const challenge = getAuthChallengeSnapshot();
     expect(challenge?.deviceId).toBeNull();
-    expect(challenge?.deviceLabel).toBe("10.0.0.99");
+    expect(challenge?.deviceLabel).toBe("198.51.100.99");
   });
 
   it("uses 'this device' when neither host nor saved devices are available", () => {
@@ -133,50 +133,50 @@ describe("authChallenge store", () => {
   });
 
   it("auto-closes the challenge when the same host becomes reachable (success)", () => {
-    notifyAuthRequired({ host: "192.168.1.167" });
-    notifyAuthSatisfied("192.168.1.167");
+    notifyAuthRequired({ host: "192.0.2.167" });
+    notifyAuthSatisfied("192.0.2.167");
     expect(getAuthChallengeSnapshot()).toBeNull();
   });
 
   it("keeps the challenge open when a DIFFERENT host becomes reachable", () => {
-    notifyAuthRequired({ host: "192.168.1.167" });
-    notifyAuthSatisfied("192.168.1.13");
+    notifyAuthRequired({ host: "192.0.2.167" });
+    notifyAuthSatisfied("192.0.2.13");
     expect(getAuthChallengeSnapshot()).not.toBeNull();
   });
 
   it("attributes a c64u challenge to the c64u saved device even when U64 is selected", () => {
     snapshot = { selectedDeviceId: "dev-u64", devices: defaultSnapshot().devices };
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     const challenge = getAuthChallengeSnapshot();
     expect(challenge?.deviceId).toBe("dev-c64u");
     expect(challenge?.deviceLabel).toBe("Living Room C64U");
-    expect(challenge?.host).toBe("192.168.1.167");
+    expect(challenge?.host).toBe("192.0.2.167");
   });
 
   it("auto-closes even after a transient failure left the popup in an error state", () => {
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     setAuthChallengeError("Saved the password, but the device didn't respond — it may be busy. Try again.");
     expect(getAuthChallengeSnapshot()?.status).toBe("error");
-    notifyAuthSatisfied("192.168.1.167");
+    notifyAuthSatisfied("192.0.2.167");
     expect(getAuthChallengeSnapshot()).toBeNull();
   });
 
   it("notifyAuthSatisfied is a no-op when no challenge is open", () => {
     const listener = vi.fn();
     subscribeAuthChallenge(listener);
-    notifyAuthSatisfied("192.168.1.167");
+    notifyAuthSatisfied("192.0.2.167");
     expect(listener).not.toHaveBeenCalled();
     expect(getAuthChallengeSnapshot()).toBeNull();
   });
 
   it("still opens the popup with a generic label when device-identity resolution throws", () => {
     snapshotError = new Error("store boom");
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     const challenge = getAuthChallengeSnapshot();
     expect(challenge).not.toBeNull();
     // Host survives; label falls back to the host since the saved-device lookup failed.
-    expect(challenge?.host).toBe("192.168.1.167");
-    expect(challenge?.deviceLabel).toBe("192.168.1.167");
+    expect(challenge?.host).toBe("192.0.2.167");
+    expect(challenge?.deviceLabel).toBe("192.0.2.167");
     expect(addLog).toHaveBeenCalledWith(
       "debug",
       "Auth challenge identity resolution failed; using generic label",
@@ -197,7 +197,7 @@ describe("authChallenge store", () => {
 
   it("setAuthChallengeStatus updates the status of an open challenge", () => {
     const listener = vi.fn();
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     subscribeAuthChallenge(listener);
     setAuthChallengeStatus("submitting");
     expect(getAuthChallengeSnapshot()?.status).toBe("submitting");
@@ -240,7 +240,7 @@ describe("authChallenge store", () => {
     const listener = vi.fn();
     const unsubscribe = subscribeAuthChallenge(listener);
     unsubscribe();
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     expect(listener).not.toHaveBeenCalled();
   });
 });

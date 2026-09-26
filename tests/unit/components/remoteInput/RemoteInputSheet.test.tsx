@@ -139,10 +139,36 @@ describe("RemoteInputSheet", () => {
     expect(joystickToggle).toHaveAttribute("title", expect.stringMatching(/joystick relay requires/i));
   });
 
-  // Lead F3: the generic "Type mode still works" hint is wrong on this tier -
+  it("shows why Joystick is unavailable as visible text in Type mode, not only in a title", () => {
+    tierState.tier = "kernal-fallback";
+    initialSessionOutputMode = "type";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    const reason = screen.getByTestId("remote-input-joystick-unavailable-reason");
+    expect(reason).toBeVisible();
+    expect(reason).toHaveTextContent(
+      "Joystick relay requires Ultimate firmware with machine:input support. The Keys tab still works.",
+    );
+    expect(reason).toHaveClass("text-sm");
+    expect(screen.getByTestId("remote-input-mode-joystick")).toHaveAccessibleDescription(reason.textContent ?? "");
+  });
+
+  it("shows no Joystick unavailable reason on a joystick-capable device or while the probe is running", () => {
+    initialSessionOutputMode = "type";
+    const { rerender } = render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByTestId("remote-input-joystick-unavailable-reason")).not.toBeInTheDocument();
+
+    tierState.tier = "kernal-fallback";
+    tierState.loading = true;
+    tierState.resolved = false;
+    rerender(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    expect(screen.queryByTestId("remote-input-joystick-unavailable-reason")).not.toBeInTheDocument();
+  });
+
+  // Lead F3: the generic "Keys tab still works" hint is wrong on this tier -
   // the fallback injection needs the same password the probe already failed
   // without, so a distinct, accurate hint must be shown instead.
-  it("shows the auth-required-specific hint (not the generic 'Type mode still works' one) on the auth-required tier", () => {
+  it("shows the auth-required-specific hint (not the generic 'Keys tab still works' one) on the auth-required tier", () => {
     tierState.tier = "auth-required";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     expect(screen.getByTestId("remote-input-mode-joystick")).toBeDisabled();

@@ -70,31 +70,31 @@ describe("leftover device streams (HARD27-021)", () => {
   });
 
   it("waits for a network before stopping streams left running, instead of failing at an offline launch", async () => {
-    recordDeviceStreamStarted("video", "192.168.1.146");
+    recordDeviceStreamStarted("video", "192.0.2.146");
     networkStatus.current = { online: false, supported: true };
     recordNetworkStatus(networkStatus.current);
 
     await stopLeftoverDeviceStreams();
 
     expect(stopAt).not.toHaveBeenCalled();
-    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.168.1.146" });
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.0.2.146" });
 
     networkStatus.current = { online: true, supported: true };
     recordNetworkStatus(networkStatus.current);
 
-    await vi.waitFor(() => expect(stopAt).toHaveBeenCalledWith("192.168.1.146", "video"));
+    await vi.waitFor(() => expect(stopAt).toHaveBeenCalledWith("192.0.2.146", "video"));
     await vi.waitFor(() => expect(getLeftoverDeviceStreamsForTests()).toEqual({}));
     await vi.waitFor(() =>
       expect(vi.mocked(addLog)).toHaveBeenCalledWith(
         "info",
         "Live View: stopped the video stream left running on the device",
-        expect.objectContaining({ host: "192.168.1.146" }),
+        expect.objectContaining({ host: "192.0.2.146" }),
       ),
     );
   });
 
   it("keeps waiting through another offline report, and warns about a stop the device refused", async () => {
-    recordDeviceStreamStarted("audio", "192.168.1.146");
+    recordDeviceStreamStarted("audio", "192.0.2.146");
     // The platform answered "no network" just before the watch last heard the network was up.
     recordNetworkStatus({ online: true, supported: true });
     networkStatus.current = { online: false, supported: true };
@@ -110,51 +110,51 @@ describe("leftover device streams (HARD27-021)", () => {
       expect(vi.mocked(addLog)).toHaveBeenCalledWith(
         "warn",
         "Live View: could not stop the audio stream left running on the device",
-        expect.objectContaining({ host: "192.168.1.146", error: "stream is busy" }),
+        expect.objectContaining({ host: "192.0.2.146", error: "stream is busy" }),
       ),
     );
   });
 
   it("logs a stop that could not reach the device at info, because a device with no power streams nothing", async () => {
-    recordDeviceStreamStarted("video", "192.168.1.146");
-    stopAt.mockRejectedValue(new Error("Failed to connect to /192.168.1.146:80"));
+    recordDeviceStreamStarted("video", "192.0.2.146");
+    stopAt.mockRejectedValue(new Error("Failed to connect to /192.0.2.146:80"));
 
     await stopLeftoverDeviceStreams();
 
     expect(vi.mocked(addLog)).toHaveBeenCalledWith(
       "info",
       "Live View: could not stop the video stream left running on the device",
-      expect.objectContaining({ host: "192.168.1.146" }),
+      expect.objectContaining({ host: "192.0.2.146" }),
     );
     expect(vi.mocked(addLog)).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 
   it("remembers the host a stream was started on and forgets it when the stop succeeds", () => {
-    recordDeviceStreamStarted("video", "192.168.1.10");
-    recordDeviceStreamStarted("audio", "192.168.1.10");
-    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.168.1.10", video: "192.168.1.10" });
+    recordDeviceStreamStarted("video", "192.0.2.10");
+    recordDeviceStreamStarted("audio", "192.0.2.10");
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.10", video: "192.0.2.10" });
 
     recordDeviceStreamStopped("video");
-    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.168.1.10" });
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.10" });
 
     recordDeviceStreamStopped("audio");
     expect(getLeftoverDeviceStreamsForTests()).toEqual({});
   });
 
   it("stops both streams at the recorded host on the next launch and clears the record", async () => {
-    recordDeviceStreamStarted("audio", "192.168.1.10");
-    recordDeviceStreamStarted("video", "192.168.1.10");
+    recordDeviceStreamStarted("audio", "192.0.2.10");
+    recordDeviceStreamStarted("video", "192.0.2.10");
 
     await stopLeftoverDeviceStreams();
 
     expect(stopAt).toHaveBeenCalledTimes(2);
-    expect(stopAt).toHaveBeenCalledWith("192.168.1.10", "audio");
-    expect(stopAt).toHaveBeenCalledWith("192.168.1.10", "video");
+    expect(stopAt).toHaveBeenCalledWith("192.0.2.10", "audio");
+    expect(stopAt).toHaveBeenCalledWith("192.0.2.10", "video");
     expect(getLeftoverDeviceStreamsForTests()).toEqual({});
   });
 
   it("issues nothing when the previous session stopped its streams cleanly", async () => {
-    recordDeviceStreamStarted("video", "192.168.1.10");
+    recordDeviceStreamStarted("video", "192.0.2.10");
     recordDeviceStreamStopped("video");
 
     await stopLeftoverDeviceStreams();
@@ -163,7 +163,7 @@ describe("leftover device streams (HARD27-021)", () => {
   });
 
   it("clears the record even when the device cannot be reached, so it is not retried forever", async () => {
-    recordDeviceStreamStarted("video", "192.168.1.10");
+    recordDeviceStreamStarted("video", "192.0.2.10");
     stopAt.mockRejectedValue(new Error("timeout"));
 
     await expect(stopLeftoverDeviceStreams()).resolves.toBeUndefined();
@@ -173,9 +173,9 @@ describe("leftover device streams (HARD27-021)", () => {
   });
 
   it("keeps the record when the stop failed, because the device may still be streaming", () => {
-    recordDeviceStreamStarted("video", "192.168.1.10");
+    recordDeviceStreamStarted("video", "192.0.2.10");
     // recordDeviceStreamStopped is only reached after a successful stop; a thrown stop skips it.
-    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.168.1.10" });
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.0.2.10" });
   });
 
   it("ignores a start with no resolvable host", () => {
@@ -210,7 +210,7 @@ describe("leftover device streams (HARD27-021)", () => {
       realSetItem.call(this, key, value);
     });
     try {
-      expect(() => recordDeviceStreamStarted("video", "192.168.1.148")).not.toThrow();
+      expect(() => recordDeviceStreamStarted("video", "192.0.2.148")).not.toThrow();
     } finally {
       setItem.mockRestore();
     }
@@ -243,7 +243,7 @@ describe("leftover device streams (HARD27-021)", () => {
   });
 
   it("removes the record entirely once nothing is left running", () => {
-    recordDeviceStreamStarted("audio", "192.168.1.148");
+    recordDeviceStreamStarted("audio", "192.0.2.148");
     recordDeviceStreamStopped("audio");
 
     expect(localStorage.getItem("c64u_device_streams_running")).toBeNull();

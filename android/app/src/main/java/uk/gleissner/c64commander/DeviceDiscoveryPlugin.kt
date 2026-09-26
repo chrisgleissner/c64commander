@@ -66,6 +66,9 @@ class DeviceDiscoveryPlugin : Plugin() {
     val hostname: String?,
     val uniqueId: String?,
     val requiresPassword: Boolean,
+    // An Ultimate on Ethernet and Wi-Fi answers on both addresses; the app needs all of them to
+    // keep the address it saved instead of whichever probe happened to answer first.
+    val addresses: Set<String> = setOf(address),
   )
 
   private data class ProbeOutcome(
@@ -361,7 +364,7 @@ class DeviceDiscoveryPlugin : Plugin() {
       pending += 1
     }
 
-    val candidatesByKey = linkedMapOf<String, DiscoveryCandidate>()
+    val candidatesByKey = linkedMapOf<String, MutableList<DiscoveryCandidate>>()
     try {
       while (pending > 0) {
         val remainingNanos = deadline - System.nanoTime()
@@ -370,14 +373,7 @@ class DeviceDiscoveryPlugin : Plugin() {
         pending -= 1
         val outcome = future.get()
         val candidate = outcome.candidate ?: continue
-        val key = candidate.uniqueId?.takeIf { it.isNotBlank() } ?: candidate.address
-        val existing = candidatesByKey[key]
-        candidatesByKey[key] =
-          if (existing == null) {
-            candidate
-          } else {
-            mergeCandidate(existing, candidate)
-          }
+        candidatesByKey.getOrPut(candidateGroupKey(candidate)) { mutableListOf() }.add(candidate)
       }
     } catch (error: Exception) {
       AppLogger.warn(context, logTag, "Device discovery probe loop failed", "DeviceDiscoveryPlugin", error)
@@ -385,8 +381,24 @@ class DeviceDiscoveryPlugin : Plugin() {
       probePool.shutdownNow()
     }
 
-    return candidatesByKey.values.toList()
+    return candidatesByKey.values.map { group -> mergeCandidateGroup(group) }
   }
+
+  // The user can set the unique id, so two Ultimates may share one; the hostname (MAC-derived by
+  // default) must match too before two answers are treated as one device on two addresses.
+  internal fun candidateGroupKey(candidate: DiscoveryCandidate): String {
+    val uniqueId = candidate.uniqueId?.trim()?.lowercase().orEmpty()
+    val hostname = candidate.hostname?.trim()?.lowercase().orEmpty()
+    if (uniqueId.isEmpty() || hostname.isEmpty()) return "address:${candidate.address}"
+    return "id:$uniqueId@$hostname"
+  }
+
+  // Merged in a fixed order rather than completion order, so the primary address of a device that
+  // answers on two addresses is the same on every scan: a known host first, then the lowest address.
+  internal fun mergeCandidateGroup(group: List<DiscoveryCandidate>): DiscoveryCandidate =
+    group
+      .sortedWith(compareBy<DiscoveryCandidate>({ "hostname" !in it.sources }, { it.address }, { it.httpPort }))
+      .reduce { left, right -> mergeCandidate(left, right) }
 
   internal fun probeTarget(target: DiscoveryTarget, connectTimeoutMs: Int): DiscoveryCandidate? {
     // Captured outside the try body (and disconnected in `finally` below) so
@@ -565,6 +577,7 @@ class DeviceDiscoveryPlugin : Plugin() {
       hostname = left.hostname ?: right.hostname,
       uniqueId = left.uniqueId ?: right.uniqueId,
       requiresPassword = left.requiresPassword || right.requiresPassword,
+      addresses = (left.addresses + right.addresses).filter { it.isNotBlank() }.toSortedSet(),
     )
   }
 
@@ -585,6 +598,9 @@ class DeviceDiscoveryPlugin : Plugin() {
       item.put("hostname", candidate.hostname)
       item.put("uniqueId", candidate.uniqueId)
       item.put("requiresPassword", candidate.requiresPassword)
+      val addresses = JSArray()
+      candidate.addresses.sorted().forEach { address -> addresses.put(address) }
+      item.put("addresses", addresses)
       array.put(item)
     }
     return array

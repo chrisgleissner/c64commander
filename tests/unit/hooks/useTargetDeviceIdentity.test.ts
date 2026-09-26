@@ -19,7 +19,7 @@ vi.mock("@/hooks/useSavedDevices", () => ({
     verifiedByDeviceId: { u2: { product: "U2" } },
     devices: [
       { id: "c64u", name: "", host: "c64u" },
-      { id: "u2", name: "", host: "192.168.1.74" },
+      { id: "u2", name: "", host: "192.0.2.74" },
     ],
   }),
 }));
@@ -37,7 +37,7 @@ describe("useTargetDeviceIdentity", () => {
   it("names the selected saved device while the app drives a real one", () => {
     const { result } = renderHook(() => useTargetDeviceIdentity());
 
-    expect(result.current).toEqual({ deviceId: "u2", multiDevice: true, fullLabel: "192.168.1.74", shortLabel: "U2" });
+    expect(result.current).toEqual({ deviceId: "u2", multiDevice: true, fullLabel: "192.0.2.74", shortLabel: "U2" });
   });
 
   it("names no saved device in Demo Mode, where commands go to the simulated device", () => {

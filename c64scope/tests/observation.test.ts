@@ -25,10 +25,10 @@ describe("LabStateStore", () => {
 
   it("tracks reported peer health", () => {
     const store = new LabStateStore();
-    const report = store.reportPeerHealth("c64bridge", "healthy", "REST responding on 192.168.1.13");
+    const report = store.reportPeerHealth("c64bridge", "healthy", "REST responding on 192.0.2.13");
     expect(report.peer).toBe("c64bridge");
     expect(report.level).toBe("healthy");
-    expect(report.detail).toContain("192.168.1.13");
+    expect(report.detail).toContain("192.0.2.13");
     expect(report.reportedAt).toBeTruthy();
 
     const retrieved = store.getPeerHealth("c64bridge");

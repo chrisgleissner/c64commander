@@ -330,6 +330,100 @@ class DeviceDiscoveryPluginTest {
     assertEquals(setOf("hostname", "lan-scan"), candidates[0].sources)
   }
 
+  private fun delayedInfoConnection(body: String, delayMs: Long): HttpURLConnection {
+    val connection = mock(HttpURLConnection::class.java)
+    doAnswer {
+      Thread.sleep(delayMs)
+      null
+    }.`when`(connection).connect()
+    `when`(connection.responseCode).thenReturn(200)
+    `when`(connection.inputStream).thenAnswer { body.byteInputStream(StandardCharsets.UTF_8) }
+    return connection
+  }
+
+  // One Ultimate on Ethernet and Wi-Fi: the saved (known) address answers last, and must still win.
+  @Test
+  fun runProbesPrefersTheKnownHostOfADualHomedDeviceWhateverAnswersFirst() {
+    val knownAddress = delayedInfoConnection(ultimateInfoJson(uniqueId = "dual"), delayMs = 400)
+    val otherAddress = delayedInfoConnection(ultimateInfoJson(uniqueId = "dual"), delayMs = 0)
+    plugin.httpConnectionFactory = { url -> if (url.host == "198.51.100.20") knownAddress else otherAddress }
+
+    val candidates =
+      plugin.runProbes(
+        listOf(
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "198.51.100.20", source = "hostname"),
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "192.0.2.10", source = "lan-scan"),
+        ),
+        3_000,
+        1_000,
+        4,
+      )
+
+    assertEquals(1, candidates.size)
+    assertEquals("198.51.100.20", candidates[0].address)
+    assertEquals(setOf("192.0.2.10", "198.51.100.20"), candidates[0].addresses)
+  }
+
+  // The unique id is user-configurable, so two separate Ultimates can report the same one.
+  @Test
+  fun runProbesKeepsTwoDevicesThatShareACustomUniqueIdButNotAHostname() {
+    val desk = delayedInfoConnection(ultimateInfoJson(uniqueId = "custom", hostname = "ultimate-desk"), delayMs = 0)
+    val attic = delayedInfoConnection(ultimateInfoJson(uniqueId = "custom", hostname = "ultimate-attic"), delayMs = 0)
+    plugin.httpConnectionFactory = { url -> if (url.host == "192.0.2.10") desk else attic }
+
+    val candidates =
+      plugin.runProbes(
+        listOf(
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "192.0.2.10", source = "lan-scan"),
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "203.0.113.40", source = "lan-scan"),
+        ),
+        3_000,
+        1_000,
+        4,
+      )
+
+    assertEquals(2, candidates.size)
+    assertEquals(
+      mapOf("ultimate-desk" to setOf("192.0.2.10"), "ultimate-attic" to setOf("203.0.113.40")),
+      candidates.associate { it.hostname to it.addresses },
+    )
+  }
+
+  @Test
+  fun candidateGroupKeyNeedsBothUniqueIdAndHostname() {
+    val known = scannedCandidate("192.0.2.10")
+    assertEquals("id:dual@u64", plugin.candidateGroupKey(known.copy(uniqueId = " DUAL ", hostname = "U64")))
+    assertEquals("address:192.0.2.10", plugin.candidateGroupKey(known.copy(hostname = null)))
+    assertEquals("address:192.0.2.10", plugin.candidateGroupKey(known.copy(uniqueId = " ")))
+  }
+
+  @Test
+  fun mergeCandidateGroupIsIndependentOfCompletionOrder() {
+    val first = scannedCandidate("198.51.100.20")
+    val second = scannedCandidate("192.0.2.10")
+
+    val forward = plugin.mergeCandidateGroup(listOf(first, second))
+    val reverse = plugin.mergeCandidateGroup(listOf(second, first))
+
+    assertEquals("192.0.2.10", forward.address)
+    assertEquals(forward, reverse)
+  }
+
+  private fun scannedCandidate(address: String) =
+    DeviceDiscoveryPlugin.DiscoveryCandidate(
+      address = address,
+      host = null,
+      httpPort = 80,
+      sources = setOf("lan-scan"),
+      product = "Ultimate 64",
+      firmwareVersion = null,
+      fpgaVersion = null,
+      coreVersion = null,
+      hostname = "u64",
+      uniqueId = "dual",
+      requiresPassword = false,
+    )
+
   @Test
   fun runProbesHonoursDeadline() {
     // 1 ms budget against a closed port: the poll loop must return promptly with nothing.
@@ -341,11 +435,11 @@ class DeviceDiscoveryPluginTest {
 
   @Test
   fun buildTargetsDedupesKnownHostsCaseInsensitively() {
-    val targets = plugin.buildTargets(listOf("U64", "u64", "192.168.1.5"), includeLanScan = false)
+    val targets = plugin.buildTargets(listOf("U64", "u64", "192.0.2.5"), includeLanScan = false)
     assertEquals(2, targets.size)
     // Same host:port key keeps the last entry, so the lowercase "u64" survives.
     assertTrue(targets.any { it.host == "u64" })
-    assertTrue(targets.any { it.host == "192.168.1.5" })
+    assertTrue(targets.any { it.host == "192.0.2.5" })
   }
 
   @Test
@@ -382,23 +476,23 @@ class DeviceDiscoveryPluginTest {
 
   @Test
   fun buildTargetsSweepsTheLanOnPort80BeforeAnySavedCustomPort() {
-    plugin.lanHostEnumerator = { listOf("192.168.1.2", "192.168.1.3") }
+    plugin.lanHostEnumerator = { listOf("192.0.2.2", "192.0.2.3") }
     val targets = plugin.buildTargets(listOf("c64u:8080"), includeLanScan = true)
     val lanTargets = targets.filter { it.source == "lan-scan" }
     // runProbes drains the pool in submission order under one deadline, so the default
     // sweep must be submitted in full before the saved custom port widens it.
     assertEquals(
-      listOf("192.168.1.2:80", "192.168.1.3:80", "192.168.1.2:8080", "192.168.1.3:8080"),
+      listOf("192.0.2.2:80", "192.0.2.3:80", "192.0.2.2:8080", "192.0.2.3:8080"),
       lanTargets.map { "${it.host}:${it.port}" },
     )
   }
 
   @Test
   fun buildTargetsSweepsTheLanOnlyOnPort80WithoutASavedCustomPort() {
-    plugin.lanHostEnumerator = { listOf("192.168.1.2", "192.168.1.3") }
+    plugin.lanHostEnumerator = { listOf("192.0.2.2", "192.0.2.3") }
     val targets = plugin.buildTargets(listOf("c64u"), includeLanScan = true)
     val lanTargets = targets.filter { it.source == "lan-scan" }
-    assertEquals(listOf("192.168.1.2:80", "192.168.1.3:80"), lanTargets.map { "${it.host}:${it.port}" })
+    assertEquals(listOf("192.0.2.2:80", "192.0.2.3:80"), lanTargets.map { "${it.host}:${it.port}" })
   }
 
   @Test
@@ -432,10 +526,10 @@ class DeviceDiscoveryPluginTest {
       put(" u64 ")
       put("")
       put("   ")
-      put("192.168.1.9")
+      put("192.0.2.9")
     }
     `when`(call.getArray("knownHosts")).thenReturn(array)
-    assertEquals(listOf("u64", "192.168.1.9"), plugin.parseKnownHosts(call))
+    assertEquals(listOf("u64", "192.0.2.9"), plugin.parseKnownHosts(call))
   }
 
   @Test
@@ -451,7 +545,7 @@ class DeviceDiscoveryPluginTest {
   fun candidatesToJsonSerialisesFields() {
     val candidate =
       DeviceDiscoveryPlugin.DiscoveryCandidate(
-        address = "192.168.1.20",
+        address = "192.0.2.20",
         host = "u64",
         httpPort = 80,
         sources = setOf("hostname", "lan-scan"),
@@ -466,11 +560,12 @@ class DeviceDiscoveryPluginTest {
     val json = plugin.candidatesToJson(listOf(candidate))
     assertEquals(1, json.length())
     val item = json.getJSONObject(0)
-    assertEquals("192.168.1.20", item.getString("address"))
+    assertEquals("192.0.2.20", item.getString("address"))
     assertEquals("Ultimate 64", item.getString("product"))
     assertEquals(80, item.getInt("httpPort"))
     assertEquals(2, item.getJSONArray("source").length())
     assertFalse(item.getBoolean("requiresPassword"))
+    assertEquals("192.0.2.20", item.getJSONArray("addresses").getString(0))
   }
 
   // ---- mergeCandidate ------------------------------------------------------
@@ -479,7 +574,7 @@ class DeviceDiscoveryPluginTest {
   fun mergeCandidatePrefersLeftAndUnionsSources() {
     val left =
       DeviceDiscoveryPlugin.DiscoveryCandidate(
-        address = "192.168.1.20",
+        address = "192.0.2.20",
         host = null,
         httpPort = 80,
         sources = setOf("lan-scan"),
@@ -523,8 +618,8 @@ class DeviceDiscoveryPluginTest {
 
   @Test
   fun isIpv4LiteralDistinguishesAddressesFromNames() {
-    assertTrue(plugin.isIpv4Literal("192.168.1.1"))
-    assertTrue(plugin.isIpv4Literal("10.0.0.255"))
+    assertTrue(plugin.isIpv4Literal("192.0.2.1"))
+    assertTrue(plugin.isIpv4Literal("198.51.100.255"))
     assertFalse(plugin.isIpv4Literal("u64"))
     assertFalse(plugin.isIpv4Literal("1.2.3"))
     assertFalse(plugin.isIpv4Literal("1.2.3.4.5"))
@@ -539,14 +634,14 @@ class DeviceDiscoveryPluginTest {
 
   @Test
   fun enumerateIpv4SubnetExcludesNetworkBroadcastAndSelf() {
-    val address = InetAddress.getByName("192.168.1.10") as Inet4Address
+    val address = InetAddress.getByName("192.168.0.10") as Inet4Address
     val hosts = plugin.enumerateIpv4Subnet(address, 24)
     assertEquals(253, hosts.size)
-    assertTrue(hosts.contains("192.168.1.1"))
-    assertTrue(hosts.contains("192.168.1.254"))
-    assertFalse(hosts.contains("192.168.1.0"))
-    assertFalse(hosts.contains("192.168.1.255"))
-    assertFalse(hosts.contains("192.168.1.10"))
+    assertTrue(hosts.contains("192.168.0.1"))
+    assertTrue(hosts.contains("192.168.0.254"))
+    assertFalse(hosts.contains("192.168.0.0"))
+    assertFalse(hosts.contains("192.168.0.255"))
+    assertFalse(hosts.contains("192.168.0.10"))
   }
 
   @Test
@@ -558,10 +653,10 @@ class DeviceDiscoveryPluginTest {
 
   @Test
   fun enumerateIpv4SubnetHandlesSmallSlash30() {
-    val address = InetAddress.getByName("192.168.1.1") as Inet4Address
+    val address = InetAddress.getByName("192.168.0.1") as Inet4Address
     val hosts = plugin.enumerateIpv4Subnet(address, 30)
     // /30 → network .0, broadcast .3, usable .1/.2, minus self .1 → only .2.
-    assertEquals(listOf("192.168.1.2"), hosts)
+    assertEquals(listOf("192.168.0.2"), hosts)
   }
 
   @Test
@@ -661,7 +756,7 @@ class DeviceDiscoveryPluginTest {
       DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
         isUp = true,
         isLoopback = false,
-        addresses = listOf(InetAddress.getByName("192.168.1.208")),
+        addresses = listOf(InetAddress.getByName("192.168.0.208")),
       ),
     )
 
@@ -674,7 +769,7 @@ class DeviceDiscoveryPluginTest {
       DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
         isUp = false,
         isLoopback = false,
-        addresses = listOf(InetAddress.getByName("192.168.1.208")),
+        addresses = listOf(InetAddress.getByName("192.168.0.208")),
       ),
     )
 

@@ -9,6 +9,9 @@
 /** How long a live mirror may receive nothing before it is treated as no longer live. */
 export const STREAM_ARRIVAL_TIMEOUT_MS = 8000;
 
+/** How long a new stream may stay silent before the controllers look for a refused sender. */
+const QUIET_START_MS = 1500;
+
 /** How often the watchdog looks at the clock. */
 const CHECK_INTERVAL_MS = 1000;
 
@@ -23,6 +26,12 @@ export interface StreamArrivalWatchdogOptions {
    * left, and it has to be read rather than pushed.
    */
   pollArrival?: () => boolean;
+  /**
+   * Called once when nothing has arrived by `quietStartMs` after start. A dual-homed Ultimate streams
+   * from its other address, and finding that out early saves the user the full timeout of silence.
+   */
+  onQuietStart?: () => void;
+  quietStartMs?: number;
   timeoutMs?: number;
   checkIntervalMs?: number;
   now?: () => number;
@@ -49,6 +58,9 @@ export class StreamArrivalWatchdog {
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastArrivalMs = 0;
   private lastCheckMs = 0;
+  private startedMs = 0;
+  private arrivedSinceStart = false;
+  private quietStartReported = false;
   private readonly timeoutMs: number;
   private readonly checkIntervalMs: number;
   private readonly now: () => number;
@@ -64,12 +76,16 @@ export class StreamArrivalWatchdog {
     this.stop();
     this.lastArrivalMs = this.now();
     this.lastCheckMs = this.lastArrivalMs;
+    this.startedMs = this.lastArrivalMs;
+    this.arrivedSinceStart = false;
+    this.quietStartReported = false;
     this.timer = setInterval(() => this.check(), this.checkIntervalMs);
   }
 
   /** Record that something arrived. Cheap enough for the per-datagram path. */
   noteArrival(): void {
     this.lastArrivalMs = this.now();
+    this.arrivedSinceStart = true;
   }
 
   stop(): void {
@@ -94,10 +110,21 @@ export class StreamArrivalWatchdog {
       this.lastArrivalMs = now;
       return;
     }
-    if (this.options.pollArrival?.()) this.lastArrivalMs = now;
+    if (this.options.pollArrival?.()) {
+      this.lastArrivalMs = now;
+      this.arrivedSinceStart = true;
+    }
+    this.reportQuietStart(now);
     const silentMs = now - this.lastArrivalMs;
     if (silentMs < this.timeoutMs) return;
     this.stop();
     this.options.onStale(silentMs);
+  }
+
+  private reportQuietStart(now: number): void {
+    const quietStartMs = this.options.quietStartMs ?? QUIET_START_MS;
+    if (this.arrivedSinceStart || this.quietStartReported || now - this.startedMs < quietStartMs) return;
+    this.quietStartReported = true;
+    this.options.onQuietStart?.();
   }
 }

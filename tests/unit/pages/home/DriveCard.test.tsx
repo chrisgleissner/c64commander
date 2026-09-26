@@ -53,6 +53,25 @@ describe("DriveCard", () => {
     expect(screen.getByTestId("home-drive-status-d8")).toHaveTextContent("OK");
   });
 
+  it("shows a placeholder instead of OFF, no disk and OK while drive data is loading", () => {
+    render(
+      <DriveCard
+        {...defaultProps}
+        loading
+        enabled={false}
+        mountedPath="No disk mounted"
+        onMountedPathClick={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("home-drive-toggle-d8")).toHaveTextContent("…");
+    expect(screen.getByTestId("home-drive-toggle-d8")).toBeDisabled();
+    expect(screen.getByTestId("home-drive-mounted-d8")).toHaveTextContent("…");
+    expect(screen.getByTestId("home-drive-mounted-d8")).toBeDisabled();
+    expect(screen.getByTestId("home-drive-status-d8")).toHaveTextContent("…");
+    expect(screen.queryByText("OFF")).toBeNull();
+    expect(screen.queryByText("No disk mounted")).toBeNull();
+  });
+
   it("shows ON/OFF based on enabled prop", () => {
     const { rerender } = render(<DriveCard {...defaultProps} enabled={true} />);
     expect(screen.getByTestId("home-drive-toggle-d8")).toHaveTextContent("ON");

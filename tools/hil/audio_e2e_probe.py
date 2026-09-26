@@ -43,6 +43,10 @@ import sys
 import time
 import urllib.request
 import wave
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lan_iface import resolve_iface  # noqa: E402
 
 # ---------------------------------------------------------------------------------------------
 # The stimulus
@@ -600,12 +604,12 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("build", "build-sid", "play", "record", "wire", "analyse", "run"):
         p = sub.add_parser(name)
-        p.add_argument("--host", default="192.168.1.148")
+        p.add_argument("--host", default="c64u")
         p.add_argument("--password", default="pwd")
         p.add_argument("--seconds", type=float, default=30.0)
         p.add_argument("--device", default="plughw:CARD=SF558,DEV=0")
         p.add_argument("--out", default="/tmp/audio-e2e.wav")
-        p.add_argument("--iface", default="192.168.1.185")
+        p.add_argument("--iface", default=None, help="local IPv4 to join the group on (default: detected)")
         if name == "analyse":
             p.add_argument("file")
     args = ap.parse_args()
@@ -632,7 +636,7 @@ def main() -> int:
         print(args.out)
         return rc
     if args.cmd == "wire":
-        rc = capture_wire(args.out, args.seconds, args.iface)
+        rc = capture_wire(args.out, args.seconds, resolve_iface(args.iface))
         return rc if rc else analyse(args.out)
     if args.cmd == "analyse":
         return analyse(args.file)

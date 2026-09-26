@@ -6,17 +6,20 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
+import { ClearPlaylistDialog } from "@/pages/playFiles/components/ClearPlaylistDialog";
 
 export type PlaylistPanelProps = {
   previewItems: ActionListItem[];
   viewAllItems: ActionListItem[];
   totalItemCount: number;
+  hiddenItemCount: number;
   selectedCount: number;
   allSelected: boolean;
   onToggleSelectAll: () => void;
@@ -27,6 +30,7 @@ export type PlaylistPanelProps = {
   onToggleFilter: (category: PlayFileCategory) => void;
   formatCategory: (category: PlayFileCategory) => string;
   hasPlaylist: boolean;
+  playlistItemCount: number;
   onAddItems: () => void;
   onClearPlaylist: () => void;
   playlistFilterText: string;
@@ -44,6 +48,7 @@ export const PlaylistPanel = ({
   previewItems,
   viewAllItems,
   totalItemCount,
+  hiddenItemCount,
   selectedCount,
   allSelected,
   onToggleSelectAll,
@@ -54,6 +59,7 @@ export const PlaylistPanel = ({
   onToggleFilter,
   formatCategory,
   hasPlaylist,
+  playlistItemCount,
   onAddItems,
   onClearPlaylist,
   playlistFilterText,
@@ -62,6 +68,7 @@ export const PlaylistPanel = ({
   onViewAllEndReached,
 }: PlaylistPanelProps) => {
   const { profile } = useDisplayProfile();
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const addItemsFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-playlist-add-items",
     order: PLAY_PLAYLIST_FOCUS_ORDER.addItems,
@@ -112,6 +119,7 @@ export const PlaylistPanel = ({
         items={previewItems}
         viewAllItems={viewAllItems}
         totalItemCount={totalItemCount}
+        hiddenItemCount={hiddenItemCount}
         emptyLabel="No tracks in playlist yet."
         selectAllLabel="Select all"
         deselectAllLabel="Deselect all"
@@ -152,7 +160,7 @@ export const PlaylistPanel = ({
                 ref={clearPlaylistFocusRef}
                 variant="outline"
                 size="sm"
-                onClick={onClearPlaylist}
+                onClick={() => setClearConfirmOpen(true)}
                 aria-label="Clear playlist"
                 className="text-destructive hover:text-destructive"
               >
@@ -161,6 +169,12 @@ export const PlaylistPanel = ({
             ) : null}
           </div>
         }
+      />
+      <ClearPlaylistDialog
+        open={clearConfirmOpen}
+        itemCount={playlistItemCount}
+        onOpenChange={setClearConfirmOpen}
+        onConfirm={onClearPlaylist}
       />
     </div>
   );

@@ -27,8 +27,8 @@ class FilteringReceiver implements StreamReceiver {
   adopted: string | null = null;
   diagnostics: SenderFilterDiagnostics | null = {
     rejectedPackets: 27_400,
-    lastRejectedSource: "192.168.1.148",
-    expectedSource: "192.168.1.9",
+    lastRejectedSource: "192.0.2.148",
+    expectedSource: "192.0.2.9",
   };
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
     this.datagram = handler;
@@ -71,7 +71,7 @@ describe("a Live View stream that is arriving from an address the filter refuses
         startStream: vi.fn(async () => ({ errors: [] })),
         stopStream: vi.fn(async () => ({ errors: [] })),
         onChange: vi.fn(),
-        expectedSenderHost: () => "192.168.1.9",
+        expectedSenderHost: () => "192.0.2.9",
         now: () => clock.value,
       });
       await controller.start();
@@ -82,11 +82,11 @@ describe("a Live View stream that is arriving from an address the filter refuses
 
       expect(controller.getSnapshot().state).toBe("error");
       expect(controller.getSnapshot().error).toBe(
-        "Video packets are arriving from 192.168.1.148 and being dropped — the app is only accepting packets from 192.168.1.9.",
+        "Video packets are arriving from 192.0.2.148 and being dropped — the app is only accepting packets from 192.0.2.9.",
       );
       expect(controller.getSnapshot().senderMismatch).toEqual({
-        source: "192.168.1.148",
-        expected: "192.168.1.9",
+        source: "192.0.2.148",
+        expected: "192.0.2.9",
         rejectedPackets: 27_400,
       });
     } finally {
@@ -99,13 +99,13 @@ describe("a Live View stream that is arriving from an address the filter refuses
     try {
       const clock = { value: 0 };
       const receiver = new FilteringReceiver();
-      receiver.diagnostics = { rejectedPackets: 0, expectedSource: "192.168.1.9" };
+      receiver.diagnostics = { rejectedPackets: 0, expectedSource: "192.0.2.9" };
       const controller = new VideoMirrorController({
         createReceiver: () => receiver,
         startStream: vi.fn(async () => ({ errors: [] })),
         stopStream: vi.fn(async () => ({ errors: [] })),
         onChange: vi.fn(),
-        expectedSenderHost: () => "192.168.1.9",
+        expectedSenderHost: () => "192.0.2.9",
         now: () => clock.value,
       });
       await controller.start();
@@ -130,7 +130,7 @@ describe("a Live View stream that is arriving from an address the filter refuses
         startStream,
         stopStream: vi.fn(async () => ({ errors: [] })),
         onChange: vi.fn(),
-        expectedSenderHost: () => "192.168.1.9",
+        expectedSenderHost: () => "192.0.2.9",
         now: () => clock.value,
       });
       await controller.start();
@@ -141,7 +141,7 @@ describe("a Live View stream that is arriving from an address the filter refuses
 
       await controller.adoptSender(mismatch!.source);
 
-      expect(receiver.adopted).toBe("192.168.1.148");
+      expect(receiver.adopted).toBe("192.0.2.148");
       expect(receiver.closed).toBe(false);
       // The device was told to stream once, at start. Recovery retargets the filter rather than
       // restarting the one part of the path that is demonstrably working.
@@ -172,7 +172,7 @@ describe("a Live View stream that is arriving from an address the filter refuses
         startStream: vi.fn(async () => ({ errors: [] })),
         stopStream: vi.fn(async () => ({ errors: [] })),
         onChange: vi.fn(),
-        expectedSenderHost: () => "192.168.1.9",
+        expectedSenderHost: () => "192.0.2.9",
       });
       await controller.start();
       receiver.emitState("open");
@@ -181,12 +181,12 @@ describe("a Live View stream that is arriving from an address the filter refuses
       await goSilent(clock);
 
       expect(controller.getSnapshot().error).toBe(
-        "Audio packets are arriving from 192.168.1.148 and being dropped — the app is only accepting packets from 192.168.1.9.",
+        "Audio packets are arriving from 192.0.2.148 and being dropped — the app is only accepting packets from 192.0.2.9.",
       );
-      expect(controller.getSnapshot().senderMismatch?.source).toBe("192.168.1.148");
+      expect(controller.getSnapshot().senderMismatch?.source).toBe("192.0.2.148");
 
-      await controller.adoptSender("192.168.1.148");
-      expect(receiver.adopted).toBe("192.168.1.148");
+      await controller.adoptSender("192.0.2.148");
+      expect(receiver.adopted).toBe("192.0.2.148");
       expect(controller.getSnapshot().state).toBe("live");
     } finally {
       vi.restoreAllMocks();

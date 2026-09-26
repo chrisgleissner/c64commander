@@ -8,10 +8,25 @@
 
 import { DeviceDiscovery, type NativeDeviceDiscoveryCandidate } from "@/lib/native/deviceDiscovery";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
-import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { C64API } from "@/lib/c64api";
+import {
+  buildBaseUrlFromDeviceHost,
+  buildDeviceHostWithHttpPort,
+  getDeviceHostHttpPort,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
+import { stripSavedDeviceHttpPort } from "@/lib/savedDevices/host";
+import {
+  deviceInfoMachineIdentity,
+  isSameMachine,
+  machineIdentityKey,
+  savedEntryMachineIdentity,
+} from "@/lib/savedDevices/machineIdentity";
 import {
   addSavedDevice,
   completeSavedDeviceVerification,
+  type DeviceSwitchSummary,
+  type SavedDevice,
   getSavedDevicesSnapshot,
   resolveCanonicalProductFamilyCode,
   selectSavedDevice,
@@ -106,33 +121,54 @@ export const acknowledgeDeviceDiscoveryResults = () => {
 
 const normalizeToken = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
-const candidateKey = (candidate: NativeDeviceDiscoveryCandidate) => {
-  const uniqueId = normalizeToken(candidate.uniqueId);
-  if (uniqueId) return `id:${uniqueId}`;
+// A user-set unique id can repeat across devices, so it identifies a candidate only together with the hostname.
+const candidateKey = (candidate: {
+  address: string;
+  hostname?: string | null;
+  product?: string | null;
+  uniqueId?: string | null;
+}) => {
+  if (machineIdentityKey(candidate)) {
+    return `id:${normalizeToken(candidate.uniqueId)}@${normalizeToken(candidate.hostname)}`;
+  }
   const hostname = normalizeToken(candidate.hostname);
   const product = normalizeToken(candidate.product);
   if (hostname && product) return `host-product:${hostname}:${product}`;
   return `address:${normalizeToken(candidate.address)}`;
 };
 
-const findSavedDeviceId = (candidate: NativeDeviceDiscoveryCandidate) => {
+const candidateAddresses = (candidate: { address: string; addresses?: string[] }) =>
+  Array.from(new Set([candidate.address, ...(candidate.addresses ?? [])].map((value) => value.trim()).filter(Boolean)));
+
+type SavedDeviceMatchInput = Pick<NativeDeviceDiscoveryCandidate, "address" | "addresses"> & {
+  host?: string | null;
+  hostname?: string | null;
+  uniqueId?: string | null;
+};
+
+const findSavedDeviceId = (candidate: SavedDeviceMatchInput) => {
   const savedDevices = getSavedDevicesSnapshot();
-  const uniqueId = normalizeToken(candidate.uniqueId);
-  if (uniqueId) {
-    const match = savedDevices.devices.find((device) => normalizeToken(device.lastKnownUniqueId) === uniqueId);
-    if (match) return match.id;
-  }
+  const identityMatch = savedDevices.devices.find((device) =>
+    isSameMachine(savedEntryMachineIdentity(savedDevices, device.id), candidate),
+  );
+  if (identityMatch) return identityMatch.id;
+  // A known, different unique id rules a saved entry out, whatever its name or address says.
+  const candidateId = normalizeToken(candidate.uniqueId);
+  const unexcluded = savedDevices.devices.filter((device) => {
+    const savedId = normalizeToken(savedEntryMachineIdentity(savedDevices, device.id).uniqueId);
+    return !candidateId || !savedId || savedId === candidateId;
+  });
   const hostname = normalizeToken(candidate.hostname);
   if (hostname) {
-    const match = savedDevices.devices.find(
+    const match = unexcluded.find(
       (device) => normalizeToken(device.lastKnownHostname) === hostname || normalizeToken(device.host) === hostname,
     );
     if (match) return match.id;
   }
-  const address = normalizeToken(candidate.address);
+  const addresses = new Set(candidateAddresses(candidate).map(normalizeToken));
   const host = normalizeToken(candidate.host);
-  const match = savedDevices.devices.find(
-    (device) => normalizeToken(device.host) === address || Boolean(host && normalizeToken(device.host) === host),
+  const match = unexcluded.find(
+    (device) => addresses.has(normalizeToken(device.host)) || Boolean(host && normalizeToken(device.host) === host),
   );
   return match?.id ?? null;
 };
@@ -165,6 +201,7 @@ const normalizeCandidate = (
     hostname: candidate.hostname?.trim() || null,
     uniqueId: candidate.uniqueId?.trim() || null,
     requiresPassword,
+    addresses: candidateAddresses({ address, addresses: candidate.addresses }),
     alreadySavedDeviceId: findSavedDeviceId(candidate),
     confidence: "verified",
     lastSeenAt,
@@ -246,6 +283,10 @@ const scanAndResolveCandidates = async (
       deduped.set(normalized.id, {
         ...existing,
         source: Array.from(new Set([...existing.source, ...normalized.source])),
+        addresses: candidateAddresses({
+          address: existing.address,
+          addresses: [...(existing.addresses ?? []), ...(normalized.addresses ?? [])],
+        }),
       });
     } else {
       deduped.set(normalized.id, normalized);
@@ -352,62 +393,113 @@ export async function startDeviceDiscovery(
   return activeDiscovery;
 }
 
+const PASSWORD_IDENTITY_TIMEOUT_MS = 3000;
+
+const readUniqueIdWithPassword = async (host: string, httpPort: number, password: string) => {
+  const deviceHost = buildDeviceHostWithHttpPort(host, httpPort);
+  try {
+    const info = await new C64API(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost).getInfo({
+      timeoutMs: PASSWORD_IDENTITY_TIMEOUT_MS,
+    });
+    return { info, uniqueId: info?.unique_id?.trim() || null };
+  } catch (error) {
+    addLog("warn", "Could not read the identity of a password-protected device", {
+      deviceHost,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { info: null, uniqueId: null };
+  }
+};
+
+/**
+ * A password-protected Ultimate hides its unique id from discovery, so one device on Ethernet and
+ * Wi-Fi is listed once per address. With the password in hand its identity is read before saving,
+ * so it lands on the saved entry it already has instead of a second one; that entry's own address
+ * is kept when it answers with the same id.
+ */
+export const resolveDiscoveredCandidateIdentity = async (
+  candidate: DeviceDiscoveryCandidate,
+  password?: string | null,
+): Promise<DeviceDiscoveryCandidate> => {
+  if (!candidate.requiresPassword || candidate.uniqueId || !password) return candidate;
+  const { info, uniqueId } = await readUniqueIdWithPassword(candidate.address, candidate.httpPort, password);
+  if (!info || !uniqueId) return candidate;
+  const withIdentity = {
+    ...candidate,
+    uniqueId,
+    hostname: info.hostname?.trim() || candidate.hostname,
+    product: info.product?.trim() || candidate.product,
+    firmwareVersion: info.firmware_version?.trim() || candidate.firmwareVersion,
+  };
+  const identified = { ...withIdentity, id: candidateKey(withIdentity) };
+  const savedDeviceId = findSavedDeviceId(identified);
+  const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === savedDeviceId) ?? null;
+  const savedHost = saved ? stripSavedDeviceHttpPort(saved.host) : null;
+  const addresses = candidateAddresses(identified);
+  if (saved && savedHost && !addresses.map(normalizeToken).includes(normalizeToken(savedHost))) {
+    const savedAnswer = await readUniqueIdWithPassword(savedHost, saved.httpPort, password);
+    if (isSameMachine(deviceInfoMachineIdentity(savedAnswer.info), identified)) addresses.push(savedHost);
+  }
+  return { ...identified, addresses, alreadySavedDeviceId: savedDeviceId };
+};
+
+const isIpAddressLiteral = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
+
+const lastContactSucceeded = (summary: DeviceSwitchSummary | null) =>
+  Boolean(summary?.lastProbeSucceededAt && summary.lastProbeSucceededAt >= (summary.lastProbeFailedAt ?? ""));
+
+/**
+ * An Ultimate on Ethernet and Wi-Fi answers on two addresses, and which one a scan reaches first
+ * varies. The saved host is kept while it still reaches this device: an address while it answers, and
+ * a name while the app's last contact through it succeeded (a never-reached placeholder is replaced).
+ */
+const choosePersistedHost = (
+  device: SavedDevice,
+  candidate: DeviceDiscoveryCandidate,
+  summary: DeviceSwitchSummary | null,
+) => {
+  const savedHost = normalizeToken(stripSavedDeviceHttpPort(device.host));
+  const answered = [candidate.host ?? "", ...candidateAddresses(candidate)].map(normalizeToken);
+  if (answered.includes(savedHost)) return device.host;
+  if (!isIpAddressLiteral(savedHost) && lastContactSucceeded(summary)) return device.host;
+  return candidate.address;
+};
+
 export const persistDiscoveredDevice = (
   candidate: DeviceDiscoveryCandidate,
   options: { select?: boolean; passwordPresent?: boolean } = {},
 ): PersistedDiscoveredDevice => {
   const savedDevices = getSavedDevicesSnapshot();
   const product = resolveCanonicalProductFamilyCode(candidate.product);
-  // HARD12-019: two devices can leave the factory sharing the same default
-  // hostname (e.g. "c64u"). When both the saved device and the candidate
-  // carry unique ids and those ids differ, the hostname/address matchers
-  // would otherwise silently retarget device A's stored credentials to the
-  // physically different device B. Refuse the match in that case — create
-  // a fresh saved device entry.
-  const matchesByUniqueId = (device: { lastKnownUniqueId?: string | null }) =>
-    candidate.uniqueId &&
-    device.lastKnownUniqueId &&
-    normalizeToken(device.lastKnownUniqueId) === normalizeToken(candidate.uniqueId);
-  const isConflictingHostnameMatch = (device: {
-    lastKnownUniqueId?: string | null;
-    host?: string;
-    lastKnownHostname?: string | null;
-  }) => {
-    if (!candidate.hostname) return false;
-    const hostnameMatchesSaved =
-      normalizeToken(device.lastKnownHostname) === normalizeToken(candidate.hostname) ||
-      normalizeToken(device.host) === normalizeToken(candidate.hostname);
-    if (!hostnameMatchesSaved) return false;
-    const savedUid = device.lastKnownUniqueId ? normalizeToken(device.lastKnownUniqueId) : null;
-    const candidateUid = candidate.uniqueId ? normalizeToken(candidate.uniqueId) : null;
+  const matchesMachineIdentity = (device: SavedDevice) =>
+    isSameMachine(savedEntryMachineIdentity(savedDevices, device.id), candidate);
+  // HARD12-019: a known, different unique id rules a saved entry out, whatever its name, address or marker says.
+  const candidateUid = normalizeToken(candidate.uniqueId);
+  const hasOtherUniqueId = (device: SavedDevice) => {
+    const savedUid = normalizeToken(savedEntryMachineIdentity(savedDevices, device.id).uniqueId);
     return Boolean(savedUid && candidateUid && savedUid !== candidateUid);
   };
-  const hostnameOrHostMatch = (device: { lastKnownHostname?: string | null; host?: string }) => {
-    if (!candidate.hostname) return false;
-    return (
-      normalizeToken(device.lastKnownHostname) === normalizeToken(candidate.hostname) ||
-      normalizeToken(device.host) === normalizeToken(candidate.hostname)
-    );
-  };
+  const eligible = savedDevices.devices.filter((device) => !hasOtherUniqueId(device));
+  const hostnameOrHostMatch = (device: { lastKnownHostname?: string | null; host?: string }) =>
+    normalizeToken(device.lastKnownHostname) === normalizeToken(candidate.hostname) ||
+    normalizeToken(device.host) === normalizeToken(candidate.hostname);
   const existingId =
-    candidate.alreadySavedDeviceId ??
-    (candidate.uniqueId ? (savedDevices.devices.find(matchesByUniqueId)?.id ?? null) : null) ??
-    (candidate.hostname
-      ? (savedDevices.devices.find((device) => hostnameOrHostMatch(device) && !isConflictingHostnameMatch(device))
-          ?.id ?? null)
-      : null) ??
+    eligible.find((device) => device.id === candidate.alreadySavedDeviceId)?.id ??
+    (candidate.uniqueId ? (savedDevices.devices.find(matchesMachineIdentity)?.id ?? null) : null) ??
+    (candidate.hostname ? (eligible.find(hostnameOrHostMatch)?.id ?? null) : null) ??
     (candidate.address
-      ? (savedDevices.devices.find(
-          (device) =>
-            normalizeToken(device.host) === normalizeToken(candidate.address) && !isConflictingHostnameMatch(device),
-        )?.id ?? null)
+      ? (eligible.find((device) => normalizeToken(device.host) === normalizeToken(candidate.address))?.id ?? null)
       : null);
   const deviceId =
     existingId ??
     ((typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
       `discovered-${Date.now().toString(36)}`);
-  const host = candidate.address;
-  const httpPort = candidate.httpPort || DEFAULT_HTTP_PORT;
+  const existingDevice = existingId ? (savedDevices.devices.find((device) => device.id === existingId) ?? null) : null;
+  const host = existingDevice
+    ? choosePersistedHost(existingDevice, candidate, savedDevices.summaries[existingDevice.id] ?? null)
+    : candidate.address;
+  const httpPort =
+    existingDevice && host === existingDevice.host ? existingDevice.httpPort : candidate.httpPort || DEFAULT_HTTP_PORT;
 
   if (existingId) {
     updateSavedDevice(existingId, {

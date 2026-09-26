@@ -438,6 +438,7 @@ export function LightingSummaryCard({
           trackClassName={fixedColorGradient ? "bg-transparent" : undefined}
           rangeClassName={fixedColorGradient ? "bg-transparent" : undefined}
           trackStyle={fixedColorGradient ? { backgroundImage: fixedColorGradient } : undefined}
+          aria-label={`${successLabel} color`}
           data-testid={`${testIdPrefix}-color-slider`}
         />
 
@@ -465,6 +466,7 @@ export function LightingSummaryCard({
           onValueChange={intensitySlider.onValueChange}
           onValueCommit={intensitySlider.onValueCommit}
           disabled={!isActive || !intensitySupported}
+          aria-label={`${successLabel} brightness`}
           data-testid={`${testIdPrefix}-intensity-slider`}
         />
 

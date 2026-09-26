@@ -137,6 +137,16 @@ describe("sidUtils", () => {
     expect(metadata.sidChipCount).toBe(3);
   });
 
+  it("drops HVSC's <?> unknown placeholder from the header's name, author and release", () => {
+    const header = createSidHeader({ nameBytes: [0x3c, 0x3f, 0x3e, 0x00] });
+    header.set([0x3c, 0x3f, 0x3e, 0x00, 0x00, 0x00, 0x00], 54);
+    header.set([0x31, 0x39, 0x38, 0x37, 0x20, 0x3c, 0x3f, 0x3e, 0x00], 86);
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.name).toBe("");
+    expect(metadata.author).toBe("");
+    expect(metadata.released).toBe("1987");
+  });
+
   it("decodes Windows-1252 metadata strings", () => {
     const metadata = parseSidHeaderMetadata(
       createSidHeader({
