@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Log
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -24,6 +25,7 @@ import org.json.JSONObject
  */
 object UltimateIdent {
   const val PORT = 64
+  private const val logTag = "UltimateIdent"
   private const val MAX_REPLY_BYTES = 2048
 
   data class Identity(val uniqueId: String, val replyFrom: String)
@@ -38,7 +40,8 @@ object UltimateIdent {
       val reply = DatagramPacket(buffer, buffer.size)
       try {
         socket.receive(reply)
-      } catch (_: SocketTimeoutException) {
+      } catch (timeout: SocketTimeoutException) {
+        Log.i(logTag, "No ident reply from $host within $timeoutMs ms", timeout)
         return null
       }
       val uniqueId = parseUniqueId(String(reply.data, 0, reply.length, Charsets.UTF_8)) ?: return null
