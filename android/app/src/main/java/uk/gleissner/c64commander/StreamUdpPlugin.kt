@@ -295,6 +295,22 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(result)
   }
 
+  /** Who a stream sender is, asked over ident so that no device password goes to an unknown address. */
+  @PluginMethod
+  fun identify(call: PluginCall) {
+    val host = call.getString("host") ?: return call.reject("host is required")
+    val timeoutMs = call.getInt("timeoutMs") ?: 1500
+    executor.execute {
+      try {
+        val identity = UltimateIdent.query(host, timeoutMs)
+        call.resolve(JSObject().put("uniqueId", identity?.uniqueId).put("replyFrom", identity?.replyFrom))
+      } catch (error: Exception) {
+        Log.w(logTag, "Ident query to $host failed", error)
+        call.reject("Ident query to $host failed: ${error.message}", error)
+      }
+    }
+  }
+
   private fun applyExpectedSource(name: String, host: String?) {
     // A new filter identity makes the old rejection count a statement about a question nobody is
     // asking any more, so adopting a sender (or rebinding) starts the diagnosis from zero.

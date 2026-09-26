@@ -6,41 +6,67 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { C64API, getC64API, getC64APIConfigSnapshot } from "@/lib/c64api";
+import { Capacitor } from "@capacitor/core";
+import { C64API, getC64API } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { StreamUdp } from "@/lib/native/streamUdp";
 import { addLog } from "@/lib/logging";
 
 const IDENTITY_TIMEOUT_MS = 3000;
+const IDENT_TIMEOUT_MS = 1500;
 
 type FetchUniqueId = (host: string) => Promise<string | null>;
 
-const fetchUniqueIdOverRest: FetchUniqueId = async (host) => {
-  const selected = getC64API();
-  const api =
-    host === selected.getDeviceHost()
-      ? selected
-      : new C64API(buildBaseUrlFromDeviceHost(host), getC64APIConfigSnapshot().password, host);
-  const info = await api.getInfo({ timeoutMs: IDENTITY_TIMEOUT_MS });
-  return info?.unique_id?.trim() || null;
+export interface SenderIdentityDeps {
+  /** The sender's id, asked without the selected device's password: the sender may be another machine. */
+  senderUniqueId: FetchUniqueId;
+  selectedUniqueId: FetchUniqueId;
+}
+
+const trimmedId = (value: string | null | undefined): string | null => value?.trim() || null;
+
+const uniqueIdWithoutPassword: FetchUniqueId = async (host) => {
+  if (Capacitor.isPluginAvailable("StreamUdp")) {
+    const { uniqueId } = await StreamUdp.identify({ host, timeoutMs: IDENT_TIMEOUT_MS });
+    if (trimmedId(uniqueId)) return trimmedId(uniqueId);
+  }
+  const info = await new C64API(buildBaseUrlFromDeviceHost(host), undefined, host).getInfo({
+    timeoutMs: IDENTITY_TIMEOUT_MS,
+    __c64uIntent: "system",
+  });
+  return trimmedId(info?.unique_id);
+};
+
+const selectedDeviceUniqueId: FetchUniqueId = async () => {
+  const info = await getC64API().getInfo({ timeoutMs: IDENTITY_TIMEOUT_MS, __c64uIntent: "system" });
+  return trimmedId(info?.unique_id);
+};
+
+const defaultDeps: SenderIdentityDeps = {
+  senderUniqueId: uniqueIdWithoutPassword,
+  selectedUniqueId: selectedDeviceUniqueId,
 };
 
 /**
  * Whether a stream sender that the address filter refused is the selected device itself.
  *
- * An Ultimate on both Ethernet and Wi-Fi answers REST on one address and streams from the other, so
- * the filter, which compares addresses, drops the device's own audio and video. The device's unique
- * id tells the two cases apart: the same id on both addresses is the same machine.
+ * An Ultimate on both Ethernet and Wi-Fi answers REST on either address but streams only from its
+ * Ethernet address, so a filter keyed to the Wi-Fi address drops the device's own audio and video.
+ * The same unique id on both addresses is the same machine.
  */
 export const isSelectedDeviceSender = async (
   source: string,
   selectedHost: string,
-  fetchUniqueId: FetchUniqueId = fetchUniqueIdOverRest,
+  deps: SenderIdentityDeps = defaultDeps,
 ): Promise<boolean> => {
   try {
-    const [sourceId, selectedId] = await Promise.all([fetchUniqueId(source), fetchUniqueId(selectedHost)]);
+    const [sourceId, selectedId] = await Promise.all([
+      deps.senderUniqueId(source),
+      deps.selectedUniqueId(selectedHost),
+    ]);
     return sourceId !== null && sourceId === selectedId;
   } catch (error) {
-    addLog("warn", "Live View: could not tell whether a refused stream sender is the selected device", {
+    addLog("warn", "Live View: could not tell whether a stream sender is the selected device", {
       service: "streams",
       source,
       selectedHost,
