@@ -17,6 +17,7 @@ export type PlaylistPanelProps = {
   previewItems: ActionListItem[];
   viewAllItems: ActionListItem[];
   totalItemCount: number;
+  hiddenItemCount: number;
   selectedCount: number;
   allSelected: boolean;
   onToggleSelectAll: () => void;
@@ -44,6 +45,7 @@ export const PlaylistPanel = ({
   previewItems,
   viewAllItems,
   totalItemCount,
+  hiddenItemCount,
   selectedCount,
   allSelected,
   onToggleSelectAll,
@@ -112,6 +114,7 @@ export const PlaylistPanel = ({
         items={previewItems}
         viewAllItems={viewAllItems}
         totalItemCount={totalItemCount}
+        hiddenItemCount={hiddenItemCount}
         emptyLabel="No tracks in playlist yet."
         selectAllLabel="Select all"
         deselectAllLabel="Deselect all"

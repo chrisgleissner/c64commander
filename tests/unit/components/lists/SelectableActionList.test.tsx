@@ -162,7 +162,8 @@ describe("SelectableActionList", () => {
 
     fireEvent.change(screen.getByTestId("view-all-filter-input"), { target: { value: "no-match" } });
 
-    expect(screen.getByText("No files")).toBeVisible();
+    expect(screen.getByText("No items match the filter. 2 items are hidden.")).toBeVisible();
+    expect(screen.queryByText("No files")).not.toBeInTheDocument();
   });
 
   it("uses the shared medium sheet presentation and clears both inline and view-all filters", () => {
@@ -356,6 +357,58 @@ describe("SelectableActionList", () => {
     renderList([]);
 
     expect(screen.getAllByText("No disks in the collection yet.")).toHaveLength(1);
+  });
+
+  it("says the filter hides every item when a text filter matches none of a non-empty list", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    renderList(items);
+    fireEvent.change(screen.getByTestId("list-filter-input"), { target: { value: "Commando" } });
+
+    expect(screen.getByText("No items match the filter. 2 items are hidden.")).toBeVisible();
+    expect(screen.queryByText("No disks in the collection yet.")).not.toBeInTheDocument();
+  });
+
+  const renderExternallyFiltered = (hiddenItemCount?: number) =>
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Playlist"
+          items={[]}
+          viewAllItems={[]}
+          totalItemCount={0}
+          hiddenItemCount={hiddenItemCount}
+          emptyLabel="No tracks in playlist yet."
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={4}
+          filterValue="Commando"
+          viewAllFilterValue="Commando"
+          disableClientFiltering
+          listTestId="playlist-list"
+        />
+      </DisplayProfileProvider>,
+    );
+
+  it("says the caller's filter hides every item, and how many, when an externally filtered list is empty", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    renderExternallyFiltered(153);
+
+    expect(screen.getByTestId("playlist-list")).toHaveTextContent("No items match the filter. 153 items are hidden.");
+    expect(screen.queryByText("No tracks in playlist yet.")).not.toBeInTheDocument();
+  });
+
+  it("keeps the empty label for an externally filtered list that hides nothing", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    renderExternallyFiltered(0);
+
+    expect(screen.getByTestId("playlist-list")).toHaveTextContent("No tracks in playlist yet.");
   });
 
   const renderRow = (row: Partial<ActionListItem>) =>

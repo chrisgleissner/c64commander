@@ -534,6 +534,63 @@ describe("useQueryFilteredPlaylist", () => {
     expect(recordSmokeBenchmarkSnapshot).not.toHaveBeenCalled();
   });
 
+  it("counts every playlist item as hidden once the repository answers that a text filter matches none", async () => {
+    markReady();
+    repository.queryPlaylist.mockImplementation(async ({ query }: { query?: string }) => {
+      const rows = query ? queryRows.filter((row) => row.track.title.includes(query)) : queryRows;
+      return { rows, totalMatchCount: rows.length };
+    });
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2));
+    expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(0);
+
+    act(() => {
+      result.current.setQuery("Commando");
+    });
+
+    await waitFor(() => expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(2));
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(0);
+  });
+
+  it("does not report the filter as hiding the playlist while the first repository query is still pending", async () => {
+    markReady();
+    let answer: (value: { rows: typeof queryRows; totalMatchCount: number }) => void = () => undefined;
+    repository.queryPlaylist.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useHarness());
+
+    await waitFor(() => expect(repository.queryPlaylist).toHaveBeenCalledTimes(1));
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(0);
+    expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(0);
+
+    await act(async () => {
+      answer({ rows: queryRows, totalMatchCount: 2 });
+    });
+
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+    expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(0);
+  });
+
+  it("counts every playlist item as hidden when the in-memory type filters exclude all of them", async () => {
+    markPlaylistRepositoryPhase(playlistId, "INGESTING", { expectedCount: playlist.length });
+    const { result } = renderHook(() => useHarness());
+
+    expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(0);
+
+    act(() => {
+      result.current.setPlaylistTypeFilters(["prg"]);
+    });
+
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(0);
+    expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(2);
+    expect(repository.queryPlaylist).not.toHaveBeenCalled();
+  });
+
   it("returns empty results immediately for an empty playlist", async () => {
     markReady(0);
     const { result } = renderHook(() => useHarness(emptyPlaylist));
@@ -543,6 +600,7 @@ describe("useQueryFilteredPlaylist", () => {
       expect(result.current.queryFilteredPlaylist.viewAllPlaylist).toEqual([]);
       expect(result.current.queryFilteredPlaylist.previewPlaylist).toEqual([]);
     });
+    expect(result.current.queryFilteredPlaylist.hiddenByFilterCount).toBe(0);
 
     expect(repository.queryPlaylist).not.toHaveBeenCalled();
     expect(recordSmokeBenchmarkSnapshot).not.toHaveBeenCalled();

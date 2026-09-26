@@ -14,13 +14,16 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
     viewAllFilterHeader,
     removeSelectedLabel,
     headerActions,
+    hiddenItemCount,
   }: {
     filterHeader: React.ReactNode;
     viewAllFilterHeader?: React.ReactNode;
     removeSelectedLabel?: string;
     headerActions?: React.ReactNode;
+    hiddenItemCount?: number;
   }) => (
     <div>
+      <div data-testid="playlist-hidden-item-count">{hiddenItemCount}</div>
       <div data-testid="playlist-filter-header">{filterHeader}</div>
       <div data-testid="playlist-view-all-filter-header">{viewAllFilterHeader}</div>
       <div data-testid="playlist-remove-selected-label">{removeSelectedLabel}</div>
@@ -49,6 +52,7 @@ type HarnessProps = {
   categoryOptions?: PlayFileCategory[];
   playlistTypeFilters?: PlayFileCategory[];
   playlistFilterText?: string;
+  hiddenItemCount?: number;
 };
 
 const PlaylistPanelHarness = ({
@@ -60,6 +64,7 @@ const PlaylistPanelHarness = ({
   categoryOptions = ["sid", "mod", "prg", "crt", "disk"] satisfies PlayFileCategory[],
   playlistTypeFilters = ["sid", "mod", "prg", "crt", "disk"],
   playlistFilterText = "",
+  hiddenItemCount = 0,
 }: HarnessProps) => {
   const { setOverride } = useDisplayProfilePreference();
 
@@ -72,6 +77,7 @@ const PlaylistPanelHarness = ({
       previewItems={items}
       viewAllItems={items}
       totalItemCount={items.length}
+      hiddenItemCount={hiddenItemCount}
       selectedCount={selectedCount}
       allSelected={false}
       onToggleSelectAll={vi.fn()}
@@ -126,6 +132,12 @@ describe("PlaylistPanel", () => {
     expect(viewAllHeader).toHaveTextContent("CRT");
     expect(viewAllHeader).toHaveTextContent("Disks");
     expect(viewAllHeader).not.toHaveTextContent("SID music");
+  });
+
+  it("hands the list the number of playlist items its filters hide", () => {
+    renderPanel({ hiddenItemCount: 153 });
+
+    expect(screen.getByTestId("playlist-hidden-item-count")).toHaveTextContent("153");
   });
 
   it("keeps the view-all filter header empty outside compact mode", () => {

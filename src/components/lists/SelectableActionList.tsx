@@ -84,6 +84,8 @@ export type SelectableActionListProps = {
   viewAllItems?: ActionListItem[];
   totalItemCount?: number;
   emptyLabel: string;
+  /** With `disableClientFiltering`: how many items the caller's filter left out of `items`. */
+  hiddenItemCount?: number;
   selectAllLabel?: string;
   deselectAllLabel?: string;
   removeSelectedLabel?: string;
@@ -113,6 +115,14 @@ export type SelectableActionListProps = {
 };
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+const countNonHeaderItems = (list: ActionListItem[]) =>
+  list.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
+
+const resolveEmptyListLabel = (emptyLabel: string, hiddenItemCount: number) => {
+  if (hiddenItemCount <= 0) return emptyLabel;
+  return `No items match the filter. ${hiddenItemCount} ${hiddenItemCount === 1 ? "item is" : "items are"} hidden.`;
+};
 
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
   const { profile } = useDisplayProfile();
@@ -331,6 +341,7 @@ export const SelectableActionList = ({
   viewAllItems,
   totalItemCount,
   emptyLabel,
+  hiddenItemCount = 0,
   selectAllLabel = "Select all",
   deselectAllLabel = "Deselect all",
   removeSelectedLabel,
@@ -457,9 +468,14 @@ export const SelectableActionList = ({
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
-  const filteredVisibleCount = filteredItems.reduce(
-    (count, item) => (item.variant === "header" ? count : count + 1),
-    0,
+  const filteredVisibleCount = countNonHeaderItems(filteredItems);
+  const inlineEmptyLabel = resolveEmptyListLabel(
+    emptyLabel,
+    disableClientFiltering ? hiddenItemCount : countNonHeaderItems(items),
+  );
+  const viewAllEmptyLabel = resolveEmptyListLabel(
+    emptyLabel,
+    disableClientFiltering ? hiddenItemCount : countNonHeaderItems(effectiveViewAllItems),
   );
   const effectiveTotalItemCount =
     disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
@@ -490,7 +506,7 @@ export const SelectableActionList = ({
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
       {list.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+        <p className="text-xs text-muted-foreground">{inlineEmptyLabel}</p>
       ) : (
         list.map((item) => <ActionListRow key={item.id} item={item} rowTestId={rowTestId} />)
       )}
@@ -634,7 +650,7 @@ export const SelectableActionList = ({
                   )}
                 >
                   {viewAllFilteredItems.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+                    <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
                   ) : (
                     <Virtuoso
                       ref={virtuosoRef}

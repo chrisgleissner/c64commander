@@ -2830,6 +2830,7 @@ export default function PlayFilesPage() {
                 previewItems={playlistPreviewListItems}
                 viewAllItems={playlistViewAllListItems}
                 totalItemCount={queryFilteredPlaylist.totalMatchCount}
+                hiddenItemCount={queryFilteredPlaylist.hiddenByFilterCount}
                 selectedCount={selectedPlaylistCount}
                 allSelected={allPlaylistSelected}
                 onToggleSelectAll={toggleSelectAllPlaylist}
