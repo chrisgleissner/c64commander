@@ -101,6 +101,9 @@ export const HvscControls = ({
   // the one frame never rendered — measured on the device, it went from 73% straight to gone.
   const [justCompleted, setJustCompleted] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  useEffect(() => {
+    if (hvscUpdating) setResetConfirmOpen(false);
+  }, [hvscUpdating]);
   const wasWorkingRef = useRef(false);
   useEffect(() => {
     if (working) {
@@ -280,7 +283,9 @@ export const HvscControls = ({
           <ConfirmDestructiveDialog
             open={resetConfirmOpen}
             onOpenChange={setResetConfirmOpen}
-            onConfirm={onReset}
+            onConfirm={() => {
+              if (!hvscUpdating) onReset();
+            }}
             title="Reset HVSC?"
             description="This removes the HVSC library installed in the app. Downloading and preparing it again takes a while."
             confirmLabel="Reset"

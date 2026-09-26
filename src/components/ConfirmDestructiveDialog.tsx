@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,16 @@ export const ConfirmDestructiveDialog = ({
   idPrefix,
 }: ConfirmDestructiveDialogProps) => {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // One confirmation per opening: a repeated activation before the dialog closes must not run the action twice.
+  const confirmedRef = useRef(false);
+  useEffect(() => {
+    if (open) confirmedRef.current = false;
+  }, [open]);
+  const confirm = () => {
+    if (confirmedRef.current) return;
+    confirmedRef.current = true;
+    onConfirm();
+  };
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -51,7 +61,7 @@ export const ConfirmDestructiveDialog = ({
           cancelRef.current?.focus();
         }}
       >
-        <AlertDialogHeader>
+        <AlertDialogHeader hideClose>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription className="not-sr-only">{description}</AlertDialogDescription>
         </AlertDialogHeader>
@@ -60,7 +70,7 @@ export const ConfirmDestructiveDialog = ({
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={confirm}
             className={buttonVariants({ variant: "destructive" })}
             id={`${idPrefix}-confirm`}
             data-testid={`${idPrefix}-confirm`}

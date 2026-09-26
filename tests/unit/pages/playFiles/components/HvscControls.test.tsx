@@ -256,6 +256,19 @@ describe("HvscControls", () => {
     expect(onReset).toHaveBeenCalledTimes(1);
   });
 
+  it("closes the Reset confirmation, and cannot reset, once an HVSC operation starts", () => {
+    const onReset = vi.fn();
+    const props = buildProps({ onReset });
+    const view = renderOpen(props);
+    fireEvent.click(screen.getByRole("button", { name: "Reset HVSC" }));
+    expect(screen.getByTestId("hvsc-reset-dialog")).toBeInTheDocument();
+
+    view.rerender(<HvscControls {...props} hvscUpdating />);
+
+    expect(screen.queryByTestId("hvsc-reset-dialog")).toBeNull();
+    expect(onReset).not.toHaveBeenCalled();
+  });
+
   it("renders the web-specific unavailable guidance", () => {
     vi.spyOn(Capacitor, "getPlatform").mockReturnValue("web");
 
