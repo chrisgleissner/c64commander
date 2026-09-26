@@ -362,6 +362,25 @@ describe("TourDriver", () => {
     expect(container.contains(overlay)).toBe(false);
   });
 
+  it("hides the app from assistive technology while the tour is open, and restores it afterwards", async () => {
+    const root = document.createElement("div");
+    root.id = "root";
+    document.body.appendChild(root);
+    try {
+      renderDriver();
+      await startTour();
+
+      expect(root.getAttribute("aria-hidden")).toBe("true");
+      expect(screen.getByTestId("tour-next").closest("[aria-hidden=true]")).toBeNull();
+
+      fireEvent.click(screen.getByTestId("tour-skip"));
+      await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+      expect(root.hasAttribute("aria-hidden")).toBe(false);
+    } finally {
+      root.remove();
+    }
+  });
+
   /*
    * The opening step points at nothing, and the viewport is only measured by the effect that draws
    * the hole. Skipping that effect for an anchor-less step left the scrim as one empty rectangle,
