@@ -571,11 +571,7 @@ past it to anything below.
   preview and the immersive Remote Input view; off leaves the picture clear)_ ;
   Low-latency audio
   (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
-  Live View audio through a native low-latency track — Android only)_ ; Audio
-  streaming route — select — `settings-stream-audio-route` — R✅ I✅ _(default
-  Dynamic; firmware wifi=true — Wi‑Fi for audio-only, Ethernet with video, or
-  Always Wi‑Fi / Always Ethernet)_
-  `[developer-mode only — firmware wifi=true not yet in released firmware; the session forces Ethernet unless dev mode is on]`
+  Live View audio through a native low-latency track — Android only)_
 - **Remote Input** _(the Game Mode block, then autofire)_: Joystick keys — select —
   `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centred) / Classic T9 /
   Custom; per-variant default from `variant.runtime.defaultJoystickKeyLayout`)_ ;

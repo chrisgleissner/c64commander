@@ -35,8 +35,6 @@ export interface AudioMirrorSnapshot {
   droppedPackets: number;
   chunks: number;
   error: string | null;
-  /** The route the current stream actually uses (Wi‑Fi only when requested + available). */
-  route: "wifi" | "ethernet";
   /**
    * A second Ultimate is streaming into our group and would not stop when asked. Non-fatal — the
    * native filter keeps the picture right — so it is a hint beside the controls, not an error.
@@ -88,7 +86,7 @@ export interface AudioMirrorDeps {
    * sink can't open (e.g. non-native platform). The session supplies this only when the setting is on.
    */
   createNativeSink?: (sampleRate: number) => NativeAudioSink | null;
-  startStream: (name: "audio", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
+  startStream: (name: "audio", destination: string) => Promise<unknown>;
   stopStream: (name: "audio") => Promise<unknown>;
   /** The device the user selected — any other sender on the group is uninvited. */
   expectedSenderHost?: () => string | null;
@@ -133,7 +131,6 @@ export class AudioMirrorController {
     droppedPackets: 0,
     chunks: 0,
     error: null,
-    route: "ethernet",
     foreignSenderNotice: null,
     senderMismatch: null,
   };
@@ -196,17 +193,7 @@ export class AudioMirrorController {
     }
   }
 
-  /** True while the current audio stream is delivered over Wi‑Fi (firmware wifi=true). */
-  isOnWifi(): boolean {
-    return this.snapshot.route === "wifi" && (this.snapshot.state === "connecting" || this.snapshot.state === "live");
-  }
-
-  /**
-   * @param options.wifi request Wi‑Fi delivery (audio-only). Falls back to
-   *   Ethernet automatically if the transport has no Wi‑Fi address or the device
-   *   rejects the Wi‑Fi start (no silent firmware fallback — PR #732).
-   */
-  async start(options?: { wifi?: boolean }): Promise<void> {
+  async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.batcher.reset();
     this.nativeLostPackets = 0;
@@ -216,7 +203,6 @@ export class AudioMirrorController {
       error: null,
       droppedPackets: 0,
       chunks: 0,
-      route: "ethernet",
       foreignSenderNotice: null,
       senderMismatch: null,
     });
@@ -298,36 +284,7 @@ export class AudioMirrorController {
 
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
-      // Wi‑Fi audio (PR #732): relay a UNICAST stream to the phone's own address.
-      // The firmware fails (no silent Ethernet fallback) if it has no Wi‑Fi, so
-      // retry over Ethernet ourselves. Only the native transport exposes a
-      // wifiDestination; elsewhere Wi‑Fi is not possible → Ethernet.
-      const wifiDestination = options?.wifi ? receiver.wifiDestination : undefined;
-      if (wifiDestination) {
-        try {
-          await this.deps.startStream("audio", wifiDestination, { wifi: true });
-          this.update({ route: "wifi" });
-        } catch (wifiError) {
-          addLog("info", "Audio Mirror: Wi‑Fi stream unavailable; using Ethernet", {
-            error: (wifiError as Error)?.message ?? String(wifiError),
-          });
-          // Tear down the failed Wi‑Fi attempt before starting the Ethernet one,
-          // so the device never has two overlapping audio:start requests in
-          // flight (it streams a single audio stream at a time).
-          try {
-            await this.deps.stopStream("audio");
-          } catch (stopError) {
-            addLog("debug", "Audio Mirror: stop after failed Wi‑Fi start (ignored)", {
-              error: (stopError as Error)?.message ?? String(stopError),
-            });
-          }
-          await this.deps.startStream("audio", receiver.destination);
-          this.update({ route: "ethernet" });
-        }
-      } else {
-        await this.deps.startStream("audio", receiver.destination);
-        this.update({ route: "ethernet" });
-      }
+      await this.deps.startStream("audio", receiver.destination);
     } catch (error) {
       addLog("warn", "Audio Mirror: device stream start failed", {
         error: (error as Error)?.message ?? String(error),

@@ -24,7 +24,6 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
   AudioMirrorController: class {
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
-    isOnWifi = vi.fn(() => false);
     constructor() {
       audioInstances.push(this as unknown as Captured);
     }

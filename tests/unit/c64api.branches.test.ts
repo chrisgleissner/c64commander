@@ -1372,19 +1372,18 @@ describe("c64api branches", () => {
     expect(urls[1]).toContain("/v1/streams/audio%20out:stop");
   });
 
-  // Wi‑Fi audio stream start (firmware PR #732): wifi=true appended for audio-only Wi‑Fi delivery.
-  it("appends wifi=true when a Wi‑Fi stream start is requested", async () => {
+  // The firmware's streams route declares only `ip`; any other parameter is answered with HTTP 400.
+  it("sends a stream start with the ip parameter and nothing else", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
 
     const api = new C64API("http://c64u");
-    await api.startStream("audio", "192.168.1.185:11001", { wifi: true });
-    await api.startStream("audio", "192.168.1.185:11001"); // default = Ethernet, no wifi param
+    await api.startStream("audio", "239.0.1.65:11001");
 
-    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(urls[0]).toContain("/v1/streams/audio:start?ip=192.168.1.185%3A11001&wifi=true");
-    expect(urls[1]).toContain("/v1/streams/audio:start?ip=192.168.1.185%3A11001");
-    expect(urls[1]).not.toContain("wifi=true");
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.pathname).toBe("/v1/streams/audio:start");
+    expect([...url.searchParams.keys()]).toEqual(["ip"]);
+    expect(url.searchParams.get("ip")).toBe("239.0.1.65:11001");
   });
 
   // #33: writeMemoryDMA failure branch

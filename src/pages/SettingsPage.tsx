@@ -156,9 +156,6 @@ import {
   saveStreamNativeVideoAssembly,
   loadStreamNativeAudio,
   saveStreamNativeAudio,
-  loadStreamAudioRoute,
-  saveStreamAudioRoute,
-  type StreamAudioRoute,
   loadNotificationVisibility,
   saveNotificationVisibility,
   loadNotificationDurationMs,
@@ -444,7 +441,6 @@ export default function SettingsPage() {
   const [streamInputPriority, setStreamInputPriority] = useState<boolean>(loadStreamInputPriority);
   const [streamVideoBadges, setStreamVideoBadges] = useState<boolean>(loadStreamVideoBadges);
   const [streamNativeAudio, setStreamNativeAudio] = useState<boolean>(loadStreamNativeAudio);
-  const [streamAudioRoute, setStreamAudioRoute] = useState<StreamAudioRoute>(loadStreamAudioRoute);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
     loadVolumeSliderPreviewIntervalMs(),
   );
@@ -2425,34 +2421,6 @@ export default function SettingsPage() {
                         lowest latency, least resilient.
                       </HelperText>
                     </div>
-                    {isDeveloperModeEnabled ? (
-                      <div className="col-span-2 space-y-2">
-                        <Label htmlFor="settings-stream-audio-route" className="text-sm">
-                          Audio streaming route
-                        </Label>
-                        <Select
-                          value={streamAudioRoute}
-                          onValueChange={(value) => {
-                            const next = value as StreamAudioRoute;
-                            setStreamAudioRoute(next);
-                            saveStreamAudioRoute(next);
-                          }}
-                        >
-                          <SelectTrigger id="settings-stream-audio-route" data-testid="settings-stream-audio-route">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="dynamic">Dynamic — Wi‑Fi for audio, Ethernet with video</SelectItem>
-                            <SelectItem value="wifi">Always Wi‑Fi (if available)</SelectItem>
-                            <SelectItem value="ethernet">Always Ethernet</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <HelperText>
-                          <strong>Developer preview — not in released firmware yet.</strong> Wi‑Fi can carry C64 audio,
-                          but not together with video — each option above explains its own trade-off.
-                        </HelperText>
-                      </div>
-                    ) : null}
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
                         <Label

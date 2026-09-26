@@ -52,8 +52,7 @@ order of how much new surface they added:
    the ♥/✕ ranking that feeds them, persistence and resume.
 4. **"Listen on: C64 / Both / This device"** and the volume that follows it — the routing decision
    that owns two audio sinks at once.
-5. **Live View** — screen palette, the tone & colour ladder, the analysers, the Wi‑Fi audio route
-   (developer-mode only; see the trap in §5).
+5. **Live View** — screen palette, the tone & colour ladder, the analysers.
 6. **Content Explorer** and the HVSC browse/search path at 61k songs.
 
 Cross-feature combinations are where the remaining defects will be. Everything above has been
@@ -151,9 +150,9 @@ hardware on demand; treat physical asks as rare and batch them.
 and `THIRD_PARTY_NOTICES.md`; sweeping that churn into a commit has broken CI here before. Add
 explicit paths and `git checkout --` the churn before pushing.
 
-**`wifi=true` on `audio:start` returns HTTP 400** and is *not* a bug — that route is the unreleased
-firmware path and is developer-mode-only. If you enable developer mode to reach the SID Radio
-settings, remember to turn it off before judging Live View.
+**`wifi=true` on `audio:start` returns HTTP 400** ("Function start does not have parameter wifi").
+The parameter does not exist in released firmware: the firmware's streams route declares only `ip`,
+and the pull request that proposed it (1541ultimate #732) was never merged. The app no longer sends it.
 
 **The c64u reported "unhealthy" is usually the app, not the device.** Under heavy tab churn the JS
 thread starves and the app's own 3 s health poll times out while the c64u answers the *host* in

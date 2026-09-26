@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 interface CapturedDeps {
-  startStream: (name: "audio" | "video", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
+  startStream: (name: "audio" | "video", destination: string) => Promise<unknown>;
   stopStream: (name: "audio" | "video") => Promise<unknown>;
 }
 
@@ -28,7 +28,6 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
   AudioMirrorController: class {
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
-    isOnWifi = vi.fn(() => false);
     constructor(deps: CapturedDeps) {
       audioDeps.push(deps);
     }
