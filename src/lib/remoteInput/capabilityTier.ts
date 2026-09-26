@@ -39,14 +39,14 @@ export const resolveRemoteInputTier = (status: MachineInputCapabilityStatus): Re
 export const remoteInputSupportsJoystick = (tier: RemoteInputTier): boolean => tier === "full";
 
 export const REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT =
-  "Joystick relay requires Ultimate firmware with machine:input support. Type mode still works.";
+  "Joystick relay requires Ultimate firmware with machine:input support. The Keys tab still works.";
 
 /**
  * Lead F3: the fallback keyboard-buffer injection (`injectAutostart`) issues
  * the same authenticated REST calls the `machine:input` probe used to
  * determine `auth-required` in the first place - it needs the identical
  * password, so it fails per keystroke just like the probe did. The generic
- * hint above ("Type mode still works") is actively wrong on this tier; use
+ * hint above ("The Keys tab still works") is actively wrong on this tier; use
  * this one instead wherever `tier === "auth-required"`.
  */
 export const REMOTE_INPUT_AUTH_REQUIRED_HINT =

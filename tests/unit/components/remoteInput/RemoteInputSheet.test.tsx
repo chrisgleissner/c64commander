@@ -147,7 +147,7 @@ describe("RemoteInputSheet", () => {
     const reason = screen.getByTestId("remote-input-joystick-unavailable-reason");
     expect(reason).toBeVisible();
     expect(reason).toHaveTextContent(
-      "Joystick relay requires Ultimate firmware with machine:input support. Type mode still works.",
+      "Joystick relay requires Ultimate firmware with machine:input support. The Keys tab still works.",
     );
     expect(reason).toHaveClass("text-sm");
     expect(screen.getByTestId("remote-input-mode-joystick")).toHaveAccessibleDescription(reason.textContent ?? "");
@@ -165,10 +165,10 @@ describe("RemoteInputSheet", () => {
     expect(screen.queryByTestId("remote-input-joystick-unavailable-reason")).not.toBeInTheDocument();
   });
 
-  // Lead F3: the generic "Type mode still works" hint is wrong on this tier -
+  // Lead F3: the generic "Keys tab still works" hint is wrong on this tier -
   // the fallback injection needs the same password the probe already failed
   // without, so a distinct, accurate hint must be shown instead.
-  it("shows the auth-required-specific hint (not the generic 'Type mode still works' one) on the auth-required tier", () => {
+  it("shows the auth-required-specific hint (not the generic 'Keys tab still works' one) on the auth-required tier", () => {
     tierState.tier = "auth-required";
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     expect(screen.getByTestId("remote-input-mode-joystick")).toBeDisabled();

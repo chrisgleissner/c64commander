@@ -98,7 +98,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
   // Lead F3: auth-required needs the same password Type mode's fallback
-  // injection would also need, so the generic "Type mode still works" hint
+  // injection would also need, so the generic "The Keys tab still works" hint
   // is wrong on this tier specifically.
   const joystickUnavailableHint =
     tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
