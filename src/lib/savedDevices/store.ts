@@ -788,13 +788,15 @@ export const addSavedDevice = (
 };
 
 export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDevice, "id">>) => {
-  return updateSnapshot((envelope) => {
+  let hostEdited = false;
+  const updated = updateSnapshot((envelope) => {
     let clearSummary = false;
     const nextDevices = envelope.devices.map((device) =>
       device.id === deviceId
         ? (() => {
             const host = update.host ? normalizeSavedDeviceHostInput(update.host) : device.host;
             const hostChanged = host !== device.host;
+            hostEdited = hostChanged;
             clearSummary = hostChanged && Boolean(envelope.summaries[deviceId]);
             const nextName = resolveSavedDeviceStoredName(
               update.name === undefined ? device.name : update.name,
@@ -820,14 +822,9 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
                   : hostChanged
                     ? null
                     : (update.lastKnownProduct ?? device.lastKnownProduct),
-              lastKnownHostname:
-                hostChanged && nextType.typeSource !== "USER"
-                  ? null
-                  : (update.lastKnownHostname ?? device.lastKnownHostname),
-              lastKnownUniqueId:
-                hostChanged && nextType.typeSource !== "USER"
-                  ? null
-                  : (update.lastKnownUniqueId ?? device.lastKnownUniqueId),
+              // A new address may be a different machine: its identity is unknown until verified again.
+              lastKnownHostname: hostChanged ? null : (update.lastKnownHostname ?? device.lastKnownHostname),
+              lastKnownUniqueId: hostChanged ? null : (update.lastKnownUniqueId ?? device.lastKnownUniqueId),
             };
           })()
         : device,
@@ -844,6 +841,11 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
         : envelope.summaries,
     };
   });
+  if (!hostEdited) return updated;
+  return updateRuntime((current) => ({
+    ...current,
+    verifiedByDeviceId: { ...current.verifiedByDeviceId, [deviceId]: null },
+  }));
 };
 
 export const updateSelectedSavedDeviceConnection = (update: {

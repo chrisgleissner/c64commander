@@ -513,9 +513,25 @@ describe("savedDevices store", () => {
       type: "Lab Ultimate",
       typeSource: "USER",
       lastKnownProduct: "U64E",
-      lastKnownHostname: "u64",
-      lastKnownUniqueId: "UID-U64",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
     });
+  });
+
+  it("forgets the machine identity of an entry whose host is edited, so it is not taken for the old machine", async () => {
+    const store = await loadStore();
+    const { areSavedEntriesSameDevice } = await import("@/lib/savedDevices/sameDevice");
+    const base = { httpPort: 80, ftpPort: 21, telnetPort: 23, lastKnownProduct: "C64U" as const, hasPassword: false };
+    store.addSavedDevice({ ...base, id: "wired", name: "Wired", host: "192.0.2.46" });
+    store.addSavedDevice({ ...base, id: "wireless", name: "Wireless", host: "192.0.2.47" });
+    for (const id of ["wired", "wireless"]) {
+      store.completeSavedDeviceVerification(id, { product: "C64 Ultimate", hostname: "c64u", unique_id: "5D0464" });
+    }
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(true);
+
+    store.updateSavedDevice("wireless", { host: "198.51.100.30" });
+
+    expect(areSavedEntriesSameDevice("wired", "wireless")).toBe(false);
   });
 
   it("updates inferred type from successful verification after a host change", async () => {
