@@ -52,7 +52,6 @@ import {
   type PlayFileCategory,
 } from "@/lib/playback/fileTypes";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
-import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
@@ -110,6 +109,7 @@ import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedC
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
@@ -2444,10 +2444,12 @@ export default function PlayFilesPage() {
     [pendingDurationOverrideMs, playlistItemDuration],
   );
 
-  const playlistTotals = useMemo(() => {
-    const durations = playlist.map((item, index) => effectivePlaylistItemDuration(item, index));
-    return calculatePlaylistTotals(durations, playedMs);
-  }, [playlist, playedMs, effectivePlaylistItemDuration]);
+  const playlistTotals = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
+    currentIndex,
+    elapsedMs: displayElapsedMs,
+    shuffleEnabled: traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  });
 
   const previewFilteredPlaylist = queryFilteredPlaylist.previewPlaylist;
   const filteredPlaylist = queryFilteredPlaylist.viewAllPlaylist;

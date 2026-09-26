@@ -381,6 +381,23 @@ export const seededShuffleIds = (ids: string[], seed: number) => {
   return shuffled;
 };
 
+/** Playlist indices in the order Next walks them, from the same seeded order the resolvers below use. */
+export const resolvePlayOrderIndices = (
+  playlist: PlaylistItem[],
+  shuffleEnabled: boolean,
+  shuffleSeed: number | null,
+): number[] => {
+  if (!shuffleEnabled || shuffleSeed === null) return playlist.map((_, index) => index);
+  const indexById = new Map<string, number>();
+  playlist.forEach((item, index) => {
+    if (!indexById.has(item.id)) indexById.set(item.id, index);
+  });
+  return seededShuffleIds(
+    playlist.map((item) => item.id),
+    shuffleSeed,
+  ).map((id) => indexById.get(id) ?? -1);
+};
+
 const resolveShuffleOrderPosition = (playlist: PlaylistItem[], currentIndex: number, order: string[]) => {
   const currentId = currentIndex >= 0 ? playlist[currentIndex]?.id : undefined;
   const position = currentId ? order.indexOf(currentId) : -1;

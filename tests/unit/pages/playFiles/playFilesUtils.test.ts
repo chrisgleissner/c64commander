@@ -37,6 +37,7 @@ import {
   seededShuffleIds,
   generateShuffleSeed,
   resolveNextPlaylistIndex,
+  resolvePlayOrderIndices,
   resolvePreviousPlaylistIndex,
   canAdvanceNext,
   canAdvancePrevious,
@@ -665,6 +666,25 @@ describe("playFilesUtils", () => {
         const before = [...playlist];
         resolveNextPlaylistIndex(playlist, 0, false, true, 999);
         expect(playlist).toEqual(before);
+      });
+    });
+
+    describe("resolvePlayOrderIndices", () => {
+      it("lists the curated order when shuffle is off", () => {
+        expect(resolvePlayOrderIndices(playlist, false, 1234)).toEqual(playlist.map((_, index) => index));
+      });
+
+      it("lists indices in exactly the order Next walks them under shuffle", () => {
+        const seed = 1234;
+        const order = resolvePlayOrderIndices(playlist, true, seed);
+        const walked = [order[0]];
+        let next = resolveNextPlaylistIndex(playlist, order[0], false, true, seed);
+        while (next !== null) {
+          walked.push(next);
+          next = resolveNextPlaylistIndex(playlist, next, false, true, seed);
+        }
+        expect(order).toEqual(walked);
+        expect(order).not.toEqual(playlist.map((_, index) => index));
       });
     });
 
