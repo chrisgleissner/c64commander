@@ -65,6 +65,7 @@ export const PlaybackSettingsPanel = ({
               onValueChange={onDurationSliderChange}
               onValueCommit={onDurationSliderCommit}
               valueFormatter={(value) => formatDurationSeconds(sliderToDurationSeconds(value))}
+              aria-label="Default duration"
               data-testid="duration-slider"
             />
           </div>

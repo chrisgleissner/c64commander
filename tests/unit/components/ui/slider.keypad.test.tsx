@@ -90,7 +90,7 @@ describe("Slider — keypad navigation (HAZARD 1)", () => {
 
   it("keeps the transparent touch overlay input out of the keypad ring, so Up from the next stop lands on the thumb", () => {
     render(<Harness nativeInputMode="overlay" />);
-    const thumb = screen.getByLabelText("Test slider").querySelector<HTMLElement>("[role='slider']:not(input)")!;
+    const thumb = screen.getByRole("slider", { name: "Test slider" });
     const nativeInput = screen.getByLabelText("Native test slider");
     const nextCta = screen.getByRole("button", { name: "Next CTA" });
 

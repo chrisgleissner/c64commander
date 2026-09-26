@@ -454,6 +454,20 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-rendered-ahead")).toHaveAttribute("data-rendered-percent", "30");
   });
 
+  it("names the progress bar Playback progress, on the seekable bar and on the plain indicator", () => {
+    const { unmount } = render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 40, onSeekToFraction: () => {} })}
+      />,
+    );
+    expect(screen.getByRole("progressbar", { name: "Playback progress" })).toBeInTheDocument();
+    unmount();
+
+    render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, progressPercent: 40 })} />);
+    expect(screen.queryByTestId("playback-progress-seek")).toBeNull();
+    expect(screen.getByRole("progressbar", { name: "Playback progress" })).toBeInTheDocument();
+  });
+
   it("omits the fill once the whole tune is rendered, since there is nothing left to report", () => {
     render(
       <PlaybackControlsCard

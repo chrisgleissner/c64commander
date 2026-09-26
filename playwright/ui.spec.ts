@@ -154,7 +154,9 @@ test.describe("UI coverage", () => {
     await expect(audioMixerButton).toBeVisible();
     if ((await audioMixerButton.getAttribute("aria-expanded")) !== "true") await audioMixerButton.click();
     await snap(page, testInfo, "audio-mixer-open");
-    const slider = page.getByLabel("Vol UltiSid 1 slider");
+    const slider = page
+      .getByRole("slider", { name: "Vol UltiSid 1 slider" })
+      .locator("xpath=ancestor::*[@data-swipe-exclude='true'][1]");
     // Into view first: with the card restored open the page sits at a scroll offset that leaves the
     // slider half above the top of the viewport, and a click at its centre lands 4px from the edge.
     await slider.scrollIntoViewIfNeeded();

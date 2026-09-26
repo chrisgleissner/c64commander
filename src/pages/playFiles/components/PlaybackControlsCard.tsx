@@ -725,6 +725,7 @@ export const PlaybackControlsCard = ({
                       "relative w-full bg-transparent transition-none",
                       isScrubbing && "ring-2 ring-primary/60",
                     )}
+                    aria-label="Playback progress"
                     data-testid="playback-progress"
                     data-scrubbing={isScrubbing ? "true" : undefined}
                   />
@@ -736,6 +737,7 @@ export const PlaybackControlsCard = ({
                 // Scrubbing gets its own look so the moving bar reads as "you are
                 // dragging this", not as playback that has suddenly sped up.
                 className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
+                aria-label="Playback progress"
                 data-testid="playback-progress"
                 data-scrubbing={isScrubbing ? "true" : undefined}
               />

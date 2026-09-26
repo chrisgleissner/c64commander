@@ -29,6 +29,30 @@ export const resolveMidpointSnap = (params: {
   return Math.abs(params.value - params.midpoint) <= snapRange ? params.midpoint : params.value;
 };
 
+const SLIDER_KEY_STEP_DIRECTIONS: Readonly<Record<string, 1 | -1>> = {
+  ArrowRight: 1,
+  ArrowUp: 1,
+  PageUp: 1,
+  ArrowLeft: -1,
+  ArrowDown: -1,
+  PageDown: -1,
+};
+export const SLIDER_KEY_SKIP_MULTIPLIER = 10;
+
+export const resolveSliderKeyStepSize = (keyboardStep: number | undefined, step: number | undefined) => {
+  if (keyboardStep !== undefined && Number.isFinite(keyboardStep) && keyboardStep > 0) return keyboardStep;
+  if (step !== undefined && Number.isFinite(step) && step > 0) return step;
+  return 1;
+};
+
+/** Signed value change for a stepping key, matching the Radix slider's keys; null for any other key. */
+export const resolveSliderKeyStepDelta = (key: string, shiftKey: boolean, stepSize: number): number | null => {
+  const direction = SLIDER_KEY_STEP_DIRECTIONS[key];
+  if (direction === undefined) return null;
+  const skip = key === "PageUp" || key === "PageDown" || shiftKey;
+  return direction * stepSize * (skip ? SLIDER_KEY_SKIP_MULTIPLIER : 1);
+};
+
 export const resolveMidpointPercent = (midpoint: number, min: number, max: number) => {
   const range = max - min;
   if (!Number.isFinite(range) || range === 0) return 0;

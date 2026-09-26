@@ -291,9 +291,10 @@ not-connected / empty / single-device).
 - **SID / Audio mixer** (`data-section-label="SID"`) — per socket/UltiSID:
   - Reset — button — `home-sid-reset` — R✅ I✅
   - Master volume — slider — `home-sid-volume-master` — R✅ I✅ when the live `Vol Master` item exists.
+    Left/Right (and PageUp/PageDown, ×10) move one mixer option per press; dragging keeps its fine step.
   - Enable toggle — button — `home-sid-toggle-*` — R✅ I✅
   - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅
-  - Volume, Pan — slider ×2 — R✅ I✅
+  - Volume, Pan — slider ×2 — `home-sid-volume-*`, `home-sid-pan-*` — R✅ I✅ — one mixer option per Left/Right press, like Master volume.
 - **Streams** (`home-stream-status`) — per VIC / Audio / Debug:
   - Edit target — button — `home-stream-edit-toggle-*` — R✅ I✅
   - Start — button — `home-stream-start-*` — R✅ I✅

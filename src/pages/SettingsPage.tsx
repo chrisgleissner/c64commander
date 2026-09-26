@@ -3388,6 +3388,7 @@ export default function SettingsPage() {
                   value={[notificationDurationMs]}
                   onValueChange={([value]) => setNotificationDurationMs(value)}
                   onValueCommit={([value]) => saveNotificationDurationMs(value)}
+                  aria-label="Notification duration"
                   data-testid="settings-notification-duration-slider"
                 />
                 <HelperText>Default 4s. Range 2–8s.</HelperText>

@@ -142,6 +142,12 @@ describe("VolumeControls", () => {
     expect(screen.getByTestId("volume-slider").className).toContain("h-11");
   });
 
+  it("names the slider thumb Playback volume for screen readers", () => {
+    renderVolumeControls({ volumeMuted: false });
+
+    expect(screen.getByRole("slider", { name: "Playback volume" })).toBeInTheDocument();
+  });
+
   it("disables both controls when playback volume is locked", () => {
     renderVolumeControls({ volumeMuted: false, canControlVolume: false, profile: "compact" });
 

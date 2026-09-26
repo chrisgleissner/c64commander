@@ -116,6 +116,8 @@ export const EMPTY_SELECT_VALUE = "__empty__";
 export const EMPTY_SELECT_LABEL = "Default";
 export const SID_SLIDER_DETENT_RANGE = 0.2;
 export const SID_SLIDER_STEP = 0.01;
+/** One mixer option per key press: SID_SLIDER_STEP is a drag step, and one of those rounds back. */
+export const SID_SLIDER_KEYBOARD_STEP = 1;
 
 export type DriveControlSpec = {
   class: DriveDeviceClass;

@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "./inlineControlStyles";
+import { SID_SLIDER_KEYBOARD_STEP } from "./constants";
 
 export interface SidCardProps {
   name: string;
@@ -289,6 +290,7 @@ export function SidCard({
             min={0}
             max={volumeMax}
             step={volumeStep ?? 1}
+            keyboardStep={SID_SLIDER_KEYBOARD_STEP}
             onValueChange={volumeSlider.onValueChange}
             onValueCommit={volumeSlider.onValueCommit}
             valueFormatter={volumeValueFormatter}
@@ -299,6 +301,7 @@ export function SidCard({
             }
             disabled={!isConnected}
             className="flex-1"
+            aria-label={`${name} volume`}
             data-testid={`home-sid-volume-${testIdSuffix}`}
           />
         </div>
@@ -316,6 +319,7 @@ export function SidCard({
             min={0}
             max={panMax}
             step={panStep ?? 1}
+            keyboardStep={SID_SLIDER_KEYBOARD_STEP}
             onValueChange={panSlider.onValueChange}
             onValueCommit={panSlider.onValueCommit}
             valueFormatter={panValueFormatter}
@@ -326,6 +330,7 @@ export function SidCard({
             }
             disabled={!isConnected}
             className="flex-1"
+            aria-label={`${name} pan`}
             data-testid={`home-sid-pan-${testIdSuffix}`}
           />
         </div>
