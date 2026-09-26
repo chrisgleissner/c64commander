@@ -104,4 +104,32 @@ describe("discovering a second Ultimate that shares a saved device's hostname", 
     expect(persisted.deviceId).not.toBe("first");
     expect(getSavedDevicesSnapshot().devices.find((device) => device.id === "first")?.host).toBe("192.0.2.46");
   });
+
+  it("does not take over a saved entry whose address was handed by DHCP to a machine with another unique id", async () => {
+    const { addSavedDevice, getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { persistDiscoveredDevice } = await import("@/lib/deviceDiscovery/discoveryManager");
+    addSavedDevice({
+      id: "first",
+      name: "Living room",
+      host: "198.51.100.30",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: "lab-ultimate",
+      lastKnownUniqueId: "5D0464",
+      hasPassword: true,
+    });
+
+    const persisted = persistDiscoveredDevice(
+      { ...secondMachine, hostname: "bench-ultimate", id: "id:8a7f21@bench-ultimate", confidence: "verified" } as never,
+      { select: false },
+    );
+
+    expect(persisted.deviceId).not.toBe("first");
+    expect(getSavedDevicesSnapshot().devices.find((device) => device.id === "first")).toMatchObject({
+      lastKnownUniqueId: "5D0464",
+      hasPassword: true,
+    });
+  });
 });
