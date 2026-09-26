@@ -178,8 +178,10 @@ interface sent a frame needs root on the bench host.
   is still restarted, because its sender filter changes.
 - Files on the connected machine count as local on either of its saved entries, using the
   `unique_id` and hostname the connected device reports (`connection/connectedDeviceIdentity.ts`).
-- The web server sends the configured password to the configured device also when a client uses the
-  device's other name or address, when both resolve to overlapping addresses (`web/server/src/hostPolicy.ts`).
+- The web server adds the configured password to requests for the configured host name, and for an
+  IP literal that the configured name resolves to, so a client can use the device's other address.
+  It never resolves another name for this, and gives up on a lookup after two seconds
+  (`web/server/src/hostPolicy.ts`).
 
 ## Not handled
 
