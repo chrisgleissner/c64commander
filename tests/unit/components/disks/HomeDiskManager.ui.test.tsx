@@ -18,6 +18,7 @@ import { reportUserError } from "@/lib/uiErrors";
 import { mountDiskToDrive, getMaterializedWorkPath, hasShownArchiveDiskWriteBackAdvisory } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
+import { resetUploadMountsForTests } from "@/lib/disks/uploadMountRegistry";
 
 // Helpers
 const createMockDisk = (overrides: any = {}) => ({
@@ -514,6 +515,50 @@ describe("HomeDiskManager UI & Interactions", () => {
     expect(screen.getByTestId("drive-mounted-label-a")).not.toHaveTextContent("c64commander-disk-work");
 
     (getMaterializedWorkPath as any).mockReturnValue(null);
+  });
+
+  it("keeps an upload-mounted disk's name and group on the card after the drive reports its temporary upload path, across a page remount", async () => {
+    resetUploadMountsForTests();
+    const disks = [
+      createMockDisk({ id: "game-1", name: "Game disk one", path: "/game-1.d64", location: "local", group: "Game" }),
+      createMockDisk({ id: "game-2", name: "Game disk two", path: "/game-2.d64", location: "local", group: "Game" }),
+    ];
+    let drivesResult = {
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+      dataUpdatedAt: 1,
+    };
+    (useDiskLibrary as any).mockReturnValue({ disks, runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    (useC64Drives as any).mockImplementation(() => drivesResult);
+    (mountDiskToDrive as any).mockResolvedValue({ persistence: "transient", writeBackTarget: { kind: "unavailable" } });
+
+    const view = render(<HomeDiskManager />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Mount" })[0]);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Game disk one");
+    });
+
+    drivesResult = {
+      data: {
+        drives: [
+          { a: createMockDrive({ image_file: "/Temp/cache/upload/temp0082", image_path: "" }) },
+          { b: createMockDrive() },
+        ],
+      },
+      dataUpdatedAt: Date.now() + 1000,
+    };
+    view.rerender(<HomeDiskManager />);
+    await waitFor(() => {
+      expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Game disk one");
+    });
+    expect(screen.getByRole("button", { name: "Drive A next disk" })).toBeInTheDocument();
+
+    view.unmount();
+    render(<HomeDiskManager />);
+    expect(screen.getByTestId("drive-mounted-label-a")).toHaveTextContent("Game disk one");
+    expect(screen.getByRole("button", { name: "Drive A next disk" })).toBeInTheDocument();
+    resetUploadMountsForTests();
   });
 
   it("clears a drive power override when fresh drive data after the toggle disagrees", async () => {

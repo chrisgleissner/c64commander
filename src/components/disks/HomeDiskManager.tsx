@@ -74,6 +74,8 @@ import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
 import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
+import { forgetUploadMount, noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
+import * as mountSupport from "@/components/disks/driveMountSupport";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
@@ -479,45 +481,16 @@ export const HomeDiskManager = () => {
 
   useEffect(() => {
     if (!drivesData?.drives?.length || drivesDataUpdatedAt <= 0) return;
+    mountSupport.learnUploadMountsFromPoll(api.getDeviceHost(), drivesData, drivesDataUpdatedAt);
     setMountedByDrive((prev) => {
       let changed = false;
       const next = { ...prev };
       Object.keys(next).forEach((drive) => {
         const setAt = mountedByDriveSetAtRef.current[drive];
         if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
-        const overrideDiskId = next[drive];
-        if (overrideDiskId) {
-          const overriddenDisk = disksById[overrideDiskId];
-          if (overriddenDisk?.location === "local") {
-            // resolveMountedDiskId's poll-based fallback only ever matches
-            // "ultimate"-location disks (it compares image_path/image_file
-            // against disk.path), so a local (uploaded-blob) disk's mount can
-            // never be re-derived from the poll once this override is gone.
-            // Clearing it as soon as any poll lands (the original design,
-            // intended for error/power overrides) made rotation and
-            // eject-before-delete stop working the instant the mount
-            // succeeded. Keep the override while the poll still shows the
-            // same uploaded filename mounted; only clear when the drive
-            // genuinely reports something else (empty or a different
-            // image). See HARD9-038.
-            const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
-            const polledBasename = driveInfo?.image_file ? getDiskName(driveInfo.image_file) : null;
-            // HARD19-007: a materialized mount path-mounts an internal work file
-            // (c64commander-disk-work-<drive>.<type>), so the poll reports the work
-            // filename, never the original disk's basename — which cleared the
-            // override on the first poll, degrading the label to the work filename
-            // and losing rotation + delete-protection. Also keep the override when
-            // the poll shows the drive's expected work file.
-            const workPath = getMaterializedWorkPath(drive as "a" | "b");
-            const workBasename = workPath ? getDiskName(workPath) : null;
-            if (
-              polledBasename &&
-              (polledBasename === getDiskName(overriddenDisk.path) || polledBasename === workBasename)
-            ) {
-              return;
-            }
-          }
-        }
+        const polledImageFile = mountSupport.findPolledDrive(drivesData, drive as DriveKey)?.image_file;
+        const workPath = getMaterializedWorkPath(drive as DriveKey);
+        if (mountSupport.keepsLocalMountOverride(disksById[next[drive]], polledImageFile, workPath)) return;
         delete next[drive];
         delete mountedByDriveSetAtRef.current[drive];
         changed = true;
@@ -721,6 +694,7 @@ export const HomeDiskManager = () => {
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
+      noteDiskMountOutcome(api.getDeviceHost(), drive, disk.id, outcome?.persistence);
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk mounted",
@@ -833,6 +807,7 @@ export const HomeDiskManager = () => {
       // device the disk was actually materialized on — never overwriting the local
       // source with a different device's stale work file.
       const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies(), api.getDeviceHost());
+      forgetUploadMount(api.getDeviceHost(), drive);
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
@@ -975,14 +950,18 @@ export const HomeDiskManager = () => {
     if (mountedOverride === "") return null;
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
-    // HARD19-007: a materialized mount path-mounts an internal work file, so the
-    // poll reports the work filename. Map it back to the materialized disk so
-    // rotation and delete-while-mounted protection keep working after the
-    // component's optimistic override is lost.
+    // HARD19-007: the poll reports a materialized mount's internal work file, never the disk.
     const workPath = getMaterializedWorkPath(drive);
     if (workPath && getDiskName(driveInfo.image_file) === getDiskName(workPath)) {
       return getMaterializedDiskId(drive);
     }
+    const uploadedDiskId = mountSupport.resolveUploadMountedDiskId(
+      api.getDeviceHost(),
+      drive,
+      driveInfo,
+      drivesDataUpdatedAt,
+    );
+    if (uploadedDiskId && disksById[uploadedDiskId]) return uploadedDiskId;
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;
     const disk = diskLibrary.disks.find((entry) => entry.location === "ultimate" && entry.path === fullPath);
