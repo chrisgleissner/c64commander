@@ -44,7 +44,7 @@ const measureAnchors = (testIds: readonly string[]): Rect[] => {
 };
 
 const hideAppFromAssistiveTech = (): (() => void) | undefined => {
-  const root = typeof document === "undefined" ? null : document.getElementById("root");
+  const root = document.getElementById("root");
   if (!root) return undefined;
   const previous = root.getAttribute("aria-hidden");
   root.setAttribute("aria-hidden", "true");
