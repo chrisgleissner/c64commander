@@ -31,7 +31,7 @@ COPILOT_TOKEN_DIR = USER_CONFIG_ROOT / "providers" / "copilot"
 LOOP_STATE_PATH = STATE_ROOT / "loop-state.json"
 ITERATION_LOG_PATH = STATE_ROOT / "iteration-log.md"
 
-DEFAULT_C64U_HOST = os.environ.get("C64U_HOST", "192.168.1.13")
+DEFAULT_C64U_HOST = os.environ.get("C64U_HOST", "c64u")
 APP_PACKAGE = "uk.gleissner.c64commander"
 APP_ACTIVITY = f"{APP_PACKAGE}/.MainActivity"
 DEFAULT_MAX_ITERATIONS = int(os.environ.get("AGENT_MAX_ITERATIONS", "5"))
