@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
+  Encoding: { UTF8: "utf8" },
   Filesystem: {
     stat: vi.fn(async () => ({ type: "file", size: 1 })),
     mkdir: vi.fn(async () => undefined),
@@ -517,7 +518,7 @@ describe("hvscBrowseIndexStore", () => {
       .mocked(Filesystem.writeFile)
       .mock.calls.find((call) => call[0]?.path === "hvsc/index/hvsc-browse-index-v1.json");
     expect(fullSnapshotWrite).toBeDefined();
-    const written = JSON.parse(Buffer.from(fullSnapshotWrite![0].data, "base64").toString("utf-8"));
+    const written = JSON.parse(fullSnapshotWrite![0].data as string);
     expect(written.folders).toEqual(staleFolders);
   });
 
@@ -535,7 +536,7 @@ describe("hvscBrowseIndexStore", () => {
     const fullSnapshotWrite = vi
       .mocked(Filesystem.writeFile)
       .mock.calls.find((call) => call[0]?.path === "hvsc/index/hvsc-browse-index-v1.json");
-    const written = JSON.parse(Buffer.from(fullSnapshotWrite![0].data, "base64").toString("utf-8"));
+    const written = JSON.parse(fullSnapshotWrite![0].data as string);
     expect(written.folders["/DEMOS/A"]).toBeDefined();
   });
 
@@ -662,7 +663,7 @@ describe("hvscBrowseIndexStore", () => {
       throw new Error("atob unavailable");
     });
     vi.mocked(Filesystem.readFile)
-      .mockResolvedValueOnce({ data: "not-base64" } as never)
+      .mockResolvedValueOnce({ data: "notbase64" } as never)
       .mockRejectedValueOnce(new Error("ENOENT: no such file"));
 
     const loaded = await loadHvscBrowseIndexSnapshot();

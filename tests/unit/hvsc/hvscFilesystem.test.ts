@@ -88,6 +88,7 @@ vi.mock("@capacitor/core", () => ({
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
+  Encoding: { UTF8: "utf8" },
   Filesystem: {
     getUri: vi.fn(async ({ path }: { path: string }) => ({
       uri: `file:///data/user/0/uk.gleissner.c64commander/files/${normalizePath(path)}`,
@@ -109,11 +110,15 @@ vi.mock("@capacitor/filesystem", () => ({
         size: entry.data?.length ?? 0,
       } as FilesystemStatResult;
     }),
-    readFile: vi.fn(async ({ path }: { path: string }) => {
+    readFile: vi.fn(async ({ path, encoding }: { path: string; encoding?: string }) => {
       const normalized = normalizePath(path);
       const entry = files.get(normalized);
       if (!entry || entry.type !== "file") {
         throw new Error(`Missing file: ${normalized}`);
+      }
+      // Stored data stands for native bytes as base64; a native UTF-8 read returns them decoded.
+      if (capacitorState.native && encoding === "utf8") {
+        return { data: Buffer.from(entry.data ?? "", "base64").toString("utf-8") };
       }
       return { data: entry.data ?? "" };
     }),

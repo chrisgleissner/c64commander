@@ -11,7 +11,7 @@ import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
-import { readDataFileText, resolveLibraryPath } from "./hvscFilesystem";
+import { readDataFileText, resolveLibraryPath, writeDataFileText } from "./hvscFilesystem";
 import { runWithHvscPerfScope } from "./hvscPerformance";
 
 // Treat file-not-found errors as expected absence (first launch, after a wipe)
@@ -242,18 +242,6 @@ const createSeededSong = (
   return song;
 };
 
-const encodeUtf8Base64 = (value: string) => {
-  if (typeof btoa === "function") {
-    const bytes = new TextEncoder().encode(value);
-    let binary = "";
-    bytes.forEach((byte) => {
-      binary += String.fromCharCode(byte);
-    });
-    return btoa(binary);
-  }
-  return Buffer.from(value, "utf-8").toString("base64");
-};
-
 const hashPath = (value: string) =>
   Math.abs(Array.from(value).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0));
 
@@ -462,7 +450,7 @@ const buildPersistedMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot): Pe
     };
     // Written only when there is something to write, so an archive that has not been hydrated
     // persists exactly the same bytes it did before.
-    if (song.durationsSeconds && song.durationsSeconds.length > 1) entry.durations = [...song.durationsSeconds];
+    if (song.durationsSeconds && song.durationsSeconds.length > 1) entry.durations = song.durationsSeconds;
     if (song.canonicalTitle) entry.title = song.canonicalTitle;
     if (song.canonicalAuthor) entry.author = song.canonicalAuthor;
     if (song.released) entry.released = song.released;
@@ -488,7 +476,7 @@ export const __parseMediaIndexSnapshotForTest = parseMediaIndexSnapshot;
  * Whether the last save already reported the downgrade, per persistence route.
  *
  * Which snapshot a library gets is a *state*, not an event: it follows from the song count and
- * changes almost never. Metadata hydration saves every five seconds for as long as it runs, so
+ * changes almost never. Metadata hydration saves periodically for as long as it runs, so
  * logging it on each save said the same sentence over and over — on a real 61k-song HVSC it took
  * 313 of the diagnostics log's 500 entries and pushed out everything worth reading. Announce the
  * transition instead, and again if a library ever comes back under the limit.
@@ -602,21 +590,12 @@ export const clearHvscBrowseIndexSnapshot = async () => {
 
 const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   await ensureFilesystemIndexDirectory();
-  await Filesystem.writeFile({
-    directory: Directory.Data,
-    path: STORAGE_PATH,
-    data: encodeUtf8Base64(JSON.stringify(snapshot)),
-  });
+  await writeDataFileText(STORAGE_PATH, JSON.stringify(snapshot));
 };
 
 const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
-  const mediaIndexSnapshot = buildPersistedMediaIndexSnapshot(snapshot);
   await ensureFilesystemIndexDirectory();
-  await Filesystem.writeFile({
-    directory: Directory.Data,
-    path: MEDIA_INDEX_STORAGE_PATH,
-    data: encodeUtf8Base64(JSON.stringify(mediaIndexSnapshot)),
-  });
+  await writeDataFileText(MEDIA_INDEX_STORAGE_PATH, JSON.stringify(buildPersistedMediaIndexSnapshot(snapshot)));
 };
 
 const ensureFilesystemIndexDirectory = async () => {

@@ -7,7 +7,7 @@
  */
 
 import { Capacitor } from "@capacitor/core";
-import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { HvscFolderListing, HvscSong } from "./hvscTypes";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -111,8 +111,23 @@ export const readDataFileText = async (path: string): Promise<string | null> => 
       logFilesystemWarning("File-server read failed; falling back to the bridge", { path, error });
     }
   }
-  const result = await Filesystem.readFile({ directory: Directory.Data, path });
-  return typeof result.data === "string" ? decodeBase64Text(result.data) : null;
+  const result = await Filesystem.readFile({ directory: Directory.Data, path, encoding: Encoding.UTF8 });
+  if (typeof result.data !== "string") return null;
+  // The web platform ignores the encoding and returns what was stored: base64 from a write without one.
+  if (Capacitor.isNativePlatform() || !BASE64_TEXT.test(result.data)) return result.data;
+  return decodeBase64Text(result.data);
+};
+
+const BASE64_TEXT = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/**
+ * Write a text file into the Data directory as UTF-8, the counterpart of {@link readDataFileText}.
+ *
+ * Passing the text straight to the bridge avoids encoding it to base64 in JavaScript, which for a
+ * 13.2 MB snapshot cost several full-size copies of it per save. The bytes on disk are identical.
+ */
+export const writeDataFileText = async (path: string, text: string) => {
+  await Filesystem.writeFile({ directory: Directory.Data, path, data: text, encoding: Encoding.UTF8 });
 };
 
 /**

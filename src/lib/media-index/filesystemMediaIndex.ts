@@ -8,7 +8,7 @@
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { addLog } from "@/lib/logging";
-import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
+import { readDataFileText, writeDataFileText } from "@/lib/hvsc/hvscFilesystem";
 import type { MediaIndexSnapshot, MediaIndexStorage } from "./mediaIndex";
 
 const STORAGE_PATH = "hvsc/index/media-index-v2.json";
@@ -28,18 +28,6 @@ const describeError = (error: unknown, extras: Record<string, unknown> = {}) => 
   error: (error as Error)?.message ?? String(error),
   errorName: (error as Error)?.name,
 });
-
-const encodeUtf8Base64 = (value: string) => {
-  if (typeof btoa === "function") {
-    const bytes = new TextEncoder().encode(value);
-    let binary = "";
-    bytes.forEach((byte) => {
-      binary += String.fromCharCode(byte);
-    });
-    return btoa(binary);
-  }
-  return Buffer.from(value, "utf-8").toString("base64");
-};
 
 const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;
@@ -89,11 +77,6 @@ export class FilesystemMediaIndexStorage implements MediaIndexStorage {
     } catch (error) {
       if (!isDirectoryExistsError(error)) throw error;
     }
-    await Filesystem.writeFile({
-      directory: Directory.Data,
-      path: STORAGE_PATH,
-      data: encodeUtf8Base64(JSON.stringify(snapshot)),
-      recursive: true,
-    });
+    await writeDataFileText(STORAGE_PATH, JSON.stringify(snapshot));
   }
 }
