@@ -19,6 +19,7 @@ type UploadDriveKey = "a" | "b";
 export type UploadMountRecord = {
   diskId: string;
   diskName?: string;
+  startedAt?: number;
   imagePath: string | null;
   recordedAt: number;
 };
@@ -34,6 +35,13 @@ const withoutRecord = (state: UploadMountState, key: string): UploadMountState =
   return next;
 };
 
+// A drive that still reports another image this long after the mount holds something else.
+const UPLOAD_PATH_LEARN_WINDOW_MS = 15_000;
+
+const looksLikeUploadOf = (imagePath: string, diskName: string | undefined) =>
+  /\/cache\/upload\//i.test(imagePath) ||
+  (diskName !== undefined && imagePath.split("/").pop()?.toLowerCase() === diskName.toLowerCase());
+
 export const reconcileUploadMount = (
   state: UploadMountState,
   deviceHost: string,
@@ -45,7 +53,12 @@ export const reconcileUploadMount = (
   const record = state[key];
   if (!record || polledAt < record.recordedAt) return state;
   if (!polledImagePath) return withoutRecord(state, key);
-  if (record.imagePath === null) return { ...state, [key]: { ...record, imagePath: polledImagePath } };
+  if (record.imagePath === null) {
+    if (looksLikeUploadOf(polledImagePath, record.diskName)) {
+      return { ...state, [key]: { ...record, imagePath: polledImagePath } };
+    }
+    return polledAt - record.recordedAt > UPLOAD_PATH_LEARN_WINDOW_MS ? withoutRecord(state, key) : state;
+  }
   return record.imagePath === polledImagePath ? state : withoutRecord(state, key);
 };
 
@@ -110,15 +123,19 @@ export const noteDiskMountOutcome = (
   diskId: string,
   persistence: DiskMountPersistence | undefined,
   diskName?: string,
-  mountedAt = Date.now(),
+  mountStartedAt = Date.now(),
 ) => {
   const key = recordKey(deviceHost, drive);
-  if ((uploadMounts[key]?.recordedAt ?? -Infinity) > mountedAt) return;
+  const existing = uploadMounts[key];
+  if ((existing?.startedAt ?? existing?.recordedAt ?? -Infinity) > mountStartedAt) return;
   if (persistence !== "transient") {
     replaceUploadMounts(withoutRecord(uploadMounts, key));
     return;
   }
-  replaceUploadMounts({ ...uploadMounts, [key]: { diskId, diskName, imagePath: null, recordedAt: mountedAt } });
+  replaceUploadMounts({
+    ...uploadMounts,
+    [key]: { diskId, diskName, imagePath: null, startedAt: mountStartedAt, recordedAt: Date.now() },
+  });
 };
 
 export const forgetUploadMount = (deviceHost: string, drive: UploadDriveKey) =>

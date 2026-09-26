@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useC64ConfigItems, useC64Drives } from "@/hooks/useC64Connection";
 import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
 import { getC64API } from "@/lib/c64api";
 import { getUploadMountedDiskName } from "@/lib/disks/uploadMountRegistry";
-import { findPolledDrive } from "@/components/disks/driveMountSupport";
+import { findPolledDrive, learnUploadMountsFromPoll } from "@/components/disks/driveMountSupport";
 import { buildDrivePath } from "@/components/disks/HomeDiskManagerSupport";
 import { DRIVE_A_HOME_ITEMS, DRIVE_B_HOME_ITEMS, HOME_SUMMARY_QUERY_OPTIONS } from "../constants";
 
@@ -45,6 +45,10 @@ export function useDriveData(isConnected: boolean) {
     () => new Map(normalizedDriveModel.devices.map((entry) => [entry.class, entry])),
     [normalizedDriveModel.devices],
   );
+
+  useEffect(() => {
+    if (drivesData) learnUploadMountsFromPoll(getC64API().getDeviceHost(), drivesData, dataUpdatedAt);
+  }, [dataUpdatedAt, drivesData]);
 
   const driveSummaryItems = useMemo(() => {
     const entries = [

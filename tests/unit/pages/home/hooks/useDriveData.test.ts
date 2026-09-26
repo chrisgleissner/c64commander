@@ -23,7 +23,11 @@ vi.mock("@/lib/c64api", async (importOriginal) => ({
 }));
 
 import { useDriveData } from "@/pages/home/hooks/useDriveData";
-import { noteDiskMountOutcome, resetUploadMountsForTests } from "@/lib/disks/uploadMountRegistry";
+import {
+  getUploadMountedDiskId,
+  noteDiskMountOutcome,
+  resetUploadMountsForTests,
+} from "@/lib/disks/uploadMountRegistry";
 
 describe("useDriveData drivesLoading", () => {
   beforeEach(() => {
@@ -50,14 +54,14 @@ describe("useDriveData mounted label", () => {
   });
 
   it("names a disk mounted by upload instead of showing the device's temporary upload file", () => {
-    noteDiskMountOutcome("c64u", "b", "frogger", "transient", "Frogger.d64", 1000);
+    noteDiskMountOutcome("c64u", "b", "frogger", "transient", "Frogger.d64");
     drivesQuery.data = {
       drives: [
         { b: { enabled: true, bus_id: 9, type: "1541", image_file: "/Temp/cache/upload/temp0082", image_path: "" } },
       ],
       errors: [],
     };
-    drivesQuery.dataUpdatedAt = 2000;
+    drivesQuery.dataUpdatedAt = Date.now() + 1000;
 
     const summary = renderHook(() => useDriveData(true)).result.current.driveSummaryItems.find(
       (item) => item.key === "b",
@@ -80,5 +84,28 @@ describe("useDriveData mounted label", () => {
     );
 
     expect(summary?.mountedLabel).toContain("Katakis.d81");
+  });
+});
+
+describe("useDriveData upload mount bookkeeping", () => {
+  beforeEach(() => {
+    resetUploadMountsForTests();
+  });
+
+  it("commits what its own poll learns, so the record is kept when no Disks page is open", () => {
+    noteDiskMountOutcome("c64u", "a", "mydisk", "transient", "MyDisk.d64");
+    const polledAt = Date.now() + 1000;
+    drivesQuery.data = {
+      drives: [
+        { a: { enabled: true, bus_id: 8, type: "1541", image_file: "/Temp/cache/upload/temp0090", image_path: "" } },
+      ],
+      errors: [],
+    };
+    drivesQuery.dataUpdatedAt = polledAt;
+
+    renderHook(() => useDriveData(true));
+
+    expect(getUploadMountedDiskId("c64u", "a", "/Temp/cache/upload/temp0090", polledAt + 60_000)).toBe("mydisk");
+    expect(getUploadMountedDiskId("c64u", "a", "/Temp/cache/upload/temp0091", polledAt + 60_000)).toBeNull();
   });
 });

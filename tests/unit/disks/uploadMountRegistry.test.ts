@@ -8,7 +8,7 @@
 
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   forgetUploadMount,
   getUploadMountedDiskId,
@@ -62,7 +62,22 @@ describe("upload mount resolution", () => {
 
 describe("upload mount registry", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ now: 1000 });
     resetUploadMountsForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does not take an image mounted some other way for the uploaded disk, and lets the record go", () => {
+    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", "MyDisk.d64", 1000);
+    learnUploadMountFromPoll("c64u", "a", "/USB2/Games/Other.d64", 2000);
+    expect(getUploadMountedDiskName("c64u", "a", "/USB2/Games/Other.d64", 2000)).toBeNull();
+
+    learnUploadMountFromPoll("c64u", "a", "/USB2/Games/Other.d64", 20_000);
+    learnUploadMountFromPoll("c64u", "a", TEMP_PATH, 21_000);
+    expect(getUploadMountedDiskName("c64u", "a", TEMP_PATH, 21_000)).toBeNull();
   });
 
   it("records only transient mounts and survives a module reload through session storage", async () => {
