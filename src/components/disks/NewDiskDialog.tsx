@@ -96,6 +96,8 @@ export function NewDiskDialog({
   const [error, setError] = useState<string | null>(null);
 
   const routingEpoch = useConnectionRoutingEpoch();
+  // A folder typed for the previous device is not a folder on this one.
+  useEffect(() => setChosenFolder(null), [routingEpoch]);
   useEffect(() => {
     if (!open || defaultFolder !== undefined) return undefined;
     let cancelled = false;

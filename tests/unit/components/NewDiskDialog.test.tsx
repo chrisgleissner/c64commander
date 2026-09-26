@@ -103,6 +103,7 @@ describe("NewDiskDialog", () => {
     setup(undefined, listStorageRoots);
     await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/SD"));
 
+    fireEvent.change(screen.getByTestId("new-disk-folder"), { target: { value: "/SD/typed-for-the-old-device" } });
     roots = ["Flash", "USB0"];
     act(() => {
       window.dispatchEvent(new CustomEvent("c64u-connection-change", { detail: { baseUrl: "http://u64" } }));
