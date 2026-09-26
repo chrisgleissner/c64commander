@@ -97,6 +97,7 @@ export function NewDiskDialog({
   useEffect(() => {
     if (!open || defaultFolder !== undefined) return undefined;
     let cancelled = false;
+    setDeviceFolder(null);
     listStorageRoots()
       .then((roots) => {
         if (!cancelled) setDeviceFolder(pickNewDiskFolder(roots));
@@ -138,6 +139,7 @@ export function NewDiskDialog({
     setName("");
     setLabel("");
     setTracks("35");
+    setChosenFolder(null);
     setError(null);
     setBusy(false);
   };

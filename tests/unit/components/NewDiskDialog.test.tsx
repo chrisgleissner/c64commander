@@ -72,6 +72,31 @@ describe("NewDiskDialog", () => {
     expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB2/games");
   });
 
+  it("offers the storage the device lists now, not a folder from an earlier visit, after a create and reopen", async () => {
+    let roots = ["SD", "USB2"];
+    const listStorageRoots = vi.fn(async () => roots);
+    const createDisk = vi.fn(async (args) => ({
+      path: "/p",
+      fileName: "x",
+      filePath: "/x",
+      label: "l",
+      kind: args.kind,
+    }));
+    const props = { onOpenChange: vi.fn(), createDisk: createDisk as never, listStorageRoots };
+    const view = render(<NewDiskDialog open {...props} />);
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/SD"));
+    fireEvent.change(screen.getByTestId("new-disk-folder"), { target: { value: "/SD/old" } });
+    fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
+    fireEvent.click(screen.getByTestId("new-disk-create"));
+    await waitFor(() => expect(createDisk).toHaveBeenCalledTimes(1));
+
+    view.rerender(<NewDiskDialog open={false} {...props} />);
+    roots = ["Flash", "USB0"];
+    view.rerender(<NewDiskDialog open {...props} />);
+
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB0"));
+  });
+
   it("shows a validation error for out-of-range tracks and keeps Create disabled", async () => {
     setup();
     await deviceFolderShown();
