@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { isSameMachine, machineIdentityKey, savedEntryMachineIdentity } from "@/lib/savedDevices/machineIdentity";
+import {
+  deviceInfoMachineIdentity,
+  isSameMachine,
+  machineIdentityKey,
+  savedEntryMachineIdentity,
+} from "@/lib/savedDevices/machineIdentity";
 import type { SavedDevice } from "@/lib/savedDevices/store";
 
 const entry = (id: string, lastKnownUniqueId: string | null, lastKnownHostname: string | null): SavedDevice => ({
@@ -44,6 +49,14 @@ describe("machine identity", () => {
     expect(
       isSameMachine({ uniqueId: "MY-ULTIMATE", hostname: null }, { uniqueId: "MY-ULTIMATE", hostname: null }),
     ).toBe(false);
+  });
+
+  it("reads the identity from a /v1/info reply", () => {
+    expect(deviceInfoMachineIdentity({ unique_id: " ABC123 ", hostname: " ultimate " })).toEqual({
+      uniqueId: "ABC123",
+      hostname: "ultimate",
+    });
+    expect(deviceInfoMachineIdentity(null)).toEqual({ uniqueId: null, hostname: null });
   });
 
   it("reads a saved entry's verified identity before the one stored with it", () => {

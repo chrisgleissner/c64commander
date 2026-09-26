@@ -78,8 +78,9 @@ import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demoOfferMemory";
 import { isNativePlatform } from "@/lib/native/platform";
 import { clearProbeFailureLog, isNewProbeFailure, noteProbeAnswered } from "@/lib/connection/probeFailureLog";
-import { setConnectedDeviceUniqueId } from "@/lib/connection/connectedDeviceIdentity";
-import { savedEntryHasUniqueId } from "@/lib/savedDevices/sameDevice";
+import { setConnectedDeviceIdentity } from "@/lib/connection/connectedDeviceIdentity";
+import { savedEntryIsMachine } from "@/lib/savedDevices/sameDevice";
+import { deviceInfoMachineIdentity } from "@/lib/savedDevices/machineIdentity";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -528,7 +529,7 @@ export const setSavedDeviceSwitchProbeWindow = (open: boolean) => {
 
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
   snapshot = Object.freeze({ ...snapshot, ...patch });
-  setConnectedDeviceUniqueId(snapshot.state === "REAL_CONNECTED" ? snapshot.deviceInfo?.unique_id : null);
+  setConnectedDeviceIdentity(snapshot.state === "REAL_CONNECTED" ? snapshot.deviceInfo : null);
   // The simulated device's identity is not the saved device's: stamping it there made the user's
   // real device read as a mismatch the next time it answered.
   if (patch.deviceInfo && snapshot.state !== "DEMO_ACTIVE" && !isSimulatedDeviceTarget()) {
@@ -876,14 +877,14 @@ const tryReachableSavedDeviceFallback = async (
       const probe = await probeInfoWithConnectionConfig(loadSwitchConnectionConfig({ deviceHost, password }), {
         timeoutMs: SAVED_DEVICE_SWEEP_TIMEOUT_MS,
       });
-      return probe.ok ? { device, deviceHost, password, uniqueId: probe.deviceInfo?.unique_id } : null;
+      return probe.ok ? { device, deviceHost, password, identity: deviceInfoMachineIdentity(probe.deviceInfo) } : null;
     }),
   );
 
   if (!isCurrentRun()) return false;
   const answered = probes.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
   // The selected device's other address, when saved, is the same machine and wins over another device.
-  const isSameMachine = (entry: (typeof answered)[number]) => savedEntryHasUniqueId(selectedId, entry.uniqueId);
+  const isSameMachine = (entry: (typeof answered)[number]) => savedEntryIsMachine(selectedId, entry.identity);
   const reachable = answered.find(isSameMachine) ?? answered[0];
   if (!reachable) return false;
 

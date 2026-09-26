@@ -1215,8 +1215,22 @@ describe("SettingsPage", () => {
       ...savedDevicesRef.current,
       selectedDeviceId: "saved-wired",
       devices: [
-        { ...base, id: "saved-wired", name: "Desk eth", host: "192.0.2.10", lastKnownUniqueId: "DUAL01" },
-        { ...base, id: "saved-wireless", name: "Desk wifi", host: "198.51.100.20", lastKnownUniqueId: "DUAL01" },
+        {
+          ...base,
+          id: "saved-wired",
+          name: "Desk eth",
+          host: "192.0.2.10",
+          lastKnownHostname: "desk-ultimate",
+          lastKnownUniqueId: "DUAL01",
+        },
+        {
+          ...base,
+          id: "saved-wireless",
+          name: "Desk wifi",
+          host: "198.51.100.20",
+          lastKnownHostname: "desk-ultimate",
+          lastKnownUniqueId: "DUAL01",
+        },
       ],
     };
 

@@ -30,6 +30,11 @@ export const isSameMachine = (left: MachineIdentity, right: MachineIdentity): bo
   return key !== null && key === machineIdentityKey(right);
 };
 
+/** The identity in a `/v1/info` reply. */
+export const deviceInfoMachineIdentity = (
+  info: { unique_id?: string | null; hostname?: string | null } | null | undefined,
+): MachineIdentity => ({ uniqueId: info?.unique_id?.trim() || null, hostname: info?.hostname?.trim() || null });
+
 /** The identity a saved entry last verified, else the one stored with it. */
 export const savedEntryMachineIdentity = (
   snapshot: Pick<SavedDevicesSnapshot, "devices" | "verifiedByDeviceId">,

@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isSameMachine, savedEntryMachineIdentity, type MachineIdentity } from "./machineIdentity";
 import {
   buildSavedDevicePrimaryLabel,
   getSavedDevicesSnapshot,
@@ -13,20 +14,14 @@ import {
   type SavedDevicesSnapshot,
 } from "./store";
 
-const normalizeUniqueId = (value: string | null | undefined) => value?.trim().toLowerCase() || null;
-
-const storedUniqueId = (snapshot: SavedDevicesSnapshot, deviceId: string) =>
-  normalizeUniqueId(snapshot.devices.find((device) => device.id === deviceId)?.lastKnownUniqueId);
-
-/** Whether a saved entry is known to be the machine that reported `uniqueId`. */
-export const savedEntryHasUniqueId = (
+/** Whether a saved entry is known to be the machine that reported `identity` (see `machineIdentityKey`). */
+export const savedEntryIsMachine = (
   deviceId: string | null | undefined,
-  uniqueId: string | null | undefined,
+  identity: MachineIdentity,
   snapshot: SavedDevicesSnapshot = getSavedDevicesSnapshot(),
 ): boolean => {
   if (!deviceId) return false;
-  const stored = storedUniqueId(snapshot, deviceId);
-  return Boolean(stored && stored === normalizeUniqueId(uniqueId));
+  return isSameMachine(savedEntryMachineIdentity(snapshot, deviceId), identity);
 };
 
 /**
@@ -39,9 +34,7 @@ export const areSavedEntriesSameDevice = (
   snapshot: SavedDevicesSnapshot = getSavedDevicesSnapshot(),
 ): boolean => {
   if (!leftId || !rightId || leftId === rightId) return false;
-  const actual = snapshot.actualDeviceIdByDeviceId ?? {};
-  if (actual[leftId] === rightId || actual[rightId] === leftId) return true;
-  return savedEntryHasUniqueId(rightId, storedUniqueId(snapshot, leftId), snapshot);
+  return savedEntryIsMachine(rightId, savedEntryMachineIdentity(snapshot, leftId), snapshot);
 };
 
 /** Another saved entry for the same machine as `deviceId`, if there is one. */

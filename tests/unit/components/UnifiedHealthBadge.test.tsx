@@ -1013,7 +1013,9 @@ describe("UnifiedHealthBadge", () => {
   it("marks a switcher row that is the same device as another saved entry", async () => {
     vi.useFakeTimers();
     const backup = mockState.savedDevices.devices[1];
+    const backupVerified = mockState.savedDevices.verifiedByDeviceId["device-backup"];
     backup.lastKnownUniqueId = "UID-OFFICE";
+    backupVerified.hostname = "office-u64";
     try {
       render(<UnifiedHealthBadge />);
       fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
@@ -1021,6 +1023,24 @@ describe("UnifiedHealthBadge", () => {
 
       expect(screen.getByTestId("switch-device-same-as-device-backup").textContent).toBe("Same device as Office U64");
       expect(screen.getByTestId("switch-device-same-as-device-office").textContent).toBe("Same device as Backup Lab");
+    } finally {
+      backup.lastKnownUniqueId = "UID-BACKUP";
+      backupVerified.hostname = "backup-lab";
+    }
+  });
+
+  // The unique id is user-configurable, so two Ultimates can share one; their hostnames tell them apart.
+  it("does not mark switcher rows for two devices that share a custom unique id but not a hostname", async () => {
+    vi.useFakeTimers();
+    const backup = mockState.savedDevices.devices[1];
+    backup.lastKnownUniqueId = "UID-OFFICE";
+    try {
+      render(<UnifiedHealthBadge />);
+      fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+      await vi.advanceTimersByTimeAsync(450);
+
+      expect(screen.queryByTestId("switch-device-same-as-device-backup")).toBeNull();
+      expect(screen.queryByTestId("switch-device-same-as-device-office")).toBeNull();
     } finally {
       backup.lastKnownUniqueId = "UID-BACKUP";
     }

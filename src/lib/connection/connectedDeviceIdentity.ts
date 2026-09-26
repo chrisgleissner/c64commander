@@ -6,12 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-// The unique id the really-connected device last reported, kept apart from the connection manager so
-// a lightweight module can read it without loading the connection manager and its start-up work.
-let connectedUniqueId: string | null = null;
+import { deviceInfoMachineIdentity, type MachineIdentity } from "@/lib/savedDevices/machineIdentity";
 
-export const setConnectedDeviceUniqueId = (uniqueId: string | null | undefined): void => {
-  connectedUniqueId = uniqueId?.trim() || null;
+// The identity the really-connected device last reported, kept apart from the connection manager so
+// a lightweight module can read it without loading the connection manager and its start-up work.
+let connectedIdentity: MachineIdentity = deviceInfoMachineIdentity(null);
+
+export const setConnectedDeviceIdentity = (info: Parameters<typeof deviceInfoMachineIdentity>[0]): void => {
+  connectedIdentity = deviceInfoMachineIdentity(info);
 };
 
-export const getConnectedDeviceUniqueId = (): string | null => connectedUniqueId;
+export const getConnectedDeviceIdentity = (): MachineIdentity => connectedIdentity;

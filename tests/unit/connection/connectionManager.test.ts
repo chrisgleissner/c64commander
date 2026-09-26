@@ -438,25 +438,28 @@ describe("connectionManager", () => {
   });
 
   // A saved entry for a device's second address has no stored id yet; files it owns are matched by this.
-  it("publishes the connected device's unique id while really connected", async () => {
+  it("publishes the connected device's unique id and hostname while really connected", async () => {
     const { discoverConnection, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
-    const { getConnectedDeviceUniqueId } = await import("../../../src/lib/connection/connectedDeviceIdentity");
+    const { getConnectedDeviceIdentity } = await import("../../../src/lib/connection/connectedDeviceIdentity");
 
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
     localStorage.removeItem("c64u_has_password");
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ product: "Ultimate 64 Elite", unique_id: "38C1BA", errors: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ product: "Ultimate 64 Elite", hostname: "ultimate.example", unique_id: "38C1BA", errors: [] }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
     );
 
     await initializeConnectionManager();
     void discoverConnection("startup");
     await vi.advanceTimersByTimeAsync(800);
 
-    expect(getConnectedDeviceUniqueId()).toBe("38C1BA");
+    expect(getConnectedDeviceIdentity()).toEqual({ uniqueId: "38C1BA", hostname: "ultimate.example" });
   });
 
   it("traffic-derived promotion without identity fetches device identity once", async () => {

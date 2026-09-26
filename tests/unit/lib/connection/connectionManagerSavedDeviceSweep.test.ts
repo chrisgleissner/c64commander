@@ -264,16 +264,17 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
 
   // One Ultimate on Ethernet (192.0.2.0/24) and Wi-Fi (198.51.100.0/24), saved under both addresses.
   it("prefers the selected device's other address and switches to it as the same device", async () => {
-    const dualHomed = { product: "Ultimate-64", unique_id: "DUAL01" };
+    const dualHomed = { product: "Ultimate-64", hostname: "ultimate-desk", unique_id: "DUAL01" };
     getInfoMock
-      .mockResolvedValueOnce({ product: "Ultimate-64", unique_id: "OTHER1" })
+      .mockResolvedValueOnce({ product: "Ultimate-64", hostname: "ultimate-attic", unique_id: "OTHER1" })
       .mockResolvedValueOnce(dualHomed)
       .mockResolvedValueOnce(dualHomed);
+    const desk = { httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01", lastKnownHostname: "ultimate-desk" };
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
-        { id: "selected", host: "198.51.100.20", httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01" },
+        { ...desk, id: "selected", host: "198.51.100.20" },
         { id: "another-device", host: "203.0.113.30", httpPort: 80, hasPassword: false, lastKnownUniqueId: "OTHER1" },
-        { id: "other-address", host: "192.0.2.10", httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01" },
+        { ...desk, id: "other-address", host: "192.0.2.10" },
       ]),
     );
 
@@ -282,6 +283,31 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
 
     expect(selectSavedDeviceMock).toHaveBeenCalledWith("other-address");
     expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "other-address", { sameDevice: true });
+  });
+
+  // The unique id is user-configurable, so a different Ultimate can report the selected device's id.
+  it("switches to a different device that shares the selected device's custom unique id but not its hostname as a different device", async () => {
+    const attic = { product: "Ultimate-64", hostname: "ultimate-attic", unique_id: "DUAL01" };
+    getInfoMock.mockResolvedValueOnce(attic).mockResolvedValueOnce(attic);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        {
+          id: "selected",
+          host: "198.51.100.20",
+          httpPort: 80,
+          hasPassword: false,
+          lastKnownUniqueId: "DUAL01",
+          lastKnownHostname: "ultimate-desk",
+        },
+        { id: "attic", host: "203.0.113.40", httpPort: 80, hasPassword: false, lastKnownUniqueId: "DUAL01" },
+      ]),
+    );
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    expect(selectSavedDeviceMock).toHaveBeenCalledWith("attic");
+    expect(prepareForDeviceRetargetMock).toHaveBeenCalledWith("selected", "attic", { sameDevice: false });
   });
 
   // HARD27-010: before this, the fallback never stopped or restarted the mirror, so Live View
