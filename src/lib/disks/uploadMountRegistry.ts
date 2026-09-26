@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addLog } from "@/lib/logging";
 import type { DiskMountPersistence } from "./diskMount";
 
 // An uploaded image is mounted from a device-side temporary file, and /v1/drives reports that
@@ -76,45 +75,12 @@ export const resolveUploadMountedDiskId = (
   return record?.imagePath === polledImagePath ? record.diskId : null;
 };
 
-const UPLOAD_MOUNTS_STORAGE_KEY = "c64u.uploadDiskMounts.v1";
-
-const isUploadMountRecord = (value: unknown): value is UploadMountRecord => {
-  const record = value as UploadMountRecord | null;
-  return (
-    typeof record?.diskId === "string" &&
-    typeof record.recordedAt === "number" &&
-    (record.imagePath === null || typeof record.imagePath === "string")
-  );
-};
-
-const rehydrateUploadMounts = (): UploadMountState => {
-  if (typeof sessionStorage === "undefined") return {};
-  try {
-    const raw = sessionStorage.getItem(UPLOAD_MOUNTS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(parsed).filter(([, record]) => isUploadMountRecord(record))) as Record<
-      string,
-      UploadMountRecord
-    >;
-  } catch (error) {
-    addLog("warn", "Failed to rehydrate upload disk mounts", { error: (error as Error).message });
-    return {};
-  }
-};
-
-let uploadMounts: UploadMountState = rehydrateUploadMounts();
+// Kept in memory only: it survives page changes, but not a reload. A temporary upload path is reused by the
+// device after a reboot or by another client, so after a reload only a new mount by this app can vouch for one.
+let uploadMounts: UploadMountState = {};
 
 const replaceUploadMounts = (next: UploadMountState) => {
-  if (next === uploadMounts) return;
   uploadMounts = next;
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    if (Object.keys(next).length === 0) sessionStorage.removeItem(UPLOAD_MOUNTS_STORAGE_KEY);
-    else sessionStorage.setItem(UPLOAD_MOUNTS_STORAGE_KEY, JSON.stringify(next));
-  } catch (error) {
-    addLog("warn", "Failed to persist upload disk mounts", { error: (error as Error).message });
-  }
 };
 
 export const noteDiskMountOutcome = (

@@ -80,17 +80,17 @@ describe("upload mount registry", () => {
     expect(getUploadMountedDiskName("c64u", "a", TEMP_PATH, 21_000)).toBeNull();
   });
 
-  it("records only transient mounts and survives a module reload through session storage", async () => {
+  it("records only transient mounts, and does not vouch for a temporary upload path after a reload", async () => {
     noteDiskMountOutcome("c64u", "a", "disk-1", "transient", undefined, 1000);
     noteDiskMountOutcome("c64u", "b", "disk-2", "device-native", undefined, 1000);
     learnUploadMountFromPoll("c64u", "a", TEMP_PATH, 1500);
     learnUploadMountFromPoll("c64u", "b", "/USB0/disk-2.d64", 1500);
+    expect(getUploadMountedDiskId("c64u", "a", TEMP_PATH, 5000)).toBe("disk-1");
+    expect(getUploadMountedDiskId("c64u", "b", "/USB0/disk-2.d64", 5000)).toBeNull();
 
     vi.resetModules();
     const reloaded = await import("@/lib/disks/uploadMountRegistry");
-    expect(reloaded.getUploadMountedDiskId("c64u", "a", TEMP_PATH, 5000)).toBe("disk-1");
-    expect(reloaded.getUploadMountedDiskId("c64u", "b", "/USB0/disk-2.d64", 5000)).toBeNull();
-    reloaded.resetUploadMountsForTests();
+    expect(reloaded.getUploadMountedDiskId("c64u", "a", TEMP_PATH, 5000)).toBeNull();
   });
 
   it("forgets a mount when the drive is ejected", () => {
