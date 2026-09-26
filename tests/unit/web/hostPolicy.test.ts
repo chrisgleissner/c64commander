@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { createLanHostPolicy } from "../../../web/server/src/hostPolicy";
+import { createDeviceAddressMatcher, createLanHostPolicy } from "../../../web/server/src/hostPolicy";
 
 describe("LAN host policy", () => {
   // HARD27-030: `u64` is the second name the app's own discovery probes for, and
@@ -71,5 +71,59 @@ describe("LAN host policy", () => {
     // The first name was evicted, so asking for it again is a fresh lookup.
     await policy.isLanHost("device-0");
     expect(resolve).toHaveBeenCalledTimes(21);
+  });
+});
+
+// One Ultimate on Ethernet and Wi-Fi: the router's DNS answers its name with one of its two addresses.
+describe("device address matcher", () => {
+  const dns: Record<string, string[]> = {
+    "ultimate.example": ["192.0.2.10"],
+    "alias.example": ["192.0.2.10"],
+    "other.example": ["203.0.113.40"],
+  };
+  const resolve = async (hostname: string) => {
+    const addresses = dns[hostname];
+    if (!addresses) throw new Error(`ENOTFOUND ${hostname}`);
+    return addresses;
+  };
+
+  it("matches a configured name with the address it resolves to, in either direction", async () => {
+    const matcher = createDeviceAddressMatcher({ resolve });
+
+    await expect(matcher.sharesAddress("192.0.2.10", "ultimate.example")).resolves.toBe(true);
+    await expect(matcher.sharesAddress("ultimate.example", "192.0.2.10")).resolves.toBe(true);
+    await expect(matcher.sharesAddress("alias.example", "ultimate.example")).resolves.toBe(true);
+  });
+
+  it("does not match a different machine or its address", async () => {
+    const matcher = createDeviceAddressMatcher({ resolve });
+
+    await expect(matcher.sharesAddress("198.51.100.20", "ultimate.example")).resolves.toBe(false);
+    await expect(matcher.sharesAddress("other.example", "ultimate.example")).resolves.toBe(false);
+  });
+
+  it("reports a name that does not resolve and matches nothing through it", async () => {
+    const onResolveError = vi.fn();
+    const matcher = createDeviceAddressMatcher({ resolve, onResolveError });
+
+    await expect(matcher.sharesAddress("192.0.2.10", "absent.example")).resolves.toBe(false);
+    expect(onResolveError).toHaveBeenCalledWith("absent.example", expect.any(Error));
+  });
+
+  it("matches identical text without a lookup and caches lookups for their TTL", async () => {
+    const counted = vi.fn(resolve);
+    let clock = 1_000;
+    const matcher = createDeviceAddressMatcher({ resolve: counted, ttlMs: 60_000, now: () => clock });
+
+    await expect(matcher.sharesAddress("Ultimate.Example", "ultimate.example")).resolves.toBe(true);
+    expect(counted).not.toHaveBeenCalled();
+
+    await matcher.sharesAddress("192.0.2.10", "ultimate.example");
+    await matcher.sharesAddress("192.0.2.10", "ultimate.example");
+    expect(counted).toHaveBeenCalledTimes(1);
+
+    clock += 60_001;
+    await matcher.sharesAddress("192.0.2.10", "ultimate.example");
+    expect(counted).toHaveBeenCalledTimes(2);
   });
 });

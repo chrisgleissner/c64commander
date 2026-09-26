@@ -727,6 +727,65 @@ describe("web server platform runtime", () => {
     expect(configuredFtp.passwords).toEqual(["server-device-secret"]);
   });
 
+  // An Ultimate reachable under a name and an address is one machine. The configured name and the
+  // address it resolves to must both get the configured password, over REST and over FTP.
+  it("sends the configured password to the configured device under an address its name resolves to", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    const ftpRoot = await makeTempDir("c64-web-ftp-alias-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>alias</body></html>", "utf8");
+    await writeFile(path.join(ftpRoot, "test.sid"), "PSID_DATA", "utf8");
+
+    const seen: Array<string | undefined> = [];
+    const upstream = http.createServer((req, res) => {
+      seen.push(req.headers["x-password"]?.toString());
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ errors: [] }));
+    });
+    await new Promise<void>((resolve, reject) => {
+      upstream.listen(0, "127.0.0.1", () => resolve());
+      upstream.once("error", reject);
+    });
+    const upstreamAddress = upstream.address();
+    if (!upstreamAddress || typeof upstreamAddress === "string") throw new Error("Invalid upstream address");
+
+    const deviceFtp = await createMockFtpServer({
+      rootDir: ftpRoot,
+      password: "server-device-secret",
+      pasvMin: 40561,
+      pasvMax: 40610,
+    });
+    ftpServers.push(deviceFtp);
+
+    try {
+      const server = await startWebServer({
+        HOST: "127.0.0.1",
+        PORT: "0",
+        WEB_DIST_DIR: distDir,
+        WEB_CONFIG_DIR: configDir,
+        C64U_NETWORK_PASSWORD: "server-device-secret",
+        C64U_DEVICE_HOST: `localhost:${upstreamAddress.port}`,
+      });
+      const cookie = await loginAndGetCookie(server.baseUrl, "server-device-secret");
+
+      const rest = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+        headers: { Cookie: cookie, "X-C64U-Host": `127.0.0.1:${upstreamAddress.port}` },
+      });
+      expect(rest.status).toBe(200);
+      expect(seen).toEqual(["server-device-secret"]);
+
+      const listing = await fetch(`${server.baseUrl}/api/ftp/list`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({ host: "127.0.0.1", port: deviceFtp.port, username: "tester", path: "/" }),
+      });
+      expect(listing.status).toBe(200);
+      expect(deviceFtp.passwords).toEqual(["server-device-secret"]);
+    } finally {
+      await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    }
+  });
+
   // `C64U_DEVICE_HOST` may carry the device's REST port, and the web client
   // strips that port before naming the host in an FTP request body, because the
   // FTP port travels in its own field. Comparing host and port would therefore

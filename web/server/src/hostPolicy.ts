@@ -1,6 +1,12 @@
 import dns from "node:dns/promises";
+import net from "node:net";
 
-import { getHostnameFromHostValue, isPrivateIpAddress, isTrustedInsecureHost } from "./hostValidation.js";
+import {
+  getHostnameFromHostValue,
+  isPrivateIpAddress,
+  isTrustedInsecureHost,
+  normalizeHostname,
+} from "./hostValidation.js";
 
 export type HostAddressResolver = (hostname: string) => Promise<string[]>;
 
@@ -72,6 +78,56 @@ export const createLanHostPolicy = (options: {
       }
       remember(hostname, allowed);
       return allowed;
+    },
+  };
+};
+
+export interface DeviceAddressMatcher {
+  sharesAddress: (leftHostname: string, rightHostname: string) => Promise<boolean>;
+}
+
+// An Ultimate on Ethernet and Wi-Fi is one machine at two addresses, and the app may name it by
+// either address or by its hostname. Two names that resolve to a common address reach the same
+// machine, so the configured password is exactly as safe there as under the configured name.
+export const createDeviceAddressMatcher = (options: {
+  resolve?: HostAddressResolver;
+  ttlMs?: number;
+  maxEntries?: number;
+  now?: () => number;
+  onResolveError?: (hostname: string, error: unknown) => void;
+}): DeviceAddressMatcher => {
+  const resolve = options.resolve ?? resolveHostAddresses;
+  const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+  const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
+  const now = options.now ?? Date.now;
+  const cache = new Map<string, { expiresAtMs: number; addresses: string[] }>();
+
+  const addressesOf = async (hostname: string): Promise<string[]> => {
+    if (net.isIP(hostname)) return [hostname];
+    const cached = cache.get(hostname);
+    if (cached && cached.expiresAtMs > now()) return cached.addresses;
+    let addresses: string[] = [];
+    try {
+      addresses = (await resolve(hostname)).map(normalizeHostname);
+    } catch (error) {
+      options.onResolveError?.(hostname, error);
+    }
+    if (cache.size >= maxEntries) {
+      const oldest = cache.keys().next();
+      if (!oldest.done) cache.delete(oldest.value);
+    }
+    cache.set(hostname, { addresses, expiresAtMs: now() + ttlMs });
+    return addresses;
+  };
+
+  return {
+    sharesAddress: async (leftHostname: string, rightHostname: string) => {
+      const left = normalizeHostname(leftHostname);
+      const right = normalizeHostname(rightHostname);
+      if (!left || !right) return false;
+      if (left === right) return true;
+      const [leftAddresses, rightAddresses] = await Promise.all([addressesOf(left), addressesOf(right)]);
+      return leftAddresses.some((address) => rightAddresses.includes(address));
     },
   };
 };

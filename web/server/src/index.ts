@@ -13,8 +13,9 @@ import {
   sanitizeHost,
   isConfiguredDeviceHost,
   getHostnameFromHostValue,
+  splitDeviceHostValue,
 } from "./hostValidation.js";
-import { createLanHostPolicy } from "./hostPolicy.js";
+import { createDeviceAddressMatcher, createLanHostPolicy } from "./hostPolicy.js";
 import { applySecurityHeaders, getClientIp, isForwardedHttps } from "./securityHeaders.js";
 import {
   FILE_BODY_LIMIT_BYTES,
@@ -124,6 +125,13 @@ const allowRemoteRestHosts = (() => {
 // IP literal. The two WEB_ALLOW_REMOTE_* switches stay as the explicit opt-in
 // for a target outside that range.
 const lanHostPolicy = createLanHostPolicy({});
+const deviceAddressMatcher = createDeviceAddressMatcher({
+  onResolveError: (hostname, error) =>
+    log("warn", "Could not resolve a host while matching it to the configured device", {
+      hostname,
+      ...errorDetails(error),
+    }),
+});
 
 // A gate the server closed itself, told apart from the device's own 401/403 so
 // the app redirects to the login page instead of asking for the device password
@@ -336,9 +344,16 @@ const saveConfig = async (config: AppConfig): Promise<void> => {
 
 const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 
+const isConfiguredRestTarget = async (targetHost: string, configuredHost: string): Promise<boolean> => {
+  const target = splitDeviceHostValue(targetHost);
+  const configured = splitDeviceHostValue(configuredHost);
+  if (!target || !configured || target.port !== configured.port) return false;
+  return deviceAddressMatcher.sharesAddress(target.host, configured.host);
+};
+
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
   const targetHost = sanitizeHost(req.headers["x-c64u-host"]) ?? config.defaultDeviceHost;
-  const isConfiguredDevice = isConfiguredDeviceHost(targetHost, config.defaultDeviceHost);
+  const isConfiguredDevice = await isConfiguredRestTarget(targetHost, config.defaultDeviceHost);
   if (!allowRemoteRestHosts && !isConfiguredDevice && !(await lanHostPolicy.isLanHost(targetHost))) {
     writeGateError(res, 403, "host-policy", {
       error: "REST host override is disabled for non-local targets",
@@ -434,14 +449,14 @@ const collectStream = async (stream: PassThrough, limitBytes = FILE_BYTES_LIMIT)
 // `defaultDeviceHost` may carry the device's REST port, so comparing ports here
 // would read the request's absent REST port as the HTTP default and treat the
 // configured device as a foreign host.
-const isConfiguredDeviceFtpHost = (host: string, configuredDeviceHost: string): boolean => {
+const isConfiguredDeviceFtpHost = async (host: string, configuredDeviceHost: string): Promise<boolean> => {
   const candidate = getHostnameFromHostValue(host);
   const configured = getHostnameFromHostValue(configuredDeviceHost);
-  return candidate !== null && configured !== null && candidate === configured;
+  return candidate !== null && configured !== null && deviceAddressMatcher.sharesAddress(candidate, configured);
 };
 
-const ftpPasswordFor = (host: string, config: AppConfig, supplied: string | undefined): string => {
-  const configured = isConfiguredDeviceFtpHost(host, config.defaultDeviceHost) ? config.networkPassword : null;
+const ftpPasswordFor = async (host: string, config: AppConfig, supplied: string | undefined): Promise<string> => {
+  const configured = (await isConfiguredDeviceFtpHost(host, config.defaultDeviceHost)) ? config.networkPassword : null;
   return configured ?? supplied ?? "";
 };
 
@@ -470,7 +485,7 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: ftpPasswordFor(host, config, payload.password),
+      password: await ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     const entries = await ftp.list(payload.path ?? "/");
@@ -529,7 +544,7 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: ftpPasswordFor(host, config, payload.password),
+      password: await ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     // The collector aborts the stream once the file crosses the size limit, so
@@ -599,7 +614,7 @@ const handleFtpPing = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: ftpPasswordFor(host, config, payload.password),
+      password: await ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     await ftp.send("NOOP");
@@ -653,7 +668,7 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: ftpPasswordFor(host, config, payload.password),
+      password: await ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     const data = Buffer.from(payload.data, "base64");
