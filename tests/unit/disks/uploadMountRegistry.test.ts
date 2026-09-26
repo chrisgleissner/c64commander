@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   forgetUploadMount,
   getUploadMountedDiskId,
+  getUploadMountedDiskName,
   learnUploadMountFromPoll,
   noteDiskMountOutcome,
   reconcileUploadMount,
@@ -65,8 +66,8 @@ describe("upload mount registry", () => {
   });
 
   it("records only transient mounts and survives a module reload through session storage", async () => {
-    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", 1000);
-    noteDiskMountOutcome("c64u", "b", "disk-2", "device-native", 1000);
+    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", undefined, 1000);
+    noteDiskMountOutcome("c64u", "b", "disk-2", "device-native", undefined, 1000);
     learnUploadMountFromPoll("c64u", "a", TEMP_PATH, 1500);
     learnUploadMountFromPoll("c64u", "b", "/USB0/disk-2.d64", 1500);
 
@@ -78,16 +79,23 @@ describe("upload mount registry", () => {
   });
 
   it("forgets a mount when the drive is ejected", () => {
-    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", 1000);
+    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", undefined, 1000);
     learnUploadMountFromPoll("c64u", "a", TEMP_PATH, 1500);
     forgetUploadMount("c64u", "a");
     expect(getUploadMountedDiskId("c64u", "a", TEMP_PATH, 2000)).toBeNull();
   });
 
   it("drops the record when the drive is remounted by a non-upload mount", () => {
-    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", 1000);
+    noteDiskMountOutcome("c64u", "a", "disk-1", "transient", undefined, 1000);
     learnUploadMountFromPoll("c64u", "a", TEMP_PATH, 1500);
-    noteDiskMountOutcome("c64u", "a", "disk-3", "materialized", 2000);
+    noteDiskMountOutcome("c64u", "a", "disk-3", "materialized", undefined, 2000);
     expect(getUploadMountedDiskId("c64u", "a", TEMP_PATH, 2500)).toBeNull();
+  });
+
+  it("does not let a slower, older mount overwrite the record of a newer one", () => {
+    noteDiskMountOutcome("c64u", "a", "disk-new", "transient", "New.d64", 2000);
+    noteDiskMountOutcome("c64u", "a", "disk-old", "transient", "Old.d64", 1000);
+
+    expect(getUploadMountedDiskName("c64u", "a", "/Temp/cache/upload/temp0001", 3000)).toBe("New.d64");
   });
 });

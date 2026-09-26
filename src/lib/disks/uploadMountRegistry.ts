@@ -18,6 +18,7 @@ type UploadDriveKey = "a" | "b";
 
 export type UploadMountRecord = {
   diskId: string;
+  diskName?: string;
   imagePath: string | null;
   recordedAt: number;
 };
@@ -108,14 +109,16 @@ export const noteDiskMountOutcome = (
   drive: UploadDriveKey,
   diskId: string,
   persistence: DiskMountPersistence | undefined,
+  diskName?: string,
   mountedAt = Date.now(),
 ) => {
   const key = recordKey(deviceHost, drive);
+  if ((uploadMounts[key]?.recordedAt ?? -Infinity) > mountedAt) return;
   if (persistence !== "transient") {
     replaceUploadMounts(withoutRecord(uploadMounts, key));
     return;
   }
-  replaceUploadMounts({ ...uploadMounts, [key]: { diskId, imagePath: null, recordedAt: mountedAt } });
+  replaceUploadMounts({ ...uploadMounts, [key]: { diskId, diskName, imagePath: null, recordedAt: mountedAt } });
 };
 
 export const forgetUploadMount = (deviceHost: string, drive: UploadDriveKey) =>
@@ -134,5 +137,19 @@ export const getUploadMountedDiskId = (
   polledImagePath: string | null,
   polledAt: number,
 ) => resolveUploadMountedDiskId(uploadMounts, deviceHost, drive, polledImagePath, polledAt);
+
+/** The library name of the disk an upload mount holds, when the polled image is that mount's upload. */
+export const getUploadMountedDiskName = (
+  deviceHost: string,
+  drive: UploadDriveKey,
+  polledImagePath: string | null,
+  polledAt: number,
+) => {
+  if (!polledImagePath) return null;
+  const record = reconcileUploadMount(uploadMounts, deviceHost, drive, polledImagePath, polledAt)[
+    recordKey(deviceHost, drive)
+  ];
+  return record?.imagePath === polledImagePath ? (record.diskName ?? null) : null;
+};
 
 export const resetUploadMountsForTests = () => replaceUploadMounts({});

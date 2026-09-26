@@ -75,7 +75,7 @@ import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
 import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
-import { forgetUploadMount, noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
+import { forgetUploadMount } from "@/lib/disks/uploadMountRegistry";
 import * as mountSupport from "@/components/disks/driveMountSupport";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
@@ -698,7 +698,6 @@ export const HomeDiskManager = () => {
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
-      noteDiskMountOutcome(api.getDeviceHost(), drive, disk.id, outcome?.persistence);
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk mounted",

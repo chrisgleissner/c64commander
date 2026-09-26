@@ -81,6 +81,7 @@ import {
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { getUploadMountedDiskName, resetUploadMountsForTests } from "@/lib/disks/uploadMountRegistry";
 import {
   buildDiskMountType,
   resolveLocalDiskBlob,
@@ -775,6 +776,20 @@ describe("diskMount", () => {
       );
       expect(outcome.persistence).toBe("transient");
       expect(mockApi.mountDriveUpload).toHaveBeenCalled();
+    });
+
+    it("records a buffer-mounted disk's name so the drive cards can name it after the device reports its upload file", async () => {
+      resetUploadMountsForTests();
+      const file = new File(["test"], "Frogger.d64");
+      await mountDiskToDrive(
+        mockApi as any,
+        "b",
+        { id: "frogger", name: "Frogger.d64", path: "/Frogger.d64", location: "local" } as any,
+        file,
+      );
+      expect(
+        getUploadMountedDiskName(mockApi.getDeviceHost(), "b", "/Temp/cache/upload/temp0082", Date.now() + 1),
+      ).toBe("Frogger.d64");
     });
   });
 

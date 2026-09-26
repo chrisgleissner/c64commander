@@ -9,10 +9,14 @@
 import { useMemo } from "react";
 import { useC64ConfigItems, useC64Drives } from "@/hooks/useC64Connection";
 import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
+import { getC64API } from "@/lib/c64api";
+import { getUploadMountedDiskName } from "@/lib/disks/uploadMountRegistry";
+import { findPolledDrive } from "@/components/disks/driveMountSupport";
+import { buildDrivePath } from "@/components/disks/HomeDiskManagerSupport";
 import { DRIVE_A_HOME_ITEMS, DRIVE_B_HOME_ITEMS, HOME_SUMMARY_QUERY_OPTIONS } from "../constants";
 
 export function useDriveData(isConnected: boolean) {
-  const { data: drivesData, refetch: refetchDrives } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
+  const { data: drivesData, dataUpdatedAt, refetch: refetchDrives } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
 
   const { data: driveASettingsCategory } = useC64ConfigItems(
     "Drive A Settings",
@@ -60,12 +64,23 @@ export function useDriveData(isConnected: boolean) {
         device: drivesByClass.get("SOFT_IEC_DRIVE") ?? null,
       },
     ];
+    const deviceHost = getC64API().getDeviceHost();
+    const uploadedDiskName = (key: string) => {
+      if (key !== "a" && key !== "b") return null;
+      const info = findPolledDrive(drivesData, key);
+      return getUploadMountedDiskName(
+        deviceHost,
+        key,
+        buildDrivePath(info?.image_path, info?.image_file),
+        dataUpdatedAt,
+      );
+    };
     return entries.map((entry) => ({
       ...entry,
-      mountedLabel: entry.device?.imageFile || "No disk mounted",
+      mountedLabel: uploadedDiskName(entry.key) || entry.device?.imageFile || "No disk mounted",
       isMounted: Boolean(entry.device?.imageFile),
     }));
-  }, [drivesByClass]);
+  }, [dataUpdatedAt, drivesByClass, drivesData]);
 
   return {
     drivesData,

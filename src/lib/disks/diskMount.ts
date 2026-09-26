@@ -18,6 +18,7 @@ import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileType
 // Reused as-is: the sd/usb/flash-over-temp persistent-root ranking is
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
 import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
+import { noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
 import { uint8ToBase64 } from "@/lib/sid/sidUtils";
 import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -949,6 +950,19 @@ export const mountDiskToDrive = async (
   disk: DiskEntry,
   runtimeFile?: File,
   options: MountDiskToDriveOptions = {},
+): Promise<DiskMountOutcome> => {
+  const startedAt = Date.now();
+  const outcome = await mountDiskToDriveUnrecorded(api, drive, disk, runtimeFile, options);
+  noteDiskMountOutcome(api.getDeviceHost(), drive, disk.id, outcome.persistence, disk.name, startedAt);
+  return outcome;
+};
+
+const mountDiskToDriveUnrecorded = async (
+  api: C64API,
+  drive: "a" | "b",
+  disk: DiskEntry,
+  runtimeFile: File | undefined,
+  options: MountDiskToDriveOptions,
 ): Promise<DiskMountOutcome> => {
   const mode = options.mode ?? "readwrite";
   const finalizedSameDiskBytes = await dropOrFinalizeStaleMaterializedMount(
