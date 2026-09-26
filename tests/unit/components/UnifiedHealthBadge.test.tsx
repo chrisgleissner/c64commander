@@ -996,6 +996,19 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.getByTestId("switch-device-row-device-backup").textContent).toContain("2/6 probes");
   });
 
+  it("says how long ago the last check was in hours and minutes once it is more than an hour old", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T22:16:57.000Z"));
+    render(<UnifiedHealthBadge />);
+
+    fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+    await vi.advanceTimersByTimeAsync(450);
+
+    const row = screen.getByTestId("switch-device-row-device-office").textContent;
+    expect(row).toContain("Last check 10h 16m ago");
+    expect(row).not.toContain("616m");
+  });
+
   it("reconciles switcher row labels with fresh health before persisted switch status", async () => {
     vi.useFakeTimers();
     mockState.switchStatuses["device-office"] = "offline";

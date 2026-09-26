@@ -62,10 +62,15 @@ describe("playFilesUtils", () => {
   });
 
   describe("formatTime", () => {
-    it("formats milliseconds to MM:SS", () => {
+    it("formats durations under an hour as m:ss", () => {
       expect(formatTime(1000)).toBe("0:01");
       expect(formatTime(65000)).toBe("1:05");
-      expect(formatTime(3600000)).toBe("60:00");
+      expect(formatTime(3599000)).toBe("59:59");
+    });
+    it("formats durations of an hour or more as h:mm:ss instead of counting minutes past 59", () => {
+      expect(formatTime(3600000)).toBe("1:00:00");
+      expect(formatTime((5 * 3600 + 26 * 60 + 56) * 1000)).toBe("5:26:56");
+      expect(formatTime((26 * 3600 + 5 * 60 + 7) * 1000)).toBe("26:05:07");
     });
     it("handles undefined", () => {
       expect(formatTime(undefined)).toBe("—:—");

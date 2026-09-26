@@ -31,9 +31,10 @@ export const DURATION_SLIDER_STEPS = 1000;
 export const formatTime = (ms?: number) => {
   if (ms === undefined) return "—:—";
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return hours > 0 ? `${hours}:${minutes.toString().padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 };
 
 // A playlist row distinguishes a size it does not know from a file that really

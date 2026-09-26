@@ -104,6 +104,7 @@ import {
 import { buildSavedDevicePrimaryLabel, updateSavedDevice, validateSavedDeviceName } from "@/lib/savedDevices/store";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
+import { formatElapsedAgo } from "@/lib/ui/elapsedAgo";
 import { cn } from "@/lib/utils";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
@@ -190,17 +191,6 @@ const SEVERITY_DOT_CLASS: Record<DiagnosticsSeverity, string> = {
   warn: "bg-warning",
   info: "bg-diagnostics-system",
   debug: "bg-muted-foreground",
-};
-
-const formatRelativeTime = (timestampMs: number | null) => {
-  if (timestampMs === null || Number.isNaN(timestampMs)) return "Last check -";
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  if (minutes === 0) {
-    return `Last check ${seconds}s ago`;
-  }
-  return `Last check ${minutes}m ${seconds}s ago`;
 };
 
 const matchesSeverity = (filter: SeverityFilter, severity: DiagnosticsSeverity) => {
@@ -1809,7 +1799,7 @@ export function DiagnosticsDialog({
                     <span className="min-w-0 truncate">{connectionLabel}</span>
                   </button>
                   <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
-                    {formatRelativeTime(lastCheckTimestamp)}
+                    {formatElapsedAgo("Last check", lastCheckTimestamp)}
                   </p>
                   <Button
                     type="button"
