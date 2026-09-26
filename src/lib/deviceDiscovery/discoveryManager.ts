@@ -9,9 +9,12 @@
 import { DeviceDiscovery, type NativeDeviceDiscoveryCandidate } from "@/lib/native/deviceDiscovery";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { stripSavedDeviceHttpPort } from "@/lib/savedDevices/host";
 import {
   addSavedDevice,
   completeSavedDeviceVerification,
+  type DeviceSwitchSummary,
+  type SavedDevice,
   getSavedDevicesSnapshot,
   resolveCanonicalProductFamilyCode,
   selectSavedDevice,
@@ -115,6 +118,9 @@ const candidateKey = (candidate: NativeDeviceDiscoveryCandidate) => {
   return `address:${normalizeToken(candidate.address)}`;
 };
 
+const candidateAddresses = (candidate: { address: string; addresses?: string[] }) =>
+  Array.from(new Set([candidate.address, ...(candidate.addresses ?? [])].map((value) => value.trim()).filter(Boolean)));
+
 const findSavedDeviceId = (candidate: NativeDeviceDiscoveryCandidate) => {
   const savedDevices = getSavedDevicesSnapshot();
   const uniqueId = normalizeToken(candidate.uniqueId);
@@ -129,10 +135,10 @@ const findSavedDeviceId = (candidate: NativeDeviceDiscoveryCandidate) => {
     );
     if (match) return match.id;
   }
-  const address = normalizeToken(candidate.address);
+  const addresses = new Set(candidateAddresses(candidate).map(normalizeToken));
   const host = normalizeToken(candidate.host);
   const match = savedDevices.devices.find(
-    (device) => normalizeToken(device.host) === address || Boolean(host && normalizeToken(device.host) === host),
+    (device) => addresses.has(normalizeToken(device.host)) || Boolean(host && normalizeToken(device.host) === host),
   );
   return match?.id ?? null;
 };
@@ -165,6 +171,7 @@ const normalizeCandidate = (
     hostname: candidate.hostname?.trim() || null,
     uniqueId: candidate.uniqueId?.trim() || null,
     requiresPassword,
+    addresses: candidateAddresses({ address, addresses: candidate.addresses }),
     alreadySavedDeviceId: findSavedDeviceId(candidate),
     confidence: "verified",
     lastSeenAt,
@@ -246,6 +253,10 @@ const scanAndResolveCandidates = async (
       deduped.set(normalized.id, {
         ...existing,
         source: Array.from(new Set([...existing.source, ...normalized.source])),
+        addresses: candidateAddresses({
+          address: existing.address,
+          addresses: [...(existing.addresses ?? []), ...(normalized.addresses ?? [])],
+        }),
       });
     } else {
       deduped.set(normalized.id, normalized);
@@ -352,6 +363,28 @@ export async function startDeviceDiscovery(
   return activeDiscovery;
 }
 
+const isIpAddressLiteral = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
+
+const lastContactSucceeded = (summary: DeviceSwitchSummary | null) =>
+  Boolean(summary?.lastProbeSucceededAt && summary.lastProbeSucceededAt >= (summary.lastProbeFailedAt ?? ""));
+
+/**
+ * An Ultimate on Ethernet and Wi-Fi answers on two addresses, and which one a scan reaches first
+ * varies. The saved host is kept while it still reaches this device: an address while it answers, and
+ * a name while the app's last contact through it succeeded (a never-reached placeholder is replaced).
+ */
+const choosePersistedHost = (
+  device: SavedDevice,
+  candidate: DeviceDiscoveryCandidate,
+  summary: DeviceSwitchSummary | null,
+) => {
+  const savedHost = normalizeToken(stripSavedDeviceHttpPort(device.host));
+  const answered = [candidate.host ?? "", ...candidateAddresses(candidate)].map(normalizeToken);
+  if (answered.includes(savedHost)) return device.host;
+  if (!isIpAddressLiteral(savedHost) && lastContactSucceeded(summary)) return device.host;
+  return candidate.address;
+};
+
 export const persistDiscoveredDevice = (
   candidate: DeviceDiscoveryCandidate,
   options: { select?: boolean; passwordPresent?: boolean } = {},
@@ -406,8 +439,12 @@ export const persistDiscoveredDevice = (
     existingId ??
     ((typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
       `discovered-${Date.now().toString(36)}`);
-  const host = candidate.address;
-  const httpPort = candidate.httpPort || DEFAULT_HTTP_PORT;
+  const existingDevice = existingId ? (savedDevices.devices.find((device) => device.id === existingId) ?? null) : null;
+  const host = existingDevice
+    ? choosePersistedHost(existingDevice, candidate, savedDevices.summaries[existingDevice.id] ?? null)
+    : candidate.address;
+  const httpPort =
+    existingDevice && host === existingDevice.host ? existingDevice.httpPort : candidate.httpPort || DEFAULT_HTTP_PORT;
 
   if (existingId) {
     updateSavedDevice(existingId, {

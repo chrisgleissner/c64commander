@@ -27,6 +27,8 @@ export type DeviceDiscoveryCandidate = {
   hostname: string | null;
   uniqueId: string | null;
   requiresPassword: boolean;
+  /** Every address the device answered on, `address` included: one Ultimate on Ethernet and Wi-Fi has two. */
+  addresses?: string[];
   alreadySavedDeviceId: string | null;
   confidence: "verified";
   lastSeenAt: string;

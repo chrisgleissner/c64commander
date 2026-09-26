@@ -330,6 +330,67 @@ class DeviceDiscoveryPluginTest {
     assertEquals(setOf("hostname", "lan-scan"), candidates[0].sources)
   }
 
+  private fun delayedInfoConnection(body: String, delayMs: Long): HttpURLConnection {
+    val connection = mock(HttpURLConnection::class.java)
+    doAnswer {
+      Thread.sleep(delayMs)
+      null
+    }.`when`(connection).connect()
+    `when`(connection.responseCode).thenReturn(200)
+    `when`(connection.inputStream).thenAnswer { body.byteInputStream(StandardCharsets.UTF_8) }
+    return connection
+  }
+
+  // One Ultimate on Ethernet and Wi-Fi: the saved (known) address answers last, and must still win.
+  @Test
+  fun runProbesPrefersTheKnownHostOfADualHomedDeviceWhateverAnswersFirst() {
+    val knownAddress = delayedInfoConnection(ultimateInfoJson(uniqueId = "dual"), delayMs = 400)
+    val otherAddress = delayedInfoConnection(ultimateInfoJson(uniqueId = "dual"), delayMs = 0)
+    plugin.httpConnectionFactory = { url -> if (url.host == "198.51.100.20") knownAddress else otherAddress }
+
+    val candidates =
+      plugin.runProbes(
+        listOf(
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "198.51.100.20", source = "hostname"),
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "192.0.2.10", source = "lan-scan"),
+        ),
+        3_000,
+        1_000,
+        4,
+      )
+
+    assertEquals(1, candidates.size)
+    assertEquals("198.51.100.20", candidates[0].address)
+    assertEquals(setOf("192.0.2.10", "198.51.100.20"), candidates[0].addresses)
+  }
+
+  @Test
+  fun mergeCandidateGroupIsIndependentOfCompletionOrder() {
+    val first = scannedCandidate("198.51.100.20")
+    val second = scannedCandidate("192.0.2.10")
+
+    val forward = plugin.mergeCandidateGroup(listOf(first, second))
+    val reverse = plugin.mergeCandidateGroup(listOf(second, first))
+
+    assertEquals("192.0.2.10", forward.address)
+    assertEquals(forward, reverse)
+  }
+
+  private fun scannedCandidate(address: String) =
+    DeviceDiscoveryPlugin.DiscoveryCandidate(
+      address = address,
+      host = null,
+      httpPort = 80,
+      sources = setOf("lan-scan"),
+      product = "Ultimate 64",
+      firmwareVersion = null,
+      fpgaVersion = null,
+      coreVersion = null,
+      hostname = "u64",
+      uniqueId = "dual",
+      requiresPassword = false,
+    )
+
   @Test
   fun runProbesHonoursDeadline() {
     // 1 ms budget against a closed port: the poll loop must return promptly with nothing.
@@ -471,6 +532,7 @@ class DeviceDiscoveryPluginTest {
     assertEquals(80, item.getInt("httpPort"))
     assertEquals(2, item.getJSONArray("source").length())
     assertFalse(item.getBoolean("requiresPassword"))
+    assertEquals("192.168.1.20", item.getJSONArray("addresses").getString(0))
   }
 
   // ---- mergeCandidate ------------------------------------------------------

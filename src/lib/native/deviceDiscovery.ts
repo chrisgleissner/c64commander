@@ -22,6 +22,8 @@ export type NativeDeviceDiscoveryCandidate = {
   hostname?: string;
   uniqueId?: string;
   requiresPassword?: boolean;
+  /** Every address the device answered on this scan, `address` included. */
+  addresses?: string[];
 };
 
 export type NativeDeviceDiscoveryOptions = {
