@@ -152,7 +152,12 @@ export const normalizeDurationInputDraft = (value: string) => {
 export const clampDurationSeconds = (value: number) =>
   Math.min(DURATION_MAX_SECONDS, Math.max(DURATION_MIN_SECONDS, value));
 
-export const formatDurationSeconds = (seconds: number) => formatTime(seconds * 1000);
+// The Default duration field edits minutes and seconds, so it never shows hours: 3600 s reads "60:00",
+// which parseDurationInput reads back as the same value.
+export const formatDurationSeconds = (seconds: number) => {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
+};
 
 export const durationSecondsToSlider = (seconds: number) => {
   const clamped = clampDurationSeconds(seconds);

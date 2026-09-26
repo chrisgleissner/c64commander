@@ -493,6 +493,11 @@ describe("playFilesUtils", () => {
     it("formatDurationSeconds", () => {
       expect(formatDurationSeconds(60)).toBe("1:00");
     });
+
+    it("shows the one-hour maximum default duration as 60:00, which the field reads back as one hour", () => {
+      expect(formatDurationSeconds(DURATION_MAX_SECONDS)).toBe("60:00");
+      expect(parseDurationInput(formatDurationSeconds(DURATION_MAX_SECONDS))).toBe(DURATION_MAX_SECONDS * 1000);
+    });
   });
 
   describe("parseVolumeOption", () => {
