@@ -619,11 +619,21 @@ describe("DriveManager", () => {
         c64ApiMockRef.current.getDeviceHost.mockReturnValue("u64");
         return true;
       });
-      render(<DriveManager {...defaultProps} />);
+      const reported: string[] = [];
+      const reportingHandleAction = vi.fn(async (action: () => Promise<void>) => {
+        try {
+          await action();
+        } catch (error) {
+          reported.push((error as Error).message);
+        }
+      });
+      render(<DriveManager {...defaultProps} handleAction={reportingHandleAction} />);
       fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
       fireEvent.click(await screen.findByTestId("confirm-mount"));
-      await vi.waitFor(() => expect(updateConfigValueSpy).toHaveBeenCalled());
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() => expect(reported).toHaveLength(1));
+      expect(reported[0]).toBe(
+        "The connected device changed from c64u to u64 while mounted to drive b; nothing more was sent.",
+      );
       expect(c64ApiMockRef.current.mountDrive).not.toHaveBeenCalled();
       c64ApiMockRef.current.getDeviceHost.mockReturnValue("c64u");
     });
