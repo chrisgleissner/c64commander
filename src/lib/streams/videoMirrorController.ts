@@ -35,6 +35,7 @@ import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
+import { describeStreamStartFailure } from "./streamStartFailure";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -437,7 +438,7 @@ export class VideoMirrorController {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: "Could not tell the device to start streaming video." });
+      this.update({ state: "error", error: describeStreamStartFailure(error, "video") });
     }
   }
 

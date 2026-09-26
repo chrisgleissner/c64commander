@@ -76,6 +76,14 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
   },
 }));
 
+const { createStreamReceiverMock } = vi.hoisted(() => ({
+  createStreamReceiverMock: vi.fn((options: object) => options),
+}));
+vi.mock("@/lib/streams/streamReceiver", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/streams/streamReceiver")>()),
+  createStreamReceiver: createStreamReceiverMock,
+}));
+
 import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { __resetPhoneAudioOwnership, claimPhoneAudio, interruptPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { addLog } from "@/lib/logging";
@@ -86,6 +94,7 @@ vi.mock("@/lib/logging", async (importOriginal) => {
 });
 
 const makeSession = () => {
+  createStreamReceiverMock.mockClear();
   audioInstances.length = 0;
   videoInstances.length = 0;
   const startStream = vi.fn(async () => ({}));
@@ -386,6 +395,68 @@ describe("AvMirrorSession", () => {
     await vi.waitFor(() => expect(isSelectedDeviceSender).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(audio.adoptSender).not.toHaveBeenCalled();
+  });
+
+  it("keeps accepting the adopted address for the selected device when the streams are restarted", async () => {
+    const { session, audio, video } = makeSession();
+    const selected = (audio.deps as { expectedSenderHost: () => string }).expectedSenderHost();
+
+    await session.adoptSender("192.0.2.47");
+
+    for (const controller of [audio, video]) {
+      const deps = controller.deps as { expectedSenderHost: () => string; createReceiver: (o: object) => unknown };
+      expect(deps.expectedSenderHost()).toBe("192.0.2.47");
+      deps.createReceiver({ name: controller === audio ? "audio" : "video" });
+    }
+    expect(createStreamReceiverMock).toHaveBeenCalledTimes(2);
+    for (const [options] of createStreamReceiverMock.mock.calls) {
+      expect(options).toMatchObject({ expectedSource: "192.0.2.47" });
+    }
+    expect(selected).not.toBe("192.0.2.47");
+  });
+
+  it("checks a refused sender again after an earlier check found it was not the selected device", async () => {
+    audioInstances.length = 0;
+    videoInstances.length = 0;
+    const isSelectedDeviceSender = vi.fn(async () => false);
+    new AvMirrorSession({
+      startStream: vi.fn(async () => ({})),
+      stopStream: vi.fn(async () => ({})),
+      isSelectedDeviceSender,
+    });
+    const audio = audioInstances[0]!;
+    const report = () =>
+      (audio.deps.onChange as (s: unknown) => void)({
+        state: "live",
+        droppedPackets: 0,
+        error: "dropped",
+        foreignSenderNotice: null,
+        senderMismatch: { source: "192.0.2.47", expected: "192.0.2.46", rejectedPackets: 3 },
+      });
+
+    report();
+    await vi.waitFor(() => expect(isSelectedDeviceSender).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    isSelectedDeviceSender.mockResolvedValueOnce(true);
+    report();
+
+    await vi.waitFor(() => expect(audio.adoptSender).toHaveBeenCalledWith("192.0.2.47"));
+    expect(isSelectedDeviceSender).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the uninvited-sender guard to spare a sender that is the selected device", async () => {
+    audioInstances.length = 0;
+    videoInstances.length = 0;
+    const isSelectedDeviceSender = vi.fn(async (source: string) => source === "192.0.2.47");
+    new AvMirrorSession({
+      startStream: vi.fn(async () => ({})),
+      stopStream: vi.fn(async () => ({})),
+      isSelectedDeviceSender,
+    });
+    const deps = audioInstances[0]!.deps as { isSelectedDevice: (host: string) => Promise<boolean> };
+
+    expect(await deps.isSelectedDevice("192.0.2.47")).toBe(true);
+    expect(await deps.isSelectedDevice("198.51.100.13")).toBe(false);
   });
 
   it("adopts on the stream that can, when the other refuses", async () => {

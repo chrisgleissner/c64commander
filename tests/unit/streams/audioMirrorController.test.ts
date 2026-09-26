@@ -435,7 +435,8 @@ describe("AudioMirrorController foreign-sender notice", () => {
       },
     }) as unknown as NativeAudioSink;
 
-  const startWithForeignSender = async (stopStreamAt: (host: string, name: "audio" | "video") => Promise<unknown>) => {
+  const startWithForeignSender = async (stop: (host: string, name: "audio" | "video") => Promise<unknown>) => {
+    const stopStreamAt = vi.fn(stop);
     const receiver = new FakeReceiver();
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
@@ -449,9 +450,9 @@ describe("AudioMirrorController foreign-sender notice", () => {
     await controller.start();
     receiver.emitState("open");
     controller.getSignals();
-    // The eviction is fire-and-forget from getSignals; let its promise chain settle.
-    await Promise.resolve();
-    await Promise.resolve();
+    // The eviction is fire-and-forget from getSignals; wait until it has asked the machine to stop.
+    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     return controller;
   };
 
@@ -470,5 +471,29 @@ describe("AudioMirrorController foreign-sender notice", () => {
   it("stays silent when the uninvited machine obeys", async () => {
     const controller = await startWithForeignSender(async () => ({ errors: [] }));
     expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
+  });
+
+  it("does not stop the selected device when it streams from its other address alongside an uninvited machine", async () => {
+    const receiver = new FakeReceiver();
+    const ownOtherAddress = "192.0.2.47";
+    const uninvited = "198.51.100.13";
+    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sinkWithSenders([ownOtherAddress, uninvited]),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "192.0.2.46",
+      stopStreamAt,
+      isSelectedDevice: async (host) => host === ownOtherAddress,
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.getSignals();
+
+    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledWith(uninvited, "audio"));
+    expect(stopStreamAt).not.toHaveBeenCalledWith(ownOtherAddress, expect.anything());
   });
 });

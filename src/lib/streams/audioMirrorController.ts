@@ -17,6 +17,7 @@
 import { addLog } from "@/lib/logging";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
 import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
+import { describeStreamStartFailure } from "./streamStartFailure";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -92,6 +93,8 @@ export interface AudioMirrorDeps {
   expectedSenderHost?: () => string | null;
   /** Ask ONE specific machine (by host/IP) to stop streaming. */
   stopStreamAt?: (host: string, name: "audio" | "video") => Promise<unknown>;
+  /** Whether a sender is the selected device on its other network address, which must not be stopped. */
+  isSelectedDevice?: (host: string) => Promise<boolean>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
@@ -290,7 +293,7 @@ export class AudioMirrorController {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: "Could not tell the device to start streaming audio." });
+      this.update({ state: "error", error: describeStreamStartFailure(error, "audio") });
     }
   }
 
@@ -308,8 +311,12 @@ export class AudioMirrorController {
     );
     if (pending.length === 0) return;
     pending.forEach((host) => this.foreignHandled.add(host));
+    const isSelectedDevice = this.deps.isSelectedDevice ?? (async () => false);
+    const selected = await Promise.all(pending.map(isSelectedDevice));
+    const foreign = pending.filter((_, index) => !selected[index]);
+    if (foreign.length === 0) return;
     const { failed } = await stopForeignSenders({
-      senders: pending,
+      senders: foreign,
       expectedHost: null, // already filtered
       stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
     });

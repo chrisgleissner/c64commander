@@ -305,7 +305,7 @@ export class AvMirrorSession {
           createStreamReceiver({
             ...opts,
             port: loadStreamAudioPort(),
-            expectedSource: getC64API().getDeviceHost(),
+            expectedSource: this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       createPlayer: deps.createPlayer,
@@ -319,8 +319,9 @@ export class AvMirrorSession {
       // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
       // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
       // earlier session sends straight into ours.
-      expectedSenderHost: () => getC64API().getDeviceHost(),
+      expectedSenderHost: () => this.expectedSender(),
       stopStreamAt: (host, name) => stopStreamAtForeignHost(host, name),
+      isSelectedDevice: (host) => this.isSelectedDeviceSender(host, getC64API().getDeviceHost()),
     });
 
     this.video = new VideoMirrorController({
@@ -338,7 +339,7 @@ export class AvMirrorSession {
             senderMismatch: s.senderMismatch,
           },
         }),
-      expectedSenderHost: () => getC64API().getDeviceHost(),
+      expectedSenderHost: () => this.expectedSender(),
       createReceiver:
         deps.createVideoReceiver ??
         ((opts) =>
@@ -348,7 +349,7 @@ export class AvMirrorSession {
             nativeVideoAssembly: loadStreamNativeVideoAssembly(),
             // Accept video only from the selected machine. Every Ultimate defaults to the same
             // multicast group, so a second one streaming into it is assembled into our frames.
-            expectedSource: getC64API().getDeviceHost(),
+            expectedSource: this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
@@ -370,14 +371,22 @@ export class AvMirrorSession {
     if (refused) this.adoptIfSelectedDevice(refused);
   }
 
-  private readonly checkedSenders = new Set<string>();
+  /** Senders being checked right now; a negative answer is not kept, so a later refusal is checked again. */
+  private readonly checkingSenders = new Set<string>();
+  /** Per selected host, the address its streams actually arrive from, kept across receiver rebuilds. */
+  private readonly adoptedSenders = new Map<string, string>();
+
+  private expectedSender(): string {
+    const selectedHost = getC64API().getDeviceHost();
+    return this.adoptedSenders.get(selectedHost) ?? selectedHost;
+  }
 
   /** A refused sender that proves to be the selected device on another address is accepted without asking. */
   private adoptIfSelectedDevice(source: string) {
     const selectedHost = getC64API().getDeviceHost();
     const key = `${selectedHost}|${source}`;
-    if (this.checkedSenders.has(key)) return;
-    this.checkedSenders.add(key);
+    if (this.checkingSenders.has(key)) return;
+    this.checkingSenders.add(key);
     void this.isSelectedDeviceSender(source, selectedHost)
       .then((sameDevice) => {
         addLog(
@@ -398,7 +407,8 @@ export class AvMirrorSession {
           source,
           error: (error as Error)?.message ?? String(error),
         });
-      });
+      })
+      .finally(() => this.checkingSenders.delete(key));
   }
 
   private emitFrame(frame: Uint8Array, height: number, arrivalMs: number) {
@@ -760,6 +770,7 @@ export class AvMirrorSession {
    * other, and a user who has been told which address to use should not have to be told twice.
    */
   adoptSender(source: string): Promise<void> {
+    this.adoptedSenders.set(getC64API().getDeviceHost(), source);
     return this.serialize(async () => {
       addLog("info", "Live View: accepting the stream from the address it is actually arriving from", {
         service: "streams",
