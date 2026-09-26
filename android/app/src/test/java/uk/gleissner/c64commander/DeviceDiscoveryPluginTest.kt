@@ -364,6 +364,39 @@ class DeviceDiscoveryPluginTest {
     assertEquals(setOf("192.0.2.10", "198.51.100.20"), candidates[0].addresses)
   }
 
+  // The unique id is user-configurable, so two separate Ultimates can report the same one.
+  @Test
+  fun runProbesKeepsTwoDevicesThatShareACustomUniqueIdButNotAHostname() {
+    val desk = delayedInfoConnection(ultimateInfoJson(uniqueId = "custom", hostname = "ultimate-desk"), delayMs = 0)
+    val attic = delayedInfoConnection(ultimateInfoJson(uniqueId = "custom", hostname = "ultimate-attic"), delayMs = 0)
+    plugin.httpConnectionFactory = { url -> if (url.host == "192.0.2.10") desk else attic }
+
+    val candidates =
+      plugin.runProbes(
+        listOf(
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "192.0.2.10", source = "lan-scan"),
+          DeviceDiscoveryPlugin.DiscoveryTarget(host = "203.0.113.40", source = "lan-scan"),
+        ),
+        3_000,
+        1_000,
+        4,
+      )
+
+    assertEquals(2, candidates.size)
+    assertEquals(
+      mapOf("ultimate-desk" to setOf("192.0.2.10"), "ultimate-attic" to setOf("203.0.113.40")),
+      candidates.associate { it.hostname to it.addresses },
+    )
+  }
+
+  @Test
+  fun candidateGroupKeyNeedsBothUniqueIdAndHostname() {
+    val known = scannedCandidate("192.0.2.10")
+    assertEquals("id:dual@u64", plugin.candidateGroupKey(known.copy(uniqueId = " DUAL ", hostname = "U64")))
+    assertEquals("address:192.0.2.10", plugin.candidateGroupKey(known.copy(hostname = null)))
+    assertEquals("address:192.0.2.10", plugin.candidateGroupKey(known.copy(uniqueId = " ")))
+  }
+
   @Test
   fun mergeCandidateGroupIsIndependentOfCompletionOrder() {
     val first = scannedCandidate("198.51.100.20")

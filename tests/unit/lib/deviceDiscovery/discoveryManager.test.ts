@@ -246,7 +246,7 @@ describe("device discovery manager", () => {
         firmwareVersion: "1.1.0",
         fpgaVersion: "122",
         coreVersion: "1.49",
-        hostname: "c64u-new",
+        hostname: "c64u",
         uniqueId: "5D4E12",
         requiresPassword: false,
         alreadySavedDeviceId: null,
@@ -439,7 +439,7 @@ describe("device discovery manager", () => {
     expect(discover).toHaveBeenCalledTimes(2);
   });
 
-  it("matches a discovered candidate to an existing saved device by unique id, hostname, then address", async () => {
+  it("matches a discovered candidate to an existing saved device by unique id and hostname, hostname, then address", async () => {
     const { addSavedDevice } = await import("@/lib/savedDevices/store");
     const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
 
@@ -451,6 +451,7 @@ describe("device discovery manager", () => {
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
+      lastKnownHostname: "ultimate-aabbcc",
       lastKnownUniqueId: "AABBCC",
       hasPassword: false,
     });
@@ -483,6 +484,7 @@ describe("device discovery manager", () => {
           httpPort: 80,
           source: ["lan-scan"],
           product: "C64 Ultimate",
+          hostname: "ultimate-aabbcc",
           uniqueId: "AABBCC",
         },
         // No uniqueId; matched by lastKnownHostname (line 113).
@@ -569,6 +571,7 @@ describe("device discovery manager", () => {
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 23,
+      lastKnownHostname: "c64u",
       lastKnownUniqueId: "DEADBE",
       hasPassword: false,
     });

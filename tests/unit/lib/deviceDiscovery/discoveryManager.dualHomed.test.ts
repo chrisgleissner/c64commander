@@ -22,6 +22,8 @@ vi.mock("@/lib/logging", () => ({
 // One Ultimate on Ethernet (192.0.2.0/24) and Wi-Fi (198.51.100.0/24), answering on both.
 const ETHERNET = "192.0.2.10";
 const WIFI = "198.51.100.20";
+// A second, separate Ultimate whose user gave it the first one's custom unique id.
+const ATTIC = "203.0.113.40";
 
 const dualHomedNativeCandidate = (address: string) => ({
   address,
@@ -101,7 +103,11 @@ describe("discovery of an Ultimate that answers on two addresses", () => {
   it("never swaps a saved hostname for an address while the device is reachable through it", async () => {
     await seedSavedDevice("ultimate.example");
     const { completeSavedDeviceVerification } = await import("@/lib/savedDevices/store");
-    completeSavedDeviceVerification("saved-1", { product: "Ultimate 64 Elite", unique_id: "DUAL01" });
+    completeSavedDeviceVerification("saved-1", {
+      product: "Ultimate 64 Elite",
+      hostname: "ultimate",
+      unique_id: "DUAL01",
+    });
 
     const persisted = await discoverAndPersist(WIFI);
 
@@ -121,13 +127,53 @@ describe("discovery of an Ultimate that answers on two addresses", () => {
   it("replaces a saved hostname once the app has lost the device through it", async () => {
     await seedSavedDevice("ultimate.example");
     const { completeSavedDeviceVerification, failSavedDeviceVerification } = await import("@/lib/savedDevices/store");
-    completeSavedDeviceVerification("saved-1", { product: "Ultimate 64 Elite", unique_id: "DUAL01" });
+    completeSavedDeviceVerification("saved-1", {
+      product: "Ultimate 64 Elite",
+      hostname: "ultimate",
+      unique_id: "DUAL01",
+    });
     await new Promise((resolve) => setTimeout(resolve, 5));
     failSavedDeviceVerification("saved-1");
 
     const persisted = await discoverAndPersist(WIFI);
 
     expect(persisted.host).toBe(WIFI);
+  });
+
+  // The unique id is user-configurable, so a second Ultimate can report the same one under its own hostname.
+  it("lists two devices that share a custom unique id but not a hostname as two candidates", async () => {
+    discover.mockResolvedValueOnce({
+      candidates: [
+        { ...dualHomedNativeCandidate(ETHERNET), addresses: [ETHERNET] },
+        { ...dualHomedNativeCandidate(ATTIC), hostname: "ultimate-attic", addresses: [ATTIC] },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 50,
+      unsupported: false,
+    });
+    const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+
+    const result = await startDeviceDiscovery({ trigger: "settings", includeLanScan: true });
+
+    expect(result.candidates.map((candidate) => candidate.addresses)).toEqual([[ETHERNET], [ATTIC]]);
+  });
+
+  it("saves a device that shares the saved device's custom unique id but not its hostname as a new entry", async () => {
+    await seedSavedDevice(ETHERNET);
+    discover.mockResolvedValueOnce({
+      candidates: [{ ...dualHomedNativeCandidate(ATTIC), hostname: "ultimate-attic", addresses: [ATTIC] }],
+      scannedHosts: 254,
+      elapsedMs: 50,
+      unsupported: false,
+    });
+    const { persistDiscoveredDevice, startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+    const result = await startDeviceDiscovery({ trigger: "settings", includeLanScan: true });
+
+    const persisted = persistDiscoveredDevice(result.candidates[0], { select: false });
+
+    expect(result.candidates[0].alreadySavedDeviceId).toBeNull();
+    expect(persisted.deviceId).not.toBe("saved-1");
+    expect(await savedHost()).toBe(ETHERNET);
   });
 
   it("recognises a device saved under its other address as already saved", async () => {

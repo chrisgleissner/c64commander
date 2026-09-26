@@ -36,6 +36,8 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), buildErrorLogDetails: vi.fn()
 const ETHERNET = "192.0.2.10";
 const WIFI = "198.51.100.20";
 const DUAL = { product: "Ultimate 64 Elite", hostname: "ultimate", unique_id: "DUAL01" };
+// A second, separate protected Ultimate whose user gave it the first one's custom unique id.
+const ATTIC = "203.0.113.40";
 
 const protectedCandidate = (address: string): DeviceDiscoveryCandidate => ({
   id: `address:${address}`,
@@ -101,6 +103,25 @@ describe("saving a password-protected device found at two addresses", () => {
     expect(identified.addresses).toEqual([WIFI, ETHERNET]);
     expect(persisted.host).toBe(ETHERNET);
     expect(requestedHosts.every((request) => request.password === "pw")).toBe(true);
+  });
+
+  it("saves a device that shares the saved device's custom unique id but not its hostname as a separate entry", async () => {
+    infoByHost.set(ATTIC, { ...DUAL, hostname: "ultimate-attic" });
+    const { persistDiscoveredDevice, resolveDiscoveredCandidateIdentity } =
+      await import("@/lib/deviceDiscovery/discoveryManager");
+    const first = persistDiscoveredDevice(
+      await resolveDiscoveredCandidateIdentity(protectedCandidate(ETHERNET), "pw"),
+      {
+        passwordPresent: true,
+      },
+    );
+
+    const identified = await resolveDiscoveredCandidateIdentity(protectedCandidate(ATTIC), "pw");
+    const second = persistDiscoveredDevice(identified, { passwordPresent: true });
+
+    expect(identified.addresses).toEqual([ATTIC]);
+    expect(second.deviceId).not.toBe(first.deviceId);
+    expect((await savedEntries()).find((device) => device.id === first.deviceId)?.host).toBe(ETHERNET);
   });
 
   it("leaves the candidate unchanged without a password or when the device does not answer", async () => {

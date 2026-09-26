@@ -373,8 +373,7 @@ class DeviceDiscoveryPlugin : Plugin() {
         pending -= 1
         val outcome = future.get()
         val candidate = outcome.candidate ?: continue
-        val key = candidate.uniqueId?.takeIf { it.isNotBlank() } ?: candidate.address
-        candidatesByKey.getOrPut(key) { mutableListOf() }.add(candidate)
+        candidatesByKey.getOrPut(candidateGroupKey(candidate)) { mutableListOf() }.add(candidate)
       }
     } catch (error: Exception) {
       AppLogger.warn(context, logTag, "Device discovery probe loop failed", "DeviceDiscoveryPlugin", error)
@@ -383,6 +382,15 @@ class DeviceDiscoveryPlugin : Plugin() {
     }
 
     return candidatesByKey.values.map { group -> mergeCandidateGroup(group) }
+  }
+
+  // The user can set the unique id, so two Ultimates may share one; the hostname (MAC-derived by
+  // default) must match too before two answers are treated as one device on two addresses.
+  internal fun candidateGroupKey(candidate: DiscoveryCandidate): String {
+    val uniqueId = candidate.uniqueId?.trim()?.lowercase().orEmpty()
+    val hostname = candidate.hostname?.trim()?.lowercase().orEmpty()
+    if (uniqueId.isEmpty() || hostname.isEmpty()) return "address:${candidate.address}"
+    return "id:$uniqueId@$hostname"
   }
 
   // Merged in a fixed order rather than completion order, so the primary address of a device that

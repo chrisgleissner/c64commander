@@ -17,6 +17,12 @@ import {
 } from "@/lib/c64api/hostConfig";
 import { stripSavedDeviceHttpPort } from "@/lib/savedDevices/host";
 import {
+  deviceInfoMachineIdentity,
+  isSameMachine,
+  machineIdentityKey,
+  savedEntryMachineIdentity,
+} from "@/lib/savedDevices/machineIdentity";
+import {
   addSavedDevice,
   completeSavedDeviceVerification,
   type DeviceSwitchSummary,
@@ -115,9 +121,16 @@ export const acknowledgeDeviceDiscoveryResults = () => {
 
 const normalizeToken = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
-const candidateKey = (candidate: NativeDeviceDiscoveryCandidate) => {
-  const uniqueId = normalizeToken(candidate.uniqueId);
-  if (uniqueId) return `id:${uniqueId}`;
+// A user-set unique id can repeat across devices, so it identifies a candidate only together with the hostname.
+const candidateKey = (candidate: {
+  address: string;
+  hostname?: string | null;
+  product?: string | null;
+  uniqueId?: string | null;
+}) => {
+  if (machineIdentityKey(candidate)) {
+    return `id:${normalizeToken(candidate.uniqueId)}@${normalizeToken(candidate.hostname)}`;
+  }
   const hostname = normalizeToken(candidate.hostname);
   const product = normalizeToken(candidate.product);
   if (hostname && product) return `host-product:${hostname}:${product}`;
@@ -135,11 +148,10 @@ type SavedDeviceMatchInput = Pick<NativeDeviceDiscoveryCandidate, "address" | "a
 
 const findSavedDeviceId = (candidate: SavedDeviceMatchInput) => {
   const savedDevices = getSavedDevicesSnapshot();
-  const uniqueId = normalizeToken(candidate.uniqueId);
-  if (uniqueId) {
-    const match = savedDevices.devices.find((device) => normalizeToken(device.lastKnownUniqueId) === uniqueId);
-    if (match) return match.id;
-  }
+  const identityMatch = savedDevices.devices.find((device) =>
+    isSameMachine(savedEntryMachineIdentity(savedDevices, device.id), candidate),
+  );
+  if (identityMatch) return identityMatch.id;
   const hostname = normalizeToken(candidate.hostname);
   if (hostname) {
     const match = savedDevices.devices.find(
@@ -406,21 +418,21 @@ export const resolveDiscoveredCandidateIdentity = async (
   if (!candidate.requiresPassword || candidate.uniqueId || !password) return candidate;
   const { info, uniqueId } = await readUniqueIdWithPassword(candidate.address, candidate.httpPort, password);
   if (!info || !uniqueId) return candidate;
-  const identified = {
+  const withIdentity = {
     ...candidate,
-    id: `id:${normalizeToken(uniqueId)}`,
     uniqueId,
     hostname: info.hostname?.trim() || candidate.hostname,
     product: info.product?.trim() || candidate.product,
     firmwareVersion: info.firmware_version?.trim() || candidate.firmwareVersion,
   };
+  const identified = { ...withIdentity, id: candidateKey(withIdentity) };
   const savedDeviceId = findSavedDeviceId(identified) ?? candidate.alreadySavedDeviceId;
   const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === savedDeviceId) ?? null;
   const savedHost = saved ? stripSavedDeviceHttpPort(saved.host) : null;
   const addresses = candidateAddresses(identified);
   if (saved && savedHost && !addresses.map(normalizeToken).includes(normalizeToken(savedHost))) {
     const savedAnswer = await readUniqueIdWithPassword(savedHost, saved.httpPort, password);
-    if (normalizeToken(savedAnswer.uniqueId) === normalizeToken(uniqueId)) addresses.push(savedHost);
+    if (isSameMachine(deviceInfoMachineIdentity(savedAnswer.info), identified)) addresses.push(savedHost);
   }
   return { ...identified, addresses, alreadySavedDeviceId: savedDeviceId };
 };
@@ -459,10 +471,8 @@ export const persistDiscoveredDevice = (
   // would otherwise silently retarget device A's stored credentials to the
   // physically different device B. Refuse the match in that case — create
   // a fresh saved device entry.
-  const matchesByUniqueId = (device: { lastKnownUniqueId?: string | null }) =>
-    candidate.uniqueId &&
-    device.lastKnownUniqueId &&
-    normalizeToken(device.lastKnownUniqueId) === normalizeToken(candidate.uniqueId);
+  const matchesMachineIdentity = (device: SavedDevice) =>
+    isSameMachine(savedEntryMachineIdentity(savedDevices, device.id), candidate);
   const isConflictingHostnameMatch = (device: {
     lastKnownUniqueId?: string | null;
     host?: string;
@@ -486,7 +496,7 @@ export const persistDiscoveredDevice = (
   };
   const existingId =
     candidate.alreadySavedDeviceId ??
-    (candidate.uniqueId ? (savedDevices.devices.find(matchesByUniqueId)?.id ?? null) : null) ??
+    (candidate.uniqueId ? (savedDevices.devices.find(matchesMachineIdentity)?.id ?? null) : null) ??
     (candidate.hostname
       ? (savedDevices.devices.find((device) => hostnameOrHostMatch(device) && !isConflictingHostnameMatch(device))
           ?.id ?? null)
