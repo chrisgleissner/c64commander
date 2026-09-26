@@ -116,13 +116,8 @@ import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch
 import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
 import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
-import {
-  loadRecentlyPlayed,
-  saveRecentlyPlayed,
-  toRecentlyPlayedEntry,
-  withRecentlyPlayed,
-  type RecentlyPlayedEntry,
-} from "@/lib/sidRadio/recentlyPlayed";
+import type { RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
+import { useRecordRecentlyPlayed } from "@/pages/playFiles/hooks/useRecordRecentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
@@ -1660,47 +1655,6 @@ export default function PlayFilesPage() {
    * blob attached until playback resolves one. The archive index turns that path straight into the
    * identity the corpus uses, which is both cheaper and available sooner.
    */
-  /**
-   * Remember what has been heard, so there is a way back to it.
-   *
-   * A station is endless and one-way, and the tune that made somebody think "what was that" has
-   * usually gone by the time they reach for anything. Recorded on the track itself rather than on
-   * the playlist so a station's tunes are covered — they never appear in a playlist anyone built —
-   * and keyed on the track instance so a repeat of the same tune moves it up rather than adding a
-   * second row.
-   */
-  useEffect(() => {
-    if (!currentItem || !currentItem.path) return;
-    // Whatever was opened, not only an archive tune. The row is reopened by this path, so a disk or
-    // a program carries the source it came from as well; only an archive tune has a path that is
-    // meaningful on its own. Recording tunes alone was why Recent stayed empty for anyone who
-    // played programs and disks, which the store has had a category for all along.
-    const isArchiveTune = isSongCategory(currentItem.category) && currentItem.request.source === "hvsc";
-    const category =
-      currentItem.category === "disk" ? "disk" : isSongCategory(currentItem.category) ? "sid" : "program";
-    saveRecentlyPlayed(
-      withRecentlyPlayed(
-        loadRecentlyPlayed(),
-        toRecentlyPlayedEntry({
-          virtualPath: currentItem.path,
-          title: currentDisplay?.title ?? currentItem.label,
-          author: currentItemCredits.author,
-          category,
-          // Both halves of where it came from: the kind the router dispatches on, and which
-          // configured source of that kind. A device can have several local roots, and "local"
-          // alone cannot say which tree the path belongs to.
-          ...(isArchiveTune ? {} : { source: currentItem.request.source }),
-          ...(isArchiveTune || !currentItem.sourceId ? {} : { sourceId: currentItem.sourceId }),
-          songNr: currentItem.request.songNr,
-          subsongCount: currentItem.subsongCount,
-          durationMs: currentItem.durationMs,
-        }),
-      ),
-    );
-    // Keyed on the track instance: the same tune coming round again is a new hearing and belongs at
-    // the top, but a re-render of the same one is not.
-  }, [trackInstanceId]);
-
   const currentSeedMd548 =
     (currentTuneMd5 ? currentTuneMd5.slice(0, 12) : null) ??
     (currentItem?.path ? md548ForVirtualPath(currentItem.path) : null);
@@ -1841,6 +1795,7 @@ export default function PlayFilesPage() {
   // address bytes, which is what the player itself obeys. It is only available where the file's
   // bytes are in hand, so a tune the app has not opened yet falls back to the file-name marker.
   const [currentItemCredits, setCurrentItemCredits] = useState<{
+    itemId: string | null;
     author: string | null;
     released: string | null;
     chipCount: SidChipCount | null;
@@ -1848,6 +1803,7 @@ export default function PlayFilesPage() {
     sidModels: SidModel[];
     clock: SidClock | null;
   }>({
+    itemId: null,
     author: null,
     released: null,
     chipCount: null,
@@ -1856,7 +1812,7 @@ export default function PlayFilesPage() {
   });
   useEffect(() => {
     let cancelled = false;
-    setCurrentItemCredits({ author: null, released: null, chipCount: null, sidModels: [], clock: null });
+    setCurrentItemCredits({ itemId: null, author: null, released: null, chipCount: null, sidModels: [], clock: null });
     const file = currentItem?.request.file;
     if (!file || currentItem?.category !== "sid") return;
     void (async () => {
@@ -1864,6 +1820,7 @@ export default function PlayFilesPage() {
         const header = parseSidHeaderMetadata(new Uint8Array(await file.arrayBuffer()));
         if (cancelled) return;
         setCurrentItemCredits({
+          itemId: currentItem.id,
           author: header.author || null,
           released: header.released || null,
           chipCount: header.sidChipCount === 2 || header.sidChipCount === 3 ? header.sidChipCount : 1,
@@ -1899,6 +1856,12 @@ export default function PlayFilesPage() {
         chipCount: currentItemCredits.chipCount,
       })
     : null;
+  useRecordRecentlyPlayed({
+    trackInstanceId,
+    item: currentItem,
+    title: currentDisplay?.title,
+    credits: currentItemCredits,
+  });
 
   /*
    * What the lock screen and the notification shade say is playing (HARD27-040).
