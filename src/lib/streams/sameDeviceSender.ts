@@ -11,15 +11,16 @@ import { C64API, getC64API } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { StreamUdp } from "@/lib/native/streamUdp";
 import { addLog } from "@/lib/logging";
+import {
+  deviceInfoMachineIdentity,
+  machineIdentityKey,
+  type MachineIdentity,
+} from "@/lib/savedDevices/machineIdentity";
 
 const IDENTITY_TIMEOUT_MS = 3000;
 const IDENT_TIMEOUT_MS = 1500;
 
-/** What identifies a machine: `unique_id` alone is user-editable, so the hostname must match too. */
-export interface MachineIdentity {
-  uniqueId: string | null;
-  hostname: string | null;
-}
+export type { MachineIdentity };
 
 type FetchIdentity = (host: string) => Promise<MachineIdentity>;
 
@@ -32,28 +33,21 @@ export interface SenderIdentityDeps {
 /** `unknown` when either side cannot be identified; only `different` may justify stopping a sender. */
 export type SenderVerdict = "same" | "different" | "unknown";
 
-const normalized = (value: string | null | undefined): string | null => value?.trim().toLowerCase() || null;
-
-const identityOf = (info: { unique_id?: string | null; hostname?: string | null } | null | undefined) => ({
-  uniqueId: normalized(info?.unique_id),
-  hostname: normalized(info?.hostname),
-});
-
 const identityWithoutPassword: FetchIdentity = async (host) => {
   if (Capacitor.isPluginAvailable("StreamUdp")) {
     const reply = await StreamUdp.identify({ host, timeoutMs: IDENT_TIMEOUT_MS });
-    const identity = identityOf({ unique_id: reply.uniqueId, hostname: reply.hostname });
+    const identity = deviceInfoMachineIdentity({ unique_id: reply.uniqueId, hostname: reply.hostname });
     if (identity.uniqueId) return identity;
   }
   const info = await new C64API(buildBaseUrlFromDeviceHost(host), undefined, host).getInfo({
     timeoutMs: IDENTITY_TIMEOUT_MS,
     __c64uIntent: "system",
   });
-  return identityOf(info);
+  return deviceInfoMachineIdentity(info);
 };
 
 const selectedDeviceIdentity: FetchIdentity = async () =>
-  identityOf(await getC64API().getInfo({ timeoutMs: IDENTITY_TIMEOUT_MS, __c64uIntent: "system" }));
+  deviceInfoMachineIdentity(await getC64API().getInfo({ timeoutMs: IDENTITY_TIMEOUT_MS, __c64uIntent: "system" }));
 
 const defaultDeps: SenderIdentityDeps = {
   senderIdentity: identityWithoutPassword,
@@ -61,8 +55,9 @@ const defaultDeps: SenderIdentityDeps = {
 };
 
 export const compareMachineIdentities = (a: MachineIdentity, b: MachineIdentity): SenderVerdict => {
-  if (!a.uniqueId || !b.uniqueId || !a.hostname || !b.hostname) return "unknown";
-  return a.uniqueId === b.uniqueId && a.hostname === b.hostname ? "same" : "different";
+  const [left, right] = [machineIdentityKey(a), machineIdentityKey(b)];
+  if (left === null || right === null) return "unknown";
+  return left === right ? "same" : "different";
 };
 
 /**
