@@ -683,7 +683,7 @@ export default function PlayFilesPage() {
    */
   const advanceOnTrackEnd = useCallback(
     (trackInstanceId?: number) => {
-      if (sleepTimerRef.current.notifyTuneEnded()) return Promise.resolve();
+      if (sleepTimerRef.current.notifyTuneEnded(trackInstanceId)) return Promise.resolve();
       return handleNextRef.current("auto", trackInstanceId);
     },
     [handleNextRef],

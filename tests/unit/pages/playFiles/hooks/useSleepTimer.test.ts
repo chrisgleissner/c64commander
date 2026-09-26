@@ -109,4 +109,61 @@ describe("useSleepTimer double-fire guards", () => {
     });
     expect(onExpire).toHaveBeenCalledTimes(1);
   });
+
+  it("tells a second end notification of the stopped tune to stop too when it arrives before the disarm renders", () => {
+    const onExpire = vi.fn();
+    const { result } = renderHook(() => useSleepTimer({ onExpire, isPlaying: true }));
+    act(() => result.current.setMode({ kind: "after-tune" }));
+    const answers: boolean[] = [];
+    act(() => {
+      answers.push(result.current.notifyTuneEnded(7));
+      answers.push(result.current.notifyTuneEnded(7));
+    });
+    expect(answers).toEqual([true, true]);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells a late end notification of the stopped tune to stop after the disarm has rendered", () => {
+    const onExpire = vi.fn();
+    const { result } = renderHook(() => useSleepTimer({ onExpire, isPlaying: true }));
+    act(() => result.current.setMode({ kind: "after-tune" }));
+    act(() => void result.current.notifyTuneEnded(7));
+    expect(result.current.mode).toEqual(SLEEP_TIMER_OFF);
+
+    let late = false;
+    act(() => {
+      late = result.current.notifyTuneEnded(7);
+    });
+    expect(late).toBe(true);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a later tune's end advance once the timer has stopped an earlier one", () => {
+    const onExpire = vi.fn();
+    const { result } = renderHook(() => useSleepTimer({ onExpire, isPlaying: true }));
+    act(() => result.current.setMode({ kind: "after-tune" }));
+    act(() => void result.current.notifyTuneEnded(7));
+
+    let later = true;
+    act(() => {
+      later = result.current.notifyTuneEnded(8);
+    });
+    expect(later).toBe(false);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops the next tune again when 'after this tune' is armed a second time", () => {
+    const onExpire = vi.fn();
+    const { result } = renderHook(() => useSleepTimer({ onExpire, isPlaying: true }));
+    act(() => result.current.setMode({ kind: "after-tune" }));
+    act(() => void result.current.notifyTuneEnded(7));
+    act(() => result.current.setMode({ kind: "after-tune" }));
+
+    let stopped = false;
+    act(() => {
+      stopped = result.current.notifyTuneEnded(8);
+    });
+    expect(stopped).toBe(true);
+    expect(onExpire).toHaveBeenCalledTimes(2);
+  });
 });

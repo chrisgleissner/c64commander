@@ -23,8 +23,11 @@ export type SleepTimerState = {
   setMode: (mode: SleepTimerMode) => void;
   /** Ticks once a second while a timed sleep timer is armed, and is otherwise static. */
   nowMs: number;
-  /** Call when a tune finishes. Returns true when playback should stop instead of advancing. */
-  notifyTuneEnded: () => boolean;
+  /**
+   * Call when a tune finishes. Returns true when playback should stop instead of advancing, and keeps
+   * returning true for every later end notification of the track instance it stopped.
+   */
+  notifyTuneEnded: (trackInstanceId?: number) => boolean;
 };
 
 /**
@@ -74,21 +77,25 @@ export const useSleepTimer = ({ onExpire, isPlaying }: UseSleepTimerParams): Sle
     return () => window.clearInterval(handle);
   }, [disarm, mode]);
 
-  // Same hazard as the interval above: `disarm()` only takes effect on the next render, so two
-  // track-end notifications arriving before it lands would both see an armed timer.
-  const stoppedForTuneRef = useRef(false);
+  // The foreground reconciliation and the background watchdog both report the same tune's end. The
+  // second report, whether it lands before or after the disarm renders, must not advance either.
+  const stoppedTuneRef = useRef<{ trackInstanceId: number | undefined } | null>(null);
   useEffect(() => {
-    if (mode.kind === "after-tune") stoppedForTuneRef.current = false;
+    if (mode.kind === "after-tune") stoppedTuneRef.current = null;
   }, [mode]);
 
-  const notifyTuneEnded = useCallback(() => {
-    if (!shouldStopAfterTune(mode) || stoppedForTuneRef.current) return false;
-    stoppedForTuneRef.current = true;
-    addLog("info", "Sleep timer: stopping after this tune");
-    disarm();
-    onExpireRef.current();
-    return true;
-  }, [disarm, mode]);
+  const notifyTuneEnded = useCallback(
+    (trackInstanceId?: number) => {
+      if (stoppedTuneRef.current) return stoppedTuneRef.current.trackInstanceId === trackInstanceId;
+      if (!shouldStopAfterTune(mode)) return false;
+      stoppedTuneRef.current = { trackInstanceId };
+      addLog("info", "Sleep timer: stopping after this tune", { trackInstanceId });
+      disarm();
+      onExpireRef.current();
+      return true;
+    },
+    [disarm, mode],
+  );
 
   // An armed timer outlives a stop the listener made themselves only for as long as it takes to
   // notice: "after this tune" cannot fire once nothing is playing, so it is cleared rather than

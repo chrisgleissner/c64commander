@@ -38,7 +38,9 @@ describe("PlayFilesPage feature-flag contracts", () => {
     // directly here would let the background path keep playing through a sleep timer the foreground
     // path honours.
     expect(playFilesPageSource).toContain("await advanceOnTrackEndRef.current(expectedTrackInstanceId);");
-    expect(playFilesPageSource).toContain("if (sleepTimerRef.current.notifyTuneEnded()) return Promise.resolve();");
+    expect(playFilesPageSource).toContain(
+      "if (sleepTimerRef.current.notifyTuneEnded(trackInstanceId)) return Promise.resolve();",
+    );
     expect(playFilesPageSource).toContain(
       "const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);",
     );
