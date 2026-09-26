@@ -168,6 +168,7 @@ export function DriveManager({
   const [mountTarget, setMountTarget] = useState<{
     spec: DriveControlSpec;
     currentPath?: string;
+    enabled: boolean;
   } | null>(null);
   const [statusDetailsDialog, setStatusDetailsDialog] = useState<{
     driveLabel: string;
@@ -191,8 +192,8 @@ export function DriveManager({
     return groups;
   }, [isConnected, localSources, ultimateSourceName]);
 
-  const handleMountClick = (spec: DriveControlSpec, currentPath?: string) => {
-    setMountTarget({ spec, currentPath });
+  const handleMountClick = (spec: DriveControlSpec, currentPath: string | undefined, enabled: boolean) => {
+    setMountTarget({ spec, currentPath, enabled });
   };
 
   const handleAddLocalSource = async () => {
@@ -223,7 +224,7 @@ export function DriveManager({
   const handleMountSelection = async (source: unknown, selections: { path: string; name?: string }[]) => {
     if (!mountTarget || selections.length === 0) return false;
     const selected = selections[0];
-    const { spec } = mountTarget;
+    const { spec, enabled } = mountTarget;
     const sourceLocation = source as SourceLocation | null;
 
     if (spec.class === "SOFT_IEC_DRIVE") {
@@ -237,6 +238,17 @@ export function DriveManager({
     } else if (spec.class === "PHYSICAL_DRIVE_A" || spec.class === "PHYSICAL_DRIVE_B") {
       const driveId = spec.class === "PHYSICAL_DRIVE_A" ? "a" : "b";
       const description = `Mounted to Drive ${driveId.toUpperCase()}`;
+      const driveOn =
+        enabled ||
+        (await updateConfigValue(
+          spec.category,
+          spec.enabledItem,
+          "Enabled",
+          "HOME_DRIVE_ENABLED",
+          `${spec.label} turned on to mount the disk`,
+          { refreshDrives: true },
+        ));
+      if (!driveOn) return false;
       if (sourceLocation?.type === "local") {
         await handleAction(async () => {
           await mountLocalImageOnPhysicalDrive(driveId, sourceLocation, selected.path, selected.name ?? selected.path);
@@ -451,7 +463,7 @@ export function DriveManager({
               typePending={!isSoftIec ? pendingType : undefined}
               mountedPath={mountedPath}
               mountedPathLabel={mountedPathLabel}
-              onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel)}
+              onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel, enabled)}
               pathEditable={!isSoftIec || isSoftIecDefaultPathConfigurable(softIecConfig)}
               statusSummary={statusSummary}
               statusSeverity={statusSeverity}

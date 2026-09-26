@@ -671,16 +671,15 @@ export const HomeDiskManager = () => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
-      // Match Play's mount mode (mountDiskToDrive/mountDriveUpload both
-      // default to "readwrite") so a disk mounted from the library behaves
-      // the same as one launched via Play - games saving high scores/state
-      // to the user's own D64s must not fail with DOS 26 "WRITE PROTECT ON".
-      // See HARD9-012.
-      const outcome = await runDriveMutationWithSettledPolling(() =>
-        mountDiskToDrive(api, drive, disk, runtimeFile, {
-          archiveConfigs,
-          writeBack: buildDiskWriteBackDependencies(),
-        }),
+      // Default "readwrite" mode, as Play mounts, so games can save to the user's own disks (HARD9-012).
+      const powerEnabled = drivePowerOverride[drive] ?? mountSupport.findPolledDrive(drivesData, drive)?.enabled;
+      const { outcome, poweredOn } = await runDriveMutationWithSettledPolling(() =>
+        mountSupport.mountOntoPoweredDrive(api, drive, powerEnabled, () =>
+          mountDiskToDrive(api, drive, disk, runtimeFile, {
+            archiveConfigs,
+            writeBack: buildDiskWriteBackDependencies(),
+          }),
+        ),
       );
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount completion", {
@@ -698,7 +697,7 @@ export const HomeDiskManager = () => {
       setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
         title: "Disk mounted",
-        description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
+        description: mountSupport.describeDiskMounted(disk.name, drive, poweredOn),
       });
       // HARD18-025: only the residual case (materialization unavailable or
       // failed) risks silent save loss - device-native and materialized
@@ -2517,7 +2516,7 @@ export const HomeDiskManager = () => {
             <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {driveRows.map(({ key, busId, driveType, mounted, configPending, mountPending }) => (
+            {driveRows.map(({ key, busId, driveType, mounted, powerEnabled, configPending, mountPending }) => (
               <Button
                 key={key}
                 variant="outline"
@@ -2528,7 +2527,7 @@ export const HomeDiskManager = () => {
                 disabled={!status.isConnected || configPending || mountPending}
               >
                 <HardDrive className="h-4 w-4 mr-2" />
-                {buildDriveLabel(key)} (#{busId}, {driveType}) {mounted ? "• mounted" : ""}
+                {mountSupport.buildMountTargetLabel({ key, busId, driveType, mounted, powerEnabled })}
               </Button>
             ))}
           </div>

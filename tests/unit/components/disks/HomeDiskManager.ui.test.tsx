@@ -561,6 +561,35 @@ describe("HomeDiskManager UI & Interactions", () => {
     resetUploadMountsForTests();
   });
 
+  it("marks an off drive in the mount dialog and turns it on before mounting onto it", async () => {
+    const disk = createMockDisk({ id: "game", name: "Game", path: "/game.d64" });
+    const calls: string[] = [];
+    mockApi.driveOn.mockImplementation(async () => calls.push("driveOn"));
+    (mountDiskToDrive as any).mockImplementation(async () => calls.push("mount"));
+    (useDiskLibrary as any).mockReturnValue({ disks: [disk], runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: createMockDrive({ bus_id: 8 }) }, { b: createMockDrive({ bus_id: 9, enabled: false }) }] },
+    });
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: /Drive A/i })).not.toHaveTextContent("off");
+    const driveB = within(dialog).getByRole("button", { name: /Drive B/i });
+    expect(driveB).toHaveTextContent("Drive B (#9, 1541) • off");
+    fireEvent.click(driveB);
+
+    await waitFor(() => expect(calls).toEqual(["driveOn", "mount"]));
+    expect(mockApi.driveOn).toHaveBeenCalledWith("b");
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ description: "Game mounted in Drive B, which was off and is now on" }),
+      ),
+    );
+    mockApi.driveOn.mockReset();
+    (mountDiskToDrive as any).mockReset();
+  });
+
   it("clears a drive power override when fresh drive data after the toggle disagrees", async () => {
     let drivesResult = {
       data: { drives: [{ a: createMockDrive({ enabled: true }) }, { b: createMockDrive() }] },

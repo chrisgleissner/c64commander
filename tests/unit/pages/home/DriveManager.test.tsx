@@ -35,7 +35,7 @@ const {
         fetchQuery: vi.fn().mockResolvedValue(undefined),
       },
     },
-    updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
+    updateConfigValueSpy: vi.fn().mockResolvedValue(true),
     resolveConfigValueSpy: vi.fn(
       (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
     ),
@@ -570,6 +570,52 @@ describe("DriveManager", () => {
       await vi.waitFor(() => {
         expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("b", "/USB0/games/test.d64");
       });
+    });
+  });
+
+  describe("mounting onto a drive that is off", () => {
+    afterEach(() => {
+      driveData.drivesByClass = new Map();
+    });
+
+    it("turns the drive on through its Drive config item before mounting", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_B", { enabled: false }]]);
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => {
+        expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("b", "/USB0/games/test.d64");
+      });
+      expect(updateConfigValueSpy).toHaveBeenCalledWith(
+        "Drive B Settings",
+        "Drive",
+        "Enabled",
+        "HOME_DRIVE_ENABLED",
+        "Drive B turned on to mount the disk",
+        { refreshDrives: true },
+      );
+      expect(updateConfigValueSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        c64ApiMockRef.current.mountDrive.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("does not mount when the drive could not be turned on", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_B", { enabled: false }]]);
+      updateConfigValueSpy.mockResolvedValueOnce(false);
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => expect(updateConfigValueSpy).toHaveBeenCalled());
+      expect(c64ApiMockRef.current.mountDrive).not.toHaveBeenCalled();
+    });
+
+    it("does not touch the power of a drive that is on", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_A", { enabled: true }]]);
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[0]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalled());
+      expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
   });
 

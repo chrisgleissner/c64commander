@@ -6,10 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { DriveInfo, DrivesResponse } from "@/lib/c64api";
+import type { C64API, DriveInfo, DrivesResponse } from "@/lib/c64api";
 import { getDiskName, type DiskEntry } from "@/lib/disks/diskTypes";
+import { addLog } from "@/lib/logging";
 import { getUploadMountedDiskId, learnUploadMountFromPoll } from "@/lib/disks/uploadMountRegistry";
-import { buildDrivePath, DRIVE_KEYS, type DriveKey } from "./HomeDiskManagerSupport";
+import { buildDriveLabel, buildDrivePath, DRIVE_KEYS, type DriveKey } from "./HomeDiskManagerSupport";
 
 export const findPolledDrive = (
   drivesData: DrivesResponse | null | undefined,
@@ -46,3 +47,44 @@ export const keepsLocalMountOverride = (
   const polledName = getDiskName(polledImageFile);
   return polledName === getDiskName(disk.path) || (workPath !== null && polledName === getDiskName(workPath));
 };
+
+export const buildMountTargetLabel = ({
+  key,
+  busId,
+  driveType,
+  mounted,
+  powerEnabled,
+}: {
+  key: DriveKey;
+  busId: number;
+  driveType: string;
+  mounted: boolean;
+  powerEnabled: boolean | undefined;
+}) => {
+  const state = [mounted ? "mounted" : null, powerEnabled === false ? "off" : null].filter(Boolean).join(", ");
+  return `${buildDriveLabel(key)} (#${busId}, ${driveType})${state ? ` • ${state}` : ""}`;
+};
+
+/** Turns an off drive on before mounting, so the mounted disk is reachable on the bus. */
+export const mountOntoPoweredDrive = async <T>(
+  api: Pick<C64API, "driveOn">,
+  drive: DriveKey,
+  powerEnabled: boolean | undefined,
+  mount: () => Promise<T>,
+): Promise<{ outcome: T; poweredOn: boolean }> => {
+  const poweredOn = powerEnabled === false;
+  if (poweredOn) {
+    addLog("info", "Turning drive on before mounting a disk", { drive });
+    try {
+      await api.driveOn(drive);
+    } catch (error) {
+      throw new Error(`Could not turn ${buildDriveLabel(drive)} on to mount the disk: ${(error as Error).message}`, {
+        cause: error,
+      });
+    }
+  }
+  return { outcome: await mount(), poweredOn };
+};
+
+export const describeDiskMounted = (diskName: string, drive: DriveKey, poweredOn: boolean) =>
+  `${diskName} mounted in ${buildDriveLabel(drive)}${poweredOn ? ", which was off and is now on" : ""}`;
