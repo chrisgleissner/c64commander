@@ -16,7 +16,7 @@ arrival pattern is measured separately over CDP, and the difference between the 
 Wi-Fi path.
 
 Usage:
-  av_stream_flow.py [--group 239.0.1.65] [--port 11001] [--seconds 20] [--iface 192.168.1.185]
+  av_stream_flow.py [--group 239.0.1.65] [--port 11001] [--seconds 20] [--iface <this host's LAN address>]
   av_stream_flow.py --video          # shorthand for the VIC group/port
 """
 

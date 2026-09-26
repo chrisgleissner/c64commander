@@ -42,7 +42,7 @@ reached with a different instrument.
 
 USAGE
 
-  python3 tools/hil/mirror_audio_latency_hil.py [--seconds 12] [--iface 192.168.1.185]
+  python3 tools/hil/mirror_audio_latency_hil.py [--seconds 12] [--iface <this host's LAN address>]
                                                 [--device plughw:CARD=SF558,DEV=0]
 
 The C64 must be making a sound and the phone must be Listening. Play something first — the
@@ -59,8 +59,12 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lan_iface import resolve_iface  # noqa: E402
 
 GROUP = "239.0.1.65"
 PORT = 11001
@@ -148,14 +152,15 @@ def envelope(signal: np.ndarray, rate: int) -> np.ndarray:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=float, default=12.0)
-    ap.add_argument("--iface", default="192.168.1.185")
+    ap.add_argument("--iface", default=None, help="local IPv4 to join the group on (default: detected)")
     ap.add_argument("--device", default="plughw:CARD=SF558,DEV=0")
     args = ap.parse_args()
+    iface = resolve_iface(args.iface)
 
     wire: dict = {}
     mic: dict = {}
     threads = [
-        threading.Thread(target=capture_wire, args=(args.seconds, args.iface, wire)),
+        threading.Thread(target=capture_wire, args=(args.seconds, iface, wire)),
         threading.Thread(target=capture_mic, args=(args.seconds, args.device, mic)),
     ]
     for t in threads:

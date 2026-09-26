@@ -12,7 +12,7 @@ spectrum. A single locally-rendered SID is one signal in the middle; if the refe
 materially decorrelated, no filter setting can close that gap.
 
 Usage:
-  capture_mirror_pcm.py --seconds 12 --out reference.wav [--iface 192.168.1.185] [--report]
+  capture_mirror_pcm.py --seconds 12 --out reference.wav [--iface <this host's LAN address>] [--report]
 """
 
 from __future__ import annotations
