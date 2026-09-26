@@ -12,36 +12,69 @@ import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 
 const setup = (
   createDisk = vi.fn(async (args) => ({ path: "/p", fileName: "x", filePath: "/x", label: "l", kind: args.kind })),
+  listStorageRoots = vi.fn(async () => ["SD", "Flash", "Temp", "USB2"]),
 ) => {
   const onOpenChange = vi.fn();
   const onCreated = vi.fn();
-  render(<NewDiskDialog open onOpenChange={onOpenChange} createDisk={createDisk as never} onCreated={onCreated} />);
+  render(
+    <NewDiskDialog
+      open
+      onOpenChange={onOpenChange}
+      createDisk={createDisk as never}
+      onCreated={onCreated}
+      listStorageRoots={listStorageRoots}
+    />,
+  );
   return { createDisk, onOpenChange, onCreated };
 };
 
+const deviceFolderShown = () => waitFor(() => expect(screen.getByTestId("new-disk-folder")).not.toHaveValue(""));
+
 describe("NewDiskDialog", () => {
-  it("disables Create until a name is entered", () => {
+  it("disables Create until a name is entered", async () => {
     setup();
+    await deviceFolderShown();
     const create = screen.getByTestId("new-disk-create");
     expect(create).toBeDisabled();
     fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
     expect(create).not.toBeDisabled();
   });
 
-  it("creates a d64 disk with default tracks and closes on success", async () => {
+  it("creates a d64 disk with default tracks in a storage folder the device lists, and closes on success", async () => {
     const { createDisk, onOpenChange, onCreated } = setup();
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/SD"));
     fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
     fireEvent.click(screen.getByTestId("new-disk-create"));
     await waitFor(() => expect(createDisk).toHaveBeenCalledTimes(1));
     expect(createDisk).toHaveBeenCalledWith(
-      expect.objectContaining({ folder: "/USB0", name: "games", kind: "d64", tracks: 35 }),
+      expect.objectContaining({ folder: "/SD", name: "games", kind: "d64", tracks: 35 }),
     );
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("shows a validation error for out-of-range tracks and keeps Create disabled", () => {
+  it("defaults to the device's removable storage when it has no SD folder", async () => {
+    setup(
+      undefined,
+      vi.fn(async () => ["Flash", "Temp", "USB2"]),
+    );
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB2"));
+  });
+
+  it("keeps a folder the user typed before the device's folders arrive", async () => {
+    let resolveRoots: (roots: string[]) => void = () => undefined;
+    const listStorageRoots = vi.fn(() => new Promise<string[]>((resolve) => (resolveRoots = resolve)));
+    setup(undefined, listStorageRoots);
+    fireEvent.change(screen.getByTestId("new-disk-folder"), { target: { value: "/USB2/games" } });
+    resolveRoots(["SD", "USB2"]);
+    await waitFor(() => expect(listStorageRoots).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB2/games");
+  });
+
+  it("shows a validation error for out-of-range tracks and keeps Create disabled", async () => {
     setup();
+    await deviceFolderShown();
     fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
     fireEvent.change(screen.getByTestId("new-disk-tracks"), { target: { value: "99" } });
     expect(screen.getByTestId("new-disk-error")).toHaveTextContent("D64 tracks must be 35");
@@ -53,6 +86,7 @@ describe("NewDiskDialog", () => {
       throw new Error("PATH DOESN'T EXIST");
     });
     const { onOpenChange } = setup(failing);
+    await deviceFolderShown();
     fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
     fireEvent.click(screen.getByTestId("new-disk-create"));
     await waitFor(() => expect(screen.getByTestId("new-disk-error")).toHaveTextContent("PATH DOESN'T EXIST"));
@@ -83,6 +117,7 @@ describe("NewDiskDialog", () => {
       throw new Error("Disk full");
     });
     setup(failing);
+    await deviceFolderShown();
     fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
     fireEvent.click(screen.getByTestId("new-disk-create"));
     await waitFor(() => expect(screen.getByTestId("new-disk-error")).toHaveTextContent("Disk full"));

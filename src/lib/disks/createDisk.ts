@@ -17,6 +17,8 @@
  *   PUT /v1/files/<folder>/<name>:create_dnp?diskname=<label>&tracks=<n>
  */
 
+import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
+
 export type CreateDiskKind = "d64" | "d71" | "d81" | "dnp";
 
 export const CREATE_DISK_KINDS: readonly CreateDiskKind[] = ["d64", "d71", "d81", "dnp"];
@@ -81,6 +83,15 @@ export interface CreateDiskPlan {
   kind: CreateDiskKind;
   tracks?: number;
 }
+
+/**
+ * The storage folder a new disk defaults to: the persistent storage root the disk write-back already writes
+ * to, picked from the device's own top-level folders, since removable media is named differently per device.
+ */
+export const pickNewDiskFolder = (rootDirNames: string[]): string | null => {
+  const root = resolvePersistentReuStorageRoot(rootDirNames);
+  return root ? `/${root}` : null;
+};
 
 /**
  * Validate the args and build the create request plan. Throws a user-facing Error

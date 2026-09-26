@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HardDriveDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,11 +24,13 @@ import {
   CREATE_DISK_KINDS,
   DISK_LABEL_MAX,
   buildCreateDiskPlan,
+  pickNewDiskFolder,
   type CreateDiskArgs,
   type CreateDiskKind,
 } from "@/lib/disks/createDisk";
 import type { CreateDiskResult } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 
 export interface NewDiskDialogProps {
   open: boolean;
@@ -37,9 +39,13 @@ export interface NewDiskDialogProps {
   createDisk: (args: CreateDiskArgs) => Promise<CreateDiskResult>;
   /** Called after a successful create, e.g. to mount + add to the library. */
   onCreated?: (result: CreateDiskResult) => void | Promise<void>;
-  /** Prefilled storage folder (e.g. the folder the user is browsing). */
+  /** Prefilled storage folder (e.g. the folder the user is browsing). Without it, a root of the device is used. */
   defaultFolder?: string;
+  /** Lists the device's top-level folders (defaults to an FTP listing of the connected device). */
+  listStorageRoots?: () => Promise<string[]>;
 }
+
+const listConnectedDeviceRoots = () => buildDiskWriteBackDependencies().listRemoteStorageRoots();
 
 const KIND_LABEL: Record<CreateDiskKind, string> = {
   d64: "D64 (1541)",
@@ -57,8 +63,8 @@ const needsTracks = (kind: CreateDiskKind) => kind === "d64" || kind === "dnp";
  * already refused before the request goes out, so a failure that gets past all that is almost
  * always the storage folder: the firmware answers a write into a path it does not have with a bare
  * 500, and the transport surfaces exactly that. "HTTP 500" tells the user nothing about the one
- * field they can fix. Seen on a Pixel 4 against a c64u whose removable media is `/USB2`: the
- * default `/USB0` does not exist there, and creating a disk failed with nothing but the status.
+ * field they can fix. Seen on a Pixel 4 against a c64u whose removable media is `/USB2`: a
+ * `/USB0` folder does not exist there, and creating a disk failed with nothing but the status.
  *
  * The device's own words are kept when it bothers to say something; only a bare status gets the
  * hint, so a genuinely different failure is never mislabelled as a missing folder.
@@ -74,15 +80,37 @@ export function NewDiskDialog({
   onOpenChange,
   createDisk,
   onCreated,
-  defaultFolder = "/USB0",
+  defaultFolder,
+  listStorageRoots = listConnectedDeviceRoots,
 }: NewDiskDialogProps) {
   const [kind, setKind] = useState<CreateDiskKind>("d64");
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
-  const [folder, setFolder] = useState(defaultFolder);
+  const [deviceFolder, setDeviceFolder] = useState<string | null>(null);
+  const initialFolder = defaultFolder ?? deviceFolder ?? "";
+  const [chosenFolder, setChosenFolder] = useState<string | null>(null);
+  const folder = chosenFolder ?? initialFolder;
   const [tracks, setTracks] = useState("35");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || defaultFolder !== undefined) return undefined;
+    let cancelled = false;
+    listStorageRoots()
+      .then((roots) => {
+        if (!cancelled) setDeviceFolder(pickNewDiskFolder(roots));
+      })
+      .catch((err) => {
+        addLog("warn", "New Disk: could not list the device's storage folders", {
+          error: (err as Error).message,
+          stack: (err as Error).stack,
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, defaultFolder, listStorageRoots]);
 
   const args = useMemo<CreateDiskArgs>(
     () => ({
@@ -109,7 +137,6 @@ export function NewDiskDialog({
     setKind("d64");
     setName("");
     setLabel("");
-    setFolder(defaultFolder);
     setTracks("35");
     setError(null);
     setBusy(false);
@@ -219,7 +246,7 @@ export function NewDiskDialog({
               data-t9-mode="hostname"
               value={folder}
               placeholder="/USB0"
-              onChange={(event) => setFolder(event.target.value)}
+              onChange={(event) => setChosenFolder(event.target.value)}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">

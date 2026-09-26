@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildCreateDiskPlan, encodeC64uPath } from "@/lib/disks/createDisk";
+import { buildCreateDiskPlan, encodeC64uPath, pickNewDiskFolder } from "@/lib/disks/createDisk";
 
 describe("createDisk — buildCreateDiskPlan", () => {
   it("builds a d64 URL with default tracks and label from the stem", () => {
@@ -95,5 +95,15 @@ describe("createDisk — encodeC64uPath", () => {
   it("preserves separators and encodes segments", () => {
     expect(encodeC64uPath("/USB0/My Games/a b.d64")).toBe("/USB0/My%20Games/a%20b.d64");
     expect(encodeC64uPath("/Temp/#weird.d64")).toBe("/Temp/%23weird.d64");
+  });
+});
+
+describe("createDisk — pickNewDiskFolder", () => {
+  it("picks a folder the connected device actually has, never the volatile Temp folder", () => {
+    expect(pickNewDiskFolder(["Temp", "USB2", "Flash"])).toBe("/USB2");
+    expect(pickNewDiskFolder(["Temp", "Flash"])).toBe("/Flash");
+  });
+  it("returns null when the device has only the Temp folder", () => {
+    expect(pickNewDiskFolder(["Temp"])).toBeNull();
   });
 });
