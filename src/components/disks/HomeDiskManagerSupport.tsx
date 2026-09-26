@@ -132,13 +132,12 @@ export const resolveDriveBusId = (drive: DriveKey, payload: unknown, fallbackInf
   return DRIVE_DEFAULT_BUS_ID[drive];
 };
 
-export const resolveDriveType = (drive: DriveKey, payload: unknown, fallbackInfo?: { type?: string }) => {
-  const fromConfig = parseDriveType(getDriveConfigValue(payload, drive, DRIVE_TYPE_ITEM));
-  if (fromConfig) return fromConfig;
-  const fromDriveInfo = parseDriveType(fallbackInfo?.type);
-  if (fromDriveInfo) return fromDriveInfo;
-  return DRIVE_DEFAULT_TYPE;
-};
+// The firmware switches the drive to the image's type on mount (a D81 turns a 1541 into a 1581) without
+// changing the Drive Type item, so the type /v1/drives reports wins over the configured one.
+export const resolveDriveType = (drive: DriveKey, payload: unknown, polledInfo?: { type?: string }) =>
+  parseDriveType(polledInfo?.type) ??
+  parseDriveType(getDriveConfigValue(payload, drive, DRIVE_TYPE_ITEM)) ??
+  DRIVE_DEFAULT_TYPE;
 
 // Firmware 3.15 and C64U 1.2 dropped the item: the drive still reports its path, and nothing can set it.
 export const isSoftIecDefaultPathConfigurable = (payload: unknown) =>

@@ -101,13 +101,19 @@ describe("HomeDiskManagerSupport", () => {
     expect(resolveDriveBusId("b", {}, { bus_id: 11 })).toBe(11);
     expect(resolveDriveBusId("b", {}, undefined)).toBe(DRIVE_DEFAULT_BUS_ID.b);
 
-    expect(resolveDriveType("a", payload, { type: "1541" })).toBe("1571");
+    expect(resolveDriveType("a", payload, undefined)).toBe("1571");
     expect(resolveDriveType("b", {}, { type: "1581" })).toBe("1581");
     expect(resolveDriveType("b", {}, undefined)).toBe(DRIVE_DEFAULT_TYPE);
 
     expect(resolveSoftIecDefaultPath(payload, "/Fallback")).toBe("/Games/");
     expect(resolveSoftIecDefaultPath({}, "/Fallback")).toBe("/Fallback/");
     expect(resolveSoftIecDefaultPath({}, null)).toBe("/USB0/");
+  });
+
+  it("shows the drive type /v1/drives reports when a mount switched it away from the configured type", () => {
+    const configured1541 = { "Drive A Settings": { items: { "Drive Type": "1541" } } };
+    expect(resolveDriveType("a", configured1541, { type: "1581" })).toBe("1581");
+    expect(resolveDriveType("a", configured1541, { type: "" })).toBe("1541");
   });
 
   it("treats the Soft IEC path as settable only where the firmware lists a Default Path item", () => {

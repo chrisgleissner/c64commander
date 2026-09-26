@@ -334,7 +334,7 @@ export function DriveManager({
           const busOptions = buildBusIdOptions(busDefaults, Number.isFinite(busValue) ? busValue : null);
 
           const typeValue = spec.typeItem
-            ? String(resolveConfigValue(payload, spec.category, spec.typeItem, device?.type ?? "1541"))
+            ? (device?.type ?? String(resolveConfigValue(payload, spec.category, spec.typeItem, "1541")))
             : (device?.type ?? "DOS emulation");
 
           const rawTypeOptions = spec.typeItem

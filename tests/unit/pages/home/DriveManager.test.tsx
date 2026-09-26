@@ -299,6 +299,21 @@ describe("DriveManager", () => {
     expect(screen.getByTestId("drive-card-soft-iec")).toBeDefined();
   });
 
+  it("shows the drive type the drive reports after a mount switched it away from the configured type", () => {
+    resolveConfigValueSpy.mockImplementation((_payload, _category, itemName, fallback) =>
+      itemName === "Drive Type" ? "1541" : fallback,
+    );
+    driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_A", { type: "1581", enabled: true }]]);
+    try {
+      render(<DriveManager {...defaultProps} />);
+      expect(within(screen.getByTestId("drive-card-a")).getByTestId("drive-type")).toHaveTextContent("1581");
+      expect(within(screen.getByTestId("drive-card-b")).getByTestId("drive-type")).toHaveTextContent("1541");
+    } finally {
+      driveData.drivesByClass = new Map();
+      resolveConfigValueSpy.mockImplementation((_payload, _category, _itemName, fallback) => fallback);
+    }
+  });
+
   describe("Soft IEC path", () => {
     afterEach(() => {
       driveData.softIecConfig = undefined;
