@@ -25,7 +25,9 @@ const ETHERNET_HOST = "198.51.100.10";
 const WIFI_HOST = "203.0.113.10";
 const OTHER_DEVICE_HOST = "192.0.2.30";
 
-const saveDevices = (uniqueIdByHost: Record<string, string | null>) => {
+// A machine's hostname defaults to one derived from its unique id; a test overrides it to model two
+// machines that share a custom unique id.
+const saveDevices = (uniqueIdByHost: Record<string, string | null>, hostnameByHost: Record<string, string> = {}) => {
   const devices = Object.entries(uniqueIdByHost).map(([host, uniqueId]) => ({
     id: `saved-${host}`,
     name: `Saved ${host}`,
@@ -34,7 +36,7 @@ const saveDevices = (uniqueIdByHost: Record<string, string | null>) => {
     ftpPort: 21,
     telnetPort: 23,
     lastKnownProduct: null,
-    lastKnownHostname: null,
+    lastKnownHostname: hostnameByHost[host] ?? (uniqueId ? `ultimate-${uniqueId.toLowerCase()}` : null),
     lastKnownUniqueId: uniqueId,
     lastSuccessfulConnectionAt: null,
     lastUsedAt: null,
@@ -85,6 +87,14 @@ describe("device-bound disk calls across a switch between saved entries", () => 
     expect(() => boundTarget(ETHERNET_HOST, OTHER_DEVICE_HOST).send()).toThrow(
       `The connected device changed from ${ETHERNET_HOST} to ${OTHER_DEVICE_HOST} while mounting Game.d64`,
     );
+  });
+
+  it("stops sending after a switch to a different Ultimate that shares the custom unique id but not the hostname", () => {
+    saveDevices(
+      { [ETHERNET_HOST]: "UID-DUAL", [OTHER_DEVICE_HOST]: "UID-DUAL" },
+      { [OTHER_DEVICE_HOST]: "ultimate-b" },
+    );
+    expect(() => boundTarget(ETHERNET_HOST, OTHER_DEVICE_HOST).send()).toThrow("The connected device changed");
   });
 
   it("stops sending between two addresses while neither has reported a unique id", () => {

@@ -30,15 +30,29 @@ export type MaterializedDiskMount = {
   // HARD19-005: the work file name is reused on every device, so an entry must know which device holds its bytes.
   deviceHost: string;
   deviceUniqueId?: string | null;
+  deviceHostname?: string | null;
   // Order of work-file writes, so a read-back can tell whether a later mount replaced this entry's bytes.
   generation?: number;
 };
 
-type WorkFileWrite = { workPath: string; deviceHost: string; deviceUniqueId: string | null; generation: number };
+type WorkFileWrite = {
+  workPath: string;
+  deviceHost: string;
+  deviceUniqueId: string | null;
+  deviceHostname?: string | null;
+  generation: number;
+};
+
+const workFileWriteDevice = (write: WorkFileWrite): DiskDeviceIdentity => ({
+  host: write.deviceHost,
+  uniqueId: write.deviceUniqueId,
+  hostname: write.deviceHostname ?? null,
+});
 
 export const materializedMountDevice = (entry: MaterializedDiskMount): DiskDeviceIdentity => ({
   host: entry.deviceHost,
   uniqueId: entry.deviceUniqueId ?? null,
+  hostname: entry.deviceHostname ?? null,
 });
 
 // HARD19-006: persisted across process death so a post-restart eject can still finalize in-game saves.
@@ -109,10 +123,11 @@ const persistOrphanedMounts = () =>
 export const recordWorkFileWrite = (workPath: string, device: DiskDeviceIdentity): number => {
   lastGeneration += 1;
   const generation = lastGeneration;
-  const writeDevice = (write: WorkFileWrite) => ({ host: write.deviceHost, uniqueId: write.deviceUniqueId });
   workFileWrites = [
-    ...workFileWrites.filter((write) => write.workPath !== workPath || !isSameDiskDevice(writeDevice(write), device)),
-    { workPath, deviceHost: device.host, deviceUniqueId: device.uniqueId, generation },
+    ...workFileWrites.filter(
+      (write) => write.workPath !== workPath || !isSameDiskDevice(workFileWriteDevice(write), device),
+    ),
+    { workPath, deviceHost: device.host, deviceUniqueId: device.uniqueId, deviceHostname: device.hostname, generation },
   ].slice(-MAX_WORK_FILE_WRITES);
   writeStored(WORK_FILE_WRITES_STORAGE_KEY, "disk work-file writes", workFileWrites);
   return generation;
@@ -122,10 +137,15 @@ export const getPrimaryMaterializedMount = (drive: DriveKey) => materializedMoun
 
 export const recordMaterializedMount = (
   drive: DriveKey,
-  mount: Omit<MaterializedDiskMount, "deviceHost" | "deviceUniqueId">,
+  mount: Omit<MaterializedDiskMount, "deviceHost" | "deviceUniqueId" | "deviceHostname">,
   device: DiskDeviceIdentity,
 ) => {
-  const entry: MaterializedDiskMount = { ...mount, deviceHost: device.host, deviceUniqueId: device.uniqueId };
+  const entry: MaterializedDiskMount = {
+    ...mount,
+    deviceHost: device.host,
+    deviceUniqueId: device.uniqueId,
+    deviceHostname: device.hostname,
+  };
   const existing = materializedMounts.get(drive);
   if (existing && !isSameDiskDevice(materializedMountDevice(existing), device)) {
     orphanedMounts.set(orphanKey(existing.deviceHost, drive), existing);
@@ -188,10 +208,7 @@ export const findLaterWorkFileWrite = (entry: MaterializedDiskMount) =>
     (write) =>
       write.workPath === entry.workPath &&
       write.generation > (entry.generation ?? 0) &&
-      !areKnownDifferentDiskDevices(
-        { host: write.deviceHost, uniqueId: write.deviceUniqueId },
-        materializedMountDevice(entry),
-      ),
+      !areKnownDifferentDiskDevices(workFileWriteDevice(write), materializedMountDevice(entry)),
   ) ?? null;
 
 // HARD19-007: the drives poll reports a materialized mount's internal work file, never the disk's own name.

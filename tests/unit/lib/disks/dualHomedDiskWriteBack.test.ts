@@ -42,9 +42,13 @@ import { uint8ToBase64 } from "@/lib/sid/sidUtils";
 const ETHERNET_HOST = "198.51.100.10";
 const WIFI_HOST = "203.0.113.10";
 const OTHER_DEVICE_HOST = "192.0.2.30";
+// A third, separate Ultimate whose user gave it the dual-homed one's custom unique id, but not its hostname.
+const IMPOSTOR_HOST = "192.0.2.40";
 const WORK_PATH = "/Usb0/c64commander-disk-work-a.d64";
 
-const saveDevices = (uniqueIdByHost: Record<string, string | null>) => {
+// A machine's hostname defaults to one derived from its unique id; a test overrides it to model two
+// machines that share a custom unique id.
+const saveDevices = (uniqueIdByHost: Record<string, string | null>, hostnameByHost: Record<string, string> = {}) => {
   const devices = Object.entries(uniqueIdByHost).map(([host, uniqueId]) => ({
     id: `saved-${host}`,
     name: `Saved ${host}`,
@@ -53,7 +57,7 @@ const saveDevices = (uniqueIdByHost: Record<string, string | null>) => {
     ftpPort: 21,
     telnetPort: 23,
     lastKnownProduct: null,
-    lastKnownHostname: null,
+    lastKnownHostname: hostnameByHost[host] ?? (uniqueId ? `ultimate-${uniqueId.toLowerCase()}` : null),
     lastKnownUniqueId: uniqueId,
     lastSuccessfulConnectionAt: null,
     lastUsedAt: null,
@@ -68,7 +72,8 @@ const saveDevices = (uniqueIdByHost: Record<string, string | null>) => {
 
 // The work files each physical machine holds; both addresses of the dual-homed Ultimate reach the same files.
 const machineFiles = new Map<string, Map<string, Uint8Array>>();
-const machineOf = (host: string) => (host === OTHER_DEVICE_HOST ? "other" : "dual-homed");
+const machineOf = (host: string) =>
+  host === OTHER_DEVICE_HOST ? "other" : host === IMPOSTOR_HOST ? "impostor" : "dual-homed";
 const filesOn = (host: string) => {
   const machine = machineOf(host);
   if (!machineFiles.has(machine)) machineFiles.set(machine, new Map());
@@ -203,6 +208,20 @@ describe("disk write-back on an Ultimate saved under two addresses", () => {
     expect(writesTo("disk-1")).toEqual([uint8ToBase64(new Uint8Array([1, 1, 9]))]);
     expect(writesTo("disk-3")).toEqual([uint8ToBase64(new Uint8Array([3, 3, 3]))]);
     expect(writesTo("disk-2")).toEqual([]);
+  });
+
+  it("never writes another machine's work image into disk 1 when that machine shares its custom unique id but not its hostname", async () => {
+    saveDevices({ [ETHERNET_HOST]: "UID-DUAL", [IMPOSTOR_HOST]: "UID-DUAL" }, { [IMPOSTOR_HOST]: "ultimate-impostor" });
+    await mountVia(ETHERNET_HOST, "disk-1", [1, 1, 1]);
+    playerSavesOn(ETHERNET_HOST, [1, 1, 9]);
+    playerSavesOn(IMPOSTOR_HOST, [6, 6, 6]);
+
+    const impostorEject = await finalizeDiskWriteBack("a", ftpFor(IMPOSTOR_HOST), IMPOSTOR_HOST);
+    await finalizeDiskWriteBack("a", ftpFor(ETHERNET_HOST), ETHERNET_HOST);
+
+    expect(impostorEject).toEqual({ attempted: false, reason: "device-mismatch" });
+    expect(writesTo("disk-1")).toEqual([uint8ToBase64(new Uint8Array([1, 1, 9]))]);
+    expect(getMaterializedWorkPath("a", IMPOSTOR_HOST)).toBeNull();
   });
 
   it("names the materialized disk in a drive polled through the other address, but not on a different device", async () => {

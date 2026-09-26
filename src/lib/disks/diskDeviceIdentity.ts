@@ -7,14 +7,15 @@
  */
 
 import { splitSavedDeviceHostAndHttpPort } from "@/lib/savedDevices/host";
+import { isSameMachine, machineIdentityKey, savedEntryMachineIdentity } from "@/lib/savedDevices/machineIdentity";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 /**
  * Which Ultimate a disk operation talked to. One Ultimate can answer on two addresses (Ethernet and Wi-Fi) and be
  * saved once per address, so the host alone cannot say whether two operations reached the same machine; the
- * `unique_id` the device reports can, when it is known.
+ * `unique_id` and hostname the device reports can, when both are known (see `machineIdentityKey`).
  */
-export type DiskDeviceIdentity = { host: string; uniqueId: string | null };
+export type DiskDeviceIdentity = { host: string; uniqueId: string | null; hostname: string | null };
 
 const canonicalHostAndPort = (host: string, httpPort: number) => `${host.toLowerCase()} port ${httpPort}`;
 
@@ -23,36 +24,43 @@ const canonicalDeviceHost = (deviceHost: string) => {
   return canonicalHostAndPort(host, httpPort);
 };
 
-const normalizeUniqueId = (value: string | null | undefined) => value?.trim().toLowerCase() || null;
+const normalize = (value: string | null | undefined) => value?.trim().toLowerCase() || null;
 
 export const resolveDiskDeviceIdentity = (deviceHost: string): DiskDeviceIdentity => {
   const canonicalHost = canonicalDeviceHost(deviceHost);
   const snapshot = getSavedDevicesSnapshot();
-  const uniqueIdOf = (deviceId: string, lastKnownUniqueId: string | null) =>
-    normalizeUniqueId(snapshot.verifiedByDeviceId[deviceId]?.uniqueId ?? lastKnownUniqueId);
+  const identityOf = (deviceId: string) => {
+    const { uniqueId, hostname } = savedEntryMachineIdentity(snapshot, deviceId);
+    return { host: deviceHost, uniqueId: normalize(uniqueId), hostname: normalize(hostname) };
+  };
   const matches = snapshot.devices.filter(
     (device) =>
       canonicalHostAndPort(splitSavedDeviceHostAndHttpPort(device.host).host, device.httpPort) === canonicalHost,
   );
   const selected = matches.find((device) => device.id === snapshot.selectedDeviceId);
-  if (selected) return { host: deviceHost, uniqueId: uniqueIdOf(selected.id, selected.lastKnownUniqueId) };
-  const uniqueIds = new Set(matches.map((device) => uniqueIdOf(device.id, device.lastKnownUniqueId)));
-  const [onlyUniqueId] = uniqueIds;
-  return { host: deviceHost, uniqueId: uniqueIds.size === 1 ? (onlyUniqueId ?? null) : null };
+  if (selected) return identityOf(selected.id);
+  const identities = new Map(
+    matches.map((device) => identityOf(device.id)).map((identity) => [JSON.stringify(identity), identity]),
+  );
+  const [onlyIdentity] = identities.values();
+  return identities.size === 1 && onlyIdentity ? onlyIdentity : { host: deviceHost, uniqueId: null, hostname: null };
 };
-
-export const isSameDiskDevice = (a: DiskDeviceIdentity, b: DiskDeviceIdentity) =>
-  a.uniqueId && b.uniqueId ? a.uniqueId === b.uniqueId : canonicalDeviceHost(a.host) === canonicalDeviceHost(b.host);
 
 /** True only when both devices reported a unique id and the ids differ; unknown identities may be one machine. */
 export const areKnownDifferentDiskDevices = (a: DiskDeviceIdentity, b: DiskDeviceIdentity) =>
   Boolean(a.uniqueId && b.uniqueId && a.uniqueId !== b.uniqueId);
 
+export const isSameDiskDevice = (a: DiskDeviceIdentity, b: DiskDeviceIdentity) => {
+  if (areKnownDifferentDiskDevices(a, b)) return false;
+  return isSameMachine(a, b) || canonicalDeviceHost(a.host) === canonicalDeviceHost(b.host);
+};
+
 export const isSameDiskDeviceHost = (a: string, b: string) =>
   isSameDiskDevice(resolveDiskDeviceIdentity(a), resolveDiskDeviceIdentity(b));
 
-/** A stable key for per-device disk records: the unique id when known, otherwise the host. */
+/** A stable key for per-device disk records: the machine identity when known, otherwise the host. */
 export const diskDeviceKey = (deviceHost: string) => {
   const identity = resolveDiskDeviceIdentity(deviceHost);
-  return identity.uniqueId ? `unique-id#${identity.uniqueId}` : identity.host;
+  const machineKey = machineIdentityKey(identity);
+  return machineKey ? `machine#${machineKey}` : identity.host;
 };
