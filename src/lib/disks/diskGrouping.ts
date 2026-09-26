@@ -35,6 +35,24 @@ export const inferDiskGroupBase = (name: string) => {
   return toGroupPrefix(base.match(MARKED_SUFFIX)) ?? toGroupPrefix(base.match(BARE_SUFFIX));
 };
 
+const legacyInferDiskGroupBase = (name: string) => {
+  const base = stripExtension(name).trim();
+  const prefix = base.match(/^(.*?)(?:[\s._-]*([A-Za-z]|\d+))$/)?.[1]?.trim();
+  return prefix && prefix.length >= 2 ? prefix : null;
+};
+const LEGACY_MARKER_REMNANT = new RegExp(`${SEPARATOR}+(?:side|disk|disc|part|s|d)$`, "i");
+
+/**
+ * Repair a group name saved by the earlier rule, which left the side marker's letters behind
+ * ("Turrican_(Original)_S"). Only a group that is exactly what that rule produced for this file is
+ * touched, and the repair depends on the group alone, so disks that shared a group still share one.
+ */
+export const repairLegacyDiskGroup = (group: string | null | undefined, name: string) => {
+  if (!group || legacyInferDiskGroupBase(name) !== group) return group;
+  const repaired = group.replace(LEGACY_MARKER_REMNANT, "").replace(TRAILING_SEPARATORS, "").trim();
+  return repaired.length >= 2 ? repaired : group;
+};
+
 export const assignDiskGroupsByPrefix = (entries: Array<{ path: string; name: string }>) => {
   const normalized = entries.map((entry) => ({
     ...entry,

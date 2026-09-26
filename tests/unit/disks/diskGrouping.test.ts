@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { assignDiskGroupsByPrefix, inferDiskGroupBase } from "@/lib/disks/diskGrouping";
+import { assignDiskGroupsByPrefix, inferDiskGroupBase, repairLegacyDiskGroup } from "@/lib/disks/diskGrouping";
+import { loadDiskLibrary } from "@/lib/disks/diskStore";
 
 describe("assignDiskGroupsByPrefix", () => {
   it("groups numeric suffixes in the same folder", () => {
@@ -144,5 +145,39 @@ describe("assignDiskGroupsByPrefix", () => {
     ]);
     expect(result.get("/Games/Last Ninja 2 side A.d64")).toBe("Last Ninja 2");
     expect(result.get("/Games/Last Ninja 2 side B.d64")).toBe("Last Ninja 2");
+  });
+});
+
+describe("repairLegacyDiskGroup", () => {
+  it("drops the side letters the earlier rule left on a saved group", () => {
+    expect(repairLegacyDiskGroup("Turrican_(Original)_S", "Turrican_(Original)_S1.d64")).toBe("Turrican_(Original)");
+    expect(repairLegacyDiskGroup("Turrican_(Original)_S", "Turrican_(Original)_S2.d64")).toBe("Turrican_(Original)");
+    expect(repairLegacyDiskGroup("Last Ninja 2 side", "Last Ninja 2 side A.d64")).toBe("Last Ninja 2");
+  });
+
+  it("leaves a group the user chose, or one the earlier rule got right, unchanged", () => {
+    expect(repairLegacyDiskGroup("My favourites_S", "Turrican_(Original)_S1.d64")).toBe("My favourites_S");
+    expect(repairLegacyDiskGroup("Katakis", "Katakis.d81")).toBe("Katakis");
+    expect(repairLegacyDiskGroup(null, "Frogger.d64")).toBeNull();
+  });
+});
+
+describe("loadDiskLibrary", () => {
+  it("repairs a legacy side-marker group when the library is loaded", () => {
+    localStorage.setItem(
+      "c64u_disk_library:shared",
+      JSON.stringify({
+        disks: [
+          {
+            id: "t1",
+            name: "Turrican_(Original)_S1.d64",
+            path: "/t/Turrican_(Original)_S1.d64",
+            group: "Turrican_(Original)_S",
+          },
+        ],
+      }),
+    );
+    expect(loadDiskLibrary("shared").disks[0].group).toBe("Turrican_(Original)");
+    localStorage.removeItem("c64u_disk_library:shared");
   });
 });
