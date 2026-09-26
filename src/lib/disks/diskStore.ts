@@ -7,7 +7,7 @@
  */
 
 import type { DiskEntry } from "./diskTypes";
-import { repairLegacyDiskGroup } from "./diskGrouping";
+import { repairLegacyDiskGroups } from "./diskGrouping";
 
 const STORE_PREFIX = "c64u_disk_library:";
 export const SHARED_DISK_LIBRARY_ID = "shared";
@@ -36,9 +36,7 @@ const parseState = (raw: string | null, uniqueId: string): DiskLibraryState => {
   try {
     const parsed = JSON.parse(raw) as DiskLibraryState;
     return {
-      disks: Array.isArray(parsed.disks)
-        ? parsed.disks.map((disk) => ({ ...disk, group: repairLegacyDiskGroup(disk.group, disk.name) ?? null }))
-        : [],
+      disks: Array.isArray(parsed.disks) ? repairLegacyDiskGroups(parsed.disks) : [],
     };
   } catch (error) {
     console.warn("Failed to load disk library", { uniqueId, error });

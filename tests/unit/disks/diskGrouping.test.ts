@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { assignDiskGroupsByPrefix, inferDiskGroupBase, repairLegacyDiskGroup } from "@/lib/disks/diskGrouping";
+import { assignDiskGroupsByPrefix, inferDiskGroupBase, repairLegacyDiskGroups } from "@/lib/disks/diskGrouping";
 import { loadDiskLibrary } from "@/lib/disks/diskStore";
 
 describe("assignDiskGroupsByPrefix", () => {
@@ -148,36 +148,51 @@ describe("assignDiskGroupsByPrefix", () => {
   });
 });
 
-describe("repairLegacyDiskGroup", () => {
-  it("drops the side letters the earlier rule left on a saved group", () => {
-    expect(repairLegacyDiskGroup("Turrican_(Original)_S", "Turrican_(Original)_S1.d64")).toBe("Turrican_(Original)");
-    expect(repairLegacyDiskGroup("Turrican_(Original)_S", "Turrican_(Original)_S2.d64")).toBe("Turrican_(Original)");
-    expect(repairLegacyDiskGroup("Last Ninja 2 side", "Last Ninja 2 side A.d64")).toBe("Last Ninja 2");
+describe("repairLegacyDiskGroups", () => {
+  const disk = (name: string, group: string | null, folder = "/USB2/Games/Turrican") => ({
+    name,
+    group,
+    path: `${folder}/${name}`,
   });
 
-  it("leaves a group the user chose, or one the earlier rule got right, unchanged", () => {
-    expect(repairLegacyDiskGroup("My favourites_S", "Turrican_(Original)_S1.d64")).toBe("My favourites_S");
-    expect(repairLegacyDiskGroup("Katakis", "Katakis.d81")).toBe("Katakis");
-    expect(repairLegacyDiskGroup(null, "Frogger.d64")).toBeNull();
+  it("drops the side letters the earlier rule left on an auto-assigned group, for every member alike", () => {
+    const repaired = repairLegacyDiskGroups([
+      disk("Turrican_(Original)_S1.d64", "Turrican_(Original)_S"),
+      disk("Turrican_(Original)_S2.d64", "Turrican_(Original)_S"),
+      disk("Katakis.d81", "Katakis", "/USB2/Games/Katakis"),
+    ]);
+    expect(repaired.map((entry) => entry.group)).toEqual(["Turrican_(Original)", "Turrican_(Original)", "Katakis"]);
+  });
+
+  it("leaves a group the user typed on a single disk alone even when it looks like the earlier rule's output", () => {
+    const entries = [disk("Last Ninja 2 side A.d64", "Last Ninja 2 side", "/USB2/Games/LN2")];
+    expect(repairLegacyDiskGroups(entries)[0].group).toBe("Last Ninja 2 side");
+  });
+
+  it("leaves a group shared across folders, or with a member the earlier rule would not have named so, alone", () => {
+    const acrossFolders = [disk("Game_S1.d64", "Game_S", "/USB2/a"), disk("Game_S2.d64", "Game_S", "/USB2/b")];
+    expect(repairLegacyDiskGroups(acrossFolders).map((entry) => entry.group)).toEqual(["Game_S", "Game_S"]);
+    const mixed = [disk("Game_S1.d64", "Game_S"), disk("Bonus.d64", "Game_S")];
+    expect(repairLegacyDiskGroups(mixed).map((entry) => entry.group)).toEqual(["Game_S", "Game_S"]);
   });
 });
 
 describe("loadDiskLibrary", () => {
   it("repairs a legacy side-marker group when the library is loaded", () => {
+    const turrican = (id: string, side: string) => ({
+      id,
+      name: `Turrican_(Original)_${side}.d64`,
+      path: `/t/Turrican_(Original)_${side}.d64`,
+      group: "Turrican_(Original)_S",
+    });
     localStorage.setItem(
       "c64u_disk_library:shared",
-      JSON.stringify({
-        disks: [
-          {
-            id: "t1",
-            name: "Turrican_(Original)_S1.d64",
-            path: "/t/Turrican_(Original)_S1.d64",
-            group: "Turrican_(Original)_S",
-          },
-        ],
-      }),
+      JSON.stringify({ disks: [turrican("t1", "S1"), turrican("t2", "S2")] }),
     );
-    expect(loadDiskLibrary("shared").disks[0].group).toBe("Turrican_(Original)");
+    expect(loadDiskLibrary("shared").disks.map((entry) => entry.group)).toEqual([
+      "Turrican_(Original)",
+      "Turrican_(Original)",
+    ]);
     localStorage.removeItem("c64u_disk_library:shared");
   });
 });
