@@ -110,6 +110,7 @@ import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedC
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
@@ -2751,13 +2752,7 @@ export default function PlayFilesPage() {
                   </div>
                   {sidRadioFlags.sidRadioEnabled && sidRadio.notice ? (
                     <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
-                      {sidRadio.notice === "no-radio-for-tune"
-                        ? "No radio for this tune yet — try a style or your likes."
-                        : sidRadio.notice === "no-hvsc"
-                          ? "No HVSC music is installed yet — install it below, then any station will play."
-                          : sidRadio.notice === "station-ended"
-                            ? "This station has played everything it could find — pick another to keep going."
-                            : "No radio available yet — like a few tunes to seed one."}
+                      {SID_RADIO_NOTICE_TEXT[sidRadio.notice]}
                     </p>
                   ) : null}
                 </div>
@@ -3020,6 +3015,8 @@ export default function PlayFilesPage() {
             songSeedLabel={sidRadioSongSeedLabel}
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
             onStartSong={startSidRadioSongMood}
+            hvscMissing={!hvsc.hvscInstalled}
+            onInstallHvsc={hvscControlsEnabled ? () => setHvscPreparationOpen(true) : undefined}
           />
           <TuneListSheet
             open={tuneListOpen}

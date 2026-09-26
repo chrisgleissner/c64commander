@@ -17,6 +17,7 @@ const page = vi.hoisted(() => ({
   runHvscPreparation: vi.fn(async () => undefined),
   selectSource: null as null | ((source: { type: string; id: string }) => Promise<boolean>),
   sidRadioParams: null as null | { startPlaylist: (items: unknown[]) => unknown },
+  launcher: null as null | { hvscMissing?: boolean; onInstallHvsc?: () => void },
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
@@ -41,6 +42,13 @@ vi.mock("@/pages/playFiles/hooks/useHvscLibrary", async (importOriginal) => {
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: (props: { onSelectSource: typeof page.selectSource }) => {
     if (props.onSelectSource) page.selectSource = props.onSelectSource;
+    return null;
+  },
+}));
+
+vi.mock("@/pages/playFiles/components/SidRadioLauncherSheet", () => ({
+  SidRadioLauncherSheet: (props: { hvscMissing?: boolean; onInstallHvsc?: () => void }) => {
+    page.launcher = props;
     return null;
   },
 }));
@@ -74,6 +82,7 @@ describe("PlayFilesPage wiring", () => {
     page.runHvscPreparation.mockClear();
     page.selectSource = null;
     page.sidRadioParams = null;
+    page.launcher = null;
   });
 
   const openHvscSource = async () => {
@@ -106,6 +115,17 @@ describe("PlayFilesPage wiring", () => {
 
     expect(browsed).toBe(false);
     expect(page.runHvscPreparation).not.toHaveBeenCalled();
+  });
+
+  it("tells the SID Radio launcher HVSC is missing and lets it start the HVSC installation", async () => {
+    renderPage();
+    await waitFor(() => expect(page.launcher).not.toBeNull());
+    expect(page.launcher!.hvscMissing).toBe(true);
+    expect(page.runHvscPreparation).not.toHaveBeenCalled();
+
+    act(() => page.launcher!.onInstallHvsc!());
+
+    await waitFor(() => expect(page.runHvscPreparation).toHaveBeenCalledTimes(1));
   });
 
   // SID Radio claims its station before starting the playlist, so it has to learn when the start did not happen.

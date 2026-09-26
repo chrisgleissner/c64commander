@@ -40,6 +40,10 @@ export type SidRadioLauncherSheetProps = {
   songStyleBit?: number | null;
   /** Start the Song station, or re-aim the active one, at this mood; `null` is all moods. */
   onStartSong?: (styleBit: number | null) => void;
+  /** No HVSC music is installed, so no station can play: every station is disabled and the sheet says why. */
+  hvscMissing?: boolean;
+  /** Opens HVSC installation; absent where HVSC cannot be installed from here. */
+  onInstallHvsc?: () => void;
 };
 
 /**
@@ -73,6 +77,8 @@ export const SidRadioLauncherSheet = ({
   songSeedLabel = null,
   songStyleBit = null,
   onStartSong,
+  hvscMissing = false,
+  onInstallHvsc,
 }: SidRadioLauncherSheetProps) => {
   const [fromLikes, setFromLikes] = useState(false);
   const tasteUnlocked = likeCount >= SID_RADIO_TASTE_UNLOCK_LIKES;
@@ -87,6 +93,27 @@ export const SidRadioLauncherSheet = ({
         </SheetHeader>
 
         <div className="flex flex-col gap-4 pt-3">
+          {hvscMissing ? (
+            <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+              {/* Focusable so the keypad ring lands on the reason before the disabled stations. */}
+              <p role="note" tabIndex={0} className="min-h-11 text-base" data-testid="sid-radio-needs-hvsc">
+                SID Radio plays tunes from the HVSC music collection, and none is installed yet. Install HVSC, then any
+                station will play.
+              </p>
+              {onInstallHvsc ? (
+                <Button
+                  type="button"
+                  data-testid="sid-radio-install-hvsc"
+                  onClick={() => {
+                    close();
+                    onInstallHvsc();
+                  }}
+                >
+                  Install HVSC
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {songSeedLabel && onStartSong ? (
             <div className="flex flex-col gap-2" data-testid="sid-radio-song-section">
               <Label className="font-medium">Similar to {songSeedLabel}</Label>
@@ -105,7 +132,7 @@ export const SidRadioLauncherSheet = ({
                       className="h-auto whitespace-normal py-1.5 text-xs"
                       data-testid={`sid-radio-song-mood-${option.bit ?? "all"}`}
                       aria-pressed={selected}
-                      disabled={!populated}
+                      disabled={hvscMissing || !populated}
                       onClick={() => {
                         close();
                         onStartSong(option.bit);
@@ -122,6 +149,7 @@ export const SidRadioLauncherSheet = ({
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               data-testid="sid-radio-likes-toggle"
+              disabled={hvscMissing}
               checked={fromLikes}
               onCheckedChange={(value) => setFromLikes(value === true)}
             />
@@ -142,7 +170,7 @@ export const SidRadioLauncherSheet = ({
                   // `overflow-wrap: anywhere` in `index.css` split it after "Experiment".
                   className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
                   data-testid={`sid-radio-style-${tile.bit}`}
-                  disabled={!populated}
+                  disabled={hvscMissing || !populated}
                   onClick={() => {
                     close();
                     onStartStyle(tile.bit, tile.label, fromLikes);
@@ -174,7 +202,7 @@ export const SidRadioLauncherSheet = ({
               type="button"
               variant="secondary"
               data-testid="sid-radio-taste"
-              disabled={!tasteUnlocked}
+              disabled={hvscMissing || !tasteUnlocked}
               onClick={() => {
                 close();
                 onStartTaste();
@@ -192,6 +220,7 @@ export const SidRadioLauncherSheet = ({
               type="button"
               variant="ghost"
               data-testid="sid-radio-surprise"
+              disabled={hvscMissing}
               onClick={() => {
                 close();
                 onSurprise();

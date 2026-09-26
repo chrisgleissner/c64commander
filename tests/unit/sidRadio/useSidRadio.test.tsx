@@ -22,8 +22,10 @@ import type {
 } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { DEFAULT_STATION_BALANCE, type StationResult } from "@/lib/sidRadio/stationEngine";
 import { addLog } from "@/lib/logging";
+import { toast } from "@/hooks/use-toast";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 
 beforeEach(async () => {
   localStorage.clear();
@@ -400,6 +402,44 @@ describe("useSidRadio", () => {
     });
     expect(result.current.active).toBe(false);
     expect(result.current.notice).toBe("no-hvsc");
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("toasts and logs a station that cannot start because no HVSC music is installed, instead of only setting page state", async () => {
+    vi.mocked(addLog).mockClear();
+    vi.mocked(toast).mockClear();
+    const params = baseParams(makeClient(), { resolvePath: () => null });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringContaining("No HVSC music is installed yet") }),
+    );
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "SID Radio: the station did not start",
+      expect.objectContaining({ notice: "no-hvsc", seedKind: "style" }),
+    );
+  });
+
+  it("logs and toasts a station start that throws, instead of leaving an unhandled rejection", async () => {
+    vi.mocked(addLog).mockClear();
+    vi.mocked(toast).mockClear();
+    const client = makeClient();
+    client.load.mockRejectedValueOnce(new Error("similarity bundle missing"));
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await expect(result.current.startStyleRadio(1, "Chill / Ambient")).resolves.toBeUndefined();
+    });
+    expect(result.current.notice).toBe("start-failed");
+    expect(addLog).toHaveBeenCalledWith(
+      "error",
+      "SID Radio: starting a station failed",
+      expect.objectContaining({ error: "similarity bundle missing" }),
+    );
+    expect(toast).toHaveBeenCalledTimes(1);
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 
