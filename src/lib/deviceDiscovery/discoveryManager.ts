@@ -152,16 +152,22 @@ const findSavedDeviceId = (candidate: SavedDeviceMatchInput) => {
     isSameMachine(savedEntryMachineIdentity(savedDevices, device.id), candidate),
   );
   if (identityMatch) return identityMatch.id;
+  // A known, different unique id rules a saved entry out, whatever its name or address says.
+  const candidateId = normalizeToken(candidate.uniqueId);
+  const unexcluded = savedDevices.devices.filter((device) => {
+    const savedId = normalizeToken(savedEntryMachineIdentity(savedDevices, device.id).uniqueId);
+    return !candidateId || !savedId || savedId === candidateId;
+  });
   const hostname = normalizeToken(candidate.hostname);
   if (hostname) {
-    const match = savedDevices.devices.find(
+    const match = unexcluded.find(
       (device) => normalizeToken(device.lastKnownHostname) === hostname || normalizeToken(device.host) === hostname,
     );
     if (match) return match.id;
   }
   const addresses = new Set(candidateAddresses(candidate).map(normalizeToken));
   const host = normalizeToken(candidate.host);
-  const match = savedDevices.devices.find(
+  const match = unexcluded.find(
     (device) => addresses.has(normalizeToken(device.host)) || Boolean(host && normalizeToken(device.host) === host),
   );
   return match?.id ?? null;
@@ -426,7 +432,7 @@ export const resolveDiscoveredCandidateIdentity = async (
     firmwareVersion: info.firmware_version?.trim() || candidate.firmwareVersion,
   };
   const identified = { ...withIdentity, id: candidateKey(withIdentity) };
-  const savedDeviceId = findSavedDeviceId(identified) ?? candidate.alreadySavedDeviceId;
+  const savedDeviceId = findSavedDeviceId(identified);
   const saved = getSavedDevicesSnapshot().devices.find((device) => device.id === savedDeviceId) ?? null;
   const savedHost = saved ? stripSavedDeviceHttpPort(saved.host) : null;
   const addresses = candidateAddresses(identified);
@@ -494,8 +500,14 @@ export const persistDiscoveredDevice = (
       normalizeToken(device.host) === normalizeToken(candidate.hostname)
     );
   };
+  const marked = savedDevices.devices.find((device) => device.id === candidate.alreadySavedDeviceId);
+  const markedHasOtherUniqueId = Boolean(
+    marked?.lastKnownUniqueId &&
+    candidate.uniqueId &&
+    normalizeToken(marked.lastKnownUniqueId) !== normalizeToken(candidate.uniqueId),
+  );
   const existingId =
-    candidate.alreadySavedDeviceId ??
+    (markedHasOtherUniqueId ? null : (marked?.id ?? null)) ??
     (candidate.uniqueId ? (savedDevices.devices.find(matchesMachineIdentity)?.id ?? null) : null) ??
     (candidate.hostname
       ? (savedDevices.devices.find((device) => hostnameOrHostMatch(device) && !isConflictingHostnameMatch(device))
