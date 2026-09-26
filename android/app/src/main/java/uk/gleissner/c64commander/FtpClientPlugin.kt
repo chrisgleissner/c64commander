@@ -120,6 +120,9 @@ class FtpClientPlugin : Plugin() {
     // subsequent RETR 550s - visible in the listing but never fetchable. See
     // HARD9-070.
     client.autodetectUTF8 = true
+    // A dual-homed device must get its data connection on the address the control connection
+    // reached, whatever address a 227 reply names; pinned here rather than left to a JVM property.
+    client.isIpAddressFromPasvResponse = false
   }
 
   private fun applyConnectedTimeouts(client: FTPClient, timeoutMs: Int) {

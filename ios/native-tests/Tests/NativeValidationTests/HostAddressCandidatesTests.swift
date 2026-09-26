@@ -112,6 +112,18 @@ final class HostAddressCandidatesTests: XCTestCase {
         XCTAssertFalse(telnet.contains("CFStreamCreatePairWithSocketToHost(nil, host as CFString"))
     }
 
+    func testPassiveDataConnectionGoesToTheAddressTheControlConnectionReached() throws {
+        let ftp = try repoFile("ios/App/App/IOSFtp.swift")
+        XCTAssertTrue(ftp.contains("controlAddress = connected.address"))
+
+        let start = try XCTUnwrap(ftp.range(of: "private func openPassiveDataChannel()"))
+        let end = try XCTUnwrap(ftp.range(of: "\n    }\n", range: start.upperBound..<ftp.endIndex))
+        let body = String(ftp[start.upperBound..<end.lowerBound])
+        XCTAssertTrue(body.contains("let dataHost = controlAddress ?? host"))
+        XCTAssertTrue(body.contains("return (dataHost, dataPort)"))
+        XCTAssertFalse(body.contains(#"let dataHost = "\(numbers[0])"#))
+    }
+
     private func enumBlock(in source: String) throws -> String {
         let start = try XCTUnwrap(source.range(of: "enum HostAddressCandidates {"))
         let end = try XCTUnwrap(source.range(of: "\n}\n", range: start.upperBound..<source.endIndex))

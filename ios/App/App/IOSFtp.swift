@@ -808,8 +808,17 @@ final class FtpSession {
         guard numbers.count == 6 else {
             throw NativePluginError.operationFailed("Invalid FTP PASV address payload")
         }
-        let dataHost = "\(numbers[0]).\(numbers[1]).\(numbers[2]).\(numbers[3])"
+        let advertisedHost = "\(numbers[0]).\(numbers[1]).\(numbers[2]).\(numbers[3])"
         let dataPort = numbers[4] * 256 + numbers[5]
+        // A dual-homed device must get its data connection on the address the control connection reached.
+        let dataHost = controlAddress ?? host
+        if advertisedHost != dataHost {
+            IOSDiagnostics.log(.debug, "FTP PASV named another address; using the control connection's", details: [
+                "origin": "native",
+                "advertisedHost": advertisedHost,
+                "dataHost": dataHost,
+            ])
+        }
         return (dataHost, dataPort)
     }
 
