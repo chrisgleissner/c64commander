@@ -7,6 +7,7 @@
  */
 
 import type { DiskMountPersistence } from "./diskMount";
+import { diskDeviceKey } from "./diskDeviceIdentity";
 
 // An uploaded image is mounted from a device-side temporary file, and /v1/drives reports that
 // file (e.g. "/Temp/cache/upload/temp0082") instead of the library disk's path. This registry
@@ -25,7 +26,8 @@ export type UploadMountRecord = {
 
 export type UploadMountState = Readonly<Record<string, UploadMountRecord>>;
 
-const recordKey = (deviceHost: string, drive: UploadDriveKey) => JSON.stringify([deviceHost, drive]);
+// By device identity, so the same Ultimate reached through its other saved address still names its disk.
+const recordKey = (deviceHost: string, drive: UploadDriveKey) => JSON.stringify([diskDeviceKey(deviceHost), drive]);
 
 const withoutRecord = (state: UploadMountState, key: string): UploadMountState => {
   if (!(key in state)) return state;

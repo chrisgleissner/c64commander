@@ -20,6 +20,7 @@ import {
   resolveUploadMountedDiskId,
   type UploadMountState,
 } from "@/lib/disks/uploadMountRegistry";
+import { getSavedDevicesStorageKey, resetSavedDevicesCacheForTests } from "@/lib/savedDevices/store";
 
 const TEMP_PATH = "/Temp/cache/upload/temp0082";
 const pending: UploadMountState = {
@@ -112,5 +113,74 @@ describe("upload mount registry", () => {
     noteDiskMountOutcome("c64u", "a", "disk-old", "transient", "Old.d64", 1000);
 
     expect(getUploadMountedDiskName("c64u", "a", "/Temp/cache/upload/temp0001", 3000)).toBe("New.d64");
+  });
+});
+
+// One Ultimate on Ethernet and Wi-Fi, saved once per address; a second, different Ultimate elsewhere.
+const ETHERNET_HOST = "198.51.100.10";
+const WIFI_HOST = "203.0.113.10";
+const OTHER_DEVICE_HOST = "192.0.2.30";
+
+const saveDevices = (uniqueIdByHost: Record<string, string | null>) => {
+  const devices = Object.entries(uniqueIdByHost).map(([host, uniqueId]) => ({
+    id: `saved-${host}`,
+    name: `Saved ${host}`,
+    host,
+    httpPort: 80,
+    ftpPort: 21,
+    telnetPort: 23,
+    lastKnownProduct: null,
+    lastKnownHostname: null,
+    lastKnownUniqueId: uniqueId,
+    lastSuccessfulConnectionAt: null,
+    lastUsedAt: null,
+    hasPassword: false,
+  }));
+  localStorage.setItem(
+    getSavedDevicesStorageKey(),
+    JSON.stringify({ selectedDeviceId: devices[0]?.id, devices, summaries: {}, runtimeStatuses: {} }),
+  );
+  resetSavedDevicesCacheForTests();
+};
+
+describe("upload mounts on an Ultimate saved under two addresses", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: 1000 });
+    localStorage.clear();
+    resetSavedDevicesCacheForTests();
+    resetUploadMountsForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    localStorage.clear();
+    resetSavedDevicesCacheForTests();
+  });
+
+  it("names the uploaded library disk when the drive is polled through the same Ultimate's other address", () => {
+    saveDevices({ [ETHERNET_HOST]: "UID-DUAL", [WIFI_HOST]: "UID-DUAL" });
+    noteDiskMountOutcome(ETHERNET_HOST, "a", "disk-1", "transient", "Disk1.d64", 1000);
+
+    learnUploadMountFromPoll(WIFI_HOST, "a", TEMP_PATH, 1500);
+
+    expect(getUploadMountedDiskId(WIFI_HOST, "a", TEMP_PATH, 2000)).toBe("disk-1");
+    expect(getUploadMountedDiskName(WIFI_HOST, "a", TEMP_PATH, 2000)).toBe("Disk1.d64");
+  });
+
+  it("does not name another Ultimate's upload as this device's library disk", () => {
+    saveDevices({ [ETHERNET_HOST]: "UID-DUAL", [OTHER_DEVICE_HOST]: "UID-OTHER" });
+    noteDiskMountOutcome(ETHERNET_HOST, "a", "disk-1", "transient", "Disk1.d64", 1000);
+    learnUploadMountFromPoll(ETHERNET_HOST, "a", TEMP_PATH, 1500);
+
+    expect(getUploadMountedDiskId(OTHER_DEVICE_HOST, "a", TEMP_PATH, 2000)).toBeNull();
+    expect(getUploadMountedDiskId(ETHERNET_HOST, "a", TEMP_PATH, 2000)).toBe("disk-1");
+  });
+
+  it("keeps two addresses apart while neither has reported a unique id", () => {
+    saveDevices({ [ETHERNET_HOST]: null, [WIFI_HOST]: null });
+    noteDiskMountOutcome(ETHERNET_HOST, "a", "disk-1", "transient", "Disk1.d64", 1000);
+    learnUploadMountFromPoll(ETHERNET_HOST, "a", TEMP_PATH, 1500);
+
+    expect(getUploadMountedDiskId(WIFI_HOST, "a", TEMP_PATH, 2000)).toBeNull();
   });
 });
