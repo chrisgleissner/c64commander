@@ -46,7 +46,7 @@ vi.mock("@/lib/diagnostics/diagnosticsActivity");
 vi.mock("@/lib/logging");
 
 describe("ftpClient", () => {
-  const mockHost = "192.168.1.64";
+  const mockHost = "192.0.2.64";
   const mockListOptions = {
     host: mockHost,
     port: 21,

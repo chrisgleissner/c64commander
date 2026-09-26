@@ -23,8 +23,8 @@ const makeDeps = (
 
 describe("isLikelyIpAddress", () => {
   it("recognises IPv4 literals and rejects hostnames", () => {
-    expect(isLikelyIpAddress("192.168.1.167")).toBe(true);
-    expect(isLikelyIpAddress(" 10.0.0.1 ")).toBe(true);
+    expect(isLikelyIpAddress("192.0.2.167")).toBe(true);
+    expect(isLikelyIpAddress(" 198.51.100.1 ")).toBe(true);
     expect(isLikelyIpAddress("c64u")).toBe(false);
     expect(isLikelyIpAddress("u64.local")).toBe(false);
   });
@@ -40,31 +40,31 @@ describe("evaluateNewDeviceReachability", () => {
 
   it("treats a 401/403 as reachable-but-needs-password (does not block the save)", async () => {
     const deps = makeDeps({ ok: false, error: "HTTP 403: Forbidden" });
-    const result = await evaluateNewDeviceReachability({ host: "192.168.1.167", deviceHost: "192.168.1.167:80" }, deps);
+    const result = await evaluateNewDeviceReachability({ host: "192.0.2.167", deviceHost: "192.0.2.167:80" }, deps);
     expect(result.status).toBe("needs-password");
     expect(deps.discover).not.toHaveBeenCalled();
   });
 
   it("suggests the LAN IP when a hostname is unreachable but the device is found by hostname match", async () => {
     const deps = makeDeps({ ok: false, error: "Couldn't resolve 'c64u'." }, [
-      { address: "192.168.1.13", hostname: "u64" },
-      { address: "192.168.1.167", hostname: "c64u" },
+      { address: "192.0.2.13", hostname: "u64" },
+      { address: "192.0.2.167", hostname: "c64u" },
     ]);
     const result = await evaluateNewDeviceReachability({ host: "c64u", deviceHost: "c64u:80" }, deps);
-    expect(result).toEqual({ status: "unreachable", suggestedAddress: "192.168.1.167", suggestedHostname: "c64u" });
+    expect(result).toEqual({ status: "unreachable", suggestedAddress: "192.0.2.167", suggestedHostname: "c64u" });
   });
 
   it("suggests the only discovered device when there is exactly one and no hostname match", async () => {
-    const deps = makeDeps({ ok: false, error: "timed out" }, [{ address: "192.168.1.50", hostname: "ultimate" }]);
+    const deps = makeDeps({ ok: false, error: "timed out" }, [{ address: "192.0.2.50", hostname: "ultimate" }]);
     const result = await evaluateNewDeviceReachability({ host: "myc64", deviceHost: "myc64:80" }, deps);
     expect(result.status).toBe("unreachable");
-    expect((result as { suggestedAddress: string }).suggestedAddress).toBe("192.168.1.50");
+    expect((result as { suggestedAddress: string }).suggestedAddress).toBe("192.0.2.50");
   });
 
   it("does not guess among multiple devices without a hostname match", async () => {
     const deps = makeDeps({ ok: false, error: "timed out" }, [
-      { address: "192.168.1.13", hostname: "u64" },
-      { address: "192.168.1.50", hostname: "other" },
+      { address: "192.0.2.13", hostname: "u64" },
+      { address: "192.0.2.50", hostname: "other" },
     ]);
     const result = await evaluateNewDeviceReachability({ host: "myc64", deviceHost: "myc64:80" }, deps);
     expect(result).toEqual({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
@@ -72,7 +72,7 @@ describe("evaluateNewDeviceReachability", () => {
 
   it("does not run discovery (no IP rescue) when the user already typed an IP", async () => {
     const deps = makeDeps({ ok: false, error: "no route to host" });
-    const result = await evaluateNewDeviceReachability({ host: "192.168.1.200", deviceHost: "192.168.1.200:80" }, deps);
+    const result = await evaluateNewDeviceReachability({ host: "192.0.2.200", deviceHost: "192.0.2.200:80" }, deps);
     expect(result).toEqual({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
     expect(deps.discover).not.toHaveBeenCalled();
   });

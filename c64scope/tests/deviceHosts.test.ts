@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_C64U_HOST, DEVICE_HOSTS, resolveDeviceHost } from "../src/deviceHosts.js";
 
 /**
- * The bench addressed the Ultimate at a fixed 192.168.1.13. DHCP moved it, so the
+ * The bench once addressed the Ultimate at a fixed address. DHCP moved it, so the
  * default pointed at neither machine while still looking deliberate.
  */
 
@@ -21,7 +21,7 @@ describe("bench device hosts", () => {
 
   it("lets C64U_HOST name any machine, by name or address", () => {
     expect(resolveDeviceHost({ C64U_HOST: "u64" })).toBe("u64");
-    expect(resolveDeviceHost({ C64U_HOST: "10.0.0.5" })).toBe("10.0.0.5");
+    expect(resolveDeviceHost({ C64U_HOST: "198.51.100.5" })).toBe("198.51.100.5");
   });
 
   it("ignores an empty override rather than resolving an empty host", () => {

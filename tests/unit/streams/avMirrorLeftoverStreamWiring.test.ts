@@ -48,7 +48,7 @@ const { api } = vi.hoisted(() => ({
   api: {
     startStream: vi.fn(async () => ({ errors: [] })),
     stopStream: vi.fn(async () => ({ errors: [] })),
-    getDeviceHost: vi.fn(() => "192.168.1.10"),
+    getDeviceHost: vi.fn(() => "192.0.2.10"),
   },
 }));
 
@@ -82,7 +82,7 @@ describe("A/V mirror records what the device is streaming (HARD27-021)", () => {
     await audio.startStream("audio", "239.0.1.65:11001");
     await video.startStream("video", "239.0.1.64:11000");
 
-    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.168.1.10", video: "192.168.1.10" });
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.10", video: "192.0.2.10" });
   });
 
   it("clears the record after a successful stop", async () => {
@@ -103,7 +103,7 @@ describe("A/V mirror records what the device is streaming (HARD27-021)", () => {
 
     await expect(video.stopStream("video")).rejects.toThrow("Network error");
 
-    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.168.1.10" });
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.0.2.10" });
   });
 
   it("records nothing when the start fails", async () => {

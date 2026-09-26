@@ -31,19 +31,19 @@ describe("DeviceDiscoveryWeb", () => {
   });
 
   it("returns the injected candidates and defaults scannedHosts/elapsedMs from them", async () => {
-    setMock({ candidates: [{ address: "192.168.1.5", hostname: "c64u" }] });
+    setMock({ candidates: [{ address: "192.0.2.5", hostname: "c64u" }] });
 
     const result = await new DeviceDiscoveryWeb().discover({});
 
     expect(result.unsupported).toBe(false);
-    expect(result.candidates).toEqual([{ address: "192.168.1.5", hostname: "c64u" }]);
+    expect(result.candidates).toEqual([{ address: "192.0.2.5", hostname: "c64u" }]);
     // scannedHosts defaults to the candidate count, elapsedMs to 0.
     expect(result.scannedHosts).toBe(1);
     expect(result.elapsedMs).toBe(0);
   });
 
   it("honours explicit scannedHosts and elapsedMs in the injected seam", async () => {
-    setMock({ candidates: [{ address: "10.0.0.9" }], scannedHosts: 42, elapsedMs: 7 });
+    setMock({ candidates: [{ address: "198.51.100.9" }], scannedHosts: 42, elapsedMs: 7 });
 
     const result = await new DeviceDiscoveryWeb().discover({});
 

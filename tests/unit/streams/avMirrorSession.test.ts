@@ -339,10 +339,10 @@ describe("AvMirrorSession", () => {
   it("adopts a sender on both streams at once", async () => {
     const { session, audio, video } = makeSession();
 
-    await session.adoptSender("192.168.1.131");
+    await session.adoptSender("192.0.2.131");
 
-    expect(audio.adoptSender).toHaveBeenCalledWith("192.168.1.131");
-    expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.131");
+    expect(audio.adoptSender).toHaveBeenCalledWith("192.0.2.131");
+    expect(video.adoptSender).toHaveBeenCalledWith("192.0.2.131");
   });
 
   it("accepts the stream on its own when the refused sender is the selected device on another address", async () => {
@@ -468,9 +468,9 @@ describe("AvMirrorSession", () => {
     const { session, audio, video } = makeSession();
     audio.adoptSender?.mockRejectedValueOnce(new Error("socket closed"));
 
-    await expect(session.adoptSender("192.168.1.131")).resolves.toBeUndefined();
+    await expect(session.adoptSender("192.0.2.131")).resolves.toBeUndefined();
 
-    expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.131");
+    expect(video.adoptSender).toHaveBeenCalledWith("192.0.2.131");
   });
 
   // The mirror claims the phone's speaker when its audio starts, so that a local tune is silenced

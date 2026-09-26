@@ -34,7 +34,7 @@ vi.mock("@capacitor/core", async (importOriginal) => {
 });
 
 const streamUdp = vi.hoisted(() => ({
-  bind: vi.fn().mockResolvedValue({ localIp: "192.168.1.206", port: 11000 }),
+  bind: vi.fn().mockResolvedValue({ localIp: "192.0.2.206", port: 11000 }),
   close: vi.fn().mockResolvedValue(undefined),
   addListener: vi.fn(),
 }));
@@ -96,7 +96,7 @@ describe("NativeUdpStreamReceiver listener registration failure (HARD27-002)", (
     logging.addLog.mockClear();
     native.pluginAvailable = true;
     streamUdp.addListener.mockReset();
-    streamUdp.bind.mockResolvedValue({ localIp: "192.168.1.206", port: 11000 });
+    streamUdp.bind.mockResolvedValue({ localIp: "192.0.2.206", port: 11000 });
     process.on("unhandledRejection", record);
   });
 

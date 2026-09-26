@@ -49,14 +49,14 @@ describe("hostEdit", () => {
   });
 
   it("normalizes host input with fallback", () => {
-    expect(normalizeConfiguredHost(" 192.168.0.1 ", "c64u")).toBe("192.168.0.1");
+    expect(normalizeConfiguredHost(" 203.0.113.1 ", "c64u")).toBe("203.0.113.1");
     expect(normalizeConfiguredHost("   ", "c64u")).toBe("c64u");
     expect(normalizeConfiguredHost("", "c64u")).toBe("c64u");
   });
 
   it("reads configured host from localStorage", () => {
-    resolveDeviceHostFromStorage.mockReturnValue("10.0.0.5");
-    expect(getConfiguredHost()).toBe("10.0.0.5");
+    resolveDeviceHostFromStorage.mockReturnValue("198.51.100.5");
+    expect(getConfiguredHost()).toBe("198.51.100.5");
   });
 
   it("returns default host and logs when localStorage read fails", () => {
@@ -78,9 +78,9 @@ describe("hostEdit", () => {
   });
 
   it("saves host and retries with default trigger", () => {
-    const host = saveConfiguredHostAndRetry(" 10.0.0.7 ", "c64u");
-    expect(host).toBe("10.0.0.7");
-    expect(updateC64APIConfig).toHaveBeenCalledWith("http://10.0.0.7", "pw", "10.0.0.7");
+    const host = saveConfiguredHostAndRetry(" 198.51.100.7 ", "c64u");
+    expect(host).toBe("198.51.100.7");
+    expect(updateC64APIConfig).toHaveBeenCalledWith("http://198.51.100.7", "pw", "198.51.100.7");
     expect(discoverConnection).toHaveBeenCalledWith("settings");
     expect(declineDemoMode).not.toHaveBeenCalled();
   });

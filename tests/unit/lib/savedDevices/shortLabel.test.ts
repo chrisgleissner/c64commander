@@ -21,8 +21,8 @@ describe("the device's short label for a phone's header", () => {
   });
 
   it("names the product instead of an IP address, which truncated names nothing", () => {
-    expect(buildDeviceShortLabel("192.168.1.13", "U64E")).toBe("U64E");
-    expect(buildDeviceShortLabel("192.168.1.74:80", "U2")).toBe("U2");
+    expect(buildDeviceShortLabel("192.0.2.13", "U64E")).toBe("U64E");
+    expect(buildDeviceShortLabel("192.0.2.74:80", "U2")).toBe("U2");
   });
 
   it("names the product instead of a host name too long for the header", () => {
@@ -30,6 +30,6 @@ describe("the device's short label for a phone's header", () => {
   });
 
   it("has nothing to show for an IP address of a device not yet identified", () => {
-    expect(buildDeviceShortLabel("192.168.1.13", null)).toBeNull();
+    expect(buildDeviceShortLabel("192.0.2.13", null)).toBeNull();
   });
 });

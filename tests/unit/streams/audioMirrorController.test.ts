@@ -21,7 +21,7 @@ import {
 class FakeReceiver implements StreamReceiver {
   datagram: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
   stateCb: ((s: StreamConnectionState) => void) | null = null;
-  readonly destination = "10.0.0.5:11001";
+  readonly destination = "198.51.100.5:11001";
   closed = false;
   private clock = 0;
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void) {
@@ -188,7 +188,7 @@ describe("AudioMirrorController", () => {
     });
 
     await controller.start();
-    expect(startStream).toHaveBeenCalledWith("audio", "10.0.0.5:11001");
+    expect(startStream).toHaveBeenCalledWith("audio", "198.51.100.5:11001");
     receiver.emitState("open");
     expect(controller.getSnapshot().state).toBe("live");
 
@@ -440,10 +440,10 @@ describe("AudioMirrorController foreign-sender notice", () => {
     const receiver = new FakeReceiver();
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
-      createNativeSink: () => sinkWithSenders(["10.0.0.7", "192.168.1.15"]),
+      createNativeSink: () => sinkWithSenders(["198.51.100.7", "192.0.2.15"]),
       startStream: vi.fn(async () => ({ errors: [] })),
       stopStream: vi.fn(async () => ({ errors: [] })),
-      expectedSenderHost: () => "10.0.0.7",
+      expectedSenderHost: () => "198.51.100.7",
       stopStreamAt,
       onChange: vi.fn(),
     });
@@ -462,7 +462,7 @@ describe("AudioMirrorController foreign-sender notice", () => {
     });
 
     expect(controller.getSnapshot().foreignSenderNotice).toBe(
-      "Another Ultimate at 192.168.1.15 is also streaming into this group; stop it on that machine.",
+      "Another Ultimate at 192.0.2.15 is also streaming into this group; stop it on that machine.",
     );
     expect(controller.getSnapshot().error).toBeNull();
     expect(controller.getSnapshot().state).toBe("live");

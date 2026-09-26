@@ -942,7 +942,7 @@ describe("useSavedDeviceSwitching", () => {
         hostname: "backup-lab",
         unique_id: "UID-BACKUP",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
@@ -953,7 +953,7 @@ describe("useSavedDeviceSwitching", () => {
         hostname: "backup-lab",
         unique_id: "UID-BACKUP",
       },
-      resolvedAddress: "192.168.1.13",
+      resolvedAddress: "192.0.2.13",
     });
 
     const { result } = renderHook(() => useSavedDeviceSwitching(), {
@@ -1084,7 +1084,7 @@ describe("useSavedDeviceSwitching", () => {
     store.addSavedDevice({
       id: "device-c64u",
       name: "C64U",
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 64,
@@ -1153,7 +1153,7 @@ describe("useSavedDeviceSwitching", () => {
     store.addSavedDevice({
       id: "device-c64u",
       name: "C64U",
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 64,
@@ -1165,7 +1165,7 @@ describe("useSavedDeviceSwitching", () => {
     store.addSavedDevice({
       id: "device-c64u-backup",
       name: "Backup C64U",
-      host: "10.0.0.12",
+      host: "198.51.100.12",
       httpPort: 80,
       ftpPort: 21,
       telnetPort: 64,
@@ -1230,11 +1230,11 @@ describe("useSavedDeviceSwitching", () => {
     });
 
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(1, {
-      deviceHost: "192.168.1.167",
+      deviceHost: "192.0.2.167",
       password: null,
     });
     expect(mockVerifyCurrentConnectionTarget).toHaveBeenNthCalledWith(2, {
-      deviceHost: "10.0.0.12",
+      deviceHost: "198.51.100.12",
       password: null,
     });
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-c64u-backup");

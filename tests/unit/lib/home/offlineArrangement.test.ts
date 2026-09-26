@@ -62,7 +62,7 @@ describe("isUntouchedBootstrapDefault", () => {
   });
 
   it("is false once the host has been edited", () => {
-    expect(isUntouchedBootstrapDefault(bootstrapDefault({ host: "192.168.1.64" }))).toBe(false);
+    expect(isUntouchedBootstrapDefault(bootstrapDefault({ host: "192.0.2.64" }))).toBe(false);
   });
 
   it("is false for no device at all, which is not a state this app can reach anyway", () => {

@@ -50,7 +50,7 @@ const defaultProps = {
 };
 
 /** Helper: provide stream config data so buildStreamControlEntries yields real entries */
-const withStreamConfig = (ip = "192.168.1.10", port = "11000") => {
+const withStreamConfig = (ip = "192.0.2.10", port = "11000") => {
   mockedUseC64ConfigItems.mockReturnValue({
     data: {
       "Stream VIC to": { value: `${ip}:${port}` },
@@ -111,19 +111,19 @@ describe("useStreamData", () => {
     );
 
     act(() => {
-      result.current.handleStreamFieldChange("vic", "10.0.0.1:9000");
+      result.current.handleStreamFieldChange("vic", "198.51.100.1:9000");
     });
 
     expect(result.current.streamDrafts["vic"]).toEqual({
-      ip: "10.0.0.1",
+      ip: "198.51.100.1",
       port: "9000",
-      endpoint: "10.0.0.1:9000",
+      endpoint: "198.51.100.1:9000",
     });
   });
 
   // 3. handleStreamEditOpen populates drafts from entry
   it("handleStreamEditOpen populates drafts from entry", () => {
-    withStreamConfig("192.168.1.10", "11000");
+    withStreamConfig("192.0.2.10", "11000");
     const { result } = renderHook(() =>
       useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
@@ -134,15 +134,15 @@ describe("useStreamData", () => {
 
     expect(result.current.activeStreamEditorKey).toBe("vic");
     expect(result.current.streamDrafts["vic"]).toEqual({
-      ip: "192.168.1.10",
+      ip: "192.0.2.10",
       port: "11000",
-      endpoint: "192.168.1.10:11000",
+      endpoint: "192.0.2.10:11000",
     });
   });
 
   // 4. handleStreamEditCancel resets draft to entry values
   it("handleStreamEditCancel resets draft to entry values", () => {
-    withStreamConfig("192.168.1.10", "11000");
+    withStreamConfig("192.0.2.10", "11000");
     const { result } = renderHook(() =>
       useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
@@ -151,7 +151,7 @@ describe("useStreamData", () => {
       result.current.handleStreamEditOpen("vic");
     });
     act(() => {
-      result.current.handleStreamFieldChange("vic", "10.0.0.99:5555");
+      result.current.handleStreamFieldChange("vic", "198.51.100.99:5555");
     });
     act(() => {
       result.current.handleStreamEditCancel("vic");
@@ -159,15 +159,15 @@ describe("useStreamData", () => {
 
     expect(result.current.activeStreamEditorKey).toBeNull();
     expect(result.current.streamDrafts["vic"]).toEqual({
-      ip: "192.168.1.10",
+      ip: "192.0.2.10",
       port: "11000",
-      endpoint: "192.168.1.10:11000",
+      endpoint: "192.0.2.10:11000",
     });
   });
 
   // 5. handleStreamStart with valid endpoint calls api.startStream
   it("handleStreamStart with valid endpoint calls api.startStream", async () => {
-    withStreamConfig("192.168.1.10", "11000");
+    withStreamConfig("192.0.2.10", "11000");
     mockStartStream.mockResolvedValue(undefined);
     const { result } = renderHook(() =>
       useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
@@ -177,13 +177,13 @@ describe("useStreamData", () => {
       await result.current.handleStreamStart("vic");
     });
 
-    expect(mockStartStream).toHaveBeenCalledWith("video", "192.168.1.10:11000");
+    expect(mockStartStream).toHaveBeenCalledWith("video", "192.0.2.10:11000");
     expect(mockToast).toHaveBeenCalledWith({ title: "VIC start command sent" });
   });
 
   // 6. handleStreamStart with invalid host shows error
   it("handleStreamStart with invalid host shows error", async () => {
-    withStreamConfig("192.168.1.10", "11000");
+    withStreamConfig("192.0.2.10", "11000");
     const { result } = renderHook(() =>
       useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
@@ -208,13 +208,13 @@ describe("useStreamData", () => {
 
   // 7. handleStreamStart with invalid port shows error
   it("handleStreamStart with invalid port shows error", async () => {
-    withStreamConfig("192.168.1.10", "11000");
+    withStreamConfig("192.0.2.10", "11000");
     const { result } = renderHook(() =>
       useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
-      result.current.handleStreamFieldChange("vic", "192.168.1.10:99999");
+      result.current.handleStreamFieldChange("vic", "192.0.2.10:99999");
     });
 
     await act(async () => {
@@ -305,7 +305,7 @@ describe("useStreamData", () => {
 
   // 11. handleStreamCommit with valid endpoint calls updateConfigValue
   it("handleStreamCommit with valid endpoint calls updateConfigValue", async () => {
-    withStreamConfig("192.168.1.10", "11000");
+    withStreamConfig("192.0.2.10", "11000");
     const { result } = renderHook(() =>
       useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
@@ -314,7 +314,7 @@ describe("useStreamData", () => {
       result.current.handleStreamEditOpen("vic");
     });
     act(() => {
-      result.current.handleStreamFieldChange("vic", "10.0.0.5:8000");
+      result.current.handleStreamFieldChange("vic", "198.51.100.5:8000");
     });
 
     let committed: boolean | undefined;
@@ -326,7 +326,7 @@ describe("useStreamData", () => {
     expect(defaultProps.updateConfigValue).toHaveBeenCalledWith(
       "Data Streams",
       "Stream VIC to",
-      "10.0.0.5:8000",
+      "198.51.100.5:8000",
       "HOME_STREAM_UPDATE",
       "VIC stream target updated",
       { clearPendingOnSuccess: true },
@@ -374,7 +374,7 @@ describe("useStreamData", () => {
       result.current.handleStreamEditOpen("vic");
     });
     act(() => {
-      result.current.handleStreamFieldChange("vic", "192.168.1.10:99999");
+      result.current.handleStreamFieldChange("vic", "192.0.2.10:99999");
     });
 
     let committed: boolean | undefined;

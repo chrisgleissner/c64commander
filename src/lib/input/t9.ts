@@ -35,9 +35,9 @@
  *   hash       → switch to "multitap" to type letters, hash again to return.
  *
  *   How the canonical targets are typed (see t9.test.ts for executable proof):
- *     "192.168.1.13"        hostname: 1 9 2 ★ 1 6 8 ★ 1 ★ 1 3
+ *     "192.0.2.13"          hostname: 1 9 2 ★ 0 ★ 2 ★ 1 3
  *                           (★ = star → ".")
- *     "192.168.1.13:8080"   …continue: ★★ (star twice → ":") 8 0 8 0
+ *     "192.0.2.13:8080"     …continue: ★★ (star twice → ":") 8 0 8 0
  *     "c64u"                multitap: 2·3 (c) 6·4 (6) 4·4 (4) 8·2 (u)
  *                           (n·k = press key n, k taps, then commit)
  *     "c64u.local"          multitap: c64u  1 (.)  5·3 (l) 6·3 (o)

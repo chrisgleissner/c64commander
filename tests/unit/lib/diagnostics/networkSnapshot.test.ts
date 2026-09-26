@@ -138,7 +138,7 @@ describe("networkSnapshot", () => {
         type: "rest-request",
         origin: "system",
         correlationId: "superseded-1",
-        data: { ...ctx, url: "http://192.168.1.13/v1/info", method: "GET" },
+        data: { ...ctx, url: "http://192.0.2.13/v1/info", method: "GET" },
       },
       {
         id: "2",
@@ -156,7 +156,7 @@ describe("networkSnapshot", () => {
         type: "rest-request",
         origin: "user",
         correlationId: "ok-1",
-        data: { ...ctx, url: "http://192.168.1.13/v1/version", method: "GET" },
+        data: { ...ctx, url: "http://192.0.2.13/v1/version", method: "GET" },
       },
       {
         id: "4",
@@ -187,7 +187,7 @@ describe("networkSnapshot", () => {
         type: "rest-request",
         origin: "system",
         correlationId: "expected-abort",
-        data: { ...ctx, url: "http://192.168.1.13/v1/configs/LED%20Strip%20Settings", method: "GET" },
+        data: { ...ctx, url: "http://192.0.2.13/v1/configs/LED%20Strip%20Settings", method: "GET" },
       },
       {
         id: "2",

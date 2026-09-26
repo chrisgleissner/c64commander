@@ -41,7 +41,7 @@ describe("recover-and-continue sites report their fallback", () => {
 
   it("stays quiet for the ordinary bare host, which is not a failure", () => {
     expect(normalizeSavedDeviceHostInput("c64u")).toBe("c64u");
-    expect(normalizeSavedDeviceHostInput("192.168.1.64:8080")).toBe("192.168.1.64:8080");
+    expect(normalizeSavedDeviceHostInput("192.0.2.64:8080")).toBe("192.0.2.64:8080");
 
     expect(sink).not.toHaveBeenCalled();
   });

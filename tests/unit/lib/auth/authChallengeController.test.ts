@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const snapshot = {
   selectedDeviceId: "dev-c64u",
-  devices: [{ id: "dev-c64u", name: "Living Room C64U", host: "192.168.1.167" }],
+  devices: [{ id: "dev-c64u", name: "Living Room C64U", host: "192.0.2.167" }],
 };
 
 vi.mock("@/lib/savedDevices/store", () => ({
@@ -58,7 +58,7 @@ describe("submitAuthChallengePassword", () => {
   });
 
   it("stores the password for the affected device, re-applies config, then re-probes", async () => {
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     const recovered = await submitAuthChallengePassword(SECRET);
 
     expect(recovered).toBe(true);
@@ -81,14 +81,14 @@ describe("submitAuthChallengePassword", () => {
       order.push("reprobe");
       return { ok: true };
     });
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     await submitAuthChallengePassword(SECRET);
     expect(order).toEqual(["store", "reapply", "reprobe"]);
   });
 
   it("re-prompts on a wrong password (re-probe still Forbidden) and never closes the challenge", async () => {
     verifyCurrentConnectionTarget.mockResolvedValue({ ok: false, error: "HTTP 403: Forbidden" });
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
 
     const recovered = await submitAuthChallengePassword("wrong-pass");
 
@@ -107,7 +107,7 @@ describe("submitAuthChallengePassword", () => {
       ok: false,
       error: "Device timed out. Check that it is powered on.",
     });
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
 
     const recovered = await submitAuthChallengePassword("pwd");
 
@@ -118,7 +118,7 @@ describe("submitAuthChallengePassword", () => {
   });
 
   it("rejects an empty password without touching storage", async () => {
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     const recovered = await submitAuthChallengePassword("   ");
     expect(recovered).toBe(false);
     expect(setPasswordForDevice).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ describe("submitAuthChallengePassword", () => {
     const retry = vi.fn(async () => {
       throw auth403();
     });
-    notifyAuthRequired({ host: "192.168.1.167", retry });
+    notifyAuthRequired({ host: "192.0.2.167", retry });
 
     const recovered = await submitAuthChallengePassword("still-wrong");
 
@@ -141,7 +141,7 @@ describe("submitAuthChallengePassword", () => {
 
   it("closes the challenge when the captured retry succeeds", async () => {
     const retry = vi.fn(async () => "ok");
-    notifyAuthRequired({ host: "192.168.1.167", retry });
+    notifyAuthRequired({ host: "192.0.2.167", retry });
     const recovered = await submitAuthChallengePassword(SECRET);
     expect(recovered).toBe(true);
     expect(retry).toHaveBeenCalledTimes(1);
@@ -150,7 +150,7 @@ describe("submitAuthChallengePassword", () => {
 
   it("NEVER logs the password — not in any addLog payload on failure", async () => {
     verifyCurrentConnectionTarget.mockRejectedValue(new Error("network down"));
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
 
     await submitAuthChallengePassword(SECRET);
 
@@ -165,7 +165,7 @@ describe("submitAuthChallengePassword", () => {
     // A non-Error rejection from secure storage must hit the catch's String(...)
     // fallback and the generic, non-auth failure message.
     setPasswordForDevice.mockRejectedValueOnce("secure-storage exploded");
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
 
     const recovered = await submitAuthChallengePassword(SECRET);
 
@@ -179,7 +179,7 @@ describe("submitAuthChallengePassword", () => {
   it("stringifies a nullish recovery failure as 'unknown error' in the log", async () => {
     // A nullish throw must hit the String(error ?? "unknown error") fallback.
     applyC64APIConfigFromStorage.mockRejectedValueOnce(undefined);
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
 
     const recovered = await submitAuthChallengePassword(SECRET);
 
@@ -191,7 +191,7 @@ describe("submitAuthChallengePassword", () => {
     // An auth error escaping a recovery step (not just the re-probe) must map to
     // the wrong-password message, not the generic failure.
     applyC64APIConfigFromStorage.mockRejectedValueOnce(auth403());
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
 
     const recovered = await submitAuthChallengePassword("still-wrong");
 
@@ -203,7 +203,7 @@ describe("submitAuthChallengePassword", () => {
     const retry = vi.fn(async () => {
       throw new Error("Device timed out");
     });
-    notifyAuthRequired({ host: "192.168.1.167", retry });
+    notifyAuthRequired({ host: "192.0.2.167", retry });
 
     const recovered = await submitAuthChallengePassword(SECRET);
 
@@ -219,7 +219,7 @@ describe("submitAuthChallengePassword", () => {
     const retry = vi.fn(async () => {
       throw new TypeError("Cannot read properties of undefined (reading 'items')");
     });
-    notifyAuthRequired({ host: "192.168.1.167", retry });
+    notifyAuthRequired({ host: "192.0.2.167", retry });
 
     await submitAuthChallengePassword(SECRET);
 
@@ -236,7 +236,7 @@ describe("submitAuthChallengePassword", () => {
 
   it("logs a non-Error thrown by a captured retry as its string form, with no stack, and treats it as unreachable", async () => {
     const retry = vi.fn(() => Promise.reject("socket closed"));
-    notifyAuthRequired({ host: "192.168.1.167", retry });
+    notifyAuthRequired({ host: "192.0.2.167", retry });
 
     const recovered = await submitAuthChallengePassword(SECRET);
 
@@ -260,7 +260,7 @@ describe("submitAuthChallengePassword", () => {
     snapshot.selectedDeviceId = "no-such-device";
     try {
       // A host that matches no saved device and no resolvable selection → deviceId is null.
-      notifyAuthRequired({ host: "10.0.0.99" });
+      notifyAuthRequired({ host: "198.51.100.99" });
       const recovered = await submitAuthChallengePassword(SECRET);
       expect(recovered).toBe(true);
       expect(setPassword).toHaveBeenCalledWith(SECRET);
@@ -271,7 +271,7 @@ describe("submitAuthChallengePassword", () => {
   });
 
   it("cancelAuthChallenge dismisses the open challenge", () => {
-    notifyAuthRequired({ host: "192.168.1.167" });
+    notifyAuthRequired({ host: "192.0.2.167" });
     expect(getAuthChallengeSnapshot()).not.toBeNull();
     cancelAuthChallenge();
     expect(getAuthChallengeSnapshot()).toBeNull();

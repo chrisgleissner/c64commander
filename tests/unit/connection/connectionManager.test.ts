@@ -1197,7 +1197,7 @@ describe("connectionManager", () => {
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
 
-    localStorage.setItem("c64u_device_host", "192.168.1.42");
+    localStorage.setItem("c64u_device_host", "192.0.2.42");
     localStorage.removeItem("c64u_has_password");
 
     await initializeConnectionManager();
@@ -1458,7 +1458,7 @@ describe("connectionManager", () => {
     startMockServer.mockRejectedValue(new Error("not available"));
     getActiveMockBaseUrl.mockReturnValue(null);
 
-    localStorage.setItem("c64u_device_host", "192.168.1.100");
+    localStorage.setItem("c64u_device_host", "192.0.2.100");
     localStorage.removeItem("c64u_has_password");
     vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
@@ -1472,11 +1472,7 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     // Should fallback to stored host-based URL
-    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith(
-      "http://192.168.1.100",
-      undefined,
-      "192.168.1.100",
-    );
+    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith("http://192.0.2.100", undefined, "192.0.2.100");
   });
 
   it("demo fallback applies FTP port override when mock server provides one", async () => {

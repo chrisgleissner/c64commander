@@ -73,7 +73,7 @@ describe("homeStreams", () => {
   it("buildStreamEndpointLabel handles missing host or port (BRDA:128,129,130)", () => {
     expect(buildStreamEndpointLabel("", "")).toBe("—");
     expect(buildStreamEndpointLabel("", "4444")).toBe("—:4444");
-    expect(buildStreamEndpointLabel("192.168.1.1", "")).toBe("192.168.1.1:—");
+    expect(buildStreamEndpointLabel("192.0.2.1", "")).toBe("192.0.2.1:—");
   });
 
   it("validateStreamHost returns required error for empty input (BRDA:102)", () => {

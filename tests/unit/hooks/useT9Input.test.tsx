@@ -106,17 +106,17 @@ describe("useT9Input", () => {
     const digit = (d: number) => press({ code: `Digit${d}`, key: String(d) });
     const dot = () => press({ key: "*", code: "NumpadMultiply" });
 
-    // "192.168.1.13": digits insert directly, star inserts "." (first separator).
+    // "192.0.2.13": digits insert directly, star inserts "." (first separator).
     [1, 9, 2].forEach(digit);
     dot();
     now += 1; // ensure separate from the previous star
-    [1, 6, 8].forEach(digit);
+    digit(0);
     dot();
-    digit(1);
+    digit(2);
     dot();
     [1, 3].forEach(digit);
 
-    expect(state.value).toBe("192.168.1.13");
+    expect(state.value).toBe("192.0.2.13");
   });
 
   it("appends a port via two star presses (':') in hostname mode", () => {

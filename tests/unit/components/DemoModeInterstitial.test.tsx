@@ -78,9 +78,9 @@ describe("DemoModeInterstitial", () => {
   it("Save & retry persists the edited hostname and triggers settings discovery", () => {
     render(<DemoModeInterstitial />);
     const input = screen.getByTestId("demo-interstitial-host-input");
-    fireEvent.change(input, { target: { value: "192.168.1.100" } });
+    fireEvent.change(input, { target: { value: "192.0.2.100" } });
     fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
-    expect(updateC64APIConfig).toHaveBeenCalledWith("http://192.168.1.100", "saved-pass", "192.168.1.100");
+    expect(updateC64APIConfig).toHaveBeenCalledWith("http://192.0.2.100", "saved-pass", "192.0.2.100");
     // Choosing a host is turning the simulated device down, and retrying with it.
     expect(declineDemoMode).toHaveBeenCalledWith({ retry: "settings" });
   });

@@ -135,7 +135,7 @@ describe("savedDevices store", () => {
           id: "debug-u64",
           name: "u64",
           nameSource: "USER",
-          host: "192.168.1.13",
+          host: "192.0.2.13",
           httpPort: 80,
           ftpPort: 21,
           telnetPort: 23,
@@ -145,7 +145,7 @@ describe("savedDevices store", () => {
           id: "debug-c64u",
           name: "c64u",
           nameSource: "USER",
-          host: "192.168.1.167",
+          host: "192.0.2.167",
           httpPort: 80,
           ftpPort: 21,
           telnetPort: 23,
@@ -164,7 +164,7 @@ describe("savedDevices store", () => {
         id: "debug-u64",
         name: "u64",
         nameSource: "USER",
-        host: "192.168.1.13",
+        host: "192.0.2.13",
         httpPort: 80,
         ftpPort: 21,
         telnetPort: 23,
@@ -174,7 +174,7 @@ describe("savedDevices store", () => {
         id: "debug-c64u",
         name: "c64u",
         nameSource: "USER",
-        host: "192.168.1.167",
+        host: "192.0.2.167",
         httpPort: 80,
         ftpPort: 21,
         telnetPort: 23,
@@ -265,7 +265,7 @@ describe("savedDevices store", () => {
             lastVerifiedProduct: "U64E",
             lastVerifiedHostname: "u64",
             lastVerifiedUniqueId: "UID-U64",
-            lastResolvedAddress: "192.168.1.13",
+            lastResolvedAddress: "192.0.2.13",
           },
         },
         summaryLru: ["device-u64"],
@@ -286,7 +286,7 @@ describe("savedDevices store", () => {
       lastVerifiedProduct: "U64E",
       lastVerifiedHostname: "u64",
       lastVerifiedUniqueId: "UID-U64",
-      lastResolvedAddress: "192.168.1.13",
+      lastResolvedAddress: "192.0.2.13",
     });
     expect(reloadedSnapshot.summaryLru).toEqual(["device-u64"]);
   });
@@ -592,7 +592,7 @@ describe("savedDevices store", () => {
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
 
     store.updateSavedDevice(initialDeviceId, {
-      host: "192.168.1.167",
+      host: "192.0.2.167",
       name: "c64u",
       nameSource: "USER",
       type: "",
@@ -636,7 +636,7 @@ describe("savedDevices store", () => {
         hostname: "u64",
         unique_id: "UID-U64",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     store.updateSavedDevice(initialDeviceId, {
@@ -671,7 +671,7 @@ describe("savedDevices store", () => {
         hostname: "u64",
         unique_id: "UID-U64",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     store.updateSelectedSavedDeviceConnection({
@@ -713,7 +713,7 @@ describe("savedDevices store", () => {
         hostname: "u64",
         unique_id: "UID-U64",
       },
-      "192.168.1.13",
+      "192.0.2.13",
     );
 
     store.updateSelectedSavedDeviceConnection({

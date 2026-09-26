@@ -158,7 +158,7 @@ describe("traceComparison extended", () => {
             body: {
               path: "C:\\Users\\User\\file.txt",
               log: "/var/log/syslog",
-              ip: "192.168.1.1",
+              ip: "192.0.2.1",
               host: "myserver:8064",
               hostname: "myserver.com", // Line 74
             },

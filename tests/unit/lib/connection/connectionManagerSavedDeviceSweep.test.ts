@@ -214,7 +214,7 @@ afterEach(() => {
 describe("probeDeviceReachability (lines 262-267)", () => {
   it("returns a healthy probe result for a reachable arbitrary host", async () => {
     getInfoMock.mockResolvedValueOnce(HEALTHY);
-    const result = await probeDeviceReachability({ deviceHost: "192.168.1.50:80", password: "secret" });
+    const result = await probeDeviceReachability({ deviceHost: "192.0.2.50:80", password: "secret" });
     expect(result.ok).toBe(true);
     expect(result.deviceInfo).toEqual(HEALTHY);
     expect(getInfoMock).toHaveBeenCalledTimes(1);
@@ -229,7 +229,7 @@ describe("probeDeviceReachability (lines 262-267)", () => {
 
   it("reports unreachable when the host does not answer /v1/info", async () => {
     getInfoMock.mockRejectedValueOnce(new Error("no route to host"));
-    const result = await probeDeviceReachability({ deviceHost: "10.0.0.9:80" });
+    const result = await probeDeviceReachability({ deviceHost: "198.51.100.9:80" });
     expect(result.ok).toBe(false);
     expect(result.deviceInfo).toBeNull();
   });
@@ -242,7 +242,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -320,7 +320,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -345,7 +345,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false },
+        { id: "flaky", host: "192.0.2.80", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -362,7 +362,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "secured", host: "192.168.1.70", httpPort: 8080, hasPassword: true },
+        { id: "secured", host: "192.0.2.70", httpPort: 8080, hasPassword: true },
       ]),
     );
 
@@ -385,7 +385,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false, ftpPort: 21, telnetPort: 23 },
+        { id: "flaky", host: "192.0.2.80", httpPort: 80, hasPassword: false, ftpPort: 21, telnetPort: 23 },
       ]),
     );
 
@@ -415,7 +415,7 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     };
     const deviceB = {
       id: "other",
-      host: "192.168.1.60",
+      host: "192.0.2.60",
       httpPort: 80,
       hasPassword: false,
       lastKnownUniqueId: "uidB",
@@ -478,7 +478,7 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -497,7 +497,7 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -512,7 +512,7 @@ describe("manual reconnect escalation (HARD18-007)", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
 
@@ -559,7 +559,7 @@ describe("a user choice made while a discovery is still running", () => {
     getSavedDevicesSnapshotMock.mockReturnValue(
       snapshotWith([
         { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
-        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.0.2.60", httpPort: 80, hasPassword: false },
       ]),
     );
     const release = deferred<{ videoWasLive: boolean; audioWasLive: boolean }>();
@@ -567,12 +567,12 @@ describe("a user choice made while a discovery is still running", () => {
 
     const discovery = discoverConnection("manual");
     await vi.waitFor(() => expect(prepareForDeviceRetargetMock).toHaveBeenCalled());
-    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.70" });
+    await verifyCurrentConnectionTarget({ deviceHost: "192.0.2.70" });
     release.resolve({ videoWasLive: false, audioWasLive: false });
     await discovery;
 
     expect(selectSavedDeviceMock).not.toHaveBeenCalled();
-    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.70", undefined, "192.168.1.70");
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.0.2.70", undefined, "192.0.2.70");
   });
 
   it("does not enter Demo Mode over a device the user switched to while the simulated device was starting", async () => {
@@ -582,12 +582,12 @@ describe("a user choice made while a discovery is still running", () => {
     vi.mocked(startMockServer).mockReturnValueOnce(mockStart.promise);
 
     const choosingDemo = pinDemoModeByUserChoice();
-    await verifyCurrentConnectionTarget({ deviceHost: "192.168.1.60" });
+    await verifyCurrentConnectionTarget({ deviceHost: "192.0.2.60" });
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     mockStart.resolve({ baseUrl: "http://127.0.0.1:45999" });
     await choosingDemo;
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
-    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.168.1.60", undefined, "192.168.1.60");
+    expect(applyC64APIRuntimeConfigMock).toHaveBeenLastCalledWith("http://192.0.2.60", undefined, "192.0.2.60");
   });
 });

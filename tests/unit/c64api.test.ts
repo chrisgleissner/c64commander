@@ -499,12 +499,12 @@ describe("c64api", () => {
   });
 
   it("migrates legacy base url into device host storage", () => {
-    localStorage.setItem("c64u_base_url", "http://192.168.1.55");
+    localStorage.setItem("c64u_base_url", "http://192.0.2.55");
 
     const resolvedHost = resolveDeviceHostFromStorage();
 
-    expect(resolvedHost).toBe("192.168.1.55");
-    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("192.168.1.55");
+    expect(resolvedHost).toBe("192.0.2.55");
+    expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("192.0.2.55");
   });
 
   it("handles non-string payloads on native platforms", async () => {
@@ -617,11 +617,11 @@ describe("c64api", () => {
   });
 
   it("uses stored device host when default hostname would otherwise be used", () => {
-    localStorage.setItem(DEVICE_HOST_KEY, "192.168.1.55");
+    localStorage.setItem(DEVICE_HOST_KEY, "192.0.2.55");
 
     applyC64APIRuntimeConfig("http://c64u");
 
-    expect(getC64API().getDeviceHost()).toBe("192.168.1.55");
+    expect(getC64API().getDeviceHost()).toBe("192.0.2.55");
   });
 
   it("uploads cartridge files and handles upload failures", async () => {
@@ -736,7 +736,7 @@ describe("c64api", () => {
       );
 
       const api = new C64API("http://c64u");
-      const pendingStart = api.startStream("audio", "192.168.1.20");
+      const pendingStart = api.startStream("audio", "192.0.2.20");
       void pendingStart.catch(() => {});
 
       await vi.advanceTimersByTimeAsync(1499);
@@ -1179,7 +1179,7 @@ describe("c64api", () => {
 
     const api = new C64API("http://c64u");
 
-    await expect(api.startStream("audio", "192.168.1.20")).rejects.toThrow(
+    await expect(api.startStream("audio", "192.0.2.20")).rejects.toThrow(
       "Firmware rejected stream audio start: stream unavailable",
     );
   });

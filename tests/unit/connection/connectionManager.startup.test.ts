@@ -181,7 +181,7 @@ describe("connectionManager startup coverage", () => {
       candidates: [
         {
           id: "id:38c1ba",
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -256,7 +256,7 @@ describe("connectionManager startup coverage", () => {
       candidates: [
         {
           id: "id:38c1ba",
-          address: "192.168.1.13",
+          address: "192.0.2.13",
           host: null,
           httpPort: 80,
           source: ["lan-scan"],
@@ -327,7 +327,7 @@ describe("connectionManager startup coverage", () => {
             id: "reachable-u64",
             name: "Office U64",
             nameSource: "USER",
-            host: "192.168.1.50",
+            host: "192.0.2.50",
             type: "U64E",
             typeSource: "INFERRED",
             httpPort: 80,
@@ -366,7 +366,7 @@ describe("connectionManager startup coverage", () => {
 
     vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("192.168.1.50")) {
+      if (url.includes("192.0.2.50")) {
         return new Response(
           JSON.stringify({ product: "Ultimate 64 Elite", hostname: "u64", unique_id: "38C1BA", errors: [] }),
           { status: 200, headers: { "content-type": "application/json" } },

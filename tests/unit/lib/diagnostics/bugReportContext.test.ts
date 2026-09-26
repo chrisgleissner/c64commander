@@ -20,7 +20,7 @@ describe("bugReportContext", () => {
 
   it("includes explicit bug-report metadata required by the diagnostics policy", () => {
     const context = buildDiagnosticsBugReportContext({
-      activeDeviceHost: "192.168.1.13",
+      activeDeviceHost: "192.0.2.13",
       activeDeviceLabel: "u64",
       deviceInfo: {
         product: "U64E",
@@ -44,8 +44,8 @@ describe("bugReportContext", () => {
       networkSnapshot: {
         requests: [
           {
-            hostname: "192.168.1.13",
-            resolvedIp: "192.168.1.13",
+            hostname: "192.0.2.13",
+            resolvedIp: "192.0.2.13",
             port: 80,
             protocol: "http",
             durationMs: 42,
@@ -54,7 +54,7 @@ describe("bugReportContext", () => {
             errorCode: null,
             errorMessage: null,
             retryCount: 0,
-            url: "http://192.168.1.13/v1/info",
+            url: "http://192.0.2.13/v1/info",
             method: "GET",
             timestamp: "2026-06-11T13:00:00.000Z",
           },
@@ -77,7 +77,7 @@ describe("bugReportContext", () => {
         androidVersion: "13",
       },
       activeDevice: {
-        host: "192.168.1.13",
+        host: "192.0.2.13",
         label: "u64",
         product: "U64E",
         firmware: "3.14e",

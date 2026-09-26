@@ -11,11 +11,11 @@ import { redactExportValue } from "@/lib/diagnostics/exportRedaction";
 
 describe("exportRedaction", () => {
   it("redacts IPs, hosts, paths, and credentials in text", () => {
-    const input = "Host c64u.local 192.168.0.10 path /mnt/usb/secret password=supersecret token: abc123";
+    const input = "Host c64u.local 203.0.113.10 path /mnt/usb/secret password=supersecret token: abc123";
     // A bare string goes through the same `redactText` rules as a string nested in an exported
     // object, so this asserts them on the path the trace export actually uses.
     const output = redactExportValue(input) as string;
-    expect(output).not.toContain("192.168.0.10");
+    expect(output).not.toContain("203.0.113.10");
     expect(output).not.toContain("c64u.local");
     expect(output).not.toContain("/mnt/usb/secret");
     expect(output).not.toContain("supersecret");
@@ -41,7 +41,7 @@ describe("exportRedaction", () => {
   it("uses key hints to redact URLs and arrays", () => {
     const input = {
       apiUrl: "https://example.com/secret",
-      hosts: ["c64u.local", "10.0.0.1"],
+      hosts: ["c64u.local", "198.51.100.1"],
     };
     const output = redactExportValue(input) as Record<string, unknown>;
     expect(String(output.apiUrl)).toContain("***");

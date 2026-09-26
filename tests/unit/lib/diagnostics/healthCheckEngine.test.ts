@@ -1425,7 +1425,7 @@ describe("runHealthCheck — TELNET probe", () => {
   it("authenticates only when a password prompt is observed", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
-      deviceHost: "10.0.0.2:6400",
+      deviceHost: "198.51.100.2:6400",
       password: "secret",
     });
     queueTelnetReads("Password:", new Uint8Array(0), new Uint8Array(0), "Storage Browser", new Uint8Array(0));
@@ -1440,7 +1440,7 @@ describe("runHealthCheck — TELNET probe", () => {
   it("does not send prompt-discovery CRLF when no password prompt is observed", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
-      deviceHost: "10.0.0.2:6400",
+      deviceHost: "198.51.100.2:6400",
       password: "secret",
     });
     queueTelnetReads(
@@ -1487,7 +1487,7 @@ describe("runHealthCheck — TELNET probe", () => {
   it("gives the TELNET probe a longer connect timeout (5000ms) when the device requires auth", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
-      deviceHost: "10.0.0.2:6400",
+      deviceHost: "198.51.100.2:6400",
       password: "secret",
     });
 
@@ -1496,13 +1496,13 @@ describe("runHealthCheck — TELNET probe", () => {
     // The login handshake adds a round-trip, pushing an auth device past the
     // base 3s ceiling; give it 5s headroom so it does not spuriously time out.
     expect(mockCreateTelnetClient).toHaveBeenCalledWith({ connectTimeoutMs: 5000 });
-    expect(mockTelnetConnect).toHaveBeenCalledWith("10.0.0.2", 23);
+    expect(mockTelnetConnect).toHaveBeenCalledWith("198.51.100.2", 23);
   });
 
   it("keeps the base TELNET connect timeout (3000ms) when the device has no auth", async () => {
     setupAllProbesSuccess();
     vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
-      deviceHost: "10.0.0.2:6400",
+      deviceHost: "198.51.100.2:6400",
       password: undefined,
     });
 

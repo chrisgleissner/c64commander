@@ -1364,11 +1364,11 @@ describe("c64api branches", () => {
     fetchMock.mockResolvedValue(okJsonResponse());
 
     const api = new C64API("http://c64u");
-    await api.startStream("audio out", "192.168.1.100");
+    await api.startStream("audio out", "192.0.2.100");
     await api.stopStream("audio out");
 
     const urls = fetchMock.mock.calls.map((call) => call[0]);
-    expect(urls[0]).toContain("/v1/streams/audio%20out:start?ip=192.168.1.100");
+    expect(urls[0]).toContain("/v1/streams/audio%20out:start?ip=192.0.2.100");
     expect(urls[1]).toContain("/v1/streams/audio%20out:stop");
   });
 
@@ -1818,8 +1818,8 @@ describe("c64api branches", () => {
   // #62: C64API constructor with empty deviceHost falls back to getDeviceHostFromBaseUrl (BRDA:515)
   it("constructor with empty deviceHost derives host from base URL", () => {
     // deviceHost = '' → '' || getDeviceHostFromBaseUrl(baseUrl) → derives from baseUrl
-    const api = new C64API("http://192.168.1.100", undefined, "");
-    expect(api.getDeviceHost()).toBe("192.168.1.100");
+    const api = new C64API("http://192.0.2.100", undefined, "");
+    expect(api.getDeviceHost()).toBe("192.0.2.100");
   });
 
   // #63: isLocalDeviceHost with empty string (BRDA:360 TRUE: !normalized → return false)
@@ -1827,7 +1827,7 @@ describe("c64api branches", () => {
     localStorage.setItem("c64u_device_host", "remote-host");
     // Call updateC64APIConfig with a base URL whose derived host is empty after normalization
     // isLocalDeviceHost('') → normalized = '' → !normalized → return false → not local → no fallback
-    updateC64APIConfig("http://192.168.1.100", undefined, "   ");
+    updateC64APIConfig("http://192.0.2.100", undefined, "   ");
     // Confirms normalizeDeviceHost handles whitespace-only: '   '.trim() = '' → DEFAULT_DEVICE_HOST
     // and persists that value using the stable host key.
     expect(localStorage.getItem(DEVICE_HOST_KEY)).toBe("c64u");

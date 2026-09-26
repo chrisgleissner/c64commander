@@ -500,7 +500,7 @@ describe("ftpSourceAdapter", () => {
   });
 
   it("normalizeFtpHost strips port from host:port", () => {
-    expect(normalizeFtpHost("192.168.1.1:8021")).toBe("192.168.1.1");
+    expect(normalizeFtpHost("192.0.2.1:8021")).toBe("192.0.2.1");
   });
 
   it("normalizeFtpHost preserves plain hostname", () => {

@@ -31,7 +31,7 @@ describe("who is offered the tour on launch", () => {
   });
 
   it("is not offered to an installation that has been used before", () => {
-    localStorage.setItem("c64u_current_device_host", "192.168.1.10");
+    localStorage.setItem("c64u_current_device_host", "192.0.2.10");
     resamplePriorAppStateForTests();
 
     expect(hasPriorAppState()).toBe(true);

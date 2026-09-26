@@ -50,8 +50,8 @@ describe("appConfigStore", () => {
     const snapshot = { savedAt: "now", data: {} };
     saveInitialSnapshot("http://127.0.0.1:38005", snapshot);
     updateHasChanges("http://127.0.0.1:38005", true);
-    saveInitialSnapshot("http://192.168.1.13", snapshot);
-    updateHasChanges("http://192.168.1.13", true);
+    saveInitialSnapshot("http://192.0.2.13", snapshot);
+    updateHasChanges("http://192.0.2.13", true);
 
     saveInitialSnapshot("http://127.0.0.1:43079", snapshot);
     updateHasChanges("http://127.0.0.1:43079", false);
@@ -59,8 +59,8 @@ describe("appConfigStore", () => {
     expect(loadInitialSnapshot("http://127.0.0.1:38005")).toBeNull();
     expect(localStorage.getItem("c64u_has_changes:http://127.0.0.1:38005")).toBeNull();
     expect(loadInitialSnapshot("http://127.0.0.1:43079")).toEqual(snapshot);
-    expect(loadInitialSnapshot("http://192.168.1.13")).toEqual(snapshot);
-    expect(loadHasChanges("http://192.168.1.13")).toBe(true);
+    expect(loadInitialSnapshot("http://192.0.2.13")).toEqual(snapshot);
+    expect(loadHasChanges("http://192.0.2.13")).toBe(true);
   });
 
   it("stores and updates has-changes flag with event dispatch", () => {

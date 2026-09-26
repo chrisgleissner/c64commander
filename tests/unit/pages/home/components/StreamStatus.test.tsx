@@ -46,10 +46,10 @@ vi.mock("@/hooks/useDisplayProfile", () => ({
 
 const mockStreamData = {
   streamControlEntries: [
-    { key: "sid", label: "sid", ip: "192.168.1.1", port: "4422", itemName: "SID Network" },
-    { key: "iec", label: "iec", ip: "192.168.1.2", port: "4423", itemName: "IEC Network" },
-    { key: "vic", label: "vic", ip: "192.168.1.3", port: "11000", itemName: "VIC Network" },
-    { key: "audio", label: "audio", ip: "192.168.1.4", port: "11001", itemName: "Audio Network" },
+    { key: "sid", label: "sid", ip: "192.0.2.1", port: "4422", itemName: "SID Network" },
+    { key: "iec", label: "iec", ip: "192.0.2.2", port: "4423", itemName: "IEC Network" },
+    { key: "vic", label: "vic", ip: "192.0.2.3", port: "11000", itemName: "VIC Network" },
+    { key: "audio", label: "audio", ip: "192.0.2.4", port: "11001", itemName: "Audio Network" },
   ],
   streamDrafts: {},
   activeStreamEditorKey: null,

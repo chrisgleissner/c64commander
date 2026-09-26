@@ -29,7 +29,7 @@ import { resolveForeignSenderPassword, stopStreamAtForeignHost } from "@/lib/str
  * user never selected.
  */
 
-const FOREIGN_IP = "192.168.1.15";
+const FOREIGN_IP = "192.0.2.15";
 
 const saveDevices = (devices: unknown[], summaries: Record<string, unknown> = {}) => {
   localStorage.setItem(
@@ -105,7 +105,7 @@ describe("foreign-sender eviction credentials (HARD27-019)", () => {
   });
 
   it("sends no password when the foreign sender is not a saved device", async () => {
-    saveDevices([device({ id: "sel", host: "10.0.0.9", hasPassword: true })]);
+    saveDevices([device({ id: "sel", host: "198.51.100.9", hasPassword: true })]);
 
     await expect(resolveForeignSenderPassword(FOREIGN_IP)).resolves.toBeNull();
     expect(getPasswordForDevice).not.toHaveBeenCalled();
