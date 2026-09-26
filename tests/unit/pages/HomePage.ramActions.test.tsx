@@ -753,16 +753,13 @@ describe("HomePage RAM actions", () => {
     fireEvent.click(screen.getByTestId("save-ram-type-program"));
 
     await waitFor(() =>
-      expect(createSnapshotSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ getDeviceHost: expect.any(Function) }),
-        {
-          type: "program",
-          customRanges: undefined,
-          label: undefined,
-          contentName: undefined,
-          alreadyPaused: false,
-        },
-      ),
+      expect(createSnapshotSpy).toHaveBeenCalledWith(expect.objectContaining({ getDeviceHost: expect.any(Function) }), {
+        type: "program",
+        customRanges: undefined,
+        label: undefined,
+        contentName: undefined,
+        alreadyPaused: false,
+      }),
     );
     expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
   }, 15000);
