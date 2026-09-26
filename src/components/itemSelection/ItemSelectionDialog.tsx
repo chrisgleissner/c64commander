@@ -119,6 +119,8 @@ export const ItemSelectionDialog = ({
   const [pendingLocalSourceId, setPendingLocalSourceId] = useState<string | null>(null);
   const [autoConfirming, setAutoConfirming] = useState(false);
   const autoConfirmInFlightRef = useRef(false);
+  const [confirmInFlight, setConfirmInFlight] = useState(false);
+  const confirmInFlightRef = useRef(false);
 
   const localSources = useMemo(
     () => sourceGroups.flatMap((group) => group.sources).filter((item) => item.type === "local"),
@@ -314,9 +316,11 @@ export const ItemSelectionDialog = ({
 
   const resolvedConfirmLabel = typeof confirmLabel === "function" ? confirmLabel(currentSelections) : confirmLabel;
 
+  const confirmBusy = isConfirming || autoConfirming || confirmInFlight;
+
   const handleConfirm = async () => {
     if (!source) return;
-    if (isConfirming || autoConfirming) return;
+    if (confirmInFlightRef.current || isConfirming || autoConfirming) return;
     if (!activeSelectionCount) {
       reportUserError({
         operation: "ITEM_SELECTION",
@@ -326,6 +330,9 @@ export const ItemSelectionDialog = ({
       return;
     }
     const selections = currentSelections;
+    // The page's isConfirming ends when the add commits, but a launch that follows it still runs here.
+    confirmInFlightRef.current = true;
+    setConfirmInFlight(true);
     try {
       const success = await onConfirm(source, selections);
       if (success) {
@@ -339,6 +346,9 @@ export const ItemSelectionDialog = ({
         description: (error as Error).message,
         error,
       });
+    } finally {
+      confirmInFlightRef.current = false;
+      setConfirmInFlight(false);
     }
   };
 
@@ -626,7 +636,8 @@ export const ItemSelectionDialog = ({
       variant="default"
       size="sm"
       onClick={handleConfirm}
-      disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
+      disabled={confirmBusy || activeSelectionCount === 0}
+      aria-busy={confirmBusy}
       data-testid="add-items-confirm"
       aria-label={resolvedConfirmLabel}
       className="shrink-0"
@@ -891,7 +902,8 @@ export const ItemSelectionDialog = ({
                   variant="default"
                   size="default"
                   onClick={handleConfirm}
-                  disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
+                  disabled={confirmBusy || activeSelectionCount === 0}
+                  aria-busy={confirmBusy}
                   data-testid="add-items-confirm"
                 >
                   {resolvedConfirmLabel}
