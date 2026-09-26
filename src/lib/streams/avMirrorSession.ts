@@ -43,6 +43,7 @@ import { stopStreamAtForeignHost } from "./foreignSenderStop";
 import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
+import { isSelectedDeviceSender } from "./sameDeviceSender";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
 import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -189,6 +190,8 @@ export interface AvMirrorSessionDeps {
   now?: () => number;
   /** Present scheduler for the video mirror (defaults to requestAnimationFrame where it exists). */
   schedulePresent?: (present: () => void) => void;
+  /** Whether a sender the address filter refused is the selected device on another of its addresses. */
+  isSelectedDeviceSender?: (source: string, selectedHost: string) => Promise<boolean>;
 }
 
 /**
@@ -252,6 +255,7 @@ export class AvMirrorSession {
   private readonly governor: StreamGovernor;
   private readonly telemetry = new StreamTelemetry();
   private readonly now: () => number;
+  private readonly isSelectedDeviceSender: (source: string, selectedHost: string) => Promise<boolean>;
   /** Last observed cumulative player-underrun count, for per-tick delta. */
   private lastAudioUnderruns = 0;
   private lastLocalAudioUnderruns = 0;
@@ -286,6 +290,7 @@ export class AvMirrorSession {
         return result;
       });
     this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+    this.isSelectedDeviceSender = deps.isSelectedDeviceSender ?? isSelectedDeviceSender;
     // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
     // construction — the app-wide singleton is built at import time, before localStorage-backed
     // settings are safe to read under test, so reading here would couple every importer to the setting.
@@ -371,6 +376,39 @@ export class AvMirrorSession {
   private update(patch: Partial<AvMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
     this.listeners.forEach((listener) => listener(this.snapshot));
+    const refused = patch.audio?.senderMismatch?.source ?? patch.video?.senderMismatch?.source;
+    if (refused) this.adoptIfSelectedDevice(refused);
+  }
+
+  private readonly checkedSenders = new Set<string>();
+
+  /** A refused sender that proves to be the selected device on another address is accepted without asking. */
+  private adoptIfSelectedDevice(source: string) {
+    const selectedHost = getC64API().getDeviceHost();
+    const key = `${selectedHost}|${source}`;
+    if (this.checkedSenders.has(key)) return;
+    this.checkedSenders.add(key);
+    void this.isSelectedDeviceSender(source, selectedHost)
+      .then((sameDevice) => {
+        addLog(
+          sameDevice ? "info" : "debug",
+          "Live View: checked a refused stream sender against the selected device",
+          {
+            service: "streams",
+            source,
+            selectedHost,
+            sameDevice,
+          },
+        );
+        if (sameDevice && getC64API().getDeviceHost() === selectedHost) return this.adoptSender(source);
+      })
+      .catch((error: unknown) => {
+        addLog("warn", "Live View: could not accept the selected device's stream from its other address", {
+          service: "streams",
+          source,
+          error: (error as Error)?.message ?? String(error),
+        });
+      });
   }
 
   private emitFrame(frame: Uint8Array, height: number, arrivalMs: number) {

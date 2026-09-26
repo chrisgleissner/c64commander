@@ -373,6 +373,58 @@ describe("AvMirrorSession", () => {
     expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.131");
   });
 
+  it("accepts the stream on its own when the refused sender is the selected device on another address", async () => {
+    audioInstances.length = 0;
+    videoInstances.length = 0;
+    const isSelectedDeviceSender = vi.fn(async () => true);
+    const session = new AvMirrorSession({
+      startStream: vi.fn(async () => ({})),
+      stopStream: vi.fn(async () => ({})),
+      isSelectedDeviceSender,
+    });
+    const [audio, video] = [audioInstances[0]!, videoInstances[0]!];
+    const refused = { source: "192.168.1.146", expected: "c64u", rejectedPackets: 12 };
+    const report = () =>
+      (audio.deps.onChange as (s: unknown) => void)({
+        state: "live",
+        droppedPackets: 0,
+        error: "Audio packets are arriving from 192.168.1.146 and being dropped",
+        foreignSenderNotice: null,
+        senderMismatch: refused,
+      });
+
+    report();
+    report();
+    await vi.waitFor(() => expect(audio.adoptSender).toHaveBeenCalledWith("192.168.1.146"));
+
+    expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.146");
+    expect(isSelectedDeviceSender).toHaveBeenCalledTimes(1);
+    expect(session.getSnapshot().audio.senderMismatch).toEqual(refused);
+  });
+
+  it("leaves a refused sender that is a different device for the user to decide", async () => {
+    audioInstances.length = 0;
+    videoInstances.length = 0;
+    const isSelectedDeviceSender = vi.fn(async () => false);
+    new AvMirrorSession({
+      startStream: vi.fn(async () => ({})),
+      stopStream: vi.fn(async () => ({})),
+      isSelectedDeviceSender,
+    });
+    const audio = audioInstances[0]!;
+    (audio.deps.onChange as (s: unknown) => void)({
+      state: "live",
+      droppedPackets: 0,
+      error: "dropped",
+      foreignSenderNotice: null,
+      senderMismatch: { source: "192.168.1.13", expected: "c64u", rejectedPackets: 3 },
+    });
+
+    await vi.waitFor(() => expect(isSelectedDeviceSender).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(audio.adoptSender).not.toHaveBeenCalled();
+  });
+
   it("adopts on the stream that can, when the other refuses", async () => {
     const { session, audio, video } = makeSession();
     audio.adoptSender?.mockRejectedValueOnce(new Error("socket closed"));
