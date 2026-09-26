@@ -19,6 +19,7 @@ import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileType
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
 import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
 import { noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
+import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 import { uint8ToBase64 } from "@/lib/sid/sidUtils";
 import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -952,8 +953,18 @@ export const mountDiskToDrive = async (
   options: MountDiskToDriveOptions = {},
 ): Promise<DiskMountOutcome> => {
   const startedAt = Date.now();
-  const outcome = await mountDiskToDriveUnrecorded(api, drive, disk, runtimeFile, options);
-  noteDiskMountOutcome(api.getDeviceHost(), drive, disk.id, outcome.persistence, disk.name, startedAt);
+  const startHost = api.getDeviceHost();
+  const currentHost = () => api.getDeviceHost();
+  const operation = `mounting ${disk.name}`;
+  const writeBack = options.writeBack && bindCallsToDevice(options.writeBack, startHost, currentHost, operation);
+  const outcome = await mountDiskToDriveUnrecorded(
+    bindCallsToDevice(api, startHost, currentHost, operation),
+    drive,
+    disk,
+    runtimeFile,
+    { ...options, writeBack },
+  );
+  noteDiskMountOutcome(startHost, drive, disk.id, outcome.persistence, disk.name, startedAt);
   return outcome;
 };
 
