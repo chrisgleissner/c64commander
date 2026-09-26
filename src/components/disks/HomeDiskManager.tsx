@@ -512,7 +512,7 @@ export const HomeDiskManager = () => {
         const setAt = mountedByDriveSetAtRef.current[drive];
         if (typeof setAt !== "number" || drivesDataUpdatedAt < setAt) return;
         const polledImageFile = mountSupport.findPolledDrive(drivesData, drive as DriveKey)?.image_file;
-        const workPath = getMaterializedWorkPath(drive as DriveKey);
+        const workPath = getMaterializedWorkPath(drive as DriveKey, api.getDeviceHost());
         if (mountSupport.keepsLocalMountOverride(disksById[next[drive]], polledImageFile, workPath)) return;
         delete next[drive];
         delete mountedByDriveSetAtRef.current[drive];
@@ -983,9 +983,9 @@ export const HomeDiskManager = () => {
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
     // HARD19-007: the poll reports a materialized mount's internal work file, never the disk.
-    const workPath = getMaterializedWorkPath(drive);
+    const workPath = getMaterializedWorkPath(drive, api.getDeviceHost());
     if (workPath && getDiskName(driveInfo.image_file) === getDiskName(workPath)) {
-      return getMaterializedDiskId(drive);
+      return getMaterializedDiskId(drive, api.getDeviceHost());
     }
     const uploadedDiskId = mountSupport.resolveUploadMountedDiskId(
       api.getDeviceHost(),
@@ -1190,7 +1190,7 @@ export const HomeDiskManager = () => {
         // HARD18-025: the disk is being removed from the library outright -
         // there is no source left to write back to, so drop any pending
         // materialized-mount entry instead of spending an FTP round trip.
-        mountedDrives.forEach((drive) => discardDiskWriteBack(drive));
+        mountedDrives.forEach((drive) => discardDiskWriteBack(drive, api.getDeviceHost()));
         setMountedByDrive((prev) => {
           const next = { ...prev };
           mountedDrives.forEach((drive) => {

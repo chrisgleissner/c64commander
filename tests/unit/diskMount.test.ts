@@ -19,6 +19,7 @@ import {
   type DiskMountWriteBackDependencies,
 } from "@/lib/disks/diskMount";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
+import { getSavedDevicesStorageKey, resetSavedDevicesCacheForTests } from "@/lib/savedDevices/store";
 import { saveLocalSources, setLocalSourceRuntimeFiles } from "@/lib/sourceNavigation/localSourcesStore";
 
 vi.mock("@/lib/native/folderPicker", () => ({
@@ -41,6 +42,28 @@ const mockFolderPickerFromTree = async (data: string) => {
   (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
 };
 
+const saveDevicesWithUniqueIds = (uniqueIdByHost: Record<string, string>) => {
+  const devices = Object.entries(uniqueIdByHost).map(([host, uniqueId]) => ({
+    id: host,
+    name: host,
+    host,
+    httpPort: 80,
+    ftpPort: 21,
+    telnetPort: 23,
+    lastKnownProduct: null,
+    lastKnownHostname: null,
+    lastKnownUniqueId: uniqueId,
+    lastSuccessfulConnectionAt: null,
+    lastUsedAt: null,
+    hasPassword: false,
+  }));
+  localStorage.setItem(
+    getSavedDevicesStorageKey(),
+    JSON.stringify({ selectedDeviceId: devices[0]?.id, devices, summaries: {}, runtimeStatuses: {} }),
+  );
+  resetSavedDevicesCacheForTests();
+};
+
 const readBlobText = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -52,6 +75,7 @@ const readBlobText = (blob: Blob) =>
 describe("mountDiskToDrive", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetSavedDevicesCacheForTests();
     if (typeof sessionStorage !== "undefined") sessionStorage.clear();
     resetMaterializedMountsForTests();
   });
@@ -354,6 +378,8 @@ describe("mountDiskToDrive", () => {
     });
 
     it("HARD21-002: a LOCAL writable remount to the same drive on another device PARKS (not loses) the first device's write-back — both devices' saves survive", async () => {
+      // Two different Ultimates, known apart by the unique ids they reported.
+      saveDevicesWithUniqueIds({ "device-a": "UID-A", "device-b": "UID-B" });
       // Device A materializes its own local disk to drive a — saves accumulate.
       const a = await materializeOnDevice("device-a", "a");
       // Device B materializes ITS OWN local writable disk to the SAME drive. This

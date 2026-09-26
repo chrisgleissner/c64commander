@@ -19,6 +19,16 @@ import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileType
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
 import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
 import { noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
+import { resolveDiskDeviceIdentity } from "@/lib/disks/diskDeviceIdentity";
+import {
+  findLaterWorkFileWrite,
+  findPendingMaterializedMountForHost,
+  getPrimaryMaterializedMount,
+  recordMaterializedMount,
+  recordWorkFileWrite,
+  type DiskWriteBackTarget,
+  type MaterializedDiskMount,
+} from "@/lib/disks/materializedDiskMounts";
 import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 import { uint8ToBase64 } from "@/lib/sid/sidUtils";
 import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDevices/deviceBoundOrigin";
@@ -54,10 +64,14 @@ type ResolveLocalDiskBlobOptions = {
 // materializes the image to the device filesystem (FTP upload to a work dir
 // + path-mount) so writes persist, then FTP-downloads the modified image
 // back on eject and re-persists it to that same source.
-export type DiskWriteBackTarget =
-  | { kind: "local-tree"; treeUri: string; path: string }
-  | { kind: "archive-cache"; archiveRef: ArchivePlaylistReference }
-  | { kind: "unavailable" };
+export type { DiskWriteBackTarget };
+// Re-exported so callers keep importing the whole write-back surface from one module.
+export {
+  discardDiskWriteBack,
+  getMaterializedDiskId,
+  getMaterializedWorkPath,
+  resetMaterializedMountsForTests,
+} from "@/lib/disks/materializedDiskMounts";
 
 export type DiskMountWriteBackDependencies = {
   listRemoteStorageRoots: () => Promise<string[]>;
@@ -140,158 +154,22 @@ const persistDiskWriteBack = async (target: DiskWriteBackTarget, bytes: Uint8Arr
   throw new Error("No write-back target is available for this disk.");
 };
 
-type MaterializedDiskMount = {
-  disk: DiskEntry;
-  workPath: string;
-  writeBackTarget: DiskWriteBackTarget;
-  // HARD19-005: the device this image was materialized to. The work file is a
-  // deterministic per-drive name reused on every device, so without recording
-  // the device, an eject after a saved-device switch would FTP-read a DIFFERENT
-  // device's stale work file and overwrite the user's local source with it.
-  deviceHost: string;
-};
-
-// HARD19-006: persist the map across process death so a post-restart eject can
-// still finalize in-game saves instead of silently discarding them.
-const MATERIALIZED_MOUNTS_STORAGE_KEY = "c64u.materializedDiskMounts.v1";
-
-const persistMaterializedMounts = () => {
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    const serialized = Array.from(materializedMounts.entries()).map(([drive, entry]) => [drive, entry]);
-    if (serialized.length === 0) {
-      sessionStorage.removeItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
-      return;
-    }
-    sessionStorage.setItem(MATERIALIZED_MOUNTS_STORAGE_KEY, JSON.stringify(serialized));
-  } catch (error) {
-    addLog("warn", "Failed to persist materialized disk mounts", { error: (error as Error).message });
-  }
-};
-
-const rehydrateMaterializedMounts = (): Map<"a" | "b", MaterializedDiskMount> => {
-  const map = new Map<"a" | "b", MaterializedDiskMount>();
-  if (typeof sessionStorage === "undefined") return map;
-  try {
-    const raw = sessionStorage.getItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
-    if (!raw) return map;
-    const parsed = JSON.parse(raw) as Array<[string, MaterializedDiskMount]>;
-    for (const [drive, entry] of parsed) {
-      if ((drive === "a" || drive === "b") && entry?.disk && entry.workPath && typeof entry.deviceHost === "string") {
-        map.set(drive, entry);
-      }
-    }
-  } catch (error) {
-    addLog("warn", "Failed to rehydrate materialized disk mounts", { error: (error as Error).message });
-  }
-  return map;
-};
-
-// Module-singleton by design (mirrors machineExecutionStore/
-// backgroundExecutionManager): drive occupancy is a device-level concept,
-// not a per-component one, and must survive HomeDiskManager remounts. Rehydrated
-// from sessionStorage on load so it also survives Android process death.
-const materializedMounts = rehydrateMaterializedMounts();
-
-// HARD21-002 (cross-device local materialization): the primary map above is
-// keyed by drive only, so a local read/write remount on the SAME drive but a
-// DIFFERENT device materializes a new work file and overwrites the drive slot —
-// discarding the first device's pending in-game saves (the drive-only key cannot
-// hold two devices' entries at once). To not lose them, an entry that is about to
-// be overwritten by a different-device materialization is PARKED here under a
-// device-scoped key, so ejecting after switching BACK to that device can still
-// finalize it. Only ever populated in that specific cross-device collision.
-const ORPHANED_MOUNTS_STORAGE_KEY = "c64u.materializedDiskMounts.orphaned.v1";
-// Composite Map key for a parked (device, drive) pair. JSON-encoded so an
-// arbitrary deviceHost (including an IPv6 address with colons) can never
-// collide or need an invisible/ambiguous separator.
-const orphanKey = (deviceHost: string, drive: "a" | "b") => JSON.stringify([deviceHost, drive]);
-
-const persistOrphanedMounts = (map: Map<string, MaterializedDiskMount>) => {
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    if (map.size === 0) {
-      sessionStorage.removeItem(ORPHANED_MOUNTS_STORAGE_KEY);
-      return;
-    }
-    sessionStorage.setItem(ORPHANED_MOUNTS_STORAGE_KEY, JSON.stringify(Array.from(map.entries())));
-  } catch (error) {
-    addLog("warn", "Failed to persist orphaned disk mounts", { error: (error as Error).message });
-  }
-};
-
-const rehydrateOrphanedMounts = (): Map<string, MaterializedDiskMount> => {
-  const map = new Map<string, MaterializedDiskMount>();
-  if (typeof sessionStorage === "undefined") return map;
-  try {
-    const raw = sessionStorage.getItem(ORPHANED_MOUNTS_STORAGE_KEY);
-    if (!raw) return map;
-    const parsed = JSON.parse(raw) as Array<[string, MaterializedDiskMount]>;
-    for (const [key, entry] of parsed) {
-      if (typeof key === "string" && entry?.disk && entry.workPath && typeof entry.deviceHost === "string") {
-        map.set(key, entry);
-      }
-    }
-  } catch (error) {
-    addLog("warn", "Failed to rehydrate orphaned disk mounts", { error: (error as Error).message });
-  }
-  return map;
-};
-
-const orphanedMounts = rehydrateOrphanedMounts();
-
-const setMaterializedMount = (drive: "a" | "b", entry: MaterializedDiskMount) => {
-  // HARD21-002: never silently drop a pending write-back from a DIFFERENT device
-  // when this drive's slot is reused by a local materialization on the current
-  // device — park it under a device-scoped key first so switching back and
-  // ejecting can still persist its saves.
-  const existing = materializedMounts.get(drive);
-  if (existing && existing.deviceHost !== entry.deviceHost) {
-    orphanedMounts.set(orphanKey(existing.deviceHost, drive), existing);
-    persistOrphanedMounts(orphanedMounts);
-    addLog("warn", "Parked a different device's pending disk write-back before a cross-device remount", {
-      drive,
-      parkedDeviceHost: existing.deviceHost,
-      currentDeviceHost: entry.deviceHost,
-      path: existing.disk.path,
-    });
-  }
-  materializedMounts.set(drive, entry);
-  persistMaterializedMounts();
-};
-
-const deleteMaterializedMount = (drive: "a" | "b") => {
-  materializedMounts.delete(drive);
-  persistMaterializedMounts();
-};
-
-// HARD19-007: the materialized work file is path-mounted, so the drives poll
-// reports the internal work filename instead of the disk's name. Expose the
-// per-drive work path so HomeDiskManager's override-keep / mounted-disk-id
-// matching can treat "still the overridden disk" for the work file too.
-export const getMaterializedWorkPath = (drive: "a" | "b"): string | null =>
-  materializedMounts.get(drive)?.workPath ?? null;
-
-// HARD19-007: map a drive's materialized work file back to the disk it holds, so
-// rotation / delete-protection survive even after HomeDiskManager's optimistic
-// override was lost (e.g. a component remount) — the drives poll only ever reports
-// the internal work filename.
-export const getMaterializedDiskId = (drive: "a" | "b"): string | null =>
-  materializedMounts.get(drive)?.disk.id ?? null;
-
-export const resetMaterializedMountsForTests = () => {
-  materializedMounts.clear();
-  orphanedMounts.clear();
-  if (typeof sessionStorage !== "undefined") {
-    sessionStorage.removeItem(MATERIALIZED_MOUNTS_STORAGE_KEY);
-    sessionStorage.removeItem(ORPHANED_MOUNTS_STORAGE_KEY);
-  }
-};
-
 const readBackAndPersist = async (
   entry: MaterializedDiskMount,
   ftp: DiskMountWriteBackDependencies,
 ): Promise<Uint8Array> => {
+  const laterWrite = findLaterWorkFileWrite(entry);
+  if (laterWrite) {
+    addLog("warn", "Refused disk write-back: a later mount replaced the work file on the device", {
+      path: entry.disk.path,
+      workPath: entry.workPath,
+      materializedOn: entry.deviceHost,
+      replacedFrom: laterWrite.deviceHost,
+    });
+    throw new Error(
+      `A later mount replaced ${getDiskName(entry.disk.path)} on the device, so its changes could not be saved back.`,
+    );
+  }
   const bytes = await ftp.readRemoteFile(entry.workPath);
   await persistDiskWriteBack(entry.writeBackTarget, bytes);
   return bytes;
@@ -305,34 +183,24 @@ const dropOrFinalizeStaleMaterializedMount = async (
   drive: "a" | "b",
   nextDisk: DiskEntry,
   ftp: DiskMountWriteBackDependencies | undefined,
-  currentDeviceHost?: string,
+  currentDeviceHost: string,
 ): Promise<Uint8Array | null> => {
-  const stale = materializedMounts.get(drive);
-  if (!stale) return null;
-  // HARD19-005: never write the stale entry back to a different device than the
-  // one it was materialized on (the deterministic work file would be a different
-  // image). Skip the write-back on a device mismatch.
-  // HARD21-002: this mismatch check MUST run BEFORE deleteMaterializedMount, and
-  // must LEAVE the entry in place (not delete) — mirroring finalizeDiskWriteBack.
-  // The previous ordering deleted the entry first and only then returned null on
-  // mismatch, silently destroying the OTHER device's pending write-back: a
-  // same-drive remount on device B wiped device A's materialized entry, so
-  // ejecting after switching BACK to A saved nothing (in-game saves lost). The
-  // nextDisk about to occupy this drive on device B is unrelated to device A's
-  // work file, so leaving A's entry is safe — a later mount ON device A
-  // finalizes it correctly.
-  if (currentDeviceHost !== undefined && stale.deviceHost !== currentDeviceHost) {
+  const primary = getPrimaryMaterializedMount(drive);
+  const pending = findPendingMaterializedMountForHost(drive, currentDeviceHost);
+  // HARD21-002: another device's entry stays in place for an eject on that device.
+  if (primary && primary !== pending?.entry) {
     addLog("warn", "Skipped pending disk write-back: stale mount belongs to a different device", {
       drive,
-      path: stale.disk.path,
-      workPath: stale.workPath,
-      materializedOn: stale.deviceHost,
+      path: primary.disk.path,
+      workPath: primary.workPath,
+      materializedOn: primary.deviceHost,
       currentDeviceHost,
     });
-    return null;
   }
+  if (!pending) return null;
+  const stale = pending.entry;
   const remountingSameDisk = stale.disk.id === nextDisk.id;
-  deleteMaterializedMount(drive);
+  pending.release();
   if (!ftp) {
     addLog("warn", "Dropped pending disk write-back: drive remounted by a flow without write-back support", {
       drive,
@@ -367,17 +235,6 @@ export type DiskWriteBackResult =
   | { attempted: true; success: true; archiveCopyOffer?: ArchiveDiskCopyOffer }
   | { attempted: true; success: false; error: Error };
 
-// Called on eject: FTP-downloads the materialized work-dir image back and
-// re-persists it to the source. Never throws - a failed write-back must not
-// block the eject the user already asked for; the result tells the caller
-// whether to surface a "changes may be lost" warning.
-//
-// HARD19-005: `currentDeviceHost` is the device the eject's FTP deps target. If
-// the mount was materialized on a DIFFERENT device (a saved-device switch
-// happened between mount and eject), skip the write-back entirely: reading the
-// deterministic work file from the current device would fetch a different (or
-// stale) image and overwrite the user's local source with it. The entry is left
-// in place so ejecting after switching BACK to the original device still saves.
 // Read-back + persist a single materialized entry, remove it via `onFinalized`,
 // and never throw. Shared by the primary-slot and parked-orphan finalize paths.
 const finalizeMaterializedEntry = async (
@@ -409,37 +266,21 @@ const finalizeMaterializedEntry = async (
   }
 };
 
+// Called on eject: FTP-downloads the materialized work-dir image back and
+// re-persists it to the source. Never throws - a failed write-back must not
+// block the eject the user already asked for; the result tells the caller
+// whether to surface a "changes may be lost" warning.
+// HARD19-005/HARD21-002: only an entry materialized on the device the eject's FTP deps reach (`currentDeviceHost`,
+// by identity) is read back; another device's entry is left for an eject on that device.
 export const finalizeDiskWriteBack = async (
   drive: "a" | "b",
   ftp: DiskMountWriteBackDependencies,
   currentDeviceHost?: string,
 ): Promise<DiskWriteBackResult> => {
-  const entry = materializedMounts.get(drive);
-  // Normal path: the drive slot holds THIS device's materialized image.
-  if (entry && (currentDeviceHost === undefined || entry.deviceHost === currentDeviceHost)) {
-    return finalizeMaterializedEntry(drive, entry, ftp, () => deleteMaterializedMount(drive));
-  }
-  // HARD21-002: the drive slot is empty or holds a DIFFERENT device's entry, but a
-  // pending write-back for the CURRENT device may have been parked when a
-  // cross-device local remount reused this drive (see setMaterializedMount).
-  // Ejecting after switching BACK must still persist those saves. The parked entry
-  // was materialized on `currentDeviceHost`, so its work file is read from the
-  // right (current) device.
-  if (currentDeviceHost !== undefined) {
-    const parkedKey = orphanKey(currentDeviceHost, drive);
-    const parked = orphanedMounts.get(parkedKey);
-    if (parked) {
-      return finalizeMaterializedEntry(drive, parked, ftp, () => {
-        orphanedMounts.delete(parkedKey);
-        persistOrphanedMounts(orphanedMounts);
-      });
-    }
-  }
+  const pending = findPendingMaterializedMountForHost(drive, currentDeviceHost);
+  if (pending) return finalizeMaterializedEntry(drive, pending.entry, ftp, pending.release);
+  const entry = getPrimaryMaterializedMount(drive);
   if (!entry) return { attempted: false, reason: "no-entry" };
-  // HARD19-005: the slot holds a different device's entry and nothing is parked for
-  // the current device — reading the deterministic work file here would fetch a
-  // different image, so skip. The entry is left in place so ejecting after
-  // switching BACK to its device still saves.
   addLog("warn", "Skipped disk write-back: mount belongs to a different device than the current one", {
     drive,
     path: entry.disk.path,
@@ -448,13 +289,6 @@ export const finalizeDiskWriteBack = async (
     currentDeviceHost,
   });
   return { attempted: false, reason: "device-mismatch" };
-};
-
-// Called when a mounted disk is being removed from the library outright
-// (HARD18-017 delete flow) - there is no source left to write back to, so
-// drop the pending entry without spending an FTP round trip on it.
-export const discardDiskWriteBack = (drive: "a" | "b"): void => {
-  deleteMaterializedMount(drive);
 };
 
 export type ArchiveDiskCopySaveResult =
@@ -569,9 +403,11 @@ const tryMaterializeDiskMount = async (
   const workPath = buildDiskWorkPath(root, drive, mountType);
   try {
     const bytes = new Uint8Array(await blob.arrayBuffer());
+    const device = resolveDiskDeviceIdentity(api.getDeviceHost());
+    const generation = recordWorkFileWrite(workPath, device);
     await ftp.writeRemoteFile(workPath, bytes);
     await api.mountDrive(drive, workPath, mountType, mode);
-    setMaterializedMount(drive, { disk, workPath, writeBackTarget, deviceHost: api.getDeviceHost() });
+    recordMaterializedMount(drive, { disk, workPath, writeBackTarget, generation }, device);
     return workPath;
   } catch (error) {
     addErrorLog("Disk work-dir materialization failed; falling back to a transient mount", {

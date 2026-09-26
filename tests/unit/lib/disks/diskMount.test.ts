@@ -89,6 +89,7 @@ import {
   resolveDiskWriteBackTarget,
   finalizeDiskWriteBack,
   discardDiskWriteBack,
+  resetMaterializedMountsForTests,
   saveArchiveDiskCopyToLocalFolder,
   type DiskMountWriteBackDependencies,
 } from "@/lib/disks/diskMount";
@@ -128,8 +129,7 @@ describe("diskMount", () => {
     // materializedMounts is a module singleton (by design - drive occupancy
     // outlives any one test's mountDiskToDrive call); drop any leftovers so
     // tests don't see a prior test's pending write-back entry.
-    discardDiskWriteBack("a");
-    discardDiskWriteBack("b");
+    resetMaterializedMountsForTests();
     mockResolvePersistentReuStorageRoot.mockImplementation(
       (names: string[]) => names.find((n) => n.toLowerCase() !== "temp") ?? null,
     );

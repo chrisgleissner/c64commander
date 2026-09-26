@@ -97,7 +97,6 @@ export const GRANDFATHERED = new Map([
   ["src/lib/streams/subjectTracker.ts", 1150],
   ["android/app/src/main/java/uk/gleissner/c64commander/AudioPipeline.kt", 1113],
   ["android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt", 1061],
-  ["src/lib/disks/diskMount.ts", 1031],
 ]);
 
 const walk = (dir) => {
