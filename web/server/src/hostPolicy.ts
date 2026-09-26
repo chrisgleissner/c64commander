@@ -83,24 +83,40 @@ export const createLanHostPolicy = (options: {
 };
 
 export interface DeviceAddressMatcher {
-  sharesAddress: (leftHostname: string, rightHostname: string) => Promise<boolean>;
+  isConfiguredDevice: (candidateHostname: string, configuredHostname: string) => Promise<boolean>;
 }
 
-// An Ultimate on Ethernet and Wi-Fi is one machine at two addresses, and the app may name it by
-// either address or by its hostname. Two names that resolve to a common address reach the same
-// machine, so the configured password is exactly as safe there as under the configured name.
+const DEFAULT_RESOLVE_TIMEOUT_MS = 2000;
+
+// An Ultimate on Ethernet and Wi-Fi is one machine at two addresses. A request that names one of the
+// configured host's own addresses as an IP literal reaches that machine, and a literal is connected to
+// as given, so no later lookup can redirect it. Other names are never resolved here: a name that also
+// resolves to the device's address could still send the connection, and the password, elsewhere.
 export const createDeviceAddressMatcher = (options: {
   resolve?: HostAddressResolver;
   ttlMs?: number;
   maxEntries?: number;
+  resolveTimeoutMs?: number;
   now?: () => number;
   onResolveError?: (hostname: string, error: unknown) => void;
 }): DeviceAddressMatcher => {
   const resolve = options.resolve ?? resolveHostAddresses;
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
+  const resolveTimeoutMs = options.resolveTimeoutMs ?? DEFAULT_RESOLVE_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const cache = new Map<string, { expiresAtMs: number; addresses: string[] }>();
+
+  const resolveWithDeadline = (hostname: string): Promise<string[]> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`DNS lookup of ${hostname} took longer than ${resolveTimeoutMs} ms`)),
+        resolveTimeoutMs,
+      );
+    });
+    return Promise.race([resolve(hostname), deadline]).finally(() => clearTimeout(timer));
+  };
 
   const addressesOf = async (hostname: string): Promise<string[]> => {
     if (net.isIP(hostname)) return [hostname];
@@ -108,7 +124,7 @@ export const createDeviceAddressMatcher = (options: {
     if (cached && cached.expiresAtMs > now()) return cached.addresses;
     let addresses: string[] = [];
     try {
-      addresses = (await resolve(hostname)).map(normalizeHostname);
+      addresses = (await resolveWithDeadline(hostname)).map(normalizeHostname);
     } catch (error) {
       options.onResolveError?.(hostname, error);
     }
@@ -121,13 +137,13 @@ export const createDeviceAddressMatcher = (options: {
   };
 
   return {
-    sharesAddress: async (leftHostname: string, rightHostname: string) => {
-      const left = normalizeHostname(leftHostname);
-      const right = normalizeHostname(rightHostname);
-      if (!left || !right) return false;
-      if (left === right) return true;
-      const [leftAddresses, rightAddresses] = await Promise.all([addressesOf(left), addressesOf(right)]);
-      return leftAddresses.some((address) => rightAddresses.includes(address));
+    isConfiguredDevice: async (candidateHostname: string, configuredHostname: string) => {
+      const candidate = normalizeHostname(candidateHostname);
+      const configured = normalizeHostname(configuredHostname);
+      if (!candidate || !configured) return false;
+      if (candidate === configured) return true;
+      if (!net.isIP(candidate)) return false;
+      return (await addressesOf(configured)).includes(candidate);
     },
   };
 };

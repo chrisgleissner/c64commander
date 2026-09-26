@@ -79,51 +79,76 @@ describe("device address matcher", () => {
   const dns: Record<string, string[]> = {
     "ultimate.example": ["192.0.2.10"],
     "alias.example": ["192.0.2.10"],
-    "other.example": ["203.0.113.40"],
+    "attacker.example": ["192.0.2.10", "203.0.113.66"],
   };
-  const resolve = async (hostname: string) => {
+  const resolve = vi.fn(async (hostname: string) => {
     const addresses = dns[hostname];
     if (!addresses) throw new Error(`ENOTFOUND ${hostname}`);
     return addresses;
-  };
-
-  it("matches a configured name with the address it resolves to, in either direction", async () => {
-    const matcher = createDeviceAddressMatcher({ resolve });
-
-    await expect(matcher.sharesAddress("192.0.2.10", "ultimate.example")).resolves.toBe(true);
-    await expect(matcher.sharesAddress("ultimate.example", "192.0.2.10")).resolves.toBe(true);
-    await expect(matcher.sharesAddress("alias.example", "ultimate.example")).resolves.toBe(true);
   });
 
-  it("does not match a different machine or its address", async () => {
+  it("matches an IP literal that the configured name resolves to", async () => {
     const matcher = createDeviceAddressMatcher({ resolve });
 
-    await expect(matcher.sharesAddress("198.51.100.20", "ultimate.example")).resolves.toBe(false);
-    await expect(matcher.sharesAddress("other.example", "ultimate.example")).resolves.toBe(false);
+    await expect(matcher.isConfiguredDevice("192.0.2.10", "ultimate.example")).resolves.toBe(true);
+    await expect(matcher.isConfiguredDevice("Ultimate.Example", "ultimate.example")).resolves.toBe(true);
   });
 
-  it("reports a name that does not resolve and matches nothing through it", async () => {
+  it("never matches another name, even one that also resolves to the device's address", async () => {
+    resolve.mockClear();
+    const matcher = createDeviceAddressMatcher({ resolve });
+
+    await expect(matcher.isConfiguredDevice("attacker.example", "ultimate.example")).resolves.toBe(false);
+    await expect(matcher.isConfiguredDevice("alias.example", "ultimate.example")).resolves.toBe(false);
+    await expect(matcher.isConfiguredDevice("ultimate.example", "192.0.2.10")).resolves.toBe(false);
+    expect(resolve).not.toHaveBeenCalledWith("attacker.example");
+  });
+
+  it("does not match an address the configured name does not resolve to", async () => {
+    const matcher = createDeviceAddressMatcher({ resolve });
+
+    await expect(matcher.isConfiguredDevice("198.51.100.20", "ultimate.example")).resolves.toBe(false);
+  });
+
+  it("reports a configured name that does not resolve and matches nothing through it", async () => {
     const onResolveError = vi.fn();
     const matcher = createDeviceAddressMatcher({ resolve, onResolveError });
 
-    await expect(matcher.sharesAddress("192.0.2.10", "absent.example")).resolves.toBe(false);
+    await expect(matcher.isConfiguredDevice("192.0.2.10", "absent.example")).resolves.toBe(false);
     expect(onResolveError).toHaveBeenCalledWith("absent.example", expect.any(Error));
   });
 
-  it("matches identical text without a lookup and caches lookups for their TTL", async () => {
-    const counted = vi.fn(resolve);
+  it("gives up on a lookup that does not answer in time and matches nothing", async () => {
+    vi.useFakeTimers();
+    try {
+      const onResolveError = vi.fn();
+      const matcher = createDeviceAddressMatcher({
+        resolve: () => new Promise<string[]>(() => {}),
+        resolveTimeoutMs: 2000,
+        onResolveError,
+      });
+
+      const answer = matcher.isConfiguredDevice("192.0.2.10", "ultimate.example");
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(answer).resolves.toBe(false);
+      expect(onResolveError).toHaveBeenCalledWith("ultimate.example", expect.any(Error));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("caches the configured name's addresses for their TTL", async () => {
+    const counted = vi.fn(async (hostname: string) => dns[hostname] ?? []);
     let clock = 1_000;
     const matcher = createDeviceAddressMatcher({ resolve: counted, ttlMs: 60_000, now: () => clock });
 
-    await expect(matcher.sharesAddress("Ultimate.Example", "ultimate.example")).resolves.toBe(true);
-    expect(counted).not.toHaveBeenCalled();
-
-    await matcher.sharesAddress("192.0.2.10", "ultimate.example");
-    await matcher.sharesAddress("192.0.2.10", "ultimate.example");
+    await matcher.isConfiguredDevice("192.0.2.10", "ultimate.example");
+    await matcher.isConfiguredDevice("192.0.2.10", "ultimate.example");
     expect(counted).toHaveBeenCalledTimes(1);
 
     clock += 60_001;
-    await matcher.sharesAddress("192.0.2.10", "ultimate.example");
+    await matcher.isConfiguredDevice("192.0.2.10", "ultimate.example");
     expect(counted).toHaveBeenCalledTimes(2);
   });
 });

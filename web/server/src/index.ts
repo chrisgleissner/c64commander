@@ -348,7 +348,7 @@ const isConfiguredRestTarget = async (targetHost: string, configuredHost: string
   const target = splitDeviceHostValue(targetHost);
   const configured = splitDeviceHostValue(configuredHost);
   if (!target || !configured || target.port !== configured.port) return false;
-  return deviceAddressMatcher.sharesAddress(target.host, configured.host);
+  return deviceAddressMatcher.isConfiguredDevice(target.host, configured.host);
 };
 
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
@@ -452,7 +452,7 @@ const collectStream = async (stream: PassThrough, limitBytes = FILE_BYTES_LIMIT)
 const isConfiguredDeviceFtpHost = async (host: string, configuredDeviceHost: string): Promise<boolean> => {
   const candidate = getHostnameFromHostValue(host);
   const configured = getHostnameFromHostValue(configuredDeviceHost);
-  return candidate !== null && configured !== null && deviceAddressMatcher.sharesAddress(candidate, configured);
+  return candidate !== null && configured !== null && deviceAddressMatcher.isConfiguredDevice(candidate, configured);
 };
 
 const ftpPasswordFor = async (host: string, config: AppConfig, supplied: string | undefined): Promise<string> => {
