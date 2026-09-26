@@ -66,6 +66,7 @@ class FtpClientPlugin : Plugin() {
   private val maxTrackedCompletedReads = 256
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
   internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
+  internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
@@ -211,7 +212,7 @@ class FtpClientPlugin : Plugin() {
               val client = ftpClientFactory()
               try {
                 applyPreConnectTimeouts(client, connectTimeoutMs)
-                client.connect(host, port)
+                connectFtpControl(client, host, port, connectTimeoutMs, hostResolver, ::pluginContextOrNull)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
@@ -280,7 +281,7 @@ class FtpClientPlugin : Plugin() {
               val client = ftpClientFactory()
               try {
                 applyPreConnectTimeouts(client, connectTimeoutMs)
-                client.connect(host, port)
+                connectFtpControl(client, host, port, connectTimeoutMs, hostResolver, ::pluginContextOrNull)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
@@ -436,7 +437,7 @@ class FtpClientPlugin : Plugin() {
                   return@Runnable
                 }
                 applyPreConnectTimeouts(client, connectTimeoutMs)
-                client.connect(host, port)
+                connectFtpControl(client, host, port, connectTimeoutMs, hostResolver, ::pluginContextOrNull)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
@@ -642,7 +643,7 @@ class FtpClientPlugin : Plugin() {
               val client = ftpClientFactory()
               try {
                 applyPreConnectTimeouts(client, connectTimeoutMs)
-                client.connect(host, port)
+                connectFtpControl(client, host, port, connectTimeoutMs, hostResolver, ::pluginContextOrNull)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
@@ -712,7 +713,7 @@ class FtpClientPlugin : Plugin() {
               val client = ftpClientFactory()
               try {
                 applyPreConnectTimeouts(client, connectTimeoutMs)
-                client.connect(host, port)
+                connectFtpControl(client, host, port, connectTimeoutMs, hostResolver, ::pluginContextOrNull)
                 applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
@@ -786,7 +787,7 @@ class FtpClientPlugin : Plugin() {
               val client = ftpClientFactory()
               try {
                 applyPreConnectTimeouts(client, connectTimeoutMs)
-                client.connect(host, port)
+                connectFtpControl(client, host, port, connectTimeoutMs, hostResolver, ::pluginContextOrNull)
                 applyConnectedTimeouts(client, connectTimeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
