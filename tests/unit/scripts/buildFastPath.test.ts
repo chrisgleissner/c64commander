@@ -108,11 +108,33 @@ describe("build fast path helper", () => {
     expect(JSON.parse(bootstrap({ BUILD_DEBUG_SAVED_DEVICE_NAMES: "" }))).toEqual([]);
   });
 
-  it("bakes in no fixed device address", () => {
-    const raw = bootstrap();
+  // A shell function named getent replaces the host database, so these runs do not depend on
+  // which names the machine running the tests can resolve.
+  const bootstrapWithHostDatabase = (getentBody: string) =>
+    execFileSync(
+      "bash",
+      [
+        "-lc",
+        `source ${JSON.stringify(helperPath)}\ngetent() { ${getentBody}; }\nbuild_debug_saved_devices_bootstrap_json`,
+      ],
+      { cwd: path.resolve("."), encoding: "utf8", env: { ...process.env, BUILD_DEBUG_SAVED_DEVICE_NAMES: undefined } },
+    );
 
-    expect(raw).not.toContain("192.168.1.13");
-    expect(raw).not.toContain("192.168.1.167");
+  it("bakes in no fixed device address", () => {
+    expect(JSON.parse(bootstrapWithHostDatabase("return 2"))).toEqual([]);
+  });
+
+  it("takes every default device address from the host database", () => {
+    const devices = JSON.parse(
+      bootstrapWithHostDatabase(
+        '[[ $2 == c64u ]] && echo "192.0.2.64 c64u"; [[ $2 == u2 ]] && echo "198.51.100.2 u2"; true',
+      ),
+    );
+
+    expect(devices.map((device: { name: string; host: string }) => [device.name, device.host])).toEqual([
+      ["c64u", "192.0.2.64"],
+      ["u2", "198.51.100.2"],
+    ]);
   });
 
   it("marks only helper-injected debug saved devices for test cleanup", () => {

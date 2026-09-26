@@ -170,7 +170,7 @@ describe("manual generator", () => {
     expect(c64uRemote).not.toContain("Commodore 64 Ultimate only");
     expect(c64uRemote).not.toContain("use C64 Commander instead");
     expect(c64uRemote).not.toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
-    expect(c64uRemote).toContain("entries such as `c64u` and `192.168.1.64`");
+    expect(c64uRemote).toMatch(/entries such as `c64u` and `\d{1,3}(?:\.\d{1,3}){3}`/);
     expect(c64uRemote).not.toContain("entries such as `c64u`, `u64`");
     expect(c64uRemote).toContain("Files and folders available on your phone.");
     expect(c64uRemote).toContain(
