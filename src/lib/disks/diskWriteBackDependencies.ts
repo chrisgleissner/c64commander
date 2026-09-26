@@ -11,6 +11,8 @@ import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 import { listPopulatedStorageRoots } from "@/lib/ftp/storageRoots";
 import { base64ToUint8, uint8ToBase64 } from "@/lib/sid/sidUtils";
 import type { DiskMountWriteBackDependencies } from "@/lib/disks/diskMount";
+import { getC64APIConfigSnapshot } from "@/lib/c64api";
+import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 
 /**
  * FTP-backed disk write-back dependencies (list roots / read / write remote
@@ -19,21 +21,27 @@ import type { DiskMountWriteBackDependencies } from "@/lib/disks/diskMount";
  * disk from Play dropped a Home-mounted disk's pending write-back (silently losing
  * in-game saves) instead of finalizing it.
  *
- * host/port/password are resolved fresh per call against the currently selected
- * device — never captured stale in a closure.
+ * The FTP host is the device the dependencies were built for (by default the selected device at that
+ * moment), so a device switch during a write-back cannot move a work-file read or write to the other device.
  */
-export const buildDiskWriteBackDependencies = (): DiskMountWriteBackDependencies => ({
-  listRemoteStorageRoots: async () => {
-    const ftpOptions = await resolveFtpConnectionOptions();
-    return listPopulatedStorageRoots((path) => listFtpDirectory({ ...ftpOptions, path }));
-  },
-  readRemoteFile: async (path) => {
-    const ftpOptions = await resolveFtpConnectionOptions();
-    const result = await readFtpFile({ ...ftpOptions, path });
-    return base64ToUint8(result.data);
-  },
-  writeRemoteFile: async (path, bytes) => {
-    const ftpOptions = await resolveFtpConnectionOptions();
-    await writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) });
-  },
-});
+export const buildDiskWriteBackDependencies = (
+  deviceHost: string = getC64APIConfigSnapshot().deviceHost,
+): DiskMountWriteBackDependencies => {
+  const ftpOptionsForDevice = async () => ({
+    ...(await resolveFtpConnectionOptions()),
+    host: stripPortFromDeviceHost(deviceHost),
+  });
+  return {
+    listRemoteStorageRoots: async () => {
+      const ftpOptions = await ftpOptionsForDevice();
+      return listPopulatedStorageRoots((path) => listFtpDirectory({ ...ftpOptions, path }));
+    },
+    readRemoteFile: async (path) => {
+      const result = await readFtpFile({ ...(await ftpOptionsForDevice()), path });
+      return base64ToUint8(result.data);
+    },
+    writeRemoteFile: async (path, bytes) => {
+      await writeFtpFile({ ...(await ftpOptionsForDevice()), path, data: uint8ToBase64(bytes) });
+    },
+  };
+};

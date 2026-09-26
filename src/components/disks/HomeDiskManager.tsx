@@ -702,7 +702,7 @@ export const HomeDiskManager = () => {
         mountSupport.mountOntoPoweredDrive(deviceApi, drive, powerEnabled, () =>
           mountDiskToDrive(api, drive, disk, runtimeFile, {
             archiveConfigs,
-            writeBack: buildDiskWriteBackDependencies(),
+            writeBack: buildDiskWriteBackDependencies(deviceHost),
             deviceHost,
           }),
         ),
@@ -834,7 +834,11 @@ export const HomeDiskManager = () => {
       // HARD19-005: pass the current device so a write-back only runs against the
       // device the disk was actually materialized on — never overwriting the local
       // source with a different device's stale work file.
-      const writeBackResult = await finalizeDiskWriteBack(drive, buildDiskWriteBackDependencies(), api.getDeviceHost());
+      const writeBackResult = await finalizeDiskWriteBack(
+        drive,
+        buildDiskWriteBackDependencies(api.getDeviceHost()),
+        api.getDeviceHost(),
+      );
       forgetUploadMount(api.getDeviceHost(), drive);
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
