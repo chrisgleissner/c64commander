@@ -796,6 +796,10 @@ describe("diskMount", () => {
       ).rejects.toThrow("The connected device changed from c64u to u64 while mounting Game.d64");
       expect(switchingApi.mountDriveUpload).not.toHaveBeenCalled();
       expect(switchingApi.mountDrive).not.toHaveBeenCalled();
+      expect(addErrorLog).toHaveBeenCalledWith(
+        "Disk mount failed",
+        expect.objectContaining({ error: expect.stringContaining("changed from c64u to u64") }),
+      );
     });
 
     it("records a buffer-mounted disk's name so the drive cards can name it after the device reports its upload file", async () => {

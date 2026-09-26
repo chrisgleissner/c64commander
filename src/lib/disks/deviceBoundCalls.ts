@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+// Accessors that only report where the client points; error handlers still need them after a switch.
+const UNGUARDED_ACCESSORS = new Set<PropertyKey>(["getDeviceHost", "getBaseUrl", "getPassword"]);
+
 /**
  * Wrap an object whose methods talk to "the connected device" so every call first checks that the device is
  * still the one the operation started on. The API client is shared and retargeted by a device switch, so a
@@ -20,7 +23,7 @@ export const bindCallsToDevice = <T extends object>(
   new Proxy(target, {
     get(object, property, receiver) {
       const value = Reflect.get(object, property, receiver);
-      if (typeof value !== "function" || property === "getDeviceHost") return value;
+      if (typeof value !== "function" || UNGUARDED_ACCESSORS.has(property)) return value;
       return (...args: unknown[]) => {
         const host = currentHost();
         if (host !== startHost) {
