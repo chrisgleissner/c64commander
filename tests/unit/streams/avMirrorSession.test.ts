@@ -383,21 +383,21 @@ describe("AvMirrorSession", () => {
       isSelectedDeviceSender,
     });
     const [audio, video] = [audioInstances[0]!, videoInstances[0]!];
-    const refused = { source: "192.168.1.146", expected: "c64u", rejectedPackets: 12 };
+    const refused = { source: "192.0.2.46", expected: "c64u", rejectedPackets: 12 };
     const report = () =>
       (audio.deps.onChange as (s: unknown) => void)({
         state: "live",
         droppedPackets: 0,
-        error: "Audio packets are arriving from 192.168.1.146 and being dropped",
+        error: "Audio packets are arriving from 192.0.2.46 and being dropped",
         foreignSenderNotice: null,
         senderMismatch: refused,
       });
 
     report();
     report();
-    await vi.waitFor(() => expect(audio.adoptSender).toHaveBeenCalledWith("192.168.1.146"));
+    await vi.waitFor(() => expect(audio.adoptSender).toHaveBeenCalledWith("192.0.2.46"));
 
-    expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.146");
+    expect(video.adoptSender).toHaveBeenCalledWith("192.0.2.46");
     expect(isSelectedDeviceSender).toHaveBeenCalledTimes(1);
     expect(session.getSnapshot().audio.senderMismatch).toEqual(refused);
   });
@@ -417,7 +417,7 @@ describe("AvMirrorSession", () => {
       droppedPackets: 0,
       error: "dropped",
       foreignSenderNotice: null,
-      senderMismatch: { source: "192.168.1.13", expected: "c64u", rejectedPackets: 3 },
+      senderMismatch: { source: "198.51.100.13", expected: "c64u", rejectedPackets: 3 },
     });
 
     await vi.waitFor(() => expect(isSelectedDeviceSender).toHaveBeenCalled());

@@ -15,31 +15,31 @@ import { isSelectedDeviceSender } from "@/lib/streams/sameDeviceSender";
 
 const ids: Record<string, string | null> = {
   c64u: "5D0464",
-  "192.168.1.146": "5D0464",
-  "192.168.1.13": "8A7F21",
-  "192.168.1.50": null,
+  "192.0.2.46": "5D0464",
+  "198.51.100.13": "8A7F21",
+  "192.0.2.50": null,
 };
 const fetchUniqueId = async (host: string) => ids[host] ?? null;
 
 describe("isSelectedDeviceSender", () => {
   it("recognizes the selected device streaming from its other network address", async () => {
-    expect(await isSelectedDeviceSender("192.168.1.146", "c64u", fetchUniqueId)).toBe(true);
+    expect(await isSelectedDeviceSender("192.0.2.46", "c64u", fetchUniqueId)).toBe(true);
   });
 
   it("does not take another Ultimate, or one that reports no id, for the selected device", async () => {
-    expect(await isSelectedDeviceSender("192.168.1.13", "c64u", fetchUniqueId)).toBe(false);
-    expect(await isSelectedDeviceSender("192.168.1.50", "c64u", fetchUniqueId)).toBe(false);
+    expect(await isSelectedDeviceSender("198.51.100.13", "c64u", fetchUniqueId)).toBe(false);
+    expect(await isSelectedDeviceSender("192.0.2.50", "c64u", fetchUniqueId)).toBe(false);
   });
 
   it("logs and answers no when the sender cannot be asked", async () => {
     const unreachable = async () => {
       throw new Error("timeout");
     };
-    expect(await isSelectedDeviceSender("192.168.1.146", "c64u", unreachable)).toBe(false);
+    expect(await isSelectedDeviceSender("192.0.2.46", "c64u", unreachable)).toBe(false);
     expect(addLog).toHaveBeenCalledWith(
       "warn",
       "Live View: could not tell whether a refused stream sender is the selected device",
-      expect.objectContaining({ source: "192.168.1.146", error: "timeout" }),
+      expect.objectContaining({ source: "192.0.2.46", error: "timeout" }),
     );
   });
 });
