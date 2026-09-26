@@ -44,6 +44,7 @@ import {
   type DeviceConfigItemRef,
 } from "../hooks/useDeviceConfigOptionDomains";
 import { isSoftIecDefaultPathConfigurable, resolveSoftIecDefaultPath } from "@/components/disks/HomeDiskManagerSupport";
+import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
   const message = value?.trim() ?? "";
@@ -203,6 +204,7 @@ export function DriveManager({
   };
 
   const mountLocalImageOnPhysicalDrive = async (
+    deviceApi: Pick<typeof api, "mountDriveUpload">,
     driveId: "a" | "b",
     source: SourceLocation,
     selectedPath: string,
@@ -219,7 +221,7 @@ export function DriveManager({
       sourceId: source.id,
     });
     const blob = runtimeFile ?? (await resolveLocalDiskBlob(diskEntry));
-    await api.mountDriveUpload(driveId, blob, mountType, "readwrite", { filename: selectedName });
+    await deviceApi.mountDriveUpload(driveId, blob, mountType, "readwrite", { filename: selectedName });
   };
 
   const handleMountSelection = async (source: unknown, selections: { path: string; name?: string }[]) => {
@@ -239,6 +241,9 @@ export function DriveManager({
     } else if (spec.class === "PHYSICAL_DRIVE_A" || spec.class === "PHYSICAL_DRIVE_B") {
       const driveId = spec.class === "PHYSICAL_DRIVE_A" ? "a" : "b";
       const description = `Mounted to Drive ${driveId.toUpperCase()}`;
+      // Bound before the drive is turned on, so a device switch meanwhile cannot move the mount elsewhere.
+      const deviceHost = api.getDeviceHost();
+      const deviceApi = bindCallsToDevice(api, deviceHost, () => api.getDeviceHost(), description.toLowerCase());
       const driveOn =
         enabled ||
         (await updateConfigValue(
@@ -252,12 +257,18 @@ export function DriveManager({
       if (!driveOn) return false;
       if (sourceLocation?.type === "local") {
         await handleAction(async () => {
-          await mountLocalImageOnPhysicalDrive(driveId, sourceLocation, selected.path, selected.name ?? selected.path);
+          await mountLocalImageOnPhysicalDrive(
+            deviceApi,
+            driveId,
+            sourceLocation,
+            selected.path,
+            selected.name ?? selected.path,
+          );
           await refetchDrives();
         }, description);
       } else {
         await handleAction(async () => {
-          await api.mountDrive(driveId, selected.path);
+          await deviceApi.mountDrive(driveId, selected.path);
           await refetchDrives();
         }, description);
       }

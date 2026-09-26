@@ -312,6 +312,7 @@ describe("HomeDiskManager UI & Interactions", () => {
           writeRemoteFile: expect.any(Function),
           readRemoteFile: expect.any(Function),
         },
+        deviceHost: "mock-host",
       });
     });
 
@@ -596,6 +597,33 @@ describe("HomeDiskManager UI & Interactions", () => {
     );
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
+  });
+
+  it("turns nothing on and mounts nothing when the device changes before the drive is turned on", async () => {
+    const disk = createMockDisk({ id: "game", name: "Game", path: "/game.d64" });
+    const originalHost = mockApi.getDeviceHost;
+    mockApi.driveOn.mockResolvedValue(undefined);
+    (useDiskLibrary as any).mockReturnValue({ disks: [disk], runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: createMockDrive({ bus_id: 8, enabled: false }) }, { b: createMockDrive({ bus_id: 9 }) }] },
+      dataUpdatedAt: 1,
+    });
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Mount" }));
+    const dialog = await screen.findByRole("dialog");
+    mockApi.getDeviceHost = vi.fn().mockReturnValueOnce("mock-host").mockReturnValue("other-host");
+    try {
+      fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(mockApi.driveOn).not.toHaveBeenCalled();
+      expect(mountDiskToDrive).not.toHaveBeenCalled();
+    } finally {
+      mockApi.getDeviceHost = originalHost;
+    }
+    mockApi.driveOn.mockReset();
   });
 
   it("shows a drive that a mount turned on as on before the next drive poll reports it", async () => {
@@ -1039,6 +1067,7 @@ describe("HomeDiskManager UI & Interactions", () => {
           writeRemoteFile: expect.any(Function),
           readRemoteFile: expect.any(Function),
         },
+        deviceHost: "mock-host",
       });
     });
 
@@ -1093,6 +1122,7 @@ describe("HomeDiskManager UI & Interactions", () => {
           writeRemoteFile: expect.any(Function),
           readRemoteFile: expect.any(Function),
         },
+        deviceHost: "mock-host",
       });
     });
 

@@ -24,6 +24,7 @@ const {
     reportUserErrorSpy: vi.fn(),
     c64ApiMockRef: {
       current: {
+        getDeviceHost: vi.fn(() => "c64u"),
         setConfigValue: vi.fn().mockResolvedValue({}),
         mountDrive: vi.fn().mockResolvedValue({}),
         getDrives: vi.fn().mockResolvedValue({ drives: [] }),
@@ -610,6 +611,21 @@ describe("DriveManager", () => {
       expect(updateConfigValueSpy.mock.invocationCallOrder[0]).toBeLessThan(
         c64ApiMockRef.current.mountDrive.mock.invocationCallOrder[0],
       );
+    });
+
+    it("does not mount on another device when the device changes while the drive is being turned on", async () => {
+      driveData.drivesByClass = new Map([["PHYSICAL_DRIVE_B", { enabled: false }]]);
+      updateConfigValueSpy.mockImplementationOnce(async () => {
+        c64ApiMockRef.current.getDeviceHost.mockReturnValue("u64");
+        return true;
+      });
+      render(<DriveManager {...defaultProps} />);
+      fireEvent.click(screen.getAllByTestId("drive-mount-click")[1]);
+      fireEvent.click(await screen.findByTestId("confirm-mount"));
+      await vi.waitFor(() => expect(updateConfigValueSpy).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(c64ApiMockRef.current.mountDrive).not.toHaveBeenCalled();
+      c64ApiMockRef.current.getDeviceHost.mockReturnValue("c64u");
     });
 
     it("does not mount when the drive could not be turned on", async () => {

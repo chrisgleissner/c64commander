@@ -82,6 +82,7 @@ import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { forgetUploadMount } from "@/lib/disks/uploadMountRegistry";
+import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 import * as mountSupport from "@/components/disks/driveMountSupport";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
@@ -695,11 +696,14 @@ export const HomeDiskManager = () => {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
       // Default "readwrite" mode, as Play mounts, so games can save to the user's own disks (HARD9-012).
       const powerEnabled = drivePowerOverride[drive] ?? mountSupport.findPolledDrive(drivesData, drive)?.enabled;
+      const deviceHost = api.getDeviceHost();
+      const deviceApi = bindCallsToDevice(api, deviceHost, () => api.getDeviceHost(), `mounting ${disk.name}`);
       const { outcome, poweredOn } = await runDriveMutationWithSettledPolling(() =>
-        mountSupport.mountOntoPoweredDrive(api, drive, powerEnabled, () =>
+        mountSupport.mountOntoPoweredDrive(deviceApi, drive, powerEnabled, () =>
           mountDiskToDrive(api, drive, disk, runtimeFile, {
             archiveConfigs,
             writeBack: buildDiskWriteBackDependencies(),
+            deviceHost,
           }),
         ),
       );

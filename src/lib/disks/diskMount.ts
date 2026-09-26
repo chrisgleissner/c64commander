@@ -86,6 +86,8 @@ type MountDiskToDriveOptions = {
   mode?: "readwrite" | "readonly" | "unlinked";
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
   writeBack?: DiskMountWriteBackDependencies;
+  /** The device the mount must reach; a caller that talked to the drive first passes the host it used. */
+  deviceHost?: string;
 };
 
 const DISK_WORK_DIR_NAME = "c64commander-disk-work";
@@ -953,7 +955,7 @@ export const mountDiskToDrive = async (
   options: MountDiskToDriveOptions = {},
 ): Promise<DiskMountOutcome> => {
   const startedAt = Date.now();
-  const startHost = api.getDeviceHost();
+  const startHost = options.deviceHost ?? api.getDeviceHost();
   const currentHost = () => api.getDeviceHost();
   const operation = `mounting ${disk.name}`;
   const writeBack = options.writeBack && bindCallsToDevice(options.writeBack, startHost, currentHost, operation);

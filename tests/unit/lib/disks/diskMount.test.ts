@@ -778,6 +778,21 @@ describe("diskMount", () => {
       expect(mockApi.mountDriveUpload).toHaveBeenCalled();
     });
 
+    it("sends nothing when the device the caller started on is no longer the connected one", async () => {
+      const file = new File(["test"], "Game.d64");
+      const api = { ...mockApi, getDeviceHost: vi.fn(() => "u64"), mountDriveUpload: vi.fn(), mountDrive: vi.fn() };
+      await expect(
+        mountDiskToDrive(
+          api as any,
+          "a",
+          { id: "g", name: "Game.d64", path: "/Game.d64", location: "local" } as any,
+          file,
+          { deviceHost: "c64u" },
+        ),
+      ).rejects.toThrow("The connected device changed from c64u to u64 while mounting Game.d64");
+      expect(api.mountDriveUpload).not.toHaveBeenCalled();
+    });
+
     it("sends nothing more once the connected device changes while a mount is being prepared", async () => {
       const file = new File(["test"], "Game.d64");
       const switchingApi = {
