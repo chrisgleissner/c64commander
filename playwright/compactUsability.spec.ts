@@ -675,6 +675,16 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       };
       if (!patch()) document.addEventListener("readystatechange", patch);
     });
+    // The font a phone actually draws with: Inter is not bundled, so Android uses Roboto. The step
+    // labels collided only at Roboto's widths, which a runner's narrower default does not reach; a
+    // runner without Roboto falls back to DejaVu Sans, which is wider still.
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        const style = document.createElement("style");
+        style.textContent = "* { font-family: Roboto, 'DejaVu Sans', sans-serif !important; }";
+        document.head.append(style);
+      });
+    });
 
     await openCompact(page, "/play");
     const audit = createAuditor();
@@ -685,6 +695,20 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     const preparation = page.getByTestId("hvsc-preparation-sheet");
     await audit.check(page, "Play / Preparing HVSC library", preparation, "confirmation");
+    // Words wider than an equal share ran into their neighbours: "Download" ended 2px before
+    // "Unpack" began, and the row read as "DownloadUnpack".
+    const labelGaps = await page.evaluate(() => {
+      const ranges = [...document.querySelectorAll("[data-testid^='hvsc-preparation-progress-'] > span")].map(
+        (label) => {
+          const range = document.createRange();
+          range.selectNodeContents(label);
+          return range.getBoundingClientRect();
+        },
+      );
+      return ranges.slice(1).map((rect, index) => rect.left - ranges[index].right);
+    });
+    expect(labelGaps.length).toBe(3);
+    for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(6);
 
     audit.assertAllUsable();
   });
