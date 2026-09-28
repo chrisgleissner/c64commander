@@ -36,6 +36,7 @@ This folder is the canonical location for durable repository documentation.
 - [testing/android-emulator-test-structure.md](testing/android-emulator-test-structure.md)
 - [testing/physical-device-matrix.md](testing/physical-device-matrix.md)
 - [testing/hil-first-impression-1.0.7-rc1-prompt.md](testing/hil-first-impression-1.0.7-rc1-prompt.md) - newcomer and compact-keypad HIL sweep, fixes, review, and release execution prompt
+- [testing/investigations/first-impression-1.0.7-rc1/README.md](testing/investigations/first-impression-1.0.7-rc1/README.md) - findings, measurements and journey results of that sweep
 
 ## Research and exploratory designs
 

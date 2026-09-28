@@ -865,7 +865,7 @@ const ensureMachineAudible = async () => {
 
 const preflight = async () => {
   // droidctl refuses a missing or ambiguous phone here, before anything is driven.
-  await phone();
+  const { serial } = await phone();
 
   const version = await fetch(`http://${HOST}/v1/version`, { headers: authHeaders });
   if (!version.ok) throw new Error(`the Ultimate at ${HOST} answered HTTP ${version.status}`);
@@ -940,7 +940,7 @@ return JSON.stringify({dismissed:true});})()`);
     }
   }
   return (
-    `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}, ` +
+    `device ${serial}, route ${page.route}, speaker volume ${volume.speaker}, ` +
     `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}`
   );
 };
