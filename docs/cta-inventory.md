@@ -1244,11 +1244,14 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 - Search / filter — text — `add-items-filter` — its accessible name follows the scope:
   "Filter this folder" or "Search the whole source"
 - Scope (`add-items-search-scope`) `[only when the source can search past the current
-  folder; on the compact profile only while the filter holds text]`:
-  - This folder — button — `add-items-scope-folder`
-  - Everywhere — button — `add-items-scope-source`
+  folder]`:
+  - This folder — button — `add-items-scope-folder` `[not on the compact profile]`
+  - Everywhere — button — `add-items-scope-source` `[not on the compact profile]`
   - Scan — button — `add-items-deep-scan` `[only for a source that has to be walked
     rather than one that answers as you type]` — runs the source-wide search
+- Search reach — button (toggles between This folder and Everywhere, face shows the current
+  reach) — `add-items-scope-toggle` `[compact profile only, while the filter holds text; on the
+  filter's own row, so the list keeps its height]`
 
 **Browser** (`add-items-scroll`) — the folder listing, `ItemSelectionView`.
 

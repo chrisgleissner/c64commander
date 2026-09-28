@@ -87,6 +87,8 @@ const renderSheet = () =>
 describe("ItemSelectionDialog search scope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    navigatorState.query = "";
     navigatorState.searchScope = "folder";
     navigatorState.isSearching = false;
     navigatorState.searchIsInstant = true;
@@ -176,5 +178,45 @@ describe("ItemSelectionDialog search scope", () => {
     renderSheet();
 
     expect(screen.getByTestId("source-entry-detail").textContent).toBe("/MUSICIANS/H/Hubbard_Rob");
+  });
+
+  /*
+   * On the smallest screen the two scope buttons took a row of their own once text was typed, and
+   * with the phone's system bars that left the file list 69 px on a Pixel 4 — less than one row.
+   */
+  describe("on the compact display profile", () => {
+    beforeEach(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      navigatorState.query = "games";
+    });
+
+    it("switches the reach with one button on the filter's own row", () => {
+      renderSheet();
+
+      const toggle = screen.getByTestId("add-items-scope-toggle");
+      expect(toggle.parentElement).toBe(screen.getByTestId("add-items-filter").parentElement);
+      expect(toggle).toHaveTextContent("This folder");
+      expect(screen.queryByTestId("add-items-scope-folder")).toBeNull();
+      expect(screen.queryByTestId("add-items-search-scope")).toBeNull();
+
+      fireEvent.click(toggle);
+      expect(navigatorState.setSearchScope).toHaveBeenCalledWith("source");
+    });
+
+    it("keeps the scan action for a source that has to be walked", () => {
+      navigatorState.searchIsInstant = false;
+      navigatorState.searchScope = "source";
+      renderSheet();
+
+      expect(screen.getByTestId("add-items-scope-toggle")).toHaveTextContent("Everywhere");
+      expect(screen.getByTestId("add-items-deep-scan")).toBeTruthy();
+    });
+
+    it("shows no scope control before anything is typed", () => {
+      navigatorState.query = "";
+      renderSheet();
+
+      expect(screen.queryByTestId("add-items-scope-toggle")).toBeNull();
+    });
   });
 });
