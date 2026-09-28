@@ -18,6 +18,8 @@ const page = vi.hoisted(() => ({
   selectSource: null as null | ((source: { type: string; id: string }) => Promise<boolean>),
   sidRadioParams: null as null | { startPlaylist: (items: unknown[]) => unknown },
   launcher: null as null | { hvscMissing?: boolean; onInstallHvsc?: () => void },
+  clearPlaylist: null as null | (() => void),
+  stationStop: vi.fn(),
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
@@ -59,10 +61,24 @@ vi.mock("@/pages/playFiles/hooks/useSidRadio", async (importOriginal) => {
     ...actual,
     useSidRadio: (params: Parameters<typeof actual.useSidRadio>[0]) => {
       page.sidRadioParams = params;
-      return actual.useSidRadio(params);
+      const radio = actual.useSidRadio(params);
+      return {
+        ...radio,
+        stop: () => {
+          page.stationStop();
+          radio.stop();
+        },
+      };
     },
   };
 });
+
+vi.mock("@/pages/playFiles/components/PlaylistPanel", () => ({
+  PlaylistPanel: (props: { onClearPlaylist?: () => void }) => {
+    page.clearPlaylist = props.onClearPlaylist ?? null;
+    return null;
+  },
+}));
 
 import PlayFilesPage from "@/pages/PlayFilesPage";
 
@@ -134,5 +150,18 @@ describe("PlayFilesPage wiring", () => {
     await waitFor(() => expect(page.sidRadioParams).not.toBeNull());
 
     await expect(page.sidRadioParams!.startPlaylist([])).resolves.toBe(false);
+  });
+
+  /*
+   * A station tops the playlist up as it empties. On a Pixel 4, "Clear playlist" was undone at once
+   * by ten new tunes, because the station it had been started with was still running.
+   */
+  it("ends a running station when the playlist is cleared", async () => {
+    renderPage();
+    await waitFor(() => expect(page.clearPlaylist).not.toBeNull());
+
+    act(() => page.clearPlaylist?.());
+
+    expect(page.stationStop).toHaveBeenCalledTimes(1);
   });
 });

@@ -2848,7 +2848,12 @@ export default function PlayFilesPage() {
                 hasPlaylist={hasPlaylist}
                 playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
-                onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
+                onClearPlaylist={() => {
+                  // A running station tops the playlist up as it empties, so clearing it would
+                  // be undone at once: clearing the playlist ends the station too.
+                  sidRadio.stop();
+                  removePlaylistItemsById(new Set(playlistIds));
+                }}
                 playlistFilterText={playlistFilterInputText}
                 onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
                 hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
