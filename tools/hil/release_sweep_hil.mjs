@@ -255,6 +255,11 @@ const OVERLAYS = [
   { route: "/play", open: "hvsc-search-open", name: "Find a tune" },
 ];
 
+/*
+ * Back only for an overlay the Close click did not shut. Pressed unconditionally, Back after a
+ * successful Close acted on the page underneath, and on Home that sends the app to the background:
+ * the next overlay was then measured behind the launcher.
+ */
 const closeOverlay = async () => {
   await evaluate(
     `(()=>{const close=[...document.querySelectorAll('[role="dialog"] button')]
@@ -262,8 +267,11 @@ const closeOverlay = async () => {
       if(close){close.click();return "closed";} return "none";})()`,
   ).catch(() => undefined);
   await sleep(1200);
-  await shell("input keyevent KEYCODE_BACK");
-  await sleep(1200);
+  const stillOpen = await evaluate(`(()=>document.querySelectorAll('[role="dialog"]').length>0)()`).catch(() => true);
+  if (stillOpen) {
+    await shell("input keyevent KEYCODE_BACK");
+    await sleep(1200);
+  }
 };
 
 const errorCensus = async () => {
@@ -488,10 +496,7 @@ const restartSoak = async () => {
  * screen-off stage measured the last twelve seconds of the last track, watched the playlist end
  * correctly, and reported it as the tune having stopped.
  */
-const remainingSeconds = (counters) => {
-  const match = /Remaining:\s*(\d+):(\d{2})/.exec(counters ?? "");
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
-};
+const remainingSeconds = (counters) => clockSeconds(counters, "Remaining:\\s*");
 
 /** Put the playlist back at its first track, so what follows has the whole of it ahead of it. */
 const rewindToFirstTrack = async () => {
@@ -533,8 +538,7 @@ const startPlayback = async (options = {}) => {
         return { started: false, why: `the playlist has under ${options.needSeconds} s left and could not be rewound` };
       }
       const after = await readState(Date.now());
-      const total = /Total:\s*(\d+):(\d{2})/.exec(after.counters ?? "");
-      const totalSeconds = total ? Number(total[1]) * 60 + Number(total[2]) : 0;
+      const totalSeconds = clockSeconds(after.counters, "Total:\\s*") ?? 0;
       if (totalSeconds < options.needSeconds) {
         return {
           started: false,
@@ -649,10 +653,17 @@ const networkDrop = async () => {
  * Parse `m:ss` from the transport. Read as a number rather than compared as text, because "10:00"
  * is not greater than "9:59" as a string.
  */
-export const elapsedSeconds = (text) => {
-  const match = /(\d+):(\d{2})/.exec(text ?? "");
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+/**
+ * A transport clock in seconds, from "m:ss" or "h:mm:ss" found after `label` (or anywhere). A
+ * playlist of twenty station tunes totals over an hour, and read as m:ss "2:00:08" was two minutes.
+ */
+export const clockSeconds = (text, label = "") => {
+  const match = new RegExp(`${label}(?:(\\d+):)?(\\d+):(\\d{2})`).exec(text ?? "");
+  if (!match) return null;
+  return Number(match[1] ?? 0) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 };
+
+export const elapsedSeconds = (text) => clockSeconds(text);
 
 /**
  * How many seconds of music a sequence of transport readings accounts for.
