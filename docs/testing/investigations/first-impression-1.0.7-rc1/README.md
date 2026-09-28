@@ -161,7 +161,6 @@ otherwise. Timings are wall-clock on the Pixel.
 | --- | --- | --- | --- |
 | First minute, reachable device | Commander / c64u | PASS | Seeded debug device; tour offered ~6 s after launch, focus on Next |
 | First minute, offline | Commander / none | PASS after FI-13 | Demo Mode offer, Down Down OK continues, tour follows |
-| First minute, discovery with no saved device | Commander | See below | Needs a non-seeded build; LAN discovery would probe the u64 |
 | Tour, all 13 steps, keys only | Commander, Remote / c64u | PASS | Geometry tables above; light theme, landscape and font scale 1.3 checked |
 | First SID song from a fresh install | Commander / c64u | PASS | Radio → Install HVSC → ready in 71 s (80 MB at 13–14 MB/s, then indexing) → Open SID Radio → Chill / Ambient: first tune after ~2.5 s, +11.8 dB in 300–6000 Hz against stopped |
 | Change a setting | Commander / c64u | PASS | 7, "led", Enter, OK, Down, OK: LedStrip Mode Rainbow → Rainbow Sparkle, read back over REST, kept after leaving and returning, restored |

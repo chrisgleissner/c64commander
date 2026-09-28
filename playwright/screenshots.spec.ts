@@ -3378,6 +3378,9 @@ test.describe("App screenshots", () => {
           .first()
           .click();
       }
+      // The scope is set on the medium profile, where it is a pair of buttons; the compact profile
+      // shows the same choice as one toggle beside the field.
+      await applyDisplayProfileViewport(page, "medium");
       await readyDialog.getByTestId("add-items-filter").fill("Second");
       await expect(readyDialog.getByTestId("add-items-search-scope")).toBeVisible();
       await readyDialog.getByTestId("add-items-scope-folder").click();
