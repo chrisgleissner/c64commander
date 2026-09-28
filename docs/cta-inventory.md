@@ -881,7 +881,8 @@ ordinary focus-ring CTAs in both output modes.
 - **Joystick mode:**
   - Port swap — switch (one-tap toggle, same directness as Autofire) —
     `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
-    current port; docked on the left rail in both standard and Game mode)
+    current port; on the row above the stick outside Game mode, and in the corner above FIRE in
+    Game mode)
   - Movement style toggle: Stick / D-Pad / Swipe — buttons —
     `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
     switching style never itself releases a held direction; compact: behind Joystick options)

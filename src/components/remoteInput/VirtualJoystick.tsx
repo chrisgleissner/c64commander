@@ -351,29 +351,30 @@ export const VirtualJoystick = ({
       ) : null}
 
       {/* Secondary settings stay away from the constant-use action zone below.
-          Game mode hides the movement-style selector, keeps the port swap on the
-          left rail, and lifts Autofire onto its own control just above FIRE.
-          HARD16-008: this chrome row gets the standard gutter; the action zone
-          below stays edge-to-edge. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4">
-        {portToggle}
-        {!immersive && showMovementStyle ? (
-          <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
-            {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
-              <Button
-                key={id}
-                size="sm"
-                variant={movementStyle === id ? "default" : "secondary"}
-                disabled={disabled}
-                data-testid={`remote-input-movement-style-${id}`}
-                onClick={() => handleMovementStyleChange(id)}
-              >
-                <Icon className="mr-1.5 h-4 w-4" /> {label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+          Game mode has no such row: it hides the movement-style selector and puts the port
+          swap in the corner above FIRE. HARD16-008: this chrome row gets the standard gutter;
+          the action zone below stays edge-to-edge. */}
+      {immersive ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4">
+          {portToggle}
+          {showMovementStyle ? (
+            <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
+              {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  size="sm"
+                  variant={movementStyle === id ? "default" : "secondary"}
+                  disabled={disabled}
+                  data-testid={`remote-input-movement-style-${id}`}
+                  onClick={() => handleMovementStyleChange(id)}
+                >
+                  <Icon className="mr-1.5 h-4 w-4" /> {label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Action zone: big directional control + big FIRE. In immersive mode the
           controls stay edge-anchored for no-look thumb reach with extra vertical
@@ -394,6 +395,9 @@ export const VirtualJoystick = ({
             : undefined
         }
       >
+        {/* Game Mode: the port switch takes the empty corner above FIRE rather than a row of its
+            own, which on a 320 x 427 screen was a row taken from the picture. */}
+        {immersive ? <div className="absolute right-2 top-1 z-10">{portToggle}</div> : null}
         <div
           className={cn(immersive && "absolute left-1")}
           style={immersive ? { bottom: IMMERSIVE_ACTION_BOTTOM_OFFSET_PX } : undefined}

@@ -648,7 +648,10 @@ export const ItemSelectionDialog = ({
       className="shrink-0"
     >
       {compactConfirmLabel(resolvedConfirmLabel)}
-      {activeSelectionCount > 0 ? ` ${activeSelectionCount}` : null}
+      {/* A count reads as part of "Add 2"; after "Play" it would read as which one to play. */}
+      {activeSelectionCount > 0 && compactConfirmLabel(resolvedConfirmLabel) === "Add"
+        ? ` ${activeSelectionCount}`
+        : null}
     </Button>
   ) : null;
 

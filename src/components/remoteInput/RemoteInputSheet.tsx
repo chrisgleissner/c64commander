@@ -35,6 +35,7 @@ import {
 } from "@/lib/remoteInput/capabilityTier";
 import {
   DEFAULT_REMOTE_INPUT_CONTROL_SIZE,
+  gameModeControlScale,
   loadRemoteInputControlSize,
   remoteInputControlScale,
   REMOTE_INPUT_CONTROL_SIZE_LABEL,
@@ -202,6 +203,12 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     return () => clearTimeout(timer);
   }, [gameMode, joystickVisibility, hidingWasAskedFor]);
   const showInputControls = !gameMode || !joystickHidden;
+  const gameModePictureScale = gameModeControlScale({
+    scale,
+    gameMode,
+    compact: isCompactDisplay,
+    pictureShown: showMirrorScreen,
+  });
 
   // Rehydrate the persisted preferences when the sheet opens.
   useEffect(() => {
@@ -510,9 +517,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         // X is gone — the floating restore handle brings it, and everything else, back.
         showClose={!chromeHidden}
         closeTestId="remote-input-close"
-        // Normal mode keeps only the navigation bar's inset, so the keys at rest end above it rather
-        // than under it. Game Mode keeps the 5rem clearance for its edge-anchored controls.
-        className={showFooterActions ? "pb-[var(--safe-area-inset-bottom)]" : "pb-[var(--app-sheet-bottom-clearance)]"}
+        // Only the navigation bar's inset, so the keys at rest end above it rather than under it.
+        // Game Mode kept a further 5rem for its edge-anchored controls, which the action zone
+        // already reserves room for; on a 320 x 427 screen those 80px were the picture's.
+        className="pb-[var(--safe-area-inset-bottom)]"
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
       >
@@ -705,7 +713,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 showAutofire={showAutofire}
                 disabled={!joystickAvailable}
                 disabledHint={joystickUnavailableHint}
-                scale={scale}
+                scale={gameModePictureScale}
                 immersive={gameMode}
                 showMovementStyle={!foldJoystickOptions || joystickOptionsOpen}
                 fillHeight={!showMirrorScreen}

@@ -42,6 +42,24 @@ const isControlSize = (value: unknown): value is RemoteInputControlSize =>
 
 export const remoteInputControlScale = (size: RemoteInputControlSize): number => CONTROL_SIZE_SCALE[size];
 
+/**
+ * The joystick's scale in Game Mode on the smallest screen, with the picture showing: at the usual
+ * L size the controls reserved every pixel of a 320 x 427 screen below the port switch and the
+ * picture got none, so a touch player never saw the game. M leaves the picture room. The chosen
+ * size applies unchanged everywhere else.
+ */
+export const gameModeControlScale = ({
+  scale,
+  gameMode,
+  compact,
+  pictureShown,
+}: {
+  scale: number;
+  gameMode: boolean;
+  compact: boolean;
+  pictureShown: boolean;
+}): number => (gameMode && compact && pictureShown ? Math.min(scale, CONTROL_SIZE_SCALE.M) : scale);
+
 export const loadRemoteInputControlSize = (): RemoteInputControlSize => {
   if (typeof localStorage === "undefined") return DEFAULT_REMOTE_INPUT_CONTROL_SIZE;
   const raw = localStorage.getItem(CONTROL_SIZE_KEY);

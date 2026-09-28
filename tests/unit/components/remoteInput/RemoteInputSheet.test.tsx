@@ -286,11 +286,26 @@ describe("RemoteInputSheet", () => {
     expect(body?.contains(toggle)).toBe(false);
   });
 
-  it("keeps the bottom clearance in game mode (no footer) so the edge-anchored controls clear the nav bar", () => {
+  /*
+   * Game Mode kept 5rem below its controls on top of the navigation bar's inset. The action zone
+   * already reserves the controls' height, so on a 320 x 427 screen those 80px came out of the
+   * picture, which was left with none.
+   */
+  it("clears only the navigation bar below the controls in game mode, as it does outside it", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const sheet = screen.getByTestId("remote-input-sheet");
+    expect(sheet.className).toContain("pb-[var(--safe-area-inset-bottom)]");
+
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    expect(sheet.className).toContain("pb-[var(--safe-area-inset-bottom)]");
+    expect(sheet.className).not.toContain("app-sheet-bottom-clearance");
+  });
+
+  it("puts the port switch in the action zone in game mode instead of a row above it", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
-    const sheet = screen.getByTestId("remote-input-sheet");
-    expect(sheet.className).toContain("app-sheet-bottom-clearance");
+    const zone = screen.getByTestId("remote-input-joystick-action-zone");
+    expect(zone.contains(screen.getByTestId("remote-input-port-toggle"))).toBe(true);
   });
 
   it("collapses ALL chrome on entering game mode, with no separate Hide-controls step", () => {
