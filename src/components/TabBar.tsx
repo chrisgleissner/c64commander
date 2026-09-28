@@ -159,6 +159,7 @@ export function TabBar() {
       <nav
         ref={navRef}
         className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
+        data-testid="tab-bar"
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"
       >

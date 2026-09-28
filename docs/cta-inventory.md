@@ -237,7 +237,7 @@ not-connected / empty / single-device).
       can be applied: Preload on Startup — button — `restore-reu-preload` — and Load into REU —
       button — `restore-reu-load`
     - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Backup, at the end of the list
-  - Reset — button (danger) — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
+  - Reset — button (danger) — `home-machine-reset` — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
   - Power — button (danger) — `home-power-actions` — R✅ I✅ — opens the **Power sheet** (`home-power-sheet`); disabled only when every row inside it is
   - **Power sheet** (`home-power-sheet`, opened by `home-power-actions`) — rows in increasing severity, each keeping the confirmation it had as a tile
     - Reboot — button — `home-power-action-reboot` — R✅ I✅ (confirm dialog)
@@ -674,10 +674,18 @@ Opened by three doors — the Home field, the Quick Menu's top entry
 
 ### 5.0.1 Tour overlay (`tour-overlay`)
 
+- Hide / show the text — button (toggles, `aria-pressed`) — `tour-toggle-text` — R✅ I✅ — 44 px.
+  Folds the caption to its title and buttons (`data-mode="look"` on `tour-caption`) so more of the
+  app shows, and unfolds it again (`data-mode="read"`). Nothing folds or unfolds it on a timer.
 - Skip / Back / Next — buttons — `tour-skip` / `tour-back` / `tour-next` — R✅ I✅ — all 44 px.
-  Keypad: Left/Right are Back/Next, OK is Next, Back skips.
-- `tour-progress` says `Step n of 8`; `tour-spotlight` is the union of the step's anchors,
-  and `data-tour-degraded="true"` marks a step that could not reach one.
+  Focus moves to Next when the tour opens and returns to where it was when the tour closes.
+  Keypad: Left/Right are Back/Next, Up/Down fold and unfold the text, OK presses the focused tour
+  button (Next unless focus was moved), Back skips. A held key acts once.
+- `tour-progress` shows `n/m` and reads "Step n of m" (`data-step`, `data-step-count`);
+  `tour-spotlight` is the union of the step's anchors, and `data-tour-degraded="true"` marks a step
+  that could not reach one.
+- The app underneath is `inert` and `aria-hidden` while the tour is open: the spotlight shows a
+  control, it does not make it operable.
 
 ### 5.0.2 Key Explorer (`key-explorer-popup`)
 

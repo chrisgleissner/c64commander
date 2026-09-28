@@ -57,11 +57,11 @@ test.describe("first-run tour", () => {
   test("opens on a first launch, walks every step, and never opens again", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("tour-progress")).toHaveText(`Step 1 of ${TOUR_STEPS.length}`);
+    await expect(page.getByTestId("tour-progress")).toHaveAttribute("data-step", "1");
 
     for (let index = 1; index < TOUR_STEPS.length; index += 1) {
       await page.getByTestId("tour-next").click();
-      await expect(page.getByTestId("tour-progress")).toHaveText(`Step ${index + 1} of ${TOUR_STEPS.length}`);
+      await expect(page.getByTestId("tour-progress")).toHaveAttribute("data-step", String(index + 1));
       // Every step either spotlights something or says so; neither is a blank screen.
       await expect(page.getByTestId("tour-caption")).toBeVisible();
     }
@@ -99,7 +99,7 @@ test.describe("first-run tour", () => {
     for (const [index, step] of TOUR_STEPS.entries()) {
       if (index > 0) {
         await page.getByTestId("tour-next").click();
-        await expect(page.getByTestId("tour-progress")).toHaveText(`Step ${index + 1} of ${TOUR_STEPS.length}`);
+        await expect(page.getByTestId("tour-progress")).toHaveAttribute("data-step", String(index + 1));
       }
       await expect(page.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", step.id);
       if (step.anchor === undefined) continue;
@@ -131,6 +131,25 @@ test.describe("first-run tour", () => {
         viewportHeight - inset,
       );
     }
+  });
+
+  /*
+   * In landscape Android puts its navigation bar down the right-hand side. On a Pixel 4 at the
+   * smallest supported geometry turned sideways, it covered the right third of Next.
+   */
+  test("keeps its buttons clear of a navigation bar down the side in landscape", async ({ page }) => {
+    const inset = 48;
+    await page.setViewportSize({ width: 427, height: 320 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
+    await page.evaluate((value: number) => {
+      document.documentElement.style.setProperty("--safe-area-inset-right", `${value}px`);
+    }, inset);
+    await page.waitForTimeout(200);
+
+    const box = await page.getByTestId("tour-next").boundingBox();
+    expect(box, "tour-next must be laid out").not.toBeNull();
+    expect(box!.x + box!.width, `tour-next must sit left of the ${inset}px bar`).toBeLessThanOrEqual(427 - inset);
   });
 
   test("spotlights the Home search field on the step that is about search", async ({ page }) => {
@@ -177,7 +196,76 @@ test.describe("first-run tour", () => {
     await page.waitForTimeout(600);
     await page.getByTestId("docs-tour-start").click();
     await expect(page.getByTestId("tour-overlay")).toBeVisible();
-    await expect(page.getByTestId("tour-progress")).toHaveText(`Step 1 of ${TOUR_STEPS.length}`);
+    await expect(page.getByTestId("tour-progress")).toHaveAttribute("data-step", "1");
+  });
+
+  /*
+   * The smallest supported screen, driven by keys alone, measuring what the caption leaves.
+   *
+   * Measured on a Pixel 4 at this geometry, the old caption left 36% of the screen showing and on
+   * three steps covered the very control it was describing. Every step must leave at least half of
+   * the screen, and every spotlight must be in view rather than underneath the caption.
+   */
+  test("leaves half the smallest screen and the whole subject in view on every step, by keys alone", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
+
+    for (const [index, step] of TOUR_STEPS.entries()) {
+      if (index > 0) await page.keyboard.press("ArrowRight");
+      await expect(page.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", step.id);
+      if (step.anchor) await expect(page.getByTestId("tour-spotlight")).toBeVisible({ timeout: 10_000 });
+      // The alignment re-checks the anchor twice within a second while the page settles.
+      await page.waitForTimeout(1_200);
+
+      const geometry = await page.evaluate(() => {
+        const box = (testId: string) => document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect();
+        const caption = box("tour-caption")!;
+        const hole = box("tour-spotlight");
+        const height = window.innerHeight;
+        const free = caption.top > 0 ? { top: 0, bottom: caption.top } : { top: caption.bottom, bottom: height };
+        const visible = hole ? Math.max(0, Math.min(hole.bottom, free.bottom) - Math.max(hole.top, free.top)) : null;
+        return {
+          unobscured: (free.bottom - free.top) / height,
+          visible,
+          wanted: hole ? Math.min(hole.height, free.bottom - free.top) : null,
+        };
+      });
+      expect(geometry.unobscured, `step "${step.id}" must leave half the screen`).toBeGreaterThanOrEqual(0.5);
+      if (geometry.visible !== null && geometry.wanted !== null) {
+        expect(geometry.visible, `step "${step.id}" must not cover its own subject`).toBeGreaterThanOrEqual(
+          geometry.wanted * 0.9,
+        );
+      }
+    }
+
+    // A held Right repeats. Playwright marks every `down` after the first as a repeat, which is what
+    // a held key sends: one step forward, then nothing, and never past the last step into Done.
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByTestId("tour-progress")).toHaveAttribute("data-step", String(TOUR_STEPS.length - 1));
+    for (let repeat = 0; repeat < 6; repeat += 1) await page.keyboard.down("ArrowRight");
+    await page.keyboard.up("ArrowRight");
+    await expect(page.getByTestId("tour-progress")).toHaveAttribute("data-step", String(TOUR_STEPS.length));
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId("tour-overlay")).toBeVisible();
+  });
+
+  test("folds its text on Down so more of the app shows, and brings it back on Up", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
+    const readHeight = (await page.getByTestId("tour-caption").boundingBox())!.height;
+
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByTestId("tour-caption")).toHaveAttribute("data-mode", "look");
+    await expect(page.getByTestId("tour-body")).toHaveCount(0);
+    const lookHeight = (await page.getByTestId("tour-caption").boundingBox())!.height;
+    expect(lookHeight).toBeLessThan(readHeight);
+
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByTestId("tour-body")).toBeVisible();
   });
 
   test("disables swipe navigation while it runs", async ({ page }) => {

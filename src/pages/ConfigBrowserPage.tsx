@@ -1051,7 +1051,7 @@ export default function ConfigBrowserPage() {
         {/* `gap-3` is a fixed 12px that opts this page out of `--display-profile-section-gap`.
             Kept where the page was tuned; dropped on compact so it uses the profile's own
             section gap, the same shape as HomePage's `gap-4` override. */}
-        <PageStack className={profile === "compact" ? undefined : "gap-3"}>
+        <PageStack className={profile === "compact" ? undefined : "gap-3"} testId="config-category-list">
           {!status.isConnected ? (
             <div className="bg-destructive/10 border border-destructive/20 rounded-panel p-4 text-center">
               <p className="text-sm text-destructive font-medium">Not connected</p>

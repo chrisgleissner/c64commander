@@ -35,6 +35,7 @@ This folder is the canonical location for durable repository documentation.
 - [testing/chaos-fuzz.md](testing/chaos-fuzz.md)
 - [testing/android-emulator-test-structure.md](testing/android-emulator-test-structure.md)
 - [testing/physical-device-matrix.md](testing/physical-device-matrix.md)
+- [testing/hil-first-impression-1.0.7-rc1-prompt.md](testing/hil-first-impression-1.0.7-rc1-prompt.md) - newcomer and compact-keypad HIL sweep, fixes, review, and release execution prompt
 
 ## Research and exploratory designs
 

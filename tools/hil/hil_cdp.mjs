@@ -7,7 +7,7 @@
  */
 
 /**
- * Talking to the app on the phone: adb on one side, the WebView's DevTools socket on the other.
+ * Talking to the app on the phone: droidctl on one side, the WebView's DevTools socket on the other.
  *
  * Shared by the HIL harnesses in this directory because the connection is the part that goes wrong
  * rather than the part that is interesting. Two failures cost a run each before this was written
@@ -20,10 +20,7 @@
  * carry the faults nothing on screen mentions and no user ever reports.
  */
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { createDroidDevice } from "./droidctl_device.mjs";
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,11 +30,13 @@ export const createHilCdp = ({ serial, packageName, port }) => {
   let nextId = 1;
   let consoleErrors = [];
 
-  const adb = async (...args) => {
-    const { stdout } = await execFileAsync("adb", ["-s", serial, ...args], { maxBuffer: 16 * 1024 * 1024 });
-    return stdout;
+  let devicePromise = null;
+  const device = () => {
+    devicePromise ??= createDroidDevice({ serial });
+    return devicePromise;
   };
-  const shell = (command) => adb("shell", command);
+  /** A device shell line, run through droidctl rather than a bare adb. */
+  const shell = async (command) => (await device()).shell(["sh", "-c", command]);
 
   const noteConsoleEvent = (message) => {
     if (
@@ -101,16 +100,7 @@ export const createHilCdp = ({ serial, packageName, port }) => {
     await send("Log.enable", {}, 20_000).catch(() => undefined);
   };
 
-  /** Point the local port at this package's WebView, resolving its pid the way droidctl does. */
-  const forwardWebView = async () => {
-    const sockets = await shell("cat /proc/net/unix");
-    const pid = (await shell(`pidof ${packageName}`)).trim().split(/\s+/)[0];
-    if (!pid) throw new Error(`${packageName} is not running`);
-    const name = `webview_devtools_remote_${pid}`;
-    if (!sockets.includes(name)) throw new Error(`no devtools socket for pid ${pid}; is this a debug build?`);
-    await adb("forward", "--remove-all").catch(() => undefined);
-    await adb("forward", `tcp:${port}`, `localabstract:${name}`);
-  };
+  const forwardWebView = async () => (await device()).forwardWebview(packageName, port);
 
   const attach = async () => {
     await forwardWebView();
@@ -163,5 +153,5 @@ export const createHilCdp = ({ serial, packageName, port }) => {
   /** Drop the socket, so a run that is finished does not leave the page attached. */
   const close = () => socket?.close();
 
-  return { adb, shell, attach, ensureAttached, evaluate, send, close, takeConsoleErrors, foreignFocusedWindow };
+  return { device, shell, attach, ensureAttached, evaluate, send, close, takeConsoleErrors, foreignFocusedWindow };
 };

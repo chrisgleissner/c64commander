@@ -100,8 +100,20 @@ export function PageContainer({ children, className, size = "default", as = "mai
   );
 }
 
-export function PageStack({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("page-stack", className)}>{children}</div>;
+export function PageStack({
+  children,
+  className,
+  testId,
+}: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+}) {
+  return (
+    <div className={cn("page-stack", className)} data-testid={testId}>
+      {children}
+    </div>
+  );
 }
 
 type ProfileActionGridProps = {

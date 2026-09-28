@@ -7,7 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const connectionRef = vi.hoisted(() => ({ current: { isConnected: false } }));
@@ -188,7 +188,7 @@ describe("TourDriver", () => {
     it("is the same length every time, whatever can be reached", async () => {
       renderDriver();
       await startTour();
-      expect(screen.getByTestId("tour-progress").textContent).toBe(`Step 1 of ${TOUR_STEPS.length}`);
+      expect(screen.getByTestId("tour-progress").textContent).toContain(`Step 1 of ${TOUR_STEPS.length}`);
     });
 
     it("walks forward and back through every step", async () => {
@@ -197,12 +197,14 @@ describe("TourDriver", () => {
       for (let index = 1; index < TOUR_STEPS.length; index += 1) {
         fireEvent.click(screen.getByTestId("tour-next"));
         await waitFor(() =>
-          expect(screen.getByTestId("tour-progress").textContent).toBe(`Step ${index + 1} of ${TOUR_STEPS.length}`),
+          expect(screen.getByTestId("tour-progress").textContent).toContain(
+            `Step ${index + 1} of ${TOUR_STEPS.length}`,
+          ),
         );
       }
       fireEvent.click(screen.getByTestId("tour-back"));
       await waitFor(() =>
-        expect(screen.getByTestId("tour-progress").textContent).toBe(
+        expect(screen.getByTestId("tour-progress").textContent).toContain(
           `Step ${TOUR_STEPS.length - 1} of ${TOUR_STEPS.length}`,
         ),
       );
@@ -221,7 +223,7 @@ describe("TourDriver", () => {
       fireEvent.click(screen.getByTestId("tour-next"));
       await waitFor(() => expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-degraded", "true"));
       expect(screen.queryByTestId("tour-spotlight")).toBeNull();
-      expect(screen.getByTestId("tour-caption").textContent).toContain("Everything is one search away");
+      expect(screen.getByTestId("tour-caption").textContent).toContain(TOUR_STEPS[1].title);
     });
 
     it("spotlights an anchor that arrives after the short settle but inside the resolver's ceiling", async () => {
@@ -417,122 +419,199 @@ describe("TourDriver", () => {
   });
 
   /*
-   * The caption steps back once it has been left alone on a screen it crowds, so the app it is
-   * describing can be seen. What must not happen is the title, the progress line or the buttons
-   * going with it — see lib/tour/captionReveal for the rule and the numbers behind it.
+   * The caption folds only when the user asks: a timer took the explanation away from someone still
+   * reading it, and a key press put it back, so every navigation key made the panel jump.
    */
-  describe("when the caption gives the page back", () => {
-    /*
-     * jsdom has no ResizeObserver, and the panel's height is only ever read through one, so with no
-     * stand-in the measured height stays zero and the caption is never in the way of anything.
-     */
-    const observers: Array<() => void> = [];
-    const installResizeObserver = () => {
-      observers.length = 0;
+  describe("folding the caption", () => {
+    it("keeps the explanation however long the step is left alone", async () => {
+      /*
+       * A caption covering 300 of 427 px, measured through a ResizeObserver stand-in: jsdom has none,
+       * and without one a caption never measures as crowding anything.
+       */
+      const originalObserver = globalThis.ResizeObserver;
+      const originalHeight = window.innerHeight;
       (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
-        private readonly callback: () => void;
-        constructor(callback: () => void) {
-          this.callback = callback;
-        }
+        constructor(private readonly callback: () => void) {}
         observe() {
-          observers.push(this.callback);
+          this.callback();
         }
         disconnect() {}
-        unobserve() {}
       };
-    };
-
-    const crowdTheCaption = () => {
-      const caption = screen.getByTestId("tour-caption");
-      caption.getBoundingClientRect = () =>
-        ({
-          height: 400,
-          width: 320,
-          top: 0,
-          left: 0,
-          right: 320,
-          bottom: 400,
-          x: 0,
-          y: 0,
-          toJSON: () => ({}),
-        }) as DOMRect;
-      observers.forEach((callback) => callback());
-      return caption;
-    };
-
-    it("keeps the body while the caption is not in the way", async () => {
-      installResizeObserver();
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 427 });
+      const originalRect = HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+        if (this.dataset.testid === "tour-caption") return { top: 127, height: 300, width: 320 } as DOMRect;
+        return originalRect.call(this);
+      };
+      onTestFinished(() => {
+        (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = originalObserver;
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+        HTMLElement.prototype.getBoundingClientRect = originalRect;
+      });
       renderDriver();
       await startTour();
-      const caption = screen.getByTestId("tour-caption");
-      expect(caption.getAttribute("data-body-hidden")).toBeNull();
-      expect(caption.textContent).toContain(TOUR_STEPS[0].body);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 7_000));
+      });
+      expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-mode", "read");
+      expect(screen.getByTestId("tour-body").textContent).toBe(TOUR_STEPS[0].body);
+    }, 15_000);
+
+    it("folds to its title and buttons on Down and unfolds on Up", async () => {
+      renderDriver();
+      await startTour();
+      fireEvent.keyDown(window, { key: "ArrowDown", code: "ArrowDown" });
+      await waitFor(() => expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-mode", "look"));
+      expect(screen.queryByTestId("tour-body")).toBeNull();
+      expect(screen.getByTestId("tour-caption").textContent).toContain(TOUR_STEPS[0].title);
+      expect(screen.getByTestId("tour-next")).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "ArrowUp", code: "ArrowUp" });
+      await waitFor(() => expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-mode", "read"));
+      expect(screen.getByTestId("tour-body")).toBeInTheDocument();
     });
 
-    it("drops the body, and nothing else, once a crowding caption has been left alone", async () => {
-      installResizeObserver();
-      vi.useFakeTimers();
-      try {
-        renderDriver();
-        await act(async () => {
-          requestTourStart();
-          await Promise.resolve();
-        });
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(50);
-        });
-        await act(async () => {
-          crowdTheCaption();
-          await vi.advanceTimersByTimeAsync(12_000);
-        });
-
-        const caption = screen.getByTestId("tour-caption");
-        expect(caption.getAttribute("data-body-hidden")).toBe("true");
-        expect(caption.textContent).not.toContain(TOUR_STEPS[0].body);
-        expect(screen.getByTestId("tour-progress")).toBeTruthy();
-        expect(screen.getByTestId("tour-next")).toBeTruthy();
-        expect(caption.textContent).toContain(TOUR_STEPS[0].title);
-      } finally {
-        vi.useRealTimers();
-      }
+    it("folds and unfolds from its own button, which says what it does", async () => {
+      renderDriver();
+      await startTour();
+      const toggle = screen.getByTestId("tour-toggle-text");
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(toggle.className).toContain("size-11");
+      fireEvent.click(toggle);
+      await waitFor(() => expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-mode", "look"));
+      expect(screen.getByTestId("tour-toggle-text")).toHaveAttribute("aria-pressed", "true");
     });
 
-    /*
-     * Anything the user does puts the body straight back. On a keypad handset moving the highlight
-     * is the whole of the interaction, which is why a key counts as well as a press.
-     */
-    it("puts the body back as soon as the user does anything", async () => {
-      installResizeObserver();
-      vi.useFakeTimers();
+    it("stays folded while the user walks on", async () => {
+      renderDriver();
+      await startTour();
+      fireEvent.click(screen.getByTestId("tour-toggle-text"));
+      fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight" });
+      await waitFor(() => expect(screen.getByTestId("tour-progress")).toHaveAttribute("data-step", "2"));
+      expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-mode", "look");
+    });
+  });
+
+  describe("key ownership", () => {
+    it("acts once for a held key, so holding Next cannot run through and complete the tour", async () => {
+      renderDriver();
+      await startTour();
+      fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight" });
+      for (let count = 0; count < TOUR_STEPS.length + 2; count += 1) {
+        fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight", repeat: true });
+      }
+      await waitFor(() => expect(screen.getByTestId("tour-progress")).toHaveAttribute("data-step", "2"));
+      expect(screen.getByTestId("tour-overlay")).toBeInTheDocument();
+      expect(loadTourState().completedAt).toBeNull();
+    });
+
+    it("swallows a repeated key without acting on it", async () => {
+      renderDriver();
+      await startTour();
+      const repeat = new KeyboardEvent("keydown", { key: "Escape", repeat: true, cancelable: true });
+      window.dispatchEvent(repeat);
+      expect(repeat.defaultPrevented).toBe(true);
+      expect(screen.getByTestId("tour-overlay")).toBeInTheDocument();
+    });
+
+    it("puts focus on Next when it opens", async () => {
+      renderDriver();
+      await startTour();
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("tour-next")));
+    });
+
+    it("presses the guide button that has focus on OK, not always Next", async () => {
+      renderDriver();
+      await startTour();
+      screen.getByTestId("tour-skip").focus();
+      fireEvent.keyDown(window, { key: "Enter", code: "Enter" });
+      await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+      expect(loadTourState().skippedAt).not.toBeNull();
+    });
+
+    it("gives focus back to where it was when the guide closes", async () => {
+      const before = document.createElement("button");
+      document.body.appendChild(before);
+      before.focus();
       try {
         renderDriver();
-        await act(async () => {
-          requestTourStart();
-          await Promise.resolve();
-        });
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(50);
-        });
-        await act(async () => {
-          crowdTheCaption();
-          await vi.advanceTimersByTimeAsync(12_000);
-        });
-        expect(screen.getByTestId("tour-caption").getAttribute("data-body-hidden")).toBe("true");
-
-        await act(async () => {
-          // The panel is measured again while the body is hidden; the collapsed height must not be
-          // the one that decides, or it would put the body back and take it away for ever.
-          crowdTheCaption();
-          window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
-          await vi.advanceTimersByTimeAsync(600);
-        });
-
-        const caption = screen.getByTestId("tour-caption");
-        expect(caption.getAttribute("data-body-hidden")).toBeNull();
-        expect(caption.textContent).toContain(TOUR_STEPS[0].body);
+        await startTour();
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("tour-next")));
+        fireEvent.click(screen.getByTestId("tour-skip"));
+        await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+        expect(document.activeElement).toBe(before);
       } finally {
-        vi.useRealTimers();
+        before.remove();
       }
+    });
+  });
+
+  it("makes the app inert while the guide is open, so a tap in the spotlight reaches nothing", async () => {
+    const root = document.createElement("div");
+    root.id = "root";
+    document.body.appendChild(root);
+    try {
+      renderDriver();
+      await startTour();
+      expect(root.hasAttribute("inert")).toBe(true);
+      fireEvent.click(screen.getByTestId("tour-skip"));
+      await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+      expect(root.hasAttribute("inert")).toBe(false);
+    } finally {
+      root.remove();
+    }
+  });
+
+  it("leaves an app root that was already inert inert when it closes", async () => {
+    const root = document.createElement("div");
+    root.id = "root";
+    root.setAttribute("inert", "");
+    document.body.appendChild(root);
+    try {
+      renderDriver();
+      await startTour();
+      fireEvent.click(screen.getByTestId("tour-skip"));
+      await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+      expect(root.hasAttribute("inert")).toBe(true);
+    } finally {
+      root.remove();
+    }
+  });
+
+  describe("what the caption says", () => {
+    it("says Radio needs a download on an installation with no HVSC collection", async () => {
+      renderDriver();
+      await startTour();
+      for (let index = 0; index < 2; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
+      await waitFor(() =>
+        expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "listening-without-a-c64"),
+      );
+      expect(screen.getByTestId("tour-body").textContent).toContain("download");
+    });
+
+    it("does not mention a download once the HVSC collection is installed", async () => {
+      localStorage.setItem("c64u_hvsc_state:v1", JSON.stringify({ installedVersion: 84 }));
+      renderDriver();
+      await startTour();
+      for (let index = 0; index < 2; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
+      await waitFor(() =>
+        expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "listening-without-a-c64"),
+      );
+      expect(screen.getByTestId("tour-body").textContent).not.toContain("download");
+    });
+
+    it("says a connected device lacks the feature when its anchor never appears", async () => {
+      connectionRef.current = { isConnected: true };
+      renderDriver();
+      await act(async () => {
+        requestTourStart({ fromStepId: "live-view", throughStepId: "live-view" });
+        await Promise.resolve();
+      });
+      await screen.findByTestId("tour-overlay");
+      const live = TOUR_STEPS.find((step) => step.id === "live-view")!;
+      await waitFor(() => expect(screen.getByTestId("tour-body").textContent).toBe(live.unavailableBody), {
+        timeout: 4_000,
+      });
     });
   });
 });

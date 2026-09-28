@@ -20,9 +20,9 @@
  *
  * Every stage here is silent. Nothing plays through the speaker, so this can run beside someone.
  *
- *   node tools/hil/release_sweep_hil.mjs --serial <adb serial>
- *   node tools/hil/release_sweep_hil.mjs --serial <adb serial> --only restart-soak
- *   node tools/hil/release_sweep_hil.mjs --serial <adb serial> --json artifacts/release-sweep.json
+ *   node tools/hil/release_sweep_hil.mjs --serial <serial> --hosts c64u,u2
+ *   node tools/hil/release_sweep_hil.mjs --serial <serial> --hosts c64u,u2 --only restart-soak
+ *   node tools/hil/release_sweep_hil.mjs --serial <serial> --hosts c64u,u2 --json artifacts/release-sweep.json
  *
  * Stages:
  *   preflight      the phone is attached and awake, the app is installed, Wi-Fi is up, and every
@@ -43,15 +43,11 @@
  * nothing must never read as a stage that passed.
  */
 
-import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { createHilCdp, sleep } from "./hil_cdp.mjs";
-
-const execFileAsync = promisify(execFile);
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -62,7 +58,7 @@ const arg = (name, fallback) => {
 const SERIAL = arg("serial", process.env.ANDROID_SERIAL ?? "");
 const PACKAGE = arg("package", "uk.gleissner.c64commander");
 const CDP_PORT = Number(arg("cdp-port", "9333"));
-const HOSTS = arg("hosts", "c64u,u64,u2")
+const HOSTS = arg("hosts", "")
   .split(",")
   .map((host) => host.trim())
   .filter(Boolean);
@@ -93,21 +89,21 @@ export const STAGE_NAMES = ["preflight", "error-census", "layout", "restart-soak
  * The CSS widths the app is drawn at, narrowest first.
  *
  * 320 is the narrowest screen the app supports and 393 is this phone's own width. They are applied
- * through CDP's device-metrics override rather than `adb shell wm size`, which stays in force until
+ * through CDP's device-metrics override rather than `wm size`, which stays in force until
  * something resets it and then makes every touch land where the control is not — a leftover
  * override has cost two merge-gate runs.
  */
 const LAYOUT_WIDTHS = [320, 360, 393];
 
 /** Routes a user reaches from the tab bar. Every one is visited by `error-census`. */
-const MAIN_ROUTES = ["/", "/play", "/disks", "/config", "/settings"];
+export const MAIN_ROUTES = ["/", "/play", "/disks", "/config", "/settings", "/docs"];
 
 /*
  * `attach` forces the forward and the socket to be rebuilt; `ensureAttached` only connects when
  * there is nothing live. A relaunch needs the forced one: the replaced WebView leaves a socket that
  * still reads as open and answers nothing.
  */
-const { adb, shell, attach, evaluate, send, close, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
+const { device, shell, attach, evaluate, send, close, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
   serial: SERIAL,
   packageName: PACKAGE,
   port: CDP_PORT,
@@ -184,8 +180,11 @@ const stage = async (name, body) => {
 
 const preflight = async () => {
   if (!SERIAL) throw new Error("--serial <serial> (or ANDROID_SERIAL) is required; refusing to pick a device");
-  const devices = await execFileAsync("adb", ["devices"]);
-  if (!devices.stdout.includes(`${SERIAL}\tdevice`)) throw new Error(`${SERIAL} is not attached and in state device`);
+  if (HOSTS.length === 0) {
+    throw new Error("--hosts <host,host> is required: name the Ultimates this run may drive, and no others");
+  }
+  // droidctl refuses a serial that is not attached and in state device.
+  await device();
 
   /*
    * A locked phone suspends the page's timers, so every later stage would misread the lock as the
@@ -203,7 +202,9 @@ const preflight = async () => {
 
   const size = (await shell("wm size")).trim();
   if (size.includes("Override")) {
-    throw new Error(`a leftover 'wm size' override is in force (${size}); run 'adb shell wm size reset' first`);
+    throw new Error(
+      `a leftover 'wm size' override is in force (${size}); reset it (droid_device.run_shell ["wm", "size", "reset"]) first`,
+    );
   }
 
   if ((await shell("settings get global airplane_mode_on")).trim() === "1") {

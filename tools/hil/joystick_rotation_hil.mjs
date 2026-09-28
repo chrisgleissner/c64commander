@@ -28,7 +28,7 @@
  *
  * WHAT IS DRIVEN, AND WHAT IS NOT
  *
- * Keys are injected with `adb shell input keyevent`, which enters the app the same way
+ * Keys are injected with droidctl `droid_input.press_key`, which enters the app the same way
  * a handset's own keypad does — through Android's key pipeline into the WebView. It is
  * a real key press, not a synthetic DOM event.
  *
@@ -46,8 +46,8 @@
  *                                            [--rotations 0,90,270]
  *                                            [--layouts diamond8,classicT9]
  *
- * Requires: the app running and foregrounded on the attached device, `adb forward
- * tcp:<cdp-port>` already pointed at its WebView (see the `hil-attach` skill), and the
+ * Requires: the app running and foregrounded on the attached device, the WebView DevTools forward
+ * (droid_device.forward_webview to <cdp-port>) already pointed at its WebView (see the `hil-attach` skill), and the
  * Ultimate reachable at `--host`.
  *
  * Exits non-zero on the first orientation whose mapping does not hold, and prints the
@@ -59,6 +59,8 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+
+import { createDroidDevice } from "./droidctl_device.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -184,7 +186,7 @@ const LAYOUT_LABEL = { classicT9: "Classic T9", diamond8: "Diamond (8-centred)",
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const adb = (args) => execFileAsync("adb", args, { maxBuffer: 1 << 22 });
+const device = await createDroidDevice();
 
 /** Evaluate an expression in the app's WebView, through the same helper the skills use. */
 const js = async (expression) => {
@@ -247,7 +249,7 @@ const pressKey = async (keycode) => {
   // It is still far shorter than the probe's repeat delay, so a press here is normally one
   // cell — but the assertions below count the events the machine reported rather than
   // assuming that, because a slow phone could stretch one press past the delay.
-  await adb(["shell", "input", "keyevent", "--longpress", String(keycode)]);
+  await device.pressKey(keycode, { longPress: true });
   await sleep(900);
 };
 
@@ -256,15 +258,15 @@ const pressKey = async (keycode) => {
  *
  * Chromium stops firing timers in a hidden page and Capacitor stops delivering plugin results
  * there, so a phone that has locked itself turns every wait in this harness into a CDP timeout
- * that looks exactly like an app hang. `adb shell svc power stayon usb` keeps the screen lit but
- * does NOT dismiss the keyguard; `adb shell wm dismiss-keyguard` is the one that matters.
+ * that looks exactly like an app hang. `svc power stayon usb` keeps the screen lit but
+ * does NOT dismiss the keyguard; `wm dismiss-keyguard` (droid_device.run_shell) is the one that matters.
  */
 const assertPageVisible = async () => {
   const visibility = await js(`(()=>JSON.stringify({hidden:document.hidden,state:document.visibilityState}))()`);
   if (visibility.hidden) {
     throw new Error(
       `the WebView is ${visibility.state}: Chromium suspends timers and Capacitor callbacks there. ` +
-        `Run "adb shell wm dismiss-keyguard" and try again.`,
+        `Dismiss the keyguard (droid_device.run_shell ["wm", "dismiss-keyguard"]) and try again.`,
     );
   }
 };
