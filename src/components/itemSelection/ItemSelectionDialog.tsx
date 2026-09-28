@@ -259,6 +259,11 @@ export const ItemSelectionDialog = ({
    * a plain `listEntries` source with no search of its own keeps a local filter here.
    */
   const usesNavigatorQuery = Boolean(browser.isQueryBacked || browser.canSearchSource);
+
+  // The local filter follows the navigator's rule: a new folder starts unfiltered.
+  useEffect(() => {
+    setFilterText("");
+  }, [browser.path]);
   const searchText = usesNavigatorQuery ? (browser.query ?? "") : filterText;
 
   const visibleEntries = useMemo(() => {
@@ -270,10 +275,10 @@ export const ItemSelectionDialog = ({
     // not in their name — a composer, for one.
     if (browser.isQueryBacked || browser.isSearching) return filesFiltered;
     if (!searchText) return filesFiltered;
+    // The name only: every entry's path contains the folder it is in, so matching the path made a
+    // filter for "Games" match everything inside /USB2/Games.
     const lower = searchText.toLowerCase();
-    return filesFiltered.filter(
-      (entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower),
-    );
+    return filesFiltered.filter((entry) => entry.name.toLowerCase().includes(lower));
   }, [browser.entries, browser.isQueryBacked, browser.isSearching, filterEntry, searchText]);
 
   const toggleSelection = (entry: SourceEntry) => {
@@ -643,6 +648,7 @@ export const ItemSelectionDialog = ({
       className="shrink-0"
     >
       {compactConfirmLabel(resolvedConfirmLabel)}
+      {activeSelectionCount > 0 ? ` ${activeSelectionCount}` : null}
     </Button>
   ) : null;
 
@@ -650,8 +656,9 @@ export const ItemSelectionDialog = ({
    * On the compact profile the sheet's own header carries the source and the count, and the
    * separate heading row above the filter is dropped. Both said much the same thing, and on a
    * 320x427 panel the header, that row, the filter, the scope buttons and the footer together
-   * left about one row of the list the sheet exists to show. The count sits under the title rather
-   * than beside the confirm button: beside it, the title was cut to its first letter.
+   * left about one row of the list the sheet exists to show. The count is part of the confirm
+   * button's face ("Add 3") rather than a separate label beside it, which cut the title to its
+   * first letter, or a line under the title, which cost the list a row.
    *
    * The visible title becomes the source rather than "Add items": by this point the user has
    * already chosen to add items and chosen where from, so the source is the useful half.
@@ -705,11 +712,9 @@ export const ItemSelectionDialog = ({
                   ) : null}
                 </AppSheetTitle>
               }
-              descriptionContent={
-                <AppSheetDescription className="not-sr-only" asChild>
-                  {selectionCount}
-                </AppSheetDescription>
-              }
+              // The count rides on the confirm button ("Add 3") and stays the sheet's description for
+              // a screen reader. As a visible line under the title it cost the list a row.
+              descriptionContent={<AppSheetDescription asChild>{selectionCount}</AppSheetDescription>}
             />
           ) : (
             <AppSheetHeader>

@@ -68,21 +68,22 @@ const sourceGroups: SourceGroup[] = [
   },
 ];
 
-const renderSheet = () =>
-  render(
-    <DisplayProfileProvider>
-      <ItemSelectionDialog
-        open
-        onOpenChange={vi.fn()}
-        title="Add items"
-        confirmLabel="Add"
-        initialSourceId="hvsc-library"
-        sourceGroups={sourceGroups}
-        onAddLocalSource={async () => null}
-        onConfirm={async () => true}
-      />
-    </DisplayProfileProvider>,
-  );
+const renderedTree = () => (
+  <DisplayProfileProvider>
+    <ItemSelectionDialog
+      open
+      onOpenChange={vi.fn()}
+      title="Add items"
+      confirmLabel="Add"
+      initialSourceId="hvsc-library"
+      sourceGroups={sourceGroups}
+      onAddLocalSource={async () => null}
+      onConfirm={async () => true}
+    />
+  </DisplayProfileProvider>
+);
+
+const renderSheet = () => render(renderedTree());
 
 describe("ItemSelectionDialog search scope", () => {
   beforeEach(() => {
@@ -90,6 +91,8 @@ describe("ItemSelectionDialog search scope", () => {
     localStorage.clear();
     navigatorState.query = "";
     navigatorState.searchScope = "folder";
+    navigatorState.path = "/music";
+    navigatorState.isQueryBacked = true;
     navigatorState.isSearching = false;
     navigatorState.searchIsInstant = true;
     navigatorState.canSearchSource = true;
@@ -212,11 +215,66 @@ describe("ItemSelectionDialog search scope", () => {
       expect(screen.getByTestId("add-items-deep-scan")).toBeTruthy();
     });
 
+    // A visible "0 selected" line under the title cost the list a row on a 320 x 427 screen.
+    it("counts the selection on the confirm button instead of a line under the title", () => {
+      navigatorState.query = "";
+      navigatorState.entries = [
+        { type: "file", name: "a.prg", path: "/music/a.prg" },
+        { type: "file", name: "b.prg", path: "/music/b.prg" },
+      ] as SourceNavigatorState["entries"];
+      renderSheet();
+
+      const count = screen.getByTestId("add-items-selection-count");
+      expect(count.className).toContain("sr-only");
+      expect(screen.getByTestId("add-items-confirm")).toHaveTextContent(/^Add$/);
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select a.prg" }));
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select b.prg" }));
+
+      expect(screen.getByTestId("add-items-confirm")).toHaveTextContent(/^Add 2$/);
+      expect(count).toHaveTextContent("2 selected");
+    });
+
     it("shows no scope control before anything is typed", () => {
       navigatorState.query = "";
       renderSheet();
 
       expect(screen.queryByTestId("add-items-scope-toggle")).toBeNull();
+    });
+  });
+
+  describe("a folder filter on a source that can only be browsed", () => {
+    beforeEach(() => {
+      navigatorState.canSearchSource = false;
+      navigatorState.isQueryBacked = false;
+      navigatorState.path = "/USB2/Games";
+      navigatorState.entries = [
+        { type: "dir", name: "_AD", path: "/USB2/Games/_AD" },
+        { type: "dir", name: "6000Games", path: "/USB2/Games/6000Games" },
+      ] as SourceNavigatorState["entries"];
+    });
+
+    // Every entry's path contains the folder it is in, so matching paths made "Games" match all of
+    // /USB2/Games.
+    it("matches entry names, not the folder they are in", () => {
+      renderSheet();
+      fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "Games" } });
+
+      const rows = screen.getAllByTestId("source-entry-row").map((row) => row.textContent);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toContain("6000Games");
+    });
+
+    it("starts each new folder unfiltered", () => {
+      const view = renderSheet();
+      fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "Games" } });
+      expect(screen.getAllByTestId("source-entry-row")).toHaveLength(1);
+
+      navigatorState.path = "/USB2/Games/_AD";
+      view.rerender(renderedTree());
+
+      expect(screen.getByTestId("add-items-filter")).toHaveValue("");
+      expect(screen.getAllByTestId("source-entry-row")).toHaveLength(2);
     });
   });
 });

@@ -308,14 +308,22 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
       searchAbortRef.current?.abort();
       const leavingSearch = searchScopeRef.current === "source";
       if (leavingSearch) {
-        queryRef.current = "";
-        setQueryState("");
         searchScopeRef.current = "folder";
         setSearchScopeState("folder");
       }
+      /*
+       * A folder filter is typed to find something in the folder on screen; opening what it found
+       * is the end of that. Carried into the next folder it filtered the new listing by the old
+       * term: "Games" found the Games folder, and inside it hid every entry but "6000Games".
+       * Refreshing the same folder keeps it.
+       */
+      if (leavingSearch || nextPath !== path) {
+        queryRef.current = "";
+        setQueryState("");
+      }
       void loadEntries(nextPath, { query: queryRef.current });
     },
-    [loadEntries, source],
+    [loadEntries, path, source],
   );
 
   const navigateTo = useCallback((nextPath: string) => goToFolder(nextPath), [goToFolder]);
