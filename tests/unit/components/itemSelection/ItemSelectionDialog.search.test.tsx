@@ -212,7 +212,8 @@ describe("ItemSelectionDialog search scope", () => {
       renderSheet();
 
       expect(screen.getByTestId("add-items-scope-toggle")).toHaveTextContent("Everywhere");
-      expect(screen.getByTestId("add-items-deep-scan")).toBeTruthy();
+      fireEvent.click(screen.getByTestId("add-items-deep-scan"));
+      expect(navigatorState.runSourceSearch).toHaveBeenCalledTimes(1);
     });
 
     // A visible "0 selected" line under the title cost the list a row on a 320 x 427 screen.

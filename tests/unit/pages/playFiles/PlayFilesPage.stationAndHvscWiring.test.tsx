@@ -19,6 +19,7 @@ const page = vi.hoisted(() => ({
   sidRadioParams: null as null | { startPlaylist: (items: unknown[]) => unknown },
   launcher: null as null | { hvscMissing?: boolean; onInstallHvsc?: () => void },
   clearPlaylist: null as null | (() => void),
+  preparation: null as null | { open: boolean; browseLabel?: string; onOpenChange: (open: boolean) => void },
   stationStop: vi.fn(),
 }));
 
@@ -72,6 +73,13 @@ vi.mock("@/pages/playFiles/hooks/useSidRadio", async (importOriginal) => {
     },
   };
 });
+
+vi.mock("@/pages/playFiles/components/HvscPreparationSheet", () => ({
+  HvscPreparationSheet: (props: { open: boolean; browseLabel?: string; onOpenChange: (open: boolean) => void }) => {
+    page.preparation = props;
+    return null;
+  },
+}));
 
 vi.mock("@/pages/playFiles/components/PlaylistPanel", () => ({
   PlaylistPanel: (props: { onClearPlaylist?: () => void }) => {
@@ -163,5 +171,20 @@ describe("PlayFilesPage wiring", () => {
     act(() => page.clearPlaylist?.());
 
     expect(page.stationStop).toHaveBeenCalledTimes(1);
+  });
+
+  // An install started from SID Radio ended on "Browse HVSC" and an empty playlist; the radio is
+  // what the user had asked for.
+  it("offers SID Radio when the install it started finishes, and only for that install", async () => {
+    renderPage();
+    await waitFor(() => expect(page.launcher).not.toBeNull());
+
+    act(() => page.launcher!.onInstallHvsc!());
+    await waitFor(() => expect(page.preparation?.open).toBe(true));
+    expect(page.preparation!.browseLabel).toBe("Open SID Radio");
+
+    act(() => page.preparation!.onOpenChange(false));
+    await waitFor(() => expect(page.preparation?.open).toBe(false));
+    expect(page.preparation!.browseLabel).toBeUndefined();
   });
 });

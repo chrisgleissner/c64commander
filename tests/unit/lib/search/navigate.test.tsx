@@ -182,6 +182,27 @@ describe("navigateToSearchTarget", () => {
     expect(document.activeElement).toBe(control);
   });
 
+  // The tour jumps to its anchor and then positions it itself; a smooth scroll still running when it
+  // measured left the anchor under the caption.
+  it.each([
+    ["the caller's scroll behavior", "instant" as ScrollBehavior, "instant"],
+    ["a smooth scroll by default", undefined, "smooth"],
+  ])("scrolls a landed config item with %s", async (_label, scrollBehavior, expected) => {
+    const opts = options();
+    const item = document.createElement("div");
+    item.setAttribute("data-config-item", "CPU Speed");
+    item.setAttribute("data-config-category", "U64 Specific Settings");
+    document.body.appendChild(item);
+
+    await expect(
+      navigateToSearchTarget(
+        { kind: "configItem", category: "U64 Specific Settings", itemName: "CPU Speed" },
+        { ...opts, currentPath: "/config", scrollBehavior },
+      ),
+    ).resolves.toBe("landed");
+    expect(item.scrollIntoView).toHaveBeenCalledWith({ block: "center", inline: "nearest", behavior: expected });
+  });
+
   it("leaves a control that arrives after the caller moved on unfocused, and says so", async () => {
     const opts = options();
     const stop = new AbortController();

@@ -614,4 +614,53 @@ describe("TourDriver", () => {
       });
     });
   });
+
+  /*
+   * On a Pixel 4 at 320 x 427 CSS px the caption covered the Radio tile it was describing: the
+   * resolver had scrolled the tile to the middle of the page, under a caption that covered the
+   * bottom two thirds. The tour now scrolls the anchor's own container until it sits clear.
+   */
+  it("scrolls an anchor the caption would cover into the part of the screen it leaves free", async () => {
+    const originalObserver = globalThis.ResizeObserver;
+    const originalHeight = window.innerHeight;
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+      constructor(private readonly callback: () => void) {}
+      observe() {
+        this.callback();
+      }
+      disconnect() {}
+    };
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 427 });
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.dataset.testid === "tour-caption") return { top: 277, height: 150, width: 320 } as DOMRect;
+      return originalRect.call(this);
+    };
+    const container = document.createElement("div");
+    container.style.overflowY = "auto";
+    Object.defineProperty(container, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(container, "clientHeight", { configurable: true, value: 300 });
+    // Like Home's page shell: the page scrolls between the app bar and the tab bar.
+    container.getBoundingClientRect = () => ({ top: 87, bottom: 337, height: 250, width: 320 }) as DOMRect;
+    const scrollBy = vi.fn();
+    container.scrollBy = scrollBy as unknown as typeof container.scrollBy;
+    document.body.appendChild(container);
+    const anchor = mountAnchor("home-search-field", { top: 200, left: 10, width: 300, height: 200 });
+    container.appendChild(anchor);
+    onTestFinished(() => {
+      (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = originalObserver;
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      container.remove();
+    });
+
+    renderDriver();
+    await startTour();
+    fireEvent.click(screen.getByTestId("tour-next"));
+    await waitFor(() => expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "search"));
+
+    // The caption goes on top (150 px), leaving 150..337 of the page. The anchor, 194..406 with its
+    // padding, is taller than that band, so it is scrolled until its top shows: 194 - (150 + 8).
+    await waitFor(() => expect(scrollBy).toHaveBeenCalledWith({ top: 36, behavior: "instant" }));
+  });
 });
