@@ -14,7 +14,7 @@ Raw screenshots, geometry dumps and logs are kept out of the repository under
 | Phone | Pixel 4, serial `9B081FFAZ001WX`, Android 16 (API 36), WebView 150.0.7871.63 |
 | Callback 8020 stand-in | `wm size 480x640`, `wm density 240`: 320 x 427 CSS px at DPR 1.5, `compact` profile |
 | System bars at that geometry | status bar 30 CSS px, navigation bar 48 CSS px (C64 Commander); navigation bar hidden in C64U Remote |
-| Ultimates | `c64u` (C64 Ultimate, fw 1.2RC, core 1.4F), `u2` (Ultimate-II+L, fw 3.15, in the c64u's cartridge port), `u64` (Ultimate 64 Elite, fw 3.15) |
+| Ultimates | `c64u` (C64 Ultimate, fw 1.2RC, core 1.4F), `u2` (Ultimate-II+L, fw 3.15, in the c64u's cartridge port), `u64` (Ultimate 64 Elite; during this sweep it ran another session's JTAG-deployed test build of 1541ultimate PR #705, git `893877ce`, which reports itself as 3.15) |
 | Editions | C64 Commander `uk.gleissner.c64commander`, C64U Remote `uk.gleissner.c64uremote`, both debug builds of this branch |
 | Media volume | 3 of 25 throughout |
 | Automation | droidctl for every phone operation; CDP (`scripts/bughunt-cdp.mjs`) for measurement only |
@@ -169,7 +169,43 @@ otherwise. Timings are wall-clock on the Pixel.
 | Play remotely | Remote / c64u | PASS | `0` from Home: full-screen picture, joystick hidden |
 | Device switch c64u → u2 → c64u | Commander | PASS after FI-24 | U2: Live tile disabled "No streaming", Game opens Remote Input with the machine:input explanation, no `/v1/streams` or `machine:input` requests, badge healthy |
 | Enjoy music, clear while a station runs | Commander / c64u | PASS after FI-25 | |
-| u64 rows | — | Blocked | The u64 was taken for Software IEC work by another session during this sweep |
+| Tour, first song, change a setting, Game Mode | Commander / u64 | PASS | Build seeded with `u64` only, so the app never contacted c64u or u2 after the user put them off limits. HVSC ready in 67 s; LedStrip Mode Fixed Color → SID Music read back and restored; Game Mode picture live at PAL 50 fps |
+| First minute, discovery with no saved device | Commander | Not run | Discovery would probe every Ultimate on the LAN, and c64u and u2 were off limits by then |
+
+## Hardware merge gate and release sweep
+
+Run on this branch through `tools/hil/merge_gate.mjs` and `tools/hil/release_sweep_hil.mjs`, both
+now driving the phone through droidctl.
+
+| Stage | c64u (volume 3) | u64 (volume 5) |
+| --- | --- | --- |
+| preflight | pass | pass |
+| input | pass: held direction moved 9 cells; 20 rotation checks | pass: 9 cells; 20 rotation checks |
+| search-latency | pass: p95 39.8 ms | pass: p95 74.0 ms |
+| wire | pass: loss 0%, p99 4.13 ms | pass: loss 0%, p99 4.10 ms |
+| av-clarity | pass: 82 tones, 1 defective | pass: 82 tones, 0 defective |
+| av-latency | pass: 296 ms | pass: 262 ms |
+| sid-remote | pass: 100%, no gap | 2 of 3 runs pass; one run had a 300 ms dropout |
+| sid-local | pass: 100%, no gap | pass: 100%, no gap |
+| crossfade | pass: seamless | pass: seamless |
+
+The u64 was first run at volume 3, the gate's default, and its microphone stages could not
+separate the tones from the room (peaks at -61.7 dBFS against the -60 dBFS the graders need) while
+the room's 0–120 Hz band was loud. At 5 of 25, the grader level AGENTS.md names and below the
+ceiling of 10, they measured. The sid-remote dropout did not recur in two further runs of that
+stage.
+
+| Sweep stage | c64u | u2 | u64 |
+| --- | --- | --- | --- |
+| error-census (6 routes including Docs, 6 overlays) | pass | pass | pass |
+| layout (320, 360, 393 px × 6 routes) | pass | pass | pass |
+| restart-soak (6 cycles) | pass | pass | pass |
+| network-drop (3 cycles) | pass, slowest 5059 ms | pass, slowest 5056 ms | pass, slowest 5093 ms |
+| screen-off (≥ 125 s, local playback) | 134 s of music in 142 s | 135 s in 142 s | 140 s in 142 s |
+
+Two harness defects found on the way are fixed on this branch: the sweep read "Total: 2:00:08" as
+two minutes, and its error census pressed Back after closing an overlay, which sent the app to the
+background from Home.
 
 ## Revert checks
 
