@@ -529,13 +529,14 @@ test.describe("The Demo Mode offer on a small screen", () => {
       await startStrictUiMonitoring(page, testInfo);
       allowWarnings(testInfo, "Reads in flight when Demo Mode re-routes the API are aborted by design.");
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      // The Pixel 4's gesture bar, which the dialog keeps clear of, and the widest fallback font a runner
+      // The Pixel 4's status and navigation bars as measured on the device, which the dialog keeps
+      // clear of, and the widest fallback font a runner
       // has: Inter is not bundled, and under DejaVu Sans both the message and the primary label wrap further.
       await page.addInitScript(() => {
         document.addEventListener("DOMContentLoaded", () => {
           const style = document.createElement("style");
           style.textContent =
-            ":root { --safe-area-inset-bottom: 24px !important; } * { font-family: 'DejaVu Sans', sans-serif !important; }";
+            ":root { --safe-area-inset-top: 30px !important; --safe-area-inset-bottom: 48px !important; } * { font-family: 'DejaVu Sans', sans-serif !important; }";
           document.head.append(style);
         });
       });
@@ -581,6 +582,17 @@ test.describe("The Demo Mode offer on a small screen", () => {
           .map((button) => button.textContent?.trim()),
       );
       expect(unreachable, `${viewport.name}: actions the offer shows only in part`).toEqual([]);
+
+      // The buttons stay put while prose that does not fit scrolls under them, so a message longer
+      // than the space above them loses its last line with nothing to say so.
+      // The button sits in a column inside the footer; the footer's top edge is where prose disappears.
+      const buttonsTop = await page
+        .getByTestId("demo-interstitial-continue")
+        .evaluate((button) => button.parentElement!.parentElement!.getBoundingClientRect().top);
+      const messageBottom = await page
+        .getByTestId("demo-interstitial-message")
+        .evaluate((message) => message.getBoundingClientRect().bottom);
+      expect(messageBottom, `${viewport.name}: the message runs under the buttons`).toBeLessThanOrEqual(buttonsTop);
 
       await snap(page, testInfo, `offer-${viewport.name}`);
     });

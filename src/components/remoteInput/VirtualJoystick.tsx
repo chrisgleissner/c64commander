@@ -43,6 +43,8 @@ export type VirtualJoystickProps = {
   scale?: number;
   /** Immersive/gaming layout: edge-anchored, maximized, no-look thumb reach. */
   immersive?: boolean;
+  /** Whether the Stick / D-Pad / Swipe choice is shown. Game mode never shows it. */
+  showMovementStyle?: boolean;
   /**
    * Whether the controls own the whole sheet body. False when they share it with the
    * live picture, which then takes the height they do not reserve — without this both
@@ -96,6 +98,7 @@ export const VirtualJoystick = ({
   disabledHint,
   scale = 1,
   immersive = false,
+  showMovementStyle = true,
   fillHeight,
   releaseAllEpoch,
   onPointerInput,
@@ -354,7 +357,7 @@ export const VirtualJoystick = ({
           below stays edge-to-edge. */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-4">
         {portToggle}
-        {!immersive ? (
+        {!immersive && showMovementStyle ? (
           <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
             {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
               <Button

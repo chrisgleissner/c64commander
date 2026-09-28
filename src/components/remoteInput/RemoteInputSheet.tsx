@@ -109,6 +109,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const { profile } = useDisplayProfile();
   const isCompactDisplay = profile === "compact";
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
+  const [joystickOptionsOpen, setJoystickOptionsOpen] = useState(false);
   const [showAutofire, setShowAutofire] = useState(loadShowAutofireButton);
   const [joystickBinding, setJoystickBinding] = useState(() =>
     bindingForLayout(loadJoystickLayout(), loadCustomBinding()),
@@ -153,6 +154,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // — no joystick relay, or Keys mode — leaves the ordinary sheet with its way out intact
   // rather than a stripped header with no control on it.
   const gameMode = joystickAvailable && session.outputMode === "joystick" && immersive;
+  const foldJoystickOptions = isCompactDisplay && !gameMode;
   // Longer than the mirror's own floating cluster: this is a whole toolbar the user asked
   // for, with Watch, Listen, the orientation control and the way out on it, and it is
   // re-armed by every interaction — so it stays while it is being used.
@@ -322,6 +324,37 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       >
         <Plus className="h-4 w-4" />
       </Button>
+    </div>
+  );
+
+  /*
+   * On the smallest screen the size stepper and the Stick / D-Pad / Swipe choice fold behind one
+   * button. With both showing, five rows of settings filled a 320 x 427 panel and the joystick they
+   * configure started below the fold. Port stays out: a game on the other port does not answer.
+   */
+  const joystickOptionsToggle = (
+    <Button
+      size="sm"
+      variant={joystickOptionsOpen ? "default" : "secondary"}
+      aria-expanded={joystickOptionsOpen}
+      data-testid="remote-input-joystick-options"
+      onClick={() => setJoystickOptionsOpen((open) => !open)}
+    >
+      <Settings2 className="mr-1.5 h-4 w-4" />
+      Options
+    </Button>
+  );
+
+  // Listen and Watch. Pinned above the controls, except on the smallest screen outside Game Mode,
+  // where pinned rows left the joystick 80px of a 349px sheet; there they scroll with the joystick.
+  const mirrorControlsRow = (
+    <div className="flex flex-wrap items-center justify-between gap-2" data-testid="remote-input-mirror-controls">
+      <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
+      {mirrorAdjust ? (
+        <span className="text-xs font-medium text-warning" data-testid="remote-input-mirror-adjust-hint">
+          Physical keys adjust the view
+        </span>
+      ) : null}
     </div>
   );
 
@@ -599,10 +632,13 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               // and the Game mode button together are wider than the row, and without
               // wrapping the stepper was squeezed until "Size" was set one or two
               // letters to a line.
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {sizeStepper}
-                {enterGameModeToggle}
-              </div>
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {foldJoystickOptions ? joystickOptionsToggle : sizeStepper}
+                  {enterGameModeToggle}
+                </div>
+                {foldJoystickOptions && joystickOptionsOpen ? sizeStepper : null}
+              </>
             ) : null}
             {/* Game Mode's chrome carries the orientation control: it is what makes the
                 picture and the keys followable when the sensor cannot answer, and the
@@ -614,19 +650,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 {joystickVisibilityToggle}
               </div>
             ) : null}
-            {mirrorEnabled ? (
-              <div
-                className="flex flex-wrap items-center justify-between gap-2"
-                data-testid="remote-input-mirror-controls"
-              >
-                <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
-                {mirrorAdjust ? (
-                  <span className="text-xs font-medium text-warning" data-testid="remote-input-mirror-adjust-hint">
-                    Physical keys adjust the view
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
+            {mirrorEnabled && !foldJoystickOptions ? mirrorControlsRow : null}
           </div>
         )}
         <AppSheetBody
@@ -683,6 +707,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 disabledHint={joystickUnavailableHint}
                 scale={scale}
                 immersive={gameMode}
+                showMovementStyle={!foldJoystickOptions || joystickOptionsOpen}
                 fillHeight={!showMirrorScreen}
                 releaseAllEpoch={session.releaseAllEpoch}
                 // Touching the on-screen joystick withdraws the only evidence `auto`
@@ -725,6 +750,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               tier={tier}
             />
           )}
+
+          {mirrorEnabled && foldJoystickOptions ? <div className="px-4">{mirrorControlsRow}</div> : null}
 
           {/* The quick-keys bar rides alongside the JOYSTICK for one-tap
               SPACE/RETURN/cursor without leaving game control; in Type mode the

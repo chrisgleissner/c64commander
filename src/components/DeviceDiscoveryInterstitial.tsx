@@ -614,7 +614,7 @@ export function DeviceDiscoveryInterstitial() {
               data-testid="startup-device-discovery-open-settings"
             >
               <Settings className="h-4 w-4" />
-              Open Settings
+              Settings
             </Button>
           ) : null}
           <Button

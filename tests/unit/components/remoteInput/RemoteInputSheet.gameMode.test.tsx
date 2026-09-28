@@ -674,6 +674,31 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(screen.getByTestId("remote-input-game-mode-title").textContent).not.toContain("mode");
     });
 
+    /*
+     * With the size stepper and the Stick / D-Pad / Swipe choice both showing, five rows of settings
+     * filled a 320 x 427 panel and the joystick started below the fold.
+     */
+    it("folds the size and movement style behind Options, and keeps the port in view", () => {
+      renderSheetAtProfile("compact");
+      const options = screen.getByTestId("remote-input-joystick-options");
+      expect(options).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByTestId("remote-input-size-stepper")).toBeNull();
+      expect(screen.queryByTestId("remote-input-movement-style-toggle")).toBeNull();
+      expect(screen.getByTestId("remote-input-port-toggle")).toBeInTheDocument();
+
+      fireEvent.click(options);
+      expect(screen.getByTestId("remote-input-joystick-options")).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByTestId("remote-input-size-stepper")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-movement-style-toggle")).toBeInTheDocument();
+    });
+
+    it("shows the size and movement style directly on a standard display", () => {
+      renderSheetAtProfile("medium");
+      expect(screen.queryByTestId("remote-input-joystick-options")).toBeNull();
+      expect(screen.getByTestId("remote-input-size-stepper")).toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-movement-style-toggle")).toBeInTheDocument();
+    });
+
     it("keeps the full name on a standard display", () => {
       renderSheetAtProfile("medium");
       expect(screen.getByTestId("remote-input-immersive-toggle")).toHaveTextContent("Game mode");

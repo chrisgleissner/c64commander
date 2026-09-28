@@ -79,12 +79,17 @@ const expectUsable = async (page: Page, name: string, selector: string, kind: Su
   return measurement;
 };
 
-/** A phone's status bar, measured at 30px on the Pixel 4 at 480x640: the app draws under it. */
+/**
+ * A phone's status and navigation bars, measured at 30px and 48px on the Pixel 4 at 480x640: the
+ * app draws under both. With the status bar alone, a bottom sheet that stood on the navigation bar
+ * at full screen height looked fine here and started 48px above the top of the screen on the phone.
+ */
 const emulatePhoneSystemBars = (page: Page) =>
   page.addInitScript(() => {
     document.addEventListener("DOMContentLoaded", () => {
       const style = document.createElement("style");
-      style.textContent = ":root { --safe-area-inset-top: 30px !important; }";
+      style.textContent =
+        ":root { --safe-area-inset-top: 30px !important; --safe-area-inset-bottom: 48px !important; }";
       document.head.append(style);
     });
   });

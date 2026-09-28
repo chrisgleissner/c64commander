@@ -734,7 +734,7 @@ the manual entry form — `startup-manual-device-panel` `[when discovery finds n
 devices]`, which submits on Enter and holds: manual host/IP — text input —
 `startup-manual-device-host-input` — R✅ I✅ ; manual Connect — button —
 `startup-manual-device-connect` — R✅ I✅ ;
-Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
+Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
 
@@ -797,17 +797,23 @@ ordinary focus-ring CTAs in both output modes.
   _(what the transport is currently asked to hold, comma-separated and sorted. A direction
   stuck on the real C64 is this feature's worst failure, so the answer is on the surface
   rather than only in a log)_
+- Joystick options (Joystick mode, compact display profile only, outside Game mode) —
+  button (toggles, `aria-expanded`) — `remote-input-joystick-options` — R✅ I✅ — shows and
+  hides the control size stepper and the Stick / D-Pad / Swipe choice, which are folded
+  behind it by default on the compact profile so the joystick is on the first screen.
+  Other profiles show both directly and have no Options button.
 - Control size stepper (Joystick mode only) — decrease/increase buttons + label
   — `remote-input-size-decrease`, `remote-input-size-increase`,
   `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
   joystick action controls, not the Type-tab keyboard, which sizes itself from
-  measured space)
+  measured space) _(compact: behind Joystick options)_
 - Game mode toggle (Joystick mode, joystick-capable tier only) — button —
   `remote-input-immersive-toggle` — R✅ I✅ — ENTERING starts the remembered
   Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
   separate Hide-controls step); leaving restores it. Auto-exits if the tier
   downgrades mid-session. One testid, two placements: the way IN sits on the
-  size-stepper row and reads "Game mode" ("Game" on the compact display profile);
+  size-stepper row (beside Joystick options on the compact profile) and reads "Game mode"
+  ("Game" on the compact display profile);
   the way OUT rides the Game mode heading row (`remote-input-game-mode-title`),
   right-aligned, reads "Exit", and carries the accessible name "Exit game mode"
 - Orientation override (inside Game mode) — buttons —
@@ -837,7 +843,8 @@ ordinary focus-ring CTAs in both output modes.
   Watch reachable with the controls hidden and no touchscreen)_
 - **A/V mirror controls** (`remote-input-mirror-controls`) _(Content Explorer
   A/V Mirror; pinned in the sheet chrome when `audio_mirror_enabled` or
-  `video_mirror_enabled` is on and the device advertises streaming; shares the
+  `video_mirror_enabled` is on and the device advertises streaming — on the compact
+  profile outside Game mode it sits below the joystick and scrolls with it; shares the
   single app-wide session with Home's Live View)_
   - Audio toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`)_
   - Video toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`)_
@@ -877,7 +884,7 @@ ordinary focus-ring CTAs in both output modes.
     current port; docked on the left rail in both standard and Game mode)
   - Movement style toggle: Stick / D-Pad / Swipe — buttons —
     `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
-    switching style never itself releases a held direction)
+    switching style never itself releases a held direction; compact: behind Joystick options)
   - **Stick style** — relative thumbstick — pointer-only zone —
     `remote-input-stick-zone` — touch only (see below for the physical
     equivalent)
