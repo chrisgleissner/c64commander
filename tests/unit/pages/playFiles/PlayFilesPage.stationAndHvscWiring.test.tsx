@@ -17,9 +17,14 @@ const page = vi.hoisted(() => ({
   runHvscPreparation: vi.fn(async () => undefined),
   selectSource: null as null | ((source: { type: string; id: string }) => Promise<boolean>),
   sidRadioParams: null as null | { startPlaylist: (items: unknown[]) => unknown },
-  launcher: null as null | { hvscMissing?: boolean; onInstallHvsc?: () => void },
+  launcher: null as null | { open?: boolean; hvscMissing?: boolean; onInstallHvsc?: () => void },
   clearPlaylist: null as null | (() => void),
-  preparation: null as null | { open: boolean; browseLabel?: string; onOpenChange: (open: boolean) => void },
+  preparation: null as null | {
+    open: boolean;
+    browseLabel?: string;
+    onOpenChange: (open: boolean) => void;
+    onBrowse: () => void;
+  },
   stationStop: vi.fn(),
 }));
 
@@ -50,7 +55,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
 }));
 
 vi.mock("@/pages/playFiles/components/SidRadioLauncherSheet", () => ({
-  SidRadioLauncherSheet: (props: { hvscMissing?: boolean; onInstallHvsc?: () => void }) => {
+  SidRadioLauncherSheet: (props: { open?: boolean; hvscMissing?: boolean; onInstallHvsc?: () => void }) => {
     page.launcher = props;
     return null;
   },
@@ -75,7 +80,12 @@ vi.mock("@/pages/playFiles/hooks/useSidRadio", async (importOriginal) => {
 });
 
 vi.mock("@/pages/playFiles/components/HvscPreparationSheet", () => ({
-  HvscPreparationSheet: (props: { open: boolean; browseLabel?: string; onOpenChange: (open: boolean) => void }) => {
+  HvscPreparationSheet: (props: {
+    open: boolean;
+    browseLabel?: string;
+    onOpenChange: (open: boolean) => void;
+    onBrowse: () => void;
+  }) => {
     page.preparation = props;
     return null;
   },
@@ -185,6 +195,19 @@ describe("PlayFilesPage wiring", () => {
 
     act(() => page.preparation!.onOpenChange(false));
     await waitFor(() => expect(page.preparation?.open).toBe(false));
+    expect(page.preparation!.browseLabel).toBeUndefined();
+  });
+
+  it("reopens SID Radio, not the HVSC browser, from the ready button of an install the radio started", async () => {
+    renderPage();
+    await waitFor(() => expect(page.launcher).not.toBeNull());
+
+    act(() => page.launcher!.onInstallHvsc!());
+    await waitFor(() => expect(page.preparation?.open).toBe(true));
+    act(() => page.preparation!.onBrowse());
+
+    await waitFor(() => expect(page.preparation?.open).toBe(false));
+    expect(page.launcher!.open).toBe(true);
     expect(page.preparation!.browseLabel).toBeUndefined();
   });
 });

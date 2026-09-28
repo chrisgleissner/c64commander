@@ -206,6 +206,17 @@ describe("ItemSelectionDialog search scope", () => {
       expect(navigatorState.setSearchScope).toHaveBeenCalledWith("source");
     });
 
+    it("hands typed text to the navigator, and the toggle back to this folder", () => {
+      navigatorState.searchScope = "source";
+      renderSheet();
+
+      fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "gam" } });
+      expect(navigatorState.setQuery).toHaveBeenCalledWith("gam");
+
+      fireEvent.click(screen.getByTestId("add-items-scope-toggle"));
+      expect(navigatorState.setSearchScope).toHaveBeenCalledWith("folder");
+    });
+
     it("keeps the scan action for a source that has to be walked", () => {
       navigatorState.searchIsInstant = false;
       navigatorState.searchScope = "source";

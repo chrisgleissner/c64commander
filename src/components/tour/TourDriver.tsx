@@ -13,7 +13,7 @@ import { PanelBottomClose, PanelBottomOpen, PanelTopClose, PanelTopOpen } from "
 
 import { Button } from "@/components/ui/button";
 import { useC64Connection } from "@/hooks/useC64Connection";
-import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { ANCHOR_WAIT_CEILING_MS, navigateToSearchTarget, waitForElement } from "@/lib/search/navigate";
 import {
   captionPlacement,
@@ -123,7 +123,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const [insets, setInsets] = useState({ top: 0, bottom: 0 });
   const ranWithoutDeviceRef = useRef(false);
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [hvscInstalled] = useState(() => (loadHvscState().installedVersion ?? 0) > 0);
+  const [hvscInstalled] = useState(isHvscInstalled);
 
   const step = TOUR_STEPS[stepIndex];
 

@@ -663,4 +663,72 @@ describe("TourDriver", () => {
     // padding, is taller than that band, so it is scrolled until its top shows: 194 - (150 + 8).
     await waitFor(() => expect(scrollBy).toHaveBeenCalledWith({ top: 36, behavior: "instant" }));
   });
+
+  /*
+   * An anchor on a page that does not scroll, with the Pixel's 30 px status bar: nothing to scroll,
+   * so the caption takes the edge that leaves the anchor showing, and its fold button's icon says
+   * which way it will move.
+   */
+  it("puts the caption on the edge that leaves an unscrollable anchor showing", async () => {
+    const originalObserver = globalThis.ResizeObserver;
+    const originalHeight = window.innerHeight;
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+      constructor(private readonly callback: () => void) {}
+      observe() {
+        this.callback();
+      }
+      disconnect() {}
+    };
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 427 });
+    document.documentElement.style.setProperty("--safe-area-inset-top", "30px");
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.dataset.testid === "tour-caption") return { top: 0, height: 150, width: 320 } as DOMRect;
+      return originalRect.call(this);
+    };
+    const anchor = mountAnchor("home-search-field", { top: 330, left: 10, width: 300, height: 44 });
+    onTestFinished(() => {
+      (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = originalObserver;
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      document.documentElement.style.removeProperty("--safe-area-inset-top");
+      anchor.remove();
+    });
+
+    renderDriver();
+    await startTour();
+    fireEvent.click(screen.getByTestId("tour-next"));
+    await waitFor(() => expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-placement", "top"));
+    const icon = () => screen.getByTestId("tour-toggle-text").querySelector("svg")!.getAttribute("class") ?? "";
+    expect(icon()).toContain("panel-top-close");
+
+    fireEvent.click(screen.getByTestId("tour-toggle-text"));
+    await waitFor(() => expect(icon()).toContain("panel-top-open"));
+  });
+
+  it("walks on with Enter or Space when focus has left the guide's buttons", async () => {
+    renderDriver();
+    await startTour();
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    fireEvent.keyDown(window, { key: "Enter", code: "Enter" });
+    await waitFor(() => expect(screen.getByTestId("tour-progress")).toHaveAttribute("data-step", "2"));
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(window, { key: " ", code: "Space" });
+    await waitFor(() => expect(screen.getByTestId("tour-progress")).toHaveAttribute("data-step", "3"));
+  });
+
+  it("does not try to give focus back to an element that has left the page", async () => {
+    const before = document.createElement("button");
+    document.body.appendChild(before);
+    before.focus();
+    const focus = vi.spyOn(before, "focus");
+    renderDriver();
+    await startTour();
+    before.remove();
+
+    fireEvent.click(screen.getByTestId("tour-skip"));
+    await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+    expect(focus).not.toHaveBeenCalled();
+  });
 });
