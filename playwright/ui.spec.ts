@@ -312,7 +312,7 @@ test.describe("UI coverage", () => {
   test("play page renders with HVSC controls", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await enableHvscDownloads(page);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
     // The HVSC card is closed on a first visit; its controls live in the body.
     await openAllCards(page);
     await expect(page.getByRole("button", { name: "Download HVSC" })).toBeVisible();

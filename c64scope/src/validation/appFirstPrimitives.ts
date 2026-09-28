@@ -41,7 +41,7 @@ const TAB_RESOURCE_ID_BY_ROUTE: Record<string, string> = {
 
 const ROUTE_MARKERS: Record<string, readonly string[]> = {
   "/": ["HOME", "Save RAM", "QUICK CONFIG"],
-  "/play": ["PLAY FILES", "Playlist"],
+  "/play": ["PLAY", "Playlist"],
   "/disks": ["DISKS", "DRIVES"],
   "/config": ["CONFIG", "categories"],
   "/settings": ["SETTINGS", "Connection"],

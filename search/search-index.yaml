@@ -29,7 +29,7 @@ entries:
 
   - id: page.play
     title_key: search.page.play
-    title: Play files
+    title: Play
     subtitle_key: search.page.play.subtitle
     subtitle: Playlist, transport and SID Radio
     keywords: [music, tunes, sid, playlist, player, listen]

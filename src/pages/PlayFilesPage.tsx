@@ -2516,7 +2516,7 @@ export default function PlayFilesPage() {
 
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Play files" />
+      <AppBar title="Play" />
       <PageContainer>
         <PageStack>
           {lightingStudioEnabled && lightingResolved.sourceCue ? (

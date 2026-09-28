@@ -213,7 +213,7 @@ const tourDisks = async (page: Page) => {
 
 const tourPlay = async (page: Page) => {
   await page.goto("/play");
-  await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
   await pauseAtTop(page);
 
   await smoothScrollToLocator(page, page.getByTestId("play-section-playback"), 2200);

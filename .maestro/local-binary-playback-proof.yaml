@@ -22,7 +22,7 @@ env:
           id: "page-play"
       - extendedWaitUntil:
           visible:
-            text: "PLAY FILES"
+            id: "page-play"
           timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:

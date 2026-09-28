@@ -63,7 +63,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "search",
     title: "Search everything",
-    body: "Find any page, setting, tune or disk from this field.",
+    body: "Find pages, settings, tunes and disks from this field.",
     anchor: { path: "/", testIds: ["home-search-field"] },
   },
   {

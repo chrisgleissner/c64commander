@@ -2922,7 +2922,7 @@ test.describe("App screenshots", () => {
     await installListPreviewLimit(page, 3);
     await page.goto("/play");
     await waitForConnected(page);
-    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
     await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText("intro.sid");
 
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -3039,7 +3039,7 @@ test.describe("App screenshots", () => {
       // C64 Commander - so those four are captured once per profile. The override is
       // written to localStorage, so it survives the `page.goto` calls further down.
       await applyDisplayProfileViewport(page, "compact");
-      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
 
       // Open the stations launcher (song / style / taste seeds).
       const stationsLauncher = getActiveMain(page).getByTestId("sid-radio-launcher");
@@ -3219,7 +3219,7 @@ test.describe("App screenshots", () => {
         await page.getByTestId("tab-play").click();
         await expect(page).toHaveURL(/\/play$/);
         await waitForConnected(page);
-        await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
 
         const viewAllDialog = await openViewAllIfPresent(page);
@@ -3241,7 +3241,7 @@ test.describe("App screenshots", () => {
       await seedArchiveSearchMock(page);
       await page.goto("/play");
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
 
       const dialog = await openImportDialog(page);
       expect(dialog, "Add items dialog should open before capturing import screenshots").not.toBeNull();
@@ -3324,7 +3324,7 @@ test.describe("App screenshots", () => {
 
       await page.goto("/play");
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
 
       const firstDialog = await openImportDialog(page);
       expect(firstDialog, "Add items dialog should open before capturing the first HVSC state").not.toBeNull();
@@ -3343,7 +3343,7 @@ test.describe("App screenshots", () => {
       await setHvscScreenshotMode(page, "ready");
       await page.reload({ waitUntil: "domcontentloaded" });
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
 
       const readyDialog = await openImportDialog(page);
       expect(readyDialog, "Add items dialog should reopen before capturing the ready HVSC state").not.toBeNull();
@@ -3408,7 +3408,7 @@ test.describe("App screenshots", () => {
         await page.goto("/play");
         await applyDisplayProfileViewport(page, profileId);
         await waitForConnected(page);
-        await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
 
         const dialog = await openImportDialog(page);
         expect(dialog, `Add items dialog should open for ${profileId} import screenshots`).not.toBeNull();

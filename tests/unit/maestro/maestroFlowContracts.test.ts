@@ -295,7 +295,7 @@ const collectWaitTexts = (value: JsonValue, texts: string[]) => {
 
 /**
  * The commands after the flow first taps `hvsc-download`. Before that tap the flow is still
- * navigating, and its waits ("Play files") belong to other pages.
+ * navigating, and its waits (`page-play`) belong to other pages.
  */
 const commandsAfterHvscInstallTap = (filePath: string): JsonValue[] => {
   const docs = readYaml(filePath) as JsonValue[];
@@ -430,7 +430,7 @@ describe("Maestro flow contracts", () => {
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain("checked: false");
-      expect(rawSource).toContain('visible: "Play files"');
+      expect(rawSource).toContain('id: "page-play"');
       expect(rawSource).toContain("id: hvsc-download");
       expect(rawSource).toContain("timeout: ${LONG_TIMEOUT}");
     }
@@ -630,7 +630,7 @@ describe("Maestro flow contracts", () => {
     expect(
       collectUnprovedTabTaps(
         flattenCommands([
-          { retry: { maxRetries: 3, commands: [{ tapOn: { id: "tab-play" } }, { assertVisible: "Play files" }] } },
+          { retry: { maxRetries: 3, commands: [{ tapOn: { id: "tab-play" } }, { assertVisible: "Play" }] } },
           { tapOn: { id: "tab-home" } },
           { assertVisible: { id: "page-home" } },
         ]),
