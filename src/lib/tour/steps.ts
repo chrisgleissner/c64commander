@@ -133,7 +133,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "configuration",
     title: "Machine settings",
     body: "Every setting your C64 has. Change it here, it changes there.",
-    anchor: { path: "/config", testIds: ["config-category-list"] },
+    anchor: { path: "/config", testIds: ["config-categories"] },
     requiresDevice: true,
   },
   {
