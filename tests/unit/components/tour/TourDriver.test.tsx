@@ -476,6 +476,7 @@ describe("TourDriver", () => {
       await startTour();
       const toggle = screen.getByTestId("tour-toggle-text");
       expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(toggle).toHaveAccessibleName("Hide the text");
       expect(toggle.className).toContain("size-11");
       fireEvent.click(toggle);
       await waitFor(() => expect(screen.getByTestId("tour-caption")).toHaveAttribute("data-mode", "look"));

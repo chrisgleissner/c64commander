@@ -537,12 +537,14 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
             size="icon"
             onClick={toggleMode}
             aria-pressed={!reading}
-            aria-label={reading ? "Hide the text and show more of the app" : "Show the text again"}
             title={reading ? "Hide the text" : "Show the text"}
             className="size-11 shrink-0"
             data-testid="tour-toggle-text"
           >
             <FoldIcon className="h-6 w-6" aria-hidden />
+            {/* A toggle keeps one name and reports its state through aria-pressed. As an aria-label
+                it did not reach Android's accessibility tree, and TalkBack found a nameless button. */}
+            <span className="sr-only">Hide the text</span>
           </Button>
           <Button
             variant="ghost"
