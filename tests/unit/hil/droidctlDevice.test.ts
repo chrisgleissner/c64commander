@@ -53,6 +53,10 @@ describe("chooseTarget", () => {
     expect(chooseTarget([target("9B0A", { state: "unauthorized" }), target("ABC")]).serial).toBe("ABC");
   });
 
+  it("names an emulator as the only target rather than as one of several", () => {
+    expect(() => chooseTarget([target("emulator-5554", { isEmulator: true })])).toThrow(/only an emulator is attached/);
+  });
+
   it("says so when nothing is attached", () => {
     expect(() => chooseTarget([])).toThrow(/no Android device attached/);
   });

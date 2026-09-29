@@ -14,7 +14,6 @@ import {
   scrimRects,
   spotlightScrollDelta,
   unionRect,
-  unobscuredShare,
   type SpotlightFrame,
 } from "@/lib/tour/spotlight";
 
@@ -165,23 +164,5 @@ describe("spotlightScrollDelta", () => {
 
   it("does nothing without a hole", () => {
     expect(spotlightScrollDelta(null, "bottom", frame)).toBe(0);
-  });
-});
-
-describe("unobscuredShare", () => {
-  /*
-   * The old caption was 273 px tall and left 36% of the screen between the system bars; the tour's
-   * acceptance bar is at least half.
-   */
-  it("measures what the old caption left of the small screen", () => {
-    expect(unobscuredShare("bottom", SMALL)).toBeCloseTo(124 / 349, 5);
-  });
-
-  it("measures a caption on the top edge the same way", () => {
-    expect(unobscuredShare("top", { ...SMALL, captionHeight: 188 })).toBeCloseTo(191 / 349, 5);
-  });
-
-  it("is zero on a screen with no usable height", () => {
-    expect(unobscuredShare("bottom", { viewportHeight: 50, captionHeight: 10, insetTop: 30, insetBottom: 30 })).toBe(0);
   });
 });

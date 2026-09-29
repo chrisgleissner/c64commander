@@ -13,6 +13,7 @@ import { PanelBottomClose, PanelBottomOpen, PanelTopClose, PanelTopOpen } from "
 
 import { Button } from "@/components/ui/button";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { dismissAllToasts } from "@/hooks/use-toast";
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { ANCHOR_WAIT_CEILING_MS, navigateToSearchTarget, waitForElement } from "@/lib/search/navigate";
 import {
@@ -66,6 +67,10 @@ const scrollContainerOf = (element: HTMLElement): HTMLElement | null => {
   }
   return null;
 };
+
+const sameRect = (a: Rect | null, b: Rect | null): boolean =>
+  a === b ||
+  (a !== null && b !== null && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height);
 
 const readInset = (name: string): number => {
   const value = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
@@ -140,8 +145,11 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   }, []);
 
   // aria-modal alone does not take the page out of Android's accessibility tree, so TalkBack could
-  // reach controls under the caption.
-  useEffect(() => isolateApp(), []);
+  // reach controls under the caption. Toasts live inside the app, so they go with it.
+  useEffect(() => {
+    dismissAllToasts();
+    return isolateApp();
+  }, []);
 
   // Focus goes into the guide, so TalkBack and the keypad start on its primary action, and comes
   // back to wherever it was when the guide closes.
@@ -213,6 +221,9 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         // decided a slow step had failed while the element was still on its way, so it is measured
         // again here, once the resolver knows the answer either way.
         if (stepChange.signal.aborted) return;
+        // Measured here, in the same update that settles the step: settled with the previous hole
+        // still null, a late anchor showed the "not available" text for a frame.
+        setHole(unionRect(measureAnchors(testIds)));
         setAnchorResolved((count) => count + 1);
         setAnchorSettled(true);
       });
@@ -228,10 +239,18 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
    * step that points at nothing, dimmed none of the app behind its caption.
    */
   useEffect(() => {
+    // Every scroll anywhere on the page lands here, so nothing is set that has not changed.
     const remeasure = () => {
-      setViewport({ width: window.innerWidth, height: window.innerHeight });
-      setInsets({ top: readInset("--safe-area-inset-top"), bottom: readInset("--safe-area-inset-bottom") });
-      setHole(step?.anchor ? unionRect(measureAnchors(step.anchor.testIds)) : null);
+      setViewport((previous) =>
+        previous.width === window.innerWidth && previous.height === window.innerHeight
+          ? previous
+          : { width: window.innerWidth, height: window.innerHeight },
+      );
+      const top = readInset("--safe-area-inset-top");
+      const bottom = readInset("--safe-area-inset-bottom");
+      setInsets((previous) => (previous.top === top && previous.bottom === bottom ? previous : { top, bottom }));
+      const next = step?.anchor ? unionRect(measureAnchors(step.anchor.testIds)) : null;
+      setHole((previous) => (sameRect(previous, next) ? previous : next));
     };
     remeasure();
     // Measured again on a short delay for the common case, where the anchor is already mounted and
@@ -427,11 +446,17 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       className="fixed inset-0 z-[80]"
       role="dialog"
       aria-modal="true"
-      aria-label={`Tour: ${step.title}`}
+      aria-labelledby="tour-caption-title"
+      aria-describedby={reading ? "tour-caption-body" : undefined}
       data-testid="tour-overlay"
       data-tour-step={step.id}
       data-tour-degraded={hole === null ? "true" : undefined}
     >
+      {/* Focus stays on Next as the user walks on, so nothing would otherwise be read out: the new
+          step is announced here. */}
+      <p className="sr-only" aria-live="polite" aria-atomic="true" data-testid="tour-announcement">
+        {`Step ${stepNumber} of ${stepCount}. ${step.title}. ${body}`}
+      </p>
       {pieces.map((piece, index) => (
         <div
           key={index}
@@ -484,7 +509,9 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         data-mode={mode}
       >
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="min-w-0 text-base font-semibold">{step.title}</h2>
+          <h2 id="tour-caption-title" className="min-w-0 text-base font-semibold">
+            {step.title}
+          </h2>
           <p
             className="shrink-0 text-xs text-muted-foreground"
             data-testid="tour-progress"
@@ -500,7 +527,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
           </p>
         </div>
         {reading ? (
-          <p className="text-sm text-muted-foreground" data-testid="tour-body">
+          <p id="tour-caption-body" className="text-sm text-muted-foreground" data-testid="tour-body">
             {body}
           </p>
         ) : null}

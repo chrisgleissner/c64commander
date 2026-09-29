@@ -77,9 +77,9 @@ export const HvscPreparationSheet = ({
           <AppSheetTitle>Preparing HVSC library</AppSheetTitle>
           <AppSheetDescription>
             {isSuccess
-              ? "The HVSC library is indexed and ready to browse."
+              ? "The HVSC library is indexed and ready."
               : isError
-                ? "Preparation stopped before the HVSC browser could open."
+                ? "Preparation stopped before the HVSC library was ready."
                 : "Downloading the free HVSC music collection once, then indexing it on this device."}
           </AppSheetDescription>
         </AppSheetHeader>

@@ -134,11 +134,3 @@ export const spotlightScrollDelta = (hole: Rect | null, placement: CaptionPlacem
   if (hole.top < top) return Math.round(hole.top - top);
   return Math.round(hole.top + hole.height - bottom);
 };
-
-/** Share of the band between the system bars that the caption leaves uncovered, from 0 to 1. */
-export const unobscuredShare = (placement: CaptionPlacement, frame: SpotlightFrame): number => {
-  const usable = frame.viewportHeight - frame.insetTop - frame.insetBottom;
-  if (usable <= 0) return 0;
-  const band = freeBand(placement, frame);
-  return Math.max(0, band.bottom - band.top) / usable;
-};

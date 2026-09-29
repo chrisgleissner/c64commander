@@ -34,9 +34,9 @@ export interface TourStep {
   /** A body that depends on what is installed is a function of the context. */
   readonly body: string | ((context: TourContext) => string);
   /**
-   * Said instead of `body` when a machine is connected and the step's anchor still never appeared:
-   * the connected device does not have the feature, and the usual body would describe something the
-   * user cannot see.
+   * Said instead of `body` when a machine is connected and the step's anchor still never appeared.
+   * The feature is then missing for this device or this platform (Live View also needs the phone's
+   * stream receiver), and the usual body would describe something the user cannot see.
    */
   readonly unavailableBody?: string;
   /**
@@ -105,14 +105,14 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "connecting",
     title: "Your connection",
-    body: "Shows whether your C64 is connected. Tap it for details.",
+    body: "Shows whether your C64 is connected. Open it for details.",
     anchor: { path: "/", testIds: ["unified-health-badge"] },
     requiresDevice: true,
   },
   {
     id: "controlling-the-machine",
     title: "Control the machine",
-    body: "Reset your C64 here. Power restarts it or turns it off.",
+    body: "Reset your C64 here. Power holds the other choices.",
     anchor: {
       path: "/",
       scope: "home",
@@ -125,7 +125,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "live-view",
     title: "Watch, listen, play",
     body: "See and hear your C64 here. Game Mode adds a joystick.",
-    unavailableBody: "Picture and sound need a C64 Ultimate or an Ultimate 64.",
+    unavailableBody: "Live View is not available with this machine or phone.",
     anchor: { path: "/", scope: "home", sectionId: "live-view", testIds: ["live-view-card"] },
     requiresDevice: true,
   },

@@ -49,6 +49,11 @@ export const chooseTarget = (targets, serial) => {
   const pixels = physical.filter((target) => target.serial.startsWith("9B0"));
   if (pixels.length === 1) return pixels[0];
   if (online.length === 0) throw new Error("no Android device attached");
+  if (physical.length === 0) {
+    throw new Error(
+      `only an emulator is attached (${online.map((t) => t.serial).join(", ")}); pass --serial to use it`,
+    );
+  }
   throw new Error(`several devices attached (${online.map((t) => t.serial).join(", ")}); pass --serial`);
 };
 
@@ -97,6 +102,7 @@ export const createDroidDevice = async ({ serial, artifactRoot } = {}) => {
         ...(longPress ? { longPress } : {}),
         ...(repeat ? { repeat } : {}),
       }),
+    tap: ({ x, y }) => call("droid_input.tap", { targetId, x: Number(x), y: Number(y) }),
     swipe: ({ x1, y1, x2, y2, durationMs }) =>
       call("droid_input.swipe", { targetId, x1, y1, x2, y2, ...(durationMs ? { durationMs } : {}) }),
     forwardWebview: (pkg, localPort) => call("droid_device.forward_webview", { targetId, package: pkg, localPort }),

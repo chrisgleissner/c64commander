@@ -1,5 +1,13 @@
 {
-  "disks": ["drives", "disks", "drive-a", "drive-b", "iec", "soft-iec", "soft-iec-drive"],
+  "disks": [
+    "drives",
+    "disks",
+    "drive-a",
+    "drive-b",
+    "iec",
+    "soft-iec",
+    "soft-iec-drive"
+  ],
   "config": [
     "memory-roms",
     "turbo-boost",
@@ -127,7 +135,8 @@
     "load",
     "revert",
     "manage",
-    "external-resources"
+    "external-resources",
+    "play"
   ],
   "styles": [
     "app-bar",

@@ -985,15 +985,22 @@ const main = async () => {
   }
 
   await stage("input", false, async () => {
-    const hold = await run("node", inputHarnessArgs("joystick_hold_hil.mjs", HOST, passwordArgs, CDP_PORT));
+    // The harnesses resolve the phone themselves; handing them the gate's own choice keeps them on
+    // it when more than one phone is attached.
+    const phoneEnv = { env: { ANDROID_SERIAL: (await phone()).serial } };
+    const hold = await run("node", inputHarnessArgs("joystick_hold_hil.mjs", HOST, passwordArgs, CDP_PORT), phoneEnv);
     if (!hold.ok) throw new Error(`held direction: ${hold.out.trim().split("\n").slice(-3).join(" | ")}`);
-    const rotation = await run("node", [
-      ...inputHarnessArgs("joystick_rotation_hil.mjs", HOST, passwordArgs, CDP_PORT),
-      "--layouts",
-      "classicT9",
-      "--rotations",
-      "0,90",
-    ]);
+    const rotation = await run(
+      "node",
+      [
+        ...inputHarnessArgs("joystick_rotation_hil.mjs", HOST, passwordArgs, CDP_PORT),
+        "--layouts",
+        "classicT9",
+        "--rotations",
+        "0,90",
+      ],
+      phoneEnv,
+    );
     if (!rotation.ok) throw new Error(`rotation: ${rotation.out.trim().split("\n").slice(-3).join(" | ")}`);
     const moved = number(hold.out, /kept moving rather than stopping after one cell\s+\((\d+) cells\)/, "cells moved");
     return `held direction moved ${moved} cells; ${number(rotation.out, /(\d+)\/\d+ checks passed/, "rotation checks")} rotation checks passed`;

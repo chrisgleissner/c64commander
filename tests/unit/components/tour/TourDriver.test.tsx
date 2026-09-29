@@ -731,4 +731,31 @@ describe("TourDriver", () => {
     await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
     expect(focus).not.toHaveBeenCalled();
   });
+
+  // Focus stays on Next as the user walks on, so a screen reader had nothing new to read.
+  it("announces each step's title and text to a screen reader", async () => {
+    renderDriver();
+    await startTour();
+    const announcement = screen.getByTestId("tour-announcement");
+    expect(announcement).toHaveAttribute("aria-live", "polite");
+    expect(announcement.textContent).toBe(
+      `Step 1 of ${TOUR_STEPS.length}. ${TOUR_STEPS[0].title}. ${TOUR_STEPS[0].body}`,
+    );
+
+    fireEvent.click(screen.getByTestId("tour-next"));
+    await waitFor(() => expect(announcement.textContent).toContain(TOUR_STEPS[1].title));
+    const dialog = screen.getByTestId("tour-overlay");
+    expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe(TOUR_STEPS[1].title);
+  });
+
+  // Toasts render inside the app, which the tour makes inert: one left open drew over the caption
+  // and could not be dismissed.
+  it("dismisses the toasts on screen when it opens", async () => {
+    const toasts = await import("@/hooks/use-toast");
+    const dismiss = vi.spyOn(toasts, "dismissAllToasts");
+    renderDriver();
+    await startTour();
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
+  });
 });

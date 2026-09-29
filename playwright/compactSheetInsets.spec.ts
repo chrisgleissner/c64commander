@@ -59,4 +59,31 @@ test.describe("compact bottom sheets and the system bars", () => {
     expect(close.width).toBeGreaterThanOrEqual(44);
     expect(close.height).toBeGreaterThanOrEqual(44);
   });
+
+  /*
+   * Game Mode kept 5rem below its controls on top of the navigation bar's inset. That space came out
+   * of the live picture, and on a 320 x 427 screen left it none. The controls must still clear the
+   * navigation bar without it, on the smallest screen and on a phone.
+   */
+  for (const viewport of [
+    { name: "compact", width: 320, height: 426 },
+    { name: "medium", width: 393, height: 727 },
+  ]) {
+    test(`Game Mode's controls clear the navigation bar on a ${viewport.name} screen`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto("/");
+      await page.getByTestId("home-machine-inline-openRemoteInput").first().click();
+      await expect(page.getByTestId("remote-input-sheet")).toBeVisible();
+      await page.getByTestId("remote-input-immersive-toggle").click();
+      await expect(page.getByTestId("remote-input-sheet")).toHaveAttribute("data-game-mode", "true");
+      await page.waitForTimeout(600);
+
+      const fire = (await page.getByRole("button", { name: /fire/i }).first().boundingBox())!;
+      const stick = (await page.getByTestId("remote-input-joystick-action-zone").boundingBox())!;
+      expect(fire.y + fire.height, "FIRE runs under the navigation bar").toBeLessThanOrEqual(viewport.height - 48);
+      expect(stick.y + stick.height, "the stick runs under the navigation bar").toBeLessThanOrEqual(
+        viewport.height - 48,
+      );
+    });
+  }
 });

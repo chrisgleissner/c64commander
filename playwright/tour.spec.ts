@@ -221,19 +221,28 @@ test.describe("first-run tour", () => {
       await page.waitForTimeout(1_200);
 
       const geometry = await page.evaluate(() => {
-        const box = (testId: string) => document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect();
-        const caption = box("tour-caption")!;
-        const hole = box("tour-spotlight");
-        const height = window.innerHeight;
-        const free = caption.top > 0 ? { top: 0, bottom: caption.top } : { top: caption.bottom, bottom: height };
-        const visible = hole ? Math.max(0, Math.min(hole.bottom, free.bottom) - Math.max(hole.top, free.top)) : null;
+        const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
+        const caption = box('[data-testid="tour-caption"]')!;
+        const hole = box('[data-testid="tour-spotlight"]');
+        const atBottom = caption.top > window.innerHeight / 2;
+        // What the caption leaves of the screen, and of the app's own area between the app bar and
+        // the tab bar, which the tour dims but which are not what a step describes.
+        const screenBand = atBottom
+          ? { top: 0, bottom: caption.top }
+          : { top: caption.bottom, bottom: window.innerHeight };
+        const appTop = box('[data-testid="app-bar-row"]')?.bottom ?? 0;
+        const appBottom = box('[data-testid="tab-bar"]')?.top ?? window.innerHeight;
+        const appFree = Math.min(appBottom, screenBand.bottom) - Math.max(appTop, screenBand.top);
+        const visible = hole
+          ? Math.max(0, Math.min(hole.bottom, screenBand.bottom) - Math.max(hole.top, screenBand.top))
+          : null;
         return {
-          unobscured: (free.bottom - free.top) / height,
+          unobscured: Math.max(0, appFree) / (appBottom - appTop),
           visible,
-          wanted: hole ? Math.min(hole.height, free.bottom - free.top) : null,
+          wanted: hole ? Math.min(hole.height, screenBand.bottom - screenBand.top) : null,
         };
       });
-      expect(geometry.unobscured, `step "${step.id}" must leave half the screen`).toBeGreaterThanOrEqual(0.5);
+      expect(geometry.unobscured, `step "${step.id}" must leave half the app's area`).toBeGreaterThanOrEqual(0.5);
       if (geometry.visible !== null && geometry.wanted !== null) {
         expect(geometry.visible, `step "${step.id}" must not cover its own subject`).toBeGreaterThanOrEqual(
           geometry.wanted * 0.9,

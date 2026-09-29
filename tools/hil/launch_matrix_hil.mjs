@@ -154,7 +154,7 @@ const reboot = async () => {
 
 /* ----------------------------------------------------------------- app ---- */
 
-const { adb, shell, attach, evaluate, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
+const { device, shell, attach, evaluate, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
   serial: SERIAL,
   packageName: PACKAGE,
   port: CDP_PORT,
@@ -386,8 +386,8 @@ const ftpList = async (path) => {
 
 const preflight = async () => {
   if (!SERIAL) throw new Error("--serial <serial> (or ANDROID_SERIAL) is required; refusing to pick a device");
-  const { stdout: devices } = await execFileAsync("adb", ["devices"]);
-  if (!devices.includes(`${SERIAL}\tdevice`)) throw new Error(`${SERIAL} is not attached and ready`);
+  // droidctl refuses a serial that is not attached and in state device.
+  await device();
 
   const info = await (await rest("/v1/info")).json();
   record("preflight", "pass", `${info.product} ${info.firmware_version} answers as ${HOST}`);
@@ -790,7 +790,6 @@ const main = async () => {
     writeFileSync(target, JSON.stringify({ host: HOST, usb: USB, folder: FOLDER, results }, null, 2));
     console.log(`wrote ${target}`);
   }
-  await adb("forward", "--remove-all").catch(() => undefined);
   process.exit(code);
 };
 
