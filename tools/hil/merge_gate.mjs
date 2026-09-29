@@ -58,8 +58,8 @@
  *   node tools/hil/merge_gate.mjs [--host c64u] [--iface <host ip>] [--only input,wire]
  *                                [--quiet-check] [--volume 3] [--json artifacts/hil-gate.json]
  *
- * Requires: the branch's APK installed and foregrounded on the attached Pixel, `adb forward`
- * pointed at its WebView (see the `hil-attach` skill), the Ultimate reachable, and a microphone
+ * Requires: the branch's APK installed and foregrounded on the attached Pixel, the WebView DevTools
+ * forwarded with droid_device.forward_webview (see the `hil-attach` skill), the Ultimate reachable, and a microphone
  * in front of the phone for the audio stages.
  */
 
@@ -68,6 +68,7 @@ import { promisify } from "node:util";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { createDroidDevice } from "./droidctl_device.mjs";
 import { percentile } from "./percentile.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -130,20 +131,18 @@ const TMP = arg("tmp", "/tmp");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /*
- * Every adb call carries -s. Through this helper the gate runs `input keyevent`,
- * which changes the phone's media volume, and `wm size`; with a CI emulator
- * attached alongside the phone, a bare adb call can pick the wrong one.
- * ANDROID_SERIAL is honoured so the environment variable adb itself respects
- * also works here.
+ * Every phone operation goes through droidctl, which names its target on every call. Through it the
+ * gate steps the media volume with key events and reads `wm size`; with a CI emulator attached
+ * alongside the phone, a call without a target could pick the wrong one. ANDROID_SERIAL is honoured
+ * as the default for `--serial`.
  */
 const SERIAL = arg("serial", process.env.ANDROID_SERIAL ?? "");
-const adb = (args) => {
-  // Checked here, not at module load: this file exports pure parsers that unit
-  // tests import on a machine with no device and no serial set.
-  if (!SERIAL) {
-    throw new Error("merge_gate: --serial <serial> (or ANDROID_SERIAL) is required; refusing to pick a device");
-  }
-  return execFileAsync("adb", ["-s", SERIAL, ...args], { maxBuffer: 1 << 22 });
+let phonePromise = null;
+const phone = () => {
+  // Resolved on first use, not at module load: this file exports pure parsers that unit tests
+  // import on a machine with no device attached.
+  phonePromise ??= createDroidDevice({ serial: SERIAL || undefined });
+  return phonePromise;
 };
 
 const run = async (command, args, { timeoutMs = 600_000, env } = {}) => {
@@ -292,7 +291,7 @@ const silenceC64 = async () => {
 };
 
 const readVolume = async () => {
-  const { stdout } = await adb(["shell", "dumpsys", "audio"]);
+  const stdout = await (await phone()).shell(["dumpsys", "audio"]);
   const block = stdout.split("- STREAM_MUSIC:")[1] ?? "";
   const muted = /Muted:\s*true/.test(block.split("- STREAM")[0] ?? "");
   const index = Number(/streamVolume:(\d+)/.exec(block)?.[1] ?? "-1");
@@ -311,7 +310,7 @@ const setVolume = async (target) => {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const { muted, index } = await readVolume();
     if (!muted && index === target) return;
-    await adb(["shell", "input", "keyevent", index < target || muted ? "24" : "25"]);
+    await (await phone()).pressKey(index < target || muted ? 24 : 25);
     await sleep(250);
   }
   throw new Error(`could not set the media volume to ${target}`);
@@ -865,16 +864,16 @@ const ensureMachineAudible = async () => {
 };
 
 const preflight = async () => {
-  const { stdout: devices } = await adb(["devices"]);
-  const attached = devices.split("\n").filter((l) => /\tdevice$/.test(l));
-  if (attached.length === 0) throw new Error("no adb device attached");
+  // droidctl refuses a missing or ambiguous phone here, before anything is driven.
+  const { serial } = await phone();
 
   const version = await fetch(`http://${HOST}/v1/version`, { headers: authHeaders });
   if (!version.ok) throw new Error(`the Ultimate at ${HOST} answered HTTP ${version.status}`);
 
   const page = await js("(()=>JSON.stringify({route:location.pathname,hidden:document.hidden}))()");
-  if (typeof page !== "object") throw new Error("the WebView is not reachable over CDP — re-run adb forward");
-  if (page.hidden) throw new Error("the WebView is hidden; run `adb shell wm dismiss-keyguard` and foreground the app");
+  if (typeof page !== "object")
+    throw new Error("the WebView is not reachable over CDP — forward it with droid_device.forward_webview");
+  if (page.hidden) throw new Error("the WebView is hidden; dismiss the keyguard and foreground the app");
 
   /*
    * Refuse to run under a display-size override.
@@ -887,11 +886,11 @@ const preflight = async () => {
    * with "0 tone bursts found". Both pass after a reset with no code change, so the override is
    * worth one line here instead of two misattributed stage failures.
    */
-  const override = await adb(["shell", "wm", "size"]).then(({ stdout }) => /Override size:\s*(\S+)/.exec(stdout)?.[1]);
+  const override = /Override size:\s*(\S+)/.exec(await (await phone()).shell(["wm", "size"]))?.[1];
   if (override) {
     throw new Error(
-      `the display is overridden to ${override}; run "adb shell wm size reset && adb shell wm density reset", ` +
-        "relaunch the app and re-attach adb forward",
+      `the display is overridden to ${override}; run "wm size reset" and "wm density reset" through ` +
+        "droid_device.run_shell, relaunch the app and forward the WebView again",
     );
   }
 
@@ -911,7 +910,7 @@ const preflight = async () => {
    * Get the first-run tour out of the way.
    *
    * It is a full-screen overlay that opens on a launch where nothing has been recorded, which is
-   * exactly what a fresh `--install-apk` leaves behind. `input` taps through `adb shell input` at
+   * exactly what a fresh `--install-apk` leaves behind. `input` taps through droidctl input at
    * real screen coordinates, so a tour still up eats every one of them and the stage reports a
    * machine that never moved — rig state read as a broken machine:input path.
    */
@@ -941,7 +940,7 @@ return JSON.stringify({dismissed:true});})()`);
     }
   }
   return (
-    `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}, ` +
+    `device ${serial}, route ${page.route}, speaker volume ${volume.speaker}, ` +
     `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}`
   );
 };
@@ -986,15 +985,22 @@ const main = async () => {
   }
 
   await stage("input", false, async () => {
-    const hold = await run("node", inputHarnessArgs("joystick_hold_hil.mjs", HOST, passwordArgs, CDP_PORT));
+    // The harnesses resolve the phone themselves; handing them the gate's own choice keeps them on
+    // it when more than one phone is attached.
+    const phoneEnv = { env: { ANDROID_SERIAL: (await phone()).serial } };
+    const hold = await run("node", inputHarnessArgs("joystick_hold_hil.mjs", HOST, passwordArgs, CDP_PORT), phoneEnv);
     if (!hold.ok) throw new Error(`held direction: ${hold.out.trim().split("\n").slice(-3).join(" | ")}`);
-    const rotation = await run("node", [
-      ...inputHarnessArgs("joystick_rotation_hil.mjs", HOST, passwordArgs, CDP_PORT),
-      "--layouts",
-      "classicT9",
-      "--rotations",
-      "0,90",
-    ]);
+    const rotation = await run(
+      "node",
+      [
+        ...inputHarnessArgs("joystick_rotation_hil.mjs", HOST, passwordArgs, CDP_PORT),
+        "--layouts",
+        "classicT9",
+        "--rotations",
+        "0,90",
+      ],
+      phoneEnv,
+    );
     if (!rotation.ok) throw new Error(`rotation: ${rotation.out.trim().split("\n").slice(-3).join(" | ")}`);
     const moved = number(hold.out, /kept moving rather than stopping after one cell\s+\((\d+) cells\)/, "cells moved");
     return `held direction moved ${moved} cells; ${number(rotation.out, /(\d+)\/\d+ checks passed/, "rotation checks")} rotation checks passed`;

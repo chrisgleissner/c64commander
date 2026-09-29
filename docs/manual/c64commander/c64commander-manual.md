@@ -121,7 +121,7 @@ With the box empty, search suggests four good places to start, then lists your r
 
 The first time you open C64 Commander, it offers a short guided tour inside the app itself. It visits each page in turn, points at one thing, and explains it in a line or two.
 
-**Next** and **Back** move you along, **Skip** ends the tour, and a counter shows how far you have come. On a keypad, Left and Right are Back and Next, OK is Next, and the Back key leaves. Stop whenever you like.
+**Next** and **Back** move you along, **Skip** ends the tour, and a counter shows how far you have come. The panel button beside Skip folds the explanation away so more of the app shows, and brings it back; it stays the way you leave it. On a keypad, Left and Right are Back and Next, Up and Down fold and unfold the explanation, OK is Next, and the Back key leaves. Stop whenever you like.
 
 To take it again, use the card at the top of **Docs**, or go to **Settings → About → Take the tour**. If you took the tour before connecting your C64, Home offers the steps you missed as soon as your machine answers.
 

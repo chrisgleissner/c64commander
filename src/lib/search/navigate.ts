@@ -29,6 +29,11 @@ export interface NavigateOptions {
   runAction?: (handlerId: string) => void | Promise<void>;
   /** Stops the wait for an anchor and leaves the page alone once the caller has moved on. */
   signal?: AbortSignal;
+  /**
+   * How the anchor is scrolled into view. Smooth by default; the tour asks for an instant jump
+   * because it re-measures and re-positions the anchor itself once it has landed.
+   */
+  scrollBehavior?: ScrollBehavior;
 }
 
 /**
@@ -78,8 +83,8 @@ export const markLanded = (element: HTMLElement): void => {
   setTimeout(() => element.removeAttribute("data-search-landed"), LANDING_HIGHLIGHT_MS);
 };
 
-const focusAnchor = (element: HTMLElement): void => {
-  element.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+const focusAnchor = (element: HTMLElement, behavior: ScrollBehavior = "smooth"): void => {
+  element.scrollIntoView({ block: "center", inline: "nearest", behavior });
   markLanded(element);
   // So the next key press acts on the thing that was searched for. A non-focusable anchor takes a
   // temporary tabindex rather than being left unreachable from the keypad.
@@ -126,7 +131,7 @@ export const navigateToSearchTarget = async (
       options.onToast(`Could not reach ${options.label}`);
       return "not-found";
     }
-    focusAnchor(anchor);
+    focusAnchor(anchor, options.scrollBehavior);
     return "landed";
   }
 
@@ -151,7 +156,7 @@ export const navigateToSearchTarget = async (
 
   if (target.kind === "section") {
     requestSectionOpen(target.scope, target.id);
-    focusAnchor(section);
+    focusAnchor(section, options.scrollBehavior);
     return "landed";
   }
 
@@ -162,6 +167,6 @@ export const navigateToSearchTarget = async (
     options.onToast(`Could not reach ${options.label}`);
     return "not-found";
   }
-  focusAnchor(control);
+  focusAnchor(control, options.scrollBehavior);
   return "landed";
 };

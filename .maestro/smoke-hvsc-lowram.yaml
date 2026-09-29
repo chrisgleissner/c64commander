@@ -47,7 +47,8 @@ env:
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
-    visible: "Play files"
+    visible:
+      id: "page-play"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible:
     id: "page-play"

@@ -32,9 +32,9 @@ tags:
       # Every wait below names a tab-bar label, which renders outside the page and is
       # present whichever tab is selected, so it is a readiness signal only. The
       # `page-*` id that follows it is what proves the tap landed: SwipeNavigationLayer
-      # puts it on the active slot alone. Page *text* anchors were tried here and only
-      # "Play files" survived, because Maestro matches whole element text and the
-      # configuration menu's entries depend on the firmware the device reports.
+      # puts it on the active slot alone. Page *text* anchors are not used: Maestro matches
+      # whole element text, so a page titled "Play" matches the Play tab's own label, and
+      # the configuration menu's entries depend on the firmware the device reports.
       - extendedWaitUntil:
           visible:
             text: "Home"
@@ -62,11 +62,11 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Play files"
+          visible:
+            id: "page-play"
           timeout: ${TIMEOUT}
       # Inside the retry, not after it: the picker can re-arm between the wait above and a
       # check placed after the block, and it covers the tab bar.
-      - assertVisible: "Play files"
       - assertVisible:
           id: "page-play"
       - assertNotVisible: "Something went wrong"

@@ -48,11 +48,16 @@ export const HvscStageSteps = ({
 
   return (
     <div className="space-y-2" data-testid={testId}>
-      <ol className="flex items-start justify-between gap-1">
+      {/* Equal columns, except that none is narrower than its longest word: at 320px an equal share
+          was 60px and "Download" is 66px at the smallest type allowed, so it ran into "Unpack". */}
+      <ol
+        className="grid items-start gap-x-3"
+        style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(min-content, 1fr))` }}
+      >
         {steps.map((step, index) => (
           <li
             key={step.id}
-            className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
+            className="flex flex-col items-center gap-1.5"
             data-testid={`${testId}-${step.id}`}
             data-status={step.status}
           >

@@ -432,6 +432,7 @@ export function MachineControls({
               label="Reset"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
+              dataTestId="home-machine-reset"
               focusId="home-machine-reset"
               focusOrder={170}
               onClick={() =>

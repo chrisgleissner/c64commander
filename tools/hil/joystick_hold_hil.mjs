@@ -20,7 +20,7 @@
  * actually broken before: a press that arrives as a press-and-release relays a
  * direction the C64 sees for one frame, and one frame is a press, not a hold.
  *
- * So the touch is a real one, from outside the app: `adb shell input swipe` drags on
+ * So the touch is a real one, from outside the app: a droidctl `droid_input.swipe` drags on
  * the on-screen stick and stays down. What the machine did with it is read back out of
  * the probe's telemetry.
  *
@@ -44,8 +44,8 @@
  *   node tools/hil/joystick_hold_hil.mjs [--host c64u] [--password pwd]
  *                                        [--cdp-port 9333] [--hold-ms 2000]
  *
- * Requires: the app running and foregrounded on the attached device, `adb forward
- * tcp:<cdp-port>` already pointed at its WebView (see the `hil-attach` skill), and the
+ * Requires: the app running and foregrounded on the attached device, the WebView DevTools forward
+ * (droid_device.forward_webview to <cdp-port>) already pointed at its WebView (see the `hil-attach` skill), and the
  * Ultimate reachable at `--host`.
  */
 
@@ -54,6 +54,8 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+
+import { createDroidDevice } from "./droidctl_device.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -101,7 +103,7 @@ const SCREEN_BASE = 0x0400;
 const CIRCLE_SCREEN_CODE = 0x51;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const adb = (args) => execFileAsync("adb", args, { maxBuffer: 1 << 22 });
+const device = await createDroidDevice();
 
 /** Evaluate an expression in the app's WebView, through the same helper the skills use. */
 const js = async (expression) => {
@@ -177,14 +179,14 @@ const expectedMoves = (frames, delay, rate) => {
  *
  * Chromium stops firing timers in a hidden page and Capacitor stops delivering plugin
  * results there, so a locked phone turns every wait into a CDP timeout that looks
- * exactly like an app hang. `adb shell wm dismiss-keyguard` is the fix.
+ * exactly like an app hang. `wm dismiss-keyguard` (droid_device.run_shell) is the fix.
  */
 const assertPageVisible = async () => {
   const visibility = await js(`(()=>JSON.stringify({hidden:document.hidden,state:document.visibilityState}))()`);
   if (visibility.hidden) {
     throw new Error(
       `the WebView is ${visibility.state}: Chromium suspends timers and Capacitor callbacks there. ` +
-        `Run "adb shell wm dismiss-keyguard" and try again.`,
+        `Dismiss the keyguard (droid_device.run_shell ["wm", "dismiss-keyguard"]) and try again.`,
     );
   }
 };
@@ -322,7 +324,7 @@ const openGameMode = async () => {
 /**
  * Where the on-screen stick is, in the device's own pixels.
  *
- * `adb shell input` speaks physical pixels and the DOM speaks CSS pixels, so the
+ * droidctl input speaks physical pixels and the DOM speaks CSS pixels, so the
  * device-pixel ratio is read from the page rather than hard-coded — it differs per
  * handset, and getting it wrong lands the touch somewhere else entirely with no error.
  */
@@ -357,16 +359,13 @@ const holdLeft = async (centre) => {
   const travel = Math.max(48, Math.round(centre.radiusPx * 0.8));
   const before = await readTelemetry();
 
-  const swipe = adb([
-    "shell",
-    "input",
-    "swipe",
-    String(centre.x),
-    String(centre.y),
-    String(centre.x - travel),
-    String(centre.y),
-    String(HOLD_MS),
-  ]);
+  const swipe = device.swipe({
+    x1: centre.x,
+    y1: centre.y,
+    x2: centre.x - travel,
+    y2: centre.y,
+    durationMs: HOLD_MS,
+  });
   // Late enough that the drag has long passed the dead zone and several repeats have
   // landed, early enough that the finger is still down.
   await sleep(Math.max(400, HOLD_MS - 400));
@@ -447,7 +446,7 @@ const main = async () => {
 
   // KEYCODE_DPAD_LEFT: a physical key that steers the game, which is the one thing
   // `auto` is allowed to hide the joystick on.
-  await adb(["shell", "input", "keyevent", "21"]);
+  await device.pressKey(21);
   await sleep(3500);
   const afterKey = await readSheet();
   check(afterKey.joystick === "hidden", "a physical key steering the game hid the joystick");

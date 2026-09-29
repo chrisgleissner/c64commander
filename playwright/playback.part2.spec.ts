@@ -1079,7 +1079,8 @@ test.describe("Playback file browser (part 2)", () => {
     await ensureRemoteRoot(dialog);
     await openRemoteFolder(dialog, "Usb0");
     await openRemoteFolder(dialog, "Games");
-    await expect(dialog.getByTestId("source-path-label")).toContainText("/Usb0/Games");
+    // At 360 px the compact path row names only the current folder; the full path is its accessible name.
+    await expect(dialog.getByTestId("source-path-label")).toHaveAttribute("aria-label", "Path: /Usb0/Games");
     await expect(dialog.getByText("/Usb0/Games/Sample Arcade")).toHaveCount(0);
     await snap(page, testInfo, "c64u-path-remembered");
     await page.getByRole("button", { name: "Cancel" }).click();
@@ -1087,7 +1088,10 @@ test.describe("Playback file browser (part 2)", () => {
 
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "C64 Ultimate");
-    await expect(page.getByRole("dialog").getByTestId("source-path-label")).toContainText("/Usb0/Games");
+    await expect(page.getByRole("dialog").getByTestId("source-path-label")).toHaveAttribute(
+      "aria-label",
+      "Path: /Usb0/Games",
+    );
     await page.getByTestId("navigate-root").click();
     await expect(page.getByText("Usb0", { exact: true })).toBeVisible();
     await snap(page, testInfo, "c64u-root");

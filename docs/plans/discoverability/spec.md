@@ -505,9 +505,15 @@ abbreviations, and no word that only means something inside this app.
 
 ### 8.4 Controls and state
 
-A caption bar at the bottom carries `Step n of <count>` and **Skip**, **Back**, **Next**. Keypad: Left
-and Right are Back and Next, OK is Next, the Back key skips. Every control is at least 44 px. The bar
-is padded by the bottom safe-area inset, or its buttons are drawn under the system navigation bar.
+A caption bar carries the title with an `n/<count>` counter beside it, a body of at most two lines,
+and a fold toggle, **Skip**, **Back** and **Next**. It sits on the edge that leaves more of the
+spotlit anchor in view, and the page is scrolled so the anchor lands in the band the caption leaves
+free; on a 320 x 427 CSS px screen the caption leaves at least half of it showing. The fold toggle
+hides the body so more of the app shows, and stays as the user leaves it; nothing folds it on a
+timer. Keypad: Left and Right are Back and Next, Up and Down fold and unfold, OK presses the focused
+tour button (Next when it opens), the Back key skips, and a held key acts once. The app underneath
+is inert and hidden from assistive technology. Every control is at least 44 px. The bar is padded by
+the safe-area inset on its edge, or its buttons are drawn under the system bar.
 
 ```ts
 // c64u_tour_state:v1

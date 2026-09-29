@@ -31,6 +31,8 @@ type HvscPreparationSheetProps = {
   readySongCount: number;
   errorReason: string | null;
   onBrowse: () => void;
+  /** What the ready button does, said on its face: browsing, or going back to what asked for HVSC. */
+  browseLabel?: string;
   onCancel: () => void;
   onRetry: () => void;
 };
@@ -52,6 +54,7 @@ export const HvscPreparationSheet = ({
   readySongCount,
   errorReason,
   onBrowse,
+  browseLabel = "Browse HVSC",
   onCancel,
   onRetry,
 }: HvscPreparationSheetProps) => {
@@ -74,10 +77,10 @@ export const HvscPreparationSheet = ({
           <AppSheetTitle>Preparing HVSC library</AppSheetTitle>
           <AppSheetDescription>
             {isSuccess
-              ? "The HVSC library is indexed and ready to browse."
+              ? "The HVSC library is indexed and ready."
               : isError
-                ? "Preparation stopped before the HVSC browser could open."
-                : "Download and indexing start automatically when you choose HVSC from Add items."}
+                ? "Preparation stopped before the HVSC library was ready."
+                : "Downloading the free HVSC music collection once, then indexing it on this device."}
           </AppSheetDescription>
         </AppSheetHeader>
 
@@ -133,7 +136,7 @@ export const HvscPreparationSheet = ({
         <AppSheetFooter className="flex flex-wrap items-center justify-end gap-2">
           {isSuccess ? (
             <Button onClick={onBrowse} data-testid="hvsc-preparation-browse">
-              Browse HVSC
+              {browseLabel}
             </Button>
           ) : null}
           {isError ? (

@@ -237,7 +237,7 @@ not-connected / empty / single-device).
       can be applied: Preload on Startup — button — `restore-reu-preload` — and Load into REU —
       button — `restore-reu-load`
     - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Backup, at the end of the list
-  - Reset — button (danger) — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
+  - Reset — button (danger) — `home-machine-reset` — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
   - Power — button (danger) — `home-power-actions` — R✅ I✅ — opens the **Power sheet** (`home-power-sheet`); disabled only when every row inside it is
   - **Power sheet** (`home-power-sheet`, opened by `home-power-actions`) — rows in increasing severity, each keeping the confirmation it had as a tile
     - Reboot — button — `home-power-action-reboot` — R✅ I✅ (confirm dialog)
@@ -640,7 +640,7 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
 ### 4.6 Docs (`/docs`)
 
 - Take the tour — card `docs-tour-card`, button `docs-tour-start` — R✅ I✅ — first on the page
-- Section toggles: Getting Started, Home, Play files, Disks & Drives, Swapping
+- Section toggles: Getting Started, Home, Play, Disks & Drives, Swapping
   Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
   Official Site — link — `docs-external-resource-*` — R✅ I✅
@@ -674,10 +674,18 @@ Opened by three doors — the Home field, the Quick Menu's top entry
 
 ### 5.0.1 Tour overlay (`tour-overlay`)
 
+- Hide / show the text — button (toggles, `aria-pressed`) — `tour-toggle-text` — R✅ I✅ — 44 px.
+  Folds the caption to its title and buttons (`data-mode="look"` on `tour-caption`) so more of the
+  app shows, and unfolds it again (`data-mode="read"`). Nothing folds or unfolds it on a timer.
 - Skip / Back / Next — buttons — `tour-skip` / `tour-back` / `tour-next` — R✅ I✅ — all 44 px.
-  Keypad: Left/Right are Back/Next, OK is Next, Back skips.
-- `tour-progress` says `Step n of 8`; `tour-spotlight` is the union of the step's anchors,
-  and `data-tour-degraded="true"` marks a step that could not reach one.
+  Focus moves to Next when the tour opens and returns to where it was when the tour closes.
+  Keypad: Left/Right are Back/Next, Up/Down fold and unfold the text, OK presses the focused tour
+  button (Next unless focus was moved), Back skips. A held key acts once.
+- `tour-progress` shows `n/m` and reads "Step n of m" (`data-step`, `data-step-count`);
+  `tour-spotlight` is the union of the step's anchors, and `data-tour-degraded="true"` marks a step
+  that could not reach one.
+- The app underneath is `inert` and `aria-hidden` while the tour is open: the spotlight shows a
+  control, it does not make it operable.
 
 ### 5.0.2 Key Explorer (`key-explorer-popup`)
 
@@ -726,7 +734,7 @@ the manual entry form — `startup-manual-device-panel` `[when discovery finds n
 devices]`, which submits on Enter and holds: manual host/IP — text input —
 `startup-manual-device-host-input` — R✅ I✅ ; manual Connect — button —
 `startup-manual-device-connect` — R✅ I✅ ;
-Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
+Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
 
@@ -789,17 +797,23 @@ ordinary focus-ring CTAs in both output modes.
   _(what the transport is currently asked to hold, comma-separated and sorted. A direction
   stuck on the real C64 is this feature's worst failure, so the answer is on the surface
   rather than only in a log)_
+- Joystick options (Joystick mode, compact display profile only, outside Game mode) —
+  button (toggles, `aria-expanded`) — `remote-input-joystick-options` — R✅ I✅ — shows and
+  hides the control size stepper and the Stick / D-Pad / Swipe choice, which are folded
+  behind it by default on the compact profile so the joystick is on the first screen.
+  Other profiles show both directly and have no Options button.
 - Control size stepper (Joystick mode only) — decrease/increase buttons + label
   — `remote-input-size-decrease`, `remote-input-size-increase`,
   `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
   joystick action controls, not the Type-tab keyboard, which sizes itself from
-  measured space)
+  measured space) _(compact: behind Joystick options)_
 - Game mode toggle (Joystick mode, joystick-capable tier only) — button —
   `remote-input-immersive-toggle` — R✅ I✅ — ENTERING starts the remembered
   Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
   separate Hide-controls step); leaving restores it. Auto-exits if the tier
   downgrades mid-session. One testid, two placements: the way IN sits on the
-  size-stepper row and reads "Game mode" ("Game" on the compact display profile);
+  size-stepper row (beside Joystick options on the compact profile) and reads "Game mode"
+  ("Game" on the compact display profile);
   the way OUT rides the Game mode heading row (`remote-input-game-mode-title`),
   right-aligned, reads "Exit", and carries the accessible name "Exit game mode"
 - Orientation override (inside Game mode) — buttons —
@@ -829,7 +843,8 @@ ordinary focus-ring CTAs in both output modes.
   Watch reachable with the controls hidden and no touchscreen)_
 - **A/V mirror controls** (`remote-input-mirror-controls`) _(Content Explorer
   A/V Mirror; pinned in the sheet chrome when `audio_mirror_enabled` or
-  `video_mirror_enabled` is on and the device advertises streaming; shares the
+  `video_mirror_enabled` is on and the device advertises streaming — on the compact
+  profile outside Game mode it sits below the joystick and scrolls with it; shares the
   single app-wide session with Home's Live View)_
   - Audio toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`)_
   - Video toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`)_
@@ -866,10 +881,11 @@ ordinary focus-ring CTAs in both output modes.
 - **Joystick mode:**
   - Port swap — switch (one-tap toggle, same directness as Autofire) —
     `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
-    current port; docked on the left rail in both standard and Game mode)
+    current port; on the row above the stick outside Game mode, and in the corner above FIRE in
+    Game mode)
   - Movement style toggle: Stick / D-Pad / Swipe — buttons —
     `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
-    switching style never itself releases a held direction)
+    switching style never itself releases a held direction; compact: behind Joystick options)
   - **Stick style** — relative thumbstick — pointer-only zone —
     `remote-input-stick-zone` — touch only (see below for the physical
     equivalent)
@@ -1229,11 +1245,14 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 - Search / filter — text — `add-items-filter` — its accessible name follows the scope:
   "Filter this folder" or "Search the whole source"
 - Scope (`add-items-search-scope`) `[only when the source can search past the current
-  folder; on the compact profile only while the filter holds text]`:
-  - This folder — button — `add-items-scope-folder`
-  - Everywhere — button — `add-items-scope-source`
+  folder]`:
+  - This folder — button — `add-items-scope-folder` `[not on the compact profile]`
+  - Everywhere — button — `add-items-scope-source` `[not on the compact profile]`
   - Scan — button — `add-items-deep-scan` `[only for a source that has to be walked
     rather than one that answers as you type]` — runs the source-wide search
+- Search reach — button (toggles between This folder and Everywhere, face shows the current
+  reach) — `add-items-scope-toggle` `[compact profile only, while the filter holds text; on the
+  filter's own row, so the list keeps its height]`
 
 **Browser** (`add-items-scroll`) — the folder listing, `ItemSelectionView`.
 

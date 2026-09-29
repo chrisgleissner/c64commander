@@ -83,6 +83,25 @@ describe("useDeviceConfigOptionDomains", () => {
     expect(hoisted.absent.has("Cat::Item")).toBe(true);
   });
 
+  /*
+   * Switching to an Ultimate-II+L, the category list could not be read while the connection was
+   * still settling, so each item was asked for. The cartridge has none of them; every 404 was
+   * logged as an error and counted on the badge, which showed a healthy device with twelve problems.
+   */
+  it("reads items it could not rule out as expected-missing, so a per-model 404 is not a fault", async () => {
+    hoisted.getCategoriesMock.mockRejectedValue(new Error("Device not ready for requests"));
+    hoisted.getConfigItemMock.mockRejectedValue(http404());
+    renderHook(() => useDeviceConfigOptionDomains("test", REFS, true));
+    await flush();
+
+    expect(hoisted.getConfigItemMock).toHaveBeenCalledWith(
+      "Cat",
+      "Item",
+      expect.objectContaining({ __c64uExpectedMissing: true }),
+    );
+    expect(hoisted.absent.has("Cat::Item")).toBe(true);
+  });
+
   // Going offline while the category list was being read aborted it, and the items were then asked for with no
   // network: the network-transitions E2E saw the drive and printer Bus ID reads fail while offline.
   it("asks for no items once the page stops wanting them while the category list is still being read", async () => {

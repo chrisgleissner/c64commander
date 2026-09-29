@@ -32,7 +32,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
   {
     id: "page.play",
     titleKey: "search.page.play",
-    titleDefault: "Play files",
+    titleDefault: "Play",
     subtitleKey: "search.page.play.subtitle",
     subtitleDefault: "Playlist, transport and SID Radio",
     keywords: ["music", "tunes", "sid", "playlist", "player", "listen"],

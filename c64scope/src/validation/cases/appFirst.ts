@@ -463,7 +463,7 @@ export const appFirstPlaySurface: ValidationCase = {
       featureArea: "Play",
       screenshotName: "af-play-surface.png",
       markers: [
-        "PLAY FILES",
+        "PLAY",
         "Add items to playlist",
         "Playlist",
         "Previous",

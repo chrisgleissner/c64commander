@@ -30,6 +30,12 @@ const CARTRIDGE: DeviceInfo = {
   firmware_version: "3.15",
 } as DeviceInfo;
 
+const profileRef = vi.hoisted(() => ({ current: "medium" as "compact" | "medium" | "expanded" }));
+vi.mock("@/hooks/useDisplayProfile", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/useDisplayProfile")>()),
+  useDisplayProfile: () => ({ profile: profileRef.current }),
+}));
+
 vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => ({ deviceInfo: connectedDevice.info }),
 }));
@@ -109,5 +115,29 @@ describe("RemoteInputSheet — the mirror controls follow the device's streaming
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
 
     expect(screen.getByTestId("remote-input-mirror-controls")).toBeInTheDocument();
+  });
+
+  /*
+   * On the smallest screen four pinned rows left the joystick 80px of a 349px sheet, so Listen and
+   * Watch move below the joystick there and scroll with it. Elsewhere they stay pinned above it.
+   */
+  it("puts Listen and Watch below the joystick on a compact display", () => {
+    profileRef.current = "compact";
+    connectedDevice.info = ULTIMATE_64;
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    const joystick = screen.getByTestId("remote-input-joystick-action-zone");
+    const mirror = screen.getByTestId("remote-input-mirror-controls");
+    expect(joystick.compareDocumentPosition(mirror) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    profileRef.current = "medium";
+  });
+
+  it("keeps Listen and Watch above the joystick on a standard display", () => {
+    connectedDevice.info = ULTIMATE_64;
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    const joystick = screen.getByTestId("remote-input-joystick-action-zone");
+    const mirror = screen.getByTestId("remote-input-mirror-controls");
+    expect(joystick.compareDocumentPosition(mirror) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 });

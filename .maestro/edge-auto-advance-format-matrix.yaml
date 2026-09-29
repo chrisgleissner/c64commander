@@ -12,11 +12,12 @@ env:
 # supported file categories (sid, mod, prg, crt, disk).
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to Play files tab
+# Navigate to the Play tab
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
-    visible: "Play files"
+    visible:
+      id: "page-play"
     timeout: ${TIMEOUT}
 - assertVisible:
     id: "page-play"

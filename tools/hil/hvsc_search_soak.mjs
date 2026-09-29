@@ -164,7 +164,7 @@ const assertPageVisible = async () => {
   if (visibility.hidden) {
     throw new Error(
       `the WebView is ${visibility.state}: Chromium suspends timers there, so the search debounce never fires. ` +
-        `Run "adb shell wm dismiss-keyguard" and try again.`,
+        `Dismiss the keyguard (droid_device.run_shell ["wm", "dismiss-keyguard"]) and try again.`,
     );
   }
 };

@@ -16,6 +16,14 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { cn } from "@/lib/utils";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
+/** The folder being shown, as its own name, with "…/" standing for the folders above it. */
+export const compactPathLabel = (path: string): string => {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return "/";
+  if (segments.length === 1) return `/${segments[0]}`;
+  return `…/${segments[segments.length - 1]}`;
+};
+
 export type ItemSelectionViewProps = {
   path: string;
   rootPath: string;
@@ -79,7 +87,14 @@ export const ItemSelectionView = ({
     >
       <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
       <div className="min-w-0">
-        <PathWrap path={path} className="text-foreground" />
+        {compact ? (
+          // One line: the full path wrapped to two at 320px, a row of files nobody could see.
+          <span className="block truncate text-foreground" data-testid="source-path-short">
+            {compactPathLabel(path)}
+          </span>
+        ) : (
+          <PathWrap path={path} className="text-foreground" />
+        )}
       </div>
     </div>
   );

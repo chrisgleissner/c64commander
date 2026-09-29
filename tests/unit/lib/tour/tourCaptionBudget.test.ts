@@ -10,30 +10,38 @@
  * How much of a small screen the tour is allowed to cover.
  *
  * The tour spotlights the real app and captions it, so the caption is worth only as much as the app
- * still showing behind it. Measured on the narrowest screen the app supports, 320 x 427 CSS px: the
- * caption panel took between 66% and 81% of the height, and on the worst step nothing of the page
- * underneath was visible at all. The bodies were 119 to 165 characters, which is five or six lines
- * at that width.
+ * still showing behind it. On the narrowest screen the app supports, 320 x 427 CSS px with the
+ * Pixel's system bars, a caption of a progress line, a one-line title, a three-line body and a row
+ * of buttons left 36% of the screen showing. The acceptance bar is at least half.
  *
- * A character budget is what holds that. It is coarse — a proportional font makes any count
- * approximate — but it is the thing that regressed, it needs no browser to check, and the on-device
- * measurement in `tools/hil/release_sweep_hil.mjs` is what confirms the result in pixels.
+ * The compact profile renders the body at 18 px, which fits about 32 characters on a line at that
+ * width. Two lines and a one-line title beside the step count left 54% showing when measured on the
+ * Pixel 4 at that geometry. A character budget is coarse, but it needs no browser to check; the
+ * on-device measurement is what confirms it in pixels.
  */
 
 import { describe, expect, it } from "vitest";
-import { TOUR_STEPS } from "@/lib/tour/steps";
+import { TOUR_STEPS, stepBody, type TourContext } from "@/lib/tour/steps";
 
-/** Two lines of body at 320 CSS px, with room for the longest words this app uses. */
-const MAX_BODY_CHARS = 95;
+/** Two lines of body at 320 CSS px. */
+const MAX_BODY_CHARS = 64;
 
-/** A title is one line. Anything longer wraps and costs as much as a line of body. */
-const MAX_TITLE_CHARS = 34;
+/** One line beside the step count. */
+const MAX_TITLE_CHARS = 20;
+
+const CONTEXTS: readonly TourContext[] = [{ hvscInstalled: false }, { hvscInstalled: true }];
+
+const everyBody = () =>
+  TOUR_STEPS.flatMap((step) => [
+    ...CONTEXTS.map((context) => ({ id: step.id, text: stepBody(step, context) })),
+    ...(step.unavailableBody ? [{ id: `${step.id} (unavailable)`, text: step.unavailableBody }] : []),
+  ]);
 
 describe("the tour has to leave the app visible behind it", () => {
-  it("keeps every caption body inside the two-line budget", () => {
-    const tooLong = TOUR_STEPS.filter((step) => step.body.length > MAX_BODY_CHARS).map(
-      (step) => `${step.id}: ${step.body.length} chars`,
-    );
+  it("keeps every caption body, in every context, inside the two-line budget", () => {
+    const tooLong = everyBody()
+      .filter((body) => body.text.length > MAX_BODY_CHARS)
+      .map((body) => `${body.id}: ${body.text.length} chars`);
     expect(tooLong, `over ${MAX_BODY_CHARS} characters`).toEqual([]);
   });
 
@@ -50,9 +58,15 @@ describe("the tour has to leave the app visible behind it", () => {
    */
   it("checked every step the tour has", () => {
     expect(TOUR_STEPS.length).toBeGreaterThanOrEqual(13);
-    TOUR_STEPS.forEach((step) => {
-      expect(step.body.trim().length, `${step.id} has no body`).toBeGreaterThan(20);
-      expect(step.title.trim().length, `${step.id} has no title`).toBeGreaterThan(3);
-    });
+    everyBody().forEach((body) => expect(body.text.trim().length, `${body.id} has no body`).toBeGreaterThan(20));
+    TOUR_STEPS.forEach((step) => expect(step.title.trim().length, `${step.id} has no title`).toBeGreaterThan(3));
+  });
+
+  it("uses American spelling, like the rest of the app and the machine itself", () => {
+    const british = /\b(colour|behaviour|favourite|centre|grey|organise|recognise)\b/i;
+    const found = [...everyBody().map((body) => body.text), ...TOUR_STEPS.map((step) => step.title)].filter((text) =>
+      british.test(text),
+    );
+    expect(found).toEqual([]);
   });
 });

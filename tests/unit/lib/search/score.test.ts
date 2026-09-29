@@ -55,7 +55,7 @@ const INDEX: ScorableEntry[] = [
     subtitle: "Thousands of tunes, played on this device",
     keywords: ["radio", "station", "shuffle"],
   }),
-  entry("page.play", "Play files", "page", { keywords: ["music", "tunes", "playlist"] }),
+  entry("page.play", "Play", "page", { keywords: ["music", "tunes", "playlist"] }),
   entry("page.settings", "Settings", "page"),
   entry("settings.control.app-style", "Style", "setting", {
     subtitle: "Seven colour styles on top of Light and Dark",

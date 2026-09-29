@@ -465,6 +465,46 @@ describe("useSourceNavigator whole-source search", () => {
     expect(result.current.searchScope).toBe("folder");
   });
 
+  /*
+   * Measured on a Pixel 4: "Games" typed in /USB2 found the Games folder; opened, the listing inside
+   * was still filtered by "Games", so it showed one entry of 77.
+   */
+  it("starts a new folder unfiltered after a folder filter found it", async () => {
+    const listEntriesPage = vi.fn(
+      async ({ query }: { path: string; query: string; offset: number; limit: number }) => ({
+        entries: [{ type: "dir" as const, name: `match-${query || "all"}`, path: `/x/${query || "all"}` }],
+        totalCount: 1,
+        nextOffset: null,
+      }),
+    );
+    const source = makeSource({ listEntriesPage, searchEntries: vi.fn(), searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setQuery?.("Games"));
+    await waitFor(() => expect(listEntriesPage).toHaveBeenLastCalledWith(expect.objectContaining({ query: "Games" })));
+
+    act(() => result.current.navigateTo("/Games"));
+
+    await waitFor(() =>
+      expect(listEntriesPage).toHaveBeenLastCalledWith(expect.objectContaining({ path: "/Games", query: "" })),
+    );
+    expect(result.current.query).toBe("");
+  });
+
+  it("keeps a folder filter when the same folder is refreshed", async () => {
+    const listEntriesPage = vi.fn(async () => ({ entries: [], totalCount: 0, nextOffset: null }));
+    const source = makeSource({ listEntriesPage });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(listEntriesPage).toHaveBeenCalled());
+
+    act(() => result.current.setQuery?.("Games"));
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(listEntriesPage).toHaveBeenLastCalledWith(expect.objectContaining({ query: "Games" })));
+    expect(result.current.query).toBe("Games");
+  });
+
   it("pages further results without losing the ones already shown", async () => {
     const searchEntries = vi.fn(async ({ offset }: { offset?: number }) =>
       offset

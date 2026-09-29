@@ -19,7 +19,7 @@
 import { describe, expect, it } from "vitest";
 
 // @ts-expect-error -- a HIL harness is plain JavaScript with no type declarations.
-import { elapsedSeconds, secondsPlayed } from "../../../tools/hil/release_sweep_hil.mjs";
+import { clockSeconds, elapsedSeconds, secondsPlayed } from "../../../tools/hil/release_sweep_hil.mjs";
 
 describe("elapsedSeconds", () => {
   it("reads the transport clock as a number of seconds", () => {
@@ -51,5 +51,25 @@ describe("secondsPlayed", () => {
 
   it("returns null when any reading is not a clock, rather than treating it as zero", () => {
     expect(secondsPlayed(["1:53", null, "2:33"])).toBeNull();
+  });
+});
+
+/*
+ * A playlist of twenty station tunes totals over an hour. Read as m:ss, "Total: 2:00:08" was two
+ * minutes, and the network and screen-off stages reported a two-hour playlist as too short to test.
+ */
+describe("clockSeconds", () => {
+  it("reads hours when the clock has them", () => {
+    expect(clockSeconds("Total: 2:00:08\nRemaining: 1:59:00", "Total:\\s*")).toBe(7208);
+    expect(clockSeconds("Total: 2:00:08\nRemaining: 1:59:00", "Remaining:\\s*")).toBe(7140);
+  });
+
+  it("still reads minutes and seconds", () => {
+    expect(clockSeconds("Remaining: 2:55", "Remaining:\\s*")).toBe(175);
+    expect(elapsedSeconds("1:53")).toBe(113);
+  });
+
+  it("says nothing when there is no clock", () => {
+    expect(clockSeconds("—:—", "Total:\\s*")).toBeNull();
   });
 });

@@ -36,9 +36,9 @@
  * Requires an existing `adb forward tcp:<CDP_PORT> localabstract:webview_devtools_remote_<pid>`.
  */
 
-import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { createDroidDevice } from "./droidctl_device.mjs";
 
 const PORT = process.env.CDP_PORT || "9333";
 
@@ -59,13 +59,14 @@ const OUT = arg("out", "");
 const KEY = { UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, CENTER: 23, BACK: 4, DIGIT: (d) => 7 + d };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const key = (code) => execFileSync("adb", ["shell", "input", "keyevent", String(code)], { stdio: "ignore" });
+const device = await createDroidDevice();
+const key = (code) => device.pressKey(code);
 
 async function connect() {
   const res = await fetch(`http://localhost:${PORT}/json`);
   const pages = await res.json();
   const page = pages.find((p) => p.type === "page" && p.webSocketDebuggerUrl) || pages[0];
-  if (!page) throw new Error("no CDP page found - is the adb forward up?");
+  if (!page) throw new Error("no CDP page found - forward the WebView first (droid_device.forward_webview)");
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   let nextId = 1;
   const pending = new Map();
@@ -242,7 +243,7 @@ async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}
   let wrapped = false;
   let first = null;
   for (let step = 0; step < maxSteps; step += 1) {
-    key(KEY.DOWN);
+    await key(KEY.DOWN);
     await sleep(settleMs);
     const state = await evaluate(STATE_EXPR);
     if (!state.current) {
@@ -295,14 +296,14 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
     const state = await evaluate(STATE_EXPR);
     const id = state.current?.id;
     if (!id || !pending.has(id)) {
-      key(KEY.DOWN);
+      await key(KEY.DOWN);
       await sleep(settleMs);
       continue;
     }
     pending.delete(id);
 
     const before = state;
-    key(KEY.CENTER);
+    await key(KEY.CENTER);
     await sleep(settleMs + 240);
     const inside = await evaluate(STATE_EXPR);
     // OK on a card either descends into it or activates it. If the route changed or an overlay
@@ -311,18 +312,18 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
     // `stops.routePath`, which is a property of an ARRAY and therefore always undefined, so the
     // guard collapsed to the overlay check and a route change with no overlay walked the wrong page.
     if (inside.route !== before.route || inside.overlayDepth > before.overlayDepth) {
-      key(KEY.BACK);
+      await key(KEY.BACK);
       await sleep(settleMs + 200);
       continue;
     }
     // OK on a closed card opens it, and a second OK goes in. If the ring is still at the top after
     // both, the card has nothing to go into, and a Back here would leave the route or the app.
     if (!inside.descended) {
-      key(KEY.CENTER);
+      await key(KEY.CENTER);
       await sleep(settleMs + 240);
       const second = await evaluate(STATE_EXPR);
       if (second.route !== before.route || second.overlayDepth > before.overlayDepth) {
-        key(KEY.BACK);
+        await key(KEY.BACK);
         await sleep(settleMs + 200);
         continue;
       }
@@ -343,7 +344,7 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
         if (current.current.descendants?.length === 1) reached.add(current.current.descendants[0]);
         if (current.current.editsField) reached.add(current.current.editsField);
       }
-      key(KEY.DOWN);
+      await key(KEY.DOWN);
       await sleep(settleMs);
       const next = await evaluate(STATE_EXPR);
       if (!next.current?.id || seenHere.has(next.current.id)) break;
@@ -352,7 +353,7 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
     // or the app.
     const after = await evaluate(STATE_EXPR);
     if (after.descended) {
-      key(KEY.BACK);
+      await key(KEY.BACK);
       await sleep(settleMs + 200);
     }
   }
@@ -408,7 +409,7 @@ async function dismissKeyboard(evaluate, expectedHeight) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const state = await evaluate(STATE_EXPR);
     if (state.vh >= expectedHeight - 8) return state;
-    key(KEY.BACK);
+    await key(KEY.BACK);
     await sleep(400);
   }
   return evaluate(STATE_EXPR);
@@ -443,7 +444,7 @@ async function main() {
     }
     // Engage key-navigation modality; until a key arrives the app is in pointer modality and
     // renders no ring highlight at all.
-    key(KEY.DOWN);
+    await key(KEY.DOWN);
     await sleep(400);
 
     for (const digit of ROUTE_KEYS) {
@@ -456,18 +457,18 @@ async function main() {
         for (let back = 0; back < 3; back += 1) {
           const held = await evaluate(STATE_EXPR);
           if (held.overlayDepth === 0 && !held.editing) break;
-          key(KEY.BACK);
+          await key(KEY.BACK);
           await sleep(220);
         }
         const before = (await dismissKeyboard(evaluate, fullHeight)).route;
-        key(KEY.DIGIT(digit));
+        await key(KEY.DIGIT(digit));
         await sleep(1000);
         const after = await dismissKeyboard(evaluate, fullHeight);
         switched = after.overlayDepth === 0 && (after.route !== before || ROUTE_KEYS.indexOf(digit) === 0);
         if (!switched)
           console.log(`  (retry ${attempt + 1}: digit ${digit} did not switch route, still ${after.route})`);
       }
-      key(KEY.DOWN);
+      await key(KEY.DOWN);
       await sleep(300);
       const walk = await walkScope(evaluate);
       const descended = await walkDescendants(evaluate, walk.stops);

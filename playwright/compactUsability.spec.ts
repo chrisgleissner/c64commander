@@ -79,12 +79,17 @@ const expectUsable = async (page: Page, name: string, selector: string, kind: Su
   return measurement;
 };
 
-/** A phone's status bar, measured at 30px on the Pixel 4 at 480x640: the app draws under it. */
+/**
+ * A phone's status and navigation bars, measured at 30px and 48px on the Pixel 4 at 480x640: the
+ * app draws under both. With the status bar alone, a bottom sheet that stood on the navigation bar
+ * at full screen height looked fine here and started 48px above the top of the screen on the phone.
+ */
 const emulatePhoneSystemBars = (page: Page) =>
   page.addInitScript(() => {
     document.addEventListener("DOMContentLoaded", () => {
       const style = document.createElement("style");
-      style.textContent = ":root { --safe-area-inset-top: 30px !important; }";
+      style.textContent =
+        ":root { --safe-area-inset-top: 30px !important; --safe-area-inset-bottom: 48px !important; }";
       document.head.append(style);
     });
   });
@@ -310,6 +315,22 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await expect(page.getByTestId("c64u-file-picker")).toBeVisible({ timeout: 15_000 });
 
     await expectUsable(page, "Add items browser (C64U)", '[data-app-surface="sheet"]', "list");
+
+    // Typing a filter adds the choice of where it searches. As a row of its own that left the list
+    // 69 px on a Pixel 4, less than one row.
+    // Typed from the keypad, as on the handset, so its guidance bar takes its place at the bottom.
+    await page.getByTestId("add-items-filter").focus();
+    await page.keyboard.type("a");
+    await page.waitForTimeout(400);
+    await expectUsable(page, "Add items browser (C64U, filtered)", '[data-app-surface="sheet"]', "list");
+    // Measured on the list's own viewport rather than through the starved-body rule, which only
+    // reports a list with more rows than it shows, and the mock folder here has none.
+    const share = await page.evaluate(() => {
+      const list = document.querySelector<HTMLElement>("[data-testid='add-items-scroll']")!;
+      const sheet = document.querySelector<HTMLElement>('[data-app-surface="sheet"]')!;
+      return list.clientHeight / sheet.getBoundingClientRect().height;
+    });
+    expect(share, "share of the filtered browser left to its list").toBeGreaterThanOrEqual(0.3);
   });
 
   test("the primary pages leave room for their own content", async ({ page }) => {
@@ -670,6 +691,16 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       };
       if (!patch()) document.addEventListener("readystatechange", patch);
     });
+    // The font a phone actually draws with: Inter is not bundled, so Android uses Roboto. The step
+    // labels collided only at Roboto's widths, which a runner's narrower default does not reach; a
+    // runner without Roboto falls back to DejaVu Sans, which is wider still.
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        const style = document.createElement("style");
+        style.textContent = "* { font-family: Roboto, 'DejaVu Sans', sans-serif !important; }";
+        document.head.append(style);
+      });
+    });
 
     await openCompact(page, "/play");
     const audit = createAuditor();
@@ -680,6 +711,20 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     const preparation = page.getByTestId("hvsc-preparation-sheet");
     await audit.check(page, "Play / Preparing HVSC library", preparation, "confirmation");
+    // Words wider than an equal share ran into their neighbours: "Download" ended 2px before
+    // "Unpack" began, and the row read as "DownloadUnpack".
+    const labelGaps = await page.evaluate(() => {
+      const ranges = [...document.querySelectorAll("[data-testid^='hvsc-preparation-progress-'] > span")].map(
+        (label) => {
+          const range = document.createRange();
+          range.selectNodeContents(label);
+          return range.getBoundingClientRect();
+        },
+      );
+      return ranges.slice(1).map((rect, index) => rect.left - ranges[index].right);
+    });
+    expect(labelGaps.length).toBe(3);
+    for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(6);
 
     audit.assertAllUsable();
   });

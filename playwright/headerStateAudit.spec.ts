@@ -41,7 +41,7 @@ import { LARGEST_TEXT_SCALE_ID } from "../src/lib/textScale";
 
 const PAGES = [
   { tab: "tab-home", path: "/", title: "Home" },
-  { tab: "tab-play", path: "/play", title: "Play files" },
+  { tab: "tab-play", path: "/play", title: "Play" },
   { tab: "tab-disks", path: "/disks", title: "Disks" },
   { tab: "tab-config", path: "/config", title: "Config" },
   { tab: "tab-settings", path: "/settings", title: "Settings" },

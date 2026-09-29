@@ -24,7 +24,6 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
-import { Input } from "@/components/ui/input";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { cn } from "@/lib/utils";
 import { reportUserError } from "@/lib/uiErrors";
@@ -35,6 +34,7 @@ import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
 import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
 import { ItemSelectionView } from "./ItemSelectionView";
+import { ItemSelectionSearch } from "./ItemSelectionSearch";
 import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -259,6 +259,11 @@ export const ItemSelectionDialog = ({
    * a plain `listEntries` source with no search of its own keeps a local filter here.
    */
   const usesNavigatorQuery = Boolean(browser.isQueryBacked || browser.canSearchSource);
+
+  // The local filter follows the navigator's rule: a new folder starts unfiltered.
+  useEffect(() => {
+    setFilterText("");
+  }, [browser.path]);
   const searchText = usesNavigatorQuery ? (browser.query ?? "") : filterText;
 
   const visibleEntries = useMemo(() => {
@@ -270,10 +275,10 @@ export const ItemSelectionDialog = ({
     // not in their name — a composer, for one.
     if (browser.isQueryBacked || browser.isSearching) return filesFiltered;
     if (!searchText) return filesFiltered;
+    // The name only: every entry's path contains the folder it is in, so matching the path made a
+    // filter for "Games" match everything inside /USB2/Games.
     const lower = searchText.toLowerCase();
-    return filesFiltered.filter(
-      (entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower),
-    );
+    return filesFiltered.filter((entry) => entry.name.toLowerCase().includes(lower));
   }, [browser.entries, browser.isQueryBacked, browser.isSearching, filterEntry, searchText]);
 
   const toggleSelection = (entry: SourceEntry) => {
@@ -643,6 +648,10 @@ export const ItemSelectionDialog = ({
       className="shrink-0"
     >
       {compactConfirmLabel(resolvedConfirmLabel)}
+      {/* A count reads as part of "Add 2"; after "Play" it would read as which one to play. */}
+      {activeSelectionCount > 0 && compactConfirmLabel(resolvedConfirmLabel) === "Add"
+        ? ` ${activeSelectionCount}`
+        : null}
     </Button>
   ) : null;
 
@@ -650,14 +659,14 @@ export const ItemSelectionDialog = ({
    * On the compact profile the sheet's own header carries the source and the count, and the
    * separate heading row above the filter is dropped. Both said much the same thing, and on a
    * 320x427 panel the header, that row, the filter, the scope buttons and the footer together
-   * left about one row of the list the sheet exists to show. The count sits under the title rather
-   * than beside the confirm button: beside it, the title was cut to its first letter.
+   * left about one row of the list the sheet exists to show. The count is part of the confirm
+   * button's face ("Add 3") rather than a separate label beside it, which cut the title to its
+   * first letter, or a line under the title, which cost the list a row.
    *
    * The visible title becomes the source rather than "Add items": by this point the user has
    * already chosen to add items and chosen where from, so the source is the useful half.
    */
   const compactHeader = profile === "compact";
-
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
       {/* A browser is its list: on the smallest screen it takes the header's height too. */}
@@ -679,11 +688,9 @@ export const ItemSelectionDialog = ({
                   ) : null}
                 </AppSheetTitle>
               }
-              descriptionContent={
-                <AppSheetDescription className="not-sr-only" asChild>
-                  {selectionCount}
-                </AppSheetDescription>
-              }
+              // The count rides on the confirm button ("Add 3") and stays the sheet's description for
+              // a screen reader. As a visible line under the title it cost the list a row.
+              descriptionContent={<AppSheetDescription asChild>{selectionCount}</AppSheetDescription>}
             />
           ) : (
             <AppSheetHeader>
@@ -711,73 +718,19 @@ export const ItemSelectionDialog = ({
             )}
 
             {!isArchiveSource ? (
-              <div className="space-y-2">
-                <Input
-                  placeholder={
-                    browser.searchScope === "source"
-                      ? `Search all of ${selectedSourceLabel ?? "this source"}…`
-                      : "Filter files…"
+              <ItemSelectionSearch
+                browser={browser}
+                compact={profile === "compact"}
+                searchText={searchText}
+                onSearchTextChange={(nextValue) => {
+                  if (usesNavigatorQuery) {
+                    browser.setQuery?.(nextValue);
+                    return;
                   }
-                  value={searchText}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    if (usesNavigatorQuery) {
-                      browser.setQuery?.(nextValue);
-                      return;
-                    }
-                    setFilterText(nextValue);
-                  }}
-                  data-testid="add-items-filter"
-                  aria-label={browser.searchScope === "source" ? "Search the whole source" : "Filter this folder"}
-                />
-                {/* Where the text applies. A filter that only ever sees the folder on screen cannot
-                    find a tune in an archive filed by composer, so the reach is made explicit and
-                    switchable rather than assumed. Only shown for a source that can actually search
-                    beyond the current folder. */}
-                {browser.canSearchSource && (profile !== "compact" || searchText.trim().length > 0) ? (
-                  <div className="flex flex-wrap items-center gap-2" data-testid="add-items-search-scope">
-                    <Button
-                      type="button"
-                      variant={browser.searchScope === "folder" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => browser.setSearchScope("folder")}
-                      data-testid="add-items-scope-folder"
-                      aria-pressed={browser.searchScope === "folder"}
-                    >
-                      This folder
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={browser.searchScope === "source" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => browser.setSearchScope("source")}
-                      data-testid="add-items-scope-source"
-                      aria-pressed={browser.searchScope === "source"}
-                    >
-                      Everywhere
-                    </Button>
-                    {/* A source that has to be walked cannot search while you type, so it gets an
-                        explicit action. An indexed one answers on its own and needs no button. */}
-                    {browser.searchScope === "source" && !browser.searchIsInstant ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => browser.runSourceSearch?.()}
-                        disabled={browser.isLoading || !(browser.query ?? "").trim()}
-                        data-testid="add-items-deep-scan"
-                      >
-                        {browser.isLoading ? "Scanning…" : "Scan"}
-                      </Button>
-                    ) : null}
-                    {browser.isSearching ? (
-                      <span className="text-xs text-muted-foreground" data-testid="add-items-search-summary">
-                        {browser.totalCount ?? 0} found
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+                  setFilterText(nextValue);
+                }}
+                selectedSourceLabel={selectedSourceLabel}
+              />
             ) : null}
           </div>
 

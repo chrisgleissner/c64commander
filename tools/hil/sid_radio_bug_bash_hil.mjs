@@ -28,9 +28,10 @@
  *        [--min-seconds 15] [--out ci-artifacts/sid-radio-bug-bash/matrix.json]
  */
 
-import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+
+import { createDroidDevice } from "./droidctl_device.mjs";
 
 const PORT = process.env.CDP_PORT || "9333";
 const arg = (name, fallback) => {
@@ -52,7 +53,7 @@ const STRESS_TAPS = Number(arg("stress-taps", "12"));
 const CHAOS_ROUNDS = Number(arg("chaos-rounds", "0"));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const adb = (...args) => execFileSync("adb", ["-s", SERIAL, ...args], { encoding: "utf8" });
+const device = await createDroidDevice({ serial: SERIAL });
 
 async function connect() {
   const res = await fetch(`http://localhost:${PORT}/json`);
@@ -187,7 +188,7 @@ async function main() {
     if (state.play === "Play") {
       const p = await evaluate(GEOM("playlist-play"));
       if (p.ok) {
-        adb("shell", "input", "tap", String(Math.round(p.cx * DPR)), String(Math.round(p.cy * DPR)));
+        await device.tap({ x: Math.round(p.cx * DPR), y: Math.round(p.cy * DPR) });
         await sleep(6000);
       }
     }
@@ -197,7 +198,7 @@ async function main() {
                 return q && q.getAttribute('aria-label'); })()`,
     );
     if (g.ok && nowPaused === "Pause") {
-      adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+      await device.tap({ x: Math.round(g.cx * DPR), y: Math.round(g.cy * DPR) });
       await sleep(800);
       const after = await evaluate(
         `(() => { const q = document.querySelector('[data-testid=playlist-pause]');
@@ -259,7 +260,7 @@ async function main() {
   const tap = async (testid, scenario) => {
     const g = await stableGeometry(testid, scenario);
     if (!g) return false;
-    adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+    await device.tap({ x: Math.round(g.cx * DPR), y: Math.round(g.cy * DPR) });
     await sleep(SETTLE_MS);
     return true;
   };
@@ -282,7 +283,7 @@ async function main() {
   const tapNoSettle = async (testid, scenario) => {
     const g = await stableGeometry(testid, scenario);
     if (!g) return false;
-    adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+    await device.tap({ x: Math.round(g.cx * DPR), y: Math.round(g.cy * DPR) });
     return true;
   };
 
@@ -327,7 +328,7 @@ async function main() {
     if (label !== "Pause") return;
     const g = await stableGeometry("playlist-pause", "pause");
     if (!g) return;
-    adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+    await device.tap({ x: Math.round(g.cx * DPR), y: Math.round(g.cy * DPR) });
     repauses += 1;
     await sleep(300);
   };
@@ -433,7 +434,7 @@ async function main() {
       }
       const x = String(Math.round(g.cx * DPR));
       const y = String(Math.round(g.cy * DPR));
-      for (let t = 0; t < STRESS_TAPS; t += 1) adb("shell", "input", "tap", x, y);
+      for (let t = 0; t < STRESS_TAPS; t += 1) await device.tap({ x: x, y: y });
       await sleep(2500);
       const cur = await evaluate(CURRENT);
       const st = await evaluate(STATS);

@@ -742,6 +742,32 @@ test.describe("HVSC Play page", () => {
     await snap(page, testInfo, "hvsc-installed");
   });
 
+  /*
+   * A newcomer's first tune usually starts at SID Radio, which cannot play until HVSC is installed.
+   * Measured on a Pixel 4: the install finished on "Browse HVSC" and closed onto an empty playlist,
+   * so the radio the user had asked for had to be found again from Home.
+   */
+  test("HVSC installed from SID Radio leads back to SID Radio", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await installMocks(page, { installedVersion: 0 });
+    await page.goto("/play");
+    await page.getByTestId("sid-radio-launcher").click();
+    const radio = page.getByTestId("sid-radio-launcher-sheet");
+    await expect(radio.getByTestId("sid-radio-needs-hvsc")).toBeVisible();
+    await radio.getByTestId("sid-radio-install-hvsc").click();
+
+    const ready = page.getByTestId("hvsc-preparation-browse");
+    await expect(ready).toBeVisible({ timeout: 30_000 });
+    await expect(ready).toHaveText("Open SID Radio");
+    await ready.click();
+
+    await expect(page.getByTestId("hvsc-preparation-sheet")).toBeHidden();
+    await expect(page.getByTestId("sid-radio-launcher-sheet")).toBeVisible();
+    await expect(page.getByTestId("sid-radio-needs-hvsc")).toHaveCount(0);
+    await snap(page, testInfo, "radio-after-install");
+  });
+
   test("HVSC install shows progress updates", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto("/play");

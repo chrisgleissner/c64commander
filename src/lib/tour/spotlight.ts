@@ -60,9 +60,77 @@ export const scrimRects = (hole: Rect | null, viewport: { width: number; height:
   ].filter((rect) => rect.width > 0 && rect.height > 0);
 };
 
-/** Whether the caption bar goes above or below the hole, so it never covers what it describes. */
-export const captionPlacement = (hole: Rect | null, viewportHeight: number): "top" | "bottom" => {
+export type CaptionPlacement = "top" | "bottom";
+
+/** The part of the screen the caption and the system bars leave uncovered. */
+export interface SpotlightFrame {
+  /** Viewport height in CSS px. */
+  readonly viewportHeight: number;
+  /** The caption panel's height in CSS px, its own inset padding included. */
+  readonly captionHeight: number;
+  /** System bar insets in CSS px. The caption pads itself by the inset on the side it sits on. */
+  readonly insetTop: number;
+  readonly insetBottom: number;
+  /**
+   * The part of the viewport the anchor's scroll container shows, when that is less than the
+   * viewport. A page scrolled inside a region between the app bar and the tab bar cannot show an
+   * anchor above or below that region, however much of the screen the caption leaves free there.
+   */
+  readonly clip?: { readonly top: number; readonly bottom: number };
+}
+
+/** Breathing room between a spotlit anchor and the caption or the screen edge. */
+export const SPOTLIGHT_MARGIN = 8;
+
+/**
+ * The band of the viewport the app still shows with the caption on `placement`'s side.
+ *
+ * The caption's measured height already contains the inset on its own side, so that inset is not
+ * subtracted a second time. The opposite side still loses its system bar.
+ */
+export const freeBand = (placement: CaptionPlacement, frame: SpotlightFrame): { top: number; bottom: number } =>
+  placement === "bottom"
+    ? { top: frame.insetTop, bottom: frame.viewportHeight - frame.captionHeight }
+    : { top: frame.captionHeight, bottom: frame.viewportHeight - frame.insetBottom };
+
+/** The free band, narrowed to what the anchor's scroll container can show. */
+const visibleBand = (placement: CaptionPlacement, frame: SpotlightFrame): { top: number; bottom: number } => {
+  const band = freeBand(placement, frame);
+  if (!frame.clip) return band;
+  return { top: Math.max(band.top, frame.clip.top), bottom: Math.min(band.bottom, frame.clip.bottom) };
+};
+
+const visibleHeight = (hole: Rect, band: { top: number; bottom: number }): number =>
+  Math.max(0, Math.min(hole.top + hole.height, band.bottom) - Math.max(hole.top, band.top));
+
+/**
+ * Which edge the caption sits on: the one that leaves more of the spotlit anchor in view.
+ *
+ * Deciding from the space around the hole alone, without the caption's height, put a 273 px caption
+ * below a hole whose top was at 167 on a 427 px screen, and the Radio tile it was describing was
+ * entirely underneath. A tie keeps the bottom, where the caption has no hole to cover.
+ */
+export const captionPlacement = (hole: Rect | null, frame: SpotlightFrame): CaptionPlacement => {
   if (hole === null) return "bottom";
-  const spaceBelow = viewportHeight - (hole.top + hole.height);
-  return spaceBelow >= hole.top ? "bottom" : "top";
+  const below = visibleHeight(hole, visibleBand("bottom", frame));
+  const above = visibleHeight(hole, visibleBand("top", frame));
+  return above > below ? "top" : "bottom";
+};
+
+/**
+ * How far to scroll so the spotlit anchor sits in the band the caption leaves free.
+ *
+ * Positive scrolls the page down (content moves up). Zero when the hole already fits, including the
+ * margin. A hole taller than the band is aligned by its top, so the reader sees where the thing
+ * starts rather than an arbitrary slice of its middle.
+ */
+export const spotlightScrollDelta = (hole: Rect | null, placement: CaptionPlacement, frame: SpotlightFrame): number => {
+  if (hole === null) return 0;
+  const band = visibleBand(placement, frame);
+  const top = band.top + SPOTLIGHT_MARGIN;
+  const bottom = band.bottom - SPOTLIGHT_MARGIN;
+  if (hole.top >= top && hole.top + hole.height <= bottom) return 0;
+  if (hole.height > bottom - top) return Math.round(hole.top - top);
+  if (hole.top < top) return Math.round(hole.top - top);
+  return Math.round(hole.top + hole.height - bottom);
 };

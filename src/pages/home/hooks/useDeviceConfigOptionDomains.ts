@@ -141,7 +141,13 @@ export function useDeviceConfigOptionDomains(
           continue;
         }
         try {
-          const payload = await api.getConfigItem(category, item, { __c64uIntent: "background" });
+          // A 404 here is a per-model absence, not a fault. Undeclared, each one was logged as an
+          // error and counted on the badge: switching to an Ultimate-II+L while the category list
+          // could not be read turned a healthy cartridge red with twelve problems.
+          const payload = await api.getConfigItem(category, item, {
+            __c64uIntent: "background",
+            __c64uExpectedMissing: true,
+          });
           if (cancelled) return;
           const domain = toDomain(
             readItemOptions(payload, category, item).map(String),

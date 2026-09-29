@@ -75,7 +75,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
     },
     {
       id: "play",
-      title: "Play files",
+      title: "Play",
       icon: Play,
       content: (
         <div className="space-y-3 text-sm">

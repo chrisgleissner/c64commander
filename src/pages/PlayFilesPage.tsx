@@ -298,6 +298,8 @@ export default function PlayFilesPage() {
   const [recurseFolders, setRecurseFolders] = useState(true);
 
   const [hvscPreparationOpen, setHvscPreparationOpen] = useState(false);
+  // Set when SID Radio asked for HVSC, so the finished install leads back to the radio.
+  const [hvscPreparationForRadio, setHvscPreparationForRadio] = useState(false);
   const [browserInitialSourceId, setBrowserInitialSourceId] = useState<string | null>(null);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
     status: "idle",
@@ -992,9 +994,14 @@ export default function PlayFilesPage() {
   const handleBrowsePreparedHvsc = useCallback(() => {
     if (!hvscControlsEnabled) return;
     setHvscPreparationOpen(false);
+    if (hvscPreparationForRadio) {
+      setHvscPreparationForRadio(false);
+      setSidRadioLauncherOpen(true);
+      return;
+    }
     setBrowserInitialSourceId("hvsc-library");
     setBrowserOpen(true);
-  }, [hvscControlsEnabled]);
+  }, [hvscControlsEnabled, hvscPreparationForRadio]);
 
   const handleCancelHvscPreparation = useCallback(async () => {
     if (hvsc.hvscPreparationState === "DOWNLOADING" || hvsc.hvscPreparationState === "INGESTING") {
@@ -2509,7 +2516,7 @@ export default function PlayFilesPage() {
 
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Play files" />
+      <AppBar title="Play" />
       <PageContainer>
         <PageStack>
           {lightingStudioEnabled && lightingResolved.sourceCue ? (
@@ -2841,7 +2848,12 @@ export default function PlayFilesPage() {
                 hasPlaylist={hasPlaylist}
                 playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
-                onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
+                onClearPlaylist={() => {
+                  // A running station tops the playlist up as it empties, so clearing it would
+                  // be undone at once: clearing the playlist ends the station too.
+                  sidRadio.stop();
+                  removePlaylistItemsById(new Set(playlistIds));
+                }}
                 playlistFilterText={playlistFilterInputText}
                 onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
                 hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
@@ -2939,7 +2951,10 @@ export default function PlayFilesPage() {
 
           <HvscPreparationSheet
             open={hvscControlsEnabled && hvscPreparationOpen}
-            onOpenChange={setHvscPreparationOpen}
+            onOpenChange={(open) => {
+              setHvscPreparationOpen(open);
+              if (!open) setHvscPreparationForRadio(false);
+            }}
             state={hvsc.hvscPreparationState}
             statusLabel={hvsc.hvscPreparationStatusLabel}
             failedPhase={hvsc.hvscPreparationFailedPhase}
@@ -2952,6 +2967,7 @@ export default function PlayFilesPage() {
             readySongCount={hvsc.hvscReadySongCount}
             errorReason={hvsc.hvscPreparationErrorReason}
             onBrowse={handleBrowsePreparedHvsc}
+            browseLabel={hvscPreparationForRadio ? "Open SID Radio" : undefined}
             onCancel={() => void handleCancelHvscPreparation()}
             onRetry={() => void hvsc.retryHvscPreparation()}
           />
@@ -3016,7 +3032,14 @@ export default function PlayFilesPage() {
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
             onStartSong={startSidRadioSongMood}
             hvscMissing={!hvsc.hvscInstalled}
-            onInstallHvsc={hvscControlsEnabled ? () => setHvscPreparationOpen(true) : undefined}
+            onInstallHvsc={
+              hvscControlsEnabled
+                ? () => {
+                    setHvscPreparationForRadio(true);
+                    setHvscPreparationOpen(true);
+                  }
+                : undefined
+            }
           />
           <TuneListSheet
             open={tuneListOpen}

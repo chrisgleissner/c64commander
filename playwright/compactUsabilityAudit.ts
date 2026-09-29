@@ -26,6 +26,7 @@ export type CompactDefectKind =
   | "clipped-content"
   | "starved-body"
   | "overlapping-controls"
+  | "overlapping-text"
   | "text-below-floor"
   | "small-target"
   | "under-system-bar";
@@ -143,6 +144,11 @@ const MEASURE = ({ rootSelector, bodyShareFloor, textFloor, targetFloor }: Measu
   const isVisible = (element: Element) => {
     const style = getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+    // A faded-out container hides its children, whose own opacity still reads 1: the alphabet
+    // scrubber's letters sat invisibly over the dialog title and read as overlapping text.
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      if (getComputedStyle(parent).opacity === "0") return false;
+    }
     if (isScreenReaderOnly(element)) return false;
     const rect = element.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
@@ -250,6 +256,47 @@ const MEASURE = ({ rootSelector, bodyShareFloor, textFloor, targetFloor }: Measu
           detail: `${round(overlapX)}x${round(overlapY)}px of shared area on screen`,
         });
       }
+    }
+  }
+
+  /*
+   * Two pieces of text drawn over each other cannot both be read. Measured on the glyphs, not the
+   * boxes: a word wider than its column overflows its box, which is exactly how "Download" ran
+   * into "Unpack" in the HVSC progress steps on a 320px screen.
+   */
+  const textRuns = all
+    .filter((element) => element.children.length === 0 && (element.textContent ?? "").trim().length > 0)
+    .flatMap((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const clip = clipRect(element);
+      return Array.from(range.getClientRects())
+        .map((rect) => ({
+          element,
+          left: Math.max(rect.left, clip.left),
+          right: Math.min(rect.right, clip.right),
+          top: Math.max(rect.top, clip.top),
+          bottom: Math.min(rect.bottom, clip.bottom),
+        }))
+        .filter((rect) => rect.right > rect.left && rect.bottom > rect.top);
+    });
+  const reportedText = new Set<string>();
+  for (let i = 0; i < textRuns.length; i += 1) {
+    for (let j = i + 1; j < textRuns.length; j += 1) {
+      const a = textRuns[i];
+      const b = textRuns[j];
+      if (a.element === b.element) continue;
+      const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (overlapX <= 1 || overlapY <= 2) continue;
+      const what = `${describe(a.element)} over ${describe(b.element)}`;
+      if (reportedText.has(what)) continue;
+      reportedText.add(what);
+      defects.push({
+        kind: "overlapping-text",
+        what,
+        detail: `${round(overlapX)}x${round(overlapY)}px of shared glyph area at ${round(Math.max(a.left, b.left))},${round(Math.max(a.top, b.top))}`,
+      });
     }
   }
 

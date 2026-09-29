@@ -112,11 +112,15 @@ const sheetVariants = cva(
        * side padding takes another 15% of the width. Both matter more here than the visual cue
        * that something is layered over the page, which the animation already provides.
        */
+      /*
+       * No inset in the padding at either density: every side already offsets the sheet by the
+       * status and navigation bars, and adding them again cost a bottom sheet 78px of list on a
+       * Pixel 4 (30 top, 48 bottom). Compact's height is the screen less those bars. At the whole
+       * screen, a bottom sheet standing on the navigation bar reached 48px above the top of the
+       * screen, and its title and Close sat under the status bar.
+       */
       density: {
-        compact:
-          "max-h-[100dvh] px-3 pt-[calc(0.75rem+var(--safe-area-inset-top))] pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
-        // No inset in the padding: every side already offsets the sheet by the status and navigation
-        // bars, and adding them again cost a bottom sheet 78px of list on a Pixel 4 (30 top, 48 bottom).
+        compact: "max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))] px-3 pt-3 pb-3",
         standard: "max-h-[85dvh] px-6 pt-6 pb-6",
       },
     },
@@ -150,13 +154,8 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
           style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
         >
           {children}
-          {/* 44px around the same icon position; compact pads the sheet by the status bar, so the button moves with it. */}
-          <SheetPrimitive.Close
-            className={cn(
-              "absolute right-0.5 flex h-11 w-11 items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
-              density === "compact" ? "top-[calc(0.125rem+var(--safe-area-inset-top))]" : "top-0.5",
-            )}
-          >
+          {/* 44px around the same icon position. */}
+          <SheetPrimitive.Close className="absolute right-0.5 top-0.5 flex h-11 w-11 items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>

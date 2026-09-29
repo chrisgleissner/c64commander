@@ -14,21 +14,35 @@
  * time — a step whose anchors cannot appear degrades to the same caption with no spotlight rather
  * than being skipped.
  *
- * The steps cover what the app does, not what was added to it most recently: playing music with no
- * machine attached, playlists and where content comes from, disks, connecting and controlling a
- * machine, watching and steering it, its configuration, getting around without touching the screen,
- * the built-in guides, and appearance. Captions are written for someone who has never used a C64:
- * short sentences, no abbreviations, and no word that only means something to this app.
+ * Each step points at the thing it describes, not at the tab that leads there: a highlighted tab
+ * icon shows where a page is and nothing of what it does.
+ *
+ * Captions are written for someone who has never used a C64 and must fit the smallest screen: a
+ * title of one line and a body of two, so the caption leaves at least half of a 320 x 427 CSS px
+ * screen showing. `tourCaptionBudget.test.ts` holds the lengths.
  */
+
+/** What a caption may depend on, read when the step is shown. */
+export interface TourContext {
+  /** Whether the HVSC music collection is installed, which SID Radio needs before it can play. */
+  readonly hvscInstalled: boolean;
+}
 
 export interface TourStep {
   readonly id: string;
   readonly title: string;
-  readonly body: string;
+  /** A body that depends on what is installed is a function of the context. */
+  readonly body: string | ((context: TourContext) => string);
+  /**
+   * Said instead of `body` when a machine is connected and the step's anchor still never appeared.
+   * The feature is then missing for this device or this platform (Live View also needs the phone's
+   * stream receiver), and the usual body would describe something the user cannot see.
+   */
+  readonly unavailableBody?: string;
   /**
    * Where to go and what to spotlight. `testIds` is a LIST because a step may point at more than
-   * one element — step 4 highlights both the Last and the Recent tile — and the spotlight is then
-   * the union of their rects. Absent for a step that explains rather than points.
+   * one element — the Last and Recent tiles, say — and the spotlight is then the union of their
+   * rects. Absent for a step that explains rather than points.
    */
   readonly anchor?: {
     readonly path: string;
@@ -36,32 +50,39 @@ export interface TourStep {
     readonly sectionId?: string;
     readonly testIds: readonly string[];
   };
-  /** True for a step that only makes sense with a machine attached (steps 5 to 7). */
+  /** True for a step that only makes sense with a machine attached. */
   readonly requiresDevice?: boolean;
 }
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "what-this-is",
-    title: "What this app is",
-    body: "Your C64's remote control and music player. It plays C64 music on its own too.",
+    title: "Welcome",
+    body: "Controls your C64, and plays C64 music by itself too.",
   },
   {
     id: "search",
-    title: "Everything is one search away",
-    body: "Finds any page, setting, tune or disk. It is the field at the top of Home.",
+    title: "Search everything",
+    body: "Find pages, settings, tunes and disks from this field.",
     anchor: { path: "/", testIds: ["home-search-field"] },
   },
   {
     id: "listening-without-a-c64",
-    title: "Music with no C64",
-    body: "Radio plays thousands of C64 tunes here. No C64 and no network needed.",
+    title: "Music without a C64",
+    /*
+     * "No network needed" was true only once the HVSC collection had been downloaded, and a new
+     * installation has not downloaded it: every station is disabled until it has.
+     */
+    body: ({ hvscInstalled }) =>
+      hvscInstalled
+        ? "Radio plays C64 tunes right here. No C64 needed."
+        : "Radio plays C64 tunes here after a free one-time download.",
     anchor: { path: "/", scope: "home", sectionId: "quick-actions", testIds: ["home-tile-action.sid-radio"] },
   },
   {
     id: "your-tunes",
-    title: "Pick up where you left off",
-    body: "Last returns to the tune you were playing. Recent lists what you opened before.",
+    title: "Carry on listening",
+    body: "Last resumes your tune. Recent lists what you played.",
     anchor: {
       path: "/",
       scope: "home",
@@ -72,62 +93,72 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "playlists",
     title: "Build a playlist",
-    body: "Play holds your music and programs — from here, from your C64, or from a free library.",
-    anchor: { path: "/play", testIds: ["tab-play"] },
+    body: "Add tunes and programs from this device or from your C64.",
+    anchor: { path: "/play", testIds: ["add-items-to-playlist"] },
   },
   {
     id: "disks",
     title: "Disks and games",
-    body: "Load a disk image and your C64 runs what is on it. Keep a collection and swap between them.",
-    anchor: { path: "/disks", testIds: ["tab-disks"] },
+    body: "Put a disk in a drive and your C64 runs what is on it.",
+    anchor: { path: "/disks", testIds: ["disks-section-toggle-drive-a", "drive-mount-toggle-a"] },
   },
   {
     id: "connecting",
-    title: "Connecting your C64",
-    body: "Keep this device and your C64 on one network. The badge shows the connection.",
+    title: "Your connection",
+    body: "Shows whether your C64 is connected. Open it for details.",
     anchor: { path: "/", testIds: ["unified-health-badge"] },
     requiresDevice: true,
   },
   {
     id: "controlling-the-machine",
-    title: "Controlling the machine",
-    body: "Reset, pause and power off here. The cards below hold drives, sound and lights.",
-    anchor: { path: "/", scope: "home", sectionId: "quick-actions", testIds: ["home-quick-actions"] },
+    title: "Control the machine",
+    body: "Reset your C64 here. Power holds the other choices.",
+    anchor: {
+      path: "/",
+      scope: "home",
+      sectionId: "quick-actions",
+      testIds: ["home-machine-reset", "home-power-actions"],
+    },
     requiresDevice: true,
   },
   {
     id: "live-view",
-    title: "Watch, listen and play",
-    body: "See and hear your C64 here, and steer it. Game Mode starts both and adds a joystick.",
+    title: "Watch, listen, play",
+    body: "See and hear your C64 here. Game Mode adds a joystick.",
+    unavailableBody: "Live View is not available with this machine or phone.",
     anchor: { path: "/", scope: "home", sectionId: "live-view", testIds: ["live-view-card"] },
     requiresDevice: true,
   },
   {
     id: "configuration",
-    title: "Every machine setting",
-    body: "Every setting your C64 has, read from the machine. Change it here, it changes there.",
-    anchor: { path: "/config", testIds: ["tab-config"] },
+    title: "Machine settings",
+    body: "Every setting your C64 has. Change it here, it changes there.",
+    anchor: { path: "/config", testIds: ["config-categories"] },
     requiresDevice: true,
   },
   {
     id: "getting-around",
-    title: "Getting around without the screen",
-    body: "A keypad works too: 1 to 6 open the pages, 7 opens search, and a highlight follows you.",
-    anchor: { path: "/", testIds: ["tab-home"] },
+    title: "Keys work too",
+    body: "1 to 6 open pages, 7 searches, arrows move the highlight.",
+    anchor: { path: "/", testIds: ["tab-bar"] },
   },
   {
     id: "docs",
     title: "Help is built in",
-    body: "Docs has short guides, and starts this tour again whenever you want it.",
+    body: "Docs has short guides, and starts this tour again.",
     anchor: { path: "/docs", testIds: ["docs-tour-start"] },
   },
   {
     id: "making-it-yours",
-    title: "Making it yours",
-    body: "Seven colour styles over Light and Dark, larger text, and a tighter or roomier layout.",
+    title: "Make it yours",
+    body: "Color styles, Light or Dark, and larger text are here.",
     anchor: { path: "/settings", scope: "settings", sectionId: "appearance", testIds: ["settings-app-style"] },
   },
 ];
+
+/** The caption's body for `step` in `context`. */
+export const stepBody = (step: TourStep, context: TourContext): string =>
+  typeof step.body === "function" ? step.body(context) : step.body;
 
 /** The steps offered again after a first connection, when they ran with nothing attached. */
 export const DEVICE_STEP_IDS: readonly string[] = TOUR_STEPS.filter((step) => step.requiresDevice).map(

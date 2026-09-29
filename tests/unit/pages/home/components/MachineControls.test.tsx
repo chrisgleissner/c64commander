@@ -242,7 +242,7 @@ describe("MachineControls", () => {
   it("opens Reset confirmation and does not call reset immediately", () => {
     render(<MachineControls {...defaultProps} />);
 
-    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByTestId("home-machine-reset"));
 
     expect(screen.getByRole("dialog")).toHaveTextContent("Reset?");
     expect(defaultProps.onAction).not.toHaveBeenCalled();
@@ -252,7 +252,7 @@ describe("MachineControls", () => {
   it("cancels Reset confirmation without sending the machine command", () => {
     render(<MachineControls {...defaultProps} />);
 
-    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByTestId("home-machine-reset"));
     fireEvent.click(screen.getByText("Cancel"));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -263,7 +263,7 @@ describe("MachineControls", () => {
   it("confirms Reset exactly once after re-checking guards", async () => {
     render(<MachineControls {...defaultProps} />);
 
-    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByTestId("home-machine-reset"));
     fireEvent.click(screen.getByText("Confirm"));
 
     await waitFor(() => {
@@ -280,7 +280,7 @@ describe("MachineControls", () => {
   it("does not execute confirmed Reset if current guards become disabled", () => {
     const { rerender } = render(<MachineControls {...defaultProps} />);
 
-    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByTestId("home-machine-reset"));
     rerender(<MachineControls {...defaultProps} machineTaskBusy={true} />);
     fireEvent.click(screen.getByText("Confirm"));
 
@@ -390,7 +390,7 @@ describe("MachineControls", () => {
       </InterstitialStateProvider>,
     );
 
-    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByTestId("home-machine-reset"));
     await waitFor(() => expect(appListenerState.backButtonListener).not.toBeNull());
 
     act(() => {
@@ -416,7 +416,7 @@ describe("MachineControls", () => {
       </InterstitialStateProvider>,
     );
 
-    fireEvent.click(screen.getByTestId("action-Reset"));
+    fireEvent.click(screen.getByTestId("home-machine-reset"));
 
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm" }));

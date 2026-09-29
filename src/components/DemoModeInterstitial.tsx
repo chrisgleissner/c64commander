@@ -44,8 +44,10 @@ const NO_NETWORK_MESSAGE =
  *
  * On a 320x427 panel above a gesture bar the offer has about 330px. Five lines of prose left the
  * second button half off screen, and a tap on its hidden half reached the backdrop, which declines.
+ * With the Pixel's status bar as well the dialog is 283px tall, and a third line of prose ran under
+ * the buttons, which stay put while the prose scrolls: two lines is what fits.
  */
-const NO_NETWORK_MESSAGE_COMPACT = "No network, so no C64U can be reached. Demo Mode simulates one.";
+const NO_NETWORK_MESSAGE_COMPACT = "No network. Demo Mode can simulate a C64.";
 const NOT_FOUND_SUFFIX_COMPACT = ". Demo Mode runs the app against a simulated device on this phone.";
 
 export function DemoModeInterstitial() {
@@ -94,7 +96,8 @@ export function DemoModeInterstitial() {
         if (!open) void declineDemoMode();
       }}
     >
-      <DialogContent>
+      {/* Compact: the default 24 px padding and 16 px gaps took 80 of the 283 px this offer gets. */}
+      <DialogContent className={compact ? "gap-2 p-4" : undefined}>
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
           <DialogDescription data-testid="demo-interstitial-description">{message}</DialogDescription>

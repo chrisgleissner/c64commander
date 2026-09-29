@@ -57,4 +57,12 @@ describe("ItemSelectionView on the smallest screen", () => {
     expect(screen.getByRole("button", { name: "Up" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Root" })).toBeDisabled();
   });
+
+  it("shows the current folder on one line and keeps the full path as the label's name", () => {
+    renderAt("/USB2/Games/Boulder Dash");
+
+    expect(screen.getByTestId("source-path-short")).toHaveTextContent("…/Boulder Dash");
+    expect(screen.getByTestId("source-path-short")).toHaveClass("truncate");
+    expect(screen.getByTestId("source-path-label")).toHaveAttribute("aria-label", "Path: /USB2/Games/Boulder Dash");
+  });
 });

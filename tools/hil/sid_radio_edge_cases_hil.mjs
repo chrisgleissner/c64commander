@@ -29,9 +29,10 @@
  *   node tools/hil/sid_radio_edge_cases_hil.mjs --serial 9B081FFAZ001WX
  */
 
-import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+
+import { createDroidDevice } from "./droidctl_device.mjs";
 
 const PORT = process.env.CDP_PORT || "9333";
 const arg = (name, fallback) => {
@@ -44,7 +45,7 @@ const MIN_SECONDS = Number(arg("min-seconds", "15"));
 const DPR = 2.75;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const adb = (...a) => execFileSync("adb", ["-s", SERIAL, ...a], { encoding: "utf8" });
+const device = await createDroidDevice({ serial: SERIAL });
 
 const results = [];
 const record = (scenario, ok, detail) => {
@@ -115,7 +116,7 @@ async function main() {
     for (let i = 0; i < 15; i += 1) {
       const g = await evaluate(GEOM(testid));
       if (g.ok && previous && previous.cx === g.cx && previous.cy === g.cy) {
-        adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+        await device.tap({ x: Math.round(g.cx * DPR), y: Math.round(g.cy * DPR) });
         return true;
       }
       previous = g.ok ? g : null;
@@ -136,7 +137,7 @@ async function main() {
         if (!b) return null; const r = b.getBoundingClientRect();
         return { cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2) }; })()`);
       if (!g) return;
-      adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+      await device.tap({ x: Math.round(g.cx * DPR), y: Math.round(g.cy * DPR) });
       await sleep(900);
     }
   };

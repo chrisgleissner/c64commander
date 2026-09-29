@@ -127,7 +127,8 @@
     "load",
     "revert",
     "manage",
-    "external-resources"
+    "external-resources",
+    "play"
   ],
   "styles": [
     "app-bar",

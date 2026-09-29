@@ -17,7 +17,15 @@ const page = vi.hoisted(() => ({
   runHvscPreparation: vi.fn(async () => undefined),
   selectSource: null as null | ((source: { type: string; id: string }) => Promise<boolean>),
   sidRadioParams: null as null | { startPlaylist: (items: unknown[]) => unknown },
-  launcher: null as null | { hvscMissing?: boolean; onInstallHvsc?: () => void },
+  launcher: null as null | { open?: boolean; hvscMissing?: boolean; onInstallHvsc?: () => void },
+  clearPlaylist: null as null | (() => void),
+  preparation: null as null | {
+    open: boolean;
+    browseLabel?: string;
+    onOpenChange: (open: boolean) => void;
+    onBrowse: () => void;
+  },
+  stationStop: vi.fn(),
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
@@ -47,7 +55,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
 }));
 
 vi.mock("@/pages/playFiles/components/SidRadioLauncherSheet", () => ({
-  SidRadioLauncherSheet: (props: { hvscMissing?: boolean; onInstallHvsc?: () => void }) => {
+  SidRadioLauncherSheet: (props: { open?: boolean; hvscMissing?: boolean; onInstallHvsc?: () => void }) => {
     page.launcher = props;
     return null;
   },
@@ -59,10 +67,36 @@ vi.mock("@/pages/playFiles/hooks/useSidRadio", async (importOriginal) => {
     ...actual,
     useSidRadio: (params: Parameters<typeof actual.useSidRadio>[0]) => {
       page.sidRadioParams = params;
-      return actual.useSidRadio(params);
+      const radio = actual.useSidRadio(params);
+      return {
+        ...radio,
+        stop: () => {
+          page.stationStop();
+          radio.stop();
+        },
+      };
     },
   };
 });
+
+vi.mock("@/pages/playFiles/components/HvscPreparationSheet", () => ({
+  HvscPreparationSheet: (props: {
+    open: boolean;
+    browseLabel?: string;
+    onOpenChange: (open: boolean) => void;
+    onBrowse: () => void;
+  }) => {
+    page.preparation = props;
+    return null;
+  },
+}));
+
+vi.mock("@/pages/playFiles/components/PlaylistPanel", () => ({
+  PlaylistPanel: (props: { onClearPlaylist?: () => void }) => {
+    page.clearPlaylist = props.onClearPlaylist ?? null;
+    return null;
+  },
+}));
 
 import PlayFilesPage from "@/pages/PlayFilesPage";
 
@@ -134,5 +168,46 @@ describe("PlayFilesPage wiring", () => {
     await waitFor(() => expect(page.sidRadioParams).not.toBeNull());
 
     await expect(page.sidRadioParams!.startPlaylist([])).resolves.toBe(false);
+  });
+
+  /*
+   * A station tops the playlist up as it empties. On a Pixel 4, "Clear playlist" was undone at once
+   * by ten new tunes, because the station it had been started with was still running.
+   */
+  it("ends a running station when the playlist is cleared", async () => {
+    renderPage();
+    await waitFor(() => expect(page.clearPlaylist).not.toBeNull());
+
+    act(() => page.clearPlaylist?.());
+
+    expect(page.stationStop).toHaveBeenCalledTimes(1);
+  });
+
+  // An install started from SID Radio ended on "Browse HVSC" and an empty playlist; the radio is
+  // what the user had asked for.
+  it("offers SID Radio when the install it started finishes, and only for that install", async () => {
+    renderPage();
+    await waitFor(() => expect(page.launcher).not.toBeNull());
+
+    act(() => page.launcher!.onInstallHvsc!());
+    await waitFor(() => expect(page.preparation?.open).toBe(true));
+    expect(page.preparation!.browseLabel).toBe("Open SID Radio");
+
+    act(() => page.preparation!.onOpenChange(false));
+    await waitFor(() => expect(page.preparation?.open).toBe(false));
+    expect(page.preparation!.browseLabel).toBeUndefined();
+  });
+
+  it("reopens SID Radio, not the HVSC browser, from the ready button of an install the radio started", async () => {
+    renderPage();
+    await waitFor(() => expect(page.launcher).not.toBeNull());
+
+    act(() => page.launcher!.onInstallHvsc!());
+    await waitFor(() => expect(page.preparation?.open).toBe(true));
+    act(() => page.preparation!.onBrowse());
+
+    await waitFor(() => expect(page.preparation?.open).toBe(false));
+    expect(page.launcher!.open).toBe(true);
+    expect(page.preparation!.browseLabel).toBeUndefined();
   });
 });
