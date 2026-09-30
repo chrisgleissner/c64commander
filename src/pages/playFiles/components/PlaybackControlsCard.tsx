@@ -636,7 +636,7 @@ export const PlaybackControlsCard = ({
                 type="button"
                 data-testid="playback-progress-seek"
                 aria-label="Seek within the tune"
-                className="flex-1 min-w-0 cursor-pointer py-2 -my-2 touch-none"
+                className="flex-1 min-w-0 min-h-11 cursor-pointer py-2 -my-2 touch-none"
                 onPointerDown={(event) => {
                   event.currentTarget.setPointerCapture(event.pointerId);
                   onSeekToFraction(fractionFromPointer(event));

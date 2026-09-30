@@ -3820,6 +3820,56 @@ describe("a seek keeps the time played by earlier tunes", () => {
     expect(setPlayedMs).toHaveBeenLastCalledWith(270_000);
     expect(clock.current(Date.now() + 5_000)).toBe(270_000);
   });
+
+  it.each(["relative", "scrub"])("updates the paused position immediately after a %s seek", async (method) => {
+    const clock = new PlaybackClock();
+    clock.hydrate(250_000, null);
+    const setElapsedMs = vi.fn();
+    const { result } = renderPlaybackController([createPlaylistItem({ category: "sid" })], {
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 10_000,
+      playedClockRef: { current: clock },
+      trackStartedAtRef: { current: 0 },
+      setElapsedMs,
+      localSidPlaybackController: seekingController(10, 30),
+    } as any);
+
+    await act(async () => {
+      if (method === "relative") await result.current.handleSeekBy(20);
+      else result.current.seekToFraction(0.5, 60_000);
+      await vi.waitFor(() => expect(setElapsedMs).toHaveBeenLastCalledWith(30_000));
+    });
+    expect(clock.current(Date.now() + 5_000)).toBe(270_000);
+  });
+
+  it("subtracts a backward paused scrub from the position reached by the preceding scrub", async () => {
+    const clock = new PlaybackClock();
+    clock.hydrate(250_000, null);
+    const options: any = {
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 10_000,
+      playedClockRef: { current: clock },
+      trackStartedAtRef: { current: 0 },
+      localSidPlaybackController: seekingController(10, 10),
+    };
+    options.setElapsedMs = vi.fn((position: number) => {
+      options.elapsedMs = position;
+    });
+    const { result } = renderPlaybackController([createPlaylistItem({ category: "sid" })], options);
+
+    await act(async () => {
+      result.current.seekToFraction(0.5, 60_000);
+      await vi.waitFor(() => expect(options.setElapsedMs).toHaveBeenLastCalledWith(30_000));
+    });
+    await act(async () => {
+      result.current.seekToFraction(0.2, 60_000);
+      await vi.waitFor(() => expect(options.setElapsedMs).toHaveBeenLastCalledWith(12_000));
+    });
+
+    expect(clock.current(Date.now() + 5_000)).toBe(252_000);
+  });
 });
 
 describe("playback and the Listen-on choice", () => {

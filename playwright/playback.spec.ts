@@ -10,6 +10,7 @@ import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import type { Page, TestInfo } from "@playwright/test";
 import * as path from "node:path";
+import { mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
@@ -697,6 +698,32 @@ test.describe("Playback file browser", () => {
     const lastUpload = server.sidplayRequests[server.sidplayRequests.length - 1];
     expect(lastUpload.method).toBe("POST");
     await snap(page, testInfo, "local-playback-uploaded");
+  });
+
+  test("the local seek bar has a 44px target on the compact screen", async ({ page }: { page: Page }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_playback_engine", "local");
+      localStorage.setItem("c64u_sid_emulation_engine", "sidlite");
+    });
+    const fixtureFolder = testInfo.outputPath("seek-fixture");
+    mkdirSync(fixtureFolder, { recursive: true });
+    const generated = spawnSync(process.execPath, [
+      "scripts/generate-test-sid.mjs",
+      "--hz",
+      "550",
+      "--out",
+      path.join(fixtureFolder, "seek.sid"),
+    ]);
+    expect(generated.status, generated.stderr.toString()).toBe(0);
+    await page.goto("/play");
+    await addLocalFolder(page, fixtureFolder);
+    await page.getByTestId("playlist-play").click();
+    const seek = page.getByTestId("playback-progress-seek");
+    await expect(seek).toBeVisible();
+    const bounds = await seek.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
   });
 
   test("local SID playback does not throw unavailable error", async ({ page }: { page: Page }, testInfo: TestInfo) => {

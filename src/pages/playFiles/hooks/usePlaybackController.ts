@@ -2363,6 +2363,8 @@ export function usePlaybackController({
     const paused = isPausedRef.current;
     const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };
     setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
+    elapsedMsRef.current = positionMs;
+    setElapsedMs(positionMs);
     rescheduleAutoAdvance(positionMs);
     try {
       // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
@@ -2392,7 +2394,7 @@ export function usePlaybackController({
       scrubEndingRef.current = false;
     }
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
-  }, [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance]);
+  }, [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance]);
 
   /**
    * Jump to a fraction of the tune (tapping/dragging the progress bar).
@@ -2443,10 +2445,12 @@ export function usePlaybackController({
       // rebased or the audio jumps while the display carries on from the old spot.
       const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
       setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
+      elapsedMsRef.current = positionMs;
+      setElapsedMs(positionMs);
       rescheduleAutoAdvance(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },
-    [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
+    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
   seekByRef.current = handleSeekBy;
 
