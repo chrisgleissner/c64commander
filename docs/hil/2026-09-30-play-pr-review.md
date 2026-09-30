@@ -78,6 +78,14 @@ and documentation. The earlier bug-bash report remains a historical record of it
   final combined Pixel build, paused cartridge Stop left the RAM marker zero
   and restored the actual C64U master mixer from OFF to its original 0 dB.
 
+### src/pages/playFiles/components/PlaybackControlsCard.tsx — seek haptic diagnostics
+
+- **Warning — resolved**, the optional vibration helper swallowed exceptions.
+  Failed vibration now logs WARN with duration, original error and full available
+  stack, while the hold-to-seek gesture continues. Error and native string cases
+  both failed without logging; all 33 control-card tests pass with the repair.
+  Missing vibration support remains optional and causes no exception.
+
 ## Adversarial checks
 
 - Both seek entry points update elapsed state after calculating the delta from

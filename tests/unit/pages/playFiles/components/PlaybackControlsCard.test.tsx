@@ -8,6 +8,7 @@
 
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as logging from "@/lib/logging";
 import { PENDING_ANNOUNCEMENT_INTERVAL_MS, type PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
 import type { NowPlayingMetadataSegment } from "@/lib/playback/nowPlayingMetadata";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
@@ -80,6 +81,47 @@ const FocusContextCapture = ({ target }: { target: { current: FocusNavigationCon
 };
 
 describe("PlaybackControlsCard", () => {
+  it.each([new Error("vibration unavailable"), "native vibration unavailable"])(
+    "logs a failed seek vibration with its duration and original details while scrubbing continues: %s",
+    (error) => {
+      vi.useFakeTimers();
+      const originalVibrate = Object.getOwnPropertyDescriptor(navigator, "vibrate");
+      Object.defineProperty(navigator, "vibrate", {
+        configurable: true,
+        value: vi.fn(() => {
+          throw error;
+        }),
+      });
+      const log = vi.spyOn(logging, "addLog").mockImplementation(() => {});
+      const onScrubStart = vi.fn();
+      const onScrubStep = vi.fn();
+      const onScrubEnd = vi.fn();
+      try {
+        render(<PlaybackControlsCard {...buildProps({ onSeek: vi.fn(), onScrubStart, onScrubStep, onScrubEnd })} />);
+        const next = screen.getByTestId("playlist-next");
+        fireEvent.pointerDown(next);
+        act(() => vi.advanceTimersByTime(450));
+        expect(onScrubStart).toHaveBeenCalledTimes(1);
+        expect(onScrubStep).toHaveBeenCalledTimes(1);
+        expect(log).toHaveBeenCalledWith("warn", "Seek vibration failed", {
+          durationMs: 12,
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        fireEvent.pointerUp(next);
+        expect(onScrubEnd).toHaveBeenCalledTimes(1);
+      } finally {
+        cleanup();
+        // Pointer-up installs a document-level ghost-click guard; let it disarm.
+        act(() => vi.runOnlyPendingTimers());
+        log.mockRestore();
+        if (originalVibrate) Object.defineProperty(navigator, "vibrate", originalVibrate);
+        else Reflect.deleteProperty(navigator, "vibrate");
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("promotes the play button from transient flash to persistent highlight while playback is active", () => {
     vi.useFakeTimers();
     const props = buildProps();
