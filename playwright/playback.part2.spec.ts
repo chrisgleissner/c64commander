@@ -1042,7 +1042,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "no-supported-files");
   });
 
-  test("ultimate browsing lists FTP entries and mounts remote disk image", async ({
+  test("confirming one remote disk mounts and launches it once", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
@@ -1058,15 +1058,20 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(dialog.getByText("Disk 1.d64", { exact: true })).toBeVisible();
     await snap(page, testInfo, "c64u-folder");
     await selectEntryCheckbox(dialog, "Disk 1.d64");
-    await page.getByTestId("add-items-confirm").click();
-    await snap(page, testInfo, "playlist-updated");
-    await page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "Disk 1.d64" })
-      .getByRole("button", { name: "Play" })
-      .click();
-    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")));
-    await snap(page, testInfo, "mount-requested");
+    const confirm = page.getByTestId("add-items-confirm");
+    await expect(confirm).toHaveText("Play");
+    const mounted = page.waitForResponse(
+      (response) => response.url().includes("/v1/drives/a:mount") && response.status() === 200,
+    );
+    await confirm.click();
+    await mounted;
+    // A single disk selection launches on confirm. Wait for that launch to finish before
+    // collecting coverage; serializing coverage can stall pending requests long enough to time out.
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
+    expect(
+      server.requests.filter((req) => req.method === "PUT" && req.url.startsWith("/v1/drives/a:mount")),
+    ).toHaveLength(1);
+    await snap(page, testInfo, "mount-started-on-confirm");
   });
 
   test("C64U browser remembers last path and supports root", async ({ page }: { page: Page }, testInfo: TestInfo) => {

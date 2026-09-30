@@ -3898,6 +3898,28 @@ describe("a seek keeps the time played by earlier tunes", () => {
       await vi.waitFor(() => expect(controller.seekTo).toHaveBeenLastCalledWith(12));
     });
   });
+
+  it("logs a native string rejection as text and releases the scrub", async () => {
+    const controller = seekingController(10, 10);
+    controller.seekTo.mockRejectedValueOnce("Native audio sink unavailable");
+    const { result } = renderPlaybackController([createPlaylistItem({ category: "sid" })], {
+      isPlaying: true,
+      isPaused: true,
+      localSidPlaybackController: controller,
+    });
+
+    await act(async () => {
+      result.current.seekToFraction(0.5, 60_000);
+      await vi.waitFor(() =>
+        expect(addLog).toHaveBeenCalledWith(
+          "warn",
+          "Local SID scrub seek failed on release",
+          expect.objectContaining({ error: "Native audio sink unavailable", stack: undefined, toSeconds: 30 }),
+        ),
+      );
+    });
+    expect(result.current.scrubTargetMs).toBeNull();
+  });
 });
 
 describe("playback and the Listen-on choice", () => {
