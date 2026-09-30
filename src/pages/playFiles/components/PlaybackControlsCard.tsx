@@ -215,13 +215,16 @@ const usePoliteAnnouncement = (text: string | null): string => {
   return announcement?.text ?? "";
 };
 
-/** A short tick so a scrub is felt as well as seen; silently ignored where unsupported. */
+/** A short tick so a scrub is felt as well as seen, where vibration is available. */
 const buzz = (ms: number) => {
   try {
     navigator.vibrate?.(ms);
   } catch (error) {
-    // Vibration is a nicety, never a requirement.
-    void error;
+    addLog("warn", "Seek vibration failed", {
+      durationMs: ms,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 };
 
@@ -636,7 +639,7 @@ export const PlaybackControlsCard = ({
                 type="button"
                 data-testid="playback-progress-seek"
                 aria-label="Seek within the tune"
-                className="flex-1 min-w-0 cursor-pointer py-2 -my-2 touch-none"
+                className="flex-1 min-w-0 min-h-11 cursor-pointer py-2 -my-2 touch-none"
                 onPointerDown={(event) => {
                   event.currentTarget.setPointerCapture(event.pointerId);
                   onSeekToFraction(fractionFromPointer(event));

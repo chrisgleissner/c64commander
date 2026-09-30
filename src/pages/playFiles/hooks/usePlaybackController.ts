@@ -497,7 +497,8 @@ export function usePlaybackController({
         await withTimeout(api.machineResume(), 6000, "Resume");
       } catch (error) {
         addErrorLog("Machine resume first attempt failed", {
-          error: (error as Error).message,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
         await withTimeout(api.machineResume(), 6000, "Resume");
       }
@@ -1596,7 +1597,8 @@ export function usePlaybackController({
       playGenerationRef.current += 1;
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
-      const shouldReboot = currentItem?.category === "disk";
+      // Reset boots a loaded cartridge again. Reboot clears its temporary mapping.
+      const shouldReboot = currentItem?.category === "disk" || currentItem?.category === "crt";
       // Track B (LE2): silence any on-device tune first. When the current track
       // is playing locally there is no C64 involved, so skip the device stop
       // entirely (it would hang if no Ultimate is connected).
@@ -1613,11 +1615,26 @@ export function usePlaybackController({
               await resumeMachineWithRetry(api);
             } catch (error) {
               addErrorLog("Resume before stop failed", {
-                error: (error as Error).message,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                itemId: currentItem?.id,
               });
             }
           }
           await stopMachineWithGracePeriod(api, shouldReboot);
+          // Keep the resumed program muted until reset/reboot finishes, so Stop
+          // cannot replay a fragment. Restore Pause's snapshot only afterwards.
+          if (isPaused && pauseMuteSnapshotRef.current) {
+            try {
+              await unmuteAfterMachineResume();
+            } catch (error) {
+              addErrorLog("Pause mute restore after stop failed", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                itemId: currentItem?.id,
+              });
+            }
+          }
           markRemotePlaybackStopped();
         } catch (error) {
           reportUserError({
@@ -1651,7 +1668,8 @@ export function usePlaybackController({
         await restoreVolumeOverrides("stop");
       } catch (error) {
         addErrorLog("Playback stop volume restore failed", {
-          error: (error as Error).message,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
           currentIndex,
           category: currentItem?.category,
         });
@@ -1664,6 +1682,8 @@ export function usePlaybackController({
       playlist,
       restoreVolumeOverrides,
       resumeMachineWithRetry,
+      unmuteAfterMachineResume,
+      pauseMuteSnapshotRef,
       stopMachineWithGracePeriod,
       trace,
       playedClockRef,
@@ -2363,6 +2383,8 @@ export function usePlaybackController({
     const paused = isPausedRef.current;
     const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };
     setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
+    elapsedMsRef.current = positionMs;
+    setElapsedMs(positionMs);
     rescheduleAutoAdvance(positionMs);
     try {
       // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
@@ -2373,7 +2395,12 @@ export function usePlaybackController({
         new Promise<void>((resolve) => setTimeout(resolve, SCRUB_RELEASE_WAIT_MS)),
       ]);
     } catch (error) {
-      addLog("debug", "Local SID scrub seek failed on release", { error: (error as Error).message });
+      addLog("warn", "Local SID scrub seek failed on release", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        toSeconds: positionMs / 1000,
+        itemId: playlistRef.current[currentIndexRef.current]?.id,
+      });
     } finally {
       // Always leave the scrub, whatever the seek did.
       //
@@ -2392,7 +2419,7 @@ export function usePlaybackController({
       scrubEndingRef.current = false;
     }
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
-  }, [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance]);
+  }, [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance]);
 
   /**
    * Jump to a fraction of the tune (tapping/dragging the progress bar).
@@ -2443,10 +2470,12 @@ export function usePlaybackController({
       // rebased or the audio jumps while the display carries on from the old spot.
       const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
       setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
+      elapsedMsRef.current = positionMs;
+      setElapsedMs(positionMs);
       rescheduleAutoAdvance(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },
-    [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
+    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
   seekByRef.current = handleSeekBy;
 

@@ -28,14 +28,19 @@ export async function saveCoverageFromPage(page: Page, testName?: string): Promi
   }
   const fileName = `coverage-${generateUUID()}.json`;
   try {
-    const coverage = await page.evaluate(() => (window as any).__coverage__);
+    // Returning the object makes CDP walk every counter on the WebView thread.
+    // Serialize with native JSON first so pending playback requests can keep running.
+    const coverage = await page.evaluate(() => {
+      const counters = (window as any).__coverage__;
+      return counters ? JSON.stringify(counters) : undefined;
+    });
     if (coverage) {
       if (!fs.existsSync(istanbulCLIOutput)) {
         fs.mkdirSync(istanbulCLIOutput, { recursive: true });
       }
-      await fs.promises.writeFile(path.join(istanbulCLIOutput, fileName), JSON.stringify(coverage));
+      await fs.promises.writeFile(path.join(istanbulCLIOutput, fileName), coverage);
     }
-  } catch {
-    // Intentionally silent to avoid disrupting Playwright progress output.
+  } catch (error) {
+    throw new Error(`Collecting browser coverage for ${testName ?? "unnamed test"} failed`, { cause: error });
   }
 }
