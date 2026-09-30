@@ -11,6 +11,26 @@ import { AvMirrorBackgroundPolicy, installAvMirrorBackgroundPolicy } from "@/lib
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
+const runtime = vi.hoisted(() => ({ remote: true, mirror: true, running: true, background: true }));
+vi.mock("@/lib/playback/activePlaybackSession", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/playback/activePlaybackSession")>()),
+  isRemotePlaybackActive: () => runtime.remote,
+}));
+vi.mock("@/lib/config/appSettings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/config/appSettings")>()),
+  loadMirrorC64Audio: () => runtime.mirror,
+}));
+vi.mock("@/lib/deviceInteraction/machineExecutionStore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/deviceInteraction/machineExecutionStore")>()),
+  getMachineExecutionSnapshot: () => ({ state: runtime.running ? "running" : "paused" }),
+}));
+vi.mock("@/lib/native/backgroundExecutionManager", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/native/backgroundExecutionManager")>()),
+  isBackgroundExecutionActive: () => runtime.background,
+}));
+import { avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { addLog } from "@/lib/logging";
+
 /** A session stub whose live flags follow the start/stop calls, like the real one. */
 const createSession = (initial: { audioLive: boolean; videoLive: boolean }) => {
   const state = { ...initial };
@@ -26,6 +46,10 @@ const createSession = (initial: { audioLive: boolean; videoLive: boolean }) => {
     setLive(next: Partial<typeof state>) {
       Object.assign(state, next);
     },
+    stopVideo: vi.fn(async () => {
+      calls.push("stopVideo");
+      state.videoLive = false;
+    }),
     stopAll: vi.fn(async () => {
       calls.push("stopAll");
       state.audioLive = false;
@@ -51,6 +75,38 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
 
     expect(session.stopAll).toHaveBeenCalledTimes(1);
     expect(policy.suspendedState).toEqual({ audioWasLive: true, videoWasLive: true });
+  });
+
+  it("keeps playlist-owned background audio running while suspending video", async () => {
+    const session = createSession({ audioLive: true, videoLive: true });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns: vi.fn(),
+      playlistOwnsBackgroundAudio: () => true,
+    });
+    await policy.handleHidden();
+    expect(session.audioLive).toBe(true);
+    expect(session.calls).toEqual(["stopVideo"]);
+    expect(policy.suspendedState).toEqual({ audioWasLive: false, videoWasLive: true });
+    await policy.handleVisible();
+    expect(session.calls).toEqual(["stopVideo", "startVideo"]);
+  });
+
+  it("does not resurrect playlist audio stopped while hidden", async () => {
+    const session = createSession({ audioLive: true, videoLive: false });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns: vi.fn(),
+      playlistOwnsBackgroundAudio: () => true,
+    });
+    await policy.handleHidden();
+    expect(session.audioLive).toBe(true);
+    expect(session.calls).toEqual([]);
+    session.setLive({ audioLive: false });
+    await policy.handleVisible();
+    expect(session.startAudio).not.toHaveBeenCalled();
   });
 
   it("does nothing when the app is hidden and the mirror is off", async () => {
@@ -174,6 +230,22 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
     expect(session.videoLive).toBe(true);
   });
 
+  it.each(["Audio", "Video"] as const)(
+    "logs native string %s restore failures without inventing a stack",
+    async (stream) => {
+      const session = createSession({ audioLive: true, videoLive: true });
+      session[`start${stream}`].mockRejectedValueOnce("native restore refused");
+      const policy = new AvMirrorBackgroundPolicy(session);
+      await policy.handleHidden();
+      await policy.handleVisible();
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        `Live View: failed to restart ${stream.toLowerCase()} after the app became visible`,
+        { service: "streams", error: "native restore refused", stack: undefined },
+      );
+    },
+  );
+
   it("still clears the held state when a restart fails, so the next hide records afresh", async () => {
     const session = createSession({ audioLive: true, videoLive: false });
     session.startAudio.mockRejectedValueOnce(new Error("streams:start refused"));
@@ -210,6 +282,75 @@ describe("installAvMirrorBackgroundPolicy (HARD27-021)", () => {
   const setHidden = (hidden: boolean) => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
   };
+
+  it.each(["remote", "mirror", "running", "background"] as const)(
+    "stops hidden audio when playlist background ownership lacks %s",
+    async (missing) => {
+      Object.assign(runtime, { remote: true, mirror: true, running: true, background: true });
+      runtime[missing] = false;
+      const live = vi.spyOn(avMirrorSession, "audioLive", "get").mockReturnValue(true);
+      const video = vi.spyOn(avMirrorSession, "videoLive", "get").mockReturnValue(false);
+      const stop = vi.spyOn(avMirrorSession, "stopAll").mockResolvedValue();
+      const dispose = installAvMirrorBackgroundPolicy();
+      try {
+        setHidden(true);
+        document.dispatchEvent(new Event("visibilitychange"));
+        await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+      } finally {
+        dispose();
+        live.mockRestore();
+        video.mockRestore();
+        stop.mockRestore();
+      }
+    },
+  );
+
+  it("retains audio when all playlist background ownership conditions hold", async () => {
+    Object.assign(runtime, { remote: true, mirror: true, running: true, background: true });
+    const live = vi.spyOn(avMirrorSession, "audioLive", "get").mockReturnValue(true);
+    const video = vi.spyOn(avMirrorSession, "videoLive", "get").mockReturnValue(true);
+    const stop = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAll = vi.spyOn(avMirrorSession, "stopAll").mockResolvedValue();
+    const dispose = installAvMirrorBackgroundPolicy();
+    try {
+      setHidden(true);
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+      expect(stopAll).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+      live.mockRestore();
+      video.mockRestore();
+      stop.mockRestore();
+      stopAll.mockRestore();
+    }
+  });
+
+  it.each([new Error("stream stop refused"), "native stream stop refused"])(
+    "logs a failed hidden transition with its original error and stack: %s",
+    async (error) => {
+      const session = createSession({ audioLive: true, videoLive: true });
+      session.stopAll.mockRejectedValueOnce(error);
+      const dispose = installAvMirrorBackgroundPolicy(new AvMirrorBackgroundPolicy(session));
+      try {
+        setHidden(true);
+        document.dispatchEvent(new Event("visibilitychange"));
+        await vi.waitFor(() =>
+          expect(addLog).toHaveBeenCalledWith(
+            "error",
+            "Live View: visibility transition failed",
+            expect.objectContaining({
+              error: error instanceof Error ? error.message : error,
+              stack: error instanceof Error ? error.stack : undefined,
+              hidden: true,
+            }),
+          ),
+        );
+      } finally {
+        dispose();
+      }
+    },
+  );
 
   it("drives the policy from visibilitychange and stops driving it after disposal", async () => {
     const session = createSession({ audioLive: true, videoLive: true });

@@ -3,7 +3,8 @@
 PR: https://github.com/chrisgleissner/c64commander/pull/446
 
 The review uses `REVIEW.md` from the base branch. Scope is paused seek clock
-updates, the seek target size, their regression tests and documentation. The
+updates, the seek target size, Both screen-off audio, the coverage collector,
+their regression tests and documentation. The
 earlier bug-bash report remains a historical record of its partial hardware run.
 
 ## Resolved review finding
@@ -31,6 +32,25 @@ earlier bug-bash report remains a historical record of its partial hardware run.
 - The three affected instrumented tests (remote mount, rapid Next, Previous/Next)
   failed in the initial full run and pass after the collection/launch repair.
 
+### src/lib/streams/avMirrorBackgroundPolicy.ts
+
+- **Bug — resolved**, hidden transition: Both playlist playback stopped its mirror
+  audio on screen-off despite having a foreground service and media controls.
+  A 35-second microphone recording captured a 22.7-second gap while the playback
+  clock continued. Preserve audio only when a remote playlist is active, the
+  listener selected Both, the machine is running and background execution is
+  active. Standalone Live View and paused sessions retain stop-on-hide behavior.
+- Video still stops on hide. Retained playlist audio is excluded from restore
+  state so a Stop while hidden cannot restart it on wake. Two focused tests
+  failed before the fix. Default installation tests cover each ownership guard.
+  On the repaired Pixel build, the repeated 35-second microphone recording
+  measured 100% tone presence, a 0ms gap and +0.5 cents through 23 seconds
+  screen-off (Android reported Dozing). An earlier repaired-build recording
+  captured a 450ms startup gap before sleep; the repeated measurement began
+  after playback settled. Neither run showed the original screen-off stop.
+- Visibility-handler rejections now log the operation, original error and stack;
+  restore error logs retain full stacks and handle native string rejections.
+
 ## Adversarial checks
 
 - Both seek entry points update elapsed state after calculating the delta from
@@ -44,9 +64,9 @@ earlier bug-bash report remains a historical record of its partial hardware run.
 - The compact-screen size test renders a valid generated SID with real local
   emulation. It measures geometry rather than asserting a CSS class. Removing
   the target-size repair caused a 32px failure; restoring it passed.
-- No device request pattern, native bridge, capability gate, secret handling or
-  focus order is changed. The increased hit target retains the existing pointer
-  and arrow-key handlers.
+- The seek changes retain the existing pointer and arrow-key handlers. The
+  background policy preserves the existing U64-family capability gating and
+  stops video while hidden; no new device endpoint or config write is introduced.
 
 GitHub's Kilo review service could not run because its account has insufficient
 credits. It supplied no code findings. This document records the manual review;

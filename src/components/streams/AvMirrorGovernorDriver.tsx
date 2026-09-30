@@ -34,7 +34,7 @@ export function AvMirrorGovernorDriver() {
     return () => window.clearInterval(id);
   }, []);
   // HARD27-021: the same app-wide mount owns the mirror's backgrounding policy, so hiding the app
-  // stops the streams instead of leaving the phone receiving and the Ultimate multicasting.
+  // stops video and standalone audio; playlist-owned audio keeps its background controls.
   useEffect(() => installAvMirrorBackgroundPolicy(), []);
   return null;
 }

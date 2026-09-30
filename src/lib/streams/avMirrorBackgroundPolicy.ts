@@ -6,11 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { loadMirrorC64Audio } from "@/lib/config/appSettings";
+import { getMachineExecutionSnapshot } from "@/lib/deviceInteraction/machineExecutionStore";
+import { isBackgroundExecutionActive } from "@/lib/native/backgroundExecutionManager";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { restoreMirrorWhenDeviceReturns } from "@/lib/connection/networkTransitions";
 import { addLog } from "@/lib/logging";
-import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
+import { isLocalPlaybackActive, isRemotePlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 /** What the mirror was doing when the app was hidden, so becoming visible can put it back. */
@@ -23,6 +26,8 @@ export interface AvMirrorSuspendedState {
 export interface AvMirrorRestoreConditions {
   /** Starting a stream now would fail, so the restore waits for the device instead. */
   deviceOutOfReach: () => boolean;
+  /** Playlist audio has foreground-service / lock-screen controls and can continue while hidden. */
+  playlistOwnsBackgroundAudio?: () => boolean;
   /** A tune rendering on the phone owns the speaker, and the C64's audio starting would stop it. */
   phoneIsPlaying: () => boolean;
   restoreWhenDeviceReturns: (state: AvMirrorSuspendedState) => void;
@@ -40,10 +45,9 @@ const RESTORE_ALWAYS: AvMirrorRestoreConditions = {
  * multicasting 2.6 MB/s of video onto the Wi-Fi. If the OS then killed the process the device was
  * never told to stop.
  *
- * The policy is stop-on-hide, restore-on-show, which is the same shape the device switch already
- * uses. Chosen over running the mirror under the background-execution foreground service because
- * the mirror has no lock-screen controls: a stream the user cannot see, hear a reason for, or stop
- * is exactly the state this finding is about.
+ * Standalone Live View stops on hide and restores on show. Both playlist playback already has a
+ * foreground service and lock-screen controls, so its audio continues; video still stops. Audio
+ * retained for the playlist is never held for restoration, so Stop while hidden cannot resurrect it.
  */
 export class AvMirrorBackgroundPolicy {
   private suspended: AvMirrorSuspendedState | null = null;
@@ -52,7 +56,7 @@ export class AvMirrorBackgroundPolicy {
   constructor(
     private readonly session: Pick<
       AvMirrorSession,
-      "audioLive" | "videoLive" | "stopAll" | "startAudio" | "startVideo"
+      "audioLive" | "videoLive" | "stopAll" | "stopVideo" | "startAudio" | "startVideo"
     >,
     private readonly conditions: AvMirrorRestoreConditions = RESTORE_ALWAYS,
   ) {}
@@ -89,8 +93,9 @@ export class AvMirrorBackgroundPolicy {
 
   private async stopForHidden(): Promise<void> {
     if (this.suspended) return;
+    const keepAudio = this.session.audioLive && !!this.conditions.playlistOwnsBackgroundAudio?.();
     const state: AvMirrorSuspendedState = {
-      audioWasLive: this.session.audioLive,
+      audioWasLive: this.session.audioLive && !keepAudio,
       videoWasLive: this.session.videoLive,
     };
     if (!state.audioWasLive && !state.videoWasLive) return;
@@ -98,9 +103,11 @@ export class AvMirrorBackgroundPolicy {
     addLog("info", "Live View: stopping the mirror while the app is hidden", {
       service: "streams",
       audioWasLive: state.audioWasLive,
+      audioKeptForPlayback: keepAudio,
       videoWasLive: state.videoWasLive,
     });
-    await this.session.stopAll();
+    if (keepAudio) await this.session.stopVideo();
+    else await this.session.stopAll();
   }
 
   private async restoreForVisible(): Promise<void> {
@@ -120,6 +127,7 @@ export class AvMirrorBackgroundPolicy {
         addLog("warn", "Live View: failed to restart video after the app became visible", {
           service: "streams",
           error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
       });
     }
@@ -128,6 +136,7 @@ export class AvMirrorBackgroundPolicy {
         addLog("warn", "Live View: failed to restart audio after the app became visible", {
           service: "streams",
           error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
       });
     }
@@ -143,11 +152,23 @@ export function installAvMirrorBackgroundPolicy(
   policy: AvMirrorBackgroundPolicy = new AvMirrorBackgroundPolicy(avMirrorSession, {
     deviceOutOfReach: () => isNetworkKnownOffline() || getConnectionSnapshot().state === "OFFLINE_NO_DEMO",
     phoneIsPlaying: isLocalPlaybackActive,
+    playlistOwnsBackgroundAudio: () =>
+      isRemotePlaybackActive() &&
+      loadMirrorC64Audio() &&
+      getMachineExecutionSnapshot().state === "running" &&
+      isBackgroundExecutionActive(),
     restoreWhenDeviceReturns: restoreMirrorWhenDeviceReturns,
   }),
 ): () => void {
   const handleVisibilityChange = () => {
-    void (document.hidden ? policy.handleHidden() : policy.handleVisible());
+    void (document.hidden ? policy.handleHidden() : policy.handleVisible()).catch((error: unknown) => {
+      addLog("error", "Live View: visibility transition failed", {
+        service: "streams",
+        hidden: document.hidden,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
   };
   document.addEventListener("visibilitychange", handleVisibilityChange);
   return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
