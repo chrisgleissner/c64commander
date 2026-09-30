@@ -67,8 +67,11 @@ and documentation. The earlier bug-bash report remains a historical record of it
 
 - **Bug — resolved**, paused Stop resumed the CPU without restoring the
   pause-mute snapshot. The repaired cartridge Stop exposed master volume still
-  OFF on hardware. Restore an existing snapshot before machine Stop; keep Stop
-  running if resume or unmute fails, with original error text and full stack.
+  OFF on hardware. Restore an existing snapshot after machine Stop; keep Stop
+  running if resume fails, and log failed restores with original error text
+  and full stack. A microphone check and direct stream capture then exposed
+  about 180ms of tune replay when restoration preceded reset. Keeping the
+  resumed CPU muted until reset/reboot finishes prevents that replay.
   Five file-type regressions failed before the repair. A U2 session without a
   snapshot performs no mixer query. Error and native string paths verify that
   cartridge unloading still runs despite a failed resume or restore. On the

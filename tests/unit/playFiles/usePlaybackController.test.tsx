@@ -1748,7 +1748,7 @@ describe("usePlaybackController", () => {
   });
 
   it.each(["sid", "mod", "prg", "crt", "disk"] as const)(
-    "restores pause-muted mixer levels before stopping %s playback",
+    "keeps %s playback muted until Stop finishes, then restores the captured mixer levels",
     async (category) => {
       const playlist = [createPlaylistItem({ category })];
       const calls: string[] = [];
@@ -1776,12 +1776,39 @@ describe("usePlaybackController", () => {
         snapshotToUpdates: vi.fn().mockReturnValue({ "Vol Master": "0 dB" }),
       });
       await result.current.handleStop();
-      expect(calls).toEqual(["resume", "unmute", "stop"]);
+      expect(calls).toEqual(["resume", "stop", "unmute"]);
       expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
       expect(pauseMuteSnapshotRef.current).toBeNull();
       expect(dispatchVolume).toHaveBeenCalledWith({ type: "unmute", reason: "pause" });
     },
   );
+
+  it("waits for the paused tune's reset response before restoring its mixer snapshot", async () => {
+    let finishStop!: () => void;
+    const stopResponse = new Promise<void>((resolve) => {
+      finishStop = resolve;
+    });
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    const machineReset = vi.fn().mockReturnValue(stopResponse);
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineResume, machineReset } as any);
+    const { result } = renderPlaybackController([createPlaylistItem()], {
+      isPlaying: true,
+      isPaused: true,
+      applyAudioMixerUpdates,
+      pauseMuteSnapshotRef: { current: { volumes: { "Vol Master": "0 dB" }, enablement: {} } as any },
+      snapshotToUpdates: vi.fn().mockReturnValue({ "Vol Master": "0 dB" }),
+    });
+    const stopping = result.current.handleStop();
+    try {
+      await waitFor(() => expect(machineReset).toHaveBeenCalledTimes(1));
+      expect(applyAudioMixerUpdates).not.toHaveBeenCalled();
+    } finally {
+      finishStop();
+      await stopping;
+    }
+    expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
+  });
 
   it("stops a paused U2 session without querying a mixer when Pause captured no mute snapshot", async () => {
     const machineResume = vi.fn().mockResolvedValue(undefined);
@@ -1830,7 +1857,7 @@ describe("usePlaybackController", () => {
       expect(machineReboot).toHaveBeenCalledTimes(1);
       expect(applyAudioMixerUpdates).toHaveBeenCalledTimes(1);
       expect(addErrorLog).toHaveBeenCalledWith(
-        operation === "resume" ? "Resume before stop failed" : "Unmute before stop failed",
+        operation === "resume" ? "Resume before stop failed" : "Pause mute restore after stop failed",
         {
           error: error instanceof Error ? error.message : error,
           stack: error instanceof Error ? error.stack : undefined,

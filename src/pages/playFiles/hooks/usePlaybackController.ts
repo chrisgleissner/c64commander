@@ -1620,21 +1620,21 @@ export function usePlaybackController({
                 itemId: currentItem?.id,
               });
             }
-            // CPU resume does not restore the mixer snapshot that Pause muted.
-            // A failed restore must still allow Stop to silence/unload the program.
-            if (pauseMuteSnapshotRef.current) {
-              try {
-                await unmuteAfterMachineResume();
-              } catch (error) {
-                addErrorLog("Unmute before stop failed", {
-                  error: error instanceof Error ? error.message : String(error),
-                  stack: error instanceof Error ? error.stack : undefined,
-                  itemId: currentItem?.id,
-                });
-              }
-            }
           }
           await stopMachineWithGracePeriod(api, shouldReboot);
+          // Keep the resumed program muted until reset/reboot finishes, so Stop
+          // cannot replay a fragment. Restore Pause's snapshot only afterwards.
+          if (isPaused && pauseMuteSnapshotRef.current) {
+            try {
+              await unmuteAfterMachineResume();
+            } catch (error) {
+              addErrorLog("Pause mute restore after stop failed", {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                itemId: currentItem?.id,
+              });
+            }
+          }
           markRemotePlaybackStopped();
         } catch (error) {
           reportUserError({
