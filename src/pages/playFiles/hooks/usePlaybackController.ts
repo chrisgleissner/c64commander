@@ -2375,7 +2375,12 @@ export function usePlaybackController({
         new Promise<void>((resolve) => setTimeout(resolve, SCRUB_RELEASE_WAIT_MS)),
       ]);
     } catch (error) {
-      addLog("debug", "Local SID scrub seek failed on release", { error: (error as Error).message });
+      addLog("warn", "Local SID scrub seek failed on release", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        toSeconds: positionMs / 1000,
+        itemId: playlistRef.current[currentIndexRef.current]?.id,
+      });
     } finally {
       // Always leave the scrub, whatever the seek did.
       //
