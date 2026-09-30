@@ -35,7 +35,9 @@ GitHub's Kilo review service could not run because its account has insufficient
 credits. It supplied no code findings. This document records the manual review;
 the unavailable service is not represented as a successful review.
 
-## Validation status
+## Release validation
 
-Full release validation and the nine-stage hardware merge gate are in progress.
-Results will be recorded before merge and tagging.
+The full release suites, changed-line coverage, nine-stage hardware merge gate
+and Pixel deployment identity are recorded in the PR validation comment before
+merge and tagging. GitHub workflow results are attached to that PR. The earlier
+bug-bash report describes its own session and is not a release sign-off.
