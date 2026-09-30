@@ -497,7 +497,8 @@ export function usePlaybackController({
         await withTimeout(api.machineResume(), 6000, "Resume");
       } catch (error) {
         addErrorLog("Machine resume first attempt failed", {
-          error: (error as Error).message,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
         await withTimeout(api.machineResume(), 6000, "Resume");
       }
@@ -1596,7 +1597,8 @@ export function usePlaybackController({
       playGenerationRef.current += 1;
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
-      const shouldReboot = currentItem?.category === "disk";
+      // Reset boots a loaded cartridge again. Reboot clears its temporary mapping.
+      const shouldReboot = currentItem?.category === "disk" || currentItem?.category === "crt";
       // Track B (LE2): silence any on-device tune first. When the current track
       // is playing locally there is no C64 involved, so skip the device stop
       // entirely (it would hang if no Ultimate is connected).
@@ -1613,8 +1615,23 @@ export function usePlaybackController({
               await resumeMachineWithRetry(api);
             } catch (error) {
               addErrorLog("Resume before stop failed", {
-                error: (error as Error).message,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                itemId: currentItem?.id,
               });
+            }
+            // CPU resume does not restore the mixer snapshot that Pause muted.
+            // A failed restore must still allow Stop to silence/unload the program.
+            if (pauseMuteSnapshotRef.current) {
+              try {
+                await unmuteAfterMachineResume();
+              } catch (error) {
+                addErrorLog("Unmute before stop failed", {
+                  error: error instanceof Error ? error.message : String(error),
+                  stack: error instanceof Error ? error.stack : undefined,
+                  itemId: currentItem?.id,
+                });
+              }
             }
           }
           await stopMachineWithGracePeriod(api, shouldReboot);
@@ -1651,7 +1668,8 @@ export function usePlaybackController({
         await restoreVolumeOverrides("stop");
       } catch (error) {
         addErrorLog("Playback stop volume restore failed", {
-          error: (error as Error).message,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
           currentIndex,
           category: currentItem?.category,
         });
@@ -1664,6 +1682,8 @@ export function usePlaybackController({
       playlist,
       restoreVolumeOverrides,
       resumeMachineWithRetry,
+      unmuteAfterMachineResume,
+      pauseMuteSnapshotRef,
       stopMachineWithGracePeriod,
       trace,
       playedClockRef,

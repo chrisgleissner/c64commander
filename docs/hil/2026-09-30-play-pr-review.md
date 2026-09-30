@@ -3,9 +3,9 @@
 PR: https://github.com/chrisgleissner/c64commander/pull/446
 
 The review uses `REVIEW.md` from the base branch. Scope is paused seek clock
-updates, the seek target size, Both screen-off audio, the coverage collector,
-their regression tests and documentation. The
-earlier bug-bash report remains a historical record of its partial hardware run.
+updates, the seek target size, Both screen-off audio, cartridge unloading,
+paused Stop mixer restoration, the coverage collector, their regression tests
+and documentation. The earlier bug-bash report remains a historical record of its partial hardware run.
 
 ## Resolved review finding
 
@@ -50,6 +50,30 @@ earlier bug-bash report remains a historical record of its partial hardware run.
   after playback settled. Neither run showed the original screen-off stop.
 - Visibility-handler rejections now log the operation, original error and stack;
   restore error logs retain full stacks and handle native string rejections.
+
+### src/pages/playFiles/hooks/usePlaybackController.ts — cartridge Stop
+
+- **Bug — resolved**, Stop used a machine reset for cartridges. An 8KiB probe
+  wrote `CRT!` to RAM on boot and then looped. Clearing that marker and pressing
+  Stop caused it to write the marker again while the UI reported stopped.
+  Reboot cartridges on explicit Stop, as disks already do, to unload their
+  temporary mapping. Playing and paused regression cases both failed before
+  the repair. On the repaired Pixel build, the marker remained zero after
+  Stop from both playing and paused cartridges, confirming that the program
+  did not boot again. Automatic program duration remains independent of
+  explicit Stop.
+
+### src/pages/playFiles/hooks/usePlaybackController.ts — paused Stop mixer cleanup
+
+- **Bug — resolved**, paused Stop resumed the CPU without restoring the
+  pause-mute snapshot. The repaired cartridge Stop exposed master volume still
+  OFF on hardware. Restore an existing snapshot before machine Stop; keep Stop
+  running if resume or unmute fails, with original error text and full stack.
+  Five file-type regressions failed before the repair. A U2 session without a
+  snapshot performs no mixer query. Error and native string paths verify that
+  cartridge unloading still runs despite a failed resume or restore. On the
+  final combined Pixel build, paused cartridge Stop left the RAM marker zero
+  and restored the actual C64U master mixer from OFF to its original 0 dB.
 
 ## Adversarial checks
 
