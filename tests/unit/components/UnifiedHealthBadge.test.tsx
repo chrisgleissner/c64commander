@@ -433,7 +433,7 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.className).toContain("min-w-0");
+    expect(badge.className).toContain("min-w-[44px]");
     expect(badge.className).toContain("max-w-full");
     expect(badge.className).toContain("overflow-hidden");
     expect(badge.querySelectorAll('[data-overlay-critical="badge"]')).toHaveLength(4);

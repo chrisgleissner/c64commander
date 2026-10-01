@@ -642,10 +642,10 @@ export function UnifiedHealthBadge({ className }: Props) {
           // letting the header be shorter, but the box a finger and an automated reach check both
           // measure is this one, so the floor has to be real rather than implied.
           "min-h-[44px]",
-          // Compact shows the status glyph alone, which without a floor drew a 33px-wide target.
-          // The other profiles show the host name and need `min-w-0` so it can truncate instead of
-          // pushing the title out — they are comfortably past 44px on their own content.
-          profile === "compact" ? "min-w-[44px] justify-center max-w-[min(48vw,12rem)]" : "min-w-0 max-w-full",
+          // Compact shows the status glyph alone, which without a floor drew a 33px-wide target, and
+          // every profile shows it alone while offline (42px on a phone). The floor still lets a long
+          // host name truncate instead of pushing the title out.
+          profile === "compact" ? "min-w-[44px] justify-center max-w-[min(48vw,12rem)]" : "min-w-[44px] max-w-full",
           "text-foreground transition-opacity hover:opacity-90 active:opacity-80",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-0",
           className,

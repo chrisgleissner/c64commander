@@ -10,6 +10,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { DriveCard } from "@/pages/home/DriveCard";
+import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, onClick, disabled, className, ...rest }: any) => (
@@ -47,6 +48,24 @@ const defaultProps = {
 };
 
 describe("DriveCard", () => {
+  it.each([
+    [false, "grid-cols-1"],
+    [true, "grid-cols-2"],
+  ])("puts Bus ID and Type side by side under Large display only on a wide track (wide=%s)", (wide, columns) => {
+    localStorage.setItem("c64u_display_profile_override", "expanded");
+    try {
+      render(
+        <DisplayProfileProvider>
+          <DriveCard {...defaultProps} typeValue="1541" typeOptions={["1541"]} wide={wide} />
+        </DisplayProfileProvider>,
+      );
+      expect(document.documentElement.dataset.displayProfile).toBe("expanded");
+      expect(screen.getByText("Bus ID").closest(".grid")).toHaveClass(columns);
+    } finally {
+      localStorage.removeItem("c64u_display_profile_override");
+    }
+  });
+
   it("renders name and status", () => {
     render(<DriveCard {...defaultProps} />);
     expect(screen.getByText("Drive 8")).toBeInTheDocument();

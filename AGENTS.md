@@ -553,7 +553,7 @@ eye test.
 - **Never step type down to make something fit.** The answer to "it does not fit" is
   reflow, scroll, or fewer things — never smaller text.
 - Prefer a named scale step (`text-xs` and up). `text-[11px]` is the smallest arbitrary
-  size allowed, because it is the only one `src/index.css` compensates on the compact
+  size allowed, because it is the only one `src/index.css` lifts over 14px on every display
   profile; `npm run lint:font-size-floors` rejects anything smaller.
 - The smallest supported screen is **320x426 CSS pixels**, which resolves to the
   `compact` display profile. Measure there: it is the `compact` entry in

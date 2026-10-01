@@ -397,6 +397,9 @@ export const FocusNavigationProvider = ({
       if ((event.target as Element).closest(`${OPEN_OVERLAY_ANCESTOR_SELECTOR},[${SKIP_ATTR}]`)) return;
       const { action } = normalizeKeyEvent(event, keymap);
       if (action !== "enter" && action !== "center" && action !== "activate") return;
+      // A tapped-into field first, as Down does: the ring's last stop is elsewhere, and focusing it
+      // here hands this same Enter's activation to it — finishing the duration field opened Add items.
+      if (getInputModality() === "pointer") adoptActiveElement();
       leaveFieldToItsRingStop(event.target);
       setInputModality("key-navigation");
       notifyRing();

@@ -40,7 +40,7 @@ export function SystemInfo({ appVersionOnly = false }: { appVersionOnly?: boolea
       animate={{ opacity: 1, y: 0 }}
       type="button"
       onClick={() => setExpanded((prev) => !prev)}
-      className={cn("w-full text-left px-2", profile === "compact" ? "py-1" : "py-2")}
+      className={cn("min-h-11 w-full text-left px-2", profile === "compact" ? "py-1" : "py-2")}
       aria-expanded={expanded}
       data-testid="home-system-info"
       data-section-label="System info"

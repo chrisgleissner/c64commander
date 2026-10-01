@@ -31,6 +31,7 @@ import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
 import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useFittingColumns } from "@/components/layout/PageContainer";
 import { type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery";
 
@@ -45,6 +46,9 @@ import {
 } from "../hooks/useDeviceConfigOptionDomains";
 import { isSoftIecDefaultPathConfigurable, resolveSoftIecDefaultPath } from "@/components/disks/HomeDiskManagerSupport";
 import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
+
+/** Below this a drive card cannot hold Bus ID and Type side by side, as the tablet layout draws them. */
+const WIDE_DRIVE_CARD_MIN_WIDTH = "9rem";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
   const message = value?.trim() ?? "";
@@ -121,6 +125,14 @@ export function DriveManager({
   getTelnetActionSupport,
 }: DriveManagerProps) {
   const { profile } = useDisplayProfile();
+  const requestedDriveColumns = profile === "expanded" ? 3 : profile === "compact" ? 1 : 2;
+  const { ref: drivesGridRef, columns: driveColumns } = useFittingColumns(
+    requestedDriveColumns,
+    "0.5rem",
+    profile === "expanded",
+    WIDE_DRIVE_CARD_MIN_WIDTH,
+  );
+  const wideDriveCards = profile === "expanded" && driveColumns === requestedDriveColumns;
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
@@ -320,13 +332,9 @@ export function DriveManager({
       }
     >
       <div
-        className={
-          profile === "expanded"
-            ? "grid grid-cols-3 gap-2"
-            : profile === "compact"
-              ? "grid grid-cols-1 gap-2"
-              : "grid grid-cols-2 gap-2"
-        }
+        ref={drivesGridRef}
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${driveColumns}, minmax(0, 1fr))` }}
         data-testid="home-drives-group"
       >
         {DRIVE_CONTROL_SPECS.map((spec, index) => {
@@ -438,6 +446,7 @@ export function DriveManager({
           return (
             <DriveCard
               key={spec.class}
+              wide={wideDriveCards}
               name={label}
               loading={drivesLoading}
               enabled={enabled}

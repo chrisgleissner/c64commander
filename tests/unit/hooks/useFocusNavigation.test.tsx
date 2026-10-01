@@ -354,6 +354,40 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(button("After").getAttribute(SELECTED)).toBe("true");
   });
 
+  it("does not move focus onto the ring's earlier stop when OK finishes a field the user tapped into", () => {
+    const ButtonThenField = () => {
+      const addRef = useFocusItem<HTMLButtonElement>({ id: "add", order: 10 });
+      const fieldRef = useFocusItem<HTMLInputElement>({ id: "field", order: 20 });
+      return (
+        <>
+          <button ref={addRef} onClick={() => {}}>
+            Add items
+          </button>
+          <input ref={fieldRef} aria-label="Default duration" />
+        </>
+      );
+    };
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <ButtonThenField />
+      </FocusNavigationProvider>,
+    );
+    // The ring starts on Add items; Down twice goes round the two stops and back to it.
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(button("Add items").getAttribute(SELECTED)).toBe("true");
+
+    setInputModality("pointer");
+    const field = getByLabelText("Default duration") as HTMLInputElement;
+    field.focus();
+    fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
+
+    // On the device the browser's own activation of this Enter lands on whatever has focus by then,
+    // so focusing the button here clicked it and opened Add items.
+    expect(document.activeElement).not.toBe(button("Add items"));
+    expect(field.getAttribute(SELECTED)).toBe("true");
+  });
+
   /*
    * Escape and the device's Back key have to be able to leave a field, and where they leave it to
    * matters: a bare blur put DOM focus on the body, which is nowhere for a keypad user. When the
