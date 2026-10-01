@@ -1726,7 +1726,10 @@ describe("c64api", () => {
     });
 
     const api = new C64API("http://c64u");
+    expect(api.listsCategory("Drive A Settings")).toBeNull();
     await api.getCategories();
+    expect(api.listsCategory("Drive A Settings")).toBe(true);
+    expect(api.listsCategory("Data Streams")).toBe(false);
     await api.machineReset();
     await api.getConfigItems("Data Streams", ["Stream VIC to"]);
 

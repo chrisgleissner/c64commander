@@ -30,6 +30,7 @@ vi.mock("@/lib/playback/playbackSessionPersistence", () => ({
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 import { adoptInterruptedPause, pauseResumeMachine } from "@/lib/machine/pauseResumeMachine";
+import { addLog } from "@/lib/logging";
 
 const api = {} as never;
 
@@ -96,6 +97,20 @@ describe("pauseResumeMachine, the one implementation the tile and the keypad key
       expect(restoreMock).not.toHaveBeenCalled();
       releasePause();
       await pending;
+    });
+
+    it("warns when a pause that has since ended leaves levels it could not restore", async () => {
+      restoreMock.mockResolvedValue(false);
+      const readMemory = vi
+        .fn()
+        .mockResolvedValueOnce(page())
+        .mockResolvedValueOnce(page({ 0xa2: 0x49 }));
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Machine: a pause from a previous session has since ended",
+        expect.objectContaining({ levelsRestored: false }),
+      );
     });
 
     it("leaves the machine shown as it was when the memory read fails, to ask again on the next connect", async () => {

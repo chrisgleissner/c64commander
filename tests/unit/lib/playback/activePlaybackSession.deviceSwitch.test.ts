@@ -12,6 +12,7 @@ const device = vi.hoisted(() => ({
   oldReset: vi.fn(),
   oldReboot: vi.fn(),
   retryReset: vi.fn(),
+  retryReboot: vi.fn(),
   selectedDeviceId: "old-device",
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@/lib/c64api", () => ({
   getC64APIConfigSnapshot: () => ({ deviceHost: "c64u", password: undefined }),
   C64API: class {
     machineReset = device.retryReset;
+    machineReboot = device.retryReboot;
   },
 }));
 vi.mock("@/lib/savedDevices/store", () => ({
@@ -43,6 +45,7 @@ describe("stopping the old device's tune before a device switch", () => {
     device.oldReset.mockReset();
     device.oldReboot.mockReset().mockResolvedValue(undefined);
     device.retryReset.mockReset().mockResolvedValue(undefined);
+    device.retryReboot.mockReset().mockResolvedValue(undefined);
     device.selectedDeviceId = "old-device";
   });
 
@@ -58,6 +61,20 @@ describe("stopping the old device's tune before a device switch", () => {
     expect(device.oldReboot).toHaveBeenCalledTimes(1);
     expect(device.oldReset).not.toHaveBeenCalled();
     expect(isRemotePlaybackActive()).toBe(false);
+  });
+
+  it("reboots the device left behind again when a cartridge's reboot is not confirmed in time", async () => {
+    device.oldReboot.mockReturnValue(new Promise(() => undefined));
+    markRemotePlaybackStarted(true);
+
+    const switching = stopActivePlaybackBeforeDeviceSwitch(2000);
+    await vi.advanceTimersByTimeAsync(2000);
+    await switching;
+    device.selectedDeviceId = "new-device";
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(device.retryReboot).toHaveBeenCalledTimes(1);
+    expect(device.retryReset).not.toHaveBeenCalled();
   });
 
   it("resets the device left behind again when its reset is not confirmed before the switch timeout", async () => {

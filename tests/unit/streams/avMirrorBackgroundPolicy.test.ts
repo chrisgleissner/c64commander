@@ -131,6 +131,23 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
     expect(session.startAudio).not.toHaveBeenCalled();
   });
 
+  it("sends no stop when the kept audio has already ended by the time the playlist stops", async () => {
+    let playlistOwnsAudio = true;
+    const session = createSession({ audioLive: true, videoLive: false });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns: vi.fn(),
+      playlistOwnsBackgroundAudio: () => playlistOwnsAudio,
+    });
+    await policy.handleHidden();
+    session.setLive({ audioLive: false });
+    playlistOwnsAudio = false;
+    await policy.handlePlaybackChanged();
+
+    expect(session.stopAll).not.toHaveBeenCalled();
+  });
+
   it("leaves Live View audio alone when playback changes while hidden without the playlist keeping it", async () => {
     const session = createSession({ audioLive: true, videoLive: false });
     const policy = new AvMirrorBackgroundPolicy(session, {
@@ -412,6 +429,28 @@ describe("installAvMirrorBackgroundPolicy (HARD27-021)", () => {
       live.mockRestore();
       video.mockRestore();
       stopAll.mockRestore();
+    }
+  });
+
+  it("releases playlist audio only while hidden, and logs a release that fails", async () => {
+    const policy = new AvMirrorBackgroundPolicy(createSession({ audioLive: true, videoLive: false }));
+    const release = vi.spyOn(policy, "handlePlaybackChanged").mockRejectedValue(new Error("stop refused"));
+    const dispose = installAvMirrorBackgroundPolicy(policy);
+    try {
+      notifyPlaybackActivityChanged();
+      expect(release).not.toHaveBeenCalled();
+
+      setHidden(true);
+      notifyPlaybackActivityChanged();
+      await vi.waitFor(() =>
+        expect(addLog).toHaveBeenCalledWith(
+          "error",
+          "Live View: releasing hidden playlist audio failed",
+          expect.objectContaining({ error: "stop refused", stack: expect.any(String) }),
+        ),
+      );
+    } finally {
+      dispose();
     }
   });
 
