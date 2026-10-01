@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog } from "@/lib/logging";
 import type { PlaylistItem } from "./types";
 
 export type BooleanRef = { current: boolean };
@@ -26,7 +27,10 @@ export const runClaimedLaunch = async (
   setLoading: (loading: boolean) => void,
   launch: () => Promise<unknown>,
 ): Promise<void> => {
-  if (!tryAcquireSingleFlight(ref)) return;
+  if (!tryAcquireSingleFlight(ref)) {
+    addLog("info", "Playback: a launch was not started because another start is still in progress");
+    return;
+  }
   setLoading(true);
   try {
     await launch();

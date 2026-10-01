@@ -50,16 +50,21 @@ export const adoptInterruptedPause = async (api: C64API, deviceId: string | null
     const after = await readZeroPageAndStack(api);
     if (inFlight || getMachineExecutionSnapshot().state !== "running") return false;
     if (before.some((byte, index) => byte !== after[index])) {
-      await restorePauseMuteFromPersistedSnapshot(api, deviceId);
-      addLog("info", "Machine: restored the SID levels of a pause that has since ended", { deviceId });
+      const restored = await restorePauseMuteFromPersistedSnapshot(api, deviceId);
+      addLog(restored ? "info" : "warn", "Machine: a pause from a previous session has since ended", {
+        deviceId,
+        levelsRestored: restored,
+      });
       return false;
     }
   } catch (error) {
+    // Left as it is: the snapshot stays, and the next connection asks again.
     addLog("warn", "Machine: could not tell whether a pause from a previous session still holds", {
       deviceId,
       error: (error as Error).message,
       stack: (error as Error).stack,
     });
+    return false;
   }
   setMachineExecutionPaused({ pauseMutePending: true });
   addLog("info", "Machine: showing a pause left by a previous session", { deviceId });

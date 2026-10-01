@@ -1129,6 +1129,9 @@ export class C64API {
     this.bumpRequestGeneration();
     this.setActiveConfigEnrichmentNamespaceForCurrentHost();
   }
+  listsCategory(category: string): boolean | null {
+    return this.categoryPresence.lists(category);
+  }
 
   getBaseUrl() {
     return this.apiBaseUrl;
@@ -1308,11 +1311,11 @@ export class C64API {
   private resetRequestReadState() {
     this.inFlightReadRequests.clear();
     this.readRequestBudget.clear();
-    this.categoryPresence.reset();
   }
 
   private bumpRequestGeneration() {
     this.requestGeneration = (this.requestGeneration + 1) % 1_000_000;
+    this.categoryPresence.reset();
   }
 
   private setActiveConfigEnrichmentNamespaceForCurrentHost() {

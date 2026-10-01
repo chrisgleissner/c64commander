@@ -5,6 +5,9 @@ import {
   runClaimedLaunch,
 } from "@/pages/playFiles/playbackGuards";
 import type { PlaylistItem } from "@/pages/playFiles/types";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 describe("playbackGuards resolveAutoAdvanceDueAtMsOnDurationChange", () => {
   it("recomputes dueAtMs from the new duration while playing", () => {
@@ -180,5 +183,6 @@ describe("playbackGuards runClaimedLaunch", () => {
     const launch = vi.fn(async () => undefined);
     await runClaimedLaunch({ current: true }, vi.fn(), launch);
     expect(launch).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith("info", expect.stringContaining("another start is still in progress"));
   });
 });

@@ -80,6 +80,8 @@ export type PlaybackControlsCardProps = {
   isPaused: boolean;
   hasPlaylist: boolean;
   isPlaylistLoading: boolean;
+  /** Stop was pressed during a launch that has not unwound yet; the button waits for it. */
+  stopPending?: boolean;
   canPause: boolean;
   onPrevious: () => void;
   onPlay: () => void;
@@ -322,6 +324,7 @@ export const PlaybackControlsCard = ({
   isPaused,
   hasPlaylist,
   isPlaylistLoading,
+  stopPending = false,
   canPause,
   onPrevious,
   onPlay,
@@ -418,12 +421,12 @@ export const PlaybackControlsCard = ({
   });
   // A launch can take twenty seconds (a disk whose settings file is applied through the device menu),
   // and the listener must be able to call it off rather than wait for it to finish.
-  const stopAvailable = isPlaying || isPlaylistLoading;
+  const stopAvailable = isPlaying || (isPlaylistLoading && !stopPending);
   const playFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-play",
     order: PLAY_TRANSPORT_FOCUS_ORDER.play,
     group: "play-transport",
-    disabled: !hasPlaylist,
+    disabled: !hasPlaylist || stopPending,
   });
   const pauseFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-pause",
@@ -566,7 +569,7 @@ export const PlaybackControlsCard = ({
             size="icon"
             className="size-14 rounded-full"
             onClick={stopAvailable ? onStop : onPlay}
-            disabled={!hasPlaylist}
+            disabled={!hasPlaylist || stopPending}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"

@@ -7,12 +7,9 @@
  */
 
 /**
- * Which config categories the connected device has.
- *
- * An Ultimate-II+ cartridge has no Audio Mixer, Data Streams or lighting categories, and asking for
- * them answers 404: every Home visit on one sent seven such requests. A category is absent when the
- * device's own category list omits it. Before that list is read, a category that answered 404 is
- * absent. The list wins over a 404, which can be transient. Forgotten on every device change.
+ * Which config categories the connected device has. An Ultimate-II+ cartridge has no Audio Mixer, Data
+ * Streams or lighting categories, and every Home visit asked it for seven of them. The device's own
+ * list decides; before it is read, a category that answered 404 is absent. Reset on a device change.
  */
 export class CategoryPresence {
   private listed: Set<string> | null = null;
@@ -28,6 +25,11 @@ export class CategoryPresence {
 
   isAbsent(category: string) {
     return this.listed !== null ? !this.listed.has(category) : this.missing.has(category);
+  }
+
+  /** Whether the device's own list names the category; null before the list is read. */
+  lists(category: string): boolean | null {
+    return this.listed === null ? null : this.listed.has(category);
   }
 
   reset() {

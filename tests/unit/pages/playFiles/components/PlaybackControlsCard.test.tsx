@@ -135,6 +135,14 @@ describe("PlaybackControlsCard", () => {
     expect(onPlay).not.toHaveBeenCalled();
   });
 
+  it("waits, disabled, once Stop was pressed during a launch that has not unwound yet", () => {
+    render(<PlaybackControlsCard {...buildProps({ isPlaying: false, isPlaylistLoading: true, stopPending: true })} />);
+
+    const button = screen.getByTestId("playlist-play");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-label", "Play");
+  });
+
   it("promotes the play button from transient flash to persistent highlight while playback is active", () => {
     vi.useFakeTimers();
     const props = buildProps();

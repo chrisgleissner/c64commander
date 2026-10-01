@@ -8,7 +8,8 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { C64API, DrivesResponse } from "@/lib/c64api";
-import { buildPlayPlan, executePlayPlan } from "@/lib/playback/playbackRouter";
+import { buildPlayPlan, executePlayPlan, PlaybackLaunchOvertakenError } from "@/lib/playback/playbackRouter";
+import { addErrorLog } from "@/lib/logging";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
@@ -271,6 +272,28 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
       vi.mocked(enqueueKeyboardBufferInjection).mock.invocationCallOrder[0],
     );
 
+    vi.useRealTimers();
+  });
+
+  it("does not report a launch that Stop overtook as a playback failure", async () => {
+    vi.useFakeTimers();
+    vi.mocked(addErrorLog).mockClear();
+    const api = createApi({ enabled: true, type: "1541", bus_id: 8 });
+    const task = executePlayPlan(
+      api,
+      buildPlayPlan({ source: "local", path: "/games/demo.d64", file: new Blob([Uint8Array.from([1, 2, 3])]) }),
+      {
+        diskAutostartMode: "inject",
+        beforeLaunch: async () => {
+          throw new PlaybackLaunchOvertakenError();
+        },
+      },
+    );
+    const settled = task.catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+
+    expect(await settled).toBeInstanceOf(PlaybackLaunchOvertakenError);
+    expect(vi.mocked(addErrorLog)).not.toHaveBeenCalledWith("Playback failed", expect.anything());
     vi.useRealTimers();
   });
 });

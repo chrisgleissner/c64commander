@@ -7,6 +7,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { notifyPlaybackActivityChanged } from "@/lib/playback/playbackActivitySignal";
 import { BackgroundExecution, type NowPlayingInfo } from "@/lib/native/backgroundExecution";
 import { ensureNotificationPermission } from "@/lib/native/notificationPermission";
 import { getLifecycleState } from "@/lib/appLifecycle";
@@ -113,6 +114,8 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   currentNowPlaying = null;
   publishedNowPlaying = null;
   keepPageAwake(false);
+  // A playlist that ends on its own stops only this service; audio kept for it while hidden must hear that.
+  notifyPlaybackActivityChanged();
   try {
     await BackgroundExecution.stop();
   } catch (error) {

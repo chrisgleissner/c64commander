@@ -10,12 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const device = vi.hoisted(() => ({
   oldReset: vi.fn(),
+  oldReboot: vi.fn(),
   retryReset: vi.fn(),
   selectedDeviceId: "old-device",
 }));
 
 vi.mock("@/lib/c64api", () => ({
-  getC64API: () => ({ machineReset: device.oldReset }),
+  getC64API: () => ({ machineReset: device.oldReset, machineReboot: device.oldReboot }),
   getC64APIConfigSnapshot: () => ({ deviceHost: "c64u", password: undefined }),
   C64API: class {
     machineReset = device.retryReset;
@@ -40,12 +41,23 @@ describe("stopping the old device's tune before a device switch", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     device.oldReset.mockReset();
+    device.oldReboot.mockReset().mockResolvedValue(undefined);
     device.retryReset.mockReset().mockResolvedValue(undefined);
     device.selectedDeviceId = "old-device";
   });
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("reboots the old device for a cartridge or MOD, which a reset leaves running", async () => {
+    markRemotePlaybackStarted(true);
+
+    await stopActivePlaybackBeforeDeviceSwitch(2000);
+
+    expect(device.oldReboot).toHaveBeenCalledTimes(1);
+    expect(device.oldReset).not.toHaveBeenCalled();
+    expect(isRemotePlaybackActive()).toBe(false);
   });
 
   it("resets the device left behind again when its reset is not confirmed before the switch timeout", async () => {

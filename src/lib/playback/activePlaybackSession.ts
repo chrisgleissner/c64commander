@@ -64,9 +64,12 @@ export const subscribeActivePlayback = subscribePlaybackActivity;
  * stops, so it survives any amount of mounting and unmounting.
  */
 let remotePlaybackActive = false;
+// A cartridge stays mapped and a MOD player keeps playing through a reset; only a reboot ends them.
+let remoteStopNeedsReboot = false;
 
-export const markRemotePlaybackStarted = (): void => {
+export const markRemotePlaybackStarted = (stopNeedsReboot = false): void => {
   remotePlaybackActive = true;
+  remoteStopNeedsReboot = stopNeedsReboot;
   addLog("info", "Playback: tune launched on the C64", { service: "playback" });
   notifyPlaybackActivityChanged();
 };
@@ -150,13 +153,13 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
   if (!remotePlaybackActive) return;
   const { deviceHost, password } = getC64APIConfigSnapshot();
   const leftBehindDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
+  const reboot = remoteStopNeedsReboot;
   try {
     // A reset is what the app's own stop does, and it verifiably silences the
     // Ultimate's SID player.
+    const api = getC64API();
     const confirmed = await Promise.race([
-      getC64API()
-        .machineReset()
-        .then(() => true),
+      (reboot ? api.machineReboot() : api.machineReset()).then(() => true),
       new Promise<false>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
     ]);
     // Unconfirmed is not done: the switch that follows aborts the reset still in flight.
@@ -170,14 +173,19 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
       service: "playback",
       error: error instanceof Error ? error.message : String(error),
     });
-    void resetDeviceLeftBehind(deviceHost, password, leftBehindDeviceId);
+    void resetDeviceLeftBehind(deviceHost, password, leftBehindDeviceId, reboot);
   }
 };
 
 const RESET_RETRY_DELAYS_MS = [1000, 3000];
 
 // On a Pixel 4 the c64u once took over 1.5 s to answer the reset, and the C64 left behind kept playing.
-const resetDeviceLeftBehind = async (deviceHost: string, password: string | undefined, leftBehindDeviceId: string) => {
+const resetDeviceLeftBehind = async (
+  deviceHost: string,
+  password: string | undefined,
+  leftBehindDeviceId: string,
+  reboot: boolean,
+) => {
   const api = new C64API(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost);
   for (const [attempt, delayMs] of RESET_RETRY_DELAYS_MS.entries()) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -190,7 +198,7 @@ const resetDeviceLeftBehind = async (deviceHost: string, password: string | unde
       return;
     }
     try {
-      await api.machineReset();
+      await (reboot ? api.machineReboot() : api.machineReset());
       addLog("info", "Playback: reset the device left behind by the switch", { service: "playback", deviceHost });
       return;
     } catch (error) {

@@ -72,6 +72,7 @@ import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
 import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
 import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
+import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
@@ -630,6 +631,11 @@ export default function PlayFilesPage() {
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
+  const { stopPending: stopPendingDuringLaunch, stopPlayback } = useLaunchStopGuard({
+    isPlaylistLoading,
+    isPlaying,
+    stop: handleStop,
+  });
   const handleNextRef = useRef(handleNext);
   useEffect(() => {
     handleNextRef.current = handleNext;
@@ -665,14 +671,12 @@ export default function PlayFilesPage() {
         play: () => void handlePlay(),
         pauseResume: () => void handlePauseResume(),
         next: () => void handleNext(),
-        stop: () => void handleStop(),
+        stop: stopPlayback,
       }),
     playlist.length > 0 && sessionRestoreSettled,
   );
   const sleepTimer = useSleepTimer({
-    onExpire: () => {
-      void handleStop();
-    },
+    onExpire: stopPlayback,
     isPlaying,
   });
   const sleepTimerRef = useRef(sleepTimer);
@@ -2264,7 +2268,7 @@ export default function PlayFilesPage() {
         // restore, guard/due-at clear) that used to be partially and
         // impurely duplicated as setState calls inside the setPlaylist
         // updater below. See HARD9-030.
-        void handleStop();
+        stopPlayback();
       }
       setPlaylist(plan.next);
       if (currentIndex >= 0) {
@@ -2275,7 +2279,7 @@ export default function PlayFilesPage() {
         return new Set(Array.from(prev).filter((id) => !ids.has(id)));
       });
     },
-    [currentIndex, handleStop, isPaused, isPlaying, playlist],
+    [currentIndex, stopPlayback, isPaused, isPlaying, playlist],
   );
 
   useDemoPlaylistCleanup(playlist, removePlaylistItemsById);
@@ -2590,7 +2594,8 @@ export default function PlayFilesPage() {
                 canPause={canPause}
                 onPrevious={() => void handlePrevious()}
                 onPlay={() => void handlePlay()}
-                onStop={() => void handleStop()}
+                onStop={stopPlayback}
+                stopPending={stopPendingDuringLaunch}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
                 // Only offered when the tune is actually rendering here: the C64

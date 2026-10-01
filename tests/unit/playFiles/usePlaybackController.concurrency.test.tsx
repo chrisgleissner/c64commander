@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { USER_TRANSPORT_COALESCE_MS, usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
+import { getC64API } from "@/lib/c64api";
 import { SupersededMachineTransitionError } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 
 vi.mock("@/lib/archive/client", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
+  PlaybackLaunchOvertakenError: class extends Error {},
   buildPlayPlan: vi.fn((request) => request),
   executePlayPlan: vi.fn(async () => undefined),
   getRememberedUltimateSidBlob: vi.fn(() => null),
@@ -357,6 +359,33 @@ describe("usePlaybackController play transition supersession", () => {
     expect(vi.mocked(executePlayPlan).mock.calls.map(([, plan]) => (plan as { path: string }).path)).toEqual([
       "/PROGRAMS/track-b.prg",
       "/PROGRAMS/track-d.prg",
+    ]);
+  });
+
+  it("drops a skip already queued behind a launch when Stop arrives before it runs", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as never);
+    const playlist = ["a", "b", "c"].map((name) => createPlaylistItem(`track-${name}`, `/PROGRAMS/track-${name}.prg`));
+    const firstLaunch = createDeferred<void>();
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => firstLaunch.promise);
+    const { result } = renderSkipController(playlist);
+
+    const skips = [result.current.handleNext("user")];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+    skips.push(result.current.handleNext("user"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+    await act(async () => {
+      await result.current.handleStop();
+      firstLaunch.resolve();
+      await Promise.all(skips);
+    });
+
+    expect(vi.mocked(executePlayPlan).mock.calls.map(([, plan]) => (plan as { path: string }).path)).toEqual([
+      "/PROGRAMS/track-b.prg",
     ]);
   });
 

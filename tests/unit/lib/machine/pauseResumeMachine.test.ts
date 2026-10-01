@@ -98,6 +98,12 @@ describe("pauseResumeMachine, the one implementation the tile and the keypad key
       await pending;
     });
 
+    it("leaves the machine shown as it was when the memory read fails, to ask again on the next connect", async () => {
+      const readMemory = vi.fn().mockRejectedValue(new Error("Host unreachable"));
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(setPausedMock).not.toHaveBeenCalled();
+    });
+
     // A game that replaces the KERNAL interrupt leaves the jiffy clock standing while it runs.
     it("treats a running program with its own interrupt as resumed although the jiffy clock stands still", async () => {
       const readMemory = vi

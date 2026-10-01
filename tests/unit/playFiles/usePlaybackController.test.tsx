@@ -70,6 +70,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
+  PlaybackLaunchOvertakenError: class extends Error {},
   buildPlayPlan: vi.fn((request) => request),
   executePlayPlan: vi.fn(async (_api, _plan, options) => {
     if (options?.beforeLaunch) {
@@ -1619,6 +1620,25 @@ describe("usePlaybackController", () => {
     expect(executePlayPlan).toHaveBeenCalledTimes(1);
   });
 
+  it("starts nothing when Stop arrives while a playlist start is still resolving songlengths", async () => {
+    vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as any);
+    vi.mocked(executePlayPlan).mockClear();
+    let finishSonglengths!: (items: PlaylistItem[]) => void;
+    const applySonglengthsToItems = vi.fn(
+      (items: PlaylistItem[]) => new Promise<PlaylistItem[]>((resolve) => (finishSonglengths = () => resolve(items))),
+    );
+    const playlist = [createPlaylistItem()];
+    const { result } = renderPlaybackController(playlist, { applySonglengthsToItems });
+
+    const starting = result.current.startPlaylist(playlist, 0);
+    await vi.waitFor(() => expect(finishSonglengths).toBeDefined());
+    await result.current.handleStop();
+    finishSonglengths(playlist);
+    await starting;
+
+    expect(executePlayPlan).not.toHaveBeenCalled();
+  });
+
   it("never starts the program when Stop arrives while its .cfg is being applied", async () => {
     vi.mocked(getC64API).mockReturnValue({
       machineReset: vi.fn().mockResolvedValue(undefined),
@@ -1651,6 +1671,10 @@ describe("usePlaybackController", () => {
 
     expect(runProgram).not.toHaveBeenCalled();
     expect(isRemotePlaybackActive()).toBe(false);
+
+    // The interrupted apply must not count as applied: the next start applies the .cfg again.
+    await result.current.playItem(crt, { playlistIndex: 0 });
+    expect(vi.mocked(applyConfigFileReference)).toHaveBeenCalledTimes(2);
   });
 
   it("reboots a cartridge that Stop overtook mid-launch, since a reset leaves it mapped", async () => {

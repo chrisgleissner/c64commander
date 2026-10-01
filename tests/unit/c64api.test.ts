@@ -1715,6 +1715,24 @@ describe("c64api", () => {
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(["http://c64u/v1/configs"]);
   });
 
+  it("still knows which categories the device lacks after a machine action", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.endsWith("/v1/configs") ? { categories: ["Drive A Settings"], errors: [] } : { errors: [] };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    });
+
+    const api = new C64API("http://c64u");
+    await api.getCategories();
+    await api.machineReset();
+    await api.getConfigItems("Data Streams", ["Stream VIC to"]);
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0])).filter((url) => url.includes("Data"))).toEqual([]);
+  });
+
   it("asks a device for a category once after it answered 404, until the device changes", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation(() =>
