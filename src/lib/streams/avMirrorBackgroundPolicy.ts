@@ -14,6 +14,7 @@ import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { restoreMirrorWhenDeviceReturns } from "@/lib/connection/networkTransitions";
 import { addLog } from "@/lib/logging";
 import { isLocalPlaybackActive, isRemotePlaybackActive } from "@/lib/playback/activePlaybackSession";
+import { subscribePlaybackActivity } from "@/lib/playback/playbackActivitySignal";
 import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 /** What the mirror was doing when the app was hidden, so becoming visible can put it back. */
@@ -51,6 +52,7 @@ const RESTORE_ALWAYS: AvMirrorRestoreConditions = {
  */
 export class AvMirrorBackgroundPolicy {
   private suspended: AvMirrorSuspendedState | null = null;
+  private audioKeptForPlayback = false;
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(
@@ -91,9 +93,29 @@ export class AvMirrorBackgroundPolicy {
     return this.serialize(() => this.restoreForVisible());
   }
 
+  /**
+   * Playback started or stopped while the app is hidden. Audio kept running for the playlist has no
+   * owner once the playlist stops, and the phone stops receiving it soon after its foreground service
+   * ends, so the Ultimate would go on multicasting it with nobody listening.
+   */
+  handlePlaybackChanged(): Promise<void> {
+    return this.serialize(() => this.releaseAudioNoLongerOwned());
+  }
+
+  private async releaseAudioNoLongerOwned(): Promise<void> {
+    if (!this.audioKeptForPlayback || this.conditions.playlistOwnsBackgroundAudio?.()) return;
+    this.audioKeptForPlayback = false;
+    if (!this.session.audioLive) return;
+    addLog("info", "Live View: stopping the playlist's audio after playback ended while hidden", {
+      service: "streams",
+    });
+    await this.session.stopAll();
+  }
+
   private async stopForHidden(): Promise<void> {
     if (this.suspended) return;
     const keepAudio = this.session.audioLive && !!this.conditions.playlistOwnsBackgroundAudio?.();
+    this.audioKeptForPlayback = keepAudio;
     const state: AvMirrorSuspendedState = {
       audioWasLive: this.session.audioLive && !keepAudio,
       videoWasLive: this.session.videoLive,
@@ -111,6 +133,7 @@ export class AvMirrorBackgroundPolicy {
   }
 
   private async restoreForVisible(): Promise<void> {
+    this.audioKeptForPlayback = false;
     const state = this.suspended;
     if (!state) return;
     this.suspended = null;
@@ -170,6 +193,20 @@ export function installAvMirrorBackgroundPolicy(
       });
     });
   };
+  const handlePlaybackChanged = () => {
+    if (!document.hidden) return;
+    void policy.handlePlaybackChanged().catch((error: unknown) => {
+      addLog("error", "Live View: releasing hidden playlist audio failed", {
+        service: "streams",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+  };
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  const unsubscribePlayback = subscribePlaybackActivity(handlePlaybackChanged);
+  return () => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    unsubscribePlayback();
+  };
 }

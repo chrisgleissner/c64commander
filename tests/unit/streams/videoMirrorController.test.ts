@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import * as logging from "@/lib/logging";
 import { describe, expect, it, vi } from "vitest";
 import { VideoMirrorController, type VideoMirrorSnapshot } from "@/lib/streams/videoMirrorController";
 import type { StreamReceiver, StreamConnectionState } from "@/lib/streams/streamReceiver";
@@ -808,6 +809,55 @@ describe("VideoMirrorController — continuous fractional cadence (§11 governor
 
     controller.setKeepFraction(0.5);
     expect(controller.keepFractionValue).toBe(0.5); // JS decimates at the requested fraction
+  });
+
+  it("decimates in JS after all when the native side refuses the keep-fraction", async () => {
+    let refuse: (() => void) | undefined;
+    class RefusingReceiver extends FakeReceiver {
+      setNativeCadence(_fraction: number, onNativeFailure?: () => void) {
+        refuse = onNativeFailure;
+        return true;
+      }
+    }
+    const receiver = new RefusingReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.stateCb?.("open");
+
+    controller.setKeepFraction(0.5);
+    expect(controller.keepFractionValue).toBe(1);
+    refuse?.();
+    expect(controller.keepFractionValue).toBe(0.5);
+  });
+
+  it("warns when the device refuses to stop its video stream, which may still be multicasting", async () => {
+    const log = vi.spyOn(logging, "addLog");
+    const controller = new VideoMirrorController({
+      createReceiver: () => new FakeReceiver(),
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => {
+        throw new Error("Device rejected the request");
+      }),
+      onChange: vi.fn(),
+    });
+    try {
+      await controller.start();
+      await controller.stop();
+      expect(log).toHaveBeenCalledWith(
+        "warn",
+        "Video Mirror: device stream stop failed; the device may still be streaming",
+        expect.objectContaining({ error: "Device rejected the request", stack: expect.any(String) }),
+      );
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("setKeepFraction and setFrameThrottle are interchangeable views of the same cadence", async () => {

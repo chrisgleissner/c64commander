@@ -224,8 +224,13 @@ export class VideoMirrorController {
     // Native decimation applies ONLY when the receiver reports it did (assembly on). When the
     // native-assembly escape hatch is off, setNativeCadence returns false — fall back to JS
     // decimation so Auto/50%/25% still cap the rate instead of silently rendering every frame.
-    const nativeDecimating = native ? native.call(this.receiver, this.requestedKeepFraction) : false;
-    this.keepFraction = nativeDecimating ? 1 : this.requestedKeepFraction;
+    const requested = this.requestedKeepFraction;
+    const nativeDecimating = native
+      ? native.call(this.receiver, requested, () => {
+          if (this.requestedKeepFraction === requested) this.keepFraction = requested;
+        })
+      : false;
+    this.keepFraction = nativeDecimating ? 1 : requested;
   }
 
   /** Integer divisor view of the current keep-fraction (1/fraction, rounded) — for existing callers. */
@@ -536,8 +541,10 @@ export class VideoMirrorController {
     try {
       await this.deps.stopStream("video");
     } catch (error) {
-      addLog("debug", "Video Mirror: device stream stop failed (ignored)", {
+      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
+      addLog("warn", "Video Mirror: device stream stop failed; the device may still be streaming", {
         error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
       });
     }
     this.receiver?.close();

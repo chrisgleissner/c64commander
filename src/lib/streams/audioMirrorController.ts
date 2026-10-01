@@ -425,8 +425,10 @@ export class AudioMirrorController {
     try {
       await this.deps.stopStream("audio");
     } catch (error) {
-      addLog("debug", "Audio Mirror: device stream stop failed (ignored)", {
+      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
+      addLog("warn", "Audio Mirror: device stream stop failed; the device may still be streaming", {
         error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
       });
     }
     this.receiver?.close();

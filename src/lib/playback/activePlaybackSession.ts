@@ -153,7 +153,14 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
   try {
     // A reset is what the app's own stop does, and it verifiably silences the
     // Ultimate's SID player.
-    await Promise.race([getC64API().machineReset(), new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+    const confirmed = await Promise.race([
+      getC64API()
+        .machineReset()
+        .then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+    ]);
+    // Unconfirmed is not done: the switch that follows aborts the reset still in flight.
+    if (!confirmed) throw new Error(`The reset was not confirmed within ${timeoutMs} ms`);
     markRemotePlaybackStopped();
     addLog("info", "Playback: old device reset before switch", { service: "playback" });
   } catch (error) {

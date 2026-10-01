@@ -31,6 +31,7 @@ const streamUdp = vi.hoisted(() => {
     close: vi.fn().mockResolvedValue(undefined),
     readStreamDiagnostics: vi.fn().mockResolvedValue({ rejectedPackets: 0 }),
     setExpectedSource: vi.fn().mockResolvedValue(undefined),
+    setKeepFraction: vi.fn().mockResolvedValue(undefined),
     addListener: vi.fn((event: string, listener: (event: Record<string, unknown>) => void) => {
       listeners[event] = listener;
       return Promise.resolve({ remove });
@@ -49,6 +50,7 @@ vi.mock("@/lib/native/streamUdp", () => ({
     addListener: streamUdp.addListener,
     readStreamDiagnostics: streamUdp.readStreamDiagnostics,
     setExpectedSource: streamUdp.setExpectedSource,
+    setKeepFraction: streamUdp.setKeepFraction,
   },
 }));
 
@@ -64,6 +66,15 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     streamUdp.readStreamDiagnostics.mockClear().mockResolvedValue({ rejectedPackets: 0 });
     streamUdp.setExpectedSource.mockClear().mockResolvedValue(undefined);
     streamUdp.bind.mockResolvedValue({ localIp: "192.0.2.206", port: 11000 });
+  });
+
+  it("reports a refused native keep-fraction, so the caller decimates in JS", async () => {
+    streamUdp.setKeepFraction.mockRejectedValueOnce(new Error("no such stream"));
+    const receiver = new NativeUdpStreamReceiver({ name: "video", port: 11000 });
+    const onNativeFailure = vi.fn();
+
+    expect(receiver.setNativeCadence(0.5, onNativeFailure)).toBe(true);
+    await vi.waitFor(() => expect(onNativeFailure).toHaveBeenCalledTimes(1));
   });
 
   it("is selected by createStreamReceiver on native", () => {
