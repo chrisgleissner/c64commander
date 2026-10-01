@@ -32,9 +32,15 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
-import { BACKGROUND_REQUEST_TIMEOUT_MS, type ConfigCategory, type ConfigResponse } from "@/lib/c64api";
+import {
+  BACKGROUND_REQUEST_TIMEOUT_MS,
+  getC64APIConfigSnapshot,
+  type ConfigCategory,
+  type ConfigResponse,
+} from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
+import { clearSoloLevels, recordSoloLevels } from "@/lib/config/audioMixerSoloRecovery";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -407,6 +413,7 @@ function CategorySection({
       if (!configured.length) return;
       if (soloItem) {
         soloSnapshotRef.current = configured;
+        recordSoloLevels(getC64APIConfigSnapshot().deviceHost, soloItem, configured);
         try {
           sessionStorage.setItem(
             soloSnapshotKey,
@@ -428,6 +435,7 @@ function CategorySection({
         // HARD9-054.
         await updateAudioMixerBatch({ category: categoryName, updates });
         if (!soloItem) {
+          clearSoloLevels();
           try {
             sessionStorage.removeItem(soloSnapshotKey);
           } catch (error) {
@@ -604,6 +612,7 @@ function CategorySection({
           category: categoryName,
           updates,
         });
+        clearSoloLevels();
         soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
       } catch (error) {
         reportUserError({
@@ -697,6 +706,7 @@ function CategorySection({
       }
 
       if (Object.keys(updates).length === 0) {
+        clearSoloLevels();
         toast({
           title: "Audio Mixer already at defaults",
           description: "No changes needed.",
@@ -705,6 +715,7 @@ function CategorySection({
       }
 
       await updateConfigBatch.mutateAsync({ category: categoryName, updates });
+      clearSoloLevels();
       const refreshed = await refetch();
       // The batch reset changes device values out-of-band relative to any
       // optimistic override left by an earlier user edit. Those overrides will

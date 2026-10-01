@@ -6,6 +6,7 @@
  */
 
 import type { C64API } from "@/lib/c64api";
+import { addLog } from "@/lib/logging";
 import {
   getMachineExecutionSnapshot,
   restorePauseMuteFromPersistedSnapshot,
@@ -13,6 +14,15 @@ import {
   setMachineExecutionRunning,
 } from "@/lib/deviceInteraction/machineExecutionStore";
 import { capturePauseMuteToPersistedSnapshot } from "@/lib/deviceInteraction/pauseMuteCapture";
+import { hydratePlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
+
+/**
+ * A pause the app took and never resumed, for instance because it was force-stopped in between, still
+ * has its mixer snapshot persisted. Without honouring it a second pause found the SIDs already muted,
+ * recorded nothing to restore, and the resume after it left them at the mute level for good.
+ */
+const hasPersistedPauseMute = (deviceId: string | null) =>
+  Boolean(deviceId && hydratePlaybackSnapshot(deviceId)?.pauseMuteSnapshot);
 
 export type PauseResumeMachineInput = {
   api: C64API;
@@ -20,6 +30,40 @@ export type PauseResumeMachineInput = {
   deviceId: string | null;
   pause: () => Promise<unknown>;
   resume: () => Promise<unknown>;
+};
+
+// A running CPU changes these pages every frame: the KERNAL jiffy clock, and the return address
+// any interrupt pushes. A program that replaces the KERNAL interrupt stops the clock but still pushes.
+const readZeroPageAndStack = (api: C64API) => api.readMemory("0000", 0x200);
+
+/**
+ * Show a pause the app took before it was stopped as a pause. The execution store starts as running,
+ * so after a relaunch Home offered Pause for a machine that was halted with its SIDs muted. Two reads
+ * of zero page and the stack say whether that pause still holds: if they differ, something has resumed
+ * the machine since, and only the muted levels are left to put back.
+ */
+export const adoptInterruptedPause = async (api: C64API, deviceId: string | null): Promise<boolean> => {
+  if (getMachineExecutionSnapshot().state !== "running" || !hasPersistedPauseMute(deviceId)) return false;
+  try {
+    const before = await readZeroPageAndStack(api);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const after = await readZeroPageAndStack(api);
+    if (inFlight || getMachineExecutionSnapshot().state !== "running") return false;
+    if (before.some((byte, index) => byte !== after[index])) {
+      await restorePauseMuteFromPersistedSnapshot(api, deviceId);
+      addLog("info", "Machine: restored the SID levels of a pause that has since ended", { deviceId });
+      return false;
+    }
+  } catch (error) {
+    addLog("warn", "Machine: could not tell whether a pause from a previous session still holds", {
+      deviceId,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+  }
+  setMachineExecutionPaused({ pauseMutePending: true });
+  addLog("info", "Machine: showing a pause left by a previous session", { deviceId });
+  return true;
 };
 
 let inFlight: Promise<"paused" | "running"> | null = null;
@@ -52,6 +96,7 @@ const runPauseResume = async (input: PauseResumeMachineInput): Promise<"paused" 
 
   if (target === "paused") {
     // HARD19-010: mute the SID mixer before pausing, so a paused SID does not hold a drone.
+    const interruptedPauseMute = hasPersistedPauseMute(input.deviceId);
     const muteApplied = await capturePauseMuteToPersistedSnapshot(input.api, input.deviceId);
     try {
       await input.pause();
@@ -60,12 +105,14 @@ const runPauseResume = async (input: PauseResumeMachineInput): Promise<"paused" 
       if (muteApplied) await restorePauseMuteFromPersistedSnapshot(input.api, input.deviceId);
       throw error;
     }
-    setMachineExecutionPaused({ pauseMutePending: muteApplied });
+    setMachineExecutionPaused({ pauseMutePending: muteApplied || interruptedPauseMute });
     return "paused";
   }
 
   await input.resume();
-  if (pauseMutePending) await restorePauseMuteFromPersistedSnapshot(input.api, input.deviceId);
+  if (pauseMutePending || hasPersistedPauseMute(input.deviceId)) {
+    await restorePauseMuteFromPersistedSnapshot(input.api, input.deviceId);
+  }
   setMachineExecutionRunning();
   return "running";
 };

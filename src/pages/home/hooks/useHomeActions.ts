@@ -22,7 +22,7 @@ import {
 } from "@/lib/deviceInteraction/machineExecutionStore";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
-import { pauseResumeMachine } from "@/lib/machine/pauseResumeMachine";
+import { adoptInterruptedPause, pauseResumeMachine } from "@/lib/machine/pauseResumeMachine";
 import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
@@ -62,6 +62,9 @@ export function useHomeActions() {
     }
   }, []);
   const [pauseResumePending, setPauseResumePending] = useState(false);
+  useEffect(() => {
+    if (status.isConnected) void adoptInterruptedPause(api, getSelectedSavedDevice()?.id ?? null);
+  }, [api, status.isConnected]);
 
   const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
   const [folderTaskPending, setFolderTaskPending] = useState(false);
