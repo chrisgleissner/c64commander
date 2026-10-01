@@ -426,7 +426,7 @@ export const PlaybackControlsCard = ({
     id: "play-transport-play",
     order: PLAY_TRANSPORT_FOCUS_ORDER.play,
     group: "play-transport",
-    disabled: !hasPlaylist || stopPending,
+    disabled: !hasPlaylist,
   });
   const pauseFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-pause",
@@ -568,8 +568,10 @@ export const PlaybackControlsCard = ({
             variant={stopAvailable ? "destructive" : "default"}
             size="icon"
             className="size-14 rounded-full"
-            onClick={stopAvailable ? onStop : onPlay}
-            disabled={!hasPlaylist || stopPending}
+            // aria-disabled rather than disabled while a Stop is pending, so the focus ring keeps its place.
+            onClick={stopPending ? undefined : stopAvailable ? onStop : onPlay}
+            disabled={!hasPlaylist}
+            aria-disabled={stopPending || undefined}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"

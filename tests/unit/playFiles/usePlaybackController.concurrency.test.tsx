@@ -149,6 +149,7 @@ const renderSkipController = (playlist: PlaylistItem[], setCurrentIndex: (index:
 
 describe("usePlaybackController play transition supersession", () => {
   beforeEach(() => {
+    vi.mocked(getC64API).mockImplementation(() => ({}) as never);
     vi.clearAllMocks();
     vi.mocked(executePlayPlan).mockReset();
     vi.mocked(executePlayPlan).mockImplementation(async () => undefined);

@@ -136,11 +136,20 @@ describe("PlaybackControlsCard", () => {
   });
 
   it("waits, disabled, once Stop was pressed during a launch that has not unwound yet", () => {
-    render(<PlaybackControlsCard {...buildProps({ isPlaying: false, isPlaylistLoading: true, stopPending: true })} />);
+    const onPlay = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ isPlaying: false, isPlaylistLoading: true, stopPending: true, onPlay, onStop })}
+      />,
+    );
 
     const button = screen.getByTestId("playlist-play");
-    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
     expect(button).toHaveAttribute("aria-label", "Play");
+    fireEvent.click(button);
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(onStop).not.toHaveBeenCalled();
   });
 
   it("promotes the play button from transient flash to persistent highlight while playback is active", () => {
