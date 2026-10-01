@@ -19,6 +19,7 @@ const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
 const MIRROR_C64_VIDEO_KEY = "c64u_mirror_c64_video";
+const DEFAULT_SONG_DURATION_MS_KEY = "c64u_default_song_duration_ms";
 const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
 const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
 const FRIENDLY_SID_NAMES_KEY = "c64u_friendly_sid_names";
@@ -445,6 +446,17 @@ export const DEFAULT_MIRROR_C64_VIDEO = true;
 export const loadMirrorC64Video = () => readBoolean(MIRROR_C64_VIDEO_KEY, DEFAULT_MIRROR_C64_VIDEO);
 
 export const saveMirrorC64Video = (enabled: boolean) => writeBoolean(MIRROR_C64_VIDEO_KEY, enabled);
+
+/**
+ * The Play page's Default duration. Tracks without a known length keep the value they were given, so
+ * the control has to come back showing the same value, or it names a duration nothing plays to.
+ */
+export const loadDefaultSongDurationMs = (fallback: number) => {
+  const stored = readNumber(DEFAULT_SONG_DURATION_MS_KEY, fallback);
+  return stored > 0 ? stored : fallback;
+};
+
+export const saveDefaultSongDurationMs = (durationMs: number) => writeNumber(DEFAULT_SONG_DURATION_MS_KEY, durationMs);
 
 export const DEFAULT_STREAM_NATIVE_AUDIO = true;
 

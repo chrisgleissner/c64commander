@@ -84,6 +84,67 @@ const createDeferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
+const renderSkipController = (playlist: PlaylistItem[], setCurrentIndex: (index: number) => void = vi.fn()) =>
+  renderHook(() =>
+    usePlaybackController({
+      playlist,
+      setPlaylist: vi.fn(),
+      currentIndex: 0,
+      setCurrentIndex,
+      isPlaying: true,
+      setIsPlaying: vi.fn(),
+      isPaused: false,
+      setIsPaused: vi.fn(),
+      setIsPlaylistLoading: vi.fn(),
+      elapsedMs: 0,
+      setElapsedMs: vi.fn(),
+      playedMs: 0,
+      setPlayedMs: vi.fn(),
+      durationMs: undefined,
+      setDurationMs: vi.fn(),
+      setCurrentSubsongCount: vi.fn(),
+      setTrackInstanceId: vi.fn(),
+      repeatEnabled: false,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+      deviceProduct: "C64 Ultimate",
+      ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
+      resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+      applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
+      restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
+      applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
+      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
+      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
+      snapshotToUpdates: vi.fn().mockReturnValue({}),
+      resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+      dispatchVolume: vi.fn(),
+      sidEnablement: {} as never,
+      pauseMuteSnapshotRef: { current: null },
+      pausingFromPauseRef: { current: false },
+      resumingFromPauseRef: { current: false },
+      ensureUnmuted: vi.fn().mockResolvedValue(undefined),
+      playedClockRef: {
+        current: {
+          start: vi.fn(),
+          stop: vi.fn(),
+          pause: vi.fn(),
+          resume: vi.fn(),
+          reset: vi.fn(),
+          current: vi.fn().mockReturnValue(0),
+        },
+      },
+      trackStartedAtRef: { current: null },
+      trackInstanceIdRef: { current: 0 },
+      autoAdvanceGuardRef: { current: null },
+      playStartInFlightRef: { current: false },
+      cancelAutoAdvance: vi.fn(),
+      enqueuePlayTransition: vi.fn().mockImplementation(async (task) => task()),
+      durationSeconds: 45,
+      setAutoAdvanceDueAtMs: vi.fn(),
+      trace: (fn: (...args: unknown[]) => unknown) => fn,
+    }),
+  );
+
 describe("usePlaybackController play transition supersession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -268,6 +329,68 @@ describe("usePlaybackController play transition supersession", () => {
       expect.objectContaining({ path: "/PROGRAMS/track-a.prg" }),
       expect.anything(),
     );
+  });
+
+  it("launches only the latest of several skips that queued behind a launch still in flight", async () => {
+    vi.useFakeTimers();
+    const playlist = ["a", "b", "c", "d", "e"].map((name) =>
+      createPlaylistItem(`track-${name}`, `/PROGRAMS/track-${name}.prg`),
+    );
+    const firstLaunch = createDeferred<void>();
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => firstLaunch.promise);
+
+    const { result } = renderSkipController(playlist);
+    const skips: Promise<void>[] = [];
+    for (let tap = 0; tap < 3; tap += 1) {
+      skips.push(result.current.handleNext("user"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      });
+    }
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstLaunch.resolve();
+      await Promise.all(skips);
+    });
+
+    expect(vi.mocked(executePlayPlan).mock.calls.map(([, plan]) => (plan as { path: string }).path)).toEqual([
+      "/PROGRAMS/track-b.prg",
+      "/PROGRAMS/track-d.prg",
+    ]);
+  });
+
+  it("counts a skip from the track the listener chose when the launch they skipped past finishes mid-gesture", async () => {
+    vi.useFakeTimers();
+    const playlist = ["a", "b", "c", "d", "e"].map((name) =>
+      createPlaylistItem(`track-${name}`, `/PROGRAMS/track-${name}.prg`),
+    );
+    const firstLaunch = createDeferred<void>();
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => firstLaunch.promise);
+    const visibleIndexes: number[] = [];
+    const { result } = renderSkipController(playlist, (index) => visibleIndexes.push(index));
+    const tap = async (skip: () => Promise<void>, skips: Promise<void>[]) => {
+      skips.push(skip());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      });
+    };
+
+    const skips: Promise<void>[] = [];
+    await tap(() => result.current.handleNext("user"), skips);
+    skips.push(result.current.handlePrevious());
+    await act(async () => {
+      firstLaunch.resolve();
+      await firstLaunch.promise;
+    });
+    await tap(() => result.current.handleNext("user"), skips);
+    await act(async () => {
+      await Promise.all(skips);
+    });
+
+    const launchedPaths = vi.mocked(executePlayPlan).mock.calls.map(([, plan]) => (plan as { path: string }).path);
+    expect(launchedPaths.at(-1)).toBe("/PROGRAMS/track-b.prg");
+    expect(visibleIndexes.at(-1)).toBe(1);
   });
 
   it("lets a newer play request supersede an older queued transition", async () => {

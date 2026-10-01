@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
+import { describe, expect, it, vi } from "vitest";
+import {
+  planPlaylistItemRemoval,
+  resolveAutoAdvanceDueAtMsOnDurationChange,
+  runClaimedLaunch,
+} from "@/pages/playFiles/playbackGuards";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 describe("playbackGuards resolveAutoAdvanceDueAtMsOnDurationChange", () => {
@@ -154,5 +158,27 @@ describe("playbackGuards planPlaylistItemRemoval", () => {
     expect(plan.shouldStopDevice).toBe(true);
     expect(plan.next).toEqual([]);
     expect(plan.nextCurrentIndex).toBe(-1);
+  });
+});
+
+describe("playbackGuards runClaimedLaunch", () => {
+  it("shows the launch as loading while it runs and releases the claim when it fails", async () => {
+    const ref = { current: false };
+    const setLoading = vi.fn();
+    let finish!: (error: Error) => void;
+    const running = runClaimedLaunch(ref, setLoading, () => new Promise((_, reject) => (finish = reject)));
+
+    expect(ref.current).toBe(true);
+    expect(setLoading).toHaveBeenLastCalledWith(true);
+    finish(new Error("launch failed"));
+    await expect(running).rejects.toThrow("launch failed");
+    expect(ref.current).toBe(false);
+    expect(setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it("drops a launch while another start holds the claim", async () => {
+    const launch = vi.fn(async () => undefined);
+    await runClaimedLaunch({ current: true }, vi.fn(), launch);
+    expect(launch).not.toHaveBeenCalled();
   });
 });

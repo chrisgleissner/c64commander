@@ -416,11 +416,14 @@ export const PlaybackControlsCard = ({
     group: "play-transport",
     disabled: !canTransport || !hasPrev,
   });
+  // A launch can take twenty seconds (a disk whose settings file is applied through the device menu),
+  // and the listener must be able to call it off rather than wait for it to finish.
+  const stopAvailable = isPlaying || isPlaylistLoading;
   const playFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-play",
     order: PLAY_TRANSPORT_FOCUS_ORDER.play,
     group: "play-transport",
-    disabled: !hasPlaylist || isPlaylistLoading,
+    disabled: !hasPlaylist,
   });
   const pauseFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-pause",
@@ -559,18 +562,18 @@ export const PlaybackControlsCard = ({
           </Button>
           <Button
             ref={playFocusRef}
-            variant={isPlaying ? "destructive" : "default"}
+            variant={stopAvailable ? "destructive" : "default"}
             size="icon"
             className="size-14 rounded-full"
-            onClick={isPlaying ? onStop : onPlay}
-            disabled={!hasPlaylist || isPlaylistLoading}
+            onClick={stopAvailable ? onStop : onPlay}
+            disabled={!hasPlaylist}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"
-            aria-label={isPlaying ? "Stop" : "Play"}
-            title={isPlaying ? "Stop" : "Play"}
+            aria-label={stopAvailable ? "Stop" : "Play"}
+            title={stopAvailable ? "Stop" : "Play"}
           >
-            {isPlaying ? <Square className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            {stopAvailable ? <Square className="h-5 w-5" /> : <Play className="h-5 w-5" />}
           </Button>
           <Button
             ref={pauseFocusRef}

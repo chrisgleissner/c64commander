@@ -160,7 +160,11 @@ import {
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
-import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
+import {
+  planPlaylistItemRemoval,
+  resolveAutoAdvanceDueAtMsOnDurationChange,
+  runClaimedLaunch,
+} from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
@@ -169,6 +173,7 @@ import {
 } from "@/lib/config/configFileReferenceSelection";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
@@ -278,10 +283,10 @@ export default function PlayFilesPage() {
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
   const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
-  const [durationSeconds, setDurationSeconds] = useState(() => Math.round(DEFAULT_SONG_DURATION_MS / 1000));
-  const [durationInput, setDurationInput] = useState(() =>
-    formatDurationSeconds(Math.round(DEFAULT_SONG_DURATION_MS / 1000)),
+  const [durationSeconds, setDurationSeconds] = useState(() =>
+    Math.round(loadDefaultSongDurationMs(DEFAULT_SONG_DURATION_MS) / 1000),
   );
+  const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(durationSeconds));
   const [songNrInput, setSongNrInput] = useState("");
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
   const {
@@ -1440,7 +1445,10 @@ export default function PlayFilesPage() {
         launches,
         add: () => handleAddFileSelections(source, selections),
         takeLaunchTarget: () => playlistSnapshotRef.current[indexBeforeAdd],
-        launch: (item) => playItem(item, { playlistIndex: indexBeforeAdd }),
+        launch: (item) =>
+          runClaimedLaunch(playStartInFlightRef, setIsPlaylistLoading, () =>
+            playItem(item, { playlistIndex: indexBeforeAdd }),
+          ),
       });
     },
     [handleAddFileSelections, playItem, playlistSnapshotRef],
@@ -2352,6 +2360,7 @@ export default function PlayFilesPage() {
 
   const persistDurationOverride = useCallback(
     (durationOverrideMs: number) => {
+      saveDefaultSongDurationMs(durationOverrideMs);
       setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, durationOverrideMs));
     },
     [setPlaylist],
@@ -2937,7 +2946,7 @@ export default function PlayFilesPage() {
             // a folder selection means. Here it sits next to the folders it governs, and it can say
             // so in words rather than in one.
             folderOptions={
-              <label className="flex items-center gap-2 text-xs">
+              <label className="flex min-h-11 items-center gap-2 text-xs">
                 <Checkbox
                   checked={recurseFolders}
                   onCheckedChange={(value) => setRecurseFolders(Boolean(value))}

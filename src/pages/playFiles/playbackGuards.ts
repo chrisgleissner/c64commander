@@ -20,6 +20,22 @@ export const releaseSingleFlight = (ref: BooleanRef): void => {
   ref.current = false;
 };
 
+/** A launch claimed the way Play claims one: Stop is offered while it runs, and another start is dropped. */
+export const runClaimedLaunch = async (
+  ref: BooleanRef,
+  setLoading: (loading: boolean) => void,
+  launch: () => Promise<unknown>,
+): Promise<void> => {
+  if (!tryAcquireSingleFlight(ref)) return;
+  setLoading(true);
+  try {
+    await launch();
+  } finally {
+    releaseSingleFlight(ref);
+    setLoading(false);
+  }
+};
+
 export type AutoAdvanceDurationChangeInput = {
   isPlaying: boolean;
   isPaused: boolean;

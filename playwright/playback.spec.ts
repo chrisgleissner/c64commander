@@ -1671,18 +1671,23 @@ test.describe("Playback file browser", () => {
       await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     }
     const playButtonAfter = page.getByTestId("playlist-play");
-    const playLabelAfter = await playButtonAfter.textContent();
-    let playbackStarted = false;
-    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes("stop")) {
+    const playLabelAfter = await playButtonAfter.getAttribute("aria-label");
+    let playbackStarted = playLabelAfter === "Stop";
+    if (!playbackStarted) {
       const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
       }
-      if (await playButtonAfter.isEnabled().catch(() => false)) {
+      // A row tap can start the tune itself, and the button then offers Stop, so it is pressed only
+      // while it still offers Play.
+      if (
+        (await playButtonAfter.getAttribute("aria-label")) === "Play" &&
+        (await playButtonAfter.isEnabled().catch(() => false))
+      ) {
         await playButtonAfter.click();
-        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
-        playbackStarted = true;
       }
+      await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+      playbackStarted = true;
     }
     if (playbackStarted) {
       await expect(page.getByTestId("playback-current-track")).toContainText("Demo");
