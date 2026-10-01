@@ -256,6 +256,24 @@ describe("runHealthCheck — all-success path", () => {
     expect(result!.probes.TELNET.outcome).toBe("Success");
   });
 
+  it("skips CONFIG instead of failing it on a cartridge that has none of the round-trip categories", async () => {
+    setupAllProbesSuccess();
+    mockGetConfigItem.mockReset();
+    mockGetConfigItem.mockRejectedValue(new Error("HTTP 404"));
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+    expect(mockGetConfigItem).toHaveBeenCalledTimes(4);
+    // A target this device lacks is not logged as an error on every health check.
+    expect(mockGetConfigItem).toHaveBeenCalledWith(
+      "LED Strip Settings",
+      "Strip Intensity",
+      expect.objectContaining({ __c64uExpectedMissing: true }),
+    );
+    expect(mockSetConfigValue).not.toHaveBeenCalled();
+  });
+
   it("returns overallHealth Healthy when all probes pass", async () => {
     setupAllProbesSuccess();
     const result = await runHealthCheck();

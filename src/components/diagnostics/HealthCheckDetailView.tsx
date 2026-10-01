@@ -109,7 +109,10 @@ export function HealthCheckDetailView({
                     : executionState?.state === "TIMEOUT"
                       ? "Timeout"
                       : executionState?.state === "CANCELLED"
-                        ? "Canceled"
+                        ? // A probe with nothing to check on this device ends as CANCELLED too; it was skipped.
+                          executionState.outcome === "Skipped" || probe?.outcome === "Skipped"
+                          ? "Skipped"
+                          : "Canceled"
                         : (probe?.outcome ?? "—");
               const finalStatusClass =
                 executionState?.state != null
