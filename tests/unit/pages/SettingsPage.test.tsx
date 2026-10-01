@@ -45,6 +45,7 @@ import {
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
+import * as settingsExportShare from "@/lib/config/settingsExportShare";
 import { variant } from "@/generated/variant";
 import { APP_STYLES, DEFAULT_APP_STYLE_ID } from "@/generated/appStyles";
 import {
@@ -2621,6 +2622,21 @@ describe("SettingsPage", () => {
       expect(toast).toHaveBeenCalledWith({ title: "Settings export ready" });
     });
     createElementSpy.mockRestore();
+  });
+
+  it("does not say the export is ready when the share sheet was dismissed", async () => {
+    const share = vi.spyOn(settingsExportShare, "shareSettingsExport").mockResolvedValue(false);
+    try {
+      renderSettingsPage();
+      fireEvent.click(screen.getByRole("button", { name: /export settings/i }));
+
+      await waitFor(() =>
+        expect(share).toHaveBeenCalledWith('{"version":2}', expect.stringMatching(/-settings\.json$/)),
+      );
+      expect(toast).not.toHaveBeenCalledWith({ title: "Settings export ready" });
+    } finally {
+      share.mockRestore();
+    }
   });
 
   it("HARD19-035: names the settings export after the variant basename", async () => {

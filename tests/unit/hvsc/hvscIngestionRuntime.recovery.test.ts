@@ -122,6 +122,7 @@ vi.mock("@/lib/sid/sidUtils", () => ({
 }));
 
 import { cancelHvscInstall, ingestCachedHvsc } from "@/lib/hvsc/hvscIngestionRuntime";
+import { ensureHvscDirs } from "@/lib/hvsc/hvscFilesystem";
 
 describe("hvscIngestionRuntime recovery", () => {
   beforeEach(() => {
@@ -149,6 +150,18 @@ describe("hvscIngestionRuntime recovery", () => {
         installedVersion: 5,
         installedBaselineVersion: 5,
       }),
+    );
+  });
+
+  it("releases the ingestion runtime when its storage cannot be prepared, so the next run is not refused", async () => {
+    vi.mocked(ensureHvscDirs).mockRejectedValueOnce(new Error("No space left on device"));
+
+    await expect(ingestCachedHvsc("token-storage-1")).rejects.toThrow(
+      "HVSC ingestion could not prepare its storage: No space left on device",
+    );
+
+    await expect(ingestCachedHvsc("token-storage-2")).resolves.toEqual(
+      expect.objectContaining({ ingestionState: "idle" }),
     );
   });
 

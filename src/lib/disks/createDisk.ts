@@ -107,6 +107,10 @@ export const buildCreateDiskPlan = (args: CreateDiskArgs): CreateDiskPlan => {
   if (!rawName || rawName.includes("/") || rawName.includes("\\") || rawName === "." || rawName === "..") {
     throw new Error("Enter a file name, not a path.");
   }
+  // The device's FAT storage cannot hold these; it answered HTTP 500, which the dialog blamed on the folder.
+  if (/[:*?"<>|]/.test(rawName)) {
+    throw new Error('A file name cannot contain : * ? " < > or |.');
+  }
   const fileName = ensureExtension(rawName, args.kind);
 
   const label = (args.diskLabel && args.diskLabel.length > 0 ? args.diskLabel : stemOf(fileName)).slice(
@@ -118,12 +122,18 @@ export const buildCreateDiskPlan = (args: CreateDiskArgs): CreateDiskPlan => {
   let tracks: number | undefined;
   if (args.kind === "d64") {
     tracks = args.tracks ?? D64_DEFAULT_TRACKS;
-    if (tracks < D64_MIN_TRACKS || tracks > D64_MAX_TRACKS) {
+    // A typed count arrives through Number(), so "abc" is NaN and passes both range comparisons.
+    if (!Number.isInteger(tracks) || tracks < D64_MIN_TRACKS || tracks > D64_MAX_TRACKS) {
       throw new Error(`D64 tracks must be ${D64_MIN_TRACKS}–${D64_MAX_TRACKS}.`);
     }
     params.push(["tracks", String(tracks)]);
   } else if (args.kind === "dnp") {
-    if (!args.tracks || args.tracks < DNP_MIN_TRACKS || args.tracks > DNP_MAX_TRACKS) {
+    if (
+      !args.tracks ||
+      !Number.isInteger(args.tracks) ||
+      args.tracks < DNP_MIN_TRACKS ||
+      args.tracks > DNP_MAX_TRACKS
+    ) {
       throw new Error(`DNP needs a track count (${DNP_MIN_TRACKS}–${DNP_MAX_TRACKS}).`);
     }
     tracks = args.tracks;
