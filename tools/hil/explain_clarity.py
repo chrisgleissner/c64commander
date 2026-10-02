@@ -17,7 +17,9 @@ error, what was heard instead:
   undetected  a tone is missing in the read, but its pitch IS in the recording at that slot: the
               grader missed it
   between     the burst's pitch lies between two ladder notes: a detector or resampling error
-  noise       the burst's pitch is not a ladder note at all: something in the room
+  noise       the burst's pitch is not a ladder note at all: something in the room. A peak at 2x-4x a
+              ladder note whose fundamental is also present is that note's harmonic, read as the note
+              ("heard x3" in the timeline), not noise
   follow-on   the second half of an error already explained by the burst before it
 
 Bursts are found by `audio_e2e_probe.detect_bursts`, the grader's own detector, so the errors
@@ -40,7 +42,17 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audio_e2e_probe import ON_MS, SLOT_MS, TONES_HZ, detect_bursts, goertzel, read_wav  # noqa: E402
+from audio_e2e_probe import (  # noqa: E402
+    FUNDAMENTAL_PRESENCE,
+    FUNDAMENTAL_UNDER_PARTIAL,
+    ON_MS,
+    PARTIALS,
+    SLOT_MS,
+    TONES_HZ,
+    detect_bursts,
+    goertzel,
+    read_graded_wav,
+)
 
 LADDER_TOLERANCE = 0.03
 BAND = (300.0, 6000.0)
@@ -55,14 +67,34 @@ def _band_limited(segment: np.ndarray, rate: int) -> np.ndarray:
     return np.fft.irfft(spectrum, n=len(segment))
 
 
-def dominant_hz(segment: np.ndarray, rate: int) -> float:
-    """The strongest frequency in 300-6000 Hz, to a fraction of a hertz (Hann window, zero-padded)."""
+def _spectrum(segment: np.ndarray, rate: int) -> tuple[np.ndarray, np.ndarray]:
+    """Magnitude in 300-6000 Hz, finely spaced (Hann window, zero-padded), and its frequencies."""
     windowed = (segment - segment.mean()) * np.hanning(len(segment))
     size = 1 << max(16, int(math.ceil(math.log2(len(segment)))) + 3)
     spectrum = np.abs(np.fft.rfft(windowed, n=size))
     freqs = np.fft.rfftfreq(size, 1.0 / rate)
     spectrum[(freqs < BAND[0]) | (freqs > BAND[1])] = 0
-    return float(freqs[int(np.argmax(spectrum))])
+    return spectrum, freqs
+
+
+def heard_pitch(segment: np.ndarray, rate: int) -> tuple[float, int]:
+    """The pitch a burst was heard at, as (hz, partial).
+
+    A dominant peak at 2x-4x a ladder note is that note's harmonic, and is read as the note, when the
+    note's own fundamental is present by the grader's rule in `audio_e2e_probe.identify_tones`. A peak
+    at 3630 Hz with nothing at 1210 Hz stays 3630 Hz.
+    """
+    spectrum, freqs = _spectrum(segment, rate)
+    dominant = float(freqs[int(np.argmax(spectrum))])
+    near = [spectrum[np.abs(freqs - hz) <= hz * LADDER_TOLERANCE].max() for hz in TONES_HZ]
+    for partial in PARTIALS:
+        tone, off = nearest_tone(dominant / partial)
+        present = near[tone] >= max(near) * FUNDAMENTAL_PRESENCE and near[tone] >= (
+            spectrum.max() * FUNDAMENTAL_UNDER_PARTIAL
+        )
+        if off <= LADDER_TOLERANCE and present:
+            return dominant / partial, partial
+    return dominant, 1
 
 
 def level_dbfs(segment: np.ndarray, rate: int) -> float:
@@ -91,7 +123,7 @@ def timeline(samples: list[float], rate: int) -> list[dict]:
     rows: list[dict] = []
     for index, (onset, offset, tone) in enumerate(detect_bursts(samples, rate)):
         body = signal[onset:max(offset, onset + 64)]
-        measured = dominant_hz(body, rate)
+        measured, partial = heard_pitch(body, rate)
         rows.append(
             {
                 "index": index,
@@ -101,6 +133,7 @@ def timeline(samples: list[float], rate: int) -> list[dict]:
                 "tone": tone,
                 "toneHz": TONES_HZ[tone],
                 "measuredHz": round(measured, 1),
+                "partial": partial,
                 "pitchClass": pitch_class(measured),
                 "levelDbfs": round(level_dbfs(body, rate), 1),
                 "expectedTone": None if index == 0 else (rows[-1]["tone"] + 1) % len(TONES_HZ),
@@ -179,7 +212,7 @@ def classify(rows: list[dict], samples: list[float], rate: int) -> list[dict]:
 
 
 def explain_wav(path: Path) -> dict:
-    samples, rate = read_wav(str(path))
+    samples, rate = read_graded_wav(str(path))
     rows = timeline(samples, rate)
     errors = classify(rows, samples, rate)
     kinds: dict[str, int] = {}
@@ -203,13 +236,14 @@ def resolve_inputs(target: Path) -> tuple[Path, Path | None, Path | None]:
 
 def print_report(report: dict, label: str) -> None:
     print(f"== {label}: {report['file']}")
-    print(" #    onset  expected  read   measured   class    length   level  interval")
+    print(" #    onset  expected  read   measured  heard   class    length   level  interval")
     for row in report["bursts"]:
         expected = "" if row["expectedTone"] is None else f"{TONES_HZ[row['expectedTone']]}"
         interval = "" if row["intervalSlots"] is None else f"{row['intervalSlots']:.2f} slot"
         flag = "  <--" if row["expectedTone"] is not None and row["expectedTone"] != row["tone"] else ""
         print(
             f"{row['index']:3d} {row['onsetS']:7.3f}s {expected:>8} {row['toneHz']:6d} {row['measuredHz']:8.1f}Hz "
+            f"{'x' + str(row['partial']):>5} "
             f"{row['pitchClass']:>8} {row['durationMs']:6.1f}ms {row['levelDbfs']:6.1f}dB {interval:>10}{flag}"
         )
     print(f"sequence errors {len(report['sequenceErrors'])}  {report['kinds']}")
