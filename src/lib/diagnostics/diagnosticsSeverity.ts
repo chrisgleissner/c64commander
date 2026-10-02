@@ -43,8 +43,22 @@ export const resolveLogSeverity = (level: LogLevel): DiagnosticsSeverity => leve
 const isWarningFailureClass = (failureClass: unknown) =>
   failureClass === "network-transient" || failureClass === "user-cancellation";
 
+const hasErrorText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+
+const isFailedOperationTrace = (event: Pick<TraceEvent, "type" | "data">) => {
+  const data = event.data;
+  if (!data || data.expectedFailure === true) return false;
+  if (event.type === "rest-response") {
+    return (typeof data.status === "number" && data.status >= 400) || hasErrorText(data.error);
+  }
+  if (event.type === "ftp-operation" || event.type === "telnet-operation") {
+    return data.result === "failure" || hasErrorText(data.error);
+  }
+  return false;
+};
+
 export const resolveTraceSeverity = (event: Pick<TraceEvent, "type" | "data">): DiagnosticsSeverity => {
-  if (event.type !== "error") return "info";
+  if (event.type !== "error" && !isFailedOperationTrace(event)) return "info";
   return isWarningFailureClass(event.data?.failureClass) ? "warn" : "error";
 };
 
