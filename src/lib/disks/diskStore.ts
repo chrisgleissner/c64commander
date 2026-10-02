@@ -50,13 +50,18 @@ export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
   if (uniqueId !== SHARED_DISK_LIBRARY_ID || direct.disks.length > 0) {
     return direct;
   }
-  const legacyStates: DiskLibraryState[] = [];
+  const legacyKeys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
     if (!key || !key.startsWith(STORE_PREFIX) || key === getKey(SHARED_DISK_LIBRARY_ID)) continue;
-    legacyStates.push(parseState(localStorage.getItem(key), key));
+    legacyKeys.push(key);
   }
-  return mergeLibraries(legacyStates);
+  if (legacyKeys.length === 0) return direct;
+  const merged = mergeLibraries(legacyKeys.map((key) => parseState(localStorage.getItem(key), key)));
+  // Retire the per-device keys, or an emptied shared library would re-import them on every load.
+  saveDiskLibrary(SHARED_DISK_LIBRARY_ID, merged);
+  legacyKeys.forEach((key) => localStorage.removeItem(key));
+  return merged;
 };
 
 export const saveDiskLibrary = (uniqueId: string, state: DiskLibraryState) => {

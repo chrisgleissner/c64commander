@@ -59,6 +59,28 @@ describe("diskStore", () => {
     expect(loaded.disks.map((disk) => disk.path)).toEqual(["/device-a/demo.d64", "/device-b/demo.d81"]);
   });
 
+  it("keeps a shared library the user emptied empty after a legacy migration", () => {
+    const legacyDisk = createDiskEntry({ path: "/device-a/demo.d64", location: "local" });
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-a`, JSON.stringify({ disks: [legacyDisk] }));
+
+    expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toHaveLength(1);
+    saveDiskLibrary(SHARED_DISK_LIBRARY_ID, { disks: [] });
+
+    expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toEqual([]);
+  });
+
+  it("retires the legacy per-device keys once they are merged into the shared library", () => {
+    const legacyDisk = createDiskEntry({ path: "/device-a/demo.d64", location: "local" });
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-a`, JSON.stringify({ disks: [legacyDisk] }));
+
+    loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
+
+    expect(localStorage.getItem(`${DISK_LIBRARY_PREFIX}device-a`)).toBeNull();
+    expect(
+      JSON.parse(localStorage.getItem(`${DISK_LIBRARY_PREFIX}${SHARED_DISK_LIBRARY_ID}`) ?? "{}").disks,
+    ).toHaveLength(1);
+  });
+
   it("keeps same-path ultimate disks from different devices distinct when merging legacy libraries", () => {
     const originA = {
       sourceKind: "ultimate" as const,
