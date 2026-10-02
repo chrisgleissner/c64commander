@@ -63,6 +63,11 @@ import {
   type MenuNode,
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
+import {
+  filterCategoriesByQuery,
+  filterMenuPagesByQuery,
+  type MenuPageEntry,
+} from "@/lib/config/menuMapping/searchMenuPages";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
@@ -927,10 +932,6 @@ function CategorySection({
   );
 }
 
-// A flattened menu page entry for hierarchy-mode rendering: a settings page plus the
-// parent menu group it belongs to (e.g. "Audio setup" › "Audio mixer").
-type MenuPageEntry = { page: MenuNode; groupLabel: string | null };
-
 const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   const entries: MenuPageEntry[] = [];
   for (const node of hierarchy.nodes) {
@@ -1001,14 +1002,7 @@ export default function ConfigBrowserPage() {
   const hierarchy = useMemo(() => resolveMenuMapping({ family, firmwareVersion }), [family, firmwareVersion]);
 
   const menuPages = useMemo(() => (hierarchy ? flattenMenuPages(hierarchy) : []), [hierarchy]);
-  const filteredMenuPages = useMemo(() => {
-    if (!searchQuery) return menuPages;
-    const query = searchQuery.toLowerCase();
-    return menuPages.filter(
-      (entry) =>
-        entry.page.label.toLowerCase().includes(query) || (entry.groupLabel ?? "").toLowerCase().includes(query),
-    );
-  }, [menuPages, searchQuery]);
+  const filteredMenuPages = useMemo(() => filterMenuPagesByQuery(menuPages, searchQuery), [menuPages, searchQuery]);
 
   /*
    * Global search deep-links to one live item (spec.md section 5.9). Which card holds it depends
@@ -1034,13 +1028,13 @@ export default function ConfigBrowserPage() {
   // unknown/future category with no owner, keyword, or default). The residual Advanced
   // section renders ONLY these; when there are none it is omitted entirely (no junk drawer).
   const residualCategories = useMemo(
-    () => (hierarchy ? unroutedCategories(hierarchy, family, liveCategories) : []),
-    [hierarchy, family, liveCategories],
+    () => filterCategoriesByQuery(hierarchy ? unroutedCategories(hierarchy, family, liveCategories) : [], searchQuery),
+    [hierarchy, family, liveCategories, searchQuery],
   );
-  const filteredCategories = useMemo(() => {
-    if (!searchQuery) return liveCategories;
-    return liveCategories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [liveCategories, searchQuery]);
+  const filteredCategories = useMemo(
+    () => filterCategoriesByQuery(liveCategories, searchQuery),
+    [liveCategories, searchQuery],
+  );
   const pageShellClassName = usePrimaryPageShellClassName();
   const { profile } = useDisplayProfile();
 
@@ -1081,7 +1075,7 @@ export default function ConfigBrowserPage() {
               </Button>
             </div>
           ) : hierarchy ? (
-            filteredMenuPages.length === 0 ? (
+            filteredMenuPages.length === 0 && residualCategories.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">No settings match your search</div>
             ) : (
               <>

@@ -292,3 +292,37 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     }
   });
 });
+
+describe("ConfigBrowserPage — search (C64U)", () => {
+  const search = (query: string) =>
+    fireEvent.change(screen.getByPlaceholderText("Search categories..."), { target: { value: query } });
+
+  it("finds the page that holds a setting when the search names the setting", () => {
+    renderPage();
+    search("CPU speed");
+    expect(screen.queryByText("No settings match your search")).not.toBeInTheDocument();
+    expect(screen.getByTestId("config-menu-page-turbo-boost")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-menu-page-video-setup")).not.toBeInTheDocument();
+  });
+
+  it("finds the Audio mixer by a volume it shows", () => {
+    renderPage();
+    search("vol ultisid");
+    expect(screen.getByTestId("config-category-audio-mixer")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-menu-page-turbo-boost")).not.toBeInTheDocument();
+  });
+
+  it("hides the categories without a menu page that do not match the search", () => {
+    renderPage();
+    search("turbo");
+    expect(screen.getByTestId("config-menu-page-turbo-boost")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-unrouted-softiec-drive-settings")).not.toBeInTheDocument();
+  });
+
+  it("shows a category without a menu page when only that category matches", () => {
+    renderPage();
+    search("softiec");
+    expect(screen.queryByText("No settings match your search")).not.toBeInTheDocument();
+    expect(screen.getByTestId("config-unrouted-softiec-drive-settings")).toBeInTheDocument();
+  });
+});
