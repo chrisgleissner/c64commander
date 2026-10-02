@@ -427,9 +427,11 @@ class AudioPipelineTest {
     val speaker = FakeSpeaker(sampleRate)
     val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory)
     try {
-      // Start it deep, as a burst would: 250 ms in the ring against a 40 ms target.
-      repeat(62) { pipeline.offer(packet, 0, packet.size) }
+      // Drive it deep mid-stream, as a burst would: 250 ms more in the ring against a 40 ms target.
+      // A backlog present before the first sound is skipped instead (see the startup test below).
       pipeline.start()
+      feedEven(pipeline, seconds = 1, rateMultiplier = 1.0)
+      repeat(62) { pipeline.offer(packet, 0, packet.size) }
       feedEven(pipeline, seconds = 3, rateMultiplier = 1.0)
       val stats = pipeline.stats()
       assertTrue(
@@ -445,6 +447,43 @@ class AudioPipelineTest {
           stats.driftCorrection <= 1.0055,
       )
       assertTrue("a healthy over-buffered stream should not conceal: $stats", stats.concealedMs < 30.0)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun aBacklogPresentAtStartIsSkippedNotPlayedOutSharp() {
+    // On a Pixel 4 the mirror started with 156 ms in the ring against a 30 ms target, and the
+    // converter drained it at its 0.5% recovery rate: the first six seconds of every note were eight
+    // cents sharp. A clump that lands while the ring primes has not been heard by anyone, so the
+    // pipeline must start at the live edge and play at true speed from the first sound.
+    val speaker = FakeSpeaker(sampleRate)
+    val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory)
+    try {
+      repeat(62) { pipeline.offer(packet, 0, packet.size) }
+      pipeline.start()
+      var maxCorrection = 1.0
+      val settledAt = System.nanoTime() + 500_000_000L
+      var underrunsAtSettle = -1
+      val endAt = System.nanoTime() + 3_000_000_000L
+      val stepNanos = packetFrames * 1_000_000_000L / sampleRate
+      var next = System.nanoTime()
+      while (System.nanoTime() < endAt) {
+        if (underrunsAtSettle < 0 && System.nanoTime() >= settledAt) underrunsAtSettle = speaker.underruns
+        if (System.nanoTime() < next) {
+          maxCorrection = maxOf(maxCorrection, pipeline.stats().driftCorrection)
+          Thread.sleep(1)
+          continue
+        }
+        pipeline.offer(packet, 0, packet.size)
+        next += stepNanos
+      }
+      val stats = pipeline.stats()
+      // 0.1% is the steady-state authority, about 1.7 cents; the 0.5% recovery rate is what was heard.
+      assertTrue("a startup backlog was played out sharp: $maxCorrection", maxCorrection <= 1.0011)
+      assertTrue("the startup backlog was kept as latency: ${stats.bufferedMs} ms", stats.bufferedMs < 150.0)
+      assertEquals("skipping the backlog starved the speaker", underrunsAtSettle, speaker.underruns)
     } finally {
       pipeline.close()
     }

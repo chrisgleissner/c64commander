@@ -701,15 +701,13 @@ internal class AudioPipeline(
           continue
         }
         if (!started) {
-          // Prime for BOTH buffers, not just the cushion. The first writes fill the speaker track,
-          // and every frame of that comes out of the ring — so priming to the cushion target alone
-          // leaves the ring starved the moment playback begins, and it never recovers: the converter
-          // sees a thin cushion from the very first chunk and spends the whole session easing off to
-          // rebuild something that was never there.
+          // Prime for BOTH buffers: the first writes fill the speaker track out of the ring, so
+          // priming to the cushion alone starts the session on a thin cushion it never rebuilds.
           if ((writeFrames - readFrames) < primeFrames) {
             LockSupport.parkNanos(POLL_NANOS)
             continue
           }
+          dropStartupSurplus()
           track.play()
           started = true
         }
@@ -733,6 +731,22 @@ internal class AudioPipeline(
   }
 
   /**
+   * Start at the live edge, not with a backlog. A Wi-Fi clump during priming left 156 ms against a
+   * 30 ms target, drained at the 0.5% recovery rate: eight cents sharp for six seconds on a Pixel 4.
+   * Nothing has been heard yet, so skipping it is free; on-device playback's deep target never skips.
+   */
+  private fun dropStartupSurplus() {
+    val keepFrames = targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate
+    synchronized(producerLock) {
+      val surplus = (writeFrames - readFrames) - keepFrames
+      if (surplus <= 0) return
+      readFrames += surplus
+      discardedBytes += surplus * BYTES_PER_FRAME
+    }
+    fraction = 0.0
+  }
+
+  /**
    * Convert one output chunk out of the ring and write it.
    *
    * The ratio is nominal (source rate over output rate) nudged by how far the cushion is from its
@@ -752,10 +766,8 @@ internal class AudioPipeline(
     }
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
-    // Slew-limited, never stepped. The correction IS a change of playback rate, so moving it abruptly
-    // is an abrupt change of pitch — and the authority below can change fivefold when the cushion
-    // crosses a threshold, which put an audible lurch in the middle of a held note. Ramping it over
-    // tens of milliseconds makes the same correction inaudible.
+    // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
+    // fivefold at a threshold, which put an audible lurch in a held note.
     val wanted = nominalRatio() * (1.0 + driftAuthority(depth) * cushionError(depth))
     val ratio =
         when {
@@ -765,11 +777,8 @@ internal class AudioPipeline(
         }
     appliedRatio = ratio
 
-    // How many output frames the ring can actually support, leaving the one extra source frame the
-    // interpolator reads ahead. Producing a SHORT chunk is the right answer to a shallow ring: the
-    // blocking write still paces us, and coming back for the rest a moment later is inaudible.
-    // Concealing a whole chunk because the ring was one frame short is not — that quantises every
-    // near-miss into 10 ms of silence, which is most of what the listener was hearing as crackle.
+    // Output frames the ring supports (keeping the interpolator's look-ahead frame). A SHORT chunk is
+    // the answer to a shallow ring; concealing a whole chunk for one missing frame was the crackle.
     val usable = ((depth - 1) - fraction) / ratio
     val renderFrames = minOf(outFrames.toLong(), Math.floor(usable).toLong()).toInt()
     if (renderFrames <= 0) {
@@ -805,9 +814,8 @@ internal class AudioPipeline(
             true
           }
         }
-    // Written only after the position is committed, so a chunk built from audio a flush has since
-    // discarded never reaches the speaker. Outside the lock: this blocks on the AudioTrack, and the
-    // producer must never wait on that.
+    // Written after the commit so flushed audio never plays; outside the lock so the producer never
+    // waits on the AudioTrack.
     if (!committed) {
       fraction = 0.0
       return
@@ -818,12 +826,8 @@ internal class AudioPipeline(
   /**
    * How far the cushion is from target, as -1..+1, with a deadband around the target.
    *
-   * The deadband matters more than the gain. A loop that corrects continuously sits at its limit
-   * whenever the depth is anywhere but exactly on target, and since the correction IS a change of
-   * playback rate, that is a permanent detune — measurably 997.75 Hz for a 1000 Hz tone before the
-   * deadband existed, which is the "sometimes it speeds up" the listener hears. Inside the band the
-   * pipeline plays at exactly the right rate and lets the buffer absorb the difference, which is what
-   * a buffer is for.
+   * The deadband matters more than the gain: without it the loop sat at its limit off target, a
+   * permanent detune (997.75 Hz for a 1000 Hz tone). Inside the band the buffer absorbs the difference.
    */
   private fun cushionError(depth: Long): Double {
     val target = targetFrames.toDouble()
@@ -845,9 +849,8 @@ internal class AudioPipeline(
    *  - **Too deep** and the latency is permanent. Absorbing one 148 ms burst left the mirror 241 ms
    *    behind the picture, and at 0.1% it would have taken twenty-five minutes to hand that back.
    *
-   * So when the cushion is far from where it should be, in either direction, the pipeline may ease
-   * on or off harder until it is close again. Half a percent is about eight cents, it lasts tens of
-   * seconds rather than permanently, and it is far cheaper than either a gap or a lip-sync error.
+   * So far from target, in either direction, it may ease on or off harder (half a percent, about eight
+   * cents) for tens of seconds: cheaper than either a gap or a lip-sync error.
    */
   private fun driftAuthority(depth: Long): Double {
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
@@ -1055,11 +1058,8 @@ internal class AudioPipeline(
     /**
      * How far the resampling ratio may be pushed from nominal to hold the cushion.
      *
-     * 0.1% is under two cents — below the threshold at which a pitch change is noticeable even on a
-     * sustained tone — and still three times the 0.035% clock difference between the C64's 47983 Hz
-     * and the phone's DAC that it exists to absorb. It was ten times this at first, and a tone test
-     * showed the result: a steady 1000 Hz came out at 997.75 Hz, which is audible as the tune
-     * wandering in speed.
+     * 0.1% is under two cents, below audibility on a sustained tone, and three times the 0.035% clock
+     * difference it absorbs. Ten times this put a steady 1000 Hz at an audible 997.75 Hz.
      */
     private const val MAX_DRIFT = 0.001
 
