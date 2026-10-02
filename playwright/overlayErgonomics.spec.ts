@@ -6,7 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { clickSourceSelectionButton } from "./sourceSelection";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
@@ -223,6 +226,169 @@ test.describe("Overlay ergonomics on a phone", () => {
     await expect(liveView.getByTestId("stream-stats")).toBeVisible({ timeout: 15_000 });
     await expectAllMeetTarget(liveView.getByTestId("stream-stats-toggle"), "Live View stats toggle");
   });
+});
+
+/**
+ * A three-tune PSID whose header names a composer, so the now-playing card shows both links. The
+ * name is long and there is no release line, so the composer link sits directly above the tunes
+ * link and spans its column: a hit area grown downward from the composer, or upward from the tunes
+ * link, lands on the other.
+ */
+const COMPOSER = "Jeroen Tel & Charles Deenen";
+
+const writeComposerSid = (directory: string, flags: number) => {
+  const bytes = Buffer.alloc(0x7c + 4, 0x60);
+  bytes.fill(0, 0, 0x7c);
+  bytes.write("PSID", 0, "latin1");
+  bytes.writeUInt16BE(2, 0x04);
+  bytes.writeUInt16BE(0x7c, 0x06);
+  bytes.writeUInt16BE(0x1000, 0x08);
+  bytes.writeUInt16BE(0x1000, 0x0a);
+  bytes.writeUInt16BE(0x1003, 0x0c);
+  bytes.writeUInt16BE(3, 0x0e);
+  bytes.writeUInt16BE(1, 0x10);
+  bytes.write("Composer Links", 0x16, "latin1");
+  bytes.write(COMPOSER, 0x36, "latin1");
+  bytes.writeUInt16BE(flags, 0x76);
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, "composer-links.sid"), bytes);
+};
+
+type HitReport = { width: number; height: number; takenBy: string[] };
+
+/**
+ * Hit-tests every pixel around a control. `width` and `height` are the longest unbroken horizontal
+ * and vertical runs of points that land on the control, which is its reachable size whatever its
+ * corner radius. `takenBy` names the other controls that a point inside the control's own box lands
+ * on. A disabled control takes no pointer events, so a point on it falls through to whatever lies
+ * beneath, and only another control there counts.
+ */
+const hitTestTarget = (locator: Locator): Promise<HitReport> =>
+  locator.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const margin = 48;
+    const left = Math.floor(rect.left - margin);
+    const top = Math.floor(rect.top - margin);
+    const columns = Math.ceil(rect.width + 2 * margin);
+    const rows = Math.ceil(rect.height + 2 * margin);
+    const owns = (x: number, y: number) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit !== null && (hit === element || element.contains(hit));
+    };
+    const verticalRun = new Array<number>(columns).fill(0);
+    let width = 0;
+    let height = 0;
+    for (let row = 0; row < rows; row += 1) {
+      let horizontalRun = 0;
+      for (let col = 0; col < columns; col += 1) {
+        const owned = owns(left + col + 0.5, top + row + 0.5);
+        horizontalRun = owned ? horizontalRun + 1 : 0;
+        verticalRun[col] = owned ? verticalRun[col] + 1 : 0;
+        width = Math.max(width, horizontalRun);
+        height = Math.max(height, verticalRun[col]);
+      }
+    }
+    const takenBy = new Set<string>();
+    for (let y = Math.ceil(rect.top) + 0.5; y < rect.bottom; y += 1) {
+      for (let x = Math.ceil(rect.left) + 0.5; x < rect.right; x += 1) {
+        const control = document.elementFromPoint(x, y)?.closest("button, a[href], input, [role]");
+        if (control && control !== element && !element.contains(control)) {
+          takenBy.add(control.getAttribute("data-testid") ?? control.getAttribute("aria-label") ?? control.tagName);
+        }
+      }
+    }
+    return { width, height, takenBy: [...takenBy] };
+  });
+
+test.describe("Now playing links on a phone", () => {
+  let server: Awaited<ReturnType<typeof createMockC64Server>>;
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    disableTraceAssertions(testInfo, "Layout-only coverage; trace assertions disabled.");
+    server = await createMockC64Server();
+    await seedUiMocks(page, server.baseUrl);
+  });
+
+  test.afterEach(async () => {
+    await server.close();
+  });
+
+  // The header flags decide what precedes the tune position on the facts line. "6581 · PAL" leaves
+  // it on the first line; "6581 or 8580 · PAL/NTSC" pushes it onto the second on a 320 px screen.
+  const cases = [
+    { profile: "compact", flags: 0x0014, tunesLine: 1 },
+    { profile: "medium", flags: 0x0014, tunesLine: 1 },
+    { profile: "compact", flags: 0x003c, tunesLine: 2 },
+  ] as const;
+  for (const { profile, flags, tunesLine } of cases) {
+    test(`composer and tunes links have 44 px targets that take no taps from their neighbors (${profile}, tunes on facts line ${tunesLine})`, async ({
+      page,
+    }, testInfo) => {
+      await page.addInitScript((override) => {
+        localStorage.setItem("c64u_display_profile_override", override);
+        localStorage.setItem("c64u_sid_radio_enabled", "1");
+        localStorage.setItem("c64u_sid_ranking_enabled", "1");
+      }, DISPLAY_PROFILE_VIEWPORTS[profile].override);
+      await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS[profile].viewport);
+      const folder = testInfo.outputPath("composer-links");
+      writeComposerSid(folder, flags);
+
+      await page.goto("/play", { waitUntil: "domcontentloaded" });
+      await settle(page, profile);
+      await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+      await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
+      await page.locator('input[type="file"][webkitdirectory]').setInputFiles([folder]);
+      await expect(page.getByRole("dialog")).toBeHidden();
+      await activeSlot(page)
+        .getByTestId("playlist-item")
+        .filter({ hasText: "composer-links.sid" })
+        .getByRole("button", { name: "Play" })
+        .click();
+
+      const card = activeSlot(page).getByTestId("playback-current-track");
+      const composer = card.getByTestId("playback-current-composer");
+      const tunes = card.getByTestId("playback-current-tunes");
+      await expect(composer).toHaveText(COMPOSER, { timeout: 20_000 });
+      await expect(tunes).toBeVisible();
+      await expect(card.getByTestId("now-playing-ranking")).toBeVisible();
+      // The "Items added" toast sits over the transport on a short screen and would answer for it.
+      for (const close of await page.getByTestId("app-toast-close").all()) await close.click();
+      await expect(page.getByTestId("app-toast-close")).toHaveCount(0);
+      await card.scrollIntoViewIfNeeded();
+      await waitForFiniteAnimations(page);
+      const factsLineOfTunes = await tunes.evaluate((element) => {
+        const facts = element.closest('[data-testid="playback-current-facts"]');
+        const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight);
+        const offset = element.getBoundingClientRect().top - (facts?.getBoundingClientRect().top ?? 0);
+        return Math.round(offset / lineHeight) + 1;
+      });
+      expect(factsLineOfTunes, "facts line the tunes link wrapped onto").toBe(tunesLine);
+
+      await expectAllMeetTarget(card.locator("button"), "Now playing card links and actions", 4);
+      const composerCenter = await composer.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return hit === element || element.contains(hit);
+      });
+      expect(composerCenter, "a tap at the composer's center reaches the composer").toBe(true);
+
+      const neighbors = [
+        composer,
+        tunes,
+        ...(await card.getByTestId("now-playing-ranking").getByRole("button").all()),
+        ...(await activeSlot(page).getByTestId("playback-transport-row").getByRole("button").all()),
+      ];
+      for (const neighbor of neighbors) {
+        const label = (await neighbor.getAttribute("data-testid")) ?? (await neighbor.getAttribute("aria-label"));
+        const report = await hitTestTarget(neighbor);
+        expect(report.takenBy, `${label}: controls that take taps inside its own box`).toEqual([]);
+        if (await neighbor.isDisabled()) continue;
+        expect(Math.min(report.width, report.height), `${label}: reachable size`).toBeGreaterThanOrEqual(
+          MIN_TARGET_PX - 1,
+        );
+      }
+    });
+  }
 });
 
 test.describe("Large display chosen on a phone", () => {

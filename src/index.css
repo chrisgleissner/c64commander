@@ -1290,6 +1290,37 @@ button:focus-visible,
     transform: translate(-50%, -50%);
   }
 
+  /* The same target grown upward only, for an inline link whose next line holds other links. */
+  .hit-area-44-above {
+    position: relative;
+  }
+
+  .hit-area-44-above::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translateX(-50%);
+  }
+
+  /* Grown 44px past each edge, for an inline link that can wrap onto any line. A clipping ancestor
+     at least 44px tall bounds it, so it covers 44px of that ancestor and nothing outside it. */
+  .hit-area-44-clipped {
+    position: relative;
+  }
+
+  .hit-area-44-clipped::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: calc(100% + 88px);
+    transform: translate(-50%, -50%);
+  }
+
   /* C64 scanline effect for headers */
   .scanlines {
     background: repeating-linear-gradient(
