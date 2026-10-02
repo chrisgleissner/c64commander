@@ -17,7 +17,7 @@
 import { addLog } from "@/lib/logging";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
 import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
-import { describeStreamStartFailure } from "./streamStartFailure";
+import { describeReceiverOpenFailure, describeStreamStartFailure } from "./streamStartFailure";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -289,15 +289,20 @@ export class AudioMirrorController {
       this.playbackBuffer?.push(parsed.seq, parsed.body, arrivalMs);
     });
 
+    let socketOpen = false;
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
+      socketOpen = true;
       await this.deps.startStream("audio", receiver.destination);
     } catch (error) {
-      addLog("warn", "Audio Mirror: device stream start failed", {
+      addLog("warn", socketOpen ? "Audio Mirror: device stream start failed" : "Audio Mirror: receive socket failed", {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: describeStreamStartFailure(error, "audio") });
+      this.update({
+        state: "error",
+        error: socketOpen ? describeStreamStartFailure(error, "audio") : describeReceiverOpenFailure(error, "audio"),
+      });
     }
   }
 

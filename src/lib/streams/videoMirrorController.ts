@@ -35,7 +35,7 @@ import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
-import { describeStreamStartFailure } from "./streamStartFailure";
+import { describeReceiverOpenFailure, describeStreamStartFailure } from "./streamStartFailure";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -441,15 +441,20 @@ export class VideoMirrorController {
       );
     });
 
+    let socketOpen = false;
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
+      socketOpen = true;
       await this.deps.startStream("video", receiver.destination);
     } catch (error) {
-      addLog("warn", "Video Mirror: device stream start failed", {
+      addLog("warn", socketOpen ? "Video Mirror: device stream start failed" : "Video Mirror: receive socket failed", {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: describeStreamStartFailure(error, "video") });
+      this.update({
+        state: "error",
+        error: socketOpen ? describeStreamStartFailure(error, "video") : describeReceiverOpenFailure(error, "video"),
+      });
     }
   }
 
