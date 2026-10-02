@@ -1423,6 +1423,31 @@ describe("hvscIngestionRuntime", () => {
     expect(extractArchiveEntries).not.toHaveBeenCalled();
   });
 
+  it("does not start the next ingestion canceled when a stray cancel named another token during the previous one", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 5, type: "baseline" } as any);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+    });
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    vi.mocked(filesystem.ensureHvscDirs).mockImplementationOnce(async () => {
+      await cancelHvscInstall("hvsc-install");
+    });
+    await ingestCachedHvsc("hvsc-ingest");
+    vi.mocked(extractArchiveEntries).mockClear();
+
+    await ingestCachedHvsc("hvsc-install");
+
+    expect(extractArchiveEntries).toHaveBeenCalledTimes(1);
+  });
+
   it("stops the deletion loop and skips promote/finalize/success after cancellation mid-loop (HARD9-084)", async () => {
     // Regression: cancellation was previously only checked inside extraction's
     // onEntry - once extraction finished, the deletion loop (up to thousands

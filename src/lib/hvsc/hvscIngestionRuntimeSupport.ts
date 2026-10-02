@@ -175,6 +175,9 @@ const ingestionIdleListeners = new Set<() => void>();
 /** Ends the running install or ingest and tells everyone who waited for it to finish. */
 export const markIngestionRuntimeIdle = () => {
   runtimeState.activeIngestionRunning = false;
+  // Only one ingestion runs at a time, so a token left here is a cancel aimed at a token the finished
+  // ingestion never used; kept, it would start the next ingestion under that name already canceled.
+  runtimeState.cancelTokens.clear();
   ingestionIdleListeners.forEach((listener) => listener());
 };
 
