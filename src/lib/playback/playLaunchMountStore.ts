@@ -16,6 +16,8 @@ export type PlayLaunchMount = {
   drive: LaunchDrive;
   launchPath: string;
   priorImagePath: string | null;
+  /** Mounted from uploaded bytes, so the drive reports a device-side upload file, not launchPath. */
+  mountedByUpload?: boolean;
 };
 
 type PlayLaunchMountStore = Record<string, Partial<Record<LaunchDrive, PlayLaunchMount>>>;

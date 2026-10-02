@@ -8,6 +8,7 @@
 
 import type { C64API, DriveInfo, DrivesResponse } from "@/lib/c64api";
 import { isDiskWorkPath, normalizeDiskPath } from "@/lib/disks/diskPath";
+import { isUploadCachePath } from "@/lib/disks/uploadMountRegistry";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
@@ -52,10 +53,11 @@ const mountTypeOf = (path: string) => {
 
 const imageName = (path: string) => path.split("/").pop() ?? "";
 
-// An upload mount reports the uploaded file under a device directory, not the library path, so the name decides.
 const driveStillHoldsLaunchImage = (drives: DrivesResponse, mount: PlayLaunchMount) => {
   const held = describeDriveImage(drives.drives?.find((entry) => entry[mount.drive])?.[mount.drive]);
-  return held !== null && imageName(held) === imageName(normalizeDiskPath(mount.launchPath));
+  if (held === null) return false;
+  if (mount.mountedByUpload && isUploadCachePath(held)) return true;
+  return imageName(held) === imageName(normalizeDiskPath(mount.launchPath));
 };
 
 // Play's mount over a Home disk's work file already wrote its saves back and closed its write-back record. A plain

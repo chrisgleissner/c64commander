@@ -626,6 +626,39 @@ describe("playbackRouter", () => {
       expect(api.mountDrive).toHaveBeenCalledWith("a", "/USB0/Mine/work.d64", "d64");
     });
 
+    const holdingUploadCopy = (api: ReturnType<typeof apiWithDriveA>) =>
+      api.getDrives.mockImplementation(async () => ({
+        drives: [{ a: { enabled: true, image_path: "/Temp/cache/upload/", image_file: "temp0082" } }],
+        errors: [],
+      }));
+
+    it("ejects on Stop a local disk Play mounted by upload, which the drive reports as an upload cache file", async () => {
+      const api = apiWithDriveA({ enabled: true, type: "1541" });
+      vi.mocked(mountDiskToDrive).mockResolvedValueOnce({ persistence: "transient" });
+      vi.useFakeTimers();
+      const plan = buildPlayPlan({ source: "local", path: "/Games/game.d64", file: new File(["disk"], "game.d64") });
+      const task = executePlayPlan(api as any, plan, { drive: "a" });
+      await vi.runAllTimersAsync();
+      await task;
+      vi.useRealTimers();
+      holdingUploadCopy(api);
+
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).toHaveBeenCalledWith("a");
+    });
+
+    it("leaves alone on Stop an upload cache file in a drive where Play mounted an Ultimate disk by path", async () => {
+      const api = apiWithDriveA({ enabled: true, type: "1541" });
+      vi.mocked(mountDiskToDrive).mockResolvedValueOnce({ persistence: "device-native" });
+
+      await launchDisk(api, "/USB0/Games/game.d64");
+      holdingUploadCopy(api);
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).not.toHaveBeenCalled();
+    });
+
     it("leaves the drive empty on Stop when it was empty before Play", async () => {
       const api = apiWithDriveA({ enabled: true, type: "1541" });
 
