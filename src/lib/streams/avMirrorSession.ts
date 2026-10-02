@@ -207,6 +207,27 @@ export interface AvMirrorSessionDeps {
  * extending the very stall that caused them. Deferring to rAF collapses that burst to the single
  * newest frame, which is the only one anybody can see.
  */
+/**
+ * A device switch resets the shared REST queue, which drops a stop still waiting behind another
+ * request, and retargets the shared client, which abandons one in flight. Either way the stop never
+ * reaches the device, so it is sent again to that device by address.
+ */
+const stopStreamAtStopAllHost = async (host: string, name: "audio" | "video"): Promise<unknown> => {
+  if (host !== getC64API().getDeviceHost()) return stopStreamAtHost(host, name);
+  try {
+    return await getC64API().stopStream(name);
+  } catch (error) {
+    if (host === getC64API().getDeviceHost()) throw error;
+    addLog("info", "Live View: resending a stream stop dropped by the device switch", {
+      service: "streams",
+      host,
+      stream: name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return stopStreamAtHost(host, name);
+  }
+};
+
 const rafPresentScheduler = (): ((present: () => void) => void) | undefined =>
   typeof requestAnimationFrame === "function" ? (present) => void requestAnimationFrame(() => present()) : undefined;
 
@@ -278,10 +299,7 @@ export class AvMirrorSession {
       deps.stopStream ??
       (async (name) => {
         const host = this.stopAllHost;
-        const result =
-          host !== null && host !== getC64API().getDeviceHost()
-            ? await stopStreamAtHost(host, name)
-            : await getC64API().stopStream(name);
+        const result = host === null ? await getC64API().stopStream(name) : await stopStreamAtStopAllHost(host, name);
         recordDeviceStreamStopped(name);
         return result;
       });

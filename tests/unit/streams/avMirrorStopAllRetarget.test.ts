@@ -90,6 +90,41 @@ describe("A/V mirror stopAll across a device retarget", () => {
     expect(api.stopStream).not.toHaveBeenCalled();
   });
 
+  it("resends a stop that the retarget dropped from the request queue to the device it was meant for", async () => {
+    let dropAudioStop!: () => void;
+    api.stopStream.mockImplementation(
+      (name: "audio" | "video") =>
+        new Promise((resolve, reject) => {
+          if (name === "audio") {
+            dropAudioStop = () => reject(new Error("rest queued task cancelled: saved-device-switch"));
+          } else {
+            resolve({ errors: [] });
+          }
+        }),
+    );
+    const session = new AvMirrorSession();
+
+    const stopping = session.stopAll();
+    await vi.waitFor(() => expect(api.stopStream).toHaveBeenCalledWith("audio"));
+    selected.host = "192.0.2.20";
+    dropAudioStop();
+    await stopping;
+
+    expect(stopStreamAtHost).toHaveBeenCalledWith("192.0.2.10", "audio");
+    expect(stopStreamAtHost).not.toHaveBeenCalledWith("192.0.2.20", expect.anything());
+    api.stopStream.mockReset().mockResolvedValue({ errors: [] });
+  });
+
+  it("does not resend a failed stop when the selected device did not change", async () => {
+    api.stopStream.mockRejectedValueOnce(new Error("HTTP 500"));
+    const session = new AvMirrorSession();
+
+    await session.stopAll();
+
+    expect(stopStreamAtHost).not.toHaveBeenCalled();
+    api.stopStream.mockReset().mockResolvedValue({ errors: [] });
+  });
+
   it("stops through the selected device's client when no retarget happened", async () => {
     const session = new AvMirrorSession();
 
