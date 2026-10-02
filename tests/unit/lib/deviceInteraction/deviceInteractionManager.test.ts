@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import type { DeviceState } from "@/lib/deviceInteraction/deviceStateStore";
 import type { TraceActionContext } from "@/lib/tracing/types";
+import { resolveTransportFailureMessage } from "@/lib/c64api/requestFailureMessage";
 
 const createConfig = (): DeviceSafetyConfig => ({
   mode: "BALANCED",
@@ -1001,7 +1002,9 @@ describe("deviceInteractionManager", () => {
       baseUrl: "http://device",
     };
 
-    const handler = vi.fn().mockRejectedValue(new Error("The C64 did not answer within 15 s"));
+    const handler = vi
+      .fn()
+      .mockRejectedValue(new Error(resolveTransportFailureMessage("timeout", { timedOut: true, timeoutMs: 15_000 })));
     await expect(withRestInteraction(meta, handler)).rejects.toThrow("did not answer within");
     await expect(withRestInteraction(meta, handler)).rejects.toThrow("did not answer within");
 

@@ -37,6 +37,7 @@ import {
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { publishDeviceWrite, TELNET_DEVICE_ACTION } from "@/lib/deviceInteraction/deviceWriteEvents";
+import { DEVICE_NO_ANSWER_PHRASE } from "@/lib/c64api/requestFailureMessage";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -441,7 +442,7 @@ const isCriticalRestError = (error: Error) => {
   if (message.includes("smoke mode blocked")) return false;
   if (message.includes("fuzz mode blocked")) return false;
   if (message.includes("host unreachable")) return true;
-  if (message.includes("did not answer within")) return true;
+  if (message.includes(DEVICE_NO_ANSWER_PHRASE)) return true;
   if (message.includes("network")) return true;
   if (message.includes("timed out")) return true;
   const httpMatch = message.match(/http\s+(\d+)/i);
