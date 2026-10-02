@@ -163,6 +163,7 @@ export function usePlaybackPersistence({
   const hydratedPlaylistKeyRef = useRef<string | null>(null);
   const completedInitialRestoreKeyRef = useRef<string | null>(null);
   const hasPlaylistRef = useRef(false);
+  const playlistHadItemsKeyRef = useRef<string | null>(null);
   const [restoreVersion, setRestoreVersion] = useState(0);
   const currentPlaylistItemId = currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
 
@@ -570,6 +571,14 @@ export function usePlaybackPersistence({
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
     if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
+    // An empty playlist straight after restore may be a read that failed, not an empty store, and
+    // committing it would delete the stored items. Only a playlist that has had items since then
+    // (the user cleared it) is written back empty.
+    if (playlist.length > 0) {
+      playlistHadItemsKeyRef.current = playlistStorageKey;
+    } else if (playlistHadItemsKeyRef.current !== playlistStorageKey) {
+      return;
+    }
     if (
       repositorySnapshot.phase === "SCANNING" ||
       repositorySnapshot.phase === "INGESTING" ||
