@@ -521,7 +521,7 @@ describe("RemoteInputSheet — Game Mode", () => {
       return [...(held ?? new Set())].sort();
     };
 
-    it("steers the 8-centred diamond from the four keys around 8, with 8 as fire", () => {
+    it("steers the 8-centered diamond from the four keys around 8, with 8 as fire", () => {
       openAt("diamond8");
       expect(press(androidDigit(5))).toEqual(["up"]);
       expect(press(androidDigit(0))).toEqual(["down"]);

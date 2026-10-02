@@ -1704,12 +1704,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Lying down, or the sensor cannot tell which way up the phone is? The **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.",
                 "",
-                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centred)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
+                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
+                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
               ]),
           "",
         ]
@@ -2244,7 +2244,7 @@ export const INDEX_TERMS = [
   { term: "IP address", match: ["IP address"] },
   { term: "JIFFY probe", match: ["JIFFY"] },
   { term: "joystick", match: ["**Joystick**"] },
-  { term: "joystick keys", match: ["Classic T9", "Diamond (8-centred)"] },
+  { term: "joystick keys", match: ["Classic T9", "Diamond (8-centered)"] },
   { term: "KERNAL", match: ["**KERNAL**", "Classic KERNAL load"] },
   { term: "Key Explorer", match: ["Key Explorer"] },
   { term: "keyboard, on-screen", match: ["**Keys**"] },

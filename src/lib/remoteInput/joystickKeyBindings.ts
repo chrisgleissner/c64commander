@@ -193,7 +193,7 @@ export const DEFAULT_JOYSTICK_LAYOUT: JoystickLayoutId = isJoystickLayoutId(vari
   : "classicT9";
 
 export const JOYSTICK_LAYOUT_LABEL: Record<JoystickLayoutId, string> = {
-  diamond8: "Diamond (8-centred)",
+  diamond8: "Diamond (8-centered)",
   classicT9: "Classic T9",
   custom: "Custom",
 };

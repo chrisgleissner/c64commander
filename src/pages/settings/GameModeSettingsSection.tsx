@@ -60,7 +60,7 @@ const ACTION_LABEL: Partial<Record<SemanticAction, string>> = {
   dpadDown: "D-pad down",
   dpadLeft: "D-pad left",
   dpadRight: "D-pad right",
-  center: "D-pad centre",
+  center: "D-pad center",
   enter: "OK",
 };
 

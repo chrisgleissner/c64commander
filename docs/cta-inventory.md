@@ -580,7 +580,7 @@ past it to anything below.
   (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
   Live View audio through a native low-latency track — Android only)_
 - **Remote Input** _(the Game Mode block, then autofire)_: Joystick keys — select —
-  `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centred) / Classic T9 /
+  `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centered) / Classic T9 /
   Custom; per-variant default from `variant.runtime.defaultJoystickKeyLayout`)_ ;
   per-slot press-to-bind — button ×9 — `settings-joystick-bind-<slot>` (slots
   `up|upRight|right|downRight|down|downLeft|left|upLeft|fire`) with
