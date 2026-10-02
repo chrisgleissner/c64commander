@@ -368,7 +368,8 @@ export const importSettingsJson = async (
   if (safetyError) return { ok: false, error: safetyError };
 
   let importedFeatureFlags: Partial<Record<FeatureFlagId, boolean>> = {};
-  if (version === SETTINGS_EXPORT_VERSION) {
+  // Version 1 kept its only flag in appSettings.commoserveEnabled; every later version has featureFlags.
+  if (version !== 1) {
     try {
       const sanitized = sanitizeFeatureFlags(payload.featureFlags, getDeveloperModeEnabled());
       if ("error" in sanitized) {

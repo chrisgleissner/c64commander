@@ -389,6 +389,18 @@ describe("settingsTransfer", () => {
       expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ hvsc_enabled: false });
     });
 
+    it("applies the feature flags of a version 2 export, the format before function-key assignments", async () => {
+      const { remoteFunction1Action: _f1, remoteFunction3Action: _f3, ...v2AppSettings } = validPayload.appSettings;
+      const payload = {
+        ...validPayload,
+        version: 2,
+        appSettings: v2AppSettings,
+        featureFlags: { hvsc_enabled: false },
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({ ok: true });
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ hvsc_enabled: false });
+    });
+
     it("returns sanitizer exceptions when feature flag validation throws", async () => {
       isKnownFeatureFlagIdMock.mockImplementationOnce(() => {
         throw new Error("flag lookup failed");
