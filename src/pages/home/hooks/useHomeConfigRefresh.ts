@@ -23,6 +23,7 @@ export const HOME_CONFIG_REFRESH_TIMEOUT_MS = 8_000;
 // would hold back a Stop or a stream toggle, so it gets the background budget, not the refresh's.
 export const HOME_CONFIG_READ_TIMEOUT_MS = 3_000;
 export const HOME_CONFIG_REFRESH_ACTION_SETTLE_MS = 750;
+export const HOME_CONFIG_REFRESH_MAX_BACKOFF_MS = 60_000;
 const HOME_CONFIG_REFRESH_MIN_GAP_MS = 2_000;
 
 type RefreshReason = "interval" | "visible" | "focus" | "action" | "retry" | "trailing";
@@ -87,6 +88,7 @@ export const isHomeConfigAffectingAction = (resourcePath: string) =>
 const isUserInteracting = () =>
   areBackgroundReadsSuspended() || pollingPauseRegistry.isPollingPaused() || isEditingText();
 
+/** Resolves false when the refresh outlived HOME_CONFIG_REFRESH_TIMEOUT_MS. */
 const readHomeConfigWithTimeout = async (queryClient: QueryClient, pending: () => Record<string, boolean>) => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<"timeout">((resolve) => {
@@ -98,11 +100,7 @@ const readHomeConfigWithTimeout = async (queryClient: QueryClient, pending: () =
       isWritePending: (category: string, item: string) => pending()[`${category}::${item}`] === true,
     };
     const outcome = await Promise.race([readHomeConfig(queryClient, guards, HOME_CONFIG_READ_TIMEOUT_MS), timeout]);
-    if (outcome === "timeout") {
-      addLog("warn", "Home config refresh timed out; releasing the single-flight slot", {
-        timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS,
-      });
-    }
+    return outcome !== "timeout";
   } finally {
     if (timeoutId !== null) clearTimeout(timeoutId);
   }
@@ -132,6 +130,7 @@ export function useHomeConfigRefresh({
     let inFlight = false;
     let trailing = false;
     let lastStartedAtMs = 0;
+    let consecutiveFailures = 0;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     let retryId: ReturnType<typeof setTimeout> | null = null;
     let actionId: ReturnType<typeof setTimeout> | null = null;
@@ -141,16 +140,34 @@ export function useHomeConfigRefresh({
       retryId = null;
     };
 
+    const backoffIntervalMs = () =>
+      Math.min(HOME_CONFIG_REFRESH_INTERVAL_MS * 2 ** consecutiveFailures, HOME_CONFIG_REFRESH_MAX_BACKOFF_MS);
+    const recordFailure = () => {
+      consecutiveFailures += 1;
+      return { consecutiveFailures, nextIntervalMs: backoffIntervalMs() };
+    };
+
     const run = async (reason: RefreshReason) => {
       inFlight = true;
       lastStartedAtMs = Date.now();
       try {
-        await readHomeConfigWithTimeout(queryClient, () => writePendingRef.current);
+        const completed = await readHomeConfigWithTimeout(queryClient, () => writePendingRef.current);
+        if (!completed) {
+          addLog("warn", "Home config refresh timed out; releasing the single-flight slot", {
+            reason,
+            timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS,
+            ...recordFailure(),
+          });
+        } else if (consecutiveFailures > 0) {
+          addLog("info", "Home config refresh recovered", { reason, afterFailures: consecutiveFailures });
+          consecutiveFailures = 0;
+        }
       } catch (error) {
         addLog("warn", "Home config refresh failed", {
           reason,
           error: (error as Error).message,
           stack: (error as Error).stack,
+          ...recordFailure(),
         });
       } finally {
         inFlight = false;
@@ -171,6 +188,9 @@ export function useHomeConfigRefresh({
         (reason === "visible" || reason === "focus") &&
         Date.now() - lastStartedAtMs < HOME_CONFIG_REFRESH_MIN_GAP_MS
       ) {
+        return;
+      }
+      if (reason === "interval" && consecutiveFailures > 0 && Date.now() - lastStartedAtMs < backoffIntervalMs()) {
         return;
       }
       if (getHomeConfigRefreshBlocker(Object.values(writePendingRef.current).some(Boolean)) !== null) {

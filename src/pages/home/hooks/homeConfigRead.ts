@@ -102,6 +102,7 @@ export const readHomeConfig = async (
     allCategories = await api.getAllConfigCategories({
       __c64uIntent: "background",
       __c64uExpectedMissing: true,
+      __c64uSuppressCircuitContribution: true,
       timeoutMs,
     });
   } catch (error) {

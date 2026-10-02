@@ -249,7 +249,7 @@ describe("useHomeConfigRefresh", () => {
       throw httpError(401);
     };
     await advance(HOME_CONFIG_REFRESH_INTERVAL_MS);
-    await settle();
+    await focusWindow();
 
     expect(refetchSpy).not.toHaveBeenCalled();
     expect(wildcardRequests()).toBe(2);
@@ -584,7 +584,42 @@ describe("useHomeConfigRefresh", () => {
       expect.objectContaining({ timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS }),
     );
 
-    await advance(HOME_CONFIG_REFRESH_INTERVAL_MS - HOME_CONFIG_REFRESH_TIMEOUT_MS);
+    await advance(2 * HOME_CONFIG_REFRESH_INTERVAL_MS - HOME_CONFIG_REFRESH_TIMEOUT_MS);
     expect(wildcardRequests()).toBe(2);
+  });
+
+  it("does not let its background read count toward the REST circuit breaker", async () => {
+    renderHome();
+    await settle();
+    await focusWindow();
+
+    expect(fakeApi.getAllConfigCategories).toHaveBeenCalledWith(
+      expect.objectContaining({ __c64uSuppressCircuitContribution: true }),
+    );
+  });
+
+  it("doubles the refresh interval after each consecutive failure up to a minute, and logs recovery once", async () => {
+    renderHome();
+    await settle();
+    fakeApi.wildcard = async () => {
+      throw new Error("Request timed out");
+    };
+    const requestTimesSeconds: number[] = [];
+    const startedAtMs = Date.now();
+    for (let tick = 0; tick < 19; tick += 1) {
+      const before = wildcardRequests();
+      await advance(HOME_CONFIG_REFRESH_INTERVAL_MS);
+      if (wildcardRequests() > before) requestTimesSeconds.push(Math.round((Date.now() - startedAtMs) / 1000));
+    }
+    expect(requestTimesSeconds).toEqual([10, 30, 70, 130, 190]);
+    const failureLogs = addLogMock.mock.calls.filter(([, message]) => message === "Home config refresh failed");
+    expect(failureLogs.map(([, , detail]) => detail.nextIntervalMs)).toEqual([20_000, 40_000, 60_000, 60_000, 60_000]);
+
+    fakeApi.wildcard = null;
+    await advance(HOME_CONFIG_REFRESH_INTERVAL_MS * 6);
+    await advance(HOME_CONFIG_REFRESH_INTERVAL_MS * 2);
+    expect(wildcardRequests()).toBe(8);
+    const recoveryLogs = addLogMock.mock.calls.filter(([, message]) => message === "Home config refresh recovered");
+    expect(recoveryLogs).toEqual([["info", "Home config refresh recovered", { reason: "interval", afterFailures: 5 }]]);
   });
 });
