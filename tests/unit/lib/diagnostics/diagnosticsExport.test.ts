@@ -215,6 +215,18 @@ describe("diagnosticsExport", () => {
     expect(share).toHaveBeenCalledTimes(1);
   });
 
+  it("titles the native share sheet in sentence case", async () => {
+    isNativePlatform.mockReturnValue(true);
+    writeFile.mockResolvedValue(undefined);
+    getUri.mockResolvedValue({ uri: "file://cache/export.zip" });
+    share.mockResolvedValue(undefined);
+
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
+    await shareDiagnosticsZip("logs", []);
+
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ title: "Diagnostics export" }));
+  });
+
   it("shares all diagnostics tabs in a single timestamped zip", async () => {
     const override = vi.fn(async () => undefined);
     (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = override;
