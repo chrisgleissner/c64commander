@@ -58,6 +58,11 @@ describe("gradeLatencyOutput", () => {
     expect(() => gradeLatencyOutput(broadbandOnlyRun)).toThrow(/no LATENCY line naming the correlation/);
   });
 
+  it("names a negative latency as misaligned captures, not as a missing LATENCY line", () => {
+    const negative = slippedRun.replace(/^LATENCY\s+272 ms/m, "LATENCY   -40 ms");
+    expect(() => gradeLatencyOutput(negative)).toThrow(/negative latency \(-40 ms\)/);
+  });
+
   it("refuses output with no correlation strength", () => {
     expect(() => gradeLatencyOutput(slippedRun.replace(/^peak.*$/m, ""))).toThrow(/correlation strength/);
   });

@@ -374,8 +374,11 @@ export const gradeClarityOutput = (text) => {
  * Output that does not say which correlation its LATENCY came from is refused.
  */
 export const gradeLatencyOutput = (text) => {
-  const latency = /^LATENCY\s+(\d+) ms\b.*, (per-tone|broadband) \(/m.exec(text);
+  const latency = /^LATENCY\s+(-?\d+) ms\b.*, (per-tone|broadband) \(/m.exec(text);
   if (!latency) throw new Error("the probe printed no LATENCY line naming the correlation it read");
+  if (Number(latency[1]) < 0) {
+    throw new Error(`the probe read a negative latency (${latency[1]} ms): the captures are misaligned`);
+  }
   const strength = /correlation ([\d.]+) at/.exec(text);
   if (!strength) throw new Error("could not read correlation strength from the output");
   const warning = /^WARNING\s+(.+)$/m.exec(text)?.[1].trim() ?? null;
