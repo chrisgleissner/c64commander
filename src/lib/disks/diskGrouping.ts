@@ -120,3 +120,16 @@ export const assignDiskGroupsByPrefix = (entries: Array<{ path: string; name: st
 
   return result;
 };
+
+/**
+ * The order Previous/Next disk steps through a group. Names compare naturally ("Disk 2" before
+ * "Disk 10"); import positions only break ties, because each import numbers its own disks from 0.
+ */
+export const orderDisksInGroup = <T extends { name: string; importOrder?: number | null }>(disks: T[]): T[] =>
+  disks
+    .slice()
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) ||
+        (a.importOrder ?? 0) - (b.importOrder ?? 0),
+    );

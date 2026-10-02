@@ -94,7 +94,7 @@ import {
   normalizeDiskPath,
   type DiskEntry,
 } from "@/lib/disks/diskTypes";
-import { assignDiskGroupsByPrefix } from "@/lib/disks/diskGrouping";
+import { assignDiskGroupsByPrefix, orderDisksInGroup } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
@@ -1156,17 +1156,7 @@ export const HomeDiskManager = () => {
     const current = disksById[currentId];
     if (!current?.group) return;
 
-    const groupDisks = diskLibrary.disks
-      .filter((disk) => disk.group === current.group)
-      .slice()
-      .sort((a, b) => {
-        const orderA = a.importOrder ?? null;
-        const orderB = b.importOrder ?? null;
-        if (orderA !== null && orderB !== null) {
-          return orderA - orderB;
-        }
-        return a.name.localeCompare(b.name);
-      });
+    const groupDisks = orderDisksInGroup(diskLibrary.disks.filter((disk) => disk.group === current.group));
 
     if (groupDisks.length < 2) return;
     const index = groupDisks.findIndex((disk) => disk.id === current.id);
