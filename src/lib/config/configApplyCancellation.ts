@@ -65,7 +65,11 @@ export const raceConfigApplyCancellation = <T>(
   });
 };
 
-/** Every keystroke and screen read of the menu walk checks for Stop, so the walk ends between keystrokes. */
+/**
+ * Every keystroke and screen read of the menu walk checks for Stop, so the walk ends between keystrokes. An
+ * abandoned screen read also stops reading: the native plugin runs sends and reads in order on one thread, so its
+ * further reads would hold back the keys that leave the menu.
+ */
 export const createCancellableTelnetSession = (session: TelnetSessionApi, signal: AbortSignal): TelnetSessionApi => ({
   ...session,
   connect: (host, port, password) => session.connect(host, port, password),
@@ -73,7 +77,8 @@ export const createCancellableTelnetSession = (session: TelnetSessionApi, signal
   isConnected: () => session.isConnected(),
   sendKey: (key) => raceConfigApplyCancellation(signal, `key ${key}`, () => session.sendKey(key)),
   sendRaw: (data) => raceConfigApplyCancellation(signal, "raw input", () => session.sendRaw(data)),
-  readScreen: (timeoutMs) => raceConfigApplyCancellation(signal, "screen read", () => session.readScreen(timeoutMs)),
+  readScreen: (timeoutMs) =>
+    raceConfigApplyCancellation(signal, "screen read", () => session.readScreen(timeoutMs, signal)),
 });
 
 /**

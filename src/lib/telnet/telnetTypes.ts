@@ -135,7 +135,8 @@ export interface TelnetSessionApi {
   connect(host: string, port: number, password?: string): Promise<void>;
   sendKey(key: TelnetKeyName): Promise<void>;
   sendRaw(data: string): Promise<void>;
-  readScreen(timeoutMs?: number): Promise<TelnetScreen>;
+  /** A caller that gives up on the read aborts `signal`, so the session stops reading and frees the socket. */
+  readScreen(timeoutMs?: number, signal?: AbortSignal): Promise<TelnetScreen>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
   getTraceSnapshot?(): TelnetTraceSnapshot;

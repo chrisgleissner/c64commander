@@ -253,7 +253,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     await transport.send(textEncoder.encode(data));
   }
 
-  async function readScreen(timeoutMs?: number): Promise<TelnetScreen> {
+  async function readScreen(timeoutMs?: number, signal?: AbortSignal): Promise<TelnetScreen> {
     await ensureConnected();
     resetIdleTimer();
 
@@ -262,7 +262,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     const chunks: Uint8Array[] = screenBuffer.length > 0 ? [screenBuffer] : [];
     screenBuffer = new Uint8Array(0);
 
-    while (emptyReads < MAX_EMPTY_READS) {
+    while (emptyReads < MAX_EMPTY_READS && !signal?.aborted) {
       try {
         const data = await transport.read(timeout);
         if (data.length === 0) {
