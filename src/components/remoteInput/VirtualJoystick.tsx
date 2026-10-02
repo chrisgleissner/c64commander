@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Joystick, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -107,6 +107,10 @@ export const VirtualJoystick = ({
   const originRef = useRef<{ x: number; y: number } | null>(null);
   const activePointerIdRef = useRef<number | null>(null);
   const directionsRef = useRef<JoystickInputName[]>([]);
+  // Release all clears the held set without this pad; a thumb still down must send its direction again.
+  useEffect(() => {
+    directionsRef.current = [];
+  }, [releaseAllEpoch]);
   const [stickOffset, setStickOffset] = useState({ x: 0, y: 0 });
   const [movementStyle, setMovementStyle] = useState<MovementStyle>("stick");
 
@@ -265,6 +269,7 @@ export const VirtualJoystick = ({
         onHeldInputsChange={onHeldInputsChange}
         disabled={disabled}
         sizePx={controlPx}
+        releaseAllEpoch={releaseAllEpoch}
       />
     );
 

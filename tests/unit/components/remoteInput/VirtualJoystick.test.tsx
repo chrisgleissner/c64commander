@@ -145,6 +145,35 @@ describe("VirtualJoystick", () => {
     expect(onHeldInputsChangeMock).not.toHaveBeenCalled();
   });
 
+  it("sends a still-held stick direction again after Release all cleared it", () => {
+    const stick = (heldInputs: ReadonlySet<string>, releaseAllEpoch: number) => (
+      <VirtualJoystick
+        port={2}
+        onSetPort={setPortMock}
+        heldInputs={heldInputs as never}
+        onHeldInputsChange={onHeldInputsChangeMock}
+        autofireEnabled={false}
+        onAutofireEnabledChange={setAutofireEnabledChangeMock}
+        autofireRateHz={5}
+        onAutofireRateHzChange={() => {}}
+        releaseAllEpoch={releaseAllEpoch}
+      />
+    );
+    const { rerender } = render(stick(EMPTY_HELD_JOYSTICK_INPUTS, 0));
+    const zone = screen.getByTestId("remote-input-stick-zone");
+    setupZoneGeometry(zone);
+    fireEvent.pointerDown(zone, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(zone, { pointerId: 1, clientX: 100, clientY: 60 }); // up
+    expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set(["up"]));
+
+    // Release all empties the session's held set while the thumb is still down.
+    rerender(stick(EMPTY_HELD_JOYSTICK_INPUTS, 1));
+    onHeldInputsChangeMock.mockClear();
+    fireEvent.pointerMove(zone, { pointerId: 1, clientX: 100, clientY: 55 }); // still up
+
+    expect(onHeldInputsChangeMock).toHaveBeenCalledWith(new Set(["up"]));
+  });
+
   it("releases the direction on pointer up (no stuck stick direction)", () => {
     renderStick();
     const zone = screen.getByTestId("remote-input-stick-zone");

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { capturePointerBestEffort } from "@/lib/remoteInput/pointerCapture";
@@ -20,6 +20,8 @@ export type SwipePadProps = {
   disabled?: boolean;
   /** Square size of the swipe surface, in px (defaults to the compact 128px). */
   sizePx?: number;
+  /** Bumped by the session's Release all. */
+  releaseAllEpoch?: number;
 };
 
 const AXIS_DIRECTIONS: ReadonlyArray<JoystickInputName> = ["up", "down", "left", "right"];
@@ -32,11 +34,21 @@ const AXIS_DIRECTIONS: ReadonlyArray<JoystickInputName> = ["up", "down", "left",
  * drag starts wherever the finger lands — so it suits fast, sweeping menu and
  * gameplay movement without hunting for a knob.
  */
-export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false, sizePx = 128 }: SwipePadProps) => {
+export const SwipePad = ({
+  heldInputs,
+  onHeldInputsChange,
+  disabled = false,
+  sizePx = 128,
+  releaseAllEpoch,
+}: SwipePadProps) => {
   const zoneRef = useRef<HTMLDivElement | null>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
   const activePointerIdRef = useRef<number | null>(null);
   const directionsRef = useRef<JoystickInputName[]>([]);
+  // Release all clears the held set without this pad; a thumb still down must send its direction again.
+  useEffect(() => {
+    directionsRef.current = [];
+  }, [releaseAllEpoch]);
   const [dragging, setDragging] = useState(false);
   const [dotOffset, setDotOffset] = useState({ x: 0, y: 0 });
 
