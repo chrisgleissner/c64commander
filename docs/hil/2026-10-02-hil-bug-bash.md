@@ -303,7 +303,7 @@ These eight were found after the bash, while every remaining repair was being re
 
 ## Device evidence per defect
 
-Each repair below was reproduced as fixed on the Pixel 4 with the C64U (or the U2 where named). Where the rig could not produce the fault by itself, it was injected: by wrapping the Capacitor bridge (`Capacitor.nativePromise`) to delay, reject or answer a native call, by wrapping `IDBObjectStore.get`, `indexedDB.open` or `Worker.prototype.postMessage` in the page, by start-up scripts registered with `Page.addScriptToEvaluateOnNewDocument`, or by editing the stored state the fault leaves behind. Every injection and stored-state change was undone afterwards. Unless a line names another build, it was taken on `1.0.7-rc3-23aaf`; N1 to N5 and T2 on `-0213d`, N6 on `-d1228`. The evidence notes and backups are in `artifacts/hil-bug-bash-2026-10-02/verify.md`.
+Each repair below was reproduced as fixed on the Pixel 4 with the C64U (or the U2 where named). Where the rig could not produce the fault by itself, it was injected: by wrapping the Capacitor bridge (`Capacitor.nativePromise`) to delay, reject or answer a native call, by wrapping `IDBObjectStore.get`, `indexedDB.open` or `Worker.prototype.postMessage` in the page, by start-up scripts registered with `Page.addScriptToEvaluateOnNewDocument`, or by editing the stored state the fault leaves behind. Every injection and stored-state change was undone afterwards. Unless a line names another build, it was taken on `1.0.7-rc3-23aaf`; N1 to N5 and T2 on `-0213d`, N7 and N8 on `-b4190`, N6 on `-1e939`. The evidence notes and backups are in `artifacts/hil-bug-bash-2026-10-02/verify.md`.
 
 - C1 13:15Z: window 500 ms, first 2 /v1/info delayed 1200 ms via bridge hook -> Discovery decision REAL_CONNECTED, badge Connected.
 - D1 14:26Z (Play, 2-item playlist, IDB backed up to idb-backup.json): start-up script made IDBObjectStore.get throw for playlist-order:c64u_playlist:v2:shared -> "Failed to load playlist repository state from IndexedDB" (warn), the launch showed no items, and the stored order still held 2 entries after the persist effect had run. A clean relaunch showed Tone-Low and Tone-High again. Before the fix the empty in-memory playlist was committed over the stored one.
@@ -328,7 +328,10 @@ Each repair below was reproduced as fixed on the Pixel 4 with the C64U (or the U
 - N2 15:25–15:32Z (build 0213d, c64u): search_latency_profile right after a relaunch (fresh: trace events 146 -> 451) and after two quiet-check gates (aged: 2,379 -> 2,689): p95 52.7 ms fresh, 49.7 ms aged; idle-page main-thread work 89 ms/s fresh, 40 ms/s aged; typing 357 vs 399 ms/s. The gates' own search-latency stage read p95 31.7 and 33.9 ms. On 23aaf the same comparison went 94 -> 140 ms p95 and 90 -> 362 ms/s idle as traces grew 1.3k -> 4.5k. (The tool printed 1000 ms/s because it counted idle samples as busy; fixed in d1228bed4 and recomputed from the kept profiles.)
 - N4 15:24Z (build 0213d, Online Archive): /bin/ download delayed 5 s, Play on nosetrimmer.sid, sheet closed at 1 s -> log "info Archive binary download failed: canceled by the caller"; no error entry, no sidplay request. On 23aaf the same close logged "error Archive binary download failed" (AbortError).
 - N5 15:20Z (build 0213d, HVSC v85): Filesystem delayed 3 s, Ingest, Stop at 1.5 s -> cancelIngestion, LibraryInstall start/stop, state ready with no error, card "HVSC ready" (on 23aaf: "Indexing failed / Canceled", ingestionState idle). Follow-up: one entry marked un-hydrated and its reads delayed 15 s; Ingest + Stop at 26 s during hydration -> a second hydration run started (stat at 53.9 s, readFile at 68.9 s), the index was written with the entry hydrated:true and the card read "HVSC META 1/1 done"; state ready. Index file size back to the original 13,168,376 bytes.
-- N6 15:38–15:50Z (build d1228, c64u, av-clarity runs n6-1..4 and gate-d1228): first seven ladder notes on the mic +1.6 to +2.5 cents (n6-1), +1.6 to +2.2 (n6-2), +1.6 to +3.3 (n6-3), -1.6 to +2.9 (n6-4), +0.2 to +2.2 (gate-d1228), against +8.9 to +10.0 on 23aaf (graders-3). The start-up skip removed 3 frames (0.06 ms) before the first sound; underruns 0, concealed 0 ms. The n6-1..4 av-clarity defects coincide with room noise at the microphone (median <300 Hz -34 to -36 dBFS vs -40 in quiet runs, up to 1070 clipped samples); the quiet gate-d1228 run graded 1 defective of 82, 0% dropout. A residual (arrivals just after start crossing the recovery threshold, +8.6 cents for ~1 s in n6-1, before the first tone) is being closed.
+- N6 19:17–19:30Z (build 1e939 = 1e9390825, which keeps the start-up cushion and drains it at 0.1% for 2 s): three av-clarity/av-latency runs n6c-1..3 -> av-clarity 82 tones, 0 defective, 0% dropout in all three; "notes over 10 cents" 0, 0, 0 (graders-3 on 23aaf: 7, worst wobble 10.4 cents); worst wobble 3.5/6.9/6.9 cents; app stats: underruns 0, cushion target median 30–78 ms; av-latency 288/296/289 ms. The intermediate b4190 build (first-second skip, 716af928e) starved the speaker (11 underruns, target to 320 ms, 370 ms latency) and was superseded.
+- N7 17:39Z (build b4190, stored download.errorMessage still "Canceled"): three Home -> Play visits sampled every 20 ms for 3 s showed no "failed"/"Canceled" text in the HVSC card; the log held one "unknown -> READY" transition and no READY -> ERROR. On d1228 each Play visit logged READY -> ERROR -> READY (~0.27 s).
+- N8 16:20Z (build d1228, before the fix): Diagnostics > REST heat map, opened cell "Device info Info: 85 calls" (detail panel shown); back to Diagnostics; Config heat map -> heat-map-popup-config showed the detail "Device info / Info | Calls 85 | Failures 32 (38%)".
+- N8 17:41Z (build b4190): REST heat map, opened "Device info Info: 13 calls" (detail shown); back; Config heat map -> no cell detail.
 - S1 14:37Z/14:44Z: after a cancel the HVSC card reads "Canceled" (American spelling).
 - S2 14:47Z: installedVersion set to 0 (state backed up), global search "Find a tune" -> row "Needs the HVSC music collection installed"; activating it opened /play with the HVSC section on screen and focus on its header (play-section-toggle-hvsc). Before the fix it opened Settings > HVSC, which has no install control. State restored (v85, ready).
 - S3 (c64u): video:start faked as 200 so no packets arrive -> "The video stream stopped arriving.", receiver still bound. Watch again -> StreamUdp close{video} then bind{video}; 46 fps. Audio: audio:start faked -> "The audio stream stopped arriving."; Listen again -> close{audio}, closeAudioTrack, openAudioTrack, bind{audio}. Both stopped afterward.
@@ -469,6 +472,13 @@ volume 3 for the audible stages.
 | final-sid-1, -2 (`--only preflight,sid-remote,sid-local`) | final | 2 of 2 each | 99.5–100% present |
 | gate-final2 | final | 9 of 9 | search p95 63.6 ms, av-clarity 1/82, av-latency 263 ms |
 | gate-final5 | `23aaf` (after all review repairs) | 9 of 9 | search p95 48.3 ms, av-clarity 2/82, av-latency 751 ms (correlation 0.548) |
+| graders-1..3 (`--only` av stages) | `23aaf`, corrected graders | 2 of 3 `av-clarity` | the failures were a room knock (fixed in the grader) and N6; `av-latency` 289–310 ms |
+| gate-d1228 | `d1228` (N1–N6 first pass) | 8 of 9 | `sid-remote` "clock never started counting", not reproduced in 8 later runs; search p95 37.4 ms |
+| gate-d1228-2, -3 | `d1228` | 9 of 9 each | search p95 36.6 and 33.1 ms, av-clarity 2/82 and 0/82, av-latency 314 and 323 ms |
+| srseq-1..3 (`--only` av stages + `sid-remote`) | `d1228` | 4 of 4 each | `sid-remote` 100% tone present |
+| n6b-1..3 (`--only` av stages) | `b4190` | pass, but 11 underruns and a 320 ms cushion target | superseded build, see N6 |
+| n6c-1..3 (`--only` av stages) | `1e939` | pass each | av-clarity 0/82 defective in all three, 0 underruns, av-latency 288–296 ms |
+| **gate-1e939** | **`1e939` (release candidate)** | **9 of 9** | search p95 44.4 ms, av-clarity 0/82, av-latency 283 ms, sid-remote and sid-local 100% tone present, crossfade seamless |
 
 The failures on the final build between 11:00 and 11:12Z were not tied to code. The commits
 between fix4 and the final build change logging, module boundaries and two link styles; none
@@ -484,23 +494,28 @@ VALIDATION_PLACEHOLDER
 
 ## Rig left as found
 
-Checked at 11:36Z against `state-before-*.json`:
+Checked at 19:30Z against `state-before-*.json`:
 
-- **C64U.** Every configuration category and the drive list match the before-snapshot (Filename
-  overflow squeeze back to None, drive A empty, drive B off, Vol Master and every SID at 0 dB).
-  After the last gate a plain `machine:reset` left the jiffy clock stopped and zero page empty; a
-  `machine:reboot` brought the machine to the BASIC screen with the clock running. Nothing is
-  streaming.
-- **U2.** Configuration and drives match the before-snapshot; it was only read.
-- **App.** The final build `1.0.7-rc3-78de9` is installed. The playlist is Tone-Low then
-  Tone-High at 3:00 each (re-added through the app, so their ids are new). The output is "Here",
-  the mirror toggles are off (stored 0/0 after a restart), no display profile or text size
-  override is set, and the keys this bash added (`c64u_volume_slider_preview_interval_ms`) were
-  removed. Recently played, the tour state and the C64U source folder were restored from the
-  snapshot. Caches the app wrote (`c64u_learned_device_sid_model`, config enrichment) were left.
-- **Phone.** Media volume 3, Wi-Fi on, screen timeout 30 minutes, native `wm` size and density,
-  device idle enabled.
-- **Locks.** The device lock was released at 11:37Z.
+- **C64U.** Every configuration category and the drive list match the before-snapshot (drive A
+  empty, drive B off, Vol Master and every SID at 0 dB); firmware 1.2.1RC, core 1.50. A
+  `machine:reboot` left it at the BASIC screen. Nothing is streaming (no packets in either
+  multicast group).
+- **U2.** Another session reflashed it during a lock release (firmware 3.15 git 46d506db3,
+  FPGA 126) and reported it healthy. It was off the network from at least 19:28Z and answered again
+  from 19:30:28Z, right after the C64U `machine:reboot` above (the U2 sits in the C64U's cartridge
+  port). At 19:36Z the app on `-1e939` connected to it as healthy, and Game Mode opened without Live
+  View controls and sent no stream or `machine:input` request. Its configuration was only read.
+- **U64.** Used for about a minute for S5 (see the summary). Another session loaded a test FPGA
+  core on it afterwards; this session did not touch it again.
+- **App.** Build `1.0.7-rc3-1e939` is installed, connected to the C64U and healthy. The playlist is
+  Tone-Low then Tone-High. The mirror toggles, the C64U source folder, recently played, the open
+  sections, the playback session and the HVSC state and status were restored from the session's
+  first snapshot; the search history this session added was removed. Caches the app wrote (config
+  enrichment, the FTP listing cache, the learned SID model) and the saved devices' timestamps were
+  left.
+- **Phone.** Media volume 3, Wi-Fi on, screen timeout 30 minutes, stay-on while plugged in, native
+  `wm` size and density, device idle enabled.
+- **Locks.** The device lock was released at 19:37Z.
 
 ## Coverage ledger
 
