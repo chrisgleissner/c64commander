@@ -685,7 +685,8 @@ export const HomeDiskManager = () => {
     [diskLibrary.disks],
   );
 
-  const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry) => {
+  /** Resolves true only when this mount completed; failures are reported here, not thrown. */
+  const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry): Promise<boolean> => {
     const mountGeneration = (mountCompletionGenerationRef.current[drive] ?? 0) + 1;
     mountCompletionGenerationRef.current = {
       ...mountCompletionGenerationRef.current,
@@ -715,7 +716,7 @@ export const HomeDiskManager = () => {
           mountGeneration,
           currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
         });
-        return;
+        return false;
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
@@ -752,6 +753,7 @@ export const HomeDiskManager = () => {
             "This disk is from an online archive, so in-game saves are held temporarily and are lost when the app restarts or after a while. Copy it to a local folder to keep changes.",
         });
       }
+      return true;
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -762,7 +764,7 @@ export const HomeDiskManager = () => {
           currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
           error: (error as Error).message,
         });
-        return;
+        return false;
       }
       setDriveErrors((prev) => ({
         ...prev,
@@ -793,6 +795,7 @@ export const HomeDiskManager = () => {
           demoMode: status.state === "DEMO_ACTIVE",
         },
       });
+      return false;
     } finally {
       setDriveMutationPending((prev) => ({ ...prev, [drive]: false }));
     }
@@ -1717,7 +1720,11 @@ export const HomeDiskManager = () => {
   const diskExplorer = useDiskExplorer({
     api,
     drive: "a",
-    mount: (disk) => handleMountDisk("a", disk),
+    mount: async (disk) => {
+      if (!(await handleMountDisk("a", disk))) {
+        throw new Error(`${disk.name} was not mounted on drive A, so nothing was loaded.`);
+      }
+    },
     onToast: toast,
   });
 
@@ -2590,8 +2597,13 @@ export const HomeDiskManager = () => {
                 error: (error as Error)?.message ?? String(error),
               });
             }
-            await handleMountDisk("a", diskEntry);
-            toast({ title: "Disk created", description: `${result.fileName} created and mounted.` });
+            const mounted = await handleMountDisk("a", diskEntry);
+            toast({
+              title: "Disk created",
+              description: mounted
+                ? `${result.fileName} created and mounted.`
+                : `${result.fileName} created, but not mounted.`,
+            });
           }}
         />
       )}
