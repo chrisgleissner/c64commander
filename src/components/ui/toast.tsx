@@ -18,7 +18,9 @@ const ToastProvider = ToastPrimitives.Provider;
 // page area (`--app-toast-reserved-height`), so a toast never lies over a page control. Floating
 // below the app bar, a persistent error toast covered Play's "Stop radio" button and absorbed taps
 // aimed at it. pointer-events-none: the viewport is a container, not a surface; each toast opts
-// back in (toastVariants), so a gap in the strip never swallows a tap.
+// back in (toastVariants), so a gap in the strip never swallows a tap. The strip is capped at 40% of
+// the screen and scrolls past that: two persistent error toasts on a 320x426 screen otherwise left
+// the page 84 px.
 const ToastViewport = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Viewport>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
@@ -26,7 +28,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "toast-viewport pointer-events-none fixed inset-x-0 bottom-[var(--app-tab-bar-frame-height,0px)] z-[100] mx-auto flex w-full max-w-[min(100vw,32rem)] flex-col gap-2 px-[calc(0.5rem+var(--safe-area-inset-left))] py-2 empty:p-0",
+      "toast-viewport pointer-events-none fixed inset-x-0 bottom-[var(--app-tab-bar-frame-height,0px)] z-[100] mx-auto flex w-full max-w-[min(100vw,32rem)] max-h-[40dvh] flex-col gap-2 overflow-y-auto overflow-x-hidden overscroll-contain px-[calc(0.5rem+var(--safe-area-inset-left))] py-2 empty:p-0",
       className,
     )}
     {...props}
@@ -35,7 +37,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full flex-col gap-1 overflow-hidden rounded-md border px-3 py-2 shadow-elev-2 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[swipe=end]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full shrink-0 flex-col gap-1 overflow-hidden rounded-md border px-3 py-2 shadow-elev-2 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[swipe=end]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full",
   {
     variants: {
       variant: {

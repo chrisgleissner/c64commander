@@ -168,4 +168,47 @@ test.describe("Persistent error toast placement", () => {
       await expect(page.getByTestId("diagnostics-dialog")).toHaveCount(0);
     });
   }
+
+  test("two long error toasts on the smallest screen leave the page a usable area and cover no control @layout", async ({
+    page,
+  }, testInfo) => {
+    disableTraceAssertions(testInfo, "Layout-only coverage; trace assertions disabled.");
+    const profile = DISPLAY_PROFILE_VIEWPORTS.compact;
+    server = await createMockC64Server();
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript((override) => {
+      localStorage.setItem("c64u_display_profile_override", override);
+    }, profile.override);
+    await page.setViewportSize(profile.viewport);
+    const longError = JSON.stringify({
+      errors: ["The device refused the request because another client holds the machine; try again in a moment."],
+    });
+    for (const action of ["pause", "menu_button"]) {
+      await page.route(`**/v1/machine:${action}**`, (route) =>
+        route.fulfill({ status: 500, contentType: "application/json", body: longError }),
+      );
+    }
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      (expected) => document.documentElement.dataset.displayProfile === expected,
+      profile.expectedProfile,
+    );
+    await page.getByTestId("tab-bar").waitFor({ state: "visible", timeout: 30_000 });
+    const controls = page.getByTestId("home-machine-controls");
+    const openToasts = page.locator('[data-testid="app-toast"][data-state="open"]');
+    await controls.getByRole("button", { name: "Pause", exact: true }).click();
+    await expect(openToasts).toHaveCount(1, { timeout: 20_000 });
+    await controls.getByRole("button", { name: "Menu", exact: true }).click();
+    await expect(openToasts).toHaveCount(2, { timeout: 20_000 });
+    await page.waitForTimeout(400);
+
+    const pageAreaPx = await page
+      .getByTestId("swipe-navigation-container")
+      .evaluate((element) => element.getBoundingClientRect().height);
+    expect(pageAreaPx, "page area left between the toasts and the top of the screen").toBeGreaterThanOrEqual(
+      profile.viewport.height / 3,
+    );
+    await expectNoControlUnderToast(page, "Home with two error toasts");
+  });
 });
