@@ -19,6 +19,9 @@ import { readHomeConfig } from "./homeConfigRead";
 export const HOME_CONFIG_REFRESH_INTERVAL_MS = 10_000;
 export const HOME_CONFIG_REFRESH_RETRY_MS = 1_000;
 export const HOME_CONFIG_REFRESH_TIMEOUT_MS = 8_000;
+// The wildcard read holds a device-request slot; on the one-slot Conservative profile a longer read
+// would hold back a Stop or a stream toggle, so it gets the background budget, not the refresh's.
+export const HOME_CONFIG_READ_TIMEOUT_MS = 3_000;
 export const HOME_CONFIG_REFRESH_ACTION_SETTLE_MS = 750;
 const HOME_CONFIG_REFRESH_MIN_GAP_MS = 2_000;
 
@@ -82,7 +85,7 @@ const readHomeConfigWithTimeout = async (queryClient: QueryClient, pending: () =
       isInteracting: isUserInteracting,
       isWritePending: (category: string, item: string) => pending()[`${category}::${item}`] === true,
     };
-    const outcome = await Promise.race([readHomeConfig(queryClient, guards, HOME_CONFIG_REFRESH_TIMEOUT_MS), timeout]);
+    const outcome = await Promise.race([readHomeConfig(queryClient, guards, HOME_CONFIG_READ_TIMEOUT_MS), timeout]);
     if (outcome === "timeout") {
       addLog("warn", "Home config refresh timed out; releasing the single-flight slot", {
         timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS,

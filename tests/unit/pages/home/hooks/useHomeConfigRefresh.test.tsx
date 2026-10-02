@@ -198,7 +198,7 @@ describe("useHomeConfigRefresh", () => {
 
     expect(fakeApi.requests).toEqual(["/v1/configs/*"]);
     expect(fakeApi.getAllConfigCategories).toHaveBeenCalledWith(
-      expect.objectContaining({ __c64uIntent: "background", timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS }),
+      expect.objectContaining({ __c64uIntent: "background", timeoutMs: 3_000 }),
     );
     expect(screen.getByTestId("vol-master").textContent).toBe("-6");
     expect(screen.getByTestId("led-mode").textContent).toBe("Rainbow");
