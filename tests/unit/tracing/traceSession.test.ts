@@ -64,6 +64,7 @@ import {
   selectNewestEventsWithinBudget,
 } from "@/lib/tracing/traceSession";
 import { getCurrentTraceIdCounters, setTraceIdCounters } from "@/lib/tracing/traceIds";
+import { clearLatencySamples, getLatencySamples } from "@/lib/diagnostics/latencyTracker";
 import type { TraceActionContext } from "@/lib/tracing/types";
 
 const action: TraceActionContext = {
@@ -91,6 +92,29 @@ describe("traceSession", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("files an FTP file read under the FTP read latency class, not FTP list", () => {
+    vi.stubGlobal("window", { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    clearLatencySamples();
+
+    recordFtpOperation(action, {
+      operation: "read",
+      path: "/Usb0/games/a.d64",
+      durationMs: 80,
+      result: "success",
+      error: null,
+    });
+    recordFtpOperation(action, {
+      operation: "list",
+      path: "/Usb0/games",
+      durationMs: 30,
+      result: "success",
+      error: null,
+    });
+
+    expect(getLatencySamples({ endpoints: new Set(["FTP read"]) }).map((sample) => sample.durationMs)).toEqual([80]);
+    expect(getLatencySamples({ endpoints: new Set(["FTP list"]) }).map((sample) => sample.durationMs)).toEqual([30]);
   });
 
   it("records action lifecycle events", () => {

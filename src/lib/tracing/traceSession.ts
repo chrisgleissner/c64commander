@@ -562,7 +562,7 @@ export const recordFtpOperation = (
     target,
   });
   if (Number.isFinite(payload.durationMs)) {
-    recordLatencySample("FTP", payload.path, payload.durationMs ?? 0);
+    recordLatencySample("FTP", payload.path, payload.durationMs ?? 0, payload.operation);
   }
 };
 
