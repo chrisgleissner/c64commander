@@ -22,7 +22,7 @@ import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { toast } from "@/hooks/use-toast";
-import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
+import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { variant } from "@/generated/variant";
@@ -248,7 +248,13 @@ export function KeypadQuickMenu() {
               variant="ghost"
               className="justify-start gap-3"
               data-testid="keypad-quick-menu-game-mode"
-              onClick={() => run(() => void startGameMode())}
+              onClick={() =>
+                run(() => {
+                  // Only Home and Play mount the Remote Input sheet that answers the request.
+                  if (!GAME_MODE_HOST_PATHS.has(location.pathname)) navigate(TAB_ROUTES[0].path);
+                  void startGameMode();
+                })
+              }
             >
               {fromKeypad ? <ShortcutKey>0</ShortcutKey> : null}
               Game Mode
