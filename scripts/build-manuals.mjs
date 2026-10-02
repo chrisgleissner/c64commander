@@ -1647,8 +1647,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
           image("Game Mode", profile, "home/remote-input/profiles/{profile}/02-game-mode.png"),
           "",
           isC64uRemoteVariant(variant)
-            ? "The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible**."
-            : "The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.\n\nNothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.",
+            ? "The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible**."
+            : "The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.\n\nNothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible** or **Hidden** instead of **Auto**.",
           "",
           image(
             "Game Mode, played on the physical keys",

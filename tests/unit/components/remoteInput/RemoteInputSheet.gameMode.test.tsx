@@ -627,9 +627,9 @@ describe("RemoteInputSheet — Game Mode", () => {
     /**
      * It used to sit on the row below the heading, which cost a whole line on a screen
      * with few to spare. It now rides the heading row itself, right-aligned, and its face
-     * is just "Exit" — the full "Exit game mode" stays as the accessible name.
+     * is just "Exit" — the full "Exit Game Mode" stays as the accessible name.
      */
-    it("rides the heading row, reads Exit, and is still named Exit game mode", () => {
+    it("rides the heading row, reads Exit, and is still named Exit Game Mode", () => {
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
       summonChrome();
@@ -637,8 +637,8 @@ describe("RemoteInputSheet — Game Mode", () => {
       const heading = screen.getByTestId("remote-input-game-mode-title");
       const exit = screen.getByTestId("remote-input-immersive-toggle");
       expect(exit).toHaveTextContent("Exit");
-      expect(exit.textContent).not.toContain("game mode");
-      expect(exit).toHaveAttribute("aria-label", "Exit game mode");
+      expect(exit.textContent).not.toContain("Game Mode");
+      expect(exit).toHaveAttribute("aria-label", "Exit Game Mode");
       expect(exit).toHaveAttribute("aria-pressed", "true");
       expect(exit.parentElement).toBe(heading.parentElement);
     });
@@ -654,19 +654,19 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
       // Back to the way IN, on the row below the mode toggle rather than the heading row.
       const enter = screen.getByTestId("remote-input-immersive-toggle");
-      expect(enter).toHaveTextContent("Game mode");
+      expect(enter).toHaveTextContent("Game Mode");
       expect(enter).toHaveAttribute("aria-pressed", "false");
     });
   });
 
   describe("the compact display profile", () => {
-    // 320 CSS px across. "Game mode" shares its row with the size stepper, and the two do
+    // 320 CSS px across. "Game Mode" shares its row with the size stepper, and the two do
     // not fit; the shorter face is compact-only.
     it("calls it Game, on the way in and on the heading", () => {
       renderSheetAtProfile("compact");
       const enter = screen.getByTestId("remote-input-immersive-toggle");
       expect(enter).toHaveTextContent("Game");
-      expect(enter.textContent).not.toContain("Game mode");
+      expect(enter.textContent).not.toContain("Game Mode");
 
       enterGameMode();
       summonChrome();
@@ -701,11 +701,11 @@ describe("RemoteInputSheet — Game Mode", () => {
 
     it("keeps the full name on a standard display", () => {
       renderSheetAtProfile("medium");
-      expect(screen.getByTestId("remote-input-immersive-toggle")).toHaveTextContent("Game mode");
+      expect(screen.getByTestId("remote-input-immersive-toggle")).toHaveTextContent("Game Mode");
 
       enterGameMode();
       summonChrome();
-      expect(screen.getByTestId("remote-input-game-mode-title")).toHaveTextContent("Game mode");
+      expect(screen.getByTestId("remote-input-game-mode-title")).toHaveTextContent("Game Mode");
     });
   });
 

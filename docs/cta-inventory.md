@@ -588,7 +588,7 @@ past it to anything below.
 capture is by PRESSING the key, which is the only route that works with no
 touchscreen. A reserved action (✱/Menu, #, Back) is refused with
 settings-joystick-bind-rejection naming what the key already does]` ;
-  On-screen joystick in Game mode — select — `settings-game-mode-joystick` — R✅ I✅
+  On-screen joystick in Game Mode — select — `settings-game-mode-joystick` — R✅ I✅
   _(Auto / Visible / Hidden; per-variant default from
   `variant.runtime.defaultGameModeJoystick` — `hidden` on c64u-remote, which has no
   touchscreen. **Auto** waits for a physical key that steers the GAME, not the app-wide
@@ -819,10 +819,10 @@ ordinary focus-ring CTAs in both output modes.
   Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
   separate Hide-controls step); leaving restores it. Auto-exits if the tier
   downgrades mid-session. One testid, two placements: the way IN sits on the
-  size-stepper row (beside Joystick options on the compact profile) and reads "Game mode"
+  size-stepper row (beside Joystick options on the compact profile) and reads "Game Mode"
   ("Game" on the compact display profile);
   the way OUT rides the Game mode heading row (`remote-input-game-mode-title`),
-  right-aligned, reads "Exit", and carries the accessible name "Exit game mode"
+  right-aligned, reads "Exit", and carries the accessible name "Exit Game Mode"
 - Orientation override (inside Game mode) — buttons —
   `remote-input-rotation-override` (group), `remote-input-rotation-{auto,0,90,270}`
   — R✅ I✅ _(pins the picture rotation and the key permutation for this session;

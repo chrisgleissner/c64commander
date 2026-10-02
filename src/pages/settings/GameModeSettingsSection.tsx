@@ -199,7 +199,7 @@ export const GameModeSettingsSection = () => {
 
       <div className="space-y-2">
         <Label htmlFor="settings-game-mode-joystick" className="text-sm">
-          On-screen joystick in Game mode
+          On-screen joystick in Game Mode
         </Label>
         <Select
           value={joystick}

@@ -393,10 +393,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     </div>
   );
 
-  // "Game mode" is the widest control on the row that also carries the size stepper,
+  // "Game Mode" is the widest control on the row that also carries the size stepper,
   // and on the 320px-wide compact profile the two no longer share a line. The shorter
   // face is compact-only; the wider profiles keep the full name.
-  const gameModeLabel = isCompactDisplay ? "Game" : "Game mode";
+  const gameModeLabel = isCompactDisplay ? "Game" : "Game Mode";
 
   const gameModeAvailable = joystickAvailable && session.outputMode === "joystick";
 
@@ -419,10 +419,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   );
 
   /**
-   * The way OUT of Game Mode, on the header row beside the "Game mode" heading rather
+   * The way OUT of Game Mode, on the header row beside the "Game Mode" heading rather
    * than on the row below it — where it used to sit, spending a whole line of a screen
    * that has few to spare. The face is just "Exit"; the accessible name stays the full
-   * "Exit game mode", and the ordinary Button sizing keeps it at the 44px target size.
+   * "Exit Game Mode", and the ordinary Button sizing keeps it at the 44px target size.
    */
   const exitGameModeToggle = gameModeAvailable && immersive && (
     <Button
@@ -431,7 +431,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       className="shrink-0"
       data-testid="remote-input-immersive-toggle"
       aria-pressed
-      aria-label="Exit game mode"
+      aria-label="Exit Game Mode"
       onClick={() => exitGameMode()}
     >
       <Minimize2 className="mr-1.5 h-4 w-4" />

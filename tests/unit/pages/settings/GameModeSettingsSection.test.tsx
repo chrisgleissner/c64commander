@@ -185,6 +185,11 @@ describe("choosing the on-screen joystick visibility setting", () => {
     fireEvent.click(option);
   };
 
+  it("names Game Mode with its capitals, as the rest of the app does", () => {
+    render(<GameModeSettingsSection />);
+    expect(screen.getByText("On-screen joystick in Game Mode")).toBeInTheDocument();
+  });
+
   it("offers Auto, Visible and Hidden", () => {
     render(<GameModeSettingsSection />);
     fireEvent.click(screen.getByTestId("settings-game-mode-joystick"));
