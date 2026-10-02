@@ -71,6 +71,8 @@ vi.mock("@/lib/config/featureFlags", () => ({
 
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: vi.fn(),
+  clearDeviceSafetyOverride: vi.fn(),
+  isDeviceSafetyPresetValue: vi.fn(),
 
   saveDeviceSafetyMode: vi.fn(),
   saveFtpMaxConcurrency: vi.fn(),

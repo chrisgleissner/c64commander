@@ -494,6 +494,40 @@ export const saveDiscoveryProbeIntervalMs = (value: number) =>
 export const saveAllowUserOverrideCircuit = (value: boolean) =>
   saveBooleanOverride(ALLOW_USER_OVERRIDE_CIRCUIT_KEY, value);
 
+export type DeviceSafetyTunable = Exclude<keyof DeviceSafetyConfig, "mode" | "resolution">;
+
+const OVERRIDE_KEY_BY_TUNABLE: Record<DeviceSafetyTunable, string> = {
+  ftpMaxConcurrency: FTP_MAX_CONCURRENCY_KEY,
+  restMaxConcurrency: REST_MAX_CONCURRENCY_KEY,
+  infoCacheMs: INFO_CACHE_MS_KEY,
+  configsCacheMs: CONFIGS_CACHE_MS_KEY,
+  configsCooldownMs: CONFIGS_COOLDOWN_MS_KEY,
+  drivesCooldownMs: DRIVES_COOLDOWN_MS_KEY,
+  ftpListCooldownMs: FTP_LIST_COOLDOWN_MS_KEY,
+  telnetConnectCooldownMs: TELNET_CONNECT_COOLDOWN_MS_KEY,
+  machineInputCooldownMs: MACHINE_INPUT_COOLDOWN_MS_KEY,
+  backoffBaseMs: BACKOFF_BASE_MS_KEY,
+  backoffMaxMs: BACKOFF_MAX_MS_KEY,
+  backoffFactor: BACKOFF_FACTOR_KEY,
+  circuitBreakerThreshold: CIRCUIT_BREAKER_THRESHOLD_KEY,
+  circuitBreakerCooldownMs: CIRCUIT_BREAKER_COOLDOWN_MS_KEY,
+  discoveryProbeIntervalMs: DISCOVERY_PROBE_INTERVAL_MS_KEY,
+  allowUserOverrideCircuit: ALLOW_USER_OVERRIDE_CIRCUIT_KEY,
+};
+
+export const clearDeviceSafetyOverride = (tunable: DeviceSafetyTunable) => {
+  if (typeof localStorage === "undefined") return;
+  const key = OVERRIDE_KEY_BY_TUNABLE[tunable];
+  localStorage.removeItem(key);
+  broadcast(key, null);
+};
+
+const PRESETS_AUTO_CAN_RESOLVE: ConcreteDeviceSafetyMode[] = ["BALANCED", "CONSERVATIVE"];
+
+/** Whether `value` is what `mode` itself yields for `tunable`, i.e. it need not be stored as an override. */
+export const isDeviceSafetyPresetValue = (mode: DeviceSafetyMode, tunable: DeviceSafetyTunable, value: unknown) =>
+  (mode === "AUTO" ? PRESETS_AUTO_CAN_RESOLVE : [mode]).some((preset) => MODE_DEFAULTS[preset][tunable] === value);
+
 export const DEVICE_SAFETY_SETTING_KEYS = {
   DEVICE_SAFETY_MODE_KEY,
   FTP_MAX_CONCURRENCY_KEY,
