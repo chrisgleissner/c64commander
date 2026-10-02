@@ -38,7 +38,7 @@ or talks to an Ultimate on its own; the gate stages that call them do.
 | ---------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `merge_gate.mjs --keep-dir`  | Keeps each run's mic WAVs, the wire capture of the same span, each probe's output and the app's audio pipeline stats in `<dir>/<timestamp>-<host>/<stage>/` (`gate_evidence.mjs`) |
 | `explain_clarity.py <dir>`   | For each `av-clarity` sequence error, what was heard instead: replay, dropped, silent, undetected, between notes, or room noise; and whether the wire was in order over the same span |
-| `mirror_audio_latency_hil.py` | Now prints the top three correlation peaks and a barcode-aware per-tone lag. The barcode's broadband envelope repeats every 239.4 ms slot, so a broadband reading can take a neighbouring slot; the per-tone lag cannot |
+| `mirror_audio_latency_hil.py` | Reports the barcode-aware per-tone lag as LATENCY, and prints the top three broadband correlation peaks. The barcode's broadband envelope repeats every 239.4 ms slot, so a broadband peak can take a neighbouring slot; when it does, a WARNING line says so and it is not the reading |
 | `app_audio_stats.mjs`        | Samples `StreamUdp.readAudioStats()` every 250 ms (`bufferedMs`, `jitterBufferMs`, `targetJitterMs`, concealment, drops) |
 | `build_sourcemapped.mjs`     | Rebuilds one commit with hidden source maps, using the `VITE_*` values read out of the APK, and checks every chunk against the APK byte for byte |
 | `symbolize_cpuprofile.mjs`   | Self and total time per original function for a `.cpuprofile`, with `--group` and `--stacks` |

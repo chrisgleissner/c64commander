@@ -185,12 +185,36 @@ the recordings go to `--tmp` under fixed names and the next run overwrites them.
   `latency.json`, `probe.txt` and `app-audio-stats.json`.
 - `sid-remote/`, `sid-local/`: `mic.wav`. `crossfade/`: `app-pcm.wav`. The run directory holds `gate.json`.
 
-`av-latency` correlates broadband envelopes, and the barcode stimulus has the same envelope in every
-239.4 ms slot, so its correlation has a peak per slot. The probe therefore also prints its three
-strongest peaks and a per-tone lag, which has one peak per 1.9 s cycle; the stage reports both.
-Two broadband readings a whole number of slots apart can be the instrument choosing a different
-peak rather than the app's buffer changing depth. The per-tone lag tells the two apart, and
-`app-audio-stats.json` records the depth the app reported during the same capture. See `tools/hil/README.md`, "Explaining a gate result", for the other tools.
+`av-latency` reports the per-tone lag. The probe correlates the wire and the microphone two ways:
+by broadband envelope, and per ladder tone. The barcode stimulus has the same broadband envelope in
+every 239.4 ms slot, so the broadband correlation has a peak per slot, and only the speaker's
+per-tone loudness decides which one is highest. Run `2026-10-02T13-54-22` took a peak two slots out
+and reported 750 ms for a path that measured 272 ms per tone and 271-284 ms in the five other runs
+that day. Each tone sounds once per 1.9 s cycle, so the per-tone correlation has one peak in the
+window, and that peak is the stage's reading. When the broadband peak is more than half a slot away
+from it, the probe prints a `WARNING` line and the stage detail ends with
+`measurement warning: broadband peak ... is +N slots ...`. The stage still passes on the per-tone
+reading. If the per-tone score is below 0.3 (no barcode playing), the probe falls back to the
+broadband peak and warns that it can be off by whole slots. The stage fails when the broadband
+correlation strength is below 0.3, which means the microphone did not hear the wire.
+`gradeLatencyOutput` refuses output whose `LATENCY` line does not say which correlation it came
+from; `tests/unit/tools/mergeGateLatency.test.ts` and `tools/hil/tests/test_latency_reading.py` cover
+both. `app-audio-stats.json` records the depth the app reported during the same capture. See
+`tools/hil/README.md`, "Explaining a gate result", for the other tools.
+
+`av-clarity` grades the recording band-limited to 300-6000 Hz, and reads a note on whichever of its
+first four partials carries it. At gate volume the Pixel 4's speaker can put a note's third harmonic
+above the note itself: in runs `2026-10-02T13-55-53` and `2026-10-02T13-57-24` the 1210 Hz and
+1350 Hz notes measured 3632 Hz and 4054 Hz. The grader used to measure only at the fundamental, with
+2 ms windows that also picked up the room's rumble below 300 Hz. Those runs failed on "1 tones
+arrived out of order" and "15 of 82 notes defective" while every tone was in the recording, in order
+and on its slot, and the wire captured over the same 20 s was clean. A note's harmonics count toward
+it only while its own fundamental is present: at least half the strongest ladder fundamental in that
+window, and at least a tenth of the note's own strongest partial. A sound at 3630 Hz with nothing at
+1210 Hz is therefore not read as 1210 Hz, and a substituted, missing or reordered note is still a
+sequence error. A note's edges are where its level stays below half its median plateau for 3 ms.
+`explain_clarity.py` reads a harmonic the same way and shows it as `heard x3` in its timeline.
+`tools/hil/tests/test_clarity_harmonics.py` re-grades 4 s excerpts of both kept recordings.
 
 ## Reading a failure
 
