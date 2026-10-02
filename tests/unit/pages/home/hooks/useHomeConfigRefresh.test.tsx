@@ -393,6 +393,65 @@ describe("useHomeConfigRefresh", () => {
     expect(screen.getByTestId("led-mode").textContent).toBe("Rainbow");
   });
 
+  it("does not put back a value from a read that was sent before a config write completed", async () => {
+    const { queryClient, rerenderHome } = renderHome();
+    await settle();
+    let release!: () => void;
+    fakeApi.wildcard = () => {
+      const sentSnapshot = { ...structuredClone(device), errors: [] };
+      return new Promise((resolve) => {
+        release = () => resolve(sentSnapshot);
+      });
+    };
+    device["LED Strip Settings"]["LedStrip Mode"] = "Rainbow";
+    await focusWindow();
+
+    rerenderHome({ configWritePending: { "Audio Mixer::Vol Master": true } });
+    device["Audio Mixer"]["Vol Master"] = -20;
+    publishDeviceWrite("/v1/configs/Audio%20Mixer/Vol%20Master");
+    queryClient.setQueryData(
+      ["c64-config-items", "Audio Mixer", "Vol Master", 0],
+      readCategory("Audio Mixer", ["Vol Master"]),
+    );
+    rerenderHome({ configWritePending: { "Audio Mixer::Vol Master": false } });
+    await act(async () => {
+      release();
+    });
+    await settle();
+
+    expect(queryClient.getQueryData(["c64-config-items", "Audio Mixer", "Vol Master", 0])).toEqual({
+      "Audio Mixer": { items: { "Vol Master": -20 } },
+    });
+    expect(screen.getByTestId("led-mode").textContent).toBe("Rainbow");
+  });
+
+  it("does not apply any category from a read that was sent before a batch config write or a flash load", async () => {
+    const { queryClient } = renderHome();
+    await settle();
+    for (const writePath of ["/v1/configs", "/v1/configs:load_from_flash"]) {
+      let release!: () => void;
+      fakeApi.wildcard = () => {
+        const sentSnapshot = { ...structuredClone(device), errors: [] };
+        return new Promise((resolve) => {
+          release = () => resolve(sentSnapshot);
+        });
+      };
+      await advance(HOME_CONFIG_REFRESH_INTERVAL_MS);
+      device["LED Strip Settings"]["LedStrip Mode"] = writePath;
+      publishDeviceWrite(writePath);
+      queryClient.setQueryData(
+        ["c64-config-items", "LED Strip Settings", "LedStrip Mode", 0],
+        readCategory("LED Strip Settings", ["LedStrip Mode"]),
+      );
+      await act(async () => {
+        release();
+      });
+      await settle();
+
+      expect(screen.getByTestId("led-mode").textContent).toBe(writePath);
+    }
+  });
+
   it("defers while a text field is being edited and refreshes once editing ends", async () => {
     renderHome();
     await settle();

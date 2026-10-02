@@ -9,6 +9,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { getC64API } from "@/lib/c64api";
 import { getHttpStatusFromError, isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
+import { subscribeDeviceWrites } from "@/lib/deviceInteraction/deviceWriteEvents";
 import { addLog } from "@/lib/logging";
 
 export const HOME_CONFIG_QUERY_PREFIX = "c64-config-items";
@@ -46,6 +47,34 @@ const markWildcardUnsupported = (baseUrl: string, detail: Record<string, unknown
   });
 };
 
+const EVERY_CATEGORY = "*";
+const CONFIG_ITEM_WRITE_PREFIX = "/v1/configs/";
+
+const writtenConfigCategory = (resourcePath: string) => {
+  if (!resourcePath.startsWith(CONFIG_ITEM_WRITE_PREFIX)) return EVERY_CATEGORY;
+  const segment = resourcePath.slice(CONFIG_ITEM_WRITE_PREFIX.length).split("/")[0];
+  try {
+    return decodeURIComponent(segment);
+  } catch (error) {
+    addLog("warn", "Config write path has a malformed category; treating every category as written", {
+      resourcePath,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    return EVERY_CATEGORY;
+  }
+};
+
+/** Collects the config categories written while a read is on the wire; its response is older for them. */
+const trackConfigWrites = () => {
+  const written = new Set<string>();
+  const unsubscribe = subscribeDeviceWrites((resourcePath) => {
+    if (resourcePath.startsWith("/v1/configs")) written.add(writtenConfigCategory(resourcePath));
+  });
+  const wasWritten = (category: string) => written.has(EVERY_CATEGORY) || written.has(category);
+  return { wasWritten, unsubscribe };
+};
+
 const refetchPerCategory = async (queryClient: QueryClient): Promise<HomeConfigReadOutcome> => {
   const active = queryClient.getQueryCache().findAll({ queryKey: [HOME_CONFIG_QUERY_PREFIX], type: "active" });
   // cancelRefetch: false joins a read already on the wire instead of aborting and re-sending it.
@@ -67,6 +96,7 @@ export const readHomeConfig = async (
   const baseUrl = api.getBaseUrl();
   if (wildcardUnsupportedBaseUrls.has(baseUrl)) return refetchPerCategory(queryClient);
 
+  const configWrites = trackConfigWrites();
   let allCategories: Record<string, unknown>;
   try {
     allCategories = await api.getAllConfigCategories({
@@ -78,6 +108,8 @@ export const readHomeConfig = async (
     if (!isWildcardUnsupported(error)) throw error;
     markWildcardUnsupported(baseUrl, { status: getHttpStatusFromError(error), error: (error as Error).message });
     return refetchPerCategory(queryClient);
+  } finally {
+    configWrites.unsubscribe();
   }
 
   const queries = queryClient
@@ -99,7 +131,7 @@ export const readHomeConfig = async (
     const [, category, itemKey] = query.queryKey as ConfigItemsQueryKey;
     const items = itemKey.split("|");
     const data = api.selectConfigItems(allCategories, category, items);
-    if (!data || items.some((item) => guards.isWritePending(category, item))) {
+    if (!data || configWrites.wasWritten(category) || items.some((item) => guards.isWritePending(category, item))) {
       skippedKeys += 1;
       return;
     }
