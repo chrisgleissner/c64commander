@@ -8,7 +8,7 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const repo = vi.hoisted(() => ({ playlists: new Map<string, unknown[]>(), toast: vi.fn() }));
 
@@ -22,9 +22,15 @@ vi.mock("@/pages/playFiles/playlistRepositorySync", () => ({
 vi.mock("@/hooks/use-toast", () => ({ toast: repo.toast }));
 
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
-import { rememberHandover } from "@/pages/playFiles/stationPlaylistHandover";
+import {
+  rememberHandover,
+  rememberedHandover,
+  SAVED_PLAYLIST_READ,
+  writeHandoverRecord,
+} from "@/pages/playFiles/stationPlaylistHandover";
 import {
   PLAYLIST_RESTORED_TOAST,
+  SAVED_PLAYLIST_LOST_TOAST,
   useStationPlaylistHandover,
 } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -208,6 +214,72 @@ describe("useStationPlaylistHandover", () => {
     after.rerender({ stationActive: true, isPlaying: true });
 
     expect(ids(after.result.current.playlist)).toEqual(["radio:1", "radio:2", "radio:3"]);
+  });
+
+  describe("when the saved playlist cannot be read back after a restart", () => {
+    const relaunchWhileFinishing = () => {
+      writeHandoverRecord({
+        items: [],
+        currentItemId: "b",
+        currentIndex: 1,
+        selectedIds: [],
+        stationItemIds: ["radio:1"],
+        phase: "finishing",
+      });
+      rememberHandover(null);
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("retries the read and restores the playlist once it succeeds", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      const readSavedPlaylist = vi.fn().mockRejectedValueOnce(new Error("busy")).mockResolvedValue(mine);
+
+      const harness = renderHarness({ stationActive: false, isPlaying: false, readSavedPlaylist });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SAVED_PLAYLIST_READ.retryDelayMs);
+      });
+
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(2);
+      expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+    });
+
+    it("gives the handover up after the last attempt, so the station's last tune no longer holds the queue order", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      const readSavedPlaylist = vi.fn().mockRejectedValue(new Error("unreadable"));
+
+      const harness = renderHarness({ stationActive: false, isPlaying: false, readSavedPlaylist });
+      expect(harness.result.current.stationActiveRef.current).toBe(true);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SAVED_PLAYLIST_READ.retryDelayMs * SAVED_PLAYLIST_READ.attempts ** 2);
+      });
+
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(SAVED_PLAYLIST_READ.attempts);
+      expect(harness.result.current.stationActiveRef.current).toBe(false);
+      expect(rememberedHandover()).toBeNull();
+      expect(repo.toast).toHaveBeenCalledWith(expect.objectContaining({ title: SAVED_PLAYLIST_LOST_TOAST }));
+    });
+
+    it("gives up on a read that never answers", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      const readSavedPlaylist = vi.fn(() => new Promise<PlaylistItem[]>(() => undefined));
+
+      const harness = renderHarness({ stationActive: false, isPlaying: false, readSavedPlaylist });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(
+          (SAVED_PLAYLIST_READ.timeoutMs + SAVED_PLAYLIST_READ.retryDelayMs * SAVED_PLAYLIST_READ.attempts) *
+            SAVED_PLAYLIST_READ.attempts,
+        );
+      });
+
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(SAVED_PLAYLIST_READ.attempts);
+      expect(harness.result.current.stationActiveRef.current).toBe(false);
+    });
   });
 
   it("asks before stopping a station whose queue the listener edited", async () => {

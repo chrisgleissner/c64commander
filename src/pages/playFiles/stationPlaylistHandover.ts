@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 /**
@@ -100,6 +100,30 @@ export const restoredPlaylistState = (
   const known = new Set([...handover.stationItemIds, ...handover.items.map((item) => item.id)]);
   const addedMeanwhile = queue.filter((item) => !known.has(item.id));
   return { playlist: [...handover.items, ...addedMeanwhile], currentIndex, selectedIds: new Set(handover.selectedIds) };
+};
+
+export const SAVED_PLAYLIST_READ = { attempts: 3, timeoutMs: 10_000, retryDelayMs: 1_000 };
+
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`No answer within ${timeoutMs} ms`)), timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+
+/** Reads the saved items back, retrying a bounded number of times; rejects with the last failure. */
+export const readSavedPlaylistWithRetry = async (read: () => Promise<PlaylistItem[]>): Promise<PlaylistItem[]> => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await withTimeout(read(), SAVED_PLAYLIST_READ.timeoutMs);
+    } catch (error) {
+      if (attempt >= SAVED_PLAYLIST_READ.attempts) throw error;
+      addLog("warn", "SID Radio: could not read back the playlist saved before the station, retrying", {
+        attempt,
+        error: (error as Error)?.message ?? String(error),
+      });
+      await new Promise((resolve) => setTimeout(resolve, SAVED_PLAYLIST_READ.retryDelayMs * attempt));
+    }
+  }
 };
 
 const RECORD_KEY = "c64u_sid_radio_saved_playlist";

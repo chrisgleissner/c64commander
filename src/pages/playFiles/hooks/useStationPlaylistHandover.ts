@@ -15,7 +15,9 @@ import {
   handoverForStationStart,
   isStationQueueEdited,
   lastTuneQueue,
+  readSavedPlaylistWithRetry,
   rememberHandover,
+  SAVED_PLAYLIST_READ,
   rememberedHandover,
   restoredPlaylistState,
   savedPlaylistRepositoryId,
@@ -42,6 +44,7 @@ const persistSavedItems = (items: PlaylistItem[]) => {
 
 export const PLAYLIST_RESTORED_TOAST = "Your playlist is back";
 export const LAST_TUNE_TOAST = "This tune plays to its end, then your playlist comes back.";
+export const SAVED_PLAYLIST_LOST_TOAST = "Your playlist from before SID Radio could not be read back";
 
 export type UseStationPlaylistHandoverParams = {
   queue: {
@@ -194,8 +197,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
   useEffect(() => {
     if (!handover || handover.items !== null || loadingRef.current) return;
     loadingRef.current = true;
-    void latestRef.current.persistence
-      .readSavedPlaylist(SAVED_PLAYLIST_REPOSITORY_ID)
+    void readSavedPlaylistWithRetry(() => latestRef.current.persistence.readSavedPlaylist(SAVED_PLAYLIST_REPOSITORY_ID))
       .then((items) => {
         const current = handoverRef.current;
         if (!current || current.items !== null) return;
@@ -203,11 +205,15 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
         addLog("info", "SID Radio: read back the playlist saved before the station", { itemCount: items.length });
       })
       .catch((error: unknown) => {
-        addErrorLog("Failed to read back the playlist saved before SID Radio", {
+        addErrorLog("Failed to read back the playlist saved before SID Radio; giving it up", {
           playlistId: SAVED_PLAYLIST_REPOSITORY_ID,
+          attempts: SAVED_PLAYLIST_READ.attempts,
           error: (error as Error)?.message ?? String(error),
           stack: (error as Error)?.stack,
         });
+        // Left in place, the unreadable handover would hold the queue in station order indefinitely.
+        if (handoverRef.current?.items === null) commit(null);
+        toast({ title: SAVED_PLAYLIST_LOST_TOAST, variant: "destructive" });
       })
       .finally(() => {
         loadingRef.current = false;
