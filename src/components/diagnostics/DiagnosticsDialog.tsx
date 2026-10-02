@@ -1991,6 +1991,7 @@ export function DiagnosticsDialog({
         {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       </Suspense>
       <HeatMapPopup
+        key={heatMapVariant ?? "closed"}
         open={open && heatMapVariant !== null}
         onClose={() => setHeatMapVariant(null)}
         variant={heatMapVariant ?? "REST"}
