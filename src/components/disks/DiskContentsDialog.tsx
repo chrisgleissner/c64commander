@@ -80,7 +80,7 @@ export function DiskContentsDialog({
             <ul className="space-y-2" data-testid="disk-contents-list">
               {entries.map((entry) => {
                 const reason = launchReason(entry);
-                const disabled = reason != null || busyIndex === entry.index;
+                const disabled = reason != null || busyIndex !== null;
                 const loadAddr = formatLoadAddress(entry);
                 return (
                   <li

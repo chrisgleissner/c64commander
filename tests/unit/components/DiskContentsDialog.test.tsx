@@ -88,4 +88,21 @@ describe("DiskContentsDialog", () => {
     );
     expect(screen.getByTestId("disk-entry-run-0")).toBeDisabled();
   });
+
+  it("disables every row's launch buttons while one launch is running, so two resets cannot interleave", () => {
+    const entries = [entry({ index: 0, name: "FIRST" }), entry({ index: 1, name: "SECOND" })];
+    render(
+      <DiskContentsDialog
+        open
+        onOpenChange={vi.fn()}
+        diskName="D"
+        entries={entries}
+        busyIndex={0}
+        onAction={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("disk-entry-run-1")).toBeDisabled();
+    expect(screen.getByTestId("disk-entry-load-1")).toBeDisabled();
+    expect(screen.getByTestId("disk-entry-mount-1")).toBeDisabled();
+  });
 });
