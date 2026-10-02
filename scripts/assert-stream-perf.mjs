@@ -9,11 +9,16 @@
 
 /**
  * Live View streaming host-benchmark regression gate (spec §14.3 / §16.4). Runs the stream
- * hot-path microbenchmarks, then compares each stage's ops/s against a committed baseline within a
+ * hot-path microbenchmarks, then compares each stage's ops/s against a baseline within a
  * tolerance band (`hostBenchmark.thresholds.maxRegressionPct` in ci/perf/stream-perf-thresholds.json).
  *
- *   node scripts/assert-stream-perf.mjs            # gate against the committed baseline
- *   node scripts/assert-stream-perf.mjs --update   # (re)seed the baseline (requires review; §21)
+ *   node scripts/assert-stream-perf.mjs                  # gate against the committed baseline
+ *   node scripts/assert-stream-perf.mjs --against HEAD^1 # gate against HEAD^1 benchmarked here
+ *   node scripts/assert-stream-perf.mjs --update         # (re)seed the baseline (requires review; §21)
+ *
+ * CI passes `--against` (STREAM_BENCH_AGAINST): the committed baseline was seeded on one machine,
+ * and GitHub's runners differ from it in CPU model by more than the tolerance. Benchmarking the
+ * parent commit in the same job compares like with like.
  *
  * A HARD absolute CPU gate needs a dedicated, quiesced runner (a shared cloud runner is too noisy,
  * §14.3) — hence this is a RELATIVE regression gate. Machine-readable exit: 0 pass, 1 regression,
@@ -21,16 +26,18 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compareStages } from "./lib/streamPerfCompare.mjs";
+import { collectBestOf, runStreamBenchGate } from "./lib/streamPerfCompare.mjs";
 
 const ROOT = process.cwd();
 const THRESHOLDS = join(ROOT, "ci/perf/stream-perf-thresholds.json");
 const BASELINE = join(ROOT, "ci/perf/stream-bench-baseline.json");
 const BENCH_FILE = "tests/benchmarks/streamHotPaths.bench.ts";
 const update = process.argv.includes("--update");
+const againstFlag = process.argv.indexOf("--against");
+const againstRef = againstFlag >= 0 ? process.argv[againstFlag + 1] : process.env.STREAM_BENCH_AGAINST || null;
 
 const fail = (code, msg) => {
   console.error(msg);
@@ -41,86 +48,107 @@ if (!existsSync(THRESHOLDS)) fail(2, `Missing thresholds config: ${THRESHOLDS}`)
 const cfg = JSON.parse(readFileSync(THRESHOLDS, "utf8"));
 const maxRegressionPct = cfg?.hostBenchmark?.thresholds?.maxRegressionPct;
 if (typeof maxRegressionPct !== "number") fail(2, "thresholds.hostBenchmark.thresholds.maxRegressionPct missing");
+if (againstFlag >= 0 && !againstRef) fail(2, "--against needs a git ref");
+if (update && againstRef) fail(2, "--update seeds the committed baseline; it cannot be combined with --against");
 
 /**
- * How many times to run the whole benchmark file before comparing, and why the
- * per-stage aggregate is the BEST sample rather than the median.
- *
- * Each vitest run is internally tight (±0.1%), but the run-to-run spread is
- * large: `VIC frame assembly` was observed at 40,786 / 39,895 / 23,489 ops/s on
- * an otherwise idle machine — a 74% spread that no sensible tolerance can
- * straddle. One sample per stage therefore gates noise, not code.
- *
- * The median was the first attempt at collapsing that, and it is not enough on
- * a shared public runner. Interference there is not uniform: it can stall ONE
- * stage while the others run clean, which no cross-stage normalisation can
- * cancel. `governor tick` measured 256,743 ops/s in CI against a 576,956
- * baseline — on a runner the same run rated 19% FASTER overall — while the same
- * commit measured 552k/574k/574k locally. Two slow samples out of three drag
- * the median down and the gate fails on code that never touched the governor.
- *
- * So take the MAXIMUM, which follows from the sentence already true above:
- * interference only ever makes a microbenchmark slower, never faster. The
- * fastest observed sample is therefore the least-contaminated estimate of what
- * this machine can do, and noise can only pull the others away from it.
- *
- * This does not weaken the gate. A genuine code regression makes EVERY sample
- * slower — there is no run in which the slower code is fast — so the maximum
- * drops with it and the stage is still caught at the same tolerance.
+ * Each vitest run is internally tight (±0.1%), but the run-to-run spread is large: `VIC frame
+ * assembly` was observed at 40,786 / 39,895 / 23,489 ops/s on an otherwise idle machine. One
+ * sample per stage therefore gates noise, not code, so every tree is run REPEATS times and each
+ * stage keeps its fastest sample (see `collectBestOf`).
  */
 const REPEATS = Number(process.env.STREAM_BENCH_REPEATS ?? 3);
 
-const runOnce = () => {
+const runBenchIn = (cwd) => {
   const outJson = join(mkdtempSync(join(tmpdir(), "streambench-")), "bench.json");
   try {
     execFileSync("npx", ["vitest", "bench", BENCH_FILE, "--project", "unit-node", "--run", "--outputJson", outJson], {
-      cwd: ROOT,
+      cwd,
       stdio: ["ignore", "ignore", "inherit"],
     });
   } catch (error) {
-    fail(2, `Benchmark run failed: ${error.message}`);
+    throw new Error(`Benchmark run in ${cwd} failed: ${error.message}`, { cause: error });
   }
   const report = JSON.parse(readFileSync(outJson, "utf8"));
   const hz = {};
   for (const file of report.files ?? [])
     for (const group of file.groups ?? []) for (const b of group.benchmarks ?? []) hz[b.name] = b.hz;
+  if (Object.keys(hz).length === 0) throw new Error(`No benchmark results parsed from the run in ${cwd}`);
   return hz;
 };
 
-console.log(`Running stream hot-path benchmarks (${REPEATS}x, per-stage best of ${REPEATS})…`);
-const samples = {};
-for (let i = 0; i < REPEATS; i += 1) {
-  for (const [name, hz] of Object.entries(runOnce())) (samples[name] ??= []).push(hz);
-}
-const current = {};
-// Best, not median — see the REPEATS comment: interference only slows a
-// microbenchmark, so the fastest sample is the cleanest measurement.
-for (const [name, values] of Object.entries(samples)) current[name] = Math.round(Math.max(...values));
+const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
-if (Object.keys(current).length === 0) fail(2, "No benchmark results parsed");
+const checkoutBaseTree = (ref) => {
+  let sha;
+  try {
+    sha = git(["rev-parse", "--verify", `${ref}^{commit}`]);
+  } catch (error) {
+    fail(2, `Cannot resolve --against ${ref} (CI needs fetch-depth >= 2): ${error.message}`);
+  }
+  const dir = mkdtempSync(join(tmpdir(), "streambench-base-"));
+  git(["worktree", "add", "--detach", dir, sha]);
+  symlinkSync(join(ROOT, "node_modules"), join(dir, "node_modules"), "dir");
+  return { sha, dir };
+};
 
-if (update || !existsSync(BASELINE)) {
+if (update || (!againstRef && !existsSync(BASELINE))) {
+  console.log(`Running stream hot-path benchmarks (${REPEATS}x, per-stage best of ${REPEATS})…`);
+  let head;
+  try {
+    ({ head } = collectBestOf({ repeats: REPEATS, trees: ["head"], runBench: () => runBenchIn(ROOT) }));
+  } catch (error) {
+    fail(2, error.message);
+  }
   writeFileSync(
     BASELINE,
     JSON.stringify(
-      { note: "committed stream-bench baseline (ops/s); update requires review + evidence (§21)", hz: current },
+      { note: "committed stream-bench baseline (ops/s); update requires review + evidence (§21)", hz: head },
       null,
       2,
     ) + "\n",
   );
   console.log(`${update ? "Updated" : "Seeded"} baseline → ${BASELINE}`);
-  for (const [name, hz] of Object.entries(current)) console.log(`  ${hz.toLocaleString()} ops/s  ${name}`);
+  for (const [name, hz] of Object.entries(head)) console.log(`  ${hz.toLocaleString()} ops/s  ${name}`);
   process.exit(0);
 }
 
-const baseline = JSON.parse(readFileSync(BASELINE, "utf8")).hz ?? {};
+const baseTree = againstRef ? checkoutBaseTree(againstRef) : null;
+let gate;
+let benchError = null;
+try {
+  console.log(
+    baseTree
+      ? `Running stream hot-path benchmarks for this commit and ${againstRef} (${baseTree.sha.slice(0, 12)}), ` +
+          `alternating, ${REPEATS}x each, per-stage best of ${REPEATS}…`
+      : `Running stream hot-path benchmarks (${REPEATS}x, per-stage best of ${REPEATS}) against the committed baseline…`,
+  );
+  gate = runStreamBenchGate({
+    repeats: REPEATS,
+    runBench: (tree) => runBenchIn(tree === "base" ? baseTree.dir : ROOT),
+    againstBase: baseTree !== null,
+    committedBaseline: baseTree ? null : (JSON.parse(readFileSync(BASELINE, "utf8")).hz ?? {}),
+    maxRegressionPct,
+  });
+} catch (error) {
+  benchError = error;
+} finally {
+  if (baseTree) {
+    try {
+      git(["worktree", "remove", "--force", baseTree.dir]);
+    } catch (error) {
+      console.warn(`Could not remove the base worktree ${baseTree.dir}: ${error.message}`);
+    }
+  }
+}
+if (benchError) fail(2, benchError.message);
 
 /**
- * Compare each stage's share of the run against its share of the baseline, and require a genuine
- * absolute slowdown before calling it a regression. The rule, the evidence behind it and what it
- * costs are documented on `compareStages` in scripts/lib/streamPerfCompare.mjs.
+ * Each stage's share of the run is compared against its share of the baseline, and a genuine
+ * absolute slowdown is required before calling it a regression. The rule, the evidence behind it
+ * and what it costs are documented on `compareStages` in scripts/lib/streamPerfCompare.mjs.
  */
-const { scale, rows, regressions } = compareStages({ current, baseline, maxRegressionPct });
+const { scale, rows, regressions } = gate;
 if (scale === null) fail(2, "No stages in common between the run and the baseline");
 
 console.log(`\nStage                                            baseline    current    Δ% (shape)`);
@@ -135,8 +163,10 @@ for (const row of rows) {
   );
 }
 console.log(
-  `\nRunner speed vs the baseline machine: ${(scale * 100).toFixed(0)}% ` +
-    `(divided out — this gate compares shape, not absolute throughput).`,
+  baseTree
+    ? `\nThis commit vs ${againstRef} on the same runner: ${(scale * 100).toFixed(0)}% overall.`
+    : `\nRunner speed vs the baseline machine: ${(scale * 100).toFixed(0)}% ` +
+        `(divided out — this gate compares shape, not absolute throughput).`,
 );
 
 if (regressions.length > 0) {
