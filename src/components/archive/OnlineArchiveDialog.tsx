@@ -70,6 +70,8 @@ const formatEntryMeta = (size?: number, date?: number) => {
   return parts.join(" • ");
 };
 
+const IDLE_STATE = { phase: "idle" } as const;
+
 const getPresetMap = (presets: ArchivePreset[]) => new Map(presets.map((preset) => [preset.type, preset]));
 
 export const LEGAL_NOTICE = "You agree you have a necessary license or rights to download any software.";
@@ -82,24 +84,35 @@ export type OnlineArchiveDialogProps = {
 
 export const OnlineArchiveDialog = ({ open, onOpenChange, config }: OnlineArchiveDialogProps) => {
   const [form, setForm] = useState<ArchiveSearchParams>(EMPTY_SEARCH);
-  const { clientType, presets, presetsLoading, resolvedConfig, state, clearError, search, openEntries, execute } =
-    useOnlineArchive(config);
+  const {
+    clientType,
+    presets,
+    presetsLoading,
+    resolvedConfig,
+    state: archiveState,
+    clearError,
+    search,
+    openEntries,
+    execute,
+  } = useOnlineArchive(config);
   const presetMap = useMemo(() => getPresetMap(presets), [presets]);
+  // A failed search, download or launch keeps showing the lists it failed from; the error itself is a toast.
+  const state = archiveState.phase === "error" ? (archiveState.recoverableState ?? IDLE_STATE) : archiveState;
 
   useEffect(() => {
-    if (!open && state.phase === "error") {
+    if (!open && archiveState.phase === "error") {
       clearError();
     }
-  }, [clearError, open, state.phase]);
+  }, [clearError, open, archiveState.phase]);
 
   useEffect(() => {
-    if (!open || state.phase !== "error") return;
+    if (!open || archiveState.phase !== "error") return;
     reportUserError({
       operation: "ONLINE_ARCHIVE",
       title: "Online archive failed",
-      description: state.message,
+      description: archiveState.message,
     });
-  }, [open, state]);
+  }, [open, archiveState]);
 
   const queryPreview = useMemo(() => {
     if (!Object.values(form).some((value) => value.trim().length > 0)) {
