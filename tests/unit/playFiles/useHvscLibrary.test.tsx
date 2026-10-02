@@ -764,4 +764,31 @@ describe("useHvscLibrary", () => {
     expect(result.current.hvscFolders).toEqual([]);
     expect(mocks.loadHvscStatusSummaryMock).toHaveBeenCalledTimes(2);
   });
+
+  it("does not start the install when Stop is pressed while the update check is still running", async () => {
+    let resolveCheck: ((value: unknown) => void) | null = null;
+    mocks.checkForHvscUpdatesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useHvscLibrary(true));
+    let installPromise: Promise<unknown> | null = null;
+    act(() => {
+      installPromise = result.current.handleHvscInstall();
+    });
+    await waitFor(() => expect(resolveCheck).not.toBeNull());
+
+    await act(async () => {
+      await result.current.handleHvscCancel();
+    });
+    await act(async () => {
+      resolveCheck!({ latestVersion: 1, installedVersion: 0, requiredUpdates: [1] });
+      await installPromise;
+    });
+
+    expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
+    expect(mocks.toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ title: "HVSC ready" }));
+  });
 });

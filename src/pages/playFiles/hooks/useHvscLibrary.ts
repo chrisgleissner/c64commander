@@ -178,6 +178,8 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const hvscExtractionTimerRef = useRef<number | null>(null);
   const hvscExtractionThrottleRef = useRef(0);
   const hvscIgnoreProgressRef = useRef(false);
+  // A Stop pressed before the runtime has started has no ingestion to cancel, so the install has to see it itself.
+  const hvscCancelGenerationRef = useRef(0);
 
   const runHvscAction = useCallback(<T>(name: string, fn: () => Promise<T> | T) => {
     const context = createActionContext(name, "user", "HvscLibrary");
@@ -762,7 +764,12 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
             lastUpdatedAt: startedAt,
           }));
           markHvscUpdateCheckAt(startedAt);
+          const cancelGeneration = hvscCancelGenerationRef.current;
           const updateStatus = await checkForHvscUpdates();
+          if (hvscCancelGenerationRef.current !== cancelGeneration) {
+            addLog("info", "HVSC install canceled during the update check; not starting the download");
+            return;
+          }
           if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
             toast({
               title: "HVSC up to date",
@@ -1004,6 +1011,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
 
   const handleHvscCancel = useCallback(async () => {
     const token = hvscActiveToken ?? "hvsc-install";
+    hvscCancelGenerationRef.current += 1;
     try {
       await cancelHvscInstall(token);
       const stoppedAt = new Date().toISOString();
