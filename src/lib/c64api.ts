@@ -18,6 +18,7 @@ import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChallenge";
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
 import { handleWebProxyGate } from "@/lib/c64api/webProxyGate";
+import { CategoryPresence } from "@/lib/c64api/categoryPresence";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
@@ -1089,6 +1090,7 @@ export class C64API {
   private apiBaseUrl: string;
   private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
   private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
+  private readonly categoryPresence = new CategoryPresence();
   private readonly configCategoryItemsCache = new Map<string, Record<string, unknown>>();
   private activeConfigEnrichmentNamespaceKey: string | null;
   private absentConfigDomains = new Set<string>();
@@ -1126,6 +1128,9 @@ export class C64API {
     this.resetRequestReadState();
     this.bumpRequestGeneration();
     this.setActiveConfigEnrichmentNamespaceForCurrentHost();
+  }
+  listsCategory(category: string): boolean | null {
+    return this.categoryPresence.lists(category);
   }
 
   getBaseUrl() {
@@ -1310,6 +1315,7 @@ export class C64API {
 
   private bumpRequestGeneration() {
     this.requestGeneration = (this.requestGeneration + 1) % 1_000_000;
+    this.categoryPresence.reset();
   }
 
   private setActiveConfigEnrichmentNamespaceForCurrentHost() {
@@ -2302,7 +2308,9 @@ export class C64API {
 
   // Config endpoints
   async getCategories(options: C64ReadRequestOptions = {}): Promise<CategoriesResponse> {
-    return this.request("/v1/configs", options);
+    const response = await this.request<CategoriesResponse>("/v1/configs", options);
+    this.categoryPresence.recordList(response?.categories);
+    return response;
   }
 
   async getCategory(category: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
@@ -2326,7 +2334,7 @@ export class C64API {
     options: C64ReadRequestOptions = {},
   ): Promise<ConfigResponse> {
     const uniqueItems = Array.from(new Set(items));
-    if (!uniqueItems.length) {
+    if (!uniqueItems.length || this.categoryPresence.isAbsent(category)) {
       return {
         [category]: {
           items: {},
@@ -2381,6 +2389,7 @@ export class C64API {
     } catch (error) {
       const categoryErrorMessage = error instanceof Error ? error.message : String(error ?? "");
       if (parseHttpStatusFromErrorMessage(categoryErrorMessage) === 404) {
+        this.categoryPresence.recordMissing(category);
         addLog("debug", "Category config fetch returned 404; treating category as unavailable", {
           category,
           error: categoryErrorMessage,

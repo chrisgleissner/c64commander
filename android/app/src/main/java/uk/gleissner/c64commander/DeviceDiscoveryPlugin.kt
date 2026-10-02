@@ -546,7 +546,11 @@ class DeviceDiscoveryPlugin : Plugin() {
         }
         builder.toString()
       }
-    }.getOrDefault("")
+    }.getOrElse { error ->
+      // An unread body reads as "not an Ultimate", and the device is dropped from discovery.
+      AppLogger.warn(context, logTag, "Could not read the error body of a discovery probe", "DeviceDiscoveryPlugin", error)
+      ""
+    }
 
   internal fun looksLikeUltimateErrorBody(body: String): Boolean {
     val trimmed = body.trim()

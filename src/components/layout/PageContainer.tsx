@@ -35,6 +35,19 @@ export const useProfileActionGridDensity = () => useContext(ProfileActionGridDen
  */
 const MIN_TILE_REM = 3.75;
 
+/** How many of `requested` columns fit in `width` when every track needs at least `minTrackPx`. */
+export const fitColumnCount = (requested: number, width: number, gapPx: number, minTrackPx: number) => {
+  let fitting = requested;
+  while (fitting > 1 && (width - (fitting - 1) * gapPx) / fitting < minTrackPx) fitting -= 1;
+  return fitting;
+};
+
+const cssLengthToPx = (length: string, rootFontSize: number) => {
+  const value = Number.parseFloat(length);
+  if (!Number.isFinite(value)) return 0;
+  return length.trim().endsWith("rem") ? value * rootFontSize : value;
+};
+
 /**
  * The largest column count, up to the one the design asked for, whose tracks are still wide
  * enough for a tile's label.
@@ -47,8 +60,12 @@ const MIN_TILE_REM = 3.75;
  * `auto-fit` with a rem floor was tried first. It decides the count itself, and when the floor
  * and the available width are close it rounds a column away: a floor chosen to leave the medium
  * profile's four columns alone at the default text size still took it to three.
+ *
+ * `minTrack` is the smallest a track may be drawn. The tablet profile sets one, and picked on a phone,
+ * counting columns against the label floor alone asked for four 9rem tracks in a 333px card: the two
+ * that did not fit were clipped off the side together with their controls.
  */
-const useFittingColumns = (requested: number, gap: string, enabled: boolean) => {
+export const useFittingColumns = (requested: number, gap: string, enabled: boolean, minTrack = "0px") => {
   const ref = useRef<HTMLDivElement | null>(null);
   const [columns, setColumns] = useState(requested);
 
@@ -63,10 +80,8 @@ const useFittingColumns = (requested: number, gap: string, enabled: boolean) => 
       const gapPx = Number.parseFloat(getComputedStyle(element).columnGap) || 0;
       const width = element.getBoundingClientRect().width;
       if (!width) return;
-      const minTile = MIN_TILE_REM * rootFontSize;
-      let fitting = requested;
-      while (fitting > 1 && (width - (fitting - 1) * gapPx) / fitting < minTile) fitting -= 1;
-      setColumns(fitting);
+      const minTrackPx = Math.max(MIN_TILE_REM * rootFontSize, cssLengthToPx(minTrack, rootFontSize));
+      setColumns(fitColumnCount(requested, width, gapPx, minTrackPx));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -77,7 +92,7 @@ const useFittingColumns = (requested: number, gap: string, enabled: boolean) => 
       observer.disconnect();
       window.removeEventListener("c64u-ui-preferences-changed", measure);
     };
-  }, [requested, gap, enabled]);
+  }, [requested, gap, enabled, minTrack]);
 
   return { ref, columns };
 };
@@ -142,7 +157,7 @@ export function ProfileActionGrid({
   // An explicit `minItemWidth` is a caller naming exactly how wide a track must be, so it keeps
   // both the count and the width it was given; nothing is measured for it.
   const gap = tokens.actionGridGap;
-  const { ref, columns: fitting } = useFittingColumns(columns, gap, !minItemWidth);
+  const { ref, columns: fitting } = useFittingColumns(columns, gap, !minItemWidth, tokens.actionGridMinWidth);
   const style: CSSProperties = {
     gridTemplateColumns: `repeat(${fitting}, minmax(${minItemWidth ?? tokens.actionGridMinWidth}, 1fr))`,
   };

@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import * as logging from "@/lib/logging";
 import { AudioMirrorController, type AudioMirrorSnapshot } from "@/lib/streams/audioMirrorController";
 import type { StreamReceiver, StreamConnectionState } from "@/lib/streams/streamReceiver";
 import { AudioMirrorPlayer } from "@/lib/streams/audioPlayer";
@@ -89,6 +90,32 @@ describe("AudioMirrorController", () => {
   const tickSeconds = async (seconds: number) => {
     for (let i = 0; i < seconds; i += 1) await vi.advanceTimersByTimeAsync(1000);
   };
+
+  it("warns when the device refuses to stop its stream, which may still be multicasting", async () => {
+    const log = vi.spyOn(logging, "addLog");
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => {
+        throw new Error("Device rejected the request");
+      }),
+      onChange: vi.fn(),
+      networkBufferMs: 0,
+    });
+    try {
+      await controller.start();
+      await controller.stop();
+      expect(log).toHaveBeenCalledWith(
+        "warn",
+        "Audio Mirror: device stream stop failed; the device may still be streaming",
+        expect.objectContaining({ error: "Device rejected the request", stack: expect.any(String) }),
+      );
+    } finally {
+      log.mockRestore();
+    }
+  });
 
   it("calls the stream lost when audio stops arriving, instead of reading live forever", async () => {
     // Cutting the phone's Wi-Fi after the mirror is live leaves the bound multicast socket open with

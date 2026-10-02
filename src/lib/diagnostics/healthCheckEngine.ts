@@ -136,7 +136,8 @@ type ProbeExecution = {
 };
 
 type ProbeRuntime = {
-  api: Pick<C64API, "getInfo" | "readMemory" | "getConfigItem" | "setConfigValue">;
+  api: Pick<C64API, "getInfo" | "readMemory" | "getConfigItem" | "setConfigValue"> &
+    Partial<Pick<C64API, "listsCategory">>;
   host: string;
   ftpPort: number;
   telnetPort: number;
@@ -725,6 +726,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         __c64uBypassCache: true,
         __c64uForceProbe: runtime.forceProbe,
         __c64uSuppressCircuitContribution: true,
+        __c64uExpectedMissing: true,
       });
       const itemData = extractConfigItemData(readResp, target.category, target.item);
       if (itemData === null) {
@@ -929,6 +931,16 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         throw error;
       }
       const msg = (error as Error).message;
+      // An Ultimate-II+ cartridge has no lighting or mixer categories: a 404 is a target this device
+      // lacks, not a device fault, and counted as one it showed a healthy cartridge as degraded.
+      // Only a category the device does not list is missing; a listed one answering 404 is a fault.
+      if (/\bHTTP 404\b/.test(msg) && runtime.api.listsCategory?.(target.category) !== true) {
+        addLog("info", "Health check CONFIG probe: category not present on this device", {
+          category: target.category,
+          item: target.item,
+        });
+        continue;
+      }
       addLog(probeFailureLevel(msg), "Health check CONFIG probe failed", {
         category: target.category,
         item: target.item,

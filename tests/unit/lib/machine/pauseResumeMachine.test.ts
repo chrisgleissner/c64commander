@@ -23,8 +23,14 @@ vi.mock("@/lib/deviceInteraction/machineExecutionStore", () => ({
 vi.mock("@/lib/deviceInteraction/pauseMuteCapture", () => ({
   capturePauseMuteToPersistedSnapshot: captureMock,
 }));
+const persisted = vi.hoisted(() => ({ pauseMuteSnapshot: null as Record<string, string> | null }));
+vi.mock("@/lib/playback/playbackSessionPersistence", () => ({
+  hydratePlaybackSnapshot: () => ({ pauseMuteSnapshot: persisted.pauseMuteSnapshot }),
+}));
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
-import { pauseResumeMachine } from "@/lib/machine/pauseResumeMachine";
+import { adoptInterruptedPause, pauseResumeMachine } from "@/lib/machine/pauseResumeMachine";
+import { addLog } from "@/lib/logging";
 
 const api = {} as never;
 
@@ -41,6 +47,99 @@ describe("pauseResumeMachine, the one implementation the tile and the keypad key
     snapshotState.pauseMutePending = false;
     captureMock.mockResolvedValue(true);
     restoreMock.mockResolvedValue(undefined);
+    persisted.pauseMuteSnapshot = null;
+  });
+
+  // The app was force-stopped while Home had the machine paused and its SIDs at the mute level.
+  describe("after a pause the previous session never resumed", () => {
+    beforeEach(() => {
+      persisted.pauseMuteSnapshot = { "Vol UltiSid 1": " 0 dB" };
+    });
+
+    const page = (patch: Record<number, number> = {}) => {
+      const bytes = new Uint8Array(0x200).fill(0x42);
+      for (const [address, value] of Object.entries(patch)) bytes[Number(address)] = value;
+      return bytes;
+    };
+
+    it("shows the machine as paused instead of running while zero page and the stack stand still", async () => {
+      const readMemory = vi.fn().mockResolvedValue(page());
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(true);
+      expect(setPausedMock).toHaveBeenCalledWith({ pauseMutePending: true });
+      expect(restoreMock).not.toHaveBeenCalled();
+    });
+
+    it("puts the muted levels back instead when the machine has been resumed since", async () => {
+      const readMemory = vi
+        .fn()
+        .mockResolvedValueOnce(page())
+        .mockResolvedValueOnce(page({ 0xa2: 0x49 }));
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(setPausedMock).not.toHaveBeenCalled();
+      expect(restoreMock).toHaveBeenCalledWith({ readMemory }, "device-1");
+    });
+
+    it("leaves a pause the user starts between the two reads to that pause", async () => {
+      let releasePause: () => void = () => undefined;
+      const pauseCall = run(
+        vi.fn(() => new Promise<undefined>((resolve) => (releasePause = () => resolve(undefined)))),
+      );
+      let pending: Promise<unknown> = Promise.resolve();
+      const readMemory = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          pending = pauseCall.call();
+          return page();
+        })
+        .mockResolvedValueOnce(page({ 0xa2: 0x49 }));
+
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(restoreMock).not.toHaveBeenCalled();
+      releasePause();
+      await pending;
+    });
+
+    it("warns when a pause that has since ended leaves levels it could not restore", async () => {
+      restoreMock.mockResolvedValue(false);
+      const readMemory = vi
+        .fn()
+        .mockResolvedValueOnce(page())
+        .mockResolvedValueOnce(page({ 0xa2: 0x49 }));
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Machine: a pause from a previous session has since ended",
+        expect.objectContaining({ levelsRestored: false }),
+      );
+    });
+
+    it("leaves the machine shown as it was when the memory read fails, to ask again on the next connect", async () => {
+      const readMemory = vi.fn().mockRejectedValue(new Error("Host unreachable"));
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(setPausedMock).not.toHaveBeenCalled();
+    });
+
+    // A game that replaces the KERNAL interrupt leaves the jiffy clock standing while it runs.
+    it("treats a running program with its own interrupt as resumed although the jiffy clock stands still", async () => {
+      const readMemory = vi
+        .fn()
+        .mockResolvedValueOnce(page({ 0x1fd: 0x10 }))
+        .mockResolvedValueOnce(page({ 0x1fd: 0x37 }));
+      await expect(adoptInterruptedPause({ readMemory } as never, "device-1")).resolves.toBe(false);
+      expect(setPausedMock).not.toHaveBeenCalled();
+    });
+
+    it("restores the levels on resume even though this session never muted them", async () => {
+      snapshotState.state = "paused";
+      await expect(run().call()).resolves.toBe("running");
+      expect(restoreMock).toHaveBeenCalledWith(api, "device-1");
+    });
+
+    it("keeps the earlier levels to restore when a second pause finds the SIDs already muted", async () => {
+      captureMock.mockResolvedValue(false);
+      await run().call();
+      expect(setPausedMock).toHaveBeenCalledWith({ pauseMutePending: true });
+    });
   });
 
   it("joins a pause already in flight instead of capturing the mixer a second time", async () => {

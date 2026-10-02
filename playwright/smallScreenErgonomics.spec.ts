@@ -183,11 +183,17 @@ const collectTargetViolations = (page: Page, floor: number) =>
       return parts.join("");
     };
 
-    const selector = 'button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="switch"]';
+    // A slider is pressed anywhere along its root, not on the thumb that draws its value.
+    const selector =
+      'button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="switch"], [role="slider"]';
     const results: Array<{ label: string; width: number; height: number; selector: string }> = [];
     let inspected = 0;
 
-    for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+    for (const control of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+      const element =
+        control.getAttribute("role") === "slider"
+          ? (control.closest<HTMLElement>("[data-orientation][dir]") ?? control)
+          : control;
       const style = window.getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden") continue;
       if (Number.parseFloat(style.opacity) < 0.1) continue;
@@ -217,12 +223,21 @@ const collectTargetViolations = (page: Page, floor: number) =>
         }
       }
 
-      if (effective.width >= minPx && effective.height >= minPx) continue;
+      // A `hit-area-44` pseudo-element is part of the control for hit testing, so it counts.
+      const before = window.getComputedStyle(element, "::before");
+      let width = effective.width;
+      let height = effective.height;
+      if (before.content !== "none" && before.position === "absolute") {
+        width = Math.max(width, Number.parseFloat(before.width) || 0);
+        height = Math.max(height, Number.parseFloat(before.height) || 0);
+      }
+
+      if (width >= minPx && height >= minPx) continue;
 
       results.push({
-        label: (element.textContent ?? element.getAttribute("aria-label") ?? "").trim().slice(0, 40),
-        width: Math.round(effective.width),
-        height: Math.round(effective.height),
+        label: (control.getAttribute("aria-label") ?? control.textContent ?? "").trim().slice(0, 40),
+        width: Math.round(width),
+        height: Math.round(height),
         selector: describe(element),
       });
     }
@@ -302,9 +317,33 @@ const expectNoHorizontalOverflow = async (page: Page) => {
   ).toEqual([]);
 };
 
-const settle = async (page: Page) => {
+/** Controls drawn past the side of an ancestor that clips them, so part or all of them cannot be reached. */
+const collectClippedControls = (page: Page) =>
+  page.evaluate(() => {
+    const clipped: string[] = [];
+    const controls = document.querySelectorAll<HTMLElement>('button, a[href], input, select, [role="button"]');
+    for (const control of Array.from(controls)) {
+      const rect = control.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || window.getComputedStyle(control).visibility === "hidden") continue;
+      for (let ancestor = control.parentElement; ancestor; ancestor = ancestor.parentElement) {
+        const overflowX = window.getComputedStyle(ancestor).overflowX;
+        if (overflowX === "visible" || overflowX === "auto" || overflowX === "scroll") continue;
+        const box = ancestor.getBoundingClientRect();
+        if (rect.right > box.right + 1 || rect.left < box.left - 1) {
+          const name = control.getAttribute("data-testid") ?? control.getAttribute("aria-label") ?? control.textContent;
+          clipped.push(
+            `${(name ?? "").trim().slice(0, 40)} ends at ${Math.round(rect.right)}px, clipped at ${Math.round(box.right)}px`,
+          );
+        }
+        break;
+      }
+    }
+    return clipped;
+  });
+
+const settle = async (page: Page, profile = "compact") => {
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+  await page.waitForFunction((expected) => document.documentElement.dataset.displayProfile === expected, profile);
   // Wait for the tab bar, which only exists once the launch sequence has handed over
   // to a real page. Without this the measurement can land on the startup screen and
   // report that everything is fine because almost nothing is on screen yet.
@@ -418,3 +457,58 @@ test.describe("Small screen ergonomics", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The sweep above runs on the smallest screen only, and both profiles a phone can be showing went
+ * unmeasured: the phone's own, where `text-[11px]` rendered at 11px, and the tablet profile picked in
+ * Settings on a phone, where Home's action grids clipped their right-hand columns off the card.
+ */
+const PHONE_PROFILES = [
+  { name: "the phone profile", override: "medium", profile: "medium" },
+  { name: "Large display on a phone", override: "expanded", profile: "expanded" },
+] as const;
+
+for (const phone of PHONE_PROFILES) {
+  test.describe(`Ergonomics on ${phone.name}`, () => {
+    let server: Awaited<ReturnType<typeof createMockC64Server>>;
+
+    test.beforeEach(async ({ page }, testInfo) => {
+      disableTraceAssertions(testInfo, "Layout-only coverage; trace assertions disabled.");
+      server = await createMockC64Server();
+      await seedUiMocks(page, server.baseUrl);
+      await page.addInitScript((override) => {
+        localStorage.setItem("c64u_display_profile_override", override);
+      }, phone.override);
+      await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.medium.viewport);
+    });
+
+    test.afterEach(async () => {
+      await server.close();
+    });
+
+    for (const route of TAB_ROUTES) {
+      test(`${route.label} keeps its text, targets and controls within reach @layout`, async ({ page }) => {
+        await page.goto(route.path, { waitUntil: "domcontentloaded" });
+        await settle(page, phone.profile);
+
+        const text = (await collectTextViolations(page, MIN_TEXT_PX)) as Swept<TextViolation>;
+        expect(text.inspected).toBeGreaterThanOrEqual(MIN_TEXT_ELEMENTS);
+        expect(
+          text.violations,
+          `Text below the ${MIN_TEXT_PX}px floor on ${route.label}:\n` +
+            text.violations.map((v) => `  ${v.fontPx}px  ${v.selector}  "${v.text}"`).join("\n"),
+        ).toEqual([]);
+
+        const targets = (await collectTargetViolations(page, MIN_TARGET_PX)) as Swept<TargetViolation>;
+        expect(targets.inspected).toBeGreaterThanOrEqual(MIN_TARGETS);
+        expect(
+          targets.violations,
+          `Controls below the ${MIN_TARGET_PX}px target size on ${route.label}:\n` +
+            targets.violations.map((v) => `  ${v.width}x${v.height}  ${v.selector}  "${v.label}"`).join("\n"),
+        ).toEqual([]);
+
+        expect(await collectClippedControls(page), `Controls clipped off the side on ${route.label}`).toEqual([]);
+      });
+    }
+  });
+}

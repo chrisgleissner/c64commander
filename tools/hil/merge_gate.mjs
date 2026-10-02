@@ -245,7 +245,12 @@ const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');
 if(toggle){toggle.click();await wait(800);card.scrollIntoView({block:"center"});await wait(400);}
 for(const [id,want] of [["av-audio-toggle",${audio}],["av-video-toggle",${video}]]){
   const b=q(id); if(!b) return JSON.stringify({error:id+" is not on the card"});
-  if((b.getAttribute("aria-pressed")==="true")!==want){b.click();await wait(3000);}
+  if((b.getAttribute("aria-pressed")==="true")!==want){
+    b.click();
+    // A stop is shown only once the Ultimate has answered it, which took 3.3 s on a busy device.
+    for(let i=0;i<40&&(q(id)?.getAttribute("aria-pressed")==="true")!==want;i++)await wait(250);
+    await wait(500);
+  }
 }
 return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed"),
   video:q("av-video-toggle")?.getAttribute("aria-pressed")});})()`);
@@ -502,6 +507,8 @@ const readPlaylist = async () => {
   const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
 q("tab-play")?.click();await wait(2500);
+// After a relaunch the playlist hydrates from storage, which can outlast a fixed wait.
+for(let i=0;i<50&&!document.querySelector('[data-testid="playlist-item"]');i++)await wait(250);
 return JSON.stringify({titles:[...document.querySelectorAll('[data-testid="playlist-item"]')]
   .map(e=>(e.innerText||"").split(String.fromCharCode(10))[0].trim()),
   play:!!q("playlist-play"),next:!!q("playlist-next"),engine:!!q("playback-engine-toggle")});})()`);
@@ -945,6 +952,21 @@ return JSON.stringify({dismissed:true});})()`);
   );
 };
 
+/** Puts back each thing that was found, and one that cannot be put back does not stop the rest. */
+export const restoreFoundState = async (steps, warn = console.error) => {
+  for (const [what, found, restore] of steps) {
+    if (found === null) continue;
+    try {
+      await restore(found);
+    } catch (error) {
+      warn(
+        `  WARN could not put back ${what} as it was found: ` +
+          `${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+      );
+    }
+  }
+};
+
 /**
  * Put the phone back the way it was found: its own volume, and its own Listen and Watch.
  *
@@ -952,18 +974,12 @@ return JSON.stringify({dismissed:true});})()`);
  * next to it, and a mirror left running keeps the Ultimate pushing two multicast streams into the
  * room's Wi-Fi — which is exactly the traffic the next measurement is trying to characterise.
  */
-const restoreRig = async () => {
-  try {
-    if (initialVolume !== null) await setVolume(initialVolume);
-    if (initialMirror !== null) await setMirror(initialMirror);
-    if (initialMasterVolume !== null) await setMasterVolume(initialMasterVolume).catch(() => {});
-  } catch (error) {
-    console.error(
-      `  WARN could not put the rig back as it was found: ` +
-        `${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
-    );
-  }
-};
+const restoreRig = () =>
+  restoreFoundState([
+    ["the phone volume", initialVolume, setVolume],
+    ["the mirror toggles", initialMirror, setMirror],
+    ["the Ultimate master volume", initialMasterVolume, setMasterVolume],
+  ]);
 
 const main = async () => {
   console.log(`HIL merge gate — Ultimate ${HOST}, phone volume ${GATE_VOLUME}/25${QUIET ? ", quiet check" : ""}`);

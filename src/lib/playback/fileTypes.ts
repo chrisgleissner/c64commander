@@ -8,6 +8,13 @@
 
 export type PlayFileCategory = "sid" | "mod" | "prg" | "crt" | "disk";
 
+/**
+ * File types whose program a machine reset starts again rather than ends: a reset boots a mapped
+ * cartridge, and the Ultimate's MOD player survives it and keeps playing. Only a reboot unloads them.
+ */
+export const stopRequiresReboot = (category: PlayFileCategory | undefined) =>
+  category === "disk" || category === "crt" || category === "mod";
+
 const normalizeExtension = (value: string) => value.replace(/^\./, "").toLowerCase();
 
 const SID_EXTENSIONS = new Set(["sid"]);

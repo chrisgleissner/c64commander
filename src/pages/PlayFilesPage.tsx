@@ -72,6 +72,7 @@ import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
 import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
 import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
+import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
@@ -160,7 +161,11 @@ import {
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
-import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
+import {
+  planPlaylistItemRemoval,
+  resolveAutoAdvanceDueAtMsOnDurationChange,
+  runClaimedLaunch,
+} from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
@@ -169,6 +174,7 @@ import {
 } from "@/lib/config/configFileReferenceSelection";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
@@ -278,10 +284,10 @@ export default function PlayFilesPage() {
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
   const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
-  const [durationSeconds, setDurationSeconds] = useState(() => Math.round(DEFAULT_SONG_DURATION_MS / 1000));
-  const [durationInput, setDurationInput] = useState(() =>
-    formatDurationSeconds(Math.round(DEFAULT_SONG_DURATION_MS / 1000)),
+  const [durationSeconds, setDurationSeconds] = useState(() =>
+    Math.round(loadDefaultSongDurationMs(DEFAULT_SONG_DURATION_MS) / 1000),
   );
+  const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(durationSeconds));
   const [songNrInput, setSongNrInput] = useState("");
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
   const {
@@ -625,6 +631,11 @@ export default function PlayFilesPage() {
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
+  const { stopPending: stopPendingDuringLaunch, stopPlayback } = useLaunchStopGuard({
+    isPlaylistLoading,
+    isPlaying,
+    stop: handleStop,
+  });
   const handleNextRef = useRef(handleNext);
   useEffect(() => {
     handleNextRef.current = handleNext;
@@ -660,14 +671,12 @@ export default function PlayFilesPage() {
         play: () => void handlePlay(),
         pauseResume: () => void handlePauseResume(),
         next: () => void handleNext(),
-        stop: () => void handleStop(),
+        stop: stopPlayback,
       }),
     playlist.length > 0 && sessionRestoreSettled,
   );
   const sleepTimer = useSleepTimer({
-    onExpire: () => {
-      void handleStop();
-    },
+    onExpire: stopPlayback,
     isPlaying,
   });
   const sleepTimerRef = useRef(sleepTimer);
@@ -1440,7 +1449,10 @@ export default function PlayFilesPage() {
         launches,
         add: () => handleAddFileSelections(source, selections),
         takeLaunchTarget: () => playlistSnapshotRef.current[indexBeforeAdd],
-        launch: (item) => playItem(item, { playlistIndex: indexBeforeAdd }),
+        launch: (item) =>
+          runClaimedLaunch(playStartInFlightRef, setIsPlaylistLoading, () =>
+            playItem(item, { playlistIndex: indexBeforeAdd }),
+          ),
       });
     },
     [handleAddFileSelections, playItem, playlistSnapshotRef],
@@ -2256,7 +2268,7 @@ export default function PlayFilesPage() {
         // restore, guard/due-at clear) that used to be partially and
         // impurely duplicated as setState calls inside the setPlaylist
         // updater below. See HARD9-030.
-        void handleStop();
+        stopPlayback();
       }
       setPlaylist(plan.next);
       if (currentIndex >= 0) {
@@ -2267,7 +2279,7 @@ export default function PlayFilesPage() {
         return new Set(Array.from(prev).filter((id) => !ids.has(id)));
       });
     },
-    [currentIndex, handleStop, isPaused, isPlaying, playlist],
+    [currentIndex, stopPlayback, isPaused, isPlaying, playlist],
   );
 
   useDemoPlaylistCleanup(playlist, removePlaylistItemsById);
@@ -2352,6 +2364,7 @@ export default function PlayFilesPage() {
 
   const persistDurationOverride = useCallback(
     (durationOverrideMs: number) => {
+      saveDefaultSongDurationMs(durationOverrideMs);
       setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, durationOverrideMs));
     },
     [setPlaylist],
@@ -2581,7 +2594,8 @@ export default function PlayFilesPage() {
                 canPause={canPause}
                 onPrevious={() => void handlePrevious()}
                 onPlay={() => void handlePlay()}
-                onStop={() => void handleStop()}
+                onStop={stopPlayback}
+                stopPending={stopPendingDuringLaunch}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
                 // Only offered when the tune is actually rendering here: the C64
@@ -2937,7 +2951,7 @@ export default function PlayFilesPage() {
             // a folder selection means. Here it sits next to the folders it governs, and it can say
             // so in words rather than in one.
             folderOptions={
-              <label className="flex items-center gap-2 text-xs">
+              <label className="flex min-h-11 items-center gap-2 text-xs">
                 <Checkbox
                   checked={recurseFolders}
                   onCheckedChange={(value) => setRecurseFolders(Boolean(value))}

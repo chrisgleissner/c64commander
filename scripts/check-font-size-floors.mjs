@@ -12,8 +12,8 @@
  * roughly 1.4mm of text, which is not comfortably readable for an adult with ordinary
  * age-related long sight.
  *
- * `text-[11px]` is the one arbitrary size the stylesheet compensates (to 0.9rem on
- * compact, so 14.4px), which makes it the floor. Anything smaller is a mistake rather
+ * `text-[11px]` is the one arbitrary size the stylesheet compensates (to 14.4px on
+ * compact and medium, 14.6px on expanded), which makes it the floor. Anything smaller is a mistake rather
  * than a decision, so it is rejected here instead of being caught later by
  * `playwright/smallScreenErgonomics.spec.ts` - a lint failure names the file and line,
  * where the layout test only reports that some text on some page was too small.

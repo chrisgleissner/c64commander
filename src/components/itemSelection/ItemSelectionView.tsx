@@ -181,7 +181,7 @@ export const ItemSelectionView = ({
           return (
             <div
               key={entry.path}
-              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
+              className="flex min-h-11 items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
               tabIndex={canNavigateFolder ? 0 : undefined}
@@ -224,7 +224,7 @@ export const ItemSelectionView = ({
               {isFolder ? (
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  className="relative flex min-w-0 flex-1 items-center gap-2 text-left"
                   aria-label={folderLabel}
                   aria-disabled={isLoading ? "true" : undefined}
                   disabled={!canNavigateFolder}

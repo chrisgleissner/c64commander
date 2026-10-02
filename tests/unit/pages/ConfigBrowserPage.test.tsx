@@ -184,6 +184,7 @@ const renderConfigBrowserPageInFocusRing = (focusContext?: { current: FocusNavig
 vi.mock("@/lib/c64api", () => ({
   BACKGROUND_REQUEST_TIMEOUT_MS: 3000,
   getC64API: vi.fn(),
+  getC64APIConfigSnapshot: () => ({ deviceHost: "c64u" }),
 }));
 
 vi.mock("@/lib/config/audioMixer", () => ({
@@ -585,6 +586,61 @@ describe("ConfigBrowserPage", () => {
         expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "0 dB" }) }),
       ),
     );
+  });
+
+  it("keeps the levels Solo replaced where a crash cannot lose them, until Solo ends", async () => {
+    sessionStorage.clear();
+    localStorage.removeItem("c64u_audio_mixer_solo:v1");
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({ data: { categories: ["Audio Mixer"] }, isLoading: false });
+    const audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync: updateConfigBatch, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: audioMixerItems } },
+      isLoading: false,
+      refetch: vi.fn().mockResolvedValue({ data: { "Audio Mixer": { items: audioMixerItems } }, isSuccess: true }),
+    }));
+
+    renderConfigBrowserPage();
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+
+    fireEvent.click(soloSwitch);
+    await waitFor(() => expect(localStorage.getItem("c64u_audio_mixer_solo:v1")).toContain("Vol Ultisid 2"));
+
+    fireEvent.click(soloSwitch);
+    await waitFor(() => expect(localStorage.getItem("c64u_audio_mixer_solo:v1")).toBeNull());
+  });
+
+  it("forgets the levels Solo replaced once a volume edit ends Solo and writes the levels back", async () => {
+    sessionStorage.clear();
+    localStorage.removeItem("c64u_audio_mixer_solo:v1");
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({ data: { categories: ["Audio Mixer"] }, isLoading: false });
+    const audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync: updateConfigBatch, isPending: false });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: audioMixerItems } },
+      isLoading: false,
+      refetch: vi.fn().mockResolvedValue({ data: { "Audio Mixer": { items: audioMixerItems } }, isSuccess: true }),
+    }));
+
+    renderConfigBrowserPage();
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+    await waitFor(() => expect(localStorage.getItem("c64u_audio_mixer_solo:v1")).toContain("Vol Ultisid 2"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Update Vol Ultisid 2" }));
+
+    await waitFor(() => expect(localStorage.getItem("c64u_audio_mixer_solo:v1")).toBeNull());
   });
 
   it("restores the other SID volumes once and turns Solo off when the Audio Mixer card is closed while Solo is on", async () => {

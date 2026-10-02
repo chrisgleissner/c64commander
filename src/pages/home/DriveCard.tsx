@@ -72,6 +72,8 @@ export interface DriveCardProps {
   focusId?: string;
   /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
   focusOrder?: number;
+  /** The card has a tablet-width track: Bus ID and Type side by side, and the path beside its label. */
+  wide?: boolean;
 }
 
 const inlineSelectTriggerClass = INLINE_SUMMARY_CONTROL_CLASS;
@@ -108,6 +110,7 @@ export function DriveCard({
   footer,
   focusId,
   focusOrder = 0,
+  wide = false,
 }: DriveCardProps) {
   const { profile } = useDisplayProfile();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
@@ -163,7 +166,7 @@ export function DriveCard({
             disabled={!isConnected || pathPending || !pathEditable || loading}
             className={cn(
               "min-h-11 min-w-0 flex-1 text-left font-medium text-foreground hover:underline",
-              profile === "expanded" ? "basis-auto" : "basis-full",
+              wide ? "basis-auto" : "basis-full",
               /*
                * A path is elided; a sentence wraps.
                *
@@ -190,7 +193,7 @@ export function DriveCard({
           the trigger to exactly that floor and cut "1541" to 44px of the 47px it needs. It fitted
           before only because the floor was a rem that happened to be 49.5px there; sizing the floor
           honestly in pixels is what exposed the column count as the real problem. */}
-      <div className={cn("grid gap-2 text-xs", profile === "expanded" ? "grid-cols-2" : "grid-cols-1")}>
+      <div className={cn("grid gap-2 text-xs", wide ? "grid-cols-2" : "grid-cols-1")}>
         <div className="inline-summary-label-value-pair flex items-center gap-2">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
@@ -264,7 +267,7 @@ export function DriveCard({
           onClick={onStatusClick}
           disabled={!onStatusClick}
           className={cn(
-            "min-h-11 flex-1 truncate text-left font-medium",
+            "min-h-11 min-w-11 flex-1 truncate text-left font-medium",
             onStatusClick ? "underline-offset-2 hover:underline" : "cursor-default",
             getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
           )}

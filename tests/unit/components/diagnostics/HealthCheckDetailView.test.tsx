@@ -294,6 +294,33 @@ describe("HealthCheckDetailView", () => {
       expect(screen.getByText(timeoutReason, { selector: "p" })).toBeInTheDocument();
     });
 
+    it("shows a probe that had nothing to check on this device as skipped, not canceled", () => {
+      const idle = { state: "PENDING", outcome: null, startedAt: null, endedAt: null, durationMs: null, reason: null };
+      setHealthCheckStateSnapshot({
+        probeStates: {
+          REST: idle,
+          FTP: idle,
+          TELNET: idle,
+          CONFIG: {
+            state: "CANCELLED",
+            outcome: "Skipped",
+            startedAt: "2025-01-01T00:00:00.000Z",
+            endedAt: "2025-01-01T00:00:00.100Z",
+            durationMs: null,
+            reason: "No suitable config roundtrip target available",
+          },
+          RASTER: idle,
+          JIFFY: idle,
+        },
+      } as never);
+
+      render(<HealthCheckDetailView result={null} liveProbes={{}} isRunning={true} onBack={vi.fn()} />);
+
+      const row = screen.getByTestId("health-check-probe-config");
+      expect(row).toHaveTextContent("Skipped");
+      expect(row).not.toHaveTextContent("Canceled");
+    });
+
     it("shows cancelled execution state with the inline reason when a live probe is aborted", () => {
       setHealthCheckStateSnapshot({
         probeStates: {

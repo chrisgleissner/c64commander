@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { stopRequiresReboot } from "@/lib/playback/fileTypes";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import {
@@ -69,6 +70,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
+  PlaybackLaunchOvertakenError: class extends Error {},
   buildPlayPlan: vi.fn((request) => request),
   executePlayPlan: vi.fn(async (_api, _plan, options) => {
     if (options?.beforeLaunch) {
@@ -1552,6 +1554,150 @@ describe("usePlaybackController", () => {
     expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
+  it("stops the machine when Stop arrives while a launch from stopped is still in flight", async () => {
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    const setIsPlaying = vi.fn();
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+    const { result } = renderPlaybackController([createPlaylistItem()], {
+      isPlaying: false,
+      isPaused: false,
+      setIsPlaying,
+      playStartInFlightRef: { current: true },
+    });
+
+    await result.current.handleStop();
+
+    expect(machineReset).toHaveBeenCalledTimes(1);
+    expect(setIsPlaying).toHaveBeenCalledWith(false);
+  });
+
+  it("leaves no tune recorded as playing and starts no mirror when Stop overtakes a C64 launch", async () => {
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+    vi.mocked(avMirrorSession.startAudio).mockClear();
+    let finishLaunch!: () => void;
+    vi.mocked(executePlayPlan).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishLaunch = () => resolve())),
+    );
+    const { result } = renderPlaybackController([createPlaylistItem()], { currentIndex: 0 });
+
+    const launch = result.current.handlePlay();
+    await vi.waitFor(() => expect(finishLaunch).toBeDefined());
+    await result.current.handleStop();
+    finishLaunch();
+    await launch;
+
+    expect(isRemotePlaybackActive()).toBe(false);
+    expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    expect(machineReset).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a play that was queued behind a launch when Stop arrives before it runs", async () => {
+    vi.mocked(getC64API).mockReturnValue({
+      machineReset: vi.fn().mockResolvedValue(undefined),
+      machineReboot: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    let tail: Promise<void> = Promise.resolve();
+    const enqueuePlayTransition = vi.fn((task: () => Promise<void>) => (tail = tail.then(task)));
+    let finishLaunch!: () => void;
+    vi.mocked(executePlayPlan)
+      .mockClear()
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishLaunch = () => resolve())));
+    const crt = createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/demo.crt" }, category: "crt" });
+    const { result } = renderPlaybackController([crt], {
+      currentIndex: 0,
+      enqueuePlayTransition,
+      playStartInFlightRef: { current: true },
+    });
+
+    const pickerLaunch = result.current.playItem(crt, { playlistIndex: 0 });
+    await vi.waitFor(() => expect(finishLaunch).toBeDefined());
+    const queuedPlay = result.current.playItem(crt, { playlistIndex: 0 });
+    await result.current.handleStop();
+    finishLaunch();
+    await Promise.all([pickerLaunch, queuedPlay]);
+
+    expect(executePlayPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts nothing when Stop arrives while a playlist start is still resolving songlengths", async () => {
+    vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as any);
+    vi.mocked(executePlayPlan).mockClear();
+    let finishSonglengths!: (items: PlaylistItem[]) => void;
+    const applySonglengthsToItems = vi.fn(
+      (items: PlaylistItem[]) => new Promise<PlaylistItem[]>((resolve) => (finishSonglengths = () => resolve(items))),
+    );
+    const playlist = [createPlaylistItem()];
+    const { result } = renderPlaybackController(playlist, { applySonglengthsToItems });
+
+    const starting = result.current.startPlaylist(playlist, 0);
+    await vi.waitFor(() => expect(finishSonglengths).toBeDefined());
+    await result.current.handleStop();
+    finishSonglengths(playlist);
+    await starting;
+
+    expect(executePlayPlan).not.toHaveBeenCalled();
+  });
+
+  it("never starts the program when Stop arrives while its .cfg is being applied", async () => {
+    vi.mocked(getC64API).mockReturnValue({
+      machineReset: vi.fn().mockResolvedValue(undefined),
+      machineReboot: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    let finishConfig!: () => void;
+    vi.mocked(applyConfigFileReference).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishConfig = () => resolve())),
+    );
+    const runProgram = vi.fn();
+    vi.mocked(executePlayPlan).mockImplementationOnce(async (_api, _plan, options) => {
+      await options?.beforeLaunch?.();
+      runProgram();
+    });
+    const crt = createPlaylistItem({
+      request: { source: "ultimate", path: "/Usb0/demo.crt" },
+      category: "crt",
+      configRef: { kind: "ultimate", fileName: "demo.cfg", path: "/Usb0/demo.cfg" },
+    });
+    const { result } = renderPlaybackController([crt], {
+      currentIndex: 0,
+      playStartInFlightRef: { current: true },
+    });
+
+    const launch = result.current.playItem(crt, { playlistIndex: 0 });
+    await vi.waitFor(() => expect(finishConfig).toBeDefined());
+    await result.current.handleStop();
+    finishConfig();
+    await launch;
+
+    expect(runProgram).not.toHaveBeenCalled();
+    expect(isRemotePlaybackActive()).toBe(false);
+
+    // The interrupted apply must not count as applied: the next start applies the .cfg again.
+    await result.current.playItem(crt, { playlistIndex: 0 });
+    expect(vi.mocked(applyConfigFileReference)).toHaveBeenCalledTimes(2);
+  });
+
+  it("reboots a cartridge that Stop overtook mid-launch, since a reset leaves it mapped", async () => {
+    const machineReset = vi.fn().mockResolvedValue(undefined);
+    const machineReboot = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machineReset, machineReboot } as any);
+    let finishLaunch!: () => void;
+    vi.mocked(executePlayPlan).mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishLaunch = () => resolve())),
+    );
+    const crt = createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/demo.crt" }, category: "crt" });
+    const { result } = renderPlaybackController([crt], { currentIndex: 0 });
+
+    const launch = result.current.handlePlay();
+    await vi.waitFor(() => expect(finishLaunch).toBeDefined());
+    await result.current.handleStop();
+    const rebootsBeforeLaunchReturned = machineReboot.mock.calls.length;
+    finishLaunch();
+    await launch;
+
+    expect(machineReboot.mock.calls.length).toBe(rebootsBeforeLaunchReturned + 1);
+  });
+
   it("drops a duplicate startPlaylist while a start is already in flight", async () => {
     const playlist = [createPlaylistItem()];
     const setIsPlaylistLoading = vi.fn();
@@ -1713,11 +1859,16 @@ describe("usePlaybackController", () => {
     expect(setAutoAdvanceDueAtMs).toHaveBeenCalledWith(null);
   });
 
-  it.each([false, true])(
-    "unloads a cartridge on Stop instead of resetting it into its program again (paused=%s)",
-    async (isPaused) => {
+  it.each([
+    ["crt", false],
+    ["crt", true],
+    ["mod", false],
+    ["mod", true],
+  ] as const)(
+    "unloads a %s on Stop instead of resetting it into its program again (paused=%s)",
+    async (category, isPaused) => {
       const playlist = [
-        createPlaylistItem({ category: "crt", request: { source: "ultimate", path: "/CARTS/probe.crt" } }),
+        createPlaylistItem({ category, request: { source: "ultimate", path: `/TEST/probe.${category}` } }),
       ];
       const machineResume = vi.fn().mockResolvedValue(undefined);
       const machineReboot = vi.fn().mockResolvedValue(undefined);
@@ -1734,6 +1885,17 @@ describe("usePlaybackController", () => {
       expect(setIsPaused).toHaveBeenCalledWith(false);
     },
   );
+
+  it("ends SID and PRG playback with a reset but disk, cartridge and MOD playback with a reboot", () => {
+    expect(["sid", "prg", "disk", "crt", "mod", undefined].map(stopRequiresReboot)).toEqual([
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
 
   it("resets an inherited remote session on Stop when its playlist metadata is absent", async () => {
     const machineReset = vi.fn().mockResolvedValue(undefined);

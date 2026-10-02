@@ -249,6 +249,7 @@ import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/feat
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import { variant } from "@/generated/variant";
+import { shareSettingsExport } from "@/lib/config/settingsExportShare";
 import {
   persistDiscoveredDevice,
   resolveDiscoveredCandidateIdentity,
@@ -1186,17 +1187,11 @@ export default function SettingsPage() {
     void (async () => {
       try {
         const payload = await exportSettingsJson();
-        const blob = new Blob([payload], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
         // HARD19-035: honor the variant basename (like diagnostics/trace exports)
         // so the C64U Remote build doesn't emit the other product's filename —
         // the only provenance signal on an otherwise variant-agnostic payload.
-        link.download = `${variant.exportedFileBasename}-settings.json`;
-        link.click();
-        window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-        toast({ title: "Settings export ready" });
+        const shared = await shareSettingsExport(payload, `${variant.exportedFileBasename}-settings.json`);
+        if (shared) toast({ title: "Settings export ready" });
       } catch (error) {
         reportUserError({
           operation: "SETTINGS_EXPORT",

@@ -28,6 +28,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
+  PlaybackLaunchOvertakenError: class extends Error {},
   buildPlayPlan: vi.fn((request) => request),
   executePlayPlan: vi.fn(async () => undefined),
   getRememberedUltimateSidBlob: vi.fn(() => null),

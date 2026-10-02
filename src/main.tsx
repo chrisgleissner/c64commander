@@ -91,6 +91,8 @@ const startDeferredStartupBootstrap = () => {
     // the Ultimate was never told to stop and is still multicasting. Sequenced after the secure
     // storage prime because the stop has to be authenticated on a password-protected device.
     .then(() => stopLeftoverDeviceStreams())
+    .then(() => import("./lib/config/audioMixerSoloRecovery"))
+    .then(({ recoverInterruptedSolo }) => recoverInterruptedSolo())
     .catch((error) => {
       const err = error as Error;
       addErrorLog("Deferred secure storage bootstrap failed", {

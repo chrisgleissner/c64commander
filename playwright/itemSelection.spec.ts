@@ -392,6 +392,33 @@ test.describe("Item Selection Dialog UX", () => {
     await snap(page, testInfo, "folder-options-toggled");
   });
 
+  // Each folder row opens on a tap or OK. Its padding was sized against the 16px root, so on the
+  // phone profile's 18px root the rows stacked 42.8px apart.
+  test("C64U file browser rows meet the 44px target on the phone profile", async ({ page }: { page: Page }) => {
+    await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "medium"));
+    await page.setViewportSize({ width: 393, height: 851 });
+    await page.goto("/play");
+    await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "medium");
+    await openAddItemsDialog(page);
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await expect(dialog.getByText("Usb0", { exact: true })).toBeVisible();
+
+    const heights = await dialog
+      .getByTestId("source-entry-row")
+      .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
+    expect(heights.length).toBeGreaterThanOrEqual(1);
+    expect(heights.filter((height) => height < 43.5)).toEqual([]);
+
+    // The checkbox's enlarged hit area reaches past the gap; the folder button must still own its edge.
+    const edgeOwner = await dialog.getByRole("button", { name: "Open Usb0", exact: true }).evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + 2, rect.top + rect.height / 2);
+      return hit !== null && button.contains(hit);
+    });
+    expect(edgeOwner).toBe(true);
+  });
+
   test("folder row tap navigates and checkbox selection does not navigate", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {

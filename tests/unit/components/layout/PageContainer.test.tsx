@@ -1,7 +1,13 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
+import {
+  PageContainer,
+  PageStack,
+  ProfileActionGrid,
+  ProfileSplitSection,
+  fitColumnCount,
+} from "@/components/layout/PageContainer";
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
@@ -107,6 +113,46 @@ describe("profile layout primitives", () => {
     );
 
     expect(screen.getByTestId("grid")).toHaveStyle({ gridTemplateColumns: "repeat(2, minmax(0px, 1fr))" });
+  });
+
+  it("fits a tablet profile's 9rem action tiles one to a row in a phone-width card", () => {
+    expect(fitColumnCount(4, 333, 17, 9 * 19.5)).toBe(1);
+    expect(fitColumnCount(4, 700, 17, 9 * 19.5)).toBe(3);
+    expect(fitColumnCount(4, 333, 12, 3.75 * 18)).toBe(4);
+  });
+
+  describe("with a measured grid", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+      document.documentElement.style.fontSize = "";
+    });
+
+    it("never asks for more tracks than the Large display profile's minimum width fits on a phone", () => {
+      localStorage.clear();
+      localStorage.setItem("c64u_display_profile_override", "expanded");
+      setViewportWidth(393);
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe() {}
+          disconnect() {}
+        },
+      );
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 333 } as DOMRect);
+      // The tablet profile's root size, which jsdom does not apply from the stylesheet.
+      document.documentElement.style.fontSize = "19.5px";
+
+      render(
+        <DisplayProfileProvider>
+          <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4} testId="grid">
+            <div>One</div>
+          </ProfileActionGrid>
+        </DisplayProfileProvider>,
+      );
+
+      expect(screen.getByTestId("grid")).toHaveStyle({ gridTemplateColumns: "repeat(1, minmax(9rem, 1fr))" });
+    });
   });
 
   it("switches the split section into expanded mode on wide widths", () => {

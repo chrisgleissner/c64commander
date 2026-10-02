@@ -122,6 +122,36 @@ describe("PlaybackControlsCard", () => {
     },
   );
 
+  it("offers Stop, not a dead button, while a launch from stopped is still in flight", () => {
+    const onPlay = vi.fn();
+    const onStop = vi.fn();
+    render(<PlaybackControlsCard {...buildProps({ isPlaying: false, isPlaylistLoading: true, onPlay, onStop })} />);
+
+    const button = screen.getByTestId("playlist-play");
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("aria-label", "Stop");
+    fireEvent.click(button);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it("waits, disabled, once Stop was pressed during a launch that has not unwound yet", () => {
+    const onPlay = vi.fn();
+    const onStop = vi.fn();
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ isPlaying: false, isPlaylistLoading: true, stopPending: true, onPlay, onStop })}
+      />,
+    );
+
+    const button = screen.getByTestId("playlist-play");
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).toHaveAttribute("aria-label", "Play");
+    fireEvent.click(button);
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
   it("promotes the play button from transient flash to persistent highlight while playback is active", () => {
     vi.useFakeTimers();
     const props = buildProps();

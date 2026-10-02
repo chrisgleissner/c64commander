@@ -19,7 +19,6 @@ import type {
 import { buildHvscBaselineUrl, buildHvscUpdateUrl, fetchLatestHvscVersions } from "./hvscReleaseService";
 import { ensureRoomForHvscInstall } from "./hvscStorageBudget";
 import {
-  ensureHvscDirs,
   listHvscFolder,
   getHvscSongByVirtualPath,
   getHvscDurationByMd5,
@@ -42,7 +41,7 @@ import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { beginHvscInstallGuard, endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
+import { endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
@@ -85,6 +84,7 @@ import {
   reportCacheStatFailure,
   resetCacheStatFailure,
 } from "./hvscIngestionRuntimeSupport";
+import { prepareIngestionStorage } from "./hvscIngestionStoragePrep";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { createHvscCancellationError } from "./hvscCancellation";
@@ -910,10 +910,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   const ingestionId = crypto.randomUUID();
   const emitProgress = createProgressEmitter(ingestionId);
   emitProgress({ stage: "start", message: "HVSC install/update started" });
-  await ensureHvscDirs();
-  await cleanupStaleStagingDir();
-  runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
-  await beginHvscInstallGuard();
+  await prepareIngestionStorage(cancelToken);
 
   let currentArchive: string | null = null;
   let currentArchiveType: "baseline" | "update" | null = null;
@@ -1191,10 +1188,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   const emitProgress = createProgressEmitter(ingestionId);
   emitProgress({ stage: "start", message: "HVSC cached ingestion started" });
   resetHvscProgressSummaryStage();
-  await ensureHvscDirs();
-  await cleanupStaleStagingDir();
-  runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
-  await beginHvscInstallGuard();
+  await prepareIngestionStorage(cancelToken);
 
   let currentArchive: string | null = null;
   let currentArchiveType: "baseline" | "update" | null = null;

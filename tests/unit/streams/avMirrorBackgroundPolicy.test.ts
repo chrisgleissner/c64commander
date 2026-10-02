@@ -30,6 +30,7 @@ vi.mock("@/lib/native/backgroundExecutionManager", async (importOriginal) => ({
 }));
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { addLog } from "@/lib/logging";
+import { notifyPlaybackActivityChanged } from "@/lib/playback/playbackActivitySignal";
 
 /** A session stub whose live flags follow the start/stop calls, like the real one. */
 const createSession = (initial: { audioLive: boolean; videoLive: boolean }) => {
@@ -107,6 +108,60 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
     session.setLive({ audioLive: false });
     await policy.handleVisible();
     expect(session.startAudio).not.toHaveBeenCalled();
+  });
+
+  it("stops playlist audio kept while hidden once the playlist stops, without restoring it", async () => {
+    let playlistOwnsAudio = true;
+    const session = createSession({ audioLive: true, videoLive: false });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns: vi.fn(),
+      playlistOwnsBackgroundAudio: () => playlistOwnsAudio,
+    });
+    await policy.handleHidden();
+    await policy.handlePlaybackChanged();
+    expect(session.calls).toEqual([]);
+
+    playlistOwnsAudio = false;
+    await policy.handlePlaybackChanged();
+    expect(session.calls).toEqual(["stopAll"]);
+
+    await policy.handleVisible();
+    expect(session.startAudio).not.toHaveBeenCalled();
+  });
+
+  it("sends no stop when the kept audio has already ended by the time the playlist stops", async () => {
+    let playlistOwnsAudio = true;
+    const session = createSession({ audioLive: true, videoLive: false });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns: vi.fn(),
+      playlistOwnsBackgroundAudio: () => playlistOwnsAudio,
+    });
+    await policy.handleHidden();
+    session.setLive({ audioLive: false });
+    playlistOwnsAudio = false;
+    await policy.handlePlaybackChanged();
+
+    expect(session.stopAll).not.toHaveBeenCalled();
+  });
+
+  it("leaves Live View audio alone when playback changes while hidden without the playlist keeping it", async () => {
+    const session = createSession({ audioLive: true, videoLive: false });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns: vi.fn(),
+      playlistOwnsBackgroundAudio: () => false,
+    });
+    await policy.handleHidden();
+    expect(session.calls).toEqual(["stopAll"]);
+    await policy.handlePlaybackChanged();
+    expect(session.calls).toEqual(["stopAll"]);
+    await policy.handleVisible();
+    expect(session.startAudio).toHaveBeenCalledTimes(1);
   });
 
   it("does nothing when the app is hidden and the mirror is off", async () => {
@@ -351,6 +406,53 @@ describe("installAvMirrorBackgroundPolicy (HARD27-021)", () => {
       }
     },
   );
+
+  it("stops hidden playlist audio when playback stops while the app is hidden", async () => {
+    Object.assign(runtime, { remote: true, mirror: true, running: true, background: true });
+    const live = vi.spyOn(avMirrorSession, "audioLive", "get").mockReturnValue(true);
+    const video = vi.spyOn(avMirrorSession, "videoLive", "get").mockReturnValue(false);
+    const stopAll = vi.spyOn(avMirrorSession, "stopAll").mockResolvedValue();
+    const dispose = installAvMirrorBackgroundPolicy();
+    try {
+      setHidden(true);
+      document.dispatchEvent(new Event("visibilitychange"));
+      notifyPlaybackActivityChanged();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(stopAll).not.toHaveBeenCalled();
+
+      runtime.remote = false;
+      notifyPlaybackActivityChanged();
+      await vi.waitFor(() => expect(stopAll).toHaveBeenCalledTimes(1));
+    } finally {
+      dispose();
+      runtime.remote = true;
+      live.mockRestore();
+      video.mockRestore();
+      stopAll.mockRestore();
+    }
+  });
+
+  it("releases playlist audio only while hidden, and logs a release that fails", async () => {
+    const policy = new AvMirrorBackgroundPolicy(createSession({ audioLive: true, videoLive: false }));
+    const release = vi.spyOn(policy, "handlePlaybackChanged").mockRejectedValue(new Error("stop refused"));
+    const dispose = installAvMirrorBackgroundPolicy(policy);
+    try {
+      notifyPlaybackActivityChanged();
+      expect(release).not.toHaveBeenCalled();
+
+      setHidden(true);
+      notifyPlaybackActivityChanged();
+      await vi.waitFor(() =>
+        expect(addLog).toHaveBeenCalledWith(
+          "error",
+          "Live View: releasing hidden playlist audio failed",
+          expect.objectContaining({ error: "stop refused", stack: expect.any(String) }),
+        ),
+      );
+    } finally {
+      dispose();
+    }
+  });
 
   it("drives the policy from visibilitychange and stops driving it after disposal", async () => {
     const session = createSession({ audioLive: true, videoLive: true });

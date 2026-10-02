@@ -461,7 +461,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         // a track press straight to the touch position, so the blocked gesture silently
         // changed the slider's value and wrote it to the device. touch-pan-y hands the
         // vertical axis back to native scrolling and keeps only the horizontal drag.
-        className={cn("relative flex w-full touch-pan-y select-none items-center", className)}
+        className={cn("relative flex min-h-11 w-full touch-pan-y select-none items-center", className)}
         data-swipe-exclude="true"
         {...rootProps}
         min={min}
@@ -509,7 +509,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
           <div
             data-testid="slider-value-display"
             className={cn(
-              "pointer-events-none absolute -top-7 text-xs font-semibold text-foreground transition-opacity duration-150 opacity-100",
+              "pointer-events-none absolute top-[calc(50%-2rem)] text-xs font-semibold text-foreground transition-opacity duration-150 opacity-100",
               valueLabelClassName,
             )}
             style={{

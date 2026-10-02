@@ -59,6 +59,22 @@ describe("createDisk — buildCreateDiskPlan", () => {
     );
   });
 
+  it.each([Number("abc"), 35.5])("rejects a track count that is not a whole number (%s)", (tracks) => {
+    expect(() => buildCreateDiskPlan({ folder: "USB0", name: "a", kind: "d64", tracks })).toThrow(
+      "D64 tracks must be 35–41",
+    );
+    expect(() => buildCreateDiskPlan({ folder: "USB0", name: "a", kind: "dnp", tracks: tracks + 50 })).toThrow(
+      "DNP needs a track count",
+    );
+  });
+
+  it.each(["bbx:y?", "a*b", 'say"hi"', "x<y>z", "a|b"])(
+    "rejects a name the device's storage cannot hold (%s) before asking the device",
+    (name) => {
+      expect(() => buildCreateDiskPlan({ folder: "USB0", name, kind: "d64" })).toThrow("A file name cannot contain");
+    },
+  );
+
   it("requires a valid track count for dnp", () => {
     expect(() => buildCreateDiskPlan({ folder: "USB0", name: "a", kind: "dnp" })).toThrow("DNP needs a track count");
     expect(() => buildCreateDiskPlan({ folder: "USB0", name: "a", kind: "dnp", tracks: 0 })).toThrow(

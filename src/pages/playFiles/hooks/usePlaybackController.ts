@@ -34,6 +34,7 @@ import {
   buildPlayPlan,
   executePlayPlan,
   getRememberedUltimateSidBlob,
+  PlaybackLaunchOvertakenError,
   tryFetchUltimateSidBlob,
   type LocalPlayFile,
   type PlayRequest,
@@ -48,6 +49,7 @@ import {
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
+import { stopRequiresReboot } from "@/lib/playback/fileTypes";
 import {
   loadLocalEngineAutoRoms,
   loadLocalEngineEnabled,
@@ -407,6 +409,8 @@ export function usePlaybackController({
   // affordance must remain available). Reset whenever a new track starts.
   const [playlistEnded, setPlaylistEnded] = useState(false);
   const userTransportQueueRef = useRef(Promise.resolve());
+  const latestQueuedUserSkipRef = useRef(0);
+  const lastUserSkipTrackInstanceIdRef = useRef<number | null>(null);
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
   const cancelPendingUserSkip = useCallback(() => {
@@ -426,6 +430,7 @@ export function usePlaybackController({
   // playItem bumps its own too, so a rapid Play right after a Stop is never
   // mistaken for the transition the Stop just superseded.
   const playGenerationRef = useRef(0);
+  const stopCountRef = useRef(0);
 
   playlistRef.current = playlist;
   currentIndexRef.current = currentIndex;
@@ -706,13 +711,8 @@ export function usePlaybackController({
       setElapsedMs(completedElapsedMs);
       trackStartedAtRef.current = null;
       const currentItem = playlistRef.current[currentIndexRef.current];
-      // Song categories (sid/mod) do not self-stop: the C64 keeps the tune
-      // playing audibly past its resolved songlength. Flipping isPlaying to
-      // false here (as prg/crt/disk correctly do, since a reset would destroy
-      // their running session) would leave the device playing with no Stop
-      // affordance - the combined Play/Stop button derives its label from
-      // isPlaying. Keep isPlaying true so Stop stays reachable and issues its
-      // normal silence/reset through handleStop(). See HARD11-003.
+      // Songs (sid/mod) keep playing on the C64 past their songlength, so isPlaying stays true and the
+      // combined button keeps offering Stop; prg/crt/disk flip it, since a reset would end them. HARD11-003.
       // A tune on the phone is rendered only up to its songlength, so it ends here rather than playing on.
       const endedOnPhone = currentPlaybackIsLocalRef.current;
       if (endedOnPhone) getLocalSidPlayback().stop();
@@ -763,18 +763,23 @@ export function usePlaybackController({
         playlistSize?: number;
         /** `auto` marks a playlist moving on by itself; anything else is the user asking. */
         origin?: PlaybackLaunchOrigin;
+        /** The Stop count when the user asked, for a request that waited before reaching here. */
+        stopsAtRequest?: number;
       },
     ) => {
+      const stopsAtRequest = options?.stopsAtRequest ?? stopCountRef.current;
       return enqueuePlayTransition(async () => {
-        // HARD18-009 (M5): claim a fresh generation for this transition. If
-        // Stop (or a later Play) bumps past it while we are mid-flight, our
-        // post-launch state writes below are skipped and the launch is
-        // corrected with a follow-up reset instead.
+        // A play queued behind a launch that Stop then overtook would otherwise start after Stop.
+        if (stopCountRef.current !== stopsAtRequest) {
+          addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
+          return;
+        }
+        // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
+        // post-launch state writes below, and the launch is corrected with a follow-up reset.
         const myPlayGeneration = (playGenerationRef.current += 1);
-        // Starting a track (Next/Previous/row-tap) from a paused state bypasses
-        // handlePauseResume, which is the only other place these pause-mute
-        // bookkeeping refs are cleared. Left stale, pausingFromPauseRef alone
-        // permanently disables the volume device-sync effect. See HARD9-063.
+        const userSkipsQueuedAtLaunch = latestQueuedUserSkipRef.current;
+        // Starting a track from a paused state bypasses handlePauseResume, the only other place these
+        // are cleared; a stale pausingFromPauseRef disables the volume device-sync effect. HARD9-063.
         pauseMuteSnapshotRef.current = null;
         pausingFromPauseRef.current = false;
         resumingFromPauseRef.current = false;
@@ -1134,7 +1139,18 @@ export function usePlaybackController({
         }
         const executionOptions = {
           ...(shouldReboot ? { rebootBeforeMount: true } : {}),
-          ...(applyPlaybackConfigBeforeLaunch ? { beforeLaunch: applyPlaybackConfigBeforeLaunch } : {}),
+          ...(applyPlaybackConfigBeforeLaunch
+            ? {
+                // A .cfg apply takes ~20 s; a Stop during it must keep the program from starting at all.
+                beforeLaunch: async () => {
+                  await applyPlaybackConfigBeforeLaunch();
+                  if (playGenerationRef.current !== myPlayGeneration) {
+                    lastAppliedPlaybackConfigSignatureRef.current = null;
+                    throw new PlaybackLaunchOvertakenError();
+                  }
+                },
+              }
+            : {}),
           benchmarkMetadata: {
             feedbackKind: "result",
             ...(typeof options?.playlistSize === "number" ? { playlistSize: options.playlistSize } : {}),
@@ -1204,11 +1220,16 @@ export function usePlaybackController({
           // standing start — which it only just manages, and audibly failed to a second or two in.
           void warmNeighbouringTracks();
         } else {
-          await executePlayPlan(api, plan, executionOptions);
+          await executePlayPlan(api, plan, executionOptions).catch((error) => {
+            if (!(error instanceof PlaybackLaunchOvertakenError)) throw error;
+          });
+        }
+        const launchSuperseded = playGenerationRef.current !== myPlayGeneration;
+        if (!routeToLocal && !launchSuperseded) {
           // The tune is now running on the Ultimate. Recorded here, at the real
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
-          markRemotePlaybackStarted();
+          markRemotePlaybackStarted(stopRequiresReboot(item.category));
           // Bring the tune to this device's speakers too, unless the listener has said not to.
           // Without this the tune plays on the Ultimate in silence as far as the phone is concerned,
           // and the listener has to know to go to Home and switch Listen on by hand. Best-effort:
@@ -1236,14 +1257,9 @@ export function usePlaybackController({
         }
         setCurrentPlaybackIsLocal(routeToLocal);
 
-        if (playGenerationRef.current !== myPlayGeneration) {
-          // HARD18-009 (M5): Stop (or a later Play) superseded this
-          // transition while the launch was in flight. The launch already
-          // reached the device (executePlayPlan resolved), so correct it
-          // with a follow-up reset instead of leaving the just-launched
-          // track running on a machine the user told to stop - and skip
-          // every state write below, which would otherwise silently
-          // re-assert isPlaying/auto-advance over Stop's own state.
+        if (launchSuperseded) {
+          // HARD18-009 (M5): Stop or a later Play overtook a launch that already reached the device.
+          // Reset it, and skip every state write below, which would re-assert playback over Stop's.
           addLog("info", "Playback launch superseded by Stop; issuing follow-up reset", {
             itemId: item.id,
             label: item.label,
@@ -1253,12 +1269,14 @@ export function usePlaybackController({
             setCurrentPlaybackIsLocal(false);
           } else {
             try {
-              await withTimeout(api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+              const reboot = stopRequiresReboot(item.category);
+              await withTimeout(reboot ? api.machineReboot() : api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
             } catch (error) {
               addErrorLog("Follow-up reset after superseded playback launch failed", {
                 itemId: item.id,
                 label: item.label,
                 error: (error as Error).message,
+                stack: (error as Error).stack,
               });
             }
           }
@@ -1276,7 +1294,10 @@ export function usePlaybackController({
         } else {
           setCurrentSubsongCount(null);
         }
-        if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
+        // Skipped past while it launched: the listener's choice stays visible and later skips count from it.
+        const skippedPastDuringLaunch =
+          pendingUserSkipRef.current !== null || latestQueuedUserSkipRef.current !== userSkipsQueuedAtLaunch;
+        if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0 && !skippedPastDuringLaunch) {
           setVisibleCurrentIndex(resolveLaunchedItemIndex(playlistRef.current, item.id, options.playlistIndex));
         }
         trackStartedAtRef.current = now;
@@ -1297,15 +1318,9 @@ export function usePlaybackController({
           autoAdvanceGuardRef.current = null;
           setAutoAdvanceDueAtMs(null);
         }
-        // HARD19-021: a written duration that came from the default fallback
-        // (nothing resolved: resolvedDurationBase === undefined) MUST carry the
-        // `durationSource: "default"` marker so applySonglengthsToItems can
-        // re-resolve it once songlengths become available. Without the marker
-        // the fallback 3:00 is indistinguishable from a genuinely resolved
-        // songlength and pins the item forever (HARD9-008 introduced the marker
-        // for exactly this reason). A genuinely resolved duration leaves the
-        // existing marker untouched (a user's manual "Default duration" slider
-        // override must survive playback).
+        // HARD19-021: a fallback duration must carry durationSource "default" so applySonglengthsToItems
+        // can re-resolve it later (HARD9-008); without it the fallback pins the item forever. A resolved
+        // duration leaves the marker alone, so a manual Default duration override survives playback.
         const bakedFallbackDuration = resolvedDurationBase === undefined;
         if (
           resolvedDuration !== item.durationMs ||
@@ -1329,16 +1344,9 @@ export function usePlaybackController({
             ),
           );
         }
-        // HARD23-004: playItem is the shared launch primitive for Play, Next,
-        // Previous, and auto-advance. startPlaylist/resume assert the shared
-        // machine-execution store as "running", but a user Next/Previous skip
-        // reaches the device only through playItem — so skipping from a paused
-        // session (a restored/paused queue, or pause-then-Next) left the store
-        // stuck "paused" while audio actually played. That stale "paused" both
-        // mislabelled Home's Pause/Resume control AND permanently gated
-        // auto-advance (handleNext "auto" returns early when the store reads
-        // paused), so every track overran its songlength forever. Assert
-        // "running" here — the single point where a track has actually launched.
+        // HARD23-004: a Next/Previous from a paused session reaches the device only through playItem, and
+        // left the shared store "paused" while audio played: Home mislabelled Pause/Resume and auto-advance
+        // stayed gated, so every track overran. This is the one point where a track has launched.
         writeMachineExecutionFromPlay("running");
         setIsPlaying(true);
         setIsPaused(false);
@@ -1486,6 +1494,7 @@ export function usePlaybackController({
       // a stale overdue guard otherwise fires on timeline reconciliation
       // and starts the previous playlist's next item over this fresh start.
       if (!tryAcquireSingleFlight(playStartInFlightRef)) return false;
+      const stopsAtStart = stopCountRef.current;
       setIsPlaylistLoading(true);
       try {
         cancelAutoAdvance();
@@ -1500,6 +1509,7 @@ export function usePlaybackController({
           await playItem(resolvedItems[startIndex], {
             playlistIndex: startIndex,
             playlistSize: resolvedItems.length,
+            stopsAtRequest: stopsAtStart,
           });
         } catch (error) {
           if (!isHandledUiError(error)) {
@@ -1589,16 +1599,16 @@ export function usePlaybackController({
     trace(async function handleStop() {
       // Same reason as handlePauseResume: a page that did not start the tune
       // must still be able to stop it.
-      if (!isPlaying && !isPaused && !isAnyPlaybackActive()) return;
+      if (!isPlaying && !isPaused && !isAnyPlaybackActive() && !playStartInFlightRef.current) return;
       // HARD18-009 (M5): Stop always runs immediately (never queued behind
       // enqueuePlayTransition) and claims the play-generation counter so any
       // in-flight playItem transition (auto-advance, Next/Previous, a
       // row-tap) sees itself superseded once its own async work resolves.
       playGenerationRef.current += 1;
+      stopCountRef.current += 1;
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
-      // Reset boots a loaded cartridge again. Reboot clears its temporary mapping.
-      const shouldReboot = currentItem?.category === "disk" || currentItem?.category === "crt";
+      const shouldReboot = stopRequiresReboot(currentItem?.category);
       // Track B (LE2): silence any on-device tune first. When the current track
       // is playing locally there is no C64 involved, so skip the device stop
       // entirely (it would hang if no Ultimate is connected).
@@ -1698,6 +1708,7 @@ export function usePlaybackController({
       lastAppliedPlaybackConfigSignatureRef,
       autoAdvanceGuardRef,
       playGenerationRef,
+      playStartInFlightRef,
       cancelPendingUserSkip,
     ],
   );
@@ -1958,16 +1969,25 @@ export function usePlaybackController({
     const settle = () => {
       pending.resolvers.forEach(({ resolve }) => resolve());
     };
+    const queuedSkip = (latestQueuedUserSkipRef.current += 1);
+    const stopsAtSkip = stopCountRef.current;
 
     try {
       await enqueueUserTransport(async () => {
+        // Overtaken while it waited behind a running launch: the listener has already skipped past it.
+        if (queuedSkip !== latestQueuedUserSkipRef.current || stopCountRef.current !== stopsAtSkip) {
+          addLog("info", "Playback skip superseded by a later skip or a Stop", { targetIndex: pending.targetIndex });
+          return;
+        }
         const activePlaylist = playlistRef.current;
         if (!activePlaylist.length || (!isPlayingRef.current && !isPausedRef.current)) return;
         const activeIndex = currentIndexRef.current;
+        const advancedByAnotherTransition =
+          trackInstanceIdRef.current !== pending.originTrackInstanceId &&
+          trackInstanceIdRef.current !== lastUserSkipTrackInstanceIdRef.current;
         const anotherTransitionAdvanced =
           activeIndex !== pending.originIndex &&
-          (trackInstanceIdRef.current !== pending.originTrackInstanceId ||
-            Boolean(autoAdvanceGuardRef.current?.autoFired));
+          (advancedByAnotherTransition || Boolean(autoAdvanceGuardRef.current?.autoFired));
         let resolvedTargetIndex = pending.targetIndex;
         let resolvedStopAtEnd = pending.stopAtEnd;
         if (anotherTransitionAdvanced) {
@@ -2003,7 +2023,9 @@ export function usePlaybackController({
         await playItem(targetItem, {
           rebootBeforePlay: shouldReboot,
           playlistIndex: resolvedTargetIndex,
+          stopsAtRequest: stopsAtSkip,
         });
+        lastUserSkipTrackInstanceIdRef.current = trackInstanceIdRef.current;
         setIsPaused(false);
       });
       settle();
@@ -2369,16 +2391,8 @@ export function usePlaybackController({
       scrubEndingRef.current = false;
       return;
     }
-    // Rebase the clocks to the TARGET *before* awaiting the seek.
-    //
-    // Two reasons, both learned the hard way. Reading the position back after
-    // seekTo gives a stale value — it resolves before the engine has caught up —
-    // so the clocks landed on the pre-scrub position. And ordering the clear
-    // after the await left a window where the scrub display was gone but the
-    // clocks had not moved yet, showing the position playback had drifted to
-    // during the gesture (1:25 after scrubbing back to 0:33) for as long as a
-    // rewind takes to re-render. Rebasing first means there is no stale value to
-    // reveal, whatever order the rest completes in.
+    // Rebase the clocks to the TARGET before awaiting the seek: a read-back after seekTo is stale, and
+    // clearing after the await showed the drifted position (1:25 after scrubbing to 0:33) for a rewind.
     const positionMs = Math.max(0, target);
     const paused = isPausedRef.current;
     const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };

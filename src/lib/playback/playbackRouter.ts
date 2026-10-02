@@ -487,6 +487,9 @@ export type PlayExecutionOptions = {
   notify?: ((notice: PlaybackNotice) => void) | null;
 };
 
+/** Thrown from `beforeLaunch` when Stop overtook the launch, so the program is not started. */
+export class PlaybackLaunchOvertakenError extends Error {}
+
 export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: PlayExecutionOptions = {}) => {
   const drive = options.drive ?? "a";
   const loadMode = options.loadMode ?? "run";
@@ -764,6 +767,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
       }
     }
   } catch (error) {
+    if (error instanceof PlaybackLaunchOvertakenError) throw error;
     const err = error as Error;
     const failure = classifyError(err);
     addErrorLog("Playback failed", {

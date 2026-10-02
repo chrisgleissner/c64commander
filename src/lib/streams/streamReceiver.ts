@@ -62,8 +62,11 @@ export interface StreamReceiver {
    * plugin), so decimated frames skip their Base64 encode + bridge payload. Present only when the
    * transport supports it; the caller falls back to JS-side decimation otherwise.
    */
-  /** Returns true iff the NATIVE side will decimate (assembly on); false → keep JS decimation. */
-  setNativeCadence?(fraction: number): boolean;
+  /**
+   * Returns true iff the NATIVE side will decimate (assembly on); false → keep JS decimation.
+   * `onNativeFailure` runs if the native side then refuses, so the caller can decimate in JS after all.
+   */
+  setNativeCadence?(fraction: number, onNativeFailure?: () => void): boolean;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
   /**
    * Optional: what the transport's sender filter has dropped, and whose packets those were.
@@ -328,11 +331,16 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
    * escape hatch), so the caller keeps JS-side decimation enabled instead of assuming the native
    * side handled it — otherwise Auto/50%/25% would silently render every frame.
    */
-  setNativeCadence(fraction: number): boolean {
+  setNativeCadence(fraction: number, onNativeFailure?: () => void): boolean {
     if (!this.assemble) return false;
     const permille = Math.max(0, Math.min(1000, Math.round(fraction * 1000)));
     void StreamUdp.setKeepFraction({ name: this.name, permille }).catch((error) => {
-      addLog("debug", "Native keep-fraction set failed", { error: (error as Error)?.message ?? String(error) });
+      addLog("warn", "Native keep-fraction set failed; decimating in JS instead", {
+        permille,
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+      onNativeFailure?.();
     });
     return true;
   }

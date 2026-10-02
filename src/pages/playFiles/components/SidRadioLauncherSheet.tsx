@@ -146,7 +146,7 @@ export const SidRadioLauncherSheet = ({
             </div>
           ) : null}
 
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <Checkbox
               data-testid="sid-radio-likes-toggle"
               disabled={hvscMissing}

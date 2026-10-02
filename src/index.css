@@ -891,6 +891,18 @@ button:focus-visible,
    * The smallest step is 25% larger than it was and the rest are about 20% larger, which is what
    * the sizes were reviewed against on the device.
    */
+  /* text-[11px] is the smallest arbitrary size the lint allows, and only because every profile lifts
+     it over the 14px floor: 0.8rem of the phone's 18px root and 0.75rem of the tablet's 19.5px. */
+  :root[data-display-profile="medium"] :where([class~="text-[11px]"]) {
+    font-size: 0.8rem;
+    line-height: 1.1rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-[11px]"]) {
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+  }
+
   :root[data-display-profile="medium"] :where([class~="text-xs"]) {
     font-size: 0.8889rem;
     line-height: 1.25rem;
@@ -1258,6 +1270,23 @@ button:focus-visible,
     overflow-wrap: normal;
     word-break: normal;
     height: auto;
+  }
+
+  /* A 44px touch target around a control drawn smaller, without moving anything around it. The
+     pseudo-element is part of the control for hit testing, so a press anywhere in it reaches the
+     control's own handlers. */
+  .hit-area-44 {
+    position: relative;
+  }
+
+  .hit-area-44::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
 
   /* C64 scanline effect for headers */

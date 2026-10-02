@@ -48,6 +48,7 @@ import {
   startBackgroundExecution,
   stopBackgroundExecution,
 } from "@/lib/native/backgroundExecutionManager";
+import { subscribePlaybackActivity } from "@/lib/playback/playbackActivitySignal";
 
 describe("backgroundExecutionManager", () => {
   beforeEach(() => {
@@ -68,6 +69,21 @@ describe("backgroundExecutionManager", () => {
 
   afterEach(() => {
     resetBackgroundExecutionState();
+  });
+
+  it("tells playback listeners when the last session stops, as it does when a playlist ends by itself", async () => {
+    mocks.start.mockResolvedValue(undefined);
+    mocks.stop.mockResolvedValue(undefined);
+    const listener = vi.fn();
+    const unsubscribe = subscribePlaybackActivity(listener);
+    try {
+      await startBackgroundExecution({});
+      await stopBackgroundExecution({});
+      expect(isBackgroundExecutionActive()).toBe(false);
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("HARD27-040: publishes the tune a start was issued for, which was named before the session existed", async () => {

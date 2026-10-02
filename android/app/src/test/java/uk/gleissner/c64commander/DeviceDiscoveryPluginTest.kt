@@ -39,6 +39,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.shadows.ShadowLog
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
@@ -255,6 +256,23 @@ class DeviceDiscoveryPluginTest {
     // A generic 403 (e.g. a router admin page or proxy) must not appear as a device.
     val port = startInfoServer(403, "<html><body>Forbidden</body></html>")
     assertNull(plugin.probeTarget(target("127.0.0.1", port), 1_000))
+  }
+
+  @Test
+  fun readErrorBodyLogsAFailedReadInsteadOfDroppingItSilently() {
+    ShadowLog.clear()
+    val failing = object : java.io.InputStream() {
+      override fun read(): Int = throw IOException("connection reset")
+    }
+    val connection = mock(HttpURLConnection::class.java)
+    org.mockito.Mockito.`when`(connection.errorStream).thenReturn(failing)
+
+    assertEquals("", plugin.readErrorBody(connection))
+    assertTrue(
+      ShadowLog.getLogsForTag("DeviceDiscoveryPlugin").any {
+        it.msg.contains("Could not read the error body") && it.throwable?.message == "connection reset"
+      },
+    )
   }
 
   @Test

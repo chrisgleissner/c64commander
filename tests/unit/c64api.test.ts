@@ -1690,6 +1690,68 @@ describe("c64api", () => {
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(["http://c64u/v1/configs/Audio%20Mixer"]);
   });
 
+  // An Ultimate-II+ cartridge has no Data Streams, mixer or lighting categories. Home asked it for
+  // seven of them on every visit, and each answered 404.
+  it("does not ask for a category the device's own category list omits", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/v1/configs")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ categories: ["Drive A Settings"], errors: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ errors: ["not found"] }), { status: 404 }));
+    });
+
+    const api = new C64API("http://c64u");
+    await api.getCategories();
+    const response = await api.getConfigItems("Data Streams", ["Stream VIC to"]);
+
+    expect(response).toEqual({ "Data Streams": { items: {} }, errors: [] });
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual(["http://c64u/v1/configs"]);
+  });
+
+  it("still knows which categories the device lacks after a machine action", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.endsWith("/v1/configs") ? { categories: ["Drive A Settings"], errors: [] } : { errors: [] };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    });
+
+    const api = new C64API("http://c64u");
+    expect(api.listsCategory("Drive A Settings")).toBeNull();
+    await api.getCategories();
+    expect(api.listsCategory("Drive A Settings")).toBe(true);
+    expect(api.listsCategory("Data Streams")).toBe(false);
+    await api.machineReset();
+    await api.getConfigItems("Data Streams", ["Stream VIC to"]);
+
+    expect(fetchMock.mock.calls.map((call) => String(call[0])).filter((url) => url.includes("Data"))).toEqual([]);
+  });
+
+  it("asks a device for a category once after it answered 404, until the device changes", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ errors: ["not found"] }), { status: 404 })),
+    );
+
+    const api = new C64API("http://c64u");
+    await api.getConfigItems("Audio Mixer", ["Vol Master"]);
+    await api.getConfigItems("Audio Mixer", ["Vol Master"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    api.setBaseUrl("http://u64");
+    await api.getConfigItems("Audio Mixer", ["Vol Master"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   // A request that gets no answer is how the app notices that a connected device has gone. The
   // connection manager confirms it with probes; an HTTP error or a caller's abort is not that signal.
   describe("unreachable device signal", () => {
