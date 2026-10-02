@@ -987,6 +987,27 @@ describe("deviceInteractionManager", () => {
     await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
   });
 
+  it("treats a request the C64 did not answer within its time limit as a critical REST error", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-no-answer"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+
+    const handler = vi.fn().mockRejectedValue(new Error("The C64 did not answer within 15 s"));
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("did not answer within");
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("did not answer within");
+
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
+  });
+
   it("does not treat HTTP 4xx (except 429) as critical", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

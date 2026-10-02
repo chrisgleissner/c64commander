@@ -664,12 +664,12 @@ describe("c64api", () => {
     await expect(api.playSidUpload(payload)).rejects.toThrow("Host unreachable (DNS)");
   });
 
-  it("maps timed out control requests to host unreachable", async () => {
+  it("reports a timed out control request as no answer within its time limit, not as host unreachable", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockRejectedValueOnce(new Error("Request timed out"));
 
     const api = new C64API("http://c64u");
-    await expect(api.machineReset()).rejects.toThrow("Host unreachable");
+    await expect(api.machineReset()).rejects.toThrow("The C64 did not answer within 1.5 s");
   });
 
   it("does not retry user-triggered GET requests after a network failure", async () => {
@@ -685,6 +685,87 @@ describe("c64api", () => {
       "C64 API retry scheduled after scheduled timeout",
       expect.anything(),
     );
+  });
+
+  describe("runner launch time limits and timeout messages", () => {
+    const answerAfter = (delayMs: number) =>
+      getFetchMock().mockImplementation(
+        (_url: string, options?: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            const timer = setTimeout(() => resolve(okJsonResponse()), delayMs);
+            options?.signal?.addEventListener(
+              "abort",
+              () => {
+                clearTimeout(timer);
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
+      );
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("lets a PRG run upload succeed when the C64 answers after 5.7 s", async () => {
+      vi.useFakeTimers();
+      answerAfter(5_670);
+      const pending = new C64API("http://c64u").runPrgUpload(createValidPrgBlob(), { filename: "schlumpf.prg" });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(5_670);
+
+      await expect(pending).resolves.toEqual({ errors: [] });
+    });
+
+    it("lets a PRG run by path succeed when the C64 answers after 5.7 s", async () => {
+      vi.useFakeTimers();
+      answerAfter(5_670);
+      const pending = new C64API("http://c64u").runPrg("/Usb0/schlumpf.prg");
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(5_670);
+
+      await expect(pending).resolves.toEqual({ errors: [] });
+    });
+
+    it("names the 15 s time limit, not an unreachable host, when a PRG run upload gets no answer", async () => {
+      vi.useFakeTimers();
+      answerAfter(60_000);
+      const pending = new C64API("http://c64u").runPrgUpload(createValidPrgBlob(), { filename: "schlumpf.prg" });
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).rejects.toThrow("The C64 did not answer within 15 s");
+      await expect(pending).rejects.not.toThrow(/host unreachable/i);
+    });
+
+    it("names the time limit, not an unreachable host, when a control request gets no answer", async () => {
+      vi.useFakeTimers();
+      answerAfter(60_000);
+      const pending = new C64API("http://c64u").machineReset();
+      void pending.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(INTERACTIVE_CONTROL_TIMEOUT_MS);
+
+      await expect(pending).rejects.toThrow("The C64 did not answer within 1.5 s");
+    });
+
+    it("still reports a genuine network failure on a runner upload as host unreachable", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(
+        new C64API("http://c64u").runPrgUpload(createValidPrgBlob(), { filename: "schlumpf.prg" }),
+      ).rejects.toThrow(/^Host unreachable$/);
+    });
+
+    it("still reports a genuine network failure on a control request as host unreachable", async () => {
+      getFetchMock().mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+      await expect(new C64API("http://c64u").machineReset()).rejects.toThrow(/^Host unreachable$/);
+    });
   });
 
   it("applies the interactive 1500 ms timeout to machine actions", async () => {
@@ -712,7 +793,7 @@ describe("c64api", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(1);
-      await expect(pending).rejects.toThrow("Host unreachable");
+      await expect(pending).rejects.toThrow("The C64 did not answer within 1.5 s");
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
@@ -744,12 +825,12 @@ describe("c64api", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(1);
-      await expect(pendingStart).rejects.toThrow("Host unreachable");
+      await expect(pendingStart).rejects.toThrow("The C64 did not answer within 1.5 s");
 
       const pendingStop = api.stopStream("audio");
       void pendingStop.catch(() => {});
       await vi.advanceTimersByTimeAsync(1500);
-      await expect(pendingStop).rejects.toThrow("Host unreachable");
+      await expect(pendingStop).rejects.toThrow("The C64 did not answer within 1.5 s");
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
@@ -800,7 +881,7 @@ describe("c64api", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
 
       await vi.advanceTimersByTimeAsync(1);
-      await expect(pending).rejects.toThrow("Host unreachable");
+      await expect(pending).rejects.toThrow("The C64 did not answer within 1.5 s");
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
@@ -832,7 +913,7 @@ describe("c64api", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(1);
-      await expect(pending).rejects.toThrow("Host unreachable");
+      await expect(pending).rejects.toThrow("The C64 did not answer within 1.5 s");
     } finally {
       vi.useRealTimers();
     }
@@ -852,7 +933,7 @@ describe("c64api", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
 
-      await expect(pending).rejects.toThrow("Host unreachable");
+      await expect(pending).rejects.toThrow("The C64 did not answer within 3 s");
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(addLogMock).not.toHaveBeenCalledWith(
         "warn",
@@ -880,7 +961,7 @@ describe("c64api", () => {
 
       await vi.advanceTimersByTimeAsync(6001);
 
-      await expect(pending).rejects.toThrow("Host unreachable");
+      await expect(pending).rejects.toThrow("The C64 did not answer within 6 s");
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     } finally {

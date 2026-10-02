@@ -123,6 +123,7 @@ describe("failureTaxonomy", () => {
 
     const unreachable = [
       new Error("Host unreachable"),
+      new Error("The C64 did not answer within 15 s"),
       new TypeError("Failed to fetch"),
       new Error("Request timed out"),
     ];

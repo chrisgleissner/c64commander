@@ -47,6 +47,12 @@ import {
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { signalDriveWritten } from "@/lib/c64api/driveWriteSignal";
+import {
+  DEVICE_NO_ANSWER_PHRASE,
+  isDnsFailure,
+  isNetworkFailureMessage,
+  resolveTransportFailureMessage,
+} from "@/lib/c64api/requestFailureMessage";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
@@ -133,14 +139,12 @@ export const INTERACTIVE_CONTROL_TIMEOUT_MS = 1500;
 export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
 // Backwards-compatible aliases (kept until all call sites are migrated).
 const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
-const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
-const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
-// Drive mount/eject are heavier firmware ops than a tappable control: real
-// c64u-resident mounts were measured at ~0.8-1.8 s and can be slower under
-// load. The default INTERACTIVE budget (1500 ms) aborts a slow-but-successful
-// mount and mislabels it "Host unreachable" (the abort failure message), which
-// then sticks in the per-drive status. Give mount/eject an intentional, larger
-// budget so a normal mount is never falsely timed out.
+// Runner endpoints answer only after the firmware has reset the machine and loaded the program:
+// a 195-byte PRG upload to run_prg took 5.67 s on a healthy c64u, so 5 s failed real launches.
+const UPLOAD_REQUEST_TIMEOUT_MS = 15_000;
+const PLAYBACK_REQUEST_TIMEOUT_MS = 15_000;
+// Real c64u-resident mounts took ~0.8-1.8 s and can be slower under load, so the
+// interactive budget (1500 ms) failed slow-but-successful mounts.
 const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 // Formatting a blank image on slow USB media can exceed the normal control budget.
@@ -183,7 +187,7 @@ const singleConfigEntry = (
 // instrumentation across parallel CI shards, all of which inflate wall-clock
 // time far beyond the production-tuned interactive budget. Floor every timed
 // request's effective timeout in those builds so a healthy-but-slow mocked
-// response is not aborted as "Host unreachable". Production budgets are unchanged.
+// response is not aborted. Production budgets are unchanged.
 const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = 8000;
 
 // Read lazily and defensively: `import.meta.env` is undefined when this module is
@@ -367,16 +371,6 @@ const resolveConfigWriteValue = (category: string, item: string, value: string |
     resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
   );
 
-// Includes Android's "Unable to resolve host", which CapacitorHttp reports for
-// an unresolvable device hostname and which the other patterns do not match.
-const isDnsFailure = (message: string) =>
-  /unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(message);
-const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(
-    message,
-  );
-const resolveHostErrorMessage = (message: string) =>
-  isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
 const isUnsupportedSignalError = (error: unknown) =>
   error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
@@ -535,7 +529,11 @@ const normalizeNativeBinaryRequestBody = (
 
 const isSidUploadTransientFailure = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  if (isNetworkFailureMessage(message) || /timed out|timeout|host unreachable/i.test(message)) {
+  if (
+    isNetworkFailureMessage(message) ||
+    /timed out|timeout|host unreachable/i.test(message) ||
+    message.includes(DEVICE_NO_ANSWER_PHRASE)
+  ) {
     return true;
   }
   const status = parseHttpStatusFromErrorMessage(message);
@@ -697,6 +695,7 @@ const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutM
 
   return {
     signal: controller ? controller.signal : outerSignal,
+    effectiveTimeoutMs,
     didTimeout: () => timedOut,
     cleanup: () => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -1867,6 +1866,8 @@ export class C64API {
                   const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
                   const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
                   const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                  const timedOut = timedSignal.didTimeout() || /timed out/i.test(rawMessage);
+                  const timeoutMs = timedSignal.effectiveTimeoutMs;
                   // Leaving the network fails requests before the platform's callback says so; asking now lets
                   // everything below see the real cause.
                   const transportFailure = (isNetworkFailure || timedSignal.didTimeout()) && !callerAborted;
@@ -1879,7 +1880,7 @@ export class C64API {
                   const failure = classifyError(error);
                   const normalizedError =
                     !callerAborted && !superseded && (isAbort || isNetworkFailure)
-                      ? resolveHostErrorMessage(rawMessage)
+                      ? resolveTransportFailureMessage(rawMessage, { timedOut, timeoutMs })
                       : rawMessage;
                   const durationMs = Math.max(
                     0,
@@ -2000,11 +2001,9 @@ export class C64API {
                   }
 
                   if (isAbort || isNetworkFailure) {
-                    throw annotateRestFailure(
-                      new Error(resolveHostErrorMessage(rawMessage)),
-                      timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
-                      { expected: expectedFailureOption },
-                    );
+                    throw annotateRestFailure(new Error(normalizedError), timedOut ? "timeout" : "network", {
+                      expected: expectedFailureOption,
+                    });
                   }
                   throw error;
                 } finally {
@@ -2169,7 +2168,11 @@ export class C64API {
               timedSignal.didTimeout() ||
               /timed out/i.test(rawMessage);
             const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-            const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
+            const timedOut = timedSignal.didTimeout() || /timed out/i.test(rawMessage);
+            const normalizedError =
+              isAbort || isNetworkFailure
+                ? resolveTransportFailureMessage(rawMessage, { timedOut, timeoutMs: timedSignal.effectiveTimeoutMs })
+                : rawMessage;
             const durationMs = Math.max(
               0,
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
@@ -2238,10 +2241,7 @@ export class C64API {
               throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
             }
             if (isAbort || isNetworkFailure) {
-              throw annotateRestFailure(
-                new Error(resolveHostErrorMessage(rawMessage)),
-                timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
-              );
+              throw annotateRestFailure(new Error(normalizedError), timedOut ? "timeout" : "network");
             }
             throw error;
           } finally {

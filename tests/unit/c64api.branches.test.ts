@@ -736,7 +736,7 @@ describe("c64api branches", () => {
 
       const api = new C64API("http://c64u");
       const pending = api.getInfo({ __c64uIntent: "background", __c64uBypassCache: true });
-      const rejection = expect(pending).rejects.toThrow("Host unreachable");
+      const rejection = expect(pending).rejects.toThrow("The C64 did not answer within 3 s");
       await vi.advanceTimersByTimeAsync(3000);
       await rejection;
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -1993,7 +1993,7 @@ describe("c64api branches", () => {
   // #30: request() timeout — timeout fires before response, abort signal propagates
   // Uses timeoutMs:1 with a real timer so the timeout fires immediately without fake timers.
   // withNoPerformance leaves performance non-writable so fake timers cannot be used here.
-  it("rejects with host-unreachable error when request timeout fires before response", async () => {
+  it("rejects with a no-answer-within-time-limit error when the request timeout fires before a response", async () => {
     const fetchMock = getFetchMock();
 
     // Fetch observes the abort signal and rejects with AbortError when the timeout fires
@@ -2010,16 +2010,16 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     // timeoutMs:1 ensures the timeout fires almost immediately
-    await expect(api.getInfo({ timeoutMs: 1 } as any)).rejects.toThrow("Host unreachable");
+    await expect(api.getInfo({ timeoutMs: 1 } as any)).rejects.toThrow("The C64 did not answer within 1 ms");
   });
 
   // #31: request() timeout — "Request timed out" path when fetch ignores abort
-  it("rejects with host-unreachable error when fetch ignores abort signal and timeout expires", async () => {
+  it("rejects with a no-answer-within-time-limit error when fetch ignores the abort signal and the timeout expires", async () => {
     const fetchMock = getFetchMock();
 
     // Fetch hangs and does NOT react to the abort signal
     // The second setTimeout (timeoutPromise) fires and rejects with "Request timed out"
-    // which is also normalised to "Host unreachable" by resolveHostErrorMessage
+    // which is reported as a request that got no answer within its time limit
     let resolveHang!: () => void;
     fetchMock.mockImplementation(
       () =>
@@ -2033,7 +2033,7 @@ describe("c64api branches", () => {
     const pending = api.getInfo({ timeoutMs: 1 } as any);
     void pending.catch(() => {}); // suppress unhandled rejection
 
-    await expect(pending).rejects.toThrow("Host unreachable");
+    await expect(pending).rejects.toThrow("The C64 did not answer within 1 ms");
     // Clean up the hanging promise to prevent memory leaks
     resolveHang?.();
   });
@@ -2288,7 +2288,7 @@ describe("c64api branches", () => {
 
       const api = new C64API("http://c64u");
       await expect(api.getInfo({ __c64uIntent: "background", timeoutMs: 1 } as any)).rejects.toThrow(
-        "Host unreachable",
+        "The C64 did not answer within 1 ms",
       );
 
       expect(recordRestResponseMock).toHaveBeenCalledTimes(1);

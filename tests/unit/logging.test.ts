@@ -535,8 +535,9 @@ describe("device failures while the phone has no network", () => {
     addErrorLog("PLAYBACK_NEXT: Playback next failed", {
       description: "Device not connected. Check connection settings.",
     });
+    addErrorLog("Disk Explorer launch failed", { error: "The C64 did not answer within 15 s" });
 
-    expect(getLogs().map((entry) => entry.level)).toEqual(["info", "info", "info"]);
+    expect(getLogs().map((entry) => entry.level)).toEqual(["info", "info", "info", "info"]);
   });
 
   it("keeps the level of the same failure while the network is up", async () => {
