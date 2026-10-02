@@ -9,33 +9,27 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
-import { getTraceEvents } from "@/lib/tracing/traceSession";
-import type { TraceEvent } from "@/lib/tracing/types";
 import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { AUTH_REQUIRED_PROBE_ERROR } from "@/lib/connection/connectionManager";
 import { isRevalidatingConnection, subscribeConnectionRevalidation } from "@/lib/connection/connectionRevalidation";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
-import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { HealthCheckProbeOutcome } from "@/lib/diagnostics/healthHistory";
 import {
   type ContributorHealth,
-  deriveAppContributorHealth,
   deriveConnectivityState,
-  deriveFtpContributorHealth,
-  deriveLastFtpActivity,
-  deriveLastRestActivity,
-  deriveLastTelnetActivity,
-  type DeviceScope,
-  derivePrimaryProblem,
-  deriveRestContributorHealth,
-  deriveTelnetContributorHealth,
   rollUpHealth,
   type OverallHealthState,
 } from "@/lib/diagnostics/healthModel";
+import {
+  getHealthRecheckGeneration,
+  readHealthTraceEvents,
+  retainHealthProblemRecheck,
+  selectSharedTraceHealth,
+  subscribeHealthTraceUpdates,
+} from "@/lib/diagnostics/healthTraceStore";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
-import { addLog, buildErrorLogDetails } from "@/lib/logging";
 
 const contributorHealthFromProbe = (outcome: HealthCheckProbeOutcome, problemCount: number): ContributorHealth => ({
   state:
@@ -44,90 +38,6 @@ const contributorHealthFromProbe = (outcome: HealthCheckProbeOutcome, problemCou
   totalOperations: 1,
   failedOperations: problemCount,
 });
-
-const TRACE_URL_FALLBACK_BASE = "http://localhost";
-
-const resolveTraceTransportHost = (event: TraceEvent<Record<string, unknown>>) => {
-  const transportHostname = typeof event.data.hostname === "string" ? event.data.hostname : null;
-  if (transportHostname) {
-    return stripPortFromDeviceHost(transportHostname);
-  }
-
-  const url = typeof event.data.url === "string" ? event.data.url : null;
-  if (!url) {
-    return null;
-  }
-
-  try {
-    const base = typeof window !== "undefined" ? window.location.origin : TRACE_URL_FALLBACK_BASE;
-    return stripPortFromDeviceHost(new URL(url, base).host);
-  } catch (error) {
-    addLog(
-      "debug",
-      "Failed to resolve diagnostics trace transport host from URL",
-      buildErrorLogDetails(error as Error, { url }),
-    );
-    return null;
-  }
-};
-
-// F-DIAG-1 — Resolve the device-attribution host carried on the trace event's
-// device-context snapshot. The previous implementation looked for a `host`
-// field which DiagnosticsDeviceContext does not expose, so the fallback
-// always returned null and unattributed events fell through to `return true`.
-const resolveTraceAttributedHost = (event: TraceEvent<Record<string, unknown>>) => {
-  const device = event.data.device;
-  if (!device || typeof device !== "object") {
-    return null;
-  }
-  const ctx = device as { savedDeviceHostSnapshot?: unknown; verifiedHostname?: unknown };
-  const snapshotHost =
-    typeof ctx.savedDeviceHostSnapshot === "string" && ctx.savedDeviceHostSnapshot.length > 0
-      ? ctx.savedDeviceHostSnapshot
-      : null;
-  if (snapshotHost) return stripPortFromDeviceHost(snapshotHost);
-  const verifiedHost =
-    typeof ctx.verifiedHostname === "string" && ctx.verifiedHostname.length > 0 ? ctx.verifiedHostname : null;
-  return verifiedHost ? stripPortFromDeviceHost(verifiedHost) : null;
-};
-
-const filterTraceEventsForConfiguredHost = (
-  events: TraceEvent<Record<string, unknown>>[],
-  configuredHost: string,
-): TraceEvent<Record<string, unknown>>[] => {
-  const selectedHost = stripPortFromDeviceHost(configuredHost);
-  const correlationHosts = new Map<string, string>();
-
-  events.forEach((event) => {
-    const transportHost = resolveTraceTransportHost(event);
-    if (transportHost) {
-      correlationHosts.set(event.correlationId, transportHost);
-    }
-  });
-
-  return events.filter((event) => {
-    const transportHost = resolveTraceTransportHost(event);
-    if (transportHost) {
-      return transportHost === selectedHost;
-    }
-
-    const correlationHost = correlationHosts.get(event.correlationId) ?? null;
-    if (correlationHost) {
-      return correlationHost === selectedHost;
-    }
-
-    if (event.type === "error") {
-      return false;
-    }
-
-    const attributedHost = resolveTraceAttributedHost(event);
-    if (attributedHost) {
-      return attributedHost === selectedHost;
-    }
-
-    return true;
-  });
-};
 
 type IdentityDeviceInfo = {
   product?: string | null;
@@ -173,8 +83,6 @@ const applyIdentityHealthGate = (
   };
 };
 
-const PROBLEM_WINDOW_RECHECK_MS = 10_000;
-
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
   // The same getter serves the server snapshot: the flag starts false and only a resume probe sets
@@ -189,14 +97,17 @@ export function useHealthState(): OverallHealthState {
   const {
     status: { deviceInfo },
   } = useC64Connection();
-  const [traceEvents, setTraceEvents] = useState(getTraceEvents);
-  const [windowCheck, setWindowCheck] = useState(0);
+  const [traceEvents, setTraceEvents] = useState(readHealthTraceEvents);
+  const [recheckGeneration, setRecheckGeneration] = useState(getHealthRecheckGeneration);
 
-  useEffect(() => {
-    const handler = () => setTraceEvents(getTraceEvents());
-    window.addEventListener("c64u-traces-updated", handler);
-    return () => window.removeEventListener("c64u-traces-updated", handler);
-  }, []);
+  useEffect(
+    () =>
+      subscribeHealthTraceUpdates(() => {
+        setTraceEvents(readHealthTraceEvents());
+        setRecheckGeneration(getHealthRecheckGeneration());
+      }),
+    [],
+  );
 
   const health = useMemo<OverallHealthState>(() => {
     const connectivity = deriveConnectivityState(
@@ -205,7 +116,6 @@ export function useHealthState(): OverallHealthState {
       revalidatingConnection,
     );
     const host = getConfiguredHost();
-    const hostScopedTraceEvents = filterTraceEventsForConfiguredHost(traceEvents, host);
     const latestHealthCheck = healthCheckState.latestResult;
     const selectedSavedDevice =
       savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
@@ -215,42 +125,20 @@ export function useHealthState(): OverallHealthState {
       ? buildSavedDevicePrimaryLabel(selectedSavedDevice)
       : inferConnectedDeviceLabel(deviceInfo?.product);
 
-    // HARD19-004 (D1): a pinned manual health-check verdict (`latestResult`) drives
-    // the badge with no staleness bound. When live trace evidence recorded AFTER
-    // the check contradicts it — a fresh successful REST response after a
-    // non-Healthy result (recovery), or fresh failures after a Healthy result
-    // (degradation) — prefer the live trace-derived rollup below so the badge
-    // self-heals instead of asserting a stale verdict indefinitely.
-    const pinnedVerdictContradictedByNewerEvidence = (() => {
-      if (!latestHealthCheck) return false;
-      const pinnedEndMs = new Date(latestHealthCheck.endTimestamp).getTime();
-      if (Number.isNaN(pinnedEndMs)) return false;
-      const newerEvents = hostScopedTraceEvents.filter((e) => new Date(e.timestamp).getTime() > pinnedEndMs);
-      if (newerEvents.length === 0) return false;
-      if (latestHealthCheck.overallHealth === "Healthy") {
-        return newerEvents.some((e) => {
-          if (e.type === "error" && e.data.isExpected !== true) return true;
-          if (e.type === "rest-response" && typeof e.data.status === "number" && e.data.status >= 400) return true;
-          if (e.type === "ftp-operation" || e.type === "telnet-operation") {
-            const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
-            return e.data.result === "failure" || hasError;
-          }
-          return false;
-        });
-      }
-      return newerEvents.some((e) => {
-        if (e.type === "rest-response") {
-          return typeof e.data.status === "number" && e.data.status < 400;
-        }
-        if (e.type === "ftp-operation" || e.type === "telnet-operation") {
-          const hasError = typeof e.data.error === "string" && e.data.error.trim().length > 0;
-          return e.data.result === "success" && !hasError;
-        }
-        return false;
-      });
-    })();
+    const traceHealth = selectSharedTraceHealth({
+      events: traceEvents,
+      host,
+      deviceId: selectedSavedDevice?.id ?? null,
+      latestHealthCheck,
+      recheckGeneration,
+    });
+    const lastActivities = {
+      lastRestActivity: traceHealth.lastRestActivity,
+      lastFtpActivity: traceHealth.lastFtpActivity,
+      lastTelnetActivity: traceHealth.lastTelnetActivity,
+    };
 
-    if (latestHealthCheck && !pinnedVerdictContradictedByNewerEvidence) {
+    if (latestHealthCheck && traceHealth.kind === "pinned-health-check") {
       const appFailures = [latestHealthCheck.probes.CONFIG, latestHealthCheck.probes.JIFFY].filter(
         (probe) => probe.outcome === "Fail",
       ).length;
@@ -274,9 +162,7 @@ export function useHealthState(): OverallHealthState {
           connectedDeviceLabel,
           problemCount,
           contributors,
-          lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
-          lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
-          lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
+          ...lastActivities,
           primaryProblem: firstFailedProbe
             ? {
                 id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
@@ -299,51 +185,25 @@ export function useHealthState(): OverallHealthState {
       );
     }
 
-    // Gate trace-derived health on having seen at least one successful REST response.
-    // Before the first clean response, the badge stays Idle (connecting) rather than
-    // flipping to Unhealthy from early probe failures or connection-retry noise.
-    const hasFirstRestSuccess =
-      hostScopedTraceEvents.some(
-        (e) => e.type === "rest-response" && typeof e.data.status === "number" && e.data.status < 400,
-      ) || latestHealthCheck?.probes.REST.outcome === "Success";
-
-    const idleContributors = {
-      App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-      REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-      FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-      TELNET: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    } as const;
-
-    if (!hasFirstRestSuccess) {
+    if (traceHealth.kind !== "trace-derived") {
       return {
         state: "Idle",
         connectivity,
         host,
         connectedDeviceLabel,
         problemCount: 0,
-        contributors: idleContributors,
-        lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
-        lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
-        lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
+        contributors: {
+          App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+          REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+          FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+          TELNET: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+        },
+        ...lastActivities,
         primaryProblem: null,
       };
     }
 
-    // F-DIAG-1 — Defence in depth: the contributor functions also accept a
-    // device scope, so even if a non-active-device event slips past the
-    // host-name pre-filter above, it is excluded from the contributor rollup.
-    const deviceScope: DeviceScope = {
-      deviceId: selectedSavedDevice?.id ?? null,
-      host,
-    };
-    const contributors = {
-      App: deriveAppContributorHealth(hostScopedTraceEvents, deviceScope),
-      REST: deriveRestContributorHealth(hostScopedTraceEvents, deviceScope),
-      FTP: deriveFtpContributorHealth(hostScopedTraceEvents, deviceScope),
-      TELNET: deriveTelnetContributorHealth(hostScopedTraceEvents, deviceScope),
-    } as const;
-
-    const state = rollUpHealth(contributors, connectivity);
+    const { contributors } = traceHealth;
     const totalProblems =
       contributors.App.problemCount +
       contributors.REST.problemCount +
@@ -352,38 +212,31 @@ export function useHealthState(): OverallHealthState {
 
     return applyIdentityHealthGate(
       {
-        state,
+        state: rollUpHealth(contributors, connectivity),
         connectivity,
         host,
         connectedDeviceLabel,
         problemCount: totalProblems,
         contributors,
-        lastRestActivity: deriveLastRestActivity(hostScopedTraceEvents),
-        lastFtpActivity: deriveLastFtpActivity(hostScopedTraceEvents),
-        lastTelnetActivity: deriveLastTelnetActivity(hostScopedTraceEvents),
-        primaryProblem: derivePrimaryProblem(hostScopedTraceEvents, contributors, deviceScope),
+        ...lastActivities,
+        primaryProblem: traceHealth.primaryProblem,
       },
       deviceInfo,
     );
   }, [
     connectionSnapshot.state,
     connectionSnapshot.lastProbeError,
+    revalidatingConnection,
     deviceInfo?.firmware_version,
     deviceInfo?.product,
     healthCheckState.latestResult,
     savedDevices,
     traceEvents,
-    windowCheck,
+    recheckGeneration,
   ]);
 
-  // Problems age out of time windows, but nothing re-derived the health while no new trace arrived,
-  // so one failed request kept an idle app's badge at "1 problem" indefinitely.
   const hasProblems = health.problemCount > 0;
-  useEffect(() => {
-    if (!hasProblems) return;
-    const timer = window.setInterval(() => setWindowCheck((check) => check + 1), PROBLEM_WINDOW_RECHECK_MS);
-    return () => window.clearInterval(timer);
-  }, [hasProblems]);
+  useEffect(() => (hasProblems ? retainHealthProblemRecheck() : undefined), [hasProblems]);
 
   return health;
 }

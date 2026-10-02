@@ -11,6 +11,7 @@ import type { TraceEvent } from "@/lib/tracing/types";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
+import { HEALTH_CURRENT_WINDOW_MS } from "@/lib/diagnostics/healthTraceWindow";
 
 // §7.1 — Health states (fixed labels, must not be paraphrased)
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
@@ -258,7 +259,6 @@ export const deriveConnectivityState = (
   }
 };
 
-const FIVE_MINUTES_MS = 5 * 60 * 1000;
 // F-DIAG-3 — recency window for App contributor severity.
 // A single isolated error 4 minutes ago must not push the badge to Degraded;
 // only errors within the last RECENT_APP_ERROR_WINDOW_MS contribute to severity.
@@ -268,7 +268,7 @@ const APP_ERROR_UNHEALTHY_RECENT_THRESHOLD = 5;
 // §7.3 — 5-minute current window
 const isInCurrentWindow = (event: TraceEvent): boolean => {
   const eventMs = new Date(event.timestamp).getTime();
-  return Date.now() - eventMs <= FIVE_MINUTES_MS;
+  return Date.now() - eventMs <= HEALTH_CURRENT_WINDOW_MS;
 };
 
 const isInRecentAppErrorWindow = (event: TraceEvent): boolean => {
