@@ -1445,6 +1445,24 @@ describe("deviceInteractionManager", () => {
     );
   });
 
+  it("withTelnetInteraction: does not count a Stop-canceled settings-file apply as a Telnet failure", async () => {
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    const { ConfigApplyCancelledError } = await import("@/lib/config/configApplyCancellation");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-canceled");
+    const meta = { action, actionId: "telnet-canceled", intent: "system" as const };
+    const handler = vi.fn().mockRejectedValue(new ConfigApplyCancelledError("screen read"));
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(withTelnetInteraction(meta, handler)).rejects.toBeInstanceOf(ConfigApplyCancelledError);
+    }
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(addErrorLog).not.toHaveBeenCalledWith("Telnet request failed", expect.anything());
+    expect(markDeviceRequestEnd).not.toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
   it("withTelnetInteraction: blocks system intent when Telnet circuit is open", async () => {
     const { withTelnetInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

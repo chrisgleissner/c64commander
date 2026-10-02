@@ -127,6 +127,15 @@ const createProgressReporter = (
     latestContext = { ...latestContext, ...context };
     const resolvedError = error instanceof Error ? error : new Error(String(error));
     const step = currentStep ?? initialStep;
+    if (resolvedError.name === "ConfigApplyCancelledError") {
+      addLog("info", "Config workflow canceled by Stop", {
+        operation,
+        step,
+        ...latestContext,
+        error: resolvedError.message,
+      });
+      return;
+    }
     addErrorLog("Config workflow failed", {
       operation,
       step,

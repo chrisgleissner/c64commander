@@ -1157,6 +1157,11 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
         return result;
       } catch (error) {
         const err = error as Error;
+        if (err?.name === "ConfigApplyCancelledError") {
+          markDeviceRequestEnd({ success: true });
+          addLog("info", "Telnet request canceled by Stop", { error: err.message, actionId: meta.actionId });
+          throw error;
+        }
         updateTelnetFailure(err);
         markDeviceRequestEnd({ success: false, errorMessage: err.message });
         addErrorLog("Telnet request failed", {

@@ -321,7 +321,7 @@ const applyConfigFileReferenceUntil = async (
     }
   } catch (error) {
     if (isConfigApplyCancelledError(error)) {
-      addLog("info", "Playback config application cancelled by Stop", { fileName: configRef?.fileName ?? null });
+      addLog("info", "Playback config application canceled by Stop", { fileName: configRef?.fileName ?? null });
       throw error;
     }
     addErrorLog("Playback config application failed", {

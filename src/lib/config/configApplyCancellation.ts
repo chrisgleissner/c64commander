@@ -20,13 +20,13 @@ export const CONFIG_APPLY_UNWIND_TIMEOUT_MS = 1_500;
 
 export class ConfigApplyCancelledError extends Error {
   constructor(step: string) {
-    super(`Applying the settings file was cancelled by Stop (at ${step})`);
+    super(`Applying the settings file was canceled by Stop (at ${step})`);
     this.name = "ConfigApplyCancelledError";
   }
 }
 
 export const isConfigApplyCancelledError = (error: unknown): error is ConfigApplyCancelledError =>
-  error instanceof ConfigApplyCancelledError;
+  error instanceof ConfigApplyCancelledError || (error as Error | null)?.name === "ConfigApplyCancelledError";
 
 export const throwIfConfigApplyCancelled = (signal: AbortSignal | undefined, step: string) => {
   if (signal?.aborted) throw new ConfigApplyCancelledError(step);
