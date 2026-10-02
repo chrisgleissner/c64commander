@@ -1268,8 +1268,7 @@ export function usePlaybackController({
             setCurrentPlaybackIsLocal(false);
           } else {
             try {
-              const reboot = stopRequiresReboot(item.category);
-              await withTimeout(reboot ? api.machineReboot() : api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+              await stopMachineWithGracePeriod(api, stopRequiresReboot(item.category));
               await endPlayLaunchMounts(api);
             } catch (error) {
               addErrorLog("Follow-up reset after superseded playback launch failed", {

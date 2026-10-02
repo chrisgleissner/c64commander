@@ -12,6 +12,7 @@ import { diskDeviceKey } from "@/lib/disks/diskDeviceIdentity";
 import { normalizeDiskPath } from "@/lib/disks/diskPath";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
+import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
 
 export type LaunchDrive = "a" | "b";
 
@@ -104,17 +105,10 @@ export const forgetPlayLaunchMount = (deviceHost: string, drive: string) => {
 
 onDriveWritten(forgetPlayLaunchMount);
 
-const takePlayLaunchMounts = (deviceHost: string): PlayLaunchMount[] => {
-  const store = readStore();
-  const deviceKey = diskDeviceKey(deviceHost);
-  const mounts = Object.values(store[deviceKey] ?? {}).filter((mount): mount is PlayLaunchMount => Boolean(mount));
-  if (mounts.length > 0) {
-    const next = { ...store };
-    delete next[deviceKey];
-    writeStore(next);
-  }
-  return mounts;
-};
+const playLaunchMountsFor = (deviceHost: string): PlayLaunchMount[] =>
+  Object.values(readStore()[diskDeviceKey(deviceHost)] ?? {}).filter((mount): mount is PlayLaunchMount =>
+    Boolean(mount),
+  );
 
 const mountTypeOf = (path: string) => {
   const name = path.split("/").pop() ?? "";
@@ -125,13 +119,17 @@ const mountTypeOf = (path: string) => {
 /**
  * Stop ends what Play started: eject each image Play mounted on this device and put back the image the user
  * had in that drive before. One request per drive operation; a failure is logged and the next drive is tried.
+ * A drive leaves the record only once its eject succeeded, so a later Stop retries a failed one.
  */
 export const endPlayLaunchMounts = async (api: Pick<C64API, "getDeviceHost" | "unmountDrive" | "mountDrive">) => {
   if (Object.keys(readStore()).length === 0) return;
-  const mounts = takePlayLaunchMounts(api.getDeviceHost());
+  const deviceHost = api.getDeviceHost();
+  const mounts = playLaunchMountsFor(deviceHost);
+  if (mounts.length > 0) await waitForMachineTransitionsToSettle();
   for (const mount of mounts) {
     try {
       await api.unmountDrive(mount.drive);
+      forgetPlayLaunchMount(deviceHost, mount.drive);
       addLog("info", "Stop ejected the disk Play mounted", { drive: mount.drive, path: mount.launchPath });
       if (mount.priorImagePath) {
         await api.mountDrive(mount.drive, mount.priorImagePath, mountTypeOf(mount.priorImagePath));

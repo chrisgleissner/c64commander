@@ -15,6 +15,7 @@ import {
   recordPlayLaunchMount,
   resolvePriorImageForLaunch,
 } from "@/lib/playback/playLaunchMounts";
+import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 
@@ -119,5 +120,32 @@ describe("Stop returns the drives to how Play found them", () => {
       "Stop could not return the drive to how Play found it",
       expect.objectContaining({ drive: "a" }),
     );
+  });
+
+  it("keeps a drive whose eject failed on record, so the next Stop ejects it again", async () => {
+    recordPlayLaunchMount("c64u", { drive: "a", launchPath: "/USB0/a.d64", priorImagePath: null });
+    const api = createDriveApi();
+    api.unmountDrive.mockRejectedValueOnce(new Error("Network error"));
+
+    await endPlayLaunchMounts(api);
+
+    expect(peekPlayLaunchMount("c64u", "a")).not.toBeNull();
+    await endPlayLaunchMounts(api);
+    expect(api.unmountDrive).toHaveBeenCalledTimes(2);
+    expect(peekPlayLaunchMount("c64u", "a")).toBeNull();
+  });
+
+  it("waits for a reset or reboot in progress to settle before ejecting", async () => {
+    recordPlayLaunchMount("c64u", { drive: "a", launchPath: "/USB0/a.d64", priorImagePath: null });
+    const api = createDriveApi();
+    const endTransition = beginMachineTransition(0);
+
+    const ending = endPlayLaunchMounts(api);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.unmountDrive).not.toHaveBeenCalled();
+
+    endTransition();
+    await ending;
+    expect(api.unmountDrive).toHaveBeenCalledWith("a");
   });
 });

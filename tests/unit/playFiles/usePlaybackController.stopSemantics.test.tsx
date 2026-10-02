@@ -18,6 +18,7 @@ import { ConfigApplyCancelledError, runCancellableConfigApply } from "@/lib/conf
 import { recordPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
 import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { reportUserError } from "@/lib/uiErrors";
+import { isMachineTransitionActive } from "@/lib/deviceInteraction/deviceActivityGate";
 
 vi.mock("@/lib/archive/client", () => ({ createArchiveClient: vi.fn() }));
 vi.mock("@/lib/archive/execution", () => ({ buildArchivePlayPlan: vi.fn() }));
@@ -183,6 +184,35 @@ describe("Stop ends exactly what Play started", () => {
     });
 
     expect(events).toEqual(["reboot", "reboot", "eject a"]);
+  });
+
+  it("marks the follow-up reboot of an overtaken launch as a machine transition, so the eject waits for it to settle", async () => {
+    const events: string[] = [];
+    const api = createDeviceApi(events);
+    api.machineReboot.mockImplementation(
+      async () => void events.push(`reboot transition=${isMachineTransitionActive()}`),
+    );
+    vi.mocked(getC64API).mockReturnValue(api as never);
+    let finishMount!: () => void;
+    vi.mocked(executePlayPlan).mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => (finishMount = resolve));
+      recordPlayLaunchMount("c64u", { drive: "a", launchPath: "/USB0/game.d64", priorImagePath: null });
+    });
+    const { result } = renderHarness([createItem("disk", "/USB0/game.d64")]);
+
+    let launch!: Promise<void>;
+    act(() => {
+      launch = result.current.handlePlay();
+    });
+    await waitFor(() => expect(finishMount).toBeDefined());
+    await act(async () => result.current.handleStop());
+    await waitFor(() => expect(isMachineTransitionActive()).toBe(false));
+    await act(async () => {
+      finishMount();
+      await launch;
+    });
+
+    expect(events).toEqual(["reboot transition=true", "reboot transition=true", "eject a"]);
   });
 });
 
