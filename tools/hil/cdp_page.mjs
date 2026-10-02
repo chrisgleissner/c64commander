@@ -15,7 +15,9 @@
  * The forward itself is the caller's (`droid_device.forward_webview`, see the `hil-attach` skill).
  */
 
-export const connectPage = async (port = "9333") => {
+const OPEN_TIMEOUT_MS = 10_000;
+
+export const connectPage = async (port = "9333", { openTimeoutMs = OPEN_TIMEOUT_MS } = {}) => {
   const targets = await (await fetch(`http://localhost:${port}/json`)).json();
   const page = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl) ?? targets[0];
   if (!page?.webSocketDebuggerUrl) throw new Error(`no CDP page on port ${port}; is the WebView forwarded?`);
@@ -37,18 +39,40 @@ export const connectPage = async (port = "9333") => {
     }
   });
   await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", () => reject(new Error(`CDP socket on port ${port} refused`)), { once: true });
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error(`CDP socket on port ${port} did not open within ${openTimeoutMs} ms`));
+    }, openTimeoutMs);
+    socket.addEventListener(
+      "open",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+    socket.addEventListener(
+      "error",
+      () => {
+        clearTimeout(timer);
+        reject(new Error(`CDP socket on port ${port} refused`));
+      },
+      { once: true },
+    );
   });
 
   const send = (method, params = {}, timeoutMs = 60_000) =>
     new Promise((resolve, reject) => {
       const id = nextId++;
-      pending.set(id, { resolve, reject, method });
-      socket.send(JSON.stringify({ id, method, params }));
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (pending.delete(id)) reject(new Error(`${method}: no answer in ${timeoutMs} ms`));
       }, timeoutMs);
+      const settle = (finish) => (value) => {
+        clearTimeout(timer);
+        finish(value);
+      };
+      pending.set(id, { resolve: settle(resolve), reject: settle(reject), method });
+      socket.send(JSON.stringify({ id, method, params }));
     });
 
   /** Evaluate in the page; a string result that starts like JSON is parsed, an exception is rethrown. */
