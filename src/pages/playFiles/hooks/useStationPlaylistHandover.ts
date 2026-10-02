@@ -169,7 +169,9 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
       queue.setCurrentIndex(0);
       toast({ title: "SID Radio stopped", description: LAST_TUNE_TOAST });
     }
-    commit({ ...current, phase: "finishing" });
+    // Whatever is queued now belongs to the station; only what is queued after this point is kept.
+    const stationItemIds = [...new Set([...current.stationItemIds, ...queue.playlist.map((item) => item.id)])];
+    commit({ ...current, stationItemIds, phase: "finishing" });
   }, [stationActive, commit]);
 
   // After a restart only the record is left; the items come back from the playlist repository.
@@ -202,7 +204,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     // A second run of this effect for the same state (StrictMode) must not restore twice.
     if (handoverRef.current !== handover || !handover?.items) return;
     const { queue, playback } = latestRef.current;
-    const restored = restoredPlaylistState({ ...handover, items: handover.items });
+    const restored = restoredPlaylistState({ ...handover, items: handover.items }, queue.playlist);
     if (isPlaying || isPaused) playback.stopPlayback();
     queue.setPlaylist(restored.playlist);
     queue.setCurrentIndex(restored.currentIndex);

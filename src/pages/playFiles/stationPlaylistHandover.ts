@@ -90,10 +90,16 @@ export const shouldRestorePlaylist = (input: {
   input.handover.items !== null &&
   (input.playlistEnded || !input.isPlaying || input.isPaused);
 
-export const restoredPlaylistState = (handover: StationHandover & { items: PlaylistItem[] }) => {
+/** Anything the listener queued during the last tune is kept, after the playlist that comes back. */
+export const restoredPlaylistState = (
+  handover: StationHandover & { items: PlaylistItem[] },
+  queue: readonly PlaylistItem[] = [],
+) => {
   const byId = handover.currentItemId ? handover.items.findIndex((item) => item.id === handover.currentItemId) : -1;
   const currentIndex = byId >= 0 ? byId : handover.currentIndex < handover.items.length ? handover.currentIndex : -1;
-  return { playlist: handover.items, currentIndex, selectedIds: new Set(handover.selectedIds) };
+  const known = new Set([...handover.stationItemIds, ...handover.items.map((item) => item.id)]);
+  const addedMeanwhile = queue.filter((item) => !known.has(item.id));
+  return { playlist: [...handover.items, ...addedMeanwhile], currentIndex, selectedIds: new Set(handover.selectedIds) };
 };
 
 const RECORD_KEY = "c64u_sid_radio_saved_playlist";

@@ -102,6 +102,13 @@ describe("stationPlaylistHandover", () => {
     expect(shouldRestorePlaylist({ ...state, isPaused: false })).toBe(false);
   });
 
+  it("keeps what the listener queued while the station's last tune played, after the restored playlist", () => {
+    const saved = { ...savedFromMine(), stationItemIds: ["radio:1", "radio:2"] };
+    const queue = [item("radio:2"), item("added-1"), item("added-2")];
+
+    expect(ids(restoredPlaylistState(saved, queue).playlist)).toEqual(["a", "b", "c", "added-1", "added-2"]);
+  });
+
   it("puts the cursor back on the saved tune by id", () => {
     const saved = savedFromMine();
 
