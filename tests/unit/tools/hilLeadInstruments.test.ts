@@ -61,6 +61,14 @@ describe("aggregateProfile", () => {
     expect(result.self.has("(idle)")).toBe(false);
   });
 
+  it("separates idle time when the key carries the frame's empty URL, as an unsymbolized profile's does", () => {
+    const unsymbolizedKey = (callFrame: { functionName: string; url: string }) =>
+      `${callFrame.functionName || "(anonymous)"} ${callFrame.url.split("/").pop()}`;
+    const result = aggregateProfile(profile, unsymbolizedKey);
+    expect(result.idleMs).toBe(5);
+    expect(result.busyMs).toBe(3);
+  });
+
   it("assigns a sample to the first group whose pattern is on its stack", () => {
     const result = aggregateProfile(profile, key, [
       { name: "only-b", pattern: /^b$/ },

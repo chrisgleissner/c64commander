@@ -156,6 +156,9 @@ export const aggregateProfile = (profile, frameKey, groups = [], stackPattern = 
   const parent = new Map();
   for (const node of profile.nodes) for (const child of node.children ?? []) parent.set(child, node.id);
   const keyOf = new Map(profile.nodes.map((node) => [node.id, frameKey(node.callFrame)]));
+  const idleNodes = new Set(
+    profile.nodes.filter((node) => node.callFrame.functionName === "(idle)").map((node) => node.id),
+  );
 
   const self = new Map();
   const total = new Map();
@@ -168,7 +171,7 @@ export const aggregateProfile = (profile, frameKey, groups = [], stackPattern = 
     const ms = (profile.timeDeltas[index] ?? 0) / 1000;
     wallMs += ms;
     const leaf = keyOf.get(nodeId);
-    if (leaf === "(idle)") {
+    if (idleNodes.has(nodeId)) {
       idleMs += ms;
       return;
     }
