@@ -57,6 +57,12 @@
  *
  *   node tools/hil/merge_gate.mjs [--host c64u] [--iface <host ip>] [--only input,wire]
  *                                [--quiet-check] [--volume 3] [--json artifacts/hil-gate.json]
+ *                                [--keep-dir artifacts/gate-runs]
+ *
+ * `--keep-dir` keeps each run's evidence in `<dir>/<timestamp>-<host>/<stage>/`: the microphone
+ * recordings, the wire capture taken over the same span, each probe's full output, and the app's
+ * own audio pipeline stats sampled during the audio stages. Without it, recordings go to `--tmp`
+ * and the next run overwrites them.
  *
  * Requires: the branch's APK installed and foregrounded on the attached Pixel, the WebView DevTools
  * forwarded with droid_device.forward_webview (see the `hil-attach` skill), the Ultimate reachable, and a microphone
@@ -70,6 +76,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createDroidDevice } from "./droidctl_device.mjs";
 import { percentile } from "./percentile.mjs";
+import { createGateEvidence } from "./gate_evidence.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -127,6 +134,13 @@ export const inputHarnessArgs = (script, host, password, cdpPort) => [
 
 const MIC_DEVICE = arg("device", "plughw:CARD=SF558,DEV=0");
 const TMP = arg("tmp", "/tmp");
+const evidence = createGateEvidence({
+  keepDir: arg("keep-dir", ""),
+  host: HOST,
+  tmp: TMP,
+  cdpPort: CDP_PORT,
+  repo: REPO,
+});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -656,7 +670,11 @@ return JSON.stringify({engine:q("playback-engine-toggle")?.getAttribute("data-en
   // latency, not a defect in the tune.
   await sleep(700);
 
-  const wav = path.join(TMP, `sid-${testId}.wav`);
+  const wav = evidence.recordingPath(
+    await evidence.stageDir(label === "Local" ? "sid-local" : "sid-remote"),
+    "mic.wav",
+    `sid-${testId}.wav`,
+  );
   await recordMic(wav, TONE_SECONDS);
   await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`);
 
@@ -778,7 +796,7 @@ return JSON.stringify({stale:Number.isFinite(stale)?stale:0});})()`);
   await js(
     `(()=>{window.__pcmTapOn=false;document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`,
   );
-  const wav = path.join(TMP, "crossfade.wav");
+  const wav = evidence.recordingPath(await evidence.stageDir("crossfade"), "app-pcm.wav", "crossfade.wav");
   await writeFile(wav, await readTransitionPcm());
   const graded = await run("python3", [
     path.join("tools", "hil", "crossfade_probe.py"),
@@ -1110,16 +1128,26 @@ return JSON.stringify({samples});})()`);
     // same Wi-Fi link, which a listen-only run cannot see.
     await setMirror({ video: true, audio: true });
     audibleSeconds += 20;
-    const probe = await run("python3", [
-      path.join("tools", "hil", "audio_e2e_probe.py"),
-      "run",
-      "--host",
-      HOST,
-      "--password",
-      PASSWORD,
-      "--seconds",
-      "20",
-    ]);
+    const dir = await evidence.stageDir("av-clarity");
+    const keepArgs = dir ? ["--out", path.join(dir, "mic.wav"), "--wire-out", path.join(dir, "wire.wav")] : [];
+    const probe = await evidence.withAppAudioStats(dir, () =>
+      run("python3", [
+        path.join("tools", "hil", "audio_e2e_probe.py"),
+        "run",
+        "--host",
+        HOST,
+        "--password",
+        PASSWORD,
+        "--seconds",
+        "20",
+        ...keepArgs,
+        ...(IFACE ? ["--iface", IFACE] : []),
+      ]),
+    );
+    if (dir) {
+      await writeFile(path.join(dir, "probe.txt"), probe.out);
+      console.log(`  kept ${dir} (explain with: python3 tools/hil/explain_clarity.py ${dir})`);
+    }
     const { bursts, sequenceErrors, dropouts, defective } = gradeClarityOutput(probe.out);
     if (bursts < 40) throw new Error(`only ${bursts} tones reached the microphone — is the phone Listening?`);
     if (sequenceErrors > 0)
@@ -1144,13 +1172,17 @@ return JSON.stringify({samples});})()`);
       PASSWORD,
     ]);
     await sleep(2000);
+    const dir = await evidence.stageDir("av-latency");
     const args = [path.join("tools", "hil", "mirror_audio_latency_hil.py"), "--seconds", "8"];
     if (IFACE) args.push("--iface", IFACE);
-    const probe = await run("python3", args);
+    if (dir) args.push("--keep-dir", dir);
+    const probe = await evidence.withAppAudioStats(dir, () => run("python3", args));
+    if (dir) await writeFile(path.join(dir, "probe.txt"), probe.out);
     const strength = number(probe.out, /correlation ([\d.]+) at/, "correlation strength");
     const latency = number(probe.out, /LATENCY\s+(\d+) ms/, "latency");
     if (strength < 0.3) throw new Error(`the microphone and the wire barely correlate (${strength})`);
-    return `${latency} ms wire -> speaker (correlation ${strength})`;
+    const toneLag = /per-tone\s+barcode-aware lag (-?\d+) ms/.exec(probe.out)?.[1];
+    return `${latency} ms wire -> speaker (correlation ${strength}${toneLag ? `; per-tone lag ${toneLag} ms` : ""})`;
   });
 
   // The same tune, rendered two ways, graded by one instrument in one room. The two paths share
@@ -1206,6 +1238,8 @@ return JSON.stringify({samples});})()`);
     );
     console.log(`wrote ${JSON_OUT}`);
   }
+
+  await evidence.writeRunSummary({ host: HOST, results, audibleSeconds });
 
   const verdict = gateVerdict(results);
   if (verdict.exitCode !== 0) {

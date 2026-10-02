@@ -31,7 +31,7 @@ Usage:
   audio_e2e_probe.py play      [--host c64u] [--password pwd]
   audio_e2e_probe.py record    [--seconds 30] [--device ...] [--out capture.wav]
   audio_e2e_probe.py analyse   capture.wav
-  audio_e2e_probe.py run       [--seconds 30]      # play, record and grade in one go
+  audio_e2e_probe.py run       [--seconds 30] [--wire-out wire.wav]   # play, record and grade in one go
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ import argparse
 import math
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import wave
@@ -318,8 +319,11 @@ def goertzel(samples: list[float], rate: int, hz: float, start: int, count: int)
     return math.sqrt(max(0.0, s1 * s1 + s2 * s2 - coeff * s1 * s2)) / max(1, count)
 
 
-def analyse(path: str) -> int:
-    samples, rate = read_wav(path)
+def detect_bursts(samples: list[float], rate: int) -> list[tuple[int, int, int]]:
+    """Every tone burst the grader reads, as (onset, offset, tone index), first and last trimmed.
+
+    Shared with `explain_clarity.py` so an explanation is about the bursts this verdict counted.
+    """
     if len(samples) < rate * 3:
         raise SystemExit("recording too short to grade")
 
@@ -403,7 +407,14 @@ def analyse(path: str) -> int:
     # The first and last bursts are cut off by the recording boundaries, so their onsets and durations
     # are artefacts of when the microphone started, not of the pipeline. One truncated leading burst
     # was on its own contributing an 80 ms "worst case" to an otherwise ±5 ms measurement.
-    bursts = refined[1:-1] if len(refined) > 4 else refined
+    return refined[1:-1] if len(refined) > 4 else refined
+
+
+def analyse(path: str) -> int:
+    samples, rate = read_wav(path)
+    bursts = detect_bursts(samples, rate)
+    coarse_ms = 25.0
+    coarse = int(rate * coarse_ms / 1000)
 
     print(f"recording       {len(samples) / rate:.1f}s at {rate} Hz")
     print(f"stimulus        {len(TONES_HZ)} tones, {ON_MS:.1f}ms on / {SLOT_MS - ON_MS:.1f}ms off, slot {SLOT_MS:.2f}ms")
@@ -610,6 +621,12 @@ def main() -> int:
         p.add_argument("--device", default="plughw:CARD=SF558,DEV=0")
         p.add_argument("--out", default="/tmp/audio-e2e.wav")
         p.add_argument("--iface", default=None, help="local IPv4 to join the group on (default: detected)")
+        if name == "run":
+            p.add_argument(
+                "--wire-out",
+                default=None,
+                help="also capture the multicast audio to this WAV while the microphone records",
+            )
         if name == "analyse":
             p.add_argument("file")
     args = ap.parse_args()
@@ -643,7 +660,18 @@ def main() -> int:
 
     play(args.host, args.password, build_prg())
     time.sleep(3)  # let the program start and the mirror settle
-    if record(args.out, args.seconds, args.device) != 0:
+    wire_thread = None
+    if args.wire_out:
+        # The wire and the room over the same span, so a tone out of order in the room can be checked
+        # against what the Ultimate actually sent at that moment. Only captured; the verdict is the mic's.
+        wire_thread = threading.Thread(
+            target=capture_wire, args=(args.wire_out, args.seconds, resolve_iface(args.iface)), daemon=True
+        )
+        wire_thread.start()
+    recorded = record(args.out, args.seconds, args.device)
+    if wire_thread is not None:
+        wire_thread.join(timeout=10)
+    if recorded != 0:
         print("recording failed")
         return 2
     return analyse(args.out)

@@ -173,6 +173,25 @@ that as a crash would fail every run that was merely imperfect.
 `tests/unit/tools/mergeGateClarity.test.ts` covers those refusals. It is the part of the gate that
 can be checked without a rig, which is why it is worth checking.
 
+## Keeping the evidence
+
+`--keep-dir <dir>` keeps what each run measured, in `<dir>/<timestamp>-<host>/<stage>/`. Without it
+the recordings go to `--tmp` under fixed names and the next run overwrites them.
+
+- `av-clarity/`: `mic.wav`, `wire.wav` (the multicast audio captured over the same 20 s),
+  `probe.txt` (the probe's full output) and `app-audio-stats.json`. Explain a sequence error with
+  `python3 tools/hil/explain_clarity.py <run>/av-clarity`.
+- `av-latency/`: `mic.wav`, `wire.wav`, `correlation.csv` (broadband and per-tone curves by lag),
+  `latency.json`, `probe.txt` and `app-audio-stats.json`.
+- `sid-remote/`, `sid-local/`: `mic.wav`. `crossfade/`: `app-pcm.wav`. The run directory holds `gate.json`.
+
+`av-latency` correlates broadband envelopes, and the barcode stimulus has the same envelope in every
+239.4 ms slot, so its correlation has a peak per slot. The probe therefore also prints its three
+strongest peaks and a per-tone lag, which has one peak per 1.9 s cycle; the stage reports both.
+Two broadband readings a whole number of slots apart can be the instrument choosing a different
+peak rather than the app's buffer changing depth. The per-tone lag tells the two apart, and
+`app-audio-stats.json` records the depth the app reported during the same capture. See `tools/hil/README.md`, "Explaining a gate result", for the other tools.
+
 ## Reading a failure
 
 The stages are ordered so that the first failure is the most likely cause. In particular: if
