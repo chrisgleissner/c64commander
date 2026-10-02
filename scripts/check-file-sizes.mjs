@@ -95,7 +95,7 @@ export const GRANDFATHERED = new Map([
   ["src/lib/deviceInteraction/deviceInteractionManager.ts", 1176],
   ["src/pages/ConfigBrowserPage.tsx", 1154],
   ["src/lib/streams/subjectTracker.ts", 1150],
-  ["android/app/src/main/java/uk/gleissner/c64commander/AudioPipeline.kt", 1113],
+  ["android/app/src/main/java/uk/gleissner/c64commander/AudioPipeline.kt", 1039],
   ["android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt", 1061],
 ]);
 

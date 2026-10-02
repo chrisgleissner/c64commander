@@ -148,6 +148,7 @@ internal class AudioPipeline(
 
   private val ring: ByteArray
   private val ringFrames: Int
+  private val pitchPeriod: RingPitchPeriod
 
   /**
    * Held only for the ring memcpy. The mirror feeds from the receive thread and the on-device engine
@@ -195,8 +196,8 @@ internal class AudioPipeline(
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
-  /** Until when (player thread's clock) a surplus that would trigger recovery is skipped instead. */
-  private var liveEdgeUntilNanos = 0L
+  /** Until when (player thread's clock) a deep cushion is drained only at [MAX_DRIFT]. */
+  private var gentleDrainUntilNanos = 0L
   @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
@@ -258,6 +259,7 @@ internal class AudioPipeline(
     hardMaxFrames = maxTargetFrames * 2
     ringFrames = hardMaxFrames * 2
     ring = ByteArray(ringFrames * BYTES_PER_FRAME)
+    pitchPeriod = RingPitchPeriod(ring, ringFrames, sourceRate)
   }
 
   /** Output latency this pipeline targets once primed (ms) — ring target plus the track's buffer. */
@@ -389,15 +391,20 @@ internal class AudioPipeline(
       val gainTail = Math.cos(t * Math.PI / 2)
       val idx = ((realStart + i) % ringFrames).toInt() * BYTES_PER_FRAME
       val tail = i * BYTES_PER_FRAME
-      for (c in 0 until CHANNELS) {
-        val o = c * 2
-        val fresh = ((ring[idx + o].toInt() and 0xFF) or (ring[idx + o + 1].toInt() shl 8)).toShort()
-        val prior = ((blendTail[tail + o].toInt() and 0xFF) or (blendTail[tail + o + 1].toInt() shl 8)).toShort()
-        val mixed = (fresh * gainFresh + prior * gainTail).toInt().coerceIn(-32768, 32767)
-        ring[idx + o] = (mixed and 0xFF).toByte()
-        ring[idx + o + 1] = ((mixed shr 8) and 0xFF).toByte()
+      for (o in 0 until CHANNELS * 2 step 2) {
+        val prior = readSample(blendTail, tail + o) * gainTail
+        writeSample(ring, idx + o, readSample(ring, idx + o) * gainFresh + prior)
       }
     }
+  }
+
+  private fun readSample(buf: ByteArray, at: Int): Int =
+      ((buf[at].toInt() and 0xFF) or (buf[at + 1].toInt() shl 8)).toShort().toInt()
+
+  private fun writeSample(buf: ByteArray, at: Int, value: Double) {
+    val v = value.toInt().coerceIn(-32768, 32767)
+    buf[at] = (v and 0xFF).toByte()
+    buf[at + 1] = ((v shr 8) and 0xFF).toByte()
   }
 
   /** The concealment's continuation past the hole, held for the cross-fade back into real audio. */
@@ -405,110 +412,6 @@ internal class AudioPipeline(
 
   /** Frames of the next real packet still owed a cross-fade against the concealment before it. */
   private var blendFrames = 0
-
-  /**
-   * The length of one repetition of the audio just before a hole, in frames.
-   *
-   * Found by autocorrelation over the recent past: the lag at which the signal most resembles itself
-   * is its pitch period, and repeating exactly that keeps the waveform continuous across the join.
-   * The search runs on a decimated, mono-summed copy so it costs tens of microseconds rather than
-   * milliseconds — it happens on the receive thread, and nothing there may be slow.
-   */
-  private fun estimatePeriod(available: Int): Int {
-    val minLag = msToFrames(sourceRate, 1)
-    val maxLag = minOf(msToFrames(sourceRate, 12), available / 2)
-    if (maxLag <= minLag) return maxOf(1, minOf(available, msToFrames(sourceRate, 4)))
-    val window = minOf(available, maxLag * 2)
-    val stride = 4
-    val n = window / stride
-    if (n < 8) return maxOf(1, minOf(available, msToFrames(sourceRate, 4)))
-    val base = writeFrames - window
-    val history = DoubleArray(n)
-    for (i in 0 until n) {
-      val idx = ((base + i.toLong() * stride) % ringFrames).toInt() * BYTES_PER_FRAME
-      val l = ((ring[idx].toInt() and 0xFF) or (ring[idx + 1].toInt() shl 8)).toShort().toInt()
-      val r = ((ring[idx + 2].toInt() and 0xFF) or (ring[idx + 3].toInt() shl 8)).toShort().toInt()
-      history[i] = (l + r).toDouble()
-    }
-    var bestLag = msToFrames(sourceRate, 4)
-    var bestScore = -1.0
-    var lag = minLag / stride
-    val maxLagDecimated = maxLag / stride
-    while (lag <= maxLagDecimated) {
-      var num = 0.0
-      var energy = 0.0
-      var i = lag
-      while (i < n) {
-        num += history[i] * history[i - lag]
-        energy += history[i - lag] * history[i - lag]
-        i++
-      }
-      var current = 0.0
-      var j = lag
-      while (j < n) {
-        current += history[j] * history[j]
-        j++
-      }
-      // Normalise by BOTH windows. Dividing by the lagged window alone makes the score shrink as the
-      // lag grows and the overlap shortens, which quietly biases every estimate towards short lags.
-      val denom = Math.sqrt(energy * current)
-      val score = if (denom > 0) num / denom else 0.0
-      if (score > bestScore) {
-        bestScore = score
-        bestLag = lag * stride
-      }
-      lag++
-    }
-    return refinePeriod(bestLag, stride, window, available)
-  }
-
-  /**
-   * Sharpen the period estimate to a single frame, around the decimated search's answer.
-   *
-   * The coarse search steps four frames at a time, so it can be two frames out — and two frames of a
-   * 1350 Hz tone is a fifth of a period, which is a real step in the waveform where the repeat joins.
-   * Concealment is only as good as this number: get it wrong and the hole is filled with something
-   * audibly at the wrong pitch, which is exactly what a listener reports as a note briefly going off.
-   */
-  private fun refinePeriod(coarseLag: Int, stride: Int, window: Int, available: Int): Int {
-    val lowest = maxOf(1, coarseLag - stride)
-    val highest = minOf(available / 2, coarseLag + stride)
-    if (highest <= lowest) return coarseLag.coerceIn(1, available)
-    var bestLag = coarseLag
-    var bestScore = -1.0
-    val base = writeFrames - window
-    var lag = lowest
-    while (lag <= highest) {
-      var num = 0.0
-      var energyLag = 0.0
-      var energyCur = 0.0
-      var i = lag
-      while (i < window) {
-        val cur = sampleAt(base + i)
-        val prev = sampleAt(base + i - lag)
-        num += cur * prev
-        energyLag += prev * prev
-        energyCur += cur * cur
-        i += 2
-      }
-      val denom = Math.sqrt(energyLag * energyCur)
-      val score = if (denom > 0) num / denom else 0.0
-      if (score > bestScore) {
-        bestScore = score
-        bestLag = lag
-      }
-      lag++
-    }
-    return bestLag.coerceIn(1, available)
-  }
-
-  /** Mono sum of one ring frame, for the period search. */
-  private fun sampleAt(frame: Long): Double {
-    val idx = ((frame % ringFrames + ringFrames) % ringFrames).toInt() * BYTES_PER_FRAME
-    val l = ((ring[idx].toInt() and 0xFF) or (ring[idx + 1].toInt() shl 8)).toShort().toInt()
-    val r = ((ring[idx + 2].toInt() and 0xFF) or (ring[idx + 3].toInt() shl 8)).toShort().toInt()
-    return (l + r).toDouble()
-  }
 
   /**
    * Fill the hole a lost packet left, using what came just before it.
@@ -539,7 +442,7 @@ internal class AudioPipeline(
       // Search over everything the ring still holds, not just the size of the hole. Passing the hole
       // size capped the search at 96 frames, and a 440 Hz tone repeats every 109 — so the true period
       // was outside the range the estimator could ever return, and it settled on a fraction of it.
-      val period = estimatePeriod(available)
+      val period = pitchPeriod.estimate(writeFrames, available)
       val from = writeFrames - period
       // Held at full level for a short fill: fading the repeat out and then splicing the next real
       // packet in at full level trades one discontinuity for two, and the second — arriving exactly
@@ -704,13 +607,9 @@ internal class AudioPipeline(
           dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
           track.play()
           started = true
-          liveEdgeUntilNanos = System.nanoTime() + LIVE_EDGE_WINDOW_NANOS
+          gentleDrainUntilNanos = System.nanoTime() + ADAPT_WINDOW_NANOS
         }
         val depth = (writeFrames - readFrames).coerceAtLeast(0)
-        if (depth > recoveryDepthFrames() && System.nanoTime() < liveEdgeUntilNanos) {
-          dropSurplusAbove(targetFrames.toLong())
-          continue
-        }
         if (depth > hardMaxFrames) {
           // Safety net. The converter should have prevented this; if it did not, playing the backlog
           // out would be permanent added latency, so drop it and say so.
@@ -730,10 +629,9 @@ internal class AudioPipeline(
   }
 
   /**
-   * Start at the live edge. Wi-Fi clumps at or just after the start left 112–156 ms against a 30 ms
-   * target, drained at the 0.5% recovery rate: up to eight cents sharp on a Pixel 4. The unheard
-   * surplus is skipped instead: before the first sound, and in the [LIVE_EDGE_WINDOW_NANOS] after
-   * it when recovery would engage. On-device playback's deep target never reaches that depth.
+   * Start at the live edge: a Wi-Fi clump that lands while the ring primes left 156 ms against a 30 ms
+   * target, eight cents sharp while it drained. Nothing has been heard yet, so it is skipped. Depth
+   * after the first sound is not skipped (see [driftAuthority]). On-device playback never skips.
    */
   private fun dropSurplusAbove(keepFrames: Long) {
     synchronized(producerLock) {
@@ -850,10 +748,16 @@ internal class AudioPipeline(
    *
    * So far from target, in either direction, it may ease on or off harder (half a percent, about eight
    * cents) for tens of seconds: cheaper than either a gap or a lip-sync error.
+   *
+   * Except too deep in the first adaptation window after the first sound. Wi-Fi delivers in clumps,
+   * so depth just after one is the cushion the next gap spends: draining it at half a percent was
+   * eight cents sharp, and skipping it starved the speaker on a Pixel 4 (underruns, target grown to
+   * 320 ms). Until the window has a low-water mark to judge by, a deep ring drains at [MAX_DRIFT].
    */
   private fun driftAuthority(depth: Long): Double {
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
-    return if (depth < floor || depth > recoveryDepthFrames()) REBUILD_DRIFT else MAX_DRIFT
+    val drainHard = depth > recoveryDepthFrames() && System.nanoTime() >= gentleDrainUntilNanos
+    return if (depth < floor || drainHard) REBUILD_DRIFT else MAX_DRIFT
   }
 
   /**
@@ -1063,9 +967,6 @@ internal class AudioPipeline(
 
     /** The wider authority allowed only while the cushion is below its floor — see [driftAuthority]. */
     private const val REBUILD_DRIFT = 0.005
-
-    /** How long after the first sound a recovery-sized surplus is skipped rather than drained. */
-    private const val LIVE_EDGE_WINDOW_NANOS = 1_000_000_000L
 
     /**
      * The most the playback rate may change per written chunk. At one HAL burst per chunk this takes
