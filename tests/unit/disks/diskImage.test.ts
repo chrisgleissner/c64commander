@@ -250,6 +250,12 @@ describe("diskImage — readChain / readSector / trimErrorTable", () => {
 });
 
 describe("diskImage — layoutForType", () => {
+  it.each([35, 36, 37, 38, 39, 40, 41])("reads a %i-track D64, every size the New disk dialog can create", (tracks) => {
+    const sectors = totalSectors1541(tracks);
+    expect(layoutForType("d64", sectors * SECTOR)).toMatchObject({ tracks, totalSectors: sectors });
+    expect(layoutForType("d64", sectors * SECTOR + sectors)).toMatchObject({ tracks, hasErrorTable: true });
+  });
+
   it.each<[DiskImageType, number]>([
     ["d64", totalSectors1541(35) * SECTOR],
     ["d71", 0], // computed below
