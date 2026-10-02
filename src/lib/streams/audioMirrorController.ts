@@ -202,6 +202,7 @@ export class AudioMirrorController {
     this.batcher.reset();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
+    this.foreignHandled.clear();
     this.update({
       state: "connecting",
       error: null,

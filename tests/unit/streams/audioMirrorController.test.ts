@@ -547,4 +547,31 @@ describe("AudioMirrorController foreign-sender notice", () => {
     await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledWith(uninvited, "audio"));
     expect(stopStreamAt).not.toHaveBeenCalledWith(ownOtherAddress, expect.anything());
   });
+
+  it("asks an uninvited machine to stop again in a later Live View session", async () => {
+    const receiver = new FakeReceiver();
+    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sinkWithSenders(["198.51.100.7", "192.0.2.15"]),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "198.51.100.7",
+      stopStreamAt,
+      isForeignSender: async () => true,
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    controller.getSignals();
+    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledTimes(1));
+    await controller.stop();
+
+    await controller.start();
+    receiver.emitState("open");
+    controller.getSignals();
+
+    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledTimes(2));
+    expect(stopStreamAt).toHaveBeenLastCalledWith("192.0.2.15", "audio");
+  });
 });
