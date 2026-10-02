@@ -27,6 +27,9 @@ import {
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
+  markIngestionRuntimeIdle,
+  markInstalledLibraryConsistent,
+  markInstalledLibraryTouched,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
@@ -101,6 +104,7 @@ describe("hvscIngestionRuntimeSupport", () => {
   });
 
   it("formats path previews and applies cancellation state updates", () => {
+    loadHvscStateMock.mockReturnValue({ installedVersion: 0 });
     loadHvscStatusSummaryMock.mockReturnValue({
       download: { status: "in-progress", startedAt: "earlier" },
       extraction: { status: "idle" },
@@ -129,6 +133,46 @@ describe("hvscIngestionRuntimeSupport", () => {
     expect(emitProgress).toHaveBeenCalledWith(
       expect.objectContaining({ stage: "cancelled", archiveName: "HVSC.7z", errorCause: "Canceled" }),
     );
+  });
+
+  describe("cancellation of an ingestion over an installed library", () => {
+    beforeEach(() => {
+      markIngestionRuntimeIdle();
+      loadHvscStateMock.mockReturnValue({ installedVersion: 85 });
+      loadHvscStatusSummaryMock.mockReturnValue({ download: { status: "idle" }, extraction: { status: "idle" } });
+    });
+
+    it("returns the library to ready when the canceled run had not touched it", () => {
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "ready", ingestionError: null });
+    });
+
+    it("reports Canceled when the canceled run had touched the library", () => {
+      markInstalledLibraryTouched();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Canceled" });
+    });
+
+    it("returns the library to ready when the touched archive had been applied completely", () => {
+      markInstalledLibraryTouched();
+      markInstalledLibraryConsistent();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "ready", ingestionError: null });
+    });
+
+    it("forgets a touch from the previous ingestion once that ingestion has ended", () => {
+      markInstalledLibraryTouched();
+      markIngestionRuntimeIdle();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "ready", ingestionError: null });
+    });
   });
 
   it("recovers stale ingestion state only when a crashed install or update is detected", () => {
