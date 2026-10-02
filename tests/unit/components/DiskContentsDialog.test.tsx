@@ -105,4 +105,19 @@ describe("DiskContentsDialog", () => {
     expect(screen.getByTestId("disk-entry-load-1")).toBeDisabled();
     expect(screen.getByTestId("disk-entry-mount-1")).toBeDisabled();
   });
+
+  it("does not describe a failed directory read as still reading", () => {
+    render(
+      <DiskContentsDialog
+        open
+        onOpenChange={vi.fn()}
+        diskName="D"
+        entries={null}
+        error="Unreadable directory: Unsupported D64 size: 1234 bytes"
+        onAction={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Reading directory…")).not.toBeInTheDocument();
+    expect(screen.getByText("The directory could not be read.")).toBeInTheDocument();
+  });
 });

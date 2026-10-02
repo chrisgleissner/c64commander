@@ -55,7 +55,11 @@ export function DiskContentsDialog({
             {diskName}
           </DialogTitle>
           <DialogDescription>
-            {entries ? `${entries.length} file${entries.length === 1 ? "" : "s"}` : "Reading directory…"}
+            {entries
+              ? `${entries.length} file${entries.length === 1 ? "" : "s"}`
+              : error
+                ? "The directory could not be read."
+                : "Reading directory…"}
           </DialogDescription>
         </DialogHeader>
 
