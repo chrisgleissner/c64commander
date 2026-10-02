@@ -110,6 +110,8 @@ import { usePlayDeepLinks, useTransportCommands } from "@/pages/playFiles/hooks/
 import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
+import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
+import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
@@ -1635,9 +1637,8 @@ export default function PlayFilesPage() {
   );
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
-    // Replace, never merge: the station owns the queue for as long as it runs.
-    startPlaylist: (items) => startPlaylist(items, 0, { replaceQueue: true }),
-    appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
+    startPlaylist: (items) => stationHandover.startStationQueue(items),
+    appendItems: (items) => stationHandover.appendStationItems(items),
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
@@ -1649,10 +1650,6 @@ export default function PlayFilesPage() {
     // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
     ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
   });
-  // Mirrored into the ref the playback controller reads, so a skip resolved at any point after this
-  // render sees the current state of the station rather than the one captured when its handlers were
-  // created.
-  stationActiveRef.current = sidRadio.active;
 
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"
@@ -2289,7 +2286,7 @@ export default function PlayFilesPage() {
     removePlaylistItemsById(new Set(selectedPlaylistIds));
   }, [removePlaylistItemsById, selectedPlaylistIds]);
 
-  usePlaybackPersistence({
+  const { readRepositoryPlaylist, playlistHydrated } = usePlaybackPersistence({
     playlist,
     setPlaylist,
     currentIndex,
@@ -2327,6 +2324,12 @@ export default function PlayFilesPage() {
     setTrackInstanceId,
     setAutoAdvanceDueAtMs,
     setSessionRestoreSettled,
+  });
+  const stationHandover = useStationPlaylistHandover({
+    queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
+    playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
+    persistence: { ready: playlistHydrated && sessionRestoreSettled, readSavedPlaylist: readRepositoryPlaylist },
+    station: sidRadio,
   });
 
   useEffect(() => {
@@ -2558,7 +2561,11 @@ export default function PlayFilesPage() {
                 // or stopping a station never shifts the controls underneath.
                 stationIndicator={
                   sidRadioFlags.sidRadioEnabled ? (
-                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
+                    <SidRadioChip
+                      station={sidRadio.station}
+                      whyThisTune={sidRadioWhyThisTune}
+                      onStop={stationHandover.requestStop}
+                    />
                   ) : undefined
                 }
                 stationActive={sidRadio.active}
@@ -3160,6 +3167,8 @@ export default function PlayFilesPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <StationQueueEditedDialog {...stationHandover.editedPrompt} />
 
           {!browserOpen ? (
             <AddItemsProgressOverlay

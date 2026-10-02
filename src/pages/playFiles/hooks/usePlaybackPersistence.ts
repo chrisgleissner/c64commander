@@ -267,10 +267,10 @@ export function usePlaybackPersistence({
     [repeatEnabled, setRepeatEnabled, setShuffleEnabled, setShuffleSeed, shuffleEnabled, shuffleSeed],
   );
 
-  const hydrateFromRepository = async () => {
-    const playlistItems = await playlistRepository.getPlaylistItems(playlistStorageKey);
+  const hydrateFromRepository = async (playlistId = playlistStorageKey) => {
+    const playlistItems = await playlistRepository.getPlaylistItems(playlistId);
     if (!playlistItems.length) {
-      const session = await playlistRepository.getSession(playlistStorageKey);
+      const session = await playlistRepository.getSession(playlistId);
       return {
         items: [] as PlaylistItem[],
         index: -1,
@@ -280,7 +280,7 @@ export function usePlaybackPersistence({
     }
     const trackIds = playlistItems.map((item) => item.trackId);
     const tracks = await playlistRepository.getTracksByIds(trackIds);
-    const session = await playlistRepository.getSession(playlistStorageKey);
+    const session = await playlistRepository.getSession(playlistId);
     const stored: StoredPlaylistState = {
       items: playlistItems
         .map((playlistItem) => {
@@ -324,6 +324,14 @@ export function usePlaybackPersistence({
       session,
     };
   };
+
+  const hydrateFromRepositoryRef = useRef(hydrateFromRepository);
+  hydrateFromRepositoryRef.current = hydrateFromRepository;
+  // Another playlist kept in the repository, such as the one set aside while SID Radio plays.
+  const readRepositoryPlaylist = useCallback(
+    async (playlistId: string) => (await hydrateFromRepositoryRef.current(playlistId)).items,
+    [],
+  );
 
   // Restore Session (Step 1: Read)
   useEffect(() => {
@@ -680,4 +688,6 @@ export function usePlaybackPersistence({
     shuffleEnabled,
     shuffleSeed,
   ]);
+
+  return { readRepositoryPlaylist, playlistHydrated: restoreVersion > 0 };
 }

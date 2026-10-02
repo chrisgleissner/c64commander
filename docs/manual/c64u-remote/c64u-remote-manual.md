@@ -566,6 +566,8 @@ While a station runs, it chooses what comes next, so Shuffle, Repeat and Reshuff
 
 The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
 
+A station plays in place of your playlist, but your playlist is kept, even if the app is closed. When you stop the station, the tune playing now finishes, playback stops, and your playlist comes back as you left it. If you added or removed tunes while the station played, the app asks first whether to keep the station's tunes or return to your playlist.
+
 #### Finding one particular tune
 
 To play one particular piece, tap **Find a tune** and type part of a title or a composer's name. The app searches the whole collection, not just one folder. That matters, because the archive is filed by composer.

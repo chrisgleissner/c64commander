@@ -398,7 +398,14 @@ Listed below in the order they are rendered and walked by the focus ring.
   - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: no HVSC installed, or not enough rankings yet — see hint `sid-radio-taste-hint`]`
   - Surprise me — button — `sid-radio-surprise` — R✅ I✅ `[disabled: no HVSC installed]`
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
-  top of the Now Playing card, beside the station it ends
+  top of the Now Playing card, beside the station it ends. Starting a station sets the playlist aside;
+  stopping it lets the playing tune finish, then puts the playlist back. If the queue was edited during
+  the station, Stop first opens the **Station queue edited** alert dialog
+  (`station-queue-edited-dialog`), an overlay scope that adds nothing to the page count in §3.
+  Code-verified, not yet enumerated on hardware:
+  - Keep station tunes — button — `station-queue-keep` — ends the station and keeps its queue as the playlist
+  - Return to my playlist — button — `station-queue-return` — ends the station and puts the saved playlist back
+  - Close — button — the dialog's header close control — leaves the station running
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
 - Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
