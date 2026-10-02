@@ -316,6 +316,42 @@ describe("useSidRadio", () => {
     );
   });
 
+  it("tells the user when a refill on the last queued track fails, since nothing will retry it", async () => {
+    const client = makeClient();
+    let computeCalls = 0;
+    client.compute = vi.fn((request: StationRequest): Promise<StationResult> => {
+      computeCalls += 1;
+      if (computeCalls > 1) return Promise.reject(new Error("worker crashed"));
+      // Exactly one batch, so the provider holds no leftovers and the lookahead refill must compute.
+      const pool = Array.from({ length: 10 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
+      return Promise.resolve({
+        candidates: pool.map((trackOrdinal) => ({
+          trackOrdinal,
+          md5_48: `m${trackOrdinal}`,
+          songNr: 1,
+          score: 10 - trackOrdinal,
+          reason: "similar" as const,
+          fileTrackOrdinals: [trackOrdinal],
+        })),
+      });
+    });
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+
+    await act(async () => {
+      rerender({ ...params, currentIndex: 9, playlistLength: 10 });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    await waitFor(() => expect(result.current.notice).toBe("refill-failed"));
+    expect(result.current.active).toBe(true);
+  });
+
   it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {
     const client = makeClient();
     client.compute = vi.fn(async () => ({ candidates: [], empty: "no-neighbours" }));

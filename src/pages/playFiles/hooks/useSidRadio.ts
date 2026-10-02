@@ -688,6 +688,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           service: "sid-radio",
           error: error instanceof Error ? error.message : String(error),
         });
+        // With tracks still queued, the next advance retries the refill. On the last track nothing
+        // will, so the station stops after it, and the user is told why.
+        if (stationGenerationRef.current === generation && remaining === 0) setNotice("refill-failed");
       });
   }, [station, currentIndex, playlistLength, appendItems]);
 
