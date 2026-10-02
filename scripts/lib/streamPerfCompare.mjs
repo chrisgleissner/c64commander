@@ -52,18 +52,21 @@ export const median = (values) => {
  * runner had, so the 25% tolerance sits inside the spread of the runner fleet. CI therefore
  * compares against the parent commit measured in the same job (`runStreamBenchGate`).
  */
-export const compareStages = ({ current, baseline, maxRegressionPct }) => {
+export const compareStages = ({ current, baseline, maxRegressionPct, divideOutRunnerSpeed = true }) => {
   const shared = Object.keys(current).filter((name) => typeof baseline[name] === "number");
   if (shared.length === 0) return { scale: null, rows: [], regressions: [] };
 
   // Median rather than mean: one stage that happens to scale differently on a given CPU must not
   // drag every other stage's share with it.
   const scale = median(shared.map((name) => current[name] / baseline[name]));
+  // A baseline measured on the same runner has no machine speed to cancel; dividing by the median
+  // there would let a change that slows most stages by one factor pass as "unchanged shape".
+  const divisor = divideOutRunnerSpeed ? scale : 1;
 
   const rows = Object.entries(current).map(([name, hz]) => {
     const base = baseline[name];
     if (typeof base !== "number") return { name, hz, base: null, deltaPct: null, regressed: false, suppressed: false };
-    const deltaPct = (hz / base / scale - 1) * 100;
+    const deltaPct = (hz / base / divisor - 1) * 100;
     const lostShare = -deltaPct > maxRegressionPct;
     const slowerThanBaseline = hz < base;
     return {
@@ -119,7 +122,7 @@ export const runStreamBenchGate = ({ repeats, runBench, againstBase, committedBa
       baselineSource: "base",
       current: head,
       baseline: base,
-      ...compareStages({ current: head, baseline: base, maxRegressionPct }),
+      ...compareStages({ current: head, baseline: base, maxRegressionPct, divideOutRunnerSpeed: false }),
     };
   }
   const { head } = collectBestOf({ repeats, trees: ["head"], runBench });

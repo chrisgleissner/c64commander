@@ -165,6 +165,24 @@ describe("the stream benchmark gate against the parent commit on the same runner
     expect(names(result.regressions)).toEqual(["governor tick"]);
   });
 
+  it("fails every stage when this commit slows all of them by the same factor against the parent", () => {
+    const uniformlySlower = Object.fromEntries(
+      Object.entries(RUN_2026_09_25_SAME_CPU_MODEL).map(([name, hz]) => [name, Math.round(hz * 0.6)]),
+    );
+    const result = gate({ againstBase: true, head: uniformlySlower, base: RUN_2026_09_25_SAME_CPU_MODEL });
+
+    expect(names(result.regressions)).toEqual(Object.keys(RUN_2026_09_25_SAME_CPU_MODEL).sort());
+  });
+
+  it("still divides out the runner speed when comparing a uniformly slower runner with the committed baseline", () => {
+    const uniformlySlowerRunner = Object.fromEntries(
+      Object.entries(BASELINE).map(([name, hz]) => [name, Math.round(hz * 0.6)]),
+    );
+    const result = gate({ againstBase: false, head: uniformlySlowerRunner });
+
+    expect(names(result.regressions)).toEqual([]);
+  });
+
   it("alternates between the two trees and keeps each stage's fastest sample per tree", () => {
     const calls: string[] = [];
     const samples: Record<string, number[]> = { head: [100, 300, 200], base: [50, 40, 60] };

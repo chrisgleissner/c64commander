@@ -170,7 +170,11 @@ console.log(
 );
 
 if (regressions.length > 0) {
-  console.error(`\n${regressions.length} stage(s) regressed more than ${maxRegressionPct}% relative to the others.`);
+  console.error(
+    baseTree
+      ? `\n${regressions.length} stage(s) regressed more than ${maxRegressionPct}% against ${againstRef}.`
+      : `\n${regressions.length} stage(s) regressed more than ${maxRegressionPct}% relative to the others.`,
+  );
   process.exit(1);
 }
 console.log(`\nAll stages within ${maxRegressionPct}% of their baseline share. PASS.`);
