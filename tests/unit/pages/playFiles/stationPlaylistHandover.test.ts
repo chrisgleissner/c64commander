@@ -82,12 +82,24 @@ describe("stationPlaylistHandover", () => {
     const state = { handover: finishing, ready: true, isPlaying: true, isPaused: false, playlistEnded: false };
 
     expect(shouldRestorePlaylist(state)).toBe(false);
-    expect(shouldRestorePlaylist({ ...state, isPaused: true, isPlaying: false })).toBe(false);
     expect(shouldRestorePlaylist({ ...state, playlistEnded: true })).toBe(true);
     expect(shouldRestorePlaylist({ ...state, isPlaying: false })).toBe(true);
     expect(shouldRestorePlaylist({ ...state, isPlaying: false, ready: false })).toBe(false);
     expect(shouldRestorePlaylist({ ...state, isPlaying: false, handover: { ...finishing, items: null } })).toBe(false);
     expect(shouldRestorePlaylist({ ...state, isPlaying: false, handover: savedFromMine() })).toBe(false);
+  });
+
+  it("gives the playlist back at once when the station's last tune is paused, as after a relaunch", () => {
+    const state = {
+      handover: { ...savedFromMine(), phase: "finishing" as const },
+      ready: true,
+      isPlaying: true,
+      isPaused: true,
+      playlistEnded: false,
+    };
+
+    expect(shouldRestorePlaylist(state)).toBe(true);
+    expect(shouldRestorePlaylist({ ...state, isPaused: false })).toBe(false);
   });
 
   it("puts the cursor back on the saved tune by id", () => {

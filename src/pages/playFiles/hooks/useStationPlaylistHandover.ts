@@ -164,7 +164,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     if (!wasActive || stationActive || current?.phase !== "station") return;
     const { queue, playback } = latestRef.current;
     const lastTune = lastTuneQueue(queue.playlist, queue.currentIndex);
-    if ((playback.isPlaying || playback.isPaused) && lastTune.length) {
+    if (playback.isPlaying && !playback.isPaused && lastTune.length) {
       queue.setPlaylist(lastTune);
       queue.setCurrentIndex(0);
       toast({ title: "SID Radio stopped", description: LAST_TUNE_TOAST });

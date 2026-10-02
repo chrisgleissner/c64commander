@@ -88,7 +88,7 @@ export const shouldRestorePlaylist = (input: {
   input.ready &&
   input.handover?.phase === "finishing" &&
   input.handover.items !== null &&
-  (input.playlistEnded || (!input.isPlaying && !input.isPaused));
+  (input.playlistEnded || !input.isPlaying || input.isPaused);
 
 export const restoredPlaylistState = (handover: StationHandover & { items: PlaylistItem[] }) => {
   const byId = handover.currentItemId ? handover.items.findIndex((item) => item.id === handover.currentItemId) : -1;
