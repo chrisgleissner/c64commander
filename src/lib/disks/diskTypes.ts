@@ -7,6 +7,7 @@
  */
 
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
+import { normalizeDiskPath } from "./diskPath";
 import type { ArchivePlaylistReference } from "@/lib/archive/types";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigCandidate, ConfigResolutionOrigin, ConfigValueOverride } from "@/lib/config/playbackConfig";
@@ -50,12 +51,7 @@ export type DiskEntry = {
 
 export type DiskLocationLabel = "Local" | "C64U";
 
-export const normalizeDiskPath = (value: string) => {
-  if (!value) return "/";
-  const trimmed = value.replace(/\s+/g, " ").trim();
-  const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  return withSlash.replace(/\/+/g, "/");
-};
+export { normalizeDiskPath };
 
 export const buildDiskId = (location: DiskLocation, path: string, origin?: DeviceBoundContentOrigin | null) => {
   const normalizedPath = normalizeDiskPath(path);

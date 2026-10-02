@@ -7,8 +7,9 @@
  */
 
 import type { C64API, DriveInfo } from "@/lib/c64api";
+import { onDriveWritten } from "@/lib/c64api/driveWriteSignal";
 import { diskDeviceKey } from "@/lib/disks/diskDeviceIdentity";
-import { normalizeDiskPath } from "@/lib/disks/diskTypes";
+import { normalizeDiskPath } from "@/lib/disks/diskPath";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 
@@ -100,6 +101,8 @@ export const forgetPlayLaunchMount = (deviceHost: string, drive: string) => {
   const next = withoutDrive(store, diskDeviceKey(deviceHost), drive);
   if (next !== store) writeStore(next);
 };
+
+onDriveWritten(forgetPlayLaunchMount);
 
 const takePlayLaunchMounts = (deviceHost: string): PlayLaunchMount[] => {
   const store = readStore();

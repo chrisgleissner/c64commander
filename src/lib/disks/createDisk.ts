@@ -17,7 +17,7 @@
  *   PUT /v1/files/<folder>/<name>:create_dnp?diskname=<label>&tracks=<n>
  */
 
-import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
+import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuStorageRoot";
 
 export type CreateDiskKind = "d64" | "d71" | "d81" | "dnp";
 

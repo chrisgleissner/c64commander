@@ -17,7 +17,7 @@ import { FolderPicker } from "@/lib/native/folderPicker";
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 // Reused as-is: the sd/usb/flash-over-temp persistent-root ranking is
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
-import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
+import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuStorageRoot";
 import { noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
 import { resolveDiskDeviceIdentity } from "@/lib/disks/diskDeviceIdentity";
 import {

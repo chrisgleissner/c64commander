@@ -46,7 +46,7 @@ import {
 } from "@/lib/config/configFlashPersistence";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
-import { forgetPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
+import { signalDriveWritten } from "@/lib/c64api/driveWriteSignal";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
@@ -1495,7 +1495,7 @@ export class C64API {
   // callers weren't inspecting, so a rejected mount still showed a "Disk
   // mounted" toast with the drive unchanged. See HARD9-010.
   private assertDriveWriteAccepted(response: { errors?: string[] }, operation: string, drive: string) {
-    forgetPlayLaunchMount(this.deviceHost, drive);
+    signalDriveWritten(this.deviceHost, drive);
     this.assertActionAccepted(response, `drive ${drive.toUpperCase()} ${operation}`);
   }
 
