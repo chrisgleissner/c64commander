@@ -400,8 +400,8 @@ Listed below in the order they are rendered and walked by the focus ring.
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
   top of the Now Playing card, beside the station it ends. Starting a station sets the playlist aside;
   stopping it lets the playing tune finish, then puts the playlist back. If the queue was edited during
-  the station, Stop first opens the **Station queue edited** alert dialog
-  (`station-queue-edited-dialog`), an overlay scope that adds nothing to the page count in §3.
+  the station, Stop first opens the alert dialog titled **Keep the station's tunes or return to your
+  playlist?** (`station-queue-edited-dialog`), an overlay scope that adds nothing to the page count in §3.
   Code-verified, not yet enumerated on hardware:
   - Keep station tunes — button — `station-queue-keep` — ends the station and keeps its queue as the playlist
   - Return to my playlist — button — `station-queue-return` — ends the station and puts the saved playlist back
