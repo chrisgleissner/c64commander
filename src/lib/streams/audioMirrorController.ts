@@ -338,6 +338,8 @@ export class AudioMirrorController {
     if (typeof packets !== "number") return false;
     const previous = this.lastSeenArrivalPackets;
     this.lastSeenArrivalPackets = packets;
+    // No baseline yet: a socket whose filter refuses every sender still reads 0, which is not an arrival.
+    if (previous < 0) return packets > 0;
     // A counter that went BACKWARDS was reset or wrapped, not stalled — the plugin rebinding its
     // socket restarts it from zero — so it counts as arrival rather than as silence.
     //
