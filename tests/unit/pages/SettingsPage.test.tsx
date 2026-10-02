@@ -544,7 +544,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveSidRadioMinSeconds: vi.fn(),
   clampConfigWriteIntervalMs: (value: number) => value,
   clampDiscoveryProbeTimeoutMs: (value: number) => value,
-  clampVolumeSliderPreviewIntervalMs: (value: number) => value,
+  clampVolumeSliderPreviewIntervalMs: (value: number) => Math.min(500, Math.max(100, value)),
   loadConfigWriteIntervalMs: vi.fn(() => 500),
   clampBackgroundRediscoveryIntervalMs: (value: number) => value,
   clampStartupDiscoveryWindowMs: (value: number) => value,
@@ -2836,6 +2836,24 @@ describe("SettingsPage", () => {
     });
 
     expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(callsBefore);
+  });
+
+  it("lets a slider preview interval be typed one digit at a time and clamps it only on commit", () => {
+    renderSettingsPage();
+    const input = screen.getByLabelText(/slider preview interval/i) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "3" } });
+    fireEvent.change(input, { target: { value: `${input.value}0` } });
+    fireEvent.change(input, { target: { value: `${input.value}0` } });
+    fireEvent.blur(input);
+
+    expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenLastCalledWith(300);
+    expect(input.value).toBe("300");
+
+    fireEvent.change(input, { target: { value: "9000" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenLastCalledWith(500);
+    expect(input.value).toBe("500");
   });
 
   it("saves the device slider preview interval on blur and enter", () => {

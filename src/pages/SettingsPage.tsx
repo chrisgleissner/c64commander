@@ -447,8 +447,8 @@ export default function SettingsPage() {
   const [streamInputPriority, setStreamInputPriority] = useState<boolean>(loadStreamInputPriority);
   const [streamVideoBadges, setStreamVideoBadges] = useState<boolean>(loadStreamVideoBadges);
   const [streamNativeAudio, setStreamNativeAudio] = useState<boolean>(loadStreamNativeAudio);
-  const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
-    loadVolumeSliderPreviewIntervalMs(),
+  const [volumeSliderPreviewInput, setVolumeSliderPreviewInput] = useState(() =>
+    String(loadVolumeSliderPreviewIntervalMs()),
   );
   const [autofireRateHz, setAutofireRateHz] = useState(loadAutofireRateHz());
   const [showAutofireButton, setShowAutofireButton] = useState(loadShowAutofireButton());
@@ -671,7 +671,7 @@ export default function SettingsPage() {
         setPersistConfigToFlash(loadPersistConfigToFlash());
       }
       if (detail.key === APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY) {
-        setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
+        setVolumeSliderPreviewInput(String(loadVolumeSliderPreviewIntervalMs()));
       }
       if (detail.key === APP_SETTINGS_KEYS.ARCHIVE_HOST_OVERRIDE_KEY) {
         const next = loadArchiveHostOverride();
@@ -1116,6 +1116,16 @@ export default function SettingsPage() {
     setHideNavigationBar(enabled);
     saveHideNavigationBar(enabled);
     applyFullScreenFromSettings();
+  };
+
+  // Clamped on commit, not per keystroke: clamping "3" to 100 made any value from 101 to 499 untypeable.
+  const commitVolumeSliderPreviewInterval = () => {
+    const parsed = Number(volumeSliderPreviewInput);
+    const clamped = Number.isFinite(parsed)
+      ? clampVolumeSliderPreviewIntervalMs(parsed)
+      : loadVolumeSliderPreviewIntervalMs();
+    saveVolumeSliderPreviewIntervalMs(clamped);
+    setVolumeSliderPreviewInput(String(clamped));
   };
 
   const commitListPreviewLimit = () => {
@@ -3279,16 +3289,11 @@ export default function SettingsPage() {
                     min={100}
                     max={500}
                     step={10}
-                    value={volumeSliderPreviewIntervalMs}
-                    onChange={(event) => {
-                      const parsed = Number(event.target.value);
-                      if (Number.isFinite(parsed)) {
-                        setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
-                      }
-                    }}
-                    onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
+                    value={volumeSliderPreviewInput}
+                    onChange={(event) => setVolumeSliderPreviewInput(event.target.value)}
+                    onBlur={commitVolumeSliderPreviewInterval}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
+                      if (event.key === "Enter") commitVolumeSliderPreviewInterval();
                     }}
                   />
                   <HelperText>
