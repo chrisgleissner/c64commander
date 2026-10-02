@@ -73,6 +73,7 @@ const { mockAvMirror } = vi.hoisted(() => ({
   mockAvMirror: {
     videoLive: false,
     audioLive: false,
+    anyFeedFailed: false,
     stopAll: vi.fn().mockResolvedValue(undefined),
     startVideo: vi.fn().mockResolvedValue(undefined),
     startAudio: vi.fn().mockResolvedValue(undefined),
@@ -166,6 +167,7 @@ describe("useSavedDeviceSwitching", () => {
     vi.clearAllMocks();
     mockAvMirror.videoLive = false;
     mockAvMirror.audioLive = false;
+    mockAvMirror.anyFeedFailed = false;
   });
 
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
@@ -1463,6 +1465,35 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1));
     expect(mockAvMirror.startAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops a failed Live View feed on the old device and does not restart it on the new one", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", core_version: "1.4A", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+    mockAvMirror.anyFeedFailed = true;
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
+    expect(mockAvMirror.startVideo).not.toHaveBeenCalled();
+    expect(mockAvMirror.startAudio).not.toHaveBeenCalled();
   });
 
   it("does not follow Live View to a device that does not stream", async () => {

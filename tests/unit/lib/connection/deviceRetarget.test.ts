@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
   startAudio: vi.fn(async () => {}),
 }));
 
-const mirror = { videoLive: false, audioLive: false };
+const mirror = { videoLive: false, audioLive: false, failed: false };
 
 vi.mock("@/lib/remoteInput/activeInputRelease", () => ({
   hasActiveInputRelease: mocks.hasActiveInputRelease,
@@ -73,6 +73,9 @@ vi.mock("@/lib/streams/avMirrorSession", () => ({
     get audioLive() {
       return mirror.audioLive;
     },
+    get anyFeedFailed() {
+      return mirror.failed;
+    },
     stopAll: mocks.stopAll,
     startVideo: mocks.startVideo,
     startAudio: mocks.startAudio,
@@ -97,6 +100,7 @@ describe("prepareForDeviceRetarget (HARD19-012)", () => {
     mocks.hasActivePlaybackToStop.mockReturnValue(true);
     mirror.videoLive = false;
     mirror.audioLive = false;
+    mirror.failed = false;
   });
 
   it("runs every cross-device hygiene step on a real device change", async () => {
@@ -148,6 +152,20 @@ describe("prepareForDeviceRetarget (HARD19-012)", () => {
     expect(state).toEqual({ videoWasLive: false, audioWasLive: false });
     expect(mocks.stopActivePlaybackBeforeDeviceSwitch).not.toHaveBeenCalled();
     expect(mocks.stopAll).not.toHaveBeenCalled();
+  });
+
+  it("stops a failed mirror feed before the retarget, since the old device may still be streaming", async () => {
+    mocks.hasActivePlaybackToStop.mockReturnValue(false);
+    mirror.failed = true;
+
+    const state = await prepareForDeviceRetarget("device-a", "device-b");
+
+    expect(mocks.stopAll).toHaveBeenCalledTimes(1);
+    expect(mocks.stopAll.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.invalidateForSavedDeviceSwitch.mock.invocationCallOrder[0],
+    );
+    // A failed feed is stopped, not followed: nothing was playing to restart on the new device.
+    expect(state).toEqual({ videoWasLive: false, audioWasLive: false });
   });
 
   it("completes the retarget when the mirror stop never settles", async () => {

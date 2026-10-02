@@ -42,7 +42,7 @@ import { drainKernalFallbackInjectionQueue } from "@/lib/remoteInput/kernalFallb
 import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
 import {
-  hasLiveAvMirror,
+  avMirrorNeedsStop,
   readAvMirrorRetargetState,
   restartAvMirrorAfterDeviceRetarget,
   stopAvMirrorForDeviceRetarget,
@@ -116,7 +116,7 @@ export function useSavedDeviceSwitching() {
       // re-start on the new device after it verifies. Shared with the reachable-saved-device
       // fallback (HARD27-010) so the two switch paths cannot drift apart again.
       const mirrorState = readAvMirrorRetargetState();
-      if (hasLiveAvMirror(mirrorState)) {
+      if (avMirrorNeedsStop(mirrorState)) {
         await stopAvMirrorForDeviceRetarget(fromDeviceId);
       }
 

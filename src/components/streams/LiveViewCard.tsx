@@ -44,7 +44,7 @@ export function LiveViewCard({
   showAvSyncTests = true,
   className,
 }: LiveViewCardProps) {
-  const { video, anyLive, stopAll } = useAvMirror();
+  const { video, anyLive, anyStoppable, stopAll } = useAvMirror();
   const [expanded, setExpanded] = useState(false);
   const showPreview = videoEnabled && video.state !== "off";
 
@@ -61,10 +61,10 @@ export function LiveViewCard({
       // card carries a preview, the stream statistics and the A/V measurement tools underneath it.
       defaultOpen={false}
       actions={
-        anyLive ? (
+        anyStoppable ? (
           // Stops both streams without opening the card. Mirroring keeps a multicast receiver and
-          // an audio track running, so "stop it now" has to be reachable from the closed card —
-          // otherwise the only way to stop it is to open the card and find the two toggles.
+          // an audio track running, so "stop it now" has to be reachable from the closed card. A feed
+          // that failed counts too: its toggle reads "Listen", but the device may still be sending.
           <Button
             variant="outline"
             size="sm"

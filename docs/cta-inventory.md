@@ -302,7 +302,7 @@ not-connected / empty / single-device).
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
   - _Live View precedence:_ while Live View is receiving a feed (VIC↔video, Audio↔audio) that row goes **read-only** — edit/start/stop are hidden/disabled, replaced by a `home-stream-liveview-badge-*` chip + `home-stream-liveview-note-*` explanation (display-only); controls return when Live View stops.
 - **Live View** (`live-view-card`) _(Content Explorer A/V Mirror; mounted only when the device advertises streaming and `audio_mirror_enabled` or `video_mirror_enabled` is on)_
-  - Reset — button — `live-view-stop` — R✅ I✅ `[visible only while a feed is live]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
+  - Reset — button — `live-view-stop` — R✅ I✅ `[visible while a feed is live or has failed]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
   - Adopt this sender — button — `av-mirror-adopt-sender` `[only while packets arrive from a

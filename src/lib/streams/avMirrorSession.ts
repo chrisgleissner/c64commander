@@ -663,6 +663,11 @@ export class AvMirrorSession {
     return isLiveState(this.snapshot.video.state);
   }
 
+  /** A feed that failed can leave the device streaming into the shared group, so it still needs a stop. */
+  get anyFeedFailed(): boolean {
+    return this.snapshot.audio.state === "error" || this.snapshot.video.state === "error";
+  }
+
   /** Apply the effective cadence divisor to the video controller (guarded for mocked controllers in tests). */
   private applyKeepFraction(fraction: number): void {
     if (typeof this.video.setKeepFraction === "function") this.video.setKeepFraction(fraction);
