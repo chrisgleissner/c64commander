@@ -183,6 +183,12 @@ function CellDetail({ cell, mode, onClose }: { cell: HeatMapCell; mode: HeatMapM
 export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
   const [mode, setMode] = useState<HeatMapMetricMode>("Count");
   const [cellDetail, setCellDetail] = useState<CellDetailState>(null);
+  const openedVariant = open ? variant : null;
+  const [shownVariant, setShownVariant] = useState(openedVariant);
+  if (openedVariant !== shownVariant) {
+    setShownVariant(openedVariant);
+    if (openedVariant !== null) setCellDetail(null);
+  }
 
   const matrix: HeatMapMatrix = (() => {
     switch (variant) {

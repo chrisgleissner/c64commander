@@ -1063,6 +1063,8 @@ export function DiagnosticsDialog({
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
   const [decisionStateOpen, setDecisionStateOpen] = useState(false);
   const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
+  const lastHeatMapVariantRef = useRef<HeatMapVariant>("REST");
+  if (heatMapVariant !== null) lastHeatMapVariantRef.current = heatMapVariant;
   const [overflowOpen, setOverflowOpen] = useState(false);
   /*
    * Where the compact overflow panel starts, measured from the button it belongs to.
@@ -1991,10 +1993,9 @@ export function DiagnosticsDialog({
         {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       </Suspense>
       <HeatMapPopup
-        key={heatMapVariant ?? "closed"}
         open={open && heatMapVariant !== null}
         onClose={() => setHeatMapVariant(null)}
-        variant={heatMapVariant ?? "REST"}
+        variant={heatMapVariant ?? lastHeatMapVariantRef.current}
         traceEvents={traceEvents}
       />
     </>

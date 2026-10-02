@@ -893,6 +893,27 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("heat-cell-detail")).toBeNull();
   });
 
+  it("reopens the same heat map without the cell that was selected before it closed", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
+    const restCell = within(screen.getByTestId("heat-map-popup-rest"))
+      .getAllByRole("button")
+      .find((button) => button.closest("[data-testid^='heat-cell-']") && !button.hasAttribute("disabled"));
+    fireEvent.click(restCell!);
+    expect(screen.getByTestId("heat-cell-detail")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
+
+    expect(screen.getByTestId("heat-map-popup-rest")).toBeVisible();
+    expect(screen.queryByTestId("heat-cell-detail")).toBeNull();
+  });
+
   it("keeps the primary diagnostics menu controls uniquely addressable", () => {
     setViewportWidth(600);
 
