@@ -1370,6 +1370,37 @@ describe("hvscIngestionRuntime", () => {
     );
   });
 
+  it.each([
+    ["installOrUpdateHvsc", () => installOrUpdateHvsc("token-cancel-spelling")],
+    ["ingestCachedHvsc", () => ingestCachedHvsc("token-cancel-spelling")],
+  ])("leaves the American 'Canceled' reason as the last state written after %s is canceled", async (_, run) => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(Filesystem.readdir).mockResolvedValue({ files: ["hvsc-baseline-5.complete.json"] } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async () => {
+      await cancelHvscInstall("token-cancel-spelling");
+      throw new Error("HVSC update cancelled");
+    });
+
+    await expect(run()).rejects.toThrow("HVSC update cancelled");
+
+    const reasons = vi
+      .mocked(updateHvscState)
+      .mock.calls.map(([patch]) => (patch as Record<string, unknown>).ingestionError)
+      .filter((reason) => typeof reason === "string");
+    expect(reasons).not.toContain("Cancelled");
+    expect(reasons.at(-1)).toBe("Canceled");
+  });
+
   it("stops the deletion loop and skips promote/finalize/success after cancellation mid-loop (HARD9-084)", async () => {
     // Regression: cancellation was previously only checked inside extraction's
     // onEntry - once extraction finished, the deletion loop (up to thousands

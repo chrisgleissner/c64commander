@@ -180,7 +180,7 @@ describe("hvscIngestionRuntime recovery", () => {
       ),
     ).toBe(false);
     expect(statePatches).toContainEqual(
-      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Canceled" }),
     );
   });
 });

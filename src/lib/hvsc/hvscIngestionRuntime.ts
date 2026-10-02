@@ -87,7 +87,7 @@ import {
 import { prepareIngestionStorage } from "./hvscIngestionStoragePrep";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
-import { createHvscCancellationError } from "./hvscCancellation";
+import { HVSC_CANCELED_STATUS_REASON, createHvscCancellationError } from "./hvscCancellation";
 import { isHvscNoNetworkError } from "./hvscNetworkLoss";
 const runtimeState = getHvscIngestionRuntimeState();
 
@@ -1132,7 +1132,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         archiveVersion: currentArchiveVersion,
         pipelineState: currentPipelineState,
       });
-      applyCancelledIngestionState("Cancelled", emitProgress, currentArchive ?? undefined);
+      applyCancelledIngestionState(HVSC_CANCELED_STATUS_REASON, emitProgress, currentArchive ?? undefined);
       throw error;
     }
     if (currentArchiveType === "update" && currentArchiveVersion) {
@@ -1346,7 +1346,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
         archiveVersion: currentArchiveVersion,
         pipelineState: currentPipelineState,
       });
-      applyCancelledIngestionState("Cancelled", emitProgress, currentArchive ?? undefined);
+      applyCancelledIngestionState(HVSC_CANCELED_STATUS_REASON, emitProgress, currentArchive ?? undefined);
       throw error;
     }
     if (currentArchiveType === "update" && currentArchiveVersion) {
