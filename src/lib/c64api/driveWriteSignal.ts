@@ -6,26 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-type DriveWriteListener = (deviceHost: string, drive: string) => void;
-
-const MAX_PENDING_SIGNALS = 32;
-let listener: DriveWriteListener | null = null;
-const pending: Array<[string, string]> = [];
+import { forgetPlayLaunchMount } from "@/lib/playback/playLaunchMountStore";
 
 /**
- * A drive mount or eject went through the API. Kept apart from what listens, so the startup bundle
- * does not carry the Play-page launch-mount store; writes made before it loads are handed over.
+ * A drive mount or eject went through the API, so the drive no longer holds what Play put there. This clears the
+ * saved record directly, even before the Play page has loaded, so a Stop in a later session cannot eject it.
  */
-export const signalDriveWritten = (deviceHost: string, drive: string) => {
-  if (listener) {
-    listener(deviceHost, drive);
-    return;
-  }
-  pending.push([deviceHost, drive]);
-  if (pending.length > MAX_PENDING_SIGNALS) pending.shift();
-};
-
-export const onDriveWritten = (next: DriveWriteListener) => {
-  listener = next;
-  pending.splice(0).forEach(([deviceHost, drive]) => next(deviceHost, drive));
-};
+export const signalDriveWritten = (deviceHost: string, drive: string) => forgetPlayLaunchMount(deviceHost, drive);

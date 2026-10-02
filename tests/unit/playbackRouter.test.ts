@@ -22,7 +22,7 @@ import { buildAutostartSequence } from "@/lib/playback/autostart";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
-import { endPlayLaunchMounts } from "@/lib/playback/playLaunchMounts";
+import { endPlayLaunchMounts, peekPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
 import { loadDiskAutostartMode } from "@/lib/config/appSettings";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
@@ -580,6 +580,11 @@ describe("playbackRouter", () => {
     const apiWithDriveA = (...driveA: Array<Record<string, unknown>>) => {
       const getDrives = vi.fn();
       driveA.forEach((info) => getDrives.mockResolvedValueOnce({ drives: [{ a: info }], errors: [] }));
+      // Read by Stop: the drive still holds the image Play mounted last.
+      getDrives.mockImplementation(async () => ({
+        drives: [{ a: { enabled: true, image_file: peekPlayLaunchMount("c64u", "a")?.launchPath } }],
+        errors: [],
+      }));
       return {
         ...createApiMock(),
         getDrives,

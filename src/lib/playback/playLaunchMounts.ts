@@ -6,65 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { C64API, DriveInfo } from "@/lib/c64api";
-import { onDriveWritten } from "@/lib/c64api/driveWriteSignal";
-import { diskDeviceKey } from "@/lib/disks/diskDeviceIdentity";
+import type { C64API, DriveInfo, DrivesResponse } from "@/lib/c64api";
 import { normalizeDiskPath } from "@/lib/disks/diskPath";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
+import {
+  forgetPlayLaunchMount,
+  hasAnyPlayLaunchMount,
+  playLaunchMountsFor,
+  type PlayLaunchMount,
+} from "./playLaunchMountStore";
 
-export type LaunchDrive = "a" | "b";
-
-/** A disk image Play mounted to launch an item, and what the drive held before Play first took it. */
-export type PlayLaunchMount = {
-  drive: LaunchDrive;
-  launchPath: string;
-  priorImagePath: string | null;
-};
-
-type PlayLaunchMountStore = Record<string, Partial<Record<LaunchDrive, PlayLaunchMount>>>;
-
-// Persisted so a Stop after the app was closed mid-play still knows which image Play put in the drive.
-const STORAGE_KEY = "c64u_play_launch_mounts";
-
-const isDrive = (value: string): value is LaunchDrive => value === "a" || value === "b";
-
-const readStore = (): PlayLaunchMountStore => {
-  try {
-    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PlayLaunchMountStore) : {};
-  } catch (error) {
-    addLog("warn", "Could not read the record of disks Play mounted", {
-      error: (error as Error).message,
-      stack: (error as Error).stack,
-    });
-    return {};
-  }
-};
-
-const writeStore = (store: PlayLaunchMountStore) => {
-  try {
-    if (typeof localStorage === "undefined") return;
-    if (Object.keys(store).length === 0) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch (error) {
-    addLog("warn", "Could not save the record of disks Play mounted", {
-      error: (error as Error).message,
-      stack: (error as Error).stack,
-    });
-  }
-};
-
-const withoutDrive = (store: PlayLaunchMountStore, deviceKey: string, drive: LaunchDrive): PlayLaunchMountStore => {
-  const forDevice = store[deviceKey];
-  if (!forDevice?.[drive]) return store;
-  const { [drive]: _removed, ...rest } = forDevice;
-  const next = { ...store };
-  if (Object.keys(rest).length === 0) delete next[deviceKey];
-  else next[deviceKey] = rest;
-  return next;
-};
+export {
+  forgetPlayLaunchMount,
+  peekPlayLaunchMount,
+  recordPlayLaunchMount,
+  type LaunchDrive,
+  type PlayLaunchMount,
+} from "./playLaunchMountStore";
 
 /** The image a drive reports, as one normalized device path, or null for an empty drive. */
 export const describeDriveImage = (info: DriveInfo | null | undefined): string | null => {
@@ -83,49 +43,55 @@ export const resolvePriorImageForLaunch = (
   driveBeforeMount: DriveInfo | null,
 ): string | null => (existing ? existing.priorImagePath : describeDriveImage(driveBeforeMount));
 
-export const peekPlayLaunchMount = (deviceHost: string, drive: LaunchDrive): PlayLaunchMount | null =>
-  readStore()[diskDeviceKey(deviceHost)]?.[drive] ?? null;
-
-export const recordPlayLaunchMount = (deviceHost: string, mount: PlayLaunchMount) => {
-  const store = readStore();
-  const deviceKey = diskDeviceKey(deviceHost);
-  writeStore({ ...store, [deviceKey]: { ...store[deviceKey], [mount.drive]: mount } });
-};
-
-/**
- * Any other mount or eject on the drive: the drive no longer holds what Play put there, so Stop must leave it.
- * Every drive mount and eject in the app goes through the REST client, which calls this.
- */
-export const forgetPlayLaunchMount = (deviceHost: string, drive: string) => {
-  if (!isDrive(drive)) return;
-  const store = readStore();
-  const next = withoutDrive(store, diskDeviceKey(deviceHost), drive);
-  if (next !== store) writeStore(next);
-};
-
-onDriveWritten(forgetPlayLaunchMount);
-
-const playLaunchMountsFor = (deviceHost: string): PlayLaunchMount[] =>
-  Object.values(readStore()[diskDeviceKey(deviceHost)] ?? {}).filter((mount): mount is PlayLaunchMount =>
-    Boolean(mount),
-  );
-
 const mountTypeOf = (path: string) => {
   const name = path.split("/").pop() ?? "";
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : undefined;
 };
 
+const imageName = (path: string) => path.split("/").pop() ?? "";
+
+// An upload mount reports the uploaded file under a device directory, not the library path, so the name decides.
+const driveStillHoldsLaunchImage = (drives: DrivesResponse, mount: PlayLaunchMount) => {
+  const held = describeDriveImage(drives.drives?.find((entry) => entry[mount.drive])?.[mount.drive]);
+  return held !== null && imageName(held) === imageName(normalizeDiskPath(mount.launchPath));
+};
+
 /**
  * Stop ends what Play started: eject each image Play mounted on this device and put back the image the user
  * had in that drive before. One request per drive operation; a failure is logged and the next drive is tried.
- * A drive leaves the record only once its eject succeeded, so a later Stop retries a failed one.
+ * A drive leaves the record only once its eject succeeded, so a later Stop retries a failed one. A drive that
+ * no longer holds Play's image (changed from the device's own menu, or in a session that never told this
+ * record) is left alone.
  */
-export const endPlayLaunchMounts = async (api: Pick<C64API, "getDeviceHost" | "unmountDrive" | "mountDrive">) => {
-  if (Object.keys(readStore()).length === 0) return;
+export const endPlayLaunchMounts = async (
+  api: Pick<C64API, "getDeviceHost" | "getDrives" | "unmountDrive" | "mountDrive">,
+) => {
+  if (!hasAnyPlayLaunchMount()) return;
   const deviceHost = api.getDeviceHost();
-  const mounts = playLaunchMountsFor(deviceHost);
-  if (mounts.length > 0) await waitForMachineTransitionsToSettle();
+  const recorded = playLaunchMountsFor(deviceHost);
+  if (recorded.length === 0) return;
+  await waitForMachineTransitionsToSettle();
+  let drives: DrivesResponse;
+  try {
+    drives = await api.getDrives();
+  } catch (error) {
+    addLog("warn", "Stop left the drives alone: could not read what they hold", {
+      drives: recorded.map((mount) => mount.drive),
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    return;
+  }
+  const mounts = recorded.filter((mount) => {
+    if (driveStillHoldsLaunchImage(drives, mount)) return true;
+    forgetPlayLaunchMount(deviceHost, mount.drive);
+    addLog("info", "Stop left a drive alone: it no longer holds the disk Play mounted", {
+      drive: mount.drive,
+      launchPath: mount.launchPath,
+    });
+    return false;
+  });
   for (const mount of mounts) {
     try {
       await api.unmountDrive(mount.drive);
@@ -148,5 +114,5 @@ export const endPlayLaunchMounts = async (api: Pick<C64API, "getDeviceHost" | "u
       });
     }
   }
-  if (mounts.length > 0) void getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
+  void getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
 };

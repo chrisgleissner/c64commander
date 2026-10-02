@@ -15,7 +15,7 @@ import { getC64API } from "@/lib/c64api";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { ConfigApplyCancelledError, runCancellableConfigApply } from "@/lib/config/configApplyCancellation";
-import { recordPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
+import { peekPlayLaunchMount, recordPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
 import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { reportUserError } from "@/lib/uiErrors";
 import { isMachineTransitionActive } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -136,6 +136,10 @@ const renderHarness = (initialPlaylist: PlaylistItem[], initiallyPlaying = false
 
 const createDeviceApi = (events: string[]) => ({
   getDeviceHost: vi.fn(() => "c64u"),
+  getDrives: vi.fn(async () => ({
+    drives: [{ a: { enabled: true, image_file: peekPlayLaunchMount("c64u", "a")?.launchPath } }],
+    errors: [],
+  })),
   machineReset: vi.fn(async () => void events.push("reset")),
   machineReboot: vi.fn(async () => void events.push("reboot")),
   unmountDrive: vi.fn(async (drive: string) => void events.push(`eject ${drive}`)),

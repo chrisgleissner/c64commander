@@ -19,8 +19,20 @@ import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGa
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 
+const drivesHolding = (images: Partial<Record<"a" | "b", { image_path?: string; image_file?: string }>>) => ({
+  drives: Object.entries(images).map(([drive, info]) => ({ [drive]: { enabled: true, ...info } })),
+  errors: [],
+});
+
+// By default each drive still holds the image Play recorded for it.
 const createDriveApi = (host = "c64u") => ({
   getDeviceHost: vi.fn(() => host),
+  getDrives: vi.fn(async () =>
+    drivesHolding({
+      a: { image_file: peekPlayLaunchMount(host, "a")?.launchPath },
+      b: { image_file: peekPlayLaunchMount(host, "b")?.launchPath },
+    }),
+  ),
   unmountDrive: vi.fn(async () => ({ errors: [] })),
   mountDrive: vi.fn(async () => ({ errors: [] })),
 });
@@ -147,5 +159,38 @@ describe("Stop returns the drives to how Play found them", () => {
     endTransition();
     await ending;
     expect(api.unmountDrive).toHaveBeenCalledWith("a");
+  });
+
+  it("leaves a disk mounted by other means alone, even when the app never saw that mount", async () => {
+    recordPlayLaunchMount("c64u", { drive: "a", launchPath: "/USB0/Games/game.d64", priorImagePath: "/USB0/old.d64" });
+    const api = createDriveApi();
+    api.getDrives.mockResolvedValueOnce(drivesHolding({ a: { image_path: "/USB0/Mine/", image_file: "hand.d64" } }));
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).not.toHaveBeenCalled();
+    expect(api.mountDrive).not.toHaveBeenCalled();
+    expect(peekPlayLaunchMount("c64u", "a")).toBeNull();
+  });
+
+  it("ejects a launch image the device reports under its upload name rather than its library path", async () => {
+    recordPlayLaunchMount("c64u", { drive: "a", launchPath: "/Local/Games/game.d64", priorImagePath: null });
+    const api = createDriveApi();
+    api.getDrives.mockResolvedValueOnce(drivesHolding({ a: { image_path: "/Temp/", image_file: "game.d64" } }));
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).toHaveBeenCalledWith("a");
+  });
+
+  it("ejects nothing and keeps the record when the drives cannot be read", async () => {
+    recordPlayLaunchMount("c64u", { drive: "a", launchPath: "/USB0/Games/game.d64", priorImagePath: null });
+    const api = createDriveApi();
+    api.getDrives.mockRejectedValueOnce(new Error("Network error"));
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).not.toHaveBeenCalled();
+    expect(peekPlayLaunchMount("c64u", "a")).not.toBeNull();
   });
 });

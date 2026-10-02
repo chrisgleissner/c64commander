@@ -11,19 +11,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 describe("driveWriteSignal", () => {
   beforeEach(() => {
     vi.resetModules();
+    localStorage.clear();
   });
 
-  it("hands drive writes made before anything listens to the listener once it registers", async () => {
-    const { onDriveWritten, signalDriveWritten } = await import("@/lib/c64api/driveWriteSignal");
-    const listener = vi.fn();
+  it("clears Play's saved launch mount for a drive written before the Play page has loaded", async () => {
+    localStorage.setItem(
+      "c64u_play_launch_mounts",
+      JSON.stringify({ c64u: { a: { drive: "a", launchPath: "/USB0/game.d64", priorImagePath: null } } }),
+    );
+    const { signalDriveWritten } = await import("@/lib/c64api/driveWriteSignal");
 
     signalDriveWritten("c64u", "a");
-    onDriveWritten(listener);
-    signalDriveWritten("c64u", "b");
 
-    expect(listener.mock.calls).toEqual([
-      ["c64u", "a"],
-      ["c64u", "b"],
-    ]);
+    expect(localStorage.getItem("c64u_play_launch_mounts")).toBeNull();
   });
 });
