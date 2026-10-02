@@ -475,6 +475,41 @@ describe("useSidRadio", () => {
     await waitFor(() => expect(result.current.notice).toBe("station-ended"));
   });
 
+  it("does not bring a dismissed station-ended notice back as the last tracks play", async () => {
+    installMusic();
+    const client = makeClient();
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    client.compute = vi.fn(async () => ({ candidates: [], empty: "exhausted" as const }));
+    let cursor = 6;
+    for (; cursor <= 9 && result.current.notice === null; cursor += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: cursor, playlistLength: 10 });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    await waitFor(() => expect(result.current.notice).toBe("station-ended"));
+
+    act(() => result.current.dismissNotice());
+    for (; cursor <= 9; cursor += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: cursor, playlistLength: 10 });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    expect(result.current.notice).toBeNull();
+  });
+
   it("resumes the chip from a saved session on mount (D15)", () => {
     saveSidRadioSession({
       seedKind: "style",

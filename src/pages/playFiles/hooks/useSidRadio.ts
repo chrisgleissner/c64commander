@@ -266,6 +266,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
    * record or persist anything.
    */
   const stationGenerationRef = useRef(0);
+  // The provider latches exhaustion, so every later refill reports it again; the notice is said once per station.
+  const stationEndedNoticeGenerationRef = useRef(-1);
 
   const ensureClient = useCallback((): SidRadioWorkerClient => {
     if (!clientRef.current) {
@@ -654,7 +656,10 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           // 4 — a Chill / Ambient station advertised as holding 17,574 tracks stopped dead after 25
           // and left no way to tell why. The provider latches this, so it will not resolve itself:
           // the station is over and picking another is the only way on.
-          setNotice("station-ended");
+          if (stationEndedNoticeGenerationRef.current !== generation) {
+            stationEndedNoticeGenerationRef.current = generation;
+            setNotice("station-ended");
+          }
         }
         recordRefill({
           lastRefillMs: settledAt - started,
