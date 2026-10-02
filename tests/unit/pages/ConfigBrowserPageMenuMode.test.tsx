@@ -18,11 +18,12 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { requestConfigItemFocus } from "@/lib/search/configDeepLink";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
+import { reportUserError } from "@/lib/uiErrors";
 
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
 
@@ -139,8 +140,10 @@ const FocusCapture = ({ target }: { target: { current: FocusNavigationContextVal
   return null;
 };
 
-const renderPage = (focusContext?: { current: FocusNavigationContextValue | null }) => {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const renderPage = (
+  focusContext?: { current: FocusNavigationContextValue | null },
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) => {
   const router = createMemoryRouter([{ path: "*", element: <ConfigBrowserPage /> }], {
     initialEntries: ["/"],
     future: { v7_startTransition: true, v7_relativeSplatPath: true },
@@ -216,6 +219,33 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
       item: "System Mode",
       value: "updated",
     });
+  });
+
+  it("keeps a pending value and reports the failure when a menu page's Refresh cannot re-read the device", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const unsubscribe = new QueryObserver(queryClient, {
+      queryKey: ["c64-category", "U64 Specific Settings"],
+      queryFn: () => Promise.reject(new Error("Device unreachable")),
+    }).subscribe(() => undefined);
+    await waitFor(() =>
+      expect(queryClient.getQueryState(["c64-category", "U64 Specific Settings"])?.status).toBe("error"),
+    );
+    mockSetConfig.mockReturnValue(new Promise(() => undefined));
+    renderPage(undefined, queryClient);
+    ensureCardOpen(screen.getByTestId("config-menu-page-video-setup"));
+    const row = await screen.findByTestId("row-system-mode");
+    fireEvent.click(within(row).getByText("Update System Mode"));
+    await waitFor(() => expect(row).toHaveAttribute("data-value", "updated"));
+
+    fireEvent.click(within(document.getElementById("config-menu-section-video-setup")!).getByText("Refresh"));
+
+    await waitFor(() =>
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "CONFIG_REFRESH", title: "Refresh failed" }),
+      ),
+    );
+    expect(screen.getByTestId("row-system-mode")).toHaveAttribute("data-value", "updated");
+    unsubscribe();
   });
 
   it("shows drive ROM aliases under BOTH Memory & ROMs and Built-in drive A, one REST source", async () => {
