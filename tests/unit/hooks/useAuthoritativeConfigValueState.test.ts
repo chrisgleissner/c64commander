@@ -226,3 +226,40 @@ describe("useAuthoritativeConfigValueState restoreEntry race (HARD9-086)", () =>
     expect(result.current.values).toEqual({ "Video::Mode": "A" });
   });
 });
+
+describe("useAuthoritativeConfigValueState rollback to an earlier pin", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does not latch an earlier pin forever when a later write to the same item fails and restores it", () => {
+    // Writes A then B both fail: A's rollback is skipped because B owns the pin, then B's rollback
+    // restores A's pin. The device never accepted A, so A must not stay pinned indefinitely.
+    const { result } = renderHook(() => useAuthoritativeConfigValueState());
+
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "A");
+    });
+    act(() => {
+      result.current.replaceEntry("Video::Mode", "B");
+    });
+    act(() => {
+      result.current.restoreEntry("Video::Mode", undefined, "A");
+    });
+    act(() => {
+      result.current.restoreEntry("Video::Mode", { value: "A" }, "B");
+    });
+    expect(result.current.values).toEqual({ "Video::Mode": "A" });
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(result.current.pending).toEqual({});
+    expect(result.current.values).toEqual({});
+  });
+});

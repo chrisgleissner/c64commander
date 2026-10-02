@@ -90,14 +90,8 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
     };
   }, []);
 
-  const replaceEntry = useCallback(
-    (key: string, value: AuthoritativeConfigValue) => {
-      setEntries((previous) => ({
-        ...previous,
-        [key]: {
-          value,
-        },
-      }));
+  const armWatchdogTimer = useCallback(
+    (key: string) => {
       clearWatchdogTimer(key);
       const timer = setTimeout(() => {
         watchdogTimersRef.current.delete(key);
@@ -111,6 +105,19 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
       watchdogTimersRef.current.set(key, timer);
     },
     [clearWatchdogTimer],
+  );
+
+  const replaceEntry = useCallback(
+    (key: string, value: AuthoritativeConfigValue) => {
+      setEntries((previous) => ({
+        ...previous,
+        [key]: {
+          value,
+        },
+      }));
+      armWatchdogTimer(key);
+    },
+    [armWatchdogTimer],
   );
 
   const restoreEntry = useCallback(
@@ -138,11 +145,15 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
         }
         return next;
       });
-      if (applied) {
+      // A restored earlier pin is no more confirmed than it was when first set, so it keeps a
+      // watchdog: the earlier write may have failed too, and its value may never echo back.
+      if (applied && previousEntry) {
+        armWatchdogTimer(key);
+      } else if (applied) {
         clearWatchdogTimer(key);
       }
     },
-    [clearWatchdogTimer],
+    [armWatchdogTimer, clearWatchdogTimer],
   );
 
   const clearEntry = useCallback(
