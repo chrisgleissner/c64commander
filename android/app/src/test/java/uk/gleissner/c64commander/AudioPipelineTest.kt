@@ -630,6 +630,48 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun startUpDepthOnAnEvenFeedIsNeverDrainedSharpLater() {
+    // A clump at the start and then a clean link (wired, or Wi-Fi on a good day): nothing ever spends
+    // the extra depth, so it stays above the recovery threshold. Holding the gentle rate for a fixed
+    // two seconds only postponed the defect: the ring was still that deep when the window closed,
+    // and the stream then played half a percent sharp for about eight seconds.
+    val speaker = FakeSpeaker(sampleRate)
+    val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory)
+    try {
+      pipeline.start()
+      val startedAt = System.nanoTime()
+      val stepNanos = packetFrames * 1_000_000_000L / sampleRate
+      var next = startedAt
+      var clumped = false
+      var maxCorrection = 1.0
+      var starvedAtClump = 0.0
+      var concealedAtClump = 0.0
+      while (System.nanoTime() - startedAt < 10_500_000_000L) {
+        val now = System.nanoTime()
+        if (!clumped && now - startedAt >= 300_000_000L) {
+          starvedAtClump = speaker.starvedMs
+          concealedAtClump = pipeline.stats().concealedMs
+          repeat(39) { pipeline.offer(packet, 0, packet.size) }
+          clumped = true
+        }
+        if (now < next) {
+          maxCorrection = maxOf(maxCorrection, pipeline.stats().driftCorrection)
+          Thread.sleep(1)
+          continue
+        }
+        pipeline.offer(packet, 0, packet.size)
+        next += stepNanos
+      }
+      assertTrue("the start-up depth was drained sharp: $maxCorrection", maxCorrection <= 1.0011)
+      val starved = speaker.starvedMs - starvedAtClump
+      assertTrue("draining the start-up depth starved the speaker for $starved ms", starved < STARVED_MS_PER_S * 10)
+      assertEquals("draining the start-up depth emptied the ring", concealedAtClump, pipeline.stats().concealedMs, 0.0)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
   fun theConverterSlowsDownWhenTheCushionIsRunningThin() {
     // The other direction, and the one that matters for crackling: when the ring is shallower than the
     // target, playing at exactly nominal rate spends the last of the cushion and the next gap is a

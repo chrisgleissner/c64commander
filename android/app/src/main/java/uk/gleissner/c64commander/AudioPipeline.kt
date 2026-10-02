@@ -196,8 +196,9 @@ internal class AudioPipeline(
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
-  /** Until when (player thread's clock) a deep cushion is drained only at [MAX_DRIFT]. */
-  private var gentleDrainUntilNanos = 0L
+  /** Set at the first sound; cleared when, after the first window, the ring is down to recovery. */
+  private var holdingStartupDepth = false
+  private var firstWindowEndNanos = 0L
   @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
@@ -607,7 +608,10 @@ internal class AudioPipeline(
           dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
           track.play()
           started = true
-          gentleDrainUntilNanos = System.nanoTime() + ADAPT_WINDOW_NANOS
+          holdingStartupDepth = true
+          windowStartNanos = System.nanoTime()
+          windowMinDepth = Long.MAX_VALUE
+          firstWindowEndNanos = windowStartNanos + ADAPT_WINDOW_NANOS
         }
         val depth = (writeFrames - readFrames).coerceAtLeast(0)
         if (depth > hardMaxFrames) {
@@ -663,6 +667,8 @@ internal class AudioPipeline(
     }
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
+    val firstWindowOver = System.nanoTime() >= firstWindowEndNanos
+    if (firstWindowOver && depth <= recoveryDepthFrames()) holdingStartupDepth = false
     // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
     // fivefold at a threshold, which put an audible lurch in a held note.
     val wanted = nominalRatio() * (1.0 + driftAuthority(depth) * cushionError(depth))
@@ -737,26 +743,20 @@ internal class AudioPipeline(
   /**
    * How far the rate may be moved right now.
    *
-   * Normally a whisper — well under the threshold of a noticeable pitch change — because the buffer,
-   * not the rate, is what absorbs jitter. But a whisper cannot move the cushion far, and it needs to
-   * move far in both directions:
+   * Normally a whisper, because the buffer, not the rate, absorbs jitter. Far from target it may ease
+   * on or off harder (half a percent, about eight cents) for tens of seconds: too thin, the next gap
+   * is a hole and 0.1% takes two minutes to gain 100 ms; too deep, one 148 ms burst left the mirror
+   * 241 ms behind the picture, which 0.1% would take twenty-five minutes to hand back.
    *
-   *  - **Too thin** and the next gap is a hole. At 0.1% it would take two minutes to gain a tenth of
-   *    a second, so the target would climb while the ring stayed empty and the holes kept coming.
-   *  - **Too deep** and the latency is permanent. Absorbing one 148 ms burst left the mirror 241 ms
-   *    behind the picture, and at 0.1% it would have taken twenty-five minutes to hand that back.
-   *
-   * So far from target, in either direction, it may ease on or off harder (half a percent, about eight
-   * cents) for tens of seconds: cheaper than either a gap or a lip-sync error.
-   *
-   * Except too deep in the first adaptation window after the first sound. Wi-Fi delivers in clumps,
-   * so depth just after one is the cushion the next gap spends: draining it at half a percent was
-   * eight cents sharp, and skipping it starved the speaker on a Pixel 4 (underruns, target grown to
-   * 320 ms). Until the window has a low-water mark to judge by, a deep ring drains at [MAX_DRIFT].
+   * Except depth the stream started with. On a Pixel 4 the ring held 112–156 ms just after the first
+   * sound: draining it at half a percent was eight cents sharp, and skipping it starved the speaker
+   * (underruns, target grown to 320 ms), because over Wi-Fi it is the cushion the next gap spends.
+   * So through the first adaptation window, and after it until the ring first comes down to the
+   * recovery threshold, too deep drains at [MAX_DRIFT]; only depth gained later drains harder.
    */
   private fun driftAuthority(depth: Long): Double {
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
-    val drainHard = depth > recoveryDepthFrames() && System.nanoTime() >= gentleDrainUntilNanos
+    val drainHard = depth > recoveryDepthFrames() && !holdingStartupDepth
     return if (depth < floor || drainHard) REBUILD_DRIFT else MAX_DRIFT
   }
 
