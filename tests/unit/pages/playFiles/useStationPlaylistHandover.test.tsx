@@ -130,6 +130,41 @@ describe("useStationPlaylistHandover", () => {
     expect(harness.result.current.stationActiveRef.current).toBe(false);
   });
 
+  it("keeps the station's last tune through a pause, and brings the playlist back on Stop", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    act(() => harness.result.current.setCurrentIndex(1));
+    harness.rerender({ stationActive: false, isPlaying: true });
+
+    harness.rerender({ stationActive: false, isPlaying: true, isPaused: true });
+    expect(ids(harness.result.current.playlist)).toEqual(["radio:2"]);
+    harness.rerender({ stationActive: false, isPlaying: true, isPaused: false });
+    expect(ids(harness.result.current.playlist)).toEqual(["radio:2"]);
+    expect(stopPlayback).not.toHaveBeenCalled();
+
+    harness.rerender({ stationActive: false, isPlaying: false });
+    expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+  });
+
+  it("brings the playlist back at once when the station's last tune comes back paused after a relaunch", async () => {
+    const before = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(before, stationA);
+    act(() => before.result.current.setCurrentIndex(1));
+    before.rerender({ stationActive: false, isPlaying: true });
+    before.unmount();
+    rememberHandover(null);
+
+    const after = renderHarness({
+      stationActive: false,
+      isPlaying: true,
+      isPaused: true,
+      initialPlaylist: [item("radio:2")],
+      initialIndex: 0,
+    });
+
+    await waitFor(() => expect(ids(after.result.current.playlist)).toEqual(["a", "b", "c"]));
+  });
+
   it("brings the playlist back at once when the station stops while nothing plays", async () => {
     const harness = renderHarness({ stationActive: false, isPlaying: false });
     await startStation(harness, stationA, false);

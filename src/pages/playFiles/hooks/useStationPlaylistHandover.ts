@@ -164,14 +164,15 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     if (current?.phase !== "station") return;
     const { queue, playback } = latestRef.current;
     const lastTune = lastTuneQueue(queue.playlist, queue.currentIndex);
-    if (playback.isPlaying && !playback.isPaused && lastTune.length) {
+    const playsOutLastTune = playback.isPlaying && !playback.isPaused && lastTune.length > 0;
+    if (playsOutLastTune) {
       queue.setPlaylist(lastTune);
       queue.setCurrentIndex(0);
       toast({ title: "SID Radio stopped", description: LAST_TUNE_TOAST });
     }
     // Whatever is queued now belongs to the station; only what is queued after this point is kept.
     const stationItemIds = [...new Set([...current.stationItemIds, ...queue.playlist.map((item) => item.id)])];
-    commit({ ...current, stationItemIds, phase: "finishing" });
+    commit({ ...current, stationItemIds, phase: "finishing", playsOutLastTune });
   }, [commit]);
 
   const wasStationActiveRef = useRef(stationActive);

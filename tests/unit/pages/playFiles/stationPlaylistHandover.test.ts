@@ -102,6 +102,19 @@ describe("stationPlaylistHandover", () => {
     expect(shouldRestorePlaylist({ ...state, isPaused: false })).toBe(false);
   });
 
+  it("waits through a pause of a last tune left playing in this launch, but not after a relaunch", () => {
+    const handover = { ...savedFromMine(), phase: "finishing" as const, playsOutLastTune: true };
+    const paused = { handover, ready: true, isPlaying: true, isPaused: true, playlistEnded: false };
+
+    expect(shouldRestorePlaylist(paused)).toBe(false);
+    expect(shouldRestorePlaylist({ ...paused, isPlaying: false, isPaused: false })).toBe(true);
+
+    writeHandoverRecord(handover);
+    rememberHandover(null);
+    const relaunched = { ...rememberedHandover()!, items: handover.items };
+    expect(shouldRestorePlaylist({ ...paused, handover: relaunched })).toBe(true);
+  });
+
   it("keeps what the listener queued while the station's last tune played, after the restored playlist", () => {
     const saved = { ...savedFromMine(), stationItemIds: ["radio:1", "radio:2"] };
     const queue = [item("radio:2"), item("added-1"), item("added-2")];

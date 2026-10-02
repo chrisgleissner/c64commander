@@ -23,9 +23,15 @@ export type StationHandover = {
   selectedIds: string[];
   stationItemIds: string[];
   phase: "station" | "finishing";
+  /**
+   * The station's last tune was left playing in this launch, so a pause is the listener's and the
+   * playlist waits for the tune to end or be stopped. Not persisted: after a relaunch the tune comes
+   * back paused without anyone having paused it, and the playlist comes back at once.
+   */
+  playsOutLastTune?: boolean;
 };
 
-export type StationHandoverRecord = Omit<StationHandover, "items">;
+export type StationHandoverRecord = Omit<StationHandover, "items" | "playsOutLastTune">;
 
 export type PlaylistPosition = {
   playlist: readonly PlaylistItem[];
@@ -88,7 +94,7 @@ export const shouldRestorePlaylist = (input: {
   input.ready &&
   input.handover?.phase === "finishing" &&
   input.handover.items !== null &&
-  (input.playlistEnded || !input.isPlaying || input.isPaused);
+  (input.playlistEnded || !input.isPlaying || (input.isPaused && !input.handover.playsOutLastTune));
 
 /** Anything the listener queued during the last tune is kept, after the playlist that comes back. */
 export const restoredPlaylistState = (
@@ -132,7 +138,7 @@ const RECORD_KEY = "c64u_sid_radio_saved_playlist";
 export const savedPlaylistRepositoryId = (playlistStorageKey: string) => `${playlistStorageKey}:before-sid-radio`;
 
 export const writeHandoverRecord = (handover: StationHandover): void => {
-  const { items: _items, ...record } = handover;
+  const { items: _items, playsOutLastTune: _playsOutLastTune, ...record } = handover;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify(record));
   } catch (error) {
