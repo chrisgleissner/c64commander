@@ -17,6 +17,7 @@ import {
   lastTuneQueue,
   readSavedPlaylistWithRetry,
   rememberHandover,
+  forgetSavedCopyRead,
   readSavedCopyOnce,
   rememberSavedCopyUnreadable,
   SAVED_PLAYLIST_READ,
@@ -222,6 +223,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
           error: (error as Error)?.message ?? String(error),
           stack: (error as Error)?.stack,
         });
+        forgetSavedCopyRead();
         // Left in place, the unreadable handover would hold the queue in station order indefinitely. The
         // record and the repository copy stay, so the next launch reads them again.
         if (handoverRef.current?.items === null) {

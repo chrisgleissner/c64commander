@@ -57,8 +57,11 @@ export const handoverForStationStart = (
   const stationItemIds = stationItems.map((item) => item.id);
   if (existing) {
     const items =
-      existing.phase === "finishing" && existing.items
-        ? restoredPlaylistState({ ...existing, items: existing.items }, current.playlist).playlist
+      existing.items && (existing.phase === "finishing" || existing.carriedItems?.length)
+        ? restoredPlaylistState(
+            { ...existing, items: existing.items },
+            existing.phase === "finishing" ? current.playlist : [],
+          ).playlist
         : existing.items;
     const carriedItems =
       existing.items === null
@@ -253,6 +256,11 @@ export const rememberedHandover = (): StationHandover | null => {
 
 export const rememberHandover = (handover: StationHandover | null) => {
   remembered = handover;
+};
+
+/** A read given up on may never settle; the next attempt starts a fresh one instead of joining it. */
+export const forgetSavedCopyRead = () => {
+  inFlightSavedRead = null;
 };
 
 /** Starts a fresh app session's view of the saved copy: nothing remembered, no read in flight. */

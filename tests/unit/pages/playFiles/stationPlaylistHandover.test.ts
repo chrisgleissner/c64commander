@@ -6,12 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   handoverForStationStart,
   isStationQueueEdited,
   lastTuneQueue,
+  forgetSavedCopyRead,
+  readSavedCopyOnce,
   rememberHandover,
   resetStationHandoverSession,
   rememberedHandover,
@@ -136,6 +138,44 @@ describe("stationPlaylistHandover", () => {
     const queue = [item("radio:2"), item("added-1"), item("added-2")];
 
     expect(ids(restoredPlaylistState(saved, queue).playlist)).toEqual(["a", "b", "c", "added-1", "added-2"]);
+  });
+
+  it("folds the queue carried over an unread copy into the saved playlist when another station starts", () => {
+    const unread = { ...savedFromMine(), items: null };
+    const overUnread = handoverForStationStart(
+      unread,
+      { playlist: [item("radio:9"), item("new-1")], currentIndex: 0, selectedIds: new Set() },
+      stationA,
+    );
+    expect(ids(overUnread.carriedItems ?? [])).toEqual(["new-1"]);
+
+    const readBack = { ...overUnread, items: mine };
+    const next = handoverForStationStart(
+      readBack,
+      { playlist: stationA, currentIndex: 0, selectedIds: new Set() },
+      stationB,
+    );
+
+    expect(ids(next.items)).toEqual(["a", "b", "c", "new-1"]);
+    expect(next.carriedItems).toBeUndefined();
+  });
+
+  it("joins one read of the saved copy until it settles, and starts a fresh one once it is forgotten", async () => {
+    let answer: (items: PlaylistItem[]) => void = () => undefined;
+    const read = vi.fn(
+      () =>
+        new Promise<PlaylistItem[]>((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    const first = readSavedCopyOnce(read);
+    expect(readSavedCopyOnce(read)).toBe(first);
+    forgetSavedCopyRead();
+    void readSavedCopyOnce(read);
+    answer(mine);
+
+    expect(read).toHaveBeenCalledTimes(2);
   });
 
   it("puts the cursor back on the saved tune by id", () => {

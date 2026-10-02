@@ -354,7 +354,7 @@ describe("useStationPlaylistHandover", () => {
       expect(harness.result.current.stationActiveRef.current).toBe(false);
     });
 
-    it("joins the read still running from an earlier give-up when a station starts, instead of starting another", async () => {
+    it("starts a fresh read when a station starts after an earlier read was given up", async () => {
       vi.useFakeTimers();
       relaunchWhileFinishing();
       let answer: (items: PlaylistItem[]) => void = () => undefined;
@@ -385,7 +385,7 @@ describe("useStationPlaylistHandover", () => {
         await harness.result.current.handover.startStationQueue(stationB);
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(readSavedPlaylist).toHaveBeenCalledTimes(1);
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(2);
 
       await act(async () => {
         answer(mine);
