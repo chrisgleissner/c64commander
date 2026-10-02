@@ -29,9 +29,14 @@ export type StationHandover = {
    * back paused without anyone having paused it, and the playlist comes back at once.
    */
   playsOutLastTune?: boolean;
+  /**
+   * The queue the listener had when a station started over a saved copy this launch could not read
+   * back. Appended after that copy when the playlist returns; held in memory only.
+   */
+  carriedItems?: PlaylistItem[];
 };
 
-export type StationHandoverRecord = Omit<StationHandover, "items" | "playsOutLastTune">;
+export type StationHandoverRecord = Omit<StationHandover, "items" | "playsOutLastTune" | "carriedItems">;
 
 export type PlaylistPosition = {
   playlist: readonly PlaylistItem[];
@@ -55,7 +60,15 @@ export const handoverForStationStart = (
       existing.phase === "finishing" && existing.items
         ? restoredPlaylistState({ ...existing, items: existing.items }, current.playlist).playlist
         : existing.items;
-    return { ...existing, items, stationItemIds, phase: "station", playsOutLastTune: undefined };
+    const carriedItems =
+      existing.items === null
+        ? itemsNotIn(
+            current.playlist.filter((item) => !isStationBuiltItem(item)),
+            existing.stationItemIds,
+            existing.carriedItems,
+          )
+        : undefined;
+    return { ...existing, items, stationItemIds, phase: "station", playsOutLastTune: undefined, carriedItems };
   }
   return {
     items: [...current.playlist],
@@ -113,32 +126,54 @@ export const restoredPlaylistState = (
 ) => {
   const byId = handover.currentItemId ? handover.items.findIndex((item) => item.id === handover.currentItemId) : -1;
   const currentIndex = byId >= 0 ? byId : handover.currentIndex < handover.items.length ? handover.currentIndex : -1;
-  const known = new Set([...handover.stationItemIds, ...handover.items.map((item) => item.id)]);
+  const carried = itemsNotIn(
+    handover.carriedItems ?? [],
+    handover.items.map((item) => item.id),
+  );
+  const known = new Set([
+    ...handover.stationItemIds,
+    ...handover.items.map((item) => item.id),
+    ...carried.map((i) => i.id),
+  ]);
   const addedMeanwhile = queue.filter((item) => !known.has(item.id));
-  return { playlist: [...handover.items, ...addedMeanwhile], currentIndex, selectedIds: new Set(handover.selectedIds) };
+  return {
+    playlist: [...handover.items, ...carried, ...addedMeanwhile],
+    currentIndex,
+    selectedIds: new Set(handover.selectedIds),
+  };
+};
+
+/** SID Radio builds its queue items with `radio:` ids (useSidRadio's buildStationItem); nothing else does. */
+const isStationBuiltItem = (item: PlaylistItem) => item.id.startsWith("radio:");
+
+const itemsNotIn = (
+  items: readonly PlaylistItem[],
+  excludedIds: readonly string[],
+  alreadyKept: readonly PlaylistItem[] = [],
+): PlaylistItem[] => {
+  const excluded = new Set([...excludedIds, ...alreadyKept.map((item) => item.id)]);
+  return [...alreadyKept, ...items.filter((item) => !excluded.has(item.id))];
 };
 
 export const SAVED_PLAYLIST_READ = { attempts: 3, timeoutMs: 10_000, retryDelayMs: 1_000 };
 
-class ReadTimeoutError extends Error {}
-
 const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
   new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new ReadTimeoutError(`No answer within ${timeoutMs} ms`)), timeoutMs);
+    const timer = setTimeout(() => reject(new Error(`No answer within ${timeoutMs} ms`)), timeoutMs);
     promise.then(resolve, reject).finally(() => clearTimeout(timer));
   });
 
 /**
- * Reads the saved items back, retrying a read that failed a bounded number of times; rejects with the
- * last failure. A read that has not answered is still running, so it is not retried: a second read
- * would only queue behind it.
+ * Reads the saved items back, retrying a bounded number of times; rejects with the last failure. The
+ * caller's `read` joins a read still running, so retrying after a timeout waits on it again rather
+ * than starting another.
  */
 export const readSavedPlaylistWithRetry = async (read: () => Promise<PlaylistItem[]>): Promise<PlaylistItem[]> => {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await withTimeout(read(), SAVED_PLAYLIST_READ.timeoutMs);
     } catch (error) {
-      if (error instanceof ReadTimeoutError || attempt >= SAVED_PLAYLIST_READ.attempts) throw error;
+      if (attempt >= SAVED_PLAYLIST_READ.attempts) throw error;
       addLog("warn", "SID Radio: could not read back the playlist saved before the station, retrying", {
         attempt,
         error: (error as Error)?.message ?? String(error),
@@ -154,7 +189,7 @@ const RECORD_KEY = "c64u_sid_radio_saved_playlist";
 export const savedPlaylistRepositoryId = (playlistStorageKey: string) => `${playlistStorageKey}:before-sid-radio`;
 
 export const writeHandoverRecord = (handover: StationHandover): void => {
-  const { items: _items, playsOutLastTune: _playsOutLastTune, ...record } = handover;
+  const { items: _items, playsOutLastTune: _playsOutLastTune, carriedItems: _carriedItems, ...record } = handover;
   try {
     localStorage.setItem(RECORD_KEY, JSON.stringify(record));
   } catch (error) {
@@ -196,6 +231,20 @@ export const unreadSavedHandover = (): StationHandover | null => {
 // Survives the Play page unmounting on a tab switch, which a component's state does not. "unreadable":
 // this launch gave up reading the saved copy back; it stays saved for the next launch to read.
 let remembered: StationHandover | null | "unreadable" = null;
+let inFlightSavedRead: Promise<PlaylistItem[]> | null = null;
+
+/** One read of the saved copy at a time per app session; a later caller, on any mount, joins it. */
+export const readSavedCopyOnce = (read: () => Promise<PlaylistItem[]>): Promise<PlaylistItem[]> => {
+  if (!inFlightSavedRead) {
+    const reading = read();
+    inFlightSavedRead = reading;
+    const release = () => {
+      if (inFlightSavedRead === reading) inFlightSavedRead = null;
+    };
+    reading.then(release, release);
+  }
+  return inFlightSavedRead;
+};
 
 export const rememberedHandover = (): StationHandover | null => {
   if (remembered === "unreadable") return null;
@@ -204,6 +253,12 @@ export const rememberedHandover = (): StationHandover | null => {
 
 export const rememberHandover = (handover: StationHandover | null) => {
   remembered = handover;
+};
+
+/** Starts a fresh app session's view of the saved copy: nothing remembered, no read in flight. */
+export const resetStationHandoverSession = () => {
+  remembered = null;
+  inFlightSavedRead = null;
 };
 
 export const rememberSavedCopyUnreadable = () => {

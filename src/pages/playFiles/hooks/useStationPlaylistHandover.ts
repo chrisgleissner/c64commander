@@ -17,6 +17,7 @@ import {
   lastTuneQueue,
   readSavedPlaylistWithRetry,
   rememberHandover,
+  readSavedCopyOnce,
   rememberSavedCopyUnreadable,
   SAVED_PLAYLIST_READ,
   rememberedHandover,
@@ -200,19 +201,10 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
 
   // After a restart only the record is left; the items come back from the playlist repository.
   const loadingRef = useRef(false);
-  // A read given up on by its timeout is still running; a later attempt joins it instead of queuing another.
-  const inFlightReadRef = useRef<Promise<PlaylistItem[]> | null>(null);
-  const readSavedOnce = useCallback(() => {
-    if (!inFlightReadRef.current) {
-      const reading = latestRef.current.persistence.readSavedPlaylist(SAVED_PLAYLIST_REPOSITORY_ID);
-      inFlightReadRef.current = reading;
-      const release = () => {
-        if (inFlightReadRef.current === reading) inFlightReadRef.current = null;
-      };
-      reading.then(release, release);
-    }
-    return inFlightReadRef.current;
-  }, []);
+  const readSavedOnce = useCallback(
+    () => readSavedCopyOnce(() => latestRef.current.persistence.readSavedPlaylist(SAVED_PLAYLIST_REPOSITORY_ID)),
+    [],
+  );
   useEffect(() => {
     if (!ready || !handover || handover.items !== null || loadingRef.current) return;
     loadingRef.current = true;

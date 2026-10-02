@@ -13,6 +13,7 @@ import {
   isStationQueueEdited,
   lastTuneQueue,
   rememberHandover,
+  resetStationHandoverSession,
   rememberedHandover,
   restoredPlaylistState,
   shouldRestorePlaylist,
@@ -34,7 +35,7 @@ const savedFromMine = () =>
 
 beforeEach(() => {
   localStorage.clear();
-  rememberHandover(null);
+  resetStationHandoverSession();
 });
 
 describe("stationPlaylistHandover", () => {
@@ -125,7 +126,7 @@ describe("stationPlaylistHandover", () => {
     expect(shouldRestorePlaylist({ ...paused, isPlaying: false, isPaused: false })).toBe(true);
 
     writeHandoverRecord(handover);
-    rememberHandover(null);
+    resetStationHandoverSession();
     const relaunched = { ...rememberedHandover()!, items: handover.items };
     expect(shouldRestorePlaylist({ ...paused, handover: relaunched })).toBe(true);
   });
@@ -148,7 +149,7 @@ describe("stationPlaylistHandover", () => {
 
   it("finds the saved playlist again after a restart, from the persisted record alone", () => {
     writeHandoverRecord(savedFromMine());
-    rememberHandover(null);
+    resetStationHandoverSession();
 
     const resumed = rememberedHandover();
 
