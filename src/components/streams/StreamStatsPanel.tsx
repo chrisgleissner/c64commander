@@ -157,7 +157,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         </span>
         <button
           type="button"
-          className="flex items-center gap-1 text-xs text-muted-foreground"
+          className="flex min-h-11 min-w-11 items-center justify-end gap-1 text-xs text-muted-foreground"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
           data-testid="stream-stats-toggle"

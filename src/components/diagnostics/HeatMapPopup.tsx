@@ -87,7 +87,7 @@ const MetricToggle = ({ mode, onChange }: { mode: HeatMapMetricMode; onChange: (
         onClick={() => onChange(m)}
         aria-pressed={mode === m}
         className={cn(
-          "px-2.5 py-0.5 text-xs font-medium rounded-sm border transition-colors",
+          "min-h-11 px-2.5 py-0.5 text-xs font-medium rounded-sm border transition-colors",
           mode === m
             ? "border-primary bg-primary/10 text-primary"
             : "border-border text-muted-foreground hover:border-primary/40",
@@ -134,7 +134,7 @@ function CellDetail({ cell, mode, onClose }: { cell: HeatMapCell; mode: HeatMapM
         <button
           type="button"
           onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="flex size-11 shrink-0 items-center justify-center text-xs text-muted-foreground hover:text-foreground"
           aria-label="Close cell detail"
         >
           ✕
@@ -277,7 +277,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                         <td
                           key={col}
                           className={cn(
-                            "h-9 rounded-md border px-1 py-0.5 text-center transition-transform duration-150",
+                            "rounded-md border p-0 text-center transition-transform duration-150",
                             "hover:scale-[1.02] hover:ring-1 hover:ring-primary/70",
                           )}
                           style={heatCellStyle(intensity)}
@@ -286,7 +286,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                         >
                           <button
                             type="button"
-                            className="flex h-full w-full cursor-pointer items-center justify-center rounded-[inherit] font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
+                            className="flex min-h-11 w-full min-w-11 cursor-pointer items-center justify-center rounded-[inherit] font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
                             onClick={() => cell && setCellDetail({ cell })}
                             title={cell ? `${cell.rowGroup}/${cell.columnItem}: ${value}` : "—"}
                             aria-label={label}

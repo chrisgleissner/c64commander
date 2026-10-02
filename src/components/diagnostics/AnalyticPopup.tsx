@@ -87,7 +87,7 @@ export function AnalyticPopup({
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                className="flex min-h-11 shrink-0 items-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Return to diagnostics"
                 data-testid="analytic-popup-return"
               >

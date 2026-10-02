@@ -185,8 +185,10 @@ export function SidCard({
         )}
       </div>
 
-      {/* Row 2: Identity and Address */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      {/* Row 2: Identity and Address. Wraps rather than splitting into two fixed columns: with Large
+          display and Large text on a 392px phone the Address column was too narrow for "$D400", so the
+          select shrank to 33px and drew "$…". The address keeps its full width and moves down instead. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs">
         {/* Wraps: the label beside it is `shrink-0`, so when the row is too narrow the value is the
             only thing that can give. At the largest Text size "None" needed 61px against a 53px
             line and was split mid-word. Wrapping drops the value to its own line instead. */}
@@ -217,11 +219,11 @@ export function SidCard({
             </Select>
           )}
         </div>
-        <div className="inline-summary-label-value-pair flex items-center gap-2 justify-end">
+        <div className="inline-summary-label-value-pair ml-auto flex shrink-0 items-center gap-2 justify-end">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Address</span>
           <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
             <SelectTrigger
-              className={cn(inlineSelectTriggerClass, "min-w-0")}
+              className={cn(inlineSelectTriggerClass, "shrink-0")}
               data-testid={`home-sid-address-${testIdSuffix}`}
             >
               <SelectValue placeholder={addressValue} />

@@ -418,8 +418,9 @@ const FilterToggleChip = ({
   <button
     type="button"
     onClick={() => onChange(!checked)}
+    aria-pressed={checked}
     className={cn(
-      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+      "min-h-11 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
       checked ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
     )}
   >
