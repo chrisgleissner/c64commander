@@ -545,6 +545,19 @@ describe("DeviceDiscoveryInterstitial", () => {
     });
   });
 
+  it("stays silent when a newer device switch supersedes the discovered-device selection", async () => {
+    const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
+    switchSavedDevice.mockResolvedValueOnce(SAVED_DEVICE_SWITCH_SUPERSEDED as never);
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("startup-use-discovered-device-id:38c1ba"));
+
+    await waitFor(() => expect(switchSavedDevice).toHaveBeenCalledWith("saved-device"));
+    await waitFor(() => expect(screen.getByTestId("startup-use-discovered-device-id:38c1ba")).not.toBeDisabled());
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Discovered device selected" }));
+    expect(reportUserError).not.toHaveBeenCalled();
+  });
+
   it("cancels the password prompt without saving", () => {
     discoveryState = { ...discoveryState, candidates: [candidate(true)] };
     renderDialog();

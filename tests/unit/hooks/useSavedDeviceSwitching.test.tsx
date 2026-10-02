@@ -1286,6 +1286,44 @@ describe("useSavedDeviceSwitching", () => {
     expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-last");
   });
 
+  it("resolves a superseded queued caller with the superseded outcome, not the newer device's verification", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
+    for (const [id, host] of [
+      ["device-first", "192.0.2.10"],
+      ["device-skipped", "192.0.2.11"],
+      ["device-last", "192.0.2.12"],
+    ]) {
+      store.addSavedDevice({ id, name: id, host, httpPort: 80, ftpPort: 21, telnetPort: 64, hasPassword: false });
+    }
+    const firstVerification = createDeferred<{ ok: boolean; deviceInfo: { product: string; unique_id: string } }>();
+    const lastVerification = { ok: false, error: "device-last did not answer" };
+    mockVerifyCurrentConnectionTarget
+      .mockReturnValueOnce(firstVerification.promise)
+      .mockResolvedValueOnce(lastVerification);
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/settings") });
+
+    let switches!: Promise<unknown>[];
+    act(() => {
+      switches = [
+        result.current("device-first"),
+        result.current("device-skipped"),
+        result.current("device-last"),
+        result.current("device-last"),
+      ];
+    });
+    firstVerification.resolve({ ok: true, deviceInfo: { product: "C64 Ultimate", unique_id: "UID-FIRST" } });
+    await act(async () => {
+      await Promise.all(switches);
+    });
+
+    await expect(switches[1]).resolves.toBe(SAVED_DEVICE_SWITCH_SUPERSEDED);
+    await expect(switches[2]).resolves.toEqual(lastVerification);
+    await expect(switches[3]).resolves.toEqual(lastVerification);
+  });
+
   it("keeps the selected device and records offline state when verification fails", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");

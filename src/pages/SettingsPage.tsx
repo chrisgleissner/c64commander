@@ -31,6 +31,7 @@ import { useC64Connection } from "@/hooks/useC64Connection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
+import { isSupersededSavedDeviceSwitch } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 import { C64_DEFAULTS } from "@/lib/c64api";
 import {
   buildDeviceHostWithHttpPort,
@@ -1026,6 +1027,7 @@ export default function SettingsPage() {
         await setPasswordForDevice(persisted.deviceId, suppliedPassword);
       }
       const verification = await switchSavedDevice(persisted.deviceId);
+      if (isSupersededSavedDeviceSwitch(verification)) return;
       if (isOfflineSwitchResult(verification)) {
         throw new Error(
           describeSwitchFailure(

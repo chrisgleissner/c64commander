@@ -25,6 +25,7 @@ import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
+import { isSupersededSavedDeviceSwitch } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
 import { isAuthRequiredError } from "@/lib/c64api/transportErrors";
 import { probeDeviceReachability, type ProbeInfoResult } from "@/lib/connection/connectionManager";
@@ -193,6 +194,7 @@ export function DeviceDiscoveryInterstitial() {
         await setPasswordForDevice(persisted.deviceId, password);
       }
       const verification = await switchSavedDevice(persisted.deviceId);
+      if (isSupersededSavedDeviceSwitch(verification)) return false;
       if (isOfflineSwitchResult(verification)) {
         throw new Error(
           verification.error ??

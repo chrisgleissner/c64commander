@@ -1065,6 +1065,44 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("stays silent when a newer device switch supersedes the discovered-device selection", async () => {
+    const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
+    mockSwitchSavedDevice.mockResolvedValueOnce(SAVED_DEVICE_SWITCH_SUPERSEDED as never);
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [
+        {
+          id: "id:38c1ba",
+          address: "192.0.2.13",
+          host: null,
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          firmwareVersion: "3.14e",
+          fpgaVersion: "122",
+          coreVersion: "1.4B",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+          requiresPassword: false,
+          alreadySavedDeviceId: null,
+          confidence: "verified",
+          lastSeenAt: "2026-06-21T00:00:00.000Z",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 500,
+    };
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+
+    await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use" })).not.toBeDisabled());
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Discovered device selected" }));
+    expect(reportUserError).not.toHaveBeenCalled();
+  });
+
   it("explains when automatic discovery is unsupported on this platform", () => {
     deviceDiscoveryStateRef.current = {
       ...deviceDiscoveryStateRef.current,
