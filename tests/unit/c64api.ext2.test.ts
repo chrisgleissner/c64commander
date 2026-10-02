@@ -554,6 +554,37 @@ describe("c64api utility functions - targeted branch coverage", () => {
       expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
     });
 
+    it("keeps a read in flight when the same device, address and password are applied again", async () => {
+      const fm = getFetchMock();
+      let resolveFetch!: (response: Response) => void;
+      fm.mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+      );
+
+      const api = new C64API("http://device-b", "secret", "device-b");
+      const pending = api.getInfo({ __c64uBypassCache: true });
+      await vi.waitFor(() => expect(resolveFetch).toBeTypeOf("function"));
+
+      api.setBaseUrl("http://device-b");
+      api.setPassword("secret");
+      api.setDeviceHost("device-b");
+      resolveFetch(
+        new Response(JSON.stringify({ product: "Ultimate 64", errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await expect(pending).resolves.toMatchObject({ product: "Ultimate 64" });
+      expect(addLogMock).not.toHaveBeenCalledWith(
+        "debug",
+        "C64 API request superseded by routing change",
+        expect.anything(),
+      );
+    });
+
     it("still reports selected-device transport failures", async () => {
       const fm = getFetchMock();
       fm.mockRejectedValueOnce(new TypeError("Failed to fetch"));
