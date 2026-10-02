@@ -17,10 +17,12 @@ import {
   lastTuneQueue,
   readSavedPlaylistWithRetry,
   rememberHandover,
+  rememberSavedCopyUnreadable,
   SAVED_PLAYLIST_READ,
   rememberedHandover,
   restoredPlaylistState,
   savedPlaylistRepositoryId,
+  unreadSavedHandover,
   shouldRestorePlaylist,
   withAppendedStationItems,
   writeHandoverRecord,
@@ -45,6 +47,7 @@ const persistSavedItems = (items: PlaylistItem[]) => {
 export const PLAYLIST_RESTORED_TOAST = "Your playlist is back";
 export const LAST_TUNE_TOAST = "This tune plays to its end, then your playlist comes back.";
 export const SAVED_PLAYLIST_LOST_TOAST = "Your playlist from before SID Radio could not be read back";
+export const SAVED_PLAYLIST_KEPT_DESCRIPTION = "It stays saved, and the app tries again the next time it starts.";
 
 export type UseStationPlaylistHandoverParams = {
   queue: {
@@ -109,7 +112,8 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
       const { queue, playback } = latestRef.current;
       const startQueue = async () => (await playback.startPlaylist(items, 0, { replaceQueue: true })) !== false;
       if (!items.length) return startQueue();
-      const existing = handoverRef.current;
+      // A saved copy this launch could not read back is kept, not overwritten with the queue now playing.
+      const existing = handoverRef.current ?? unreadSavedHandover();
       const position = {
         playlist: queue.playlist,
         currentIndex: queue.currentIndex,
@@ -196,10 +200,23 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
 
   // After a restart only the record is left; the items come back from the playlist repository.
   const loadingRef = useRef(false);
+  // A read given up on by its timeout is still running; a later attempt joins it instead of queuing another.
+  const inFlightReadRef = useRef<Promise<PlaylistItem[]> | null>(null);
+  const readSavedOnce = useCallback(() => {
+    if (!inFlightReadRef.current) {
+      const reading = latestRef.current.persistence.readSavedPlaylist(SAVED_PLAYLIST_REPOSITORY_ID);
+      inFlightReadRef.current = reading;
+      const release = () => {
+        if (inFlightReadRef.current === reading) inFlightReadRef.current = null;
+      };
+      reading.then(release, release);
+    }
+    return inFlightReadRef.current;
+  }, []);
   useEffect(() => {
-    if (!handover || handover.items !== null || loadingRef.current) return;
+    if (!ready || !handover || handover.items !== null || loadingRef.current) return;
     loadingRef.current = true;
-    void readSavedPlaylistWithRetry(() => latestRef.current.persistence.readSavedPlaylist(SAVED_PLAYLIST_REPOSITORY_ID))
+    void readSavedPlaylistWithRetry(readSavedOnce)
       .then((items) => {
         const current = handoverRef.current;
         if (!current || current.items !== null) return;
@@ -207,20 +224,29 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
         addLog("info", "SID Radio: read back the playlist saved before the station", { itemCount: items.length });
       })
       .catch((error: unknown) => {
-        addErrorLog("Failed to read back the playlist saved before SID Radio; giving it up", {
+        addErrorLog("Failed to read back the playlist saved before SID Radio; keeping it for the next launch", {
           playlistId: SAVED_PLAYLIST_REPOSITORY_ID,
           attempts: SAVED_PLAYLIST_READ.attempts,
           error: (error as Error)?.message ?? String(error),
           stack: (error as Error)?.stack,
         });
-        // Left in place, the unreadable handover would hold the queue in station order indefinitely.
-        if (handoverRef.current?.items === null) commit(null);
-        toast({ title: SAVED_PLAYLIST_LOST_TOAST, variant: "destructive" });
+        // Left in place, the unreadable handover would hold the queue in station order indefinitely. The
+        // record and the repository copy stay, so the next launch reads them again.
+        if (handoverRef.current?.items === null) {
+          handoverRef.current = null;
+          rememberSavedCopyUnreadable();
+          setHandoverState(null);
+        }
+        toast({
+          title: SAVED_PLAYLIST_LOST_TOAST,
+          description: SAVED_PLAYLIST_KEPT_DESCRIPTION,
+          variant: "destructive",
+        });
       })
       .finally(() => {
         loadingRef.current = false;
       });
-  }, [handover, commit]);
+  }, [handover, ready, commit, readSavedOnce]);
 
   useEffect(() => {
     if (!shouldRestorePlaylist({ handover, ready, isPlaying, isPaused, playlistEnded })) return;

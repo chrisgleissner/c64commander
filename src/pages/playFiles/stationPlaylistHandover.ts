@@ -120,19 +120,25 @@ export const restoredPlaylistState = (
 
 export const SAVED_PLAYLIST_READ = { attempts: 3, timeoutMs: 10_000, retryDelayMs: 1_000 };
 
+class ReadTimeoutError extends Error {}
+
 const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> =>
   new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`No answer within ${timeoutMs} ms`)), timeoutMs);
+    const timer = setTimeout(() => reject(new ReadTimeoutError(`No answer within ${timeoutMs} ms`)), timeoutMs);
     promise.then(resolve, reject).finally(() => clearTimeout(timer));
   });
 
-/** Reads the saved items back, retrying a bounded number of times; rejects with the last failure. */
+/**
+ * Reads the saved items back, retrying a read that failed a bounded number of times; rejects with the
+ * last failure. A read that has not answered is still running, so it is not retried: a second read
+ * would only queue behind it.
+ */
 export const readSavedPlaylistWithRetry = async (read: () => Promise<PlaylistItem[]>): Promise<PlaylistItem[]> => {
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await withTimeout(read(), SAVED_PLAYLIST_READ.timeoutMs);
     } catch (error) {
-      if (attempt >= SAVED_PLAYLIST_READ.attempts) throw error;
+      if (error instanceof ReadTimeoutError || attempt >= SAVED_PLAYLIST_READ.attempts) throw error;
       addLog("warn", "SID Radio: could not read back the playlist saved before the station, retrying", {
         attempt,
         error: (error as Error)?.message ?? String(error),
@@ -181,15 +187,25 @@ export const clearHandoverRecord = (): void => {
   }
 };
 
-// Survives the Play page unmounting on a tab switch, which a component's state does not.
-let remembered: StationHandover | null = null;
-
-export const rememberedHandover = (): StationHandover | null => {
-  if (remembered) return remembered;
+/** The persisted handover with its items not yet read back, or null when no playlist is saved. */
+export const unreadSavedHandover = (): StationHandover | null => {
   const record = readHandoverRecord();
   return record ? { ...record, items: null } : null;
 };
 
+// Survives the Play page unmounting on a tab switch, which a component's state does not. "unreadable":
+// this launch gave up reading the saved copy back; it stays saved for the next launch to read.
+let remembered: StationHandover | null | "unreadable" = null;
+
+export const rememberedHandover = (): StationHandover | null => {
+  if (remembered === "unreadable") return null;
+  return remembered ?? unreadSavedHandover();
+};
+
 export const rememberHandover = (handover: StationHandover | null) => {
   remembered = handover;
+};
+
+export const rememberSavedCopyUnreadable = () => {
+  remembered = "unreadable";
 };

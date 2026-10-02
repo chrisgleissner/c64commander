@@ -23,6 +23,7 @@ vi.mock("@/hooks/use-toast", () => ({ toast: repo.toast }));
 
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import {
+  readHandoverRecord,
   rememberHandover,
   rememberedHandover,
   SAVED_PLAYLIST_READ,
@@ -52,6 +53,7 @@ type HarnessProps = {
   initialPlaylist?: PlaylistItem[];
   initialIndex?: number;
   resumeSettled?: boolean;
+  persistenceReady?: boolean;
   readSavedPlaylist?: (playlistId: string) => Promise<PlaylistItem[]>;
 };
 
@@ -79,7 +81,7 @@ const useHarness = (props: HarnessProps) => {
       stationActiveRef,
     },
     persistence: {
-      ready: true,
+      ready: props.persistenceReady ?? true,
       readSavedPlaylist:
         props.readSavedPlaylist ?? (async (playlistId) => (repo.playlists.get(playlistId) ?? []) as PlaylistItem[]),
     },
@@ -334,7 +336,7 @@ describe("useStationPlaylistHandover", () => {
       expect(repo.toast).toHaveBeenCalledWith(expect.objectContaining({ title: SAVED_PLAYLIST_LOST_TOAST }));
     });
 
-    it("gives up on a read that never answers", async () => {
+    it("gives up on a read that never answers without starting a second read behind it", async () => {
       vi.useFakeTimers();
       relaunchWhileFinishing();
       const readSavedPlaylist = vi.fn(() => new Promise<PlaylistItem[]>(() => undefined));
@@ -347,8 +349,137 @@ describe("useStationPlaylistHandover", () => {
         );
       });
 
-      expect(readSavedPlaylist).toHaveBeenCalledTimes(SAVED_PLAYLIST_READ.attempts);
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(1);
       expect(harness.result.current.stationActiveRef.current).toBe(false);
+    });
+
+    it("joins the read still running from an earlier give-up when a station starts, instead of starting another", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      let answer: (items: PlaylistItem[]) => void = () => undefined;
+      const readSavedPlaylist = vi.fn(
+        () =>
+          new Promise<PlaylistItem[]>((resolve) => {
+            answer = resolve;
+          }),
+      );
+
+      const harness = renderHarness({
+        stationActive: false,
+        isPlaying: false,
+        initialPlaylist: [stationA[0]],
+        initialIndex: 0,
+        readSavedPlaylist,
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SAVED_PLAYLIST_READ.timeoutMs);
+      });
+      expect(repo.toast).toHaveBeenCalledWith(expect.objectContaining({ title: SAVED_PLAYLIST_LOST_TOAST }));
+
+      harness.rerender({ stationActive: true, isPlaying: false, readSavedPlaylist });
+      await act(async () => {
+        await harness.result.current.handover.startStationQueue(stationB);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        answer(mine);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      harness.rerender({ stationActive: false, isPlaying: false, readSavedPlaylist });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+    });
+
+    it("does not read the saved playlist before the stored playlist has been applied", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      const readSavedPlaylist = vi.fn().mockResolvedValue(mine);
+
+      const harness = renderHarness({
+        stationActive: false,
+        isPlaying: false,
+        persistenceReady: false,
+        readSavedPlaylist,
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SAVED_PLAYLIST_READ.timeoutMs);
+      });
+      expect(readSavedPlaylist).not.toHaveBeenCalled();
+
+      harness.rerender({ stationActive: false, isPlaying: false, persistenceReady: true, readSavedPlaylist });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(readSavedPlaylist).toHaveBeenCalledTimes(1);
+      expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+    });
+
+    it("keeps the saved copy and its record after giving up, so the next launch reads it back", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      repo.playlists.set(savedPlaylistRepositoryId(SHARED_PLAYLIST_STORAGE_KEY), mine);
+      const failing = vi.fn().mockRejectedValue(new Error("unreadable"));
+
+      const first = renderHarness({ stationActive: false, isPlaying: false, readSavedPlaylist: failing });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SAVED_PLAYLIST_READ.retryDelayMs * SAVED_PLAYLIST_READ.attempts ** 2);
+      });
+      expect(failing).toHaveBeenCalledTimes(SAVED_PLAYLIST_READ.attempts);
+      expect(readHandoverRecord()).not.toBeNull();
+      expect(repo.playlists.get(savedPlaylistRepositoryId(SHARED_PLAYLIST_STORAGE_KEY))).toEqual(mine);
+      first.unmount();
+      rememberHandover(null);
+
+      const next = renderHarness({ stationActive: false, isPlaying: false, initialPlaylist: [stationA[0]] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(ids(next.result.current.playlist)).toEqual(["a", "b", "c"]);
+    });
+
+    it("does not let a station started after giving up overwrite the saved copy with the station's queue", async () => {
+      vi.useFakeTimers();
+      relaunchWhileFinishing();
+      repo.playlists.set(savedPlaylistRepositoryId(SHARED_PLAYLIST_STORAGE_KEY), mine);
+      let readable = false;
+      const readSavedPlaylist = vi.fn(async (playlistId: string) => {
+        if (!readable) throw new Error("unreadable");
+        return (repo.playlists.get(playlistId) ?? []) as PlaylistItem[];
+      });
+
+      const harness = renderHarness({
+        stationActive: false,
+        isPlaying: false,
+        initialPlaylist: stationA,
+        initialIndex: 0,
+        readSavedPlaylist,
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SAVED_PLAYLIST_READ.retryDelayMs * SAVED_PLAYLIST_READ.attempts ** 2);
+      });
+      expect(repo.toast).toHaveBeenCalledWith(expect.objectContaining({ title: SAVED_PLAYLIST_LOST_TOAST }));
+
+      readable = true;
+      harness.rerender({ stationActive: true, isPlaying: false, initialPlaylist: stationA, readSavedPlaylist });
+      await act(async () => {
+        await harness.result.current.handover.startStationQueue(stationB);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(repo.playlists.get(savedPlaylistRepositoryId(SHARED_PLAYLIST_STORAGE_KEY))).toEqual(mine);
+
+      harness.rerender({ stationActive: false, isPlaying: false, initialPlaylist: stationA, readSavedPlaylist });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
     });
   });
 
