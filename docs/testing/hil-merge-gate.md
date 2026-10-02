@@ -213,6 +213,11 @@ it only while its own fundamental is present: at least half the strongest ladder
 window, and at least a tenth of the note's own strongest partial. A sound at 3630 Hz with nothing at
 1210 Hz is therefore not read as 1210 Hz, and a substituted, missing or reordered note is still a
 sequence error. A note's edges are where its level stays below half its median plateau for 3 ms.
+A knock near the microphone can raise every ladder band for one or two 25 ms windows while a note
+continues under it. Run `2026-10-02T14-51-40` read one 1210 Hz note as two and failed on "1 tones
+arrived out of order". Up to two such windows between two runs of the same note are now read as that
+note, as long as the whole span is no longer than one note. A note played again after the ladder's
+79.8 ms silence is still a replay, and a gap inside a note is still graded by the dropout pass.
 `explain_clarity.py` reads a harmonic the same way and shows it as `heard x3` in its timeline.
 `tools/hil/tests/test_clarity_harmonics.py` re-grades 4 s excerpts of both kept recordings.
 

@@ -353,6 +353,12 @@ FUNDAMENTAL_UNDER_PARTIAL = 0.1
 SILENCE_BELOW_LOUD = 0.05
 # A note's edge is where its tone stays gone for this many 1 ms steps.
 EDGE_CONFIRM = 3
+# A knock in the room can swamp every ladder band for a window or two while a note carries on under
+# it. Up to this many 25 ms windows between two runs of the same note are that note, provided the
+# whole span is no longer than one note: the ladder's 79.8 ms silence can leave as few as two clear
+# windows between two of the same note, and a note played again must still read as a replay. A real
+# gap inside a note is still graded by the 5 ms dropout pass.
+BRIDGE_WINDOWS = 2
 
 
 def coarse_levels(samples: list[float], rate: int, hz: float, window: int, steps: int) -> np.ndarray:
@@ -385,6 +391,26 @@ def identify_tones(levels: np.ndarray) -> np.ndarray:
     loud = order[-1] >= np.percentile(order[-1], 95) * SILENCE_BELOW_LOUD
     clear = (order[-1] >= order[-2] * 2.0) & loud
     return np.where(clear, np.argmax(scores, axis=0), -1)
+
+
+def bridge_interruptions(sounding: np.ndarray, note_windows: int, max_windows: int = BRIDGE_WINDOWS) -> np.ndarray:
+    """`sounding` with a short interruption inside one note set to that note.
+
+    A run of up to `max_windows` windows between two runs of the same note is bridged when the two runs
+    and the interruption together span at most `note_windows` windows.
+    """
+    runs: list[list[int]] = []  # [value, start, length]
+    for index, value in enumerate(sounding.tolist()):
+        if runs and runs[-1][0] == value:
+            runs[-1][2] += 1
+        else:
+            runs.append([value, index, 1])
+    bridged = sounding.copy()
+    for before, gap, after in zip(runs, runs[1:], runs[2:]):
+        span = after[1] + after[2] - before[1]
+        if before[0] >= 0 and after[0] == before[0] and gap[2] <= max_windows and span <= note_windows:
+            bridged[gap[1] : gap[1] + gap[2]] = before[0]
+    return bridged
 
 
 def detect_bursts(samples: list[float], rate: int) -> list[tuple[int, int, int]]:
@@ -420,7 +446,7 @@ def detect_bursts(samples: list[float], rate: int) -> list[tuple[int, int, int]]
             for hz in TONES_HZ
         ]
     )
-    sounding = identify_tones(levels)
+    sounding = bridge_interruptions(identify_tones(levels), note_windows=math.ceil(ON_MS / coarse_ms) + 1)
 
     bursts: list[tuple[int, int, int]] = []
     i = 0
