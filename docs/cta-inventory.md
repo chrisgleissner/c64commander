@@ -1292,6 +1292,26 @@ are out of reach.
 - Cancel — button — no testid — stops the import. Escape and the device Back key do the
   same
 
+### 5.4 Notifications (`app-toast`)
+
+Notifications sit in a strip directly above the tab bar. The page area ends above that strip
+(the Toaster reserves its height as `--app-toast-reserved-height`), so a notification never
+covers a page control; dialogs and sheets draw over it. Error notifications stay until closed.
+Notices close themselves after the Notifications duration. Each notification is one
+`app-toast` (the container, not a control). Tapping its body does nothing; swiping it sideways
+closes it. Code-verified against source and `playwright/toastPlacement.spec.ts`, **not yet
+enumerated on hardware**.
+
+- Details — button — `app-toast-details` — closes the notification and opens Diagnostics on
+  the error log (§5.2)
+- Close notification — icon button (44x44) — `app-toast-close` — closes the notification
+- Retry — button — no testid `[only on an error raised with a retry action]`
+
+Keypad: notifications render outside the focus ring, so the ring does not move onto them. The
+device Back key (and the keymap's Back binding) presses `app-toast-close` on the newest open
+notification before doing anything else, unless a dialog or sheet is open, which takes Back
+first. Details is reached by keypad through `*`, which opens Diagnostics directly.
+
 ---
 
 ## 6. Known findings / limitations (as of last verification)

@@ -6,16 +6,46 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps } from "react";
+import { X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { APP_SETTINGS_KEYS, loadNotificationDurationMs } from "@/lib/config/appSettings";
 
+const TOAST_RESERVED_HEIGHT_VAR = "--app-toast-reserved-height";
+
+const reserveToastStripHeight = (heightPx: number) => {
+  const root = document.documentElement;
+  const next = `${Math.max(0, Math.round(heightPx))}px`;
+  if (root.style.getPropertyValue(TOAST_RESERVED_HEIGHT_VAR) === next) return;
+  root.style.setProperty(TOAST_RESERVED_HEIGHT_VAR, next);
+};
+
+/** Keeps the page area ending above the toast strip, so no page control can sit under a toast. */
+const useToastStripReservation = () => {
+  const viewportRef = useRef<HTMLOListElement | null>(null);
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+    const measure = () => reserveToastStripHeight(viewport.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return () => reserveToastStripHeight(0);
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+      reserveToastStripHeight(0);
+    };
+  }, []);
+  return viewportRef;
+};
+
 export function Toaster() {
   const { toasts, dismiss } = useToast();
   const [duration, setDuration] = useState(loadNotificationDurationMs);
+  const viewportRef = useToastStripReservation();
 
   // React to duration setting changes without requiring a page reload.
   useEffect(() => {
@@ -52,7 +82,7 @@ export function Toaster() {
           />
         ),
       )}
-      <ToastViewport />
+      <ToastViewport ref={viewportRef} />
     </ToastProvider>
   );
 }
@@ -67,32 +97,18 @@ type ToastItemProps = {
   [key: string]: unknown;
 };
 
-// Separate component so each toast has its own swipe-tracking ref.
+const TOAST_BUTTON_CLASS =
+  "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 function ToastItem({ id, title, description, action, dismiss, variant, ...props }: ToastItemProps) {
-  // Track whether a swipe gesture started so click does not also fire after
-  // a swipe on desktop (where mouseup + click both fire after a drag).
-  const swipingRef = useRef(false);
-
-  const handleSwipeStart = () => {
-    swipingRef.current = true;
-  };
-
-  // Radix handles rightward swipe natively via swipeDirection="right" (provider default).
-  // For leftward swipe we check the delta and call dismiss() manually.
+  // Radix dismisses on a rightward swipe itself; a leftward one is dismissed here.
   const handleSwipeEnd: NonNullable<ComponentProps<typeof Toast>["onSwipeEnd"]> = (e) => {
-    swipingRef.current = false;
     if (e.detail.delta.x < -50) {
       dismiss(id);
     }
   };
 
-  const handleSwipeCancel = () => {
-    swipingRef.current = false;
-  };
-
-  // Tap = dismiss + open Diagnostics. Guard prevents firing after a swipe gesture.
-  const handleClick = () => {
-    if (swipingRef.current) return;
+  const openDetails = () => {
     dismiss(id);
     requestDiagnosticsOpen("error-logs");
   };
@@ -102,24 +118,44 @@ function ToastItem({ id, title, description, action, dismiss, variant, ...props 
       data-testid="app-toast"
       data-toast-id={id}
       variant={variant}
-      // ERROR_POLICY §4: destructive (error) toasts must persist until dismissed
-      // or stale-cleared so failures stay visible and their Retry action is
-      // reachable. The Radix provider `duration` governs notices only; without
-      // this per-root override every error toast inherits the ~4s notice
-      // duration and silently auto-dismisses (HARD19-037). `undefined` on
-      // notices falls through to the provider duration.
+      // ERROR_POLICY §4: an error toast stays until the user closes it (or it is stale-cleared).
+      // The provider duration is the notice duration, so destructive roots override it (HARD19-037).
       duration={variant === "destructive" ? Infinity : undefined}
       {...props}
-      onSwipeStart={handleSwipeStart}
       onSwipeEnd={handleSwipeEnd}
-      onSwipeCancel={handleSwipeCancel}
-      onClick={handleClick}
     >
-      <div className="grid gap-1">
-        {title && <ToastTitle data-testid="app-toast-title">{title}</ToastTitle>}
-        {description && <ToastDescription data-testid="app-toast-description">{description}</ToastDescription>}
+      <div className="flex items-start gap-1">
+        <div className="min-w-0 flex-1 self-center">
+          {title && (
+            <ToastTitle className="line-clamp-2" data-testid="app-toast-title">
+              {title}
+            </ToastTitle>
+          )}
+        </div>
+        <button
+          type="button"
+          className={`${TOAST_BUTTON_CLASS} border border-current px-3`}
+          data-testid="app-toast-details"
+          onClick={openDetails}
+        >
+          Details
+        </button>
+        <button
+          type="button"
+          className={`${TOAST_BUTTON_CLASS} -mr-2 opacity-80 hover:opacity-100`}
+          aria-label="Close notification"
+          data-testid="app-toast-close"
+          onClick={() => dismiss(id)}
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+        </button>
       </div>
-      {action}
+      {description && (
+        <ToastDescription className="line-clamp-3" data-testid="app-toast-description">
+          {description}
+        </ToastDescription>
+      )}
+      {action ? <div className="flex justify-end">{action}</div> : null}
     </Toast>
   );
 }

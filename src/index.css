@@ -624,7 +624,8 @@ button:focus-visible,
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--app-tab-bar-frame-height, 0px);
+  /* Above the toast strip, which sits directly on the tab bar and is 0px tall without a toast. */
+  bottom: calc(var(--app-tab-bar-frame-height, 0px) + var(--app-toast-reserved-height, 0px));
   z-index: 900;
   display: flex;
   align-items: center;

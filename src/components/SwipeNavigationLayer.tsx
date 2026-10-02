@@ -454,7 +454,10 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     <div
       ref={containerRef}
       className="relative w-screen overflow-hidden bg-background"
-      style={{ height: "calc(100dvh - var(--app-tab-bar-reserved-height))", touchAction: "pan-y pinch-zoom" }}
+      style={{
+        height: "calc(100dvh - var(--app-tab-bar-reserved-height) - var(--app-toast-reserved-height, 0px))",
+        touchAction: "pan-y pinch-zoom",
+      }}
       inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"
       data-swipe-enabled={swipeEnabled ? "true" : "false"}

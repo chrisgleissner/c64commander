@@ -421,15 +421,15 @@ export const FocusNavigationProvider = ({
       const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
       // Before any branch below reads the ring, so the first key navigates.
       if (action !== null) startEngine();
-      // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
-      // portal, so the keypad ring never reaches them: on a keypad-only device (no Tab, no touch)
-      // an error toast covered the screen with no key able to dismiss it. Reuse the toast's own
-      // tap handler (dismiss + open Diagnostics), but let an open dialog win. The Pixel 4 hardware
-      // Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no declared "back" binding.
+      // Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring, so
+      // Back closes the newest one through its own close button; an open dialog wins. The Pixel 4
+      // hardware Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no "back" binding.
       if ((action === "back" || isDeviceBackButton) && !document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) {
-        const toast = document.querySelector<HTMLElement>('[data-testid="app-toast"]');
-        if (toast) {
-          toast.click();
+        const closeButton = document.querySelector<HTMLElement>(
+          '[data-testid="app-toast"][data-state="open"] [data-testid="app-toast-close"]',
+        );
+        if (closeButton) {
+          closeButton.click();
           event.preventDefault();
           return;
         }
