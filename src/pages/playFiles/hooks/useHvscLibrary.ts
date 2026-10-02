@@ -856,17 +856,21 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         } catch (error) {
           if (isHvscCancellationError(error)) {
             const cancelledAt = new Date().toISOString();
-            updateHvscSummary((prev) => ({
-              ...prev,
-              download: {
-                ...prev.download,
-                status: "failure",
-                finishedAt: cancelledAt,
-                errorCategory: null,
-                errorMessage: null,
-              },
-              lastUpdatedAt: cancelledAt,
-            }));
+            updateHvscSummary((prev) => {
+              // A download that already finished was not what the cancel stopped.
+              const stoppedStep = prev.download.status === "success" ? "extraction" : "download";
+              return {
+                ...prev,
+                [stoppedStep]: {
+                  ...prev[stoppedStep],
+                  status: "failure",
+                  finishedAt: cancelledAt,
+                  errorCategory: null,
+                  errorMessage: null,
+                },
+                lastUpdatedAt: cancelledAt,
+              };
+            });
             return;
           }
           const failedAt = new Date().toISOString();
