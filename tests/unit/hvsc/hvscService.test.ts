@@ -195,6 +195,7 @@ import {
   getHvscStatus as getRuntimeStatus,
   getHvscFolderListing as getRuntimeFolderListing,
   getHvscSong as runtimeGetHvscSong,
+  ingestCachedHvsc as runtimeIngestCachedHvsc,
   installOrUpdateHvsc as runtimeInstallOrUpdateHvsc,
   resetHvscLibraryData as runtimeResetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
@@ -825,6 +826,54 @@ describe("hvscService", () => {
       expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledWith(expect.anything(), {
         foldersUnchanged: true,
       });
+    });
+
+    it("restarts the hydration an ingestion stopped when the ingestion is canceled and the library stays ready", async () => {
+      __resetHvscHydrationGenerationForTests();
+      const songs: Record<string, { virtualPath: string; fileName: string; metadataStatus: string }> = {
+        "/DEMOS/0-9/10_Orbyte.sid": {
+          virtualPath: "/DEMOS/0-9/10_Orbyte.sid",
+          fileName: "10_Orbyte.sid",
+          metadataStatus: "seeded",
+        },
+      };
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValue({
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs,
+        folders: { "/": { path: "/", folders: [], songs: [] } },
+      });
+      vi.mocked(getRuntimeStatus).mockResolvedValueOnce({
+        ingestionState: "ready",
+        ingestionError: null,
+        installedVersion: 85,
+      } as any);
+      vi.mocked(runtimeIngestCachedHvsc).mockImplementationOnce(async () => {
+        invalidateHvscHydration();
+        throw new Error("HVSC update cancelled");
+      });
+
+      const interrupted = ensureHvscMetadataHydration();
+      await expect(ingestCachedHvsc("hvsc-ingest")).rejects.toThrow("HVSC update cancelled");
+      await interrupted;
+      await vi.waitFor(() => expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledTimes(1));
+
+      expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it("leaves hydration stopped after an ingestion that ended with the library not ready", async () => {
+      __resetHvscHydrationGenerationForTests();
+      vi.mocked(getRuntimeStatus).mockResolvedValueOnce({
+        ingestionState: "idle",
+        ingestionError: "Canceled",
+        installedVersion: 85,
+      } as any);
+      vi.mocked(runtimeIngestCachedHvsc).mockRejectedValueOnce(new Error("HVSC update cancelled"));
+
+      await expect(ingestCachedHvsc("hvsc-ingest")).rejects.toThrow("HVSC update cancelled");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(mediaIndexMocks.loadBrowseSnapshot).not.toHaveBeenCalled();
     });
 
     it("HARD19-019: a reset mid-hydration stops the loop and never persists the stale index", async () => {

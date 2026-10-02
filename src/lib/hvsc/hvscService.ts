@@ -178,6 +178,26 @@ const forgetCachedBrowseIndex = () => {
   verifiedBrowseSnapshot = null;
 };
 
+/**
+ * An ingestion stops any running hydration when it starts (HARD19-019). One that ends with the
+ * installed library still ready - canceled before it changed the library, or with nothing new to
+ * ingest - leaves that library's hydration stopped, so it is started again here.
+ */
+export const resumeHvscMetadataHydrationIfReady = async () => {
+  const status = await getRuntimeStatus();
+  if (status.ingestionState !== "ready" || !status.installedVersion) return;
+  await hvscMetadataHydrationPromise;
+  await ensureHvscMetadataHydration();
+};
+
+const resumeHydrationAfterIngestion = () => {
+  void resumeHvscMetadataHydrationIfReady().catch((error) => {
+    addErrorLog("HVSC metadata hydration could not be resumed after an ingestion", {
+      error: { name: (error as Error).name, message: (error as Error).message, stack: (error as Error).stack },
+    });
+  });
+};
+
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
   try {
@@ -187,16 +207,21 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   } finally {
     // Also after a failure: an install from a real release removes Demo Mode's library before it downloads.
     forgetCachedBrowseIndex();
+    if (!mock?.installOrUpdateHvsc) resumeHydrationAfterIngestion();
   }
 };
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
-  const status = mock?.ingestCachedHvsc
-    ? await mock.ingestCachedHvsc({ cancelToken })
-    : await ingestRuntimeCached(cancelToken);
-  forgetCachedBrowseIndex();
-  return status;
+  try {
+    const status = mock?.ingestCachedHvsc
+      ? await mock.ingestCachedHvsc({ cancelToken })
+      : await ingestRuntimeCached(cancelToken);
+    forgetCachedBrowseIndex();
+    return status;
+  } finally {
+    if (!mock?.ingestCachedHvsc) resumeHydrationAfterIngestion();
+  }
 };
 
 export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
