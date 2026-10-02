@@ -108,4 +108,51 @@ describe("createTelnetSession reconnect coverage", () => {
     expect(transport.send).toHaveBeenCalledWith(encoder.encode("secret\r"));
     expect(session.isConnected()).toBe(true);
   });
+
+  const createClosableTransport = () => {
+    let connected = false;
+    let failPendingRead: ((error: Error) => void) | null = null;
+    return {
+      connect: vi.fn().mockImplementation(async () => {
+        connected = true;
+      }),
+      disconnect: vi.fn().mockImplementation(async () => {
+        connected = false;
+        failPendingRead?.(new TelnetError("Read failed: connection closed", "CONNECTION_CLOSED"));
+      }),
+      send: vi.fn().mockResolvedValue(undefined),
+      read: vi
+        .fn()
+        .mockResolvedValueOnce(encoder.encode("READY"))
+        .mockImplementation(() => new Promise<Uint8Array>((_, reject) => (failPendingRead = reject))),
+      isConnected: vi.fn(() => connected),
+    };
+  };
+
+  it("does not reconnect for a read abandoned by Stop that fails after the caller closed the session", async () => {
+    const transport = createClosableTransport();
+    const session = createTelnetSession(transport);
+    await session.connect("c64u", 23);
+
+    const abandonedRead = session.readScreen(500).catch((error: Error) => error);
+    await vi.waitFor(() => expect(transport.read).toHaveBeenCalledTimes(2));
+    await session.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(transport.connect).toHaveBeenCalledTimes(1);
+    expect(await abandonedRead).toHaveProperty("message", "Telnet session was closed");
+  });
+
+  it("still reconnects on the next key after the idle timeout closed the session", async () => {
+    vi.useFakeTimers();
+    const transport = createClosableTransport();
+    transport.read.mockReset().mockResolvedValue(encoder.encode("READY"));
+    const session = createTelnetSession(transport);
+    await session.connect("c64u", 23);
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    await session.sendKey("DOWN");
+
+    expect(transport.connect).toHaveBeenCalledTimes(2);
+  });
 });

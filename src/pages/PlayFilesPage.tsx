@@ -633,7 +633,7 @@ export default function PlayFilesPage() {
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
-  const { stopPending: stopPendingDuringLaunch, stopPlayback } = useLaunchStopGuard({
+  const { stopPending, stopping, stopPlayback } = useLaunchStopGuard({
     isPlaylistLoading,
     isPlaying,
     stop: handleStop,
@@ -2602,7 +2602,8 @@ export default function PlayFilesPage() {
                 onPrevious={() => void handlePrevious()}
                 onPlay={() => void handlePlay()}
                 onStop={stopPlayback}
-                stopPending={stopPendingDuringLaunch}
+                stopPending={stopPending}
+                stopping={stopping}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
                 // Only offered when the tune is actually rendering here: the C64

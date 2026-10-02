@@ -14,7 +14,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
@@ -82,6 +82,8 @@ export type PlaybackControlsCardProps = {
   isPlaylistLoading: boolean;
   /** Stop was pressed during a launch that has not unwound yet; the button waits for it. */
   stopPending?: boolean;
+  /** Stop's request to the device has not been answered yet. */
+  stopping?: boolean;
   canPause: boolean;
   onPrevious: () => void;
   onPlay: () => void;
@@ -325,6 +327,7 @@ export const PlaybackControlsCard = ({
   hasPlaylist,
   isPlaylistLoading,
   stopPending = false,
+  stopping = false,
   canPause,
   onPrevious,
   onPlay,
@@ -422,6 +425,7 @@ export const PlaybackControlsCard = ({
   // A launch can take twenty seconds (a disk whose settings file is applied through the device menu),
   // and the listener must be able to call it off rather than wait for it to finish.
   const stopAvailable = isPlaying || (isPlaylistLoading && !stopPending);
+  const playButtonLabel = stopping ? "Stopping…" : stopAvailable ? "Stop" : "Play";
   const playFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-play",
     order: PLAY_TRANSPORT_FOCUS_ORDER.play,
@@ -565,20 +569,27 @@ export const PlaybackControlsCard = ({
           </Button>
           <Button
             ref={playFocusRef}
-            variant={stopAvailable ? "destructive" : "default"}
+            variant={stopping || stopAvailable ? "destructive" : "default"}
             size="icon"
             className="size-14 rounded-full"
             // aria-disabled rather than disabled while a Stop is pending, so the focus ring keeps its place.
-            onClick={stopPending ? undefined : stopAvailable ? onStop : onPlay}
+            onClick={stopping || stopPending ? undefined : stopAvailable ? onStop : onPlay}
             disabled={!hasPlaylist}
-            aria-disabled={stopPending || undefined}
+            aria-disabled={stopping || stopPending || undefined}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
+            data-stopping={stopping ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"
-            aria-label={stopAvailable ? "Stop" : "Play"}
-            title={stopAvailable ? "Stop" : "Play"}
+            aria-label={playButtonLabel}
+            title={playButtonLabel}
           >
-            {stopAvailable ? <Square className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            {stopping ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : stopAvailable ? (
+              <Square className="h-5 w-5" />
+            ) : (
+              <Play className="h-5 w-5" />
+            )}
           </Button>
           <Button
             ref={pauseFocusRef}
@@ -619,6 +630,15 @@ export const PlaybackControlsCard = ({
             <SkipForward className="h-4 w-4" />
           </Button>
         </div>
+        {stopping ? (
+          <p
+            role="status"
+            className="text-center text-sm font-medium text-foreground"
+            data-testid="playback-stop-status"
+          >
+            Stopping…
+          </p>
+        ) : null}
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span

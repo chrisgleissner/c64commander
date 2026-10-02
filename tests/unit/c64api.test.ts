@@ -30,6 +30,7 @@ import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/li
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
+import { peekPlayLaunchMount, recordPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
 const HAS_PASSWORD_KEY = "c64u_has_password";
 
 const ensureWindow = () => {
@@ -1540,6 +1541,28 @@ describe("c64api", () => {
       "Firmware rejected drive A mount: Image not found",
     );
     await expect(api.unmountDrive("b")).rejects.toThrow("Firmware rejected drive B eject: Image not found");
+  });
+
+  it("forgets Play's launch mount when a drive is mounted or ejected by hand, so Stop never ejects that disk", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ errors: [] }), { status: 200, headers: { "content-type": "application/json" } }),
+      ),
+    );
+    const api = new C64API("http://c64u");
+    const host = api.getDeviceHost();
+    recordPlayLaunchMount(host, { drive: "a", launchPath: "/USB0/game.d64", priorImagePath: null });
+    recordPlayLaunchMount(host, { drive: "b", launchPath: "/USB0/other.d64", priorImagePath: null });
+
+    await api.mountDrive("a", "/USB0/Mine/work.d64", "d64", "readwrite");
+
+    expect(peekPlayLaunchMount(host, "a")).toBeNull();
+    expect(peekPlayLaunchMount(host, "b")).not.toBeNull();
+
+    await api.unmountDrive("b");
+
+    expect(peekPlayLaunchMount(host, "b")).toBeNull();
   });
 
   it("does not throw when the firmware errors array is present but empty or blank", async () => {

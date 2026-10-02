@@ -41,6 +41,7 @@ import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
 import { loadFirstDiskPrgViaDma } from "./diskFirstPrg";
 import { withCartridgeParked } from "./launchSafety";
+import { peekPlayLaunchMount, recordPlayLaunchMount, resolvePriorImageForLaunch } from "./playLaunchMounts";
 
 export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
 
@@ -149,20 +150,21 @@ const ensureDiskAutoplayDriveReady = async (
   notify?: ((notice: PlaybackNotice) => void) | null,
 ) => {
   const desiredMode = getDiskAutoplayDriveMode(path);
-  if (!desiredMode) return 8;
+  if (!desiredMode) return { busId: 8, driveBeforeMount: null };
 
   if (
     typeof api.getDrives !== "function" ||
     typeof api.driveOn !== "function" ||
     typeof api.setDriveMode !== "function"
   ) {
-    return 8;
+    return { busId: 8, driveBeforeMount: null };
   }
 
   const compatibleModes = getDiskAutoplayCompatibleModes(path);
 
   const drives = await api.getDrives();
-  let driveInfo = getDriveInfo(drives, drive);
+  const driveBeforeMount = getDriveInfo(drives, drive);
+  let driveInfo = driveBeforeMount;
   let requiresRefresh = false;
   // HARD19-022 (D3): whether we powered on or reconfigured the drive, so the
   // Home/Disks drive-card query is invalidated afterwards and stops showing the
@@ -217,7 +219,7 @@ const ensureDiskAutoplayDriveReady = async (
     void getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
   }
 
-  return typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8;
+  return { busId: typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8, driveBeforeMount };
 };
 
 const emitDurationPropagationEvent = (payload: {
@@ -685,7 +687,14 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           await delay(resetDelayMs);
         }
 
-        const driveBusId = await ensureDiskAutoplayDriveReady(api, drive, plan.path, notify);
+        const { busId: driveBusId, driveBeforeMount } = await ensureDiskAutoplayDriveReady(
+          api,
+          drive,
+          plan.path,
+          notify,
+        );
+        const deviceHost = api.getDeviceHost();
+        const priorImagePath = resolvePriorImageForLaunch(peekPlayLaunchMount(deviceHost, drive), driveBeforeMount);
 
         // HARD19-008: mount through mountDiskToDrive with write-back deps so a
         // pending Home-mounted disk's saves on this drive are finalized (not
@@ -717,6 +726,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           });
           await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
         }
+        recordPlayLaunchMount(deviceHost, { drive, launchPath: plan.path, priorImagePath });
 
         if (beforeLaunch) {
           await beforeLaunch();

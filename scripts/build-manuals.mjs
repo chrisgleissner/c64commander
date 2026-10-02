@@ -1001,6 +1001,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.",
     "",
+    "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
+    "",
     "Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.",
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(

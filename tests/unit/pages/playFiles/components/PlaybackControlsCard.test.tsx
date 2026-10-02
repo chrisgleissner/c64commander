@@ -152,6 +152,27 @@ describe("PlaybackControlsCard", () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
+  it("says Stopping on the button and under the transport until the device answers Stop, and stays focusable", () => {
+    const onPlay = vi.fn();
+    const onStop = vi.fn();
+    const { rerender } = render(
+      <PlaybackControlsCard {...buildProps({ isPlaying: true, stopping: true, onPlay, onStop })} />,
+    );
+
+    const button = screen.getByTestId("playlist-play");
+    expect(button).toHaveAttribute("aria-label", "Stopping…");
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    expect(button).not.toBeDisabled();
+    expect(screen.getByTestId("playback-stop-status")).toHaveTextContent("Stopping…");
+    fireEvent.click(button);
+    expect(onStop).not.toHaveBeenCalled();
+    expect(onPlay).not.toHaveBeenCalled();
+
+    rerender(<PlaybackControlsCard {...buildProps({ isPlaying: false, stopping: false, onPlay, onStop })} />);
+    expect(screen.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Play");
+    expect(screen.queryByTestId("playback-stop-status")).toBeNull();
+  });
+
   it("promotes the play button from transient flash to persistent highlight while playback is active", () => {
     vi.useFakeTimers();
     const props = buildProps();

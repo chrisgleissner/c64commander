@@ -41,6 +41,7 @@ import {
 } from "@/lib/config/configFlashPersistence";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
+import { forgetPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
@@ -1515,13 +1516,8 @@ export class C64API {
   // callers weren't inspecting, so a rejected mount still showed a "Disk
   // mounted" toast with the drive unchanged. See HARD9-010.
   private assertDriveWriteAccepted(response: { errors?: string[] }, operation: string, drive: string) {
-    const firmwareErrors = Array.isArray(response.errors)
-      ? response.errors.filter((entry) => entry.trim().length > 0)
-      : [];
-    if (firmwareErrors.length === 0) {
-      return;
-    }
-    throw new Error(`Firmware rejected drive ${drive.toUpperCase()} ${operation}: ${firmwareErrors.join("; ")}`);
+    forgetPlayLaunchMount(this.deviceHost, drive);
+    this.assertActionAccepted(response, `drive ${drive.toUpperCase()} ${operation}`);
   }
 
   private assertActionAccepted(response: { errors?: string[] }, operation: string) {

@@ -83,6 +83,7 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
       mountDriveUpload: vi.fn(async () => ({ errors: [] })),
       machineReset: vi.fn(async () => ({ errors: [] })),
       machineReboot: vi.fn(async () => ({ errors: [] })),
+      getDeviceHost: vi.fn(() => "c64u"),
     } as unknown as C64API;
   };
 

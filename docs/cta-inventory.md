@@ -329,7 +329,7 @@ not-connected / empty / single-device).
 
 ### 4.2 Play (`/play`)
 
-- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading (Previous, Pause, Next), or no previous/next item in the current repeat/shuffle traversal; while a launch is in flight Play shows Stop and stays enabled; once that Stop is pressed it shows Play with `aria-disabled` (still focusable) until the stopped launch unwinds]`
+- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading (Previous, Pause, Next), or no previous/next item in the current repeat/shuffle traversal; while a launch is in flight Play shows Stop and stays enabled; after Stop is pressed the button is labelled "Stopping…" with a spinner and `aria-disabled` (still focusable), and a "Stopping…" line (`playback-stop-status`) shows under the transport, until the device answers the reset or reboot; if a stopped launch is still unwinding after that, it shows Play with `aria-disabled` until the launch returns]`
 - Now playing: where the queue comes from — `now-playing-source` — the first row of the card, present
   in both states and the same height in both (`data-station-active`); a running station renders
   `sid-radio-chip` inside it, otherwise `now-playing-source-idle` names the playlist
