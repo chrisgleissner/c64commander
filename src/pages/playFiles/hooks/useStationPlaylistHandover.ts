@@ -88,7 +88,8 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
   const handoverRef = useRef(handover);
   const latestRef = useRef(params);
   latestRef.current = params;
-  params.playback.stationActiveRef.current = stationActive || handover?.phase === "finishing";
+  const stationOrdersQueue = stationActive || handover?.phase === "finishing";
+  params.playback.stationActiveRef.current = stationOrdersQueue;
 
   const commit = useCallback((next: StationHandover | null) => {
     handoverRef.current = next;
@@ -236,6 +237,8 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
   }, [handover, ready, isPlaying, isPaused, playlistEnded, discard]);
 
   return {
+    /** A station, or its last tune after Stop, owns the play order; the value `stationActiveRef` carries. */
+    stationOrdersQueue,
     startStationQueue,
     appendStationItems,
     requestStop,

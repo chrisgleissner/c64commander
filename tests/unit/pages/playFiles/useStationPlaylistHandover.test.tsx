@@ -167,6 +167,21 @@ describe("useStationPlaylistHandover", () => {
     await waitFor(() => expect(ids(after.result.current.playlist)).toEqual(["a", "b", "c"]));
   });
 
+  it("reports the station's last tune as owning the play order, the same value the traversal reads", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    expect(harness.result.current.handover.stationOrdersQueue).toBe(false);
+    await startStation(harness, stationA);
+    expect(harness.result.current.handover.stationOrdersQueue).toBe(true);
+
+    harness.rerender({ stationActive: false, isPlaying: true });
+
+    expect(harness.result.current.handover.stationOrdersQueue).toBe(true);
+    expect(harness.result.current.stationActiveRef.current).toBe(true);
+    harness.rerender({ stationActive: false, isPlaying: true, playlistEnded: true });
+    expect(harness.result.current.handover.stationOrdersQueue).toBe(false);
+    expect(harness.result.current.stationActiveRef.current).toBe(false);
+  });
+
   it("brings the playlist back at once when the station stops while nothing plays", async () => {
     const harness = renderHarness({ stationActive: false, isPlaying: false });
     await startStation(harness, stationA, false);

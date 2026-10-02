@@ -247,7 +247,7 @@ export default function PlayFilesPage() {
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
-  // Written from `sidRadio.active` below. A ref, because `useSidRadio` is created after the playback
+  // Written by the station playlist handover below. A ref, because `useSidRadio` is created after the playback
   // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
   const stationActiveRef = useRef(false);
   const {
@@ -2196,25 +2196,6 @@ export default function PlayFilesPage() {
   const playbackRunning = isPlaying || activePlayback.any;
   const localPlaybackRunning = isPlaying || activePlayback.local;
   const canPause = playbackRunning;
-  // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
-  // (what tapping them will do), not the linear playlist position.
-  // A running station owns the order, so the enablement has to be computed from the same ordering the
-  // traversal will actually use — see `resolveTraversalOrdering`.
-  const traversalOrdering = resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, sidRadio.active);
-  const hasPrev = canAdvancePrevious(
-    playlist,
-    currentIndex,
-    traversalOrdering.repeatEnabled,
-    traversalOrdering.shuffleEnabled,
-    shuffleSeed,
-  );
-  const hasNext = canAdvanceNext(
-    playlist,
-    currentIndex,
-    traversalOrdering.repeatEnabled,
-    traversalOrdering.shuffleEnabled,
-    shuffleSeed,
-  );
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -2331,6 +2312,26 @@ export default function PlayFilesPage() {
     persistence: { ready: playlistHydrated && sessionRestoreSettled, readSavedPlaylist: readRepositoryPlaylist },
     station: sidRadio,
   });
+  // HARD12-005: Next/Prev enablement comes from the ordering the traversal uses. A station owns that
+  // order until its last tune ends, and the traversal reads the same `stationOrdersQueue` flag.
+  const traversalOrdering = resolveTraversalOrdering(
+    { repeatEnabled, shuffleEnabled },
+    stationHandover.stationOrdersQueue,
+  );
+  const hasPrev = canAdvancePrevious(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
+  const hasNext = canAdvanceNext(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
 
   useEffect(() => {
     if (isPlaying || isPaused) return;
