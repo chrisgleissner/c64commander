@@ -449,6 +449,21 @@ substance. These were defects in this branch's own new code and are not counted 
   replaced by a new station, a dead read blocked later reads, and a carried queue was dropped by a
   second station. Repaired.
 - **Review 5.** No findings of substance.
+- **Review 6 (everything after `23aaf`: N1–N8, the grader fixes, the coverage tests).** No release
+  blockers. Repaired:
+  - The N6 start-up drain was only postponed: after the 2 s gentle window, a start-up surplus on an
+    even feed would still have been drained at 0.5% (8.6 cents sharp) for several seconds. The
+    surplus is now held at 0.1% until the ring first comes down to the recovery threshold, and the
+    first adaptation window starts at the first sound. A 10.5 s even-feed test fails on the previous
+    version. (On the rig's Wi-Fi the case did not occur: the correction never exceeded 1.0007.)
+  - An HVSC cancel restored "ready" even when the retried run had started from an earlier failure,
+    hiding that failure and resuming hydration on a damaged library. A cancel now restores the
+    state the run started from.
+  - The heat map fix removed the popup's close animation; the selection is now reset on open.
+  - A negative `av-latency` reading was reported as a missing line; the CDP helper left a timer
+    per request running and could wait forever for its socket to open; the classifiers' tests used
+    a copy of the "did not answer" text instead of the produced message; a doc comment sat above
+    the wrong function.
 
 Two limits remain, both requiring an IndexedDB copy that stays unreadable: a queue carried over an
 unread saved playlist is held in memory only, so a restart during that station loses it; and if
