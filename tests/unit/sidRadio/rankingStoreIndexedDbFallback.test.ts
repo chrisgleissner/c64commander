@@ -21,7 +21,7 @@ type FakeTx = {
 
 const createFakeIndexedDb = () => {
   const records = new Map<string, unknown>();
-  const control = { failNextPut: false };
+  const control = { failNextPut: false, failNextOpen: false };
   const db = {
     objectStoreNames: { contains: () => true },
     createObjectStore: () => undefined,
@@ -55,8 +55,22 @@ const createFakeIndexedDb = () => {
   };
   const indexedDb = {
     open: () => {
-      const request = { result: db, onsuccess: null as (() => void) | null, onerror: null, onupgradeneeded: null };
-      setTimeout(() => request.onsuccess?.());
+      const request = {
+        result: db,
+        error: null as Error | null,
+        onsuccess: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        onupgradeneeded: null,
+      };
+      setTimeout(() => {
+        if (control.failNextOpen) {
+          control.failNextOpen = false;
+          request.error = new Error("UnknownError");
+          request.onerror?.();
+          return;
+        }
+        request.onsuccess?.();
+      });
       return request;
     },
   };
@@ -105,5 +119,59 @@ describe("SID Radio rankings after one IndexedDB write failure", () => {
     const thirdLaunch = await importFreshStore();
     await thirdLaunch.loadRankings();
     expect(thirdLaunch.getRanking(MD5_B)).toBe("like");
+  });
+
+  const fallBackAfterLikingAAndB = async () => {
+    const firstSession = await importFreshStore();
+    await firstSession.setRanking(MD5_A, "like");
+    fake.control.failNextPut = true;
+    await firstSession.setRanking(MD5_B, "like");
+    return firstSession;
+  };
+
+  it("does not bring back a like removed after the fallback to localStorage", async () => {
+    const firstSession = await fallBackAfterLikingAAndB();
+    await firstSession.clearRanking(MD5_A);
+
+    const nextLaunch = await importFreshStore();
+    await nextLaunch.loadRankings();
+
+    expect(nextLaunch.getLikedMd5s()).toEqual([MD5_B]);
+  });
+
+  it("keeps Clear my rankings in effect when it was done after the fallback to localStorage", async () => {
+    const firstSession = await fallBackAfterLikingAAndB();
+    await firstSession.clearAllRankings();
+
+    const nextLaunch = await importFreshStore();
+    await nextLaunch.loadRankings();
+
+    expect(nextLaunch.getLikedMd5s()).toEqual([]);
+  });
+
+  it("stays on localStorage for the session when the fallback copy cannot be written back to IndexedDB", async () => {
+    await fallBackAfterLikingAAndB();
+    const secondLaunch = await importFreshStore();
+    fake.control.failNextPut = true;
+    await secondLaunch.loadRankings();
+    await secondLaunch.clearRanking(MD5_A);
+
+    const thirdLaunch = await importFreshStore();
+    await thirdLaunch.loadRankings();
+
+    expect(thirdLaunch.getLikedMd5s()).toEqual([MD5_B]);
+  });
+
+  it("keeps the ratings IndexedDB held when an earlier session could not open it at all", async () => {
+    const firstSession = await importFreshStore();
+    await firstSession.setRanking(MD5_A, "like");
+
+    const unreadableLaunch = await importFreshStore();
+    fake.control.failNextOpen = true;
+    await unreadableLaunch.setRanking(MD5_B, "like");
+
+    const nextLaunch = await importFreshStore();
+    await nextLaunch.loadRankings();
+    expect(nextLaunch.getLikedMd5s().sort()).toEqual([MD5_A, MD5_B].sort());
   });
 });
