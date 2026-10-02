@@ -741,6 +741,7 @@ beforeEach(() => {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
     refetchQueries: vi.fn().mockResolvedValue(undefined),
+    getQueryCache: () => ({ findAll: () => [] }),
   };
   enabledConfigReadsRef.current = new Set();
   sidSocketsPayloadRef.current = undefined;
@@ -761,6 +762,9 @@ beforeEach(() => {
     writeMemory: vi.fn().mockResolvedValue({}),
     startStream: vi.fn().mockResolvedValue({}),
     stopStream: vi.fn().mockResolvedValue({}),
+    getBaseUrl: () => "http://c64u",
+    getAllConfigCategories: vi.fn().mockResolvedValue({ errors: [] }),
+    selectConfigItems: vi.fn().mockReturnValue(null),
   };
   interactiveWriteMockRef.current = vi.fn().mockResolvedValue(undefined);
   statusPayloadRef.current = {
@@ -825,26 +829,23 @@ beforeEach(() => {
 });
 
 describe("HomePage config refresh", () => {
-  it("re-reads the 14 config reads Home loads with one refetch of the active Home config queries on focus", async () => {
+  it("replaces the 14 config reads Home loads with one wildcard read on focus", async () => {
     renderHomePage();
     expect(enabledConfigReadsRef.current.size).toBe(14);
-    const refetchQueries = queryClientMockRef.current.refetchQueries as ReturnType<typeof vi.fn>;
-    expect(refetchQueries).not.toHaveBeenCalled();
+    const readAll = c64ApiMockRef.current.getAllConfigCategories as ReturnType<typeof vi.fn>;
+    expect(readAll).not.toHaveBeenCalled();
 
     fireEvent(window, new Event("focus"));
 
-    await waitFor(() => expect(refetchQueries).toHaveBeenCalledTimes(1));
-    expect(refetchQueries).toHaveBeenCalledWith(
-      { queryKey: ["c64-config-items"], type: "active" },
-      { cancelRefetch: false },
-    );
+    await waitFor(() => expect(readAll).toHaveBeenCalledTimes(1));
+    expect(queryClientMockRef.current.refetchQueries).not.toHaveBeenCalled();
   });
 
   it("does not refresh a demo device", () => {
     statusPayloadRef.current = { ...statusPayloadRef.current, isDemo: true };
     renderHomePage();
     fireEvent(window, new Event("focus"));
-    expect(queryClientMockRef.current.refetchQueries).not.toHaveBeenCalled();
+    expect(c64ApiMockRef.current.getAllConfigCategories).not.toHaveBeenCalled();
   });
 });
 

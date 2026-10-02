@@ -19,6 +19,11 @@ import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChalleng
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
 import { handleWebProxyGate } from "@/lib/c64api/webProxyGate";
 import { CategoryPresence } from "@/lib/c64api/categoryPresence";
+import {
+  hasStructuredConfigMetadata,
+  mergeListedConfigItems,
+  seedConfigItemsFromCache,
+} from "@/lib/c64api/configItemsMerge";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
@@ -1016,32 +1021,6 @@ type C64ReadRequestOptions = RequestInit & {
    * `intent: "system"` is also suppressed automatically.
    */
   __c64uSuppressAuthChallenge?: boolean;
-};
-
-const hasStructuredConfigMetadata = (config: unknown) => {
-  if (typeof config !== "object" || config === null || Array.isArray(config)) return false;
-
-  const record = config as Record<string, unknown>;
-  return [
-    "selected",
-    "value",
-    "current",
-    "current_value",
-    "currentValue",
-    "default",
-    "default_value",
-    "defaultValue",
-    "options",
-    "values",
-    "choices",
-    "details",
-    "presets",
-    "min",
-    "max",
-    "minimum",
-    "maximum",
-    "format",
-  ].some((key) => Object.prototype.hasOwnProperty.call(record, key));
 };
 
 export interface DriveInfo {
@@ -2322,14 +2301,9 @@ export class C64API {
     }
 
     const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
-    const mergedItems: Record<string, unknown> = {};
-    const itemsNeedingEnrichment = new Set<string>();
     const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
-    uniqueItems.forEach((item) => {
-      if (cachedItems[item] !== undefined) {
-        mergedItems[item] = cloneBudgetValue(cachedItems[item]);
-      }
-    });
+    const mergedItems = seedConfigItemsFromCache(uniqueItems, cachedItems);
+    let itemsNeedingEnrichment = new Set<string>();
     // An item the category listing omits is one the device does not have; asking for it only earns a 404.
     let categoryListed = false;
     try {
@@ -2342,27 +2316,7 @@ export class C64API {
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
       if (itemsBlock && typeof itemsBlock === "object") {
-        uniqueItems.forEach((item) => {
-          if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
-            const itemConfig = (itemsBlock as Record<string, unknown>)[item];
-            const cachedConfig = cachedItems[item];
-            if (hasStructuredConfigMetadata(itemConfig)) {
-              mergedItems[item] = itemConfig;
-            } else if (hasStructuredConfigMetadata(cachedConfig)) {
-              mergedItems[item] = {
-                ...(cachedConfig as Record<string, unknown>),
-                selected: extractConfigValue(itemConfig),
-              };
-            } else {
-              mergedItems[item] = itemConfig;
-            }
-            if (!hasStructuredConfigMetadata(itemConfig)) {
-              if (!hasStructuredConfigMetadata(cachedConfig)) {
-                itemsNeedingEnrichment.add(item);
-              }
-            }
-          }
-        });
+        itemsNeedingEnrichment = mergeListedConfigItems(uniqueItems, itemsBlock, cachedItems, mergedItems);
       }
     } catch (error) {
       const categoryErrorMessage = error instanceof Error ? error.message : String(error ?? "");
@@ -2431,6 +2385,26 @@ export class C64API {
       },
       errors: [],
     };
+  }
+
+  /** Every category's current values in one read (firmware wildcard), recorded into the item cache. */
+  async getAllConfigCategories(options: C64ReadRequestOptions = {}): Promise<Record<string, unknown>> {
+    const response = await this.request<Record<string, unknown>>("/v1/configs/*", options);
+    Object.keys(response ?? {}).forEach((category) => {
+      if (category !== "errors") this.rememberConfigCategoryItems(category, { [category]: response[category] });
+    });
+    return response;
+  }
+
+  /** What `getConfigItems(category, items)` would return, built from a `getAllConfigCategories` response. */
+  selectConfigItems(allCategories: Record<string, unknown>, category: string, items: string[]): ConfigResponse | null {
+    if (!Object.prototype.hasOwnProperty.call(allCategories, category)) return null;
+    const uniqueItems = Array.from(new Set(items));
+    const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
+    const mergedItems = seedConfigItemsFromCache(uniqueItems, cachedItems);
+    const itemsBlock = getConfigCategoryItems({ [category]: allCategories[category] }, category);
+    mergeListedConfigItems(uniqueItems, itemsBlock, cachedItems, mergedItems);
+    return { [category]: { items: mergedItems }, errors: [] };
   }
 
   async setConfigValue(

@@ -325,6 +325,51 @@ describe("C64API getConfigItems", () => {
     await expect(api.getConfigItems("Audio Mixer", ["Vol Master", "Vol Socket 1"])).rejects.toThrow("cancelled");
     expect(getConfigItem).not.toHaveBeenCalled();
   });
+
+  it("builds from one GET /v1/configs/* the same data a per-category read gives, keeping cached option metadata", async () => {
+    const api = new C64API("http://192.0.2.71");
+    const volMaster = { current: " 0 dB", values: ["OFF", "-6 dB", " 0 dB", "+6 dB"], default: " 0 dB" };
+    const device: Record<string, Record<string, string>> = {
+      "Audio Mixer": { "Vol Master": " 0 dB", "Vol Socket 1": " 0 dB" },
+      "LED Strip Settings": { "LedStrip Mode": "Fixed Color" },
+    };
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = decodeURIComponent(new URL(String(input)).pathname);
+      if (path === "/v1/configs/*") return json({ ...device, errors: [] });
+      if (path === "/v1/configs/Audio Mixer/Vol Master") {
+        return json({ "Audio Mixer": { items: { "Vol Master": volMaster } }, errors: [] });
+      }
+      const category = path.slice("/v1/configs/".length);
+      return json({ [category]: device[category], errors: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.getConfigItems("Audio Mixer", ["Vol Master"]);
+    device["Audio Mixer"]["Vol Master"] = "-6 dB";
+    device["LED Strip Settings"]["LedStrip Mode"] = "Rainbow";
+    fetchMock.mockClear();
+
+    const all = await api.getAllConfigCategories({ __c64uIntent: "background" });
+
+    expect(fetchMock.mock.calls.map(([input]) => decodeURIComponent(new URL(String(input)).pathname))).toEqual([
+      "/v1/configs/*",
+    ]);
+    const fromWildcard = {
+      audio: api.selectConfigItems(all, "Audio Mixer", ["Vol Master"]),
+      led: api.selectConfigItems(all, "LED Strip Settings", ["LedStrip Mode"]),
+    };
+    expect(fromWildcard.audio).toEqual({
+      "Audio Mixer": { items: { "Vol Master": { ...volMaster, selected: "-6 dB" } } },
+      errors: [],
+    });
+    expect(api.selectConfigItems(all, "Data Streams", ["Stream VIC to"])).toBeNull();
+
+    const options = { __c64uSkipItemEnrichment: true, __c64uBypassCache: true };
+    expect(fromWildcard.audio).toEqual(await api.getConfigItems("Audio Mixer", ["Vol Master"], options));
+    expect(fromWildcard.led).toEqual(await api.getConfigItems("LED Strip Settings", ["LedStrip Mode"], options));
+  });
 });
 
 describe("C64API request identity", () => {

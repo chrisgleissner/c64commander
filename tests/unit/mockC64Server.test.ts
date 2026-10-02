@@ -143,6 +143,12 @@ describe("createMockC64Server", () => {
     expect(reset.json.Audio.items.Volume.selected).toBe("0 dB");
   });
 
+  it("answers the category wildcard with every category's values in one response", async () => {
+    const all = await requestJson(`${server.baseUrl}/v1/configs/*`);
+    expect(all.status).toBe(200);
+    expect(all.json).toEqual({ Audio: { Volume: "0 dB", Mode: "Auto" }, errors: [] });
+  });
+
   it("manages drives and mounts", async () => {
     const drives = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(drives.json.drives[0].a.enabled).toBe(true);

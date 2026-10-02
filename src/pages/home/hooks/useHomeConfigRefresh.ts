@@ -14,13 +14,13 @@ import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore
 import { subscribeDeviceWrites } from "@/lib/deviceInteraction/deviceWriteEvents";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
+import { readHomeConfig } from "./homeConfigRead";
 
 export const HOME_CONFIG_REFRESH_INTERVAL_MS = 10_000;
 export const HOME_CONFIG_REFRESH_RETRY_MS = 1_000;
 export const HOME_CONFIG_REFRESH_TIMEOUT_MS = 8_000;
 export const HOME_CONFIG_REFRESH_ACTION_SETTLE_MS = 750;
 const HOME_CONFIG_REFRESH_MIN_GAP_MS = 2_000;
-const HOME_CONFIG_QUERY_PREFIX = "c64-config-items";
 
 type RefreshReason = "interval" | "visible" | "focus" | "action" | "retry" | "trailing";
 
@@ -69,17 +69,20 @@ export const getHomeConfigRefreshBlocker = (configWritePending: boolean): HomeCo
   return null;
 };
 
-const refetchHomeConfig = async (queryClient: QueryClient) => {
+const isUserInteracting = () =>
+  areBackgroundReadsSuspended() || pollingPauseRegistry.isPollingPaused() || isEditingText();
+
+const readHomeConfigWithTimeout = async (queryClient: QueryClient, pending: () => Record<string, boolean>) => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<"timeout">((resolve) => {
     timeoutId = setTimeout(() => resolve("timeout"), HOME_CONFIG_REFRESH_TIMEOUT_MS);
   });
   try {
-    // cancelRefetch: false joins a read already on the wire instead of aborting and re-sending it.
-    const outcome = await Promise.race([
-      queryClient.refetchQueries({ queryKey: [HOME_CONFIG_QUERY_PREFIX], type: "active" }, { cancelRefetch: false }),
-      timeout,
-    ]);
+    const guards = {
+      isInteracting: isUserInteracting,
+      isWritePending: (category: string, item: string) => pending()[`${category}::${item}`] === true,
+    };
+    const outcome = await Promise.race([readHomeConfig(queryClient, guards, HOME_CONFIG_REFRESH_TIMEOUT_MS), timeout]);
     if (outcome === "timeout") {
       addLog("warn", "Home config refresh timed out; releasing the single-flight slot", {
         timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS,
@@ -105,8 +108,8 @@ export function useHomeConfigRefresh({
   const queryClient = useQueryClient();
   const screenActive = useScreenActivity();
   const enabled = connected && screenActive;
-  const writePendingRef = useRef(false);
-  writePendingRef.current = Object.values(configWritePending).some(Boolean);
+  const writePendingRef = useRef(configWritePending);
+  writePendingRef.current = configWritePending;
 
   useEffect(() => {
     if (!enabled) return;
@@ -127,7 +130,7 @@ export function useHomeConfigRefresh({
       inFlight = true;
       lastStartedAtMs = Date.now();
       try {
-        await refetchHomeConfig(queryClient);
+        await readHomeConfigWithTimeout(queryClient, () => writePendingRef.current);
       } catch (error) {
         addLog("warn", "Home config refresh failed", {
           reason,
@@ -155,7 +158,7 @@ export function useHomeConfigRefresh({
       ) {
         return;
       }
-      if (getHomeConfigRefreshBlocker(writePendingRef.current) !== null) {
+      if (getHomeConfigRefreshBlocker(Object.values(writePendingRef.current).some(Boolean)) !== null) {
         if (retryId === null) {
           retryId = setTimeout(() => {
             retryId = null;
