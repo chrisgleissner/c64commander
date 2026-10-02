@@ -1061,6 +1061,11 @@ After **any** dependency change you MUST:
 - Regenerate the notices with `npm run notices:generate` and confirm
   `npm run notices:check` is clean — dependency changes alter `THIRD_PARTY_NOTICES.md`,
   and CI fails on drift.
+- After a `sharp` bump, run `node scripts/generate-variant.mjs` and commit any PNG it rewrites.
+  `npm run variant:check` compares the generated images byte for byte, and no CI job runs it. The
+  bump from sharp 0.34.5 to 0.35.1 (libvips 8.17 to 8.18) changed the bytes of the 2732 px iOS
+  splash while the smaller renders stayed identical, so `npm run lint` failed locally for months
+  until the three `splash-2732x2732*.png` files were regenerated.
 - Prefer within-major bumps; hold framework-defining majors (React, Tailwind,
   Vite, Vitest, TypeScript, Zod, react-router) for a dedicated, separately
   validated change so a break is isolated and diagnosable.
