@@ -50,7 +50,7 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 }));
 
 vi.mock("@/lib/disks/diskMount", () => ({
-  mountDiskToDrive: vi.fn(async () => undefined),
+  mountDiskToDrive: vi.fn(async () => ({ persistence: "device-native" as const })),
   resolveLocalDiskBlob: vi.fn(),
 }));
 
