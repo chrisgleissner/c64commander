@@ -366,6 +366,32 @@ export const gradeClarityOutput = (text) => {
 };
 
 /**
+ * Read the `av-latency` result out of `mirror_audio_latency_hil.py`.
+ *
+ * The reading is the probe's LATENCY line, which is the per-tone lag. The broadband correlation peaks
+ * once per 239.4 ms barcode slot and once reported 750 ms for a 272 ms path; when it lands in another
+ * slot the probe prints a WARNING line, and that is carried into the stage detail rather than read.
+ * Output that does not say which correlation its LATENCY came from is refused.
+ */
+export const gradeLatencyOutput = (text) => {
+  const latency = /^LATENCY\s+(\d+) ms\b.*, (per-tone|broadband) \(/m.exec(text);
+  if (!latency) throw new Error("the probe printed no LATENCY line naming the correlation it read");
+  const strength = /correlation ([\d.]+) at/.exec(text);
+  if (!strength) throw new Error("could not read correlation strength from the output");
+  const warning = /^WARNING\s+(.+)$/m.exec(text)?.[1].trim() ?? null;
+  const graded = {
+    latencyMs: Number(latency[1]),
+    source: latency[2],
+    strength: Number(strength[1]),
+    warning,
+  };
+  const detail =
+    `${graded.latencyMs} ms wire -> speaker (${graded.source} lag; broadband correlation ${graded.strength})` +
+    (warning ? `; measurement warning: ${warning}` : "");
+  return { ...graded, detail };
+};
+
+/**
  * The two generated tunes the playback stages are graded against, and the pitch each holds.
  *
  * Real music cannot settle any of these questions — a listener cannot tell a stall from a rest,
@@ -1178,11 +1204,9 @@ return JSON.stringify({samples});})()`);
     if (dir) args.push("--keep-dir", dir);
     const probe = await evidence.withAppAudioStats(dir, () => run("python3", args));
     if (dir) await writeFile(path.join(dir, "probe.txt"), probe.out);
-    const strength = number(probe.out, /correlation ([\d.]+) at/, "correlation strength");
-    const latency = number(probe.out, /LATENCY\s+(\d+) ms/, "latency");
-    if (strength < 0.3) throw new Error(`the microphone and the wire barely correlate (${strength})`);
-    const toneLag = /per-tone\s+barcode-aware lag (-?\d+) ms/.exec(probe.out)?.[1];
-    return `${latency} ms wire -> speaker (correlation ${strength}${toneLag ? `; per-tone lag ${toneLag} ms` : ""})`;
+    const graded = gradeLatencyOutput(probe.out);
+    if (graded.strength < 0.3) throw new Error(`the microphone and the wire barely correlate (${graded.strength})`);
+    return graded.detail;
   });
 
   // The same tune, rendered two ways, graded by one instrument in one room. The two paths share

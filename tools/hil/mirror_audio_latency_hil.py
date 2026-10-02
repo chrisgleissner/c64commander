@@ -46,8 +46,10 @@ The barcode's broadband envelope is the same shape in every 239.4 ms slot, so th
 correlation has a peak every slot and only the speaker's per-tone loudness tells them apart. The
 three strongest peaks are printed so a neighbouring one is visible, and a second, barcode-aware
 correlation is run per ladder tone: each tone sounds once per 1.9 s cycle, so the sum of the eight
-per-tone correlations has one peak in the window. When the two lags disagree by whole slots, the
-broadband reading picked the wrong slot.
+per-tone correlations has one peak in the window. The reported LATENCY is therefore the per-tone
+lag. When the broadband peak lands in another slot, that is printed as a WARNING line and kept in
+latency.json; it is not the reading. Without the barcode (per-tone score under 0.3) the reading
+falls back to the broadband peak, with a warning that it can be off by whole slots.
 
 USAGE
 
@@ -90,6 +92,9 @@ MAX_LAG_MS = 800.0
 PEAK_SEPARATION_MS = 60.0
 TONE_BAND = 0.025
 TONE_ENVELOPE_MS = 10.0
+# Below this the per-tone curve has nothing to lock onto (no barcode playing), and the reading falls
+# back to the broadband peak with a warning that it may be off by whole slots.
+MIN_TONE_SCORE = 0.3
 
 
 def capture_wire(seconds: float, iface: str, out: dict) -> None:
@@ -222,6 +227,44 @@ def tone_lag_curve(wire: np.ndarray, mic: np.ndarray, rate: int, max_lag: int) -
     return np.mean(curves, axis=0)
 
 
+def latency_reading(lags_ms: np.ndarray, broadband: np.ndarray, per_tone: np.ndarray) -> dict:
+    """The latency to report from the two correlation curves over the same lags, and any warning.
+
+    The per-tone curve has one peak per 1.9 s barcode cycle, so its peak is the latency. The broadband
+    curve has a peak every 239.4 ms slot and only the speaker's per-tone loudness picks between them:
+    run 2026-10-02T13-54-22 took the one two slots out and reported 750 ms for a 272 ms path. A
+    broadband peak in another slot is therefore a measurement warning, not the reading.
+    """
+    tone_index = int(np.argmax(per_tone))
+    broad_index = int(np.argmax(broadband))
+    tone_ms, broad_ms = float(lags_ms[tone_index]), float(lags_ms[broad_index])
+    tone_score = float(per_tone[tone_index])
+    slots_apart = (broad_ms - tone_ms) / SLOT_MS
+    reading = {
+        "latencyMs": tone_ms,
+        "source": "per-tone",
+        "toneLagMs": tone_ms,
+        "toneScore": tone_score,
+        "broadbandLagMs": broad_ms,
+        "broadbandStrength": float(broadband[broad_index]),
+        "broadbandMinusToneSlots": slots_apart,
+        "warning": None,
+    }
+    if tone_score < MIN_TONE_SCORE:
+        reading["latencyMs"], reading["source"] = broad_ms, "broadband"
+        reading["warning"] = (
+            f"per-tone correlation is weak ({tone_score:.3f}): is the barcode playing? Reporting the broadband "
+            f"peak, which can be off by whole {SLOT_MS:.1f} ms slots"
+        )
+    elif abs(broad_ms - tone_ms) > SLOT_MS / 2:
+        reading["warning"] = (
+            f"broadband peak {broad_ms:.0f} ms is {slots_apart:+.2f} slots ({broad_ms - tone_ms:+.0f} ms) from the "
+            f"per-tone lag: the barcode's envelope repeats every {SLOT_MS:.1f} ms, so the broadband correlation "
+            "took another slot; the reading is the per-tone lag"
+        )
+    return reading
+
+
 def write_wav(path: Path, samples: np.ndarray | bytes, rate: int, channels: int) -> None:
     data = samples if isinstance(samples, bytes) else np.clip(samples, -32768, 32767).astype("<i2").tobytes()
     with wave.open(str(path), "wb") as fh:
@@ -281,35 +324,28 @@ def main() -> int:
     curve = lag_curve(wire_env, mic_env, max_lag)
     peak = int(np.argmax(curve))
     strength = float(curve[peak])
+    tone_curve = tone_lag_curve(wire_mono[: len(mic_mono)], mic_mono[: len(wire_mono)], MIC_RATE, max_lag)
 
     # The two captures did not start at the same instant; that difference is part of the lag.
     start_skew_ms = (mic["first_at"] - wire["first_at"]) * 1000.0
     to_ms = lambda index: index * 1000.0 / MIC_RATE + start_skew_ms  # noqa: E731
-    lag_ms = to_ms(peak)
+    reading = latency_reading(to_ms(np.arange(len(curve))), curve, tone_curve)
 
     print(f"wire      {len(wire_mono) / MIC_RATE:.1f}s from {GROUP}:{PORT}")
     print(f"mic       {len(mic_mono) / MIC_RATE:.1f}s from {args.device}")
     print(f"skew      capture starts differ by {start_skew_ms:+.1f} ms (already included below)")
     print(f"peak      correlation {strength:.3f} at {peak * 1000.0 / MIC_RATE:.1f} ms into the window")
-    print(f"LATENCY   {lag_ms:.0f} ms  Ultimate wire -> phone speaker (+-15 ms)")
+    print(f"LATENCY   {reading['latencyMs']:.0f} ms  Ultimate wire -> phone speaker, {reading['source']} (+-15 ms)")
 
     peaks = top_peaks(curve, MIC_RATE)
     print("peaks     " + "   ".join(f"#{n + 1} {to_ms(i):.0f} ms ({v:.3f})" for n, (i, v) in enumerate(peaks)))
-    tone_curve = tone_lag_curve(wire_mono[: len(mic_mono)], mic_mono[: len(wire_mono)], MIC_RATE, max_lag)
-    tone_peak = int(np.argmax(tone_curve))
-    tone_lag_ms = to_ms(tone_peak)
     tone_peaks = top_peaks(tone_curve, MIC_RATE)
     print(
-        f"per-tone  barcode-aware lag {tone_lag_ms:.0f} ms (score {tone_curve[tone_peak]:.3f}); next "
+        f"per-tone  barcode-aware lag {reading['toneLagMs']:.0f} ms (score {reading['toneScore']:.3f}); next "
         + ", ".join(f"{to_ms(i):.0f} ms ({v:.3f})" for i, v in tone_peaks[1:])
     )
-    slots_apart = (lag_ms - tone_lag_ms) / SLOT_MS
-    if abs(lag_ms - tone_lag_ms) > SLOT_MS / 2:
-        print(
-            f"  the broadband peak is {slots_apart:+.2f} slots ({lag_ms - tone_lag_ms:+.0f} ms) from the per-tone lag: "
-            f"the barcode's envelope repeats every {SLOT_MS:.1f} ms, so the broadband reading took another slot "
-            "(only meaningful while the barcode stimulus is playing)"
-        )
+    if reading["warning"]:
+        print(f"WARNING   {reading['warning']}")
 
     if args.keep_dir:
         keep = Path(args.keep_dir)
@@ -322,7 +358,10 @@ def main() -> int:
             for index in range(0, len(curve), step):
                 fh.write(f"{to_ms(index):.3f},{curve[index]:.5f},{tone_curve[index]:.5f}\n")
         summary = {
-            "latencyMs": lag_ms,
+            "latencyMs": reading["latencyMs"],
+            "latencySource": reading["source"],
+            "warning": reading["warning"],
+            "broadbandLagMs": reading["broadbandLagMs"],
             "strength": strength,
             "skewMs": start_skew_ms,
             "wireFirstEpoch": wire.get("first_at_epoch"),
@@ -330,11 +369,11 @@ def main() -> int:
             "wireSeconds": len(wire_mono) / MIC_RATE,
             "micSeconds": len(mic_mono) / MIC_RATE,
             "peaks": [{"lagMs": to_ms(i), "strength": v} for i, v in peaks],
-            "toneLagMs": tone_lag_ms,
-            "toneScore": float(tone_curve[tone_peak]),
+            "toneLagMs": reading["toneLagMs"],
+            "toneScore": reading["toneScore"],
             "tonePeaks": [{"lagMs": to_ms(i), "score": v} for i, v in tone_peaks],
             "slotMs": SLOT_MS,
-            "broadbandMinusToneSlots": slots_apart,
+            "broadbandMinusToneSlots": reading["broadbandMinusToneSlots"],
         }
         (keep / "latency.json").write_text(json.dumps(summary, indent=2) + "\n")
         print(f"kept      {keep}")
