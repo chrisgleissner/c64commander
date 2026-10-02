@@ -522,13 +522,12 @@ function CategorySection({
       // was backgrounded for a long time while solo was active). See
       // HARD9-054.
       const snapshot = readFreshSoloSnapshot() ?? fallbackSnapshot;
-      if (snapshot.length) {
-        void applySoloRouting(null, snapshot);
-      }
+      const restored = snapshot.length ? applySoloRouting(null, snapshot) : undefined;
       wasSoloActiveRef.current = false;
       if (reason === "close") {
         resetActiveSolo();
       }
+      return restored;
     },
     [applySoloRouting, isAudioMixer, readFreshSoloSnapshot, resetActiveSolo],
   );
@@ -543,12 +542,12 @@ function CategorySection({
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = isOpen;
     if (!isAudioMixer || isOpen || !wasOpen) return;
-    restoreSoloRouting("close");
+    void restoreSoloRouting("close");
   }, [isAudioMixer, isOpen, restoreSoloRouting]);
 
   useEffect(() => {
     if (!isAudioMixer) return undefined;
-    return () => restoreSoloRouting("unmount");
+    return () => void restoreSoloRouting("unmount");
   }, [isAudioMixer, restoreSoloRouting]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
@@ -757,7 +756,8 @@ function CategorySection({
 
   const handleRefresh = async () => {
     if (isAudioMixer) {
-      resetActiveSolo();
+      // Write the levels Solo muted back before re-reading, or the re-read adopts them as configured.
+      await restoreSoloRouting("close");
       soloSnapshotRef.current = [];
       resyncPendingRef.current = true;
       syncAudioConfiguredItems([]);
