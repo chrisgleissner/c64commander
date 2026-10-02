@@ -16,7 +16,8 @@ import { ensureCardOpen } from "../helpers/cards";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { requestConfigItemFocus } from "@/lib/search/configDeepLink";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
@@ -165,6 +166,20 @@ beforeEach(() => {
   // opened — the same behaviour the Settings cards have. Without clearing it, one test's open
   // page is restored in the next one, whose click then closes it.
   localStorage.clear();
+});
+
+describe("ConfigBrowserPage — global search deep link (C64U menu mode)", () => {
+  it("opens the menu page that holds the searched item, not the first page reading its category", async () => {
+    renderPage();
+    const turboBoost = screen.getByTestId("config-menu-page-turbo-boost");
+    const videoSetup = screen.getByTestId("config-menu-page-video-setup");
+    expect(videoSetup).toHaveAttribute("aria-expanded", "false");
+
+    act(() => requestConfigItemFocus("U64 Specific Settings", "System Mode"));
+
+    await waitFor(() => expect(videoSetup).toHaveAttribute("aria-expanded", "true"));
+    expect(turboBoost).toHaveAttribute("aria-expanded", "false");
+  });
 });
 
 describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {

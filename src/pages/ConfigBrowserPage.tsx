@@ -944,16 +944,10 @@ const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   return entries;
 };
 
-/** Every REST category a menu page reads from, so a deep link can find the card that holds one. */
-const restCategoriesOfPage = (page: MenuNode): Set<string> => {
-  const categories = new Set<string>();
-  const walk = (node: MenuNode) => {
-    if (node.kind === "item" && node.rest) categories.add(node.rest.category);
-    for (const child of node.children ?? []) walk(child);
-  };
-  walk(page);
-  return categories;
-};
+/** Whether a menu page edits a REST item (or, without `item`, any item of the category). */
+const pageReadsRest = (node: MenuNode, category: string, item?: string): boolean =>
+  (node.kind === "item" && node.rest?.category === category && (item === undefined || node.rest.item === item)) ||
+  (node.children ?? []).some((child) => pageReadsRest(child, category, item));
 
 // The single REST category a page reads from when it is a flat, single-category page
 // (used to delegate the Audio Mixer page to the specialized CategorySection).
@@ -1011,8 +1005,11 @@ export default function ConfigBrowserPage() {
    */
   useEffect(
     () =>
-      subscribeConfigItemFocus(({ category }) => {
-        const owningPage = menuPages.find((entry) => restCategoriesOfPage(entry.page).has(category));
+      subscribeConfigItemFocus(({ category, itemName }) => {
+        // One category can be spread over several pages, so the page holding the item itself wins.
+        const owningPage =
+          menuPages.find((entry) => pageReadsRest(entry.page, category, itemName)) ??
+          menuPages.find((entry) => pageReadsRest(entry.page, category));
         // Through the shared rule for both, so the deep link and the section it is looking for
         // cannot drift apart: a menu page slugs its label the same way a category slugs its name.
         const sectionId = owningPage
