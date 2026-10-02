@@ -108,6 +108,12 @@ describe("StreamStatsPanel", () => {
     expect(screen.getByTestId("stream-stats-underruns")).toHaveTextContent("0");
   });
 
+  it("labels the audio summary stats in sentence case", () => {
+    render(<StreamStatsPanel session={makeFakeSession(snapshot())} />);
+    expect(screen.getByText("Audio buf")).toBeInTheDocument();
+    expect(screen.getByText("Under runs")).toBeInTheDocument();
+  });
+
   it("selecting a frame-rate mode routes to the session and persists it", () => {
     const session = makeFakeSession(snapshot());
     render(<StreamStatsPanel session={session} />);
