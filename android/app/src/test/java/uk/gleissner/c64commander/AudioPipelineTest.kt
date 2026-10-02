@@ -428,9 +428,9 @@ class AudioPipelineTest {
     val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory)
     try {
       // Drive it deep mid-stream, as a burst would: 250 ms more in the ring against a 40 ms target.
-      // A backlog present before the first sound is skipped instead (see the startup test below).
+      // A backlog in the first second is skipped instead (see the startup tests below).
       pipeline.start()
-      feedEven(pipeline, seconds = 1, rateMultiplier = 1.0)
+      feedEven(pipeline, seconds = 2, rateMultiplier = 1.0)
       repeat(62) { pipeline.offer(packet, 0, packet.size) }
       feedEven(pipeline, seconds = 3, rateMultiplier = 1.0)
       val stats = pipeline.stats()
@@ -465,12 +465,12 @@ class AudioPipelineTest {
       pipeline.start()
       var maxCorrection = 1.0
       val settledAt = System.nanoTime() + 500_000_000L
-      var underrunsAtSettle = -1
+      var concealedAtSettle = -1.0
       val endAt = System.nanoTime() + 3_000_000_000L
       val stepNanos = packetFrames * 1_000_000_000L / sampleRate
       var next = System.nanoTime()
       while (System.nanoTime() < endAt) {
-        if (underrunsAtSettle < 0 && System.nanoTime() >= settledAt) underrunsAtSettle = speaker.underruns
+        if (concealedAtSettle < 0 && System.nanoTime() >= settledAt) concealedAtSettle = pipeline.stats().concealedMs
         if (System.nanoTime() < next) {
           maxCorrection = maxOf(maxCorrection, pipeline.stats().driftCorrection)
           Thread.sleep(1)
@@ -483,7 +483,46 @@ class AudioPipelineTest {
       // 0.1% is the steady-state authority, about 1.7 cents; the 0.5% recovery rate is what was heard.
       assertTrue("a startup backlog was played out sharp: $maxCorrection", maxCorrection <= 1.0011)
       assertTrue("the startup backlog was kept as latency: ${stats.bufferedMs} ms", stats.bufferedMs < 150.0)
-      assertEquals("skipping the backlog starved the speaker", underrunsAtSettle, speaker.underruns)
+      // Concealment, not the fake speaker's wall-clock underrun count: only an empty ring conceals,
+      // while the speaker count also moves when a loaded test host deschedules the player thread.
+      assertEquals("skipping the backlog emptied the ring", concealedAtSettle, stats.concealedMs, 0.0)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun aClumpJustAfterTheStartIsSkippedNotPlayedOutSharp() {
+    // The same fault a few hundred milliseconds later: on a Pixel 4 arrivals in the first second
+    // after playback began put the ring at 112 ms against a 30 ms target, and the recovery rate ran
+    // the stream 8.6 cents sharp until about 1.0 s.
+    val speaker = FakeSpeaker(sampleRate)
+    val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory)
+    try {
+      pipeline.start()
+      val startedAt = System.nanoTime()
+      val stepNanos = packetFrames * 1_000_000_000L / sampleRate
+      var next = startedAt
+      var clumped = false
+      var maxCorrection = 1.0
+      var concealedBeforeClump = -1.0
+      while (System.nanoTime() - startedAt < 1_000_000_000L) {
+        val now = System.nanoTime()
+        if (!clumped && now - startedAt >= 300_000_000L) {
+          concealedBeforeClump = pipeline.stats().concealedMs
+          repeat(40) { pipeline.offer(packet, 0, packet.size) }
+          clumped = true
+        }
+        if (now < next) {
+          maxCorrection = maxOf(maxCorrection, pipeline.stats().driftCorrection)
+          Thread.sleep(1)
+          continue
+        }
+        pipeline.offer(packet, 0, packet.size)
+        next += stepNanos
+      }
+      assertTrue("a clump after the start was played out sharp: $maxCorrection", maxCorrection <= 1.0011)
+      assertEquals("skipping the clump emptied the ring", concealedBeforeClump, pipeline.stats().concealedMs, 0.0)
     } finally {
       pipeline.close()
     }

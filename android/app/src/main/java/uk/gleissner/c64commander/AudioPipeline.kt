@@ -166,12 +166,9 @@ internal class AudioPipeline(
    * Bumped by every [flush]. The player reads it before rendering a chunk and again before
    * committing what that chunk consumed.
    *
-   * `readFrames` is advanced by the player and reset by [flush], and `+=` on a volatile is a read,
-   * an add and a write rather than one atomic step — so a flush landing between the player's read
-   * and its write was simply overwritten, and the ring kept playing the second or two of audio the
-   * flush existed to throw away. A pause or a seek would carry on with the old position for as long
-   * as the ring was deep. Comparing the counter is what makes the player able to notice it has been
-   * overtaken, and to drop the chunk it had already converted rather than write it.
+   * `+=` on the volatile `readFrames` is not atomic, so a flush landing mid-update was overwritten and
+   * the ring played on the audio the flush threw away. The counter lets the player notice and drop
+   * the chunk it had already converted.
    */
   @Volatile private var flushSeq: Long = 0
 
@@ -188,14 +185,9 @@ internal class AudioPipeline(
   /**
    * Master attenuation, applied as samples leave the ring.
    *
-   * On-device playback keeps up to twenty seconds of audio scheduled ahead, so attenuating where the
-   * samples are produced means a listener hears a volume change twenty seconds after making it. That
-   * is not a volume control. Applying it here — on the player thread, as each frame is written out —
-   * means the change is heard within the AudioTrack's own buffer instead, which is tens of
-   * milliseconds.
-   *
-   * Set from any thread, read only by the player thread, and ramped rather than stepped: a gain that
-   * jumps between one frame and the next is audible as a click.
+   * On-device playback schedules up to twenty seconds ahead, so attenuating at the producer is heard
+   * twenty seconds late; here it is heard within the track's buffer. Set from any thread, read by the
+   * player thread, and ramped, because a stepped gain clicks.
    */
   @Volatile private var targetGain: Double = 1.0
   /** Ducking attenuation, multiplied with [targetGain]. See [setDucked]. */
@@ -203,6 +195,8 @@ internal class AudioPipeline(
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
+  /** Until when (player thread's clock) a surplus that would trigger recovery is skipped instead. */
+  private var liveEdgeUntilNanos = 0L
   @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
@@ -707,11 +701,16 @@ internal class AudioPipeline(
             LockSupport.parkNanos(POLL_NANOS)
             continue
           }
-          dropStartupSurplus()
+          dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
           track.play()
           started = true
+          liveEdgeUntilNanos = System.nanoTime() + LIVE_EDGE_WINDOW_NANOS
         }
         val depth = (writeFrames - readFrames).coerceAtLeast(0)
+        if (depth > recoveryDepthFrames() && System.nanoTime() < liveEdgeUntilNanos) {
+          dropSurplusAbove(targetFrames.toLong())
+          continue
+        }
         if (depth > hardMaxFrames) {
           // Safety net. The converter should have prevented this; if it did not, playing the backlog
           // out would be permanent added latency, so drop it and say so.
@@ -731,12 +730,12 @@ internal class AudioPipeline(
   }
 
   /**
-   * Start at the live edge, not with a backlog. A Wi-Fi clump during priming left 156 ms against a
-   * 30 ms target, drained at the 0.5% recovery rate: eight cents sharp for six seconds on a Pixel 4.
-   * Nothing has been heard yet, so skipping it is free; on-device playback's deep target never skips.
+   * Start at the live edge. Wi-Fi clumps at or just after the start left 112–156 ms against a 30 ms
+   * target, drained at the 0.5% recovery rate: up to eight cents sharp on a Pixel 4. The unheard
+   * surplus is skipped instead: before the first sound, and in the [LIVE_EDGE_WINDOW_NANOS] after
+   * it when recovery would engage. On-device playback's deep target never reaches that depth.
    */
-  private fun dropStartupSurplus() {
-    val keepFrames = targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate
+  private fun dropSurplusAbove(keepFrames: Long) {
     synchronized(producerLock) {
       val surplus = (writeFrames - readFrames) - keepFrames
       if (surplus <= 0) return
@@ -854,8 +853,7 @@ internal class AudioPipeline(
    */
   private fun driftAuthority(depth: Long): Double {
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
-    val far = targetFrames + maxTargetFrames / 4
-    return if (depth < floor || depth > far) REBUILD_DRIFT else MAX_DRIFT
+    return if (depth < floor || depth > recoveryDepthFrames()) REBUILD_DRIFT else MAX_DRIFT
   }
 
   /**
@@ -883,6 +881,9 @@ internal class AudioPipeline(
     windowMinDepth = Long.MAX_VALUE
     windowStartNanos = now
   }
+
+  /** Depth above which [driftAuthority] drains at the recovery rate. */
+  private fun recoveryDepthFrames(): Long = targetFrames + maxTargetFrames / 4L
 
   private fun nominalRatio(): Double = sourceRate.toDouble() / outputRate.toDouble()
 
@@ -1018,11 +1019,8 @@ internal class AudioPipeline(
      * survives an ordinary scheduling hiccup without the DAC drying out.
      */
     /**
-     * How many output frames a full-scale gain change is spread over.
-     *
-     * ~20 ms at 48 kHz, matching the ramp the JavaScript sinks use, so a level change sounds the
-     * same whichever path is playing. Long enough that no step is audible as a click, short enough
-     * that the control still feels immediate.
+     * Output frames a full-scale gain change is spread over: ~20 ms at 48 kHz, as in the JavaScript
+     * sinks, so no step clicks and the control still feels immediate.
      */
     /** How far output drops while ducking. The usual platform duck is about this deep. */
     private const val DUCK_GAIN = 0.2
@@ -1065,6 +1063,9 @@ internal class AudioPipeline(
 
     /** The wider authority allowed only while the cushion is below its floor — see [driftAuthority]. */
     private const val REBUILD_DRIFT = 0.005
+
+    /** How long after the first sound a recovery-sized surplus is skipped rather than drained. */
+    private const val LIVE_EDGE_WINDOW_NANOS = 1_000_000_000L
 
     /**
      * The most the playback rate may change per written chunk. At one HAL burst per chunk this takes
