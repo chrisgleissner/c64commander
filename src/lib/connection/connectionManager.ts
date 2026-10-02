@@ -1353,18 +1353,22 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     setSnapshot({ lastProbeFailedAtMs: Date.now() });
     await applyDemoFallback(trigger, await resolveDemoFallbackReason());
   };
-  const windowTimer = globalThis.setTimeout(() => {
-    void (async () => {
-      if (cancelled) return;
-      windowExpired = true;
-      await handleWindowExpiry();
-    })().catch((error) => {
-      // The offline/demo fallback transition runs here outside any try/catch;
-      // guard it so a rejection can't become an unhandled rejection.
+  // Runs outside any try/catch, so a failed fallback transition is logged rather than left unhandled.
+  const expireWindow = () =>
+    void handleWindowExpiry().catch((error) => {
       addLog("warn", "Discovery window-expiry transition failed", {
         error: error instanceof Error ? error.message : String(error ?? "unknown error"),
       });
     });
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  const windowTimer = globalThis.setTimeout(() => {
+    if (cancelled) return;
+    windowExpired = true;
+    if (!probeInFlight) return expireWindow();
+    // A probe still in flight may be a slow device's first answer: aborting it put reachable devices into
+    // Demo Mode. Its failure path falls back; this timer bounds a probe queued behind other requests.
+    globalThis.clearInterval(probeTimer);
+    settleTimer = globalThis.setTimeout(expireWindow, loadDiscoveryProbeTimeoutMs());
   }, windowMs);
 
   const runProbe = async () => {
@@ -1413,10 +1417,6 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     }
   };
 
-  // First probe immediately, then at fixed interval.
-  // The probe timeout is governed by loadDiscoveryProbeTimeoutMs (default
-  // 2500 ms). It must tolerate slow first-association on a cold WiFi link
-  // but should not block the OFFLINE banner past the discovery window.
   void runProbe();
   const probeTimer = globalThis.setInterval(() => {
     void runProbe();
@@ -1427,6 +1427,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     cancel: () => {
       cancelled = true;
       globalThis.clearTimeout(windowTimer);
+      globalThis.clearTimeout(settleTimer);
       globalThis.clearInterval(probeTimer);
     },
   };
