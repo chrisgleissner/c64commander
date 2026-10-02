@@ -62,7 +62,9 @@ const {
   appConfigStatePayloadRef,
   deviceControlPayloadRef,
   interactiveWriteMockRef,
+  enabledConfigReadsRef,
 } = vi.hoisted(() => ({
+  enabledConfigReadsRef: { current: new Set<string>() },
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
   c64ApiMockRef: {
@@ -571,10 +573,11 @@ vi.mock("@/hooks/useC64Connection", () => ({
   // isFetched is what the Home summary cards use to tell "the device does not have this"
   // from "the read has not come back yet". A disabled query has not fetched; every mocked
   // payload here stands for a completed read.
-  useC64ConfigItems: (category: string, _items?: string[], enabled = true) => {
+  useC64ConfigItems: (category: string, items: string[] = [], enabled = true) => {
     if (!enabled) {
       return { data: undefined, isFetched: false };
     }
+    enabledConfigReadsRef.current.add(`${category}|${items.join("|")}`);
     if (category === "SID Sockets Configuration") {
       return { data: sidSocketsPayloadRef.current, isFetched: true };
     }
@@ -737,7 +740,9 @@ beforeEach(() => {
   queryClientMockRef.current = {
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
+    refetchQueries: vi.fn().mockResolvedValue(undefined),
   };
+  enabledConfigReadsRef.current = new Set();
   sidSocketsPayloadRef.current = undefined;
   sidAddressingPayloadRef.current = undefined;
   audioMixerPayloadRef.current = undefined;
@@ -817,6 +822,30 @@ beforeEach(() => {
   (globalThis as any).__APP_VERSION__ = "test";
   (globalThis as any).__GIT_SHA__ = "deadbeef";
   (globalThis as any).__BUILD_TIME__ = "";
+});
+
+describe("HomePage config refresh", () => {
+  it("re-reads the 14 config reads Home loads with one refetch of the active Home config queries on focus", async () => {
+    renderHomePage();
+    expect(enabledConfigReadsRef.current.size).toBe(14);
+    const refetchQueries = queryClientMockRef.current.refetchQueries as ReturnType<typeof vi.fn>;
+    expect(refetchQueries).not.toHaveBeenCalled();
+
+    fireEvent(window, new Event("focus"));
+
+    await waitFor(() => expect(refetchQueries).toHaveBeenCalledTimes(1));
+    expect(refetchQueries).toHaveBeenCalledWith(
+      { queryKey: ["c64-config-items"], type: "active" },
+      { cancelRefetch: false },
+    );
+  });
+
+  it("does not refresh a demo device", () => {
+    statusPayloadRef.current = { ...statusPayloadRef.current, isDemo: true };
+    renderHomePage();
+    fireEvent(window, new Event("focus"));
+    expect(queryClientMockRef.current.refetchQueries).not.toHaveBeenCalled();
+  });
 });
 
 describe("HomePage SID status", () => {

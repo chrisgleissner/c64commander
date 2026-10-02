@@ -959,6 +959,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The app remembers which cards you left open. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config too; these cards just save you the search.",
     "",
+    "The cards show what your C64 reports. While Home is on screen, the app reads those settings again every 10 seconds, when you come back to the app, and right after any action it takes, so a change made in the machine's own menu shows up here within about 10 seconds. A slider you are dragging, a field you are typing in, or a setting still being written is left alone until you are done.",
+    "",
     "At the foot of the page, the system strip shows which app build, device and firmware you are on. Check it before an upgrade, or when something seems wrong.",
     "",
     '**With no C64 connected**, Home rearranges itself. The search field stays, and so do Radio, Last, Recent and Live, with a card below them that explains how to connect. Live needs a machine, so it is grayed out and reads "Needs a connected C64 Ultimate".',

@@ -36,6 +36,7 @@ import {
 } from "@/lib/deviceInteraction/restRequestIdentity";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import { publishDeviceWrite, TELNET_DEVICE_ACTION } from "@/lib/deviceInteraction/deviceWriteEvents";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -617,6 +618,7 @@ const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: 
   if (isReadOnlyRestMethod(method)) return;
 
   const writePath = normalizeRestResourcePath(path, baseUrl);
+  publishDeviceWrite(writePath);
   const invalidatedReadPaths = new Set<string>(["/v1/info"]);
   if (writePath.startsWith("/v1/configs")) {
     invalidatedReadPaths.add("/v1/configs");
@@ -1171,5 +1173,6 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
     });
   } finally {
     pollingPause.release();
+    publishDeviceWrite(TELNET_DEVICE_ACTION);
   }
 };

@@ -1904,4 +1904,35 @@ describe("deviceInteractionManager", () => {
     await expect(first).resolves.toBe("first");
     await expect(second).resolves.toBe("second");
   });
+
+  it("publishes each completed REST write and Telnet session, but no REST read, so Home can re-read the device", async () => {
+    const { withRestInteraction, withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    const { subscribeDeviceWrites } = await import("@/lib/deviceInteraction/deviceWriteEvents");
+    resetInteractionState("test");
+    const published: string[] = [];
+    const unsubscribe = subscribeDeviceWrites((path) => published.push(path));
+    const rest = (method: string, path: string) =>
+      withRestInteraction(
+        {
+          action: makeAction(`${method}-${path}`),
+          method,
+          path,
+          normalizedUrl: `http://device${path}`,
+          intent: "user" as const,
+          baseUrl: "http://device",
+        },
+        async () => ({ ok: true }),
+      );
+
+    await rest("GET", "/v1/configs/Audio%20Mixer");
+    await rest("PUT", "/v1/machine:menu_button");
+    await withTelnetInteraction(
+      { action: makeAction("telnet-action"), actionId: "power-cycle", intent: "user" as const },
+      async () => "done",
+    );
+    unsubscribe();
+
+    expect(published).toEqual(["/v1/machine:menu_button", "telnet"]);
+  });
 });

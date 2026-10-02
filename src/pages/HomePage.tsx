@@ -60,6 +60,7 @@ import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
+import { useHomeConfigRefresh } from "./home/hooks/useHomeConfigRefresh";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
 import { ConfigActionsProvider } from "./home/hooks/ConfigActionsContext";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
@@ -289,6 +290,7 @@ function HomePageContent() {
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
   const { configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
+  useHomeConfigRefresh({ connected: status.isConnected && !status.isDemo, configWritePending });
   const {
     openStudio,
     openContextLens,
