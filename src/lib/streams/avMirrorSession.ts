@@ -35,7 +35,7 @@ import {
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
-import { stopStreamAtForeignHost } from "./foreignSenderStop";
+import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
 import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
@@ -259,6 +259,8 @@ export class AvMirrorSession {
   private inputPriorityEnabled = true;
   /** Serializes audio/video start/stop and sender adoption so they never interleave. */
   private opChain: Promise<unknown> = Promise.resolve();
+  /** The host a queued `stopAll` was requested for; set only while that stop runs. */
+  private stopAllHost: string | null = null;
 
   constructor(deps: AvMirrorSessionDeps = {}) {
     // Record which machine is streaming to this phone across the two default transports, so a
@@ -275,7 +277,11 @@ export class AvMirrorSession {
     const stopStream =
       deps.stopStream ??
       (async (name) => {
-        const result = await getC64API().stopStream(name);
+        const host = this.stopAllHost;
+        const result =
+          host !== null && host !== getC64API().getDeviceHost()
+            ? await stopStreamAtHost(host, name)
+            : await getC64API().stopStream(name);
         recordDeviceStreamStopped(name);
         return result;
       });
@@ -794,7 +800,16 @@ export class AvMirrorSession {
     // Both stops go out together in one serialized step. A device switch waits only a bounded time
     // for this; a video stop queued behind a slow audio stop would reach the next device instead.
     // allSettled so one failing stop cannot orphan the other; each rejection is logged below.
-    const [audio, video] = await this.serialize(() => Promise.allSettled([this.stopAudioNow(), this.stopVideoNow()]));
+    // The host is captured now: a stop queued behind a slow start can run after the retarget.
+    const deviceHost = getC64API().getDeviceHost();
+    const [audio, video] = await this.serialize(async () => {
+      this.stopAllHost = deviceHost;
+      try {
+        return await Promise.allSettled([this.stopAudioNow(), this.stopVideoNow()]);
+      } finally {
+        this.stopAllHost = null;
+      }
+    });
     for (const [name, outcome] of [
       ["audio", audio],
       ["video", video],
