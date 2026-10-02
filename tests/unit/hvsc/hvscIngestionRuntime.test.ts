@@ -1401,6 +1401,28 @@ describe("hvscIngestionRuntime", () => {
     expect(reasons.at(-1)).toBe("Canceled");
   });
 
+  it("keeps a cancel that arrives while storage is being prepared, so the install stops before extracting", async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    vi.mocked(filesystem.ensureHvscDirs).mockImplementationOnce(async () => {
+      await cancelHvscInstall("token-cancel-during-prep");
+    });
+
+    await expect(installOrUpdateHvsc("token-cancel-during-prep")).rejects.toThrow();
+
+    expect(extractArchiveEntries).not.toHaveBeenCalled();
+  });
+
   it("stops the deletion loop and skips promote/finalize/success after cancellation mid-loop (HARD9-084)", async () => {
     // Regression: cancellation was previously only checked inside extraction's
     // onEntry - once extraction finished, the deletion loop (up to thousands

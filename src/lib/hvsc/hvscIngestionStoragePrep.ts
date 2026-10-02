@@ -20,7 +20,8 @@ export const prepareIngestionStorage = async (cancelToken: string) => {
   try {
     await ensureHvscDirs();
     await cleanupStaleStagingDir();
-    cancelTokens.set(cancelToken, { cancelled: false });
+    // The runtime is already claimed, so a token present here is a cancel that arrived during these steps.
+    if (!cancelTokens.has(cancelToken)) cancelTokens.set(cancelToken, { cancelled: false });
     await beginHvscInstallGuard();
   } catch (error) {
     cancelTokens.delete(cancelToken);
