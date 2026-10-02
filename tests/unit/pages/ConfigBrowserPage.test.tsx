@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { closeAllCards, ensureCardOpen } from "../helpers/cards";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
@@ -419,6 +419,38 @@ describe("ConfigBrowserPage", () => {
         }),
       );
     });
+  });
+
+  it("rolls back only the failed audio mixer item, keeping a newer change to another SID", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({ data: { categories: ["Audio Mixer"] }, isLoading: false });
+    let rejectFirstWrite: (error: Error) => void = () => undefined;
+    const mutateAsync = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((_, reject) => (rejectFirstWrite = reject)))
+      .mockResolvedValue({});
+    mockUseC64SetConfig.mockReturnValue({ mutateAsync, isPending: false });
+    const data = {
+      "Audio Mixer": {
+        items: {
+          "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+          "Vol Ultisid 2": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+        },
+      },
+    };
+    mockUseC64Category.mockImplementation(() => ({ data, isLoading: false, refetch: vi.fn() }));
+
+    renderConfigBrowserPage();
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Update Vol Ultisid 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update Vol Ultisid 2" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "updated"));
+
+    await act(async () => rejectFirstWrite(new Error("Update failed")));
+
+    await waitFor(() => expect(screen.getByTestId("row-vol-ultisid-1")).toHaveAttribute("data-value", "0 dB"));
+    expect(screen.getByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "updated");
   });
 
   it("keeps audio mixer Solo active across item refetch identity changes", async () => {

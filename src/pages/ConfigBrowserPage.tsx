@@ -69,6 +69,7 @@ import {
   type MenuPageEntry,
 } from "@/lib/config/menuMapping/searchMenuPages";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
+import { rollbackAudioMixerItem } from "@/pages/config/audioMixerRollback";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
@@ -628,13 +629,13 @@ function CategorySection({
             category: categoryName,
           },
         });
-        syncAudioConfiguredItems(previousConfiguredItems);
+        syncAudioConfiguredItems(rollbackAudioMixerItem(audioConfiguredRef.current, previousConfiguredItems, itemName));
       }
       return;
     }
     const success = await handleValueChange(itemName, value);
     if (!success) {
-      syncAudioConfiguredItems(previousConfiguredItems);
+      syncAudioConfiguredItems(rollbackAudioMixerItem(audioConfiguredRef.current, previousConfiguredItems, itemName));
       return;
     }
     if (!soloState.soloItem) {
