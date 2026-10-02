@@ -82,6 +82,7 @@ import {
   wait,
 } from "@/lib/c64api/requestRuntime";
 import {
+  areConfigEnrichmentItemsEqual,
   loadConfigEnrichmentAbsentDomains,
   loadConfigEnrichmentCategory,
   loadConfigEnrichmentNamespaceForHost,
@@ -1356,6 +1357,7 @@ export class C64API {
       }
       mergedItems[itemName] = nextItem;
     });
+    if (areConfigEnrichmentItemsEqual(previousItems, mergedItems)) return;
     this.configCategoryItemsCache.set(category, mergedItems);
     saveConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category, mergedItems);
   }
@@ -2387,11 +2389,12 @@ export class C64API {
     };
   }
 
-  /** Every category's current values in one read (firmware wildcard), recorded into the item cache. */
+  /** Every category's current values in one read (firmware wildcard), recorded for categories the cache tracks. */
   async getAllConfigCategories(options: C64ReadRequestOptions = {}): Promise<Record<string, unknown>> {
     const response = await this.request<Record<string, unknown>>("/v1/configs/*", options);
     Object.keys(response ?? {}).forEach((category) => {
-      if (category !== "errors") this.rememberConfigCategoryItems(category, { [category]: response[category] });
+      if (category === "errors" || !this.getCachedConfigCategoryItems(category)) return;
+      this.rememberConfigCategoryItems(category, { [category]: response[category] });
     });
     return response;
   }

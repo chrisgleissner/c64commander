@@ -166,6 +166,9 @@ export const loadConfigEnrichmentCategory = (
   return value.items;
 };
 
+export const areConfigEnrichmentItemsEqual = (left: Record<string, unknown>, right: Record<string, unknown>) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
 export const saveConfigEnrichmentCategory = (
   namespaceKey: string | null,
   category: string,

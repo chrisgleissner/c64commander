@@ -370,6 +370,41 @@ describe("C64API getConfigItems", () => {
     expect(fromWildcard.audio).toEqual(await api.getConfigItems("Audio Mixer", ["Vol Master"], options));
     expect(fromWildcard.led).toEqual(await api.getConfigItems("LED Strip Settings", ["LedStrip Mode"], options));
   });
+
+  it("persists from a GET /v1/configs/* only the tracked categories whose values changed", async () => {
+    const api = new C64API("http://192.0.2.72");
+    const device: Record<string, Record<string, string>> = {
+      "Audio Mixer": { "Vol Master": " 0 dB" },
+      "LED Strip Settings": { "LedStrip Mode": "Fixed Color" },
+      "Printer Settings": { "IEC printer": "Off" },
+    };
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = decodeURIComponent(new URL(String(input)).pathname);
+        if (path === "/v1/info") return json({ unique_id: "PERSIST01", firmware_version: "3.14", errors: [] });
+        if (path === "/v1/configs/*") return json({ ...device, errors: [] });
+        const category = path.slice("/v1/configs/".length);
+        return json({ [category]: device[category], errors: [] });
+      }),
+    );
+    await api.getInfo();
+    await api.getConfigItems("Audio Mixer", ["Vol Master"], { __c64uSkipItemEnrichment: true });
+    await api.getConfigItems("LED Strip Settings", ["LedStrip Mode"], { __c64uSkipItemEnrichment: true });
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const enrichmentWrites = () =>
+      setItem.mock.calls.map(([key]) => key).filter((key) => key.startsWith("c64u:configEnrichment:"));
+    const readAll = () => api.getAllConfigCategories({ __c64uIntent: "background", __c64uBypassCache: true });
+
+    await readAll();
+    expect(enrichmentWrites()).toEqual([]);
+
+    device["Audio Mixer"]["Vol Master"] = "-6 dB";
+    await readAll();
+    expect(enrichmentWrites()).toEqual(["c64u:configEnrichment:PERSIST01|3.14|Audio Mixer"]);
+  });
 });
 
 describe("C64API request identity", () => {
