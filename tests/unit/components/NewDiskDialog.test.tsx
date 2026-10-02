@@ -31,6 +31,17 @@ const setup = (
 const deviceFolderShown = () => waitFor(() => expect(screen.getByTestId("new-disk-folder")).not.toHaveValue(""));
 
 describe("NewDiskDialog", () => {
+  it("clears the entered name when Cancel closes the dialog, as closing by Back or outside tap does", async () => {
+    const { onOpenChange } = setup();
+    await deviceFolderShown();
+    fireEvent.change(screen.getByTestId("new-disk-name"), { target: { value: "games" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByTestId("new-disk-name")).toHaveValue("");
+  });
+
   it("disables Create until a name is entered", async () => {
     setup();
     await deviceFolderShown();

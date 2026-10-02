@@ -268,7 +268,14 @@ export function NewDiskDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              reset();
+              onOpenChange(false);
+            }}
+            disabled={busy}
+          >
             Cancel
           </Button>
           <Button
