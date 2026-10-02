@@ -408,7 +408,9 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     let removeListener: (() => Promise<void>) | null = null;
     let disposed = false;
     const registration = addHvscProgressListener((event) => {
-      if (hvscIgnoreProgressRef.current) return;
+      // Only the canceled install is muted. Metadata hydration is a separate background run of the
+      // installed library and never comes from an install, so its progress still has to land.
+      if (hvscIgnoreProgressRef.current && event.stage !== "sid_metadata_hydration") return;
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
       const applyExtractionCounts = (payload: { processedCount?: number; totalCount?: number }) => {

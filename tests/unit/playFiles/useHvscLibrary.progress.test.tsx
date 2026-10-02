@@ -529,6 +529,33 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscActionLabel).toBeNull();
   });
 
+  it("still applies background metadata hydration progress after an update was canceled", async () => {
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(progressListener).not.toBeNull();
+
+    await act(async () => {
+      await result.current.handleHvscCancel();
+    });
+
+    act(() => {
+      progressListener?.({
+        stage: "sid_metadata_hydration",
+        statusToken: "done",
+        ingestionId: "hvsc-metadata-hydration",
+        processedCount: 10,
+        totalCount: 10,
+        percent: 100,
+        elapsedTimeMs: 50,
+      });
+    });
+
+    expect(result.current.hvscStatusSummary.metadata.status).toBe("success");
+    expect(result.current.hvscStatusSummary.metadata.processedSongs).toBe(10);
+  });
+
   it("shows update-in-progress state when required updates are available", async () => {
     let resolveInstall: (() => void) | null = null;
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 85, installedVersion: 84, requiredUpdates: [85] });
