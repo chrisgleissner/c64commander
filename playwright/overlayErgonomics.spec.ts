@@ -226,6 +226,38 @@ test.describe("Overlay ergonomics on a phone", () => {
     await expect(liveView.getByTestId("stream-stats")).toBeVisible({ timeout: 15_000 });
     await expectAllMeetTarget(liveView.getByTestId("stream-stats-toggle"), "Live View stats toggle");
   });
+
+  for (const profile of ["compact", "medium"] as const) {
+    test(`immersive Live View zoom, fit, follow and mode controls meet the target size on ${profile}`, async ({
+      page,
+    }) => {
+      await installLiveViewStreamStub(page);
+      await page.addInitScript((id) => localStorage.setItem("c64u_display_profile_override", id), profile);
+      await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS[profile].viewport);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page, profile);
+      await openSection(page, "home-section-toggle-live-view");
+      const liveView = activeSlot(page).getByTestId("live-view-card");
+      await liveView.getByTestId("av-video-toggle").click();
+      await expect(liveView.getByTestId("stream-stats")).toBeVisible({ timeout: 15_000 });
+
+      await activeSlot(page).getByTestId("home-machine-inline-openRemoteInput").click();
+      const immersive = page.getByTestId("remote-input-sheet").getByTestId("av-mirror-immersive");
+      await expect(immersive).toBeVisible();
+      await immersive.hover();
+      const controls = immersive.getByTestId("av-mirror-immersive-controls");
+      await expect(controls).toBeVisible({ timeout: 8000 });
+
+      await expectAllMeetTarget(controls.locator("button"), "Immersive Live View controls", 5);
+      const stageBox = await immersive.boundingBox();
+      const controlsBox = await controls.boundingBox();
+      expect(stageBox && controlsBox).toBeTruthy();
+      expect(controlsBox!.x, "controls overflow the picture on the left").toBeGreaterThanOrEqual(stageBox!.x);
+      expect(controlsBox!.x + controlsBox!.width, "controls overflow the picture on the right").toBeLessThanOrEqual(
+        stageBox!.x + stageBox!.width + 0.5,
+      );
+    });
+  }
 });
 
 /**

@@ -623,7 +623,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Zoom out"
             onClick={() => withIdleReset(() => zoomBy(1 / ZOOM_STEP))}
             data-testid="av-immersive-zoom-out"
@@ -633,7 +633,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Zoom in"
             onClick={() => withIdleReset(() => zoomBy(ZOOM_STEP))}
             data-testid="av-immersive-zoom-in"
@@ -643,7 +643,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Fit to screen"
             onClick={() => withIdleReset(reset)}
             data-testid="av-immersive-fit"
@@ -653,7 +653,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant={follow ? "default" : "ghost"}
-            className={cn("h-8 w-8", follow ? "" : "text-media-on-scrim hover:bg-media-on-scrim/15")}
+            className={cn(!follow && "text-media-on-scrim hover:bg-media-on-scrim/15")}
             aria-label="Follow motion"
             aria-pressed={follow}
             title={follow ? "Following motion — press and hold the picture to lock on" : "Follow motion"}
@@ -665,7 +665,6 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="sm"
             variant={adjust ? "default" : "secondary"}
-            className="h-8"
             aria-pressed={adjust}
             aria-label={adjust ? "Done adjusting the view" : "Fit and pan the view"}
             onClick={toggleMode}
