@@ -224,9 +224,9 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   }
 };
 
-export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
+export const cancelHvscInstall = async (cancelToken: string): Promise<boolean> => {
   const mock = getMockBridge();
-  if (mock?.cancelHvscInstall) return mock.cancelHvscInstall({ cancelToken });
+  if (mock?.cancelHvscInstall) return (await mock.cancelHvscInstall({ cancelToken })) !== false;
   return cancelRuntimeInstall(cancelToken);
 };
 

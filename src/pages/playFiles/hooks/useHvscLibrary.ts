@@ -180,6 +180,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const hvscIgnoreProgressRef = useRef(false);
   // A Stop pressed before the runtime has started has no ingestion to cancel, so the install has to see it itself.
   const hvscCancelGenerationRef = useRef(0);
+  const hvscUpdateCheckPendingRef = useRef(false);
 
   const runHvscAction = useCallback(<T>(name: string, fn: () => Promise<T> | T) => {
     const context = createActionContext(name, "user", "HvscLibrary");
@@ -767,7 +768,8 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           }));
           markHvscUpdateCheckAt(startedAt);
           const cancelGeneration = hvscCancelGenerationRef.current;
-          const updateStatus = await checkForHvscUpdates();
+          hvscUpdateCheckPendingRef.current = true;
+          const updateStatus = await checkForHvscUpdates().finally(() => (hvscUpdateCheckPendingRef.current = false));
           if (hvscCancelGenerationRef.current !== cancelGeneration) {
             addLog("info", "HVSC install canceled during the update check; not starting the download");
             return;
@@ -1018,8 +1020,13 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const handleHvscCancel = useCallback(async () => {
     const token = hvscActiveToken ?? "hvsc-install";
     hvscCancelGenerationRef.current += 1;
+    const stopHonoredByUpdateCheck = hvscUpdateCheckPendingRef.current;
     try {
-      await cancelHvscInstall(token);
+      const canceledIngestion = await cancelHvscInstall(token);
+      if (!canceledIngestion && !stopHonoredByUpdateCheck) {
+        addLog("info", "HVSC Stop arrived after the operation had finished; nothing was canceled", { token });
+        return;
+      }
       const stoppedAt = new Date().toISOString();
       hvscIgnoreProgressRef.current = true;
       clearPendingHvscProgress();

@@ -339,8 +339,8 @@ describe("hvscIngestionRuntime", () => {
     runtimeState.activeIngestionRunning = true;
     runtimeState.cancelTokens.set("token-1", { cancelled: false });
 
-    await expect(cancelHvscInstall("token-1")).resolves.toBeUndefined();
-    await expect(cancelHvscInstall("token-1")).resolves.toBeUndefined();
+    await expect(cancelHvscInstall("token-1")).resolves.toBe(true);
+    await expect(cancelHvscInstall("token-1")).resolves.toBe(true);
     expect(runtimeState.cancelTokens.get("token-1")?.cancelled).toBe(true);
   });
 
@@ -1496,7 +1496,7 @@ describe("hvscIngestionRuntime", () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
     const releaseNativeCancel = deferNativeCancel();
-    let lateCancel: Promise<void> = Promise.resolve();
+    let lateCancel: Promise<boolean> = Promise.resolve(true);
     const filesystem = await import("@/lib/hvsc/hvscFilesystem");
     vi.mocked(filesystem.ensureHvscDirs).mockImplementationOnce(async () => {
       lateCancel = cancelHvscInstall("token-late-cancel");
@@ -1504,7 +1504,7 @@ describe("hvscIngestionRuntime", () => {
 
     await expect(ingestCachedHvsc("token-late-cancel")).rejects.toThrow();
     releaseNativeCancel();
-    await lateCancel;
+    await expect(lateCancel).resolves.toBe(false);
 
     expect(lastIngestionStatePatch()).toEqual({ ingestionState: "ready", ingestionError: null });
   });
@@ -1524,14 +1524,14 @@ describe("hvscIngestionRuntime", () => {
       installedBaselineVersion: 5,
     } as any);
     const releaseNativeCancel = deferNativeCancel();
-    let lateCancel: Promise<void> = Promise.resolve();
+    let lateCancel: Promise<boolean> = Promise.resolve(true);
     vi.mocked(endHvscInstallGuard).mockImplementationOnce(async () => {
       lateCancel = cancelHvscInstall("token-stop-at-finish");
     });
 
     await installOrUpdateHvsc("token-stop-at-finish");
     releaseNativeCancel();
-    await lateCancel;
+    await expect(lateCancel).resolves.toBe(false);
 
     expect(lastIngestionStatePatch()).toEqual(
       expect.objectContaining({ ingestionState: "ready", installedVersion: 6 }),

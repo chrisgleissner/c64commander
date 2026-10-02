@@ -1392,11 +1392,12 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
 
 // ── Cancel ───────────────────────────────────────────────────────
 
-export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
+/** Resolves true when a running ingestion was canceled, false when there was nothing left to cancel. */
+export const cancelHvscInstall = async (cancelToken: string): Promise<boolean> => {
   const tokenWasActive = runtimeState.cancelTokens.has(cancelToken);
   if (!tokenWasActive && !runtimeState.activeIngestionRunning) {
     addLog("info", "HVSC cancel ignored; no active ingestion", { token: cancelToken });
-    return;
+    return false;
   }
   if (!tokenWasActive) {
     runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
@@ -1414,8 +1415,9 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
       });
     }
   }
-  applyCancelledIngestionState();
-  addLog("info", "HVSC cancel requested", { token: cancelToken });
+  const canceled = applyCancelledIngestionState();
+  addLog("info", "HVSC cancel requested", { token: cancelToken, canceled });
+  return canceled;
 };
 
 // ── Folder / song / duration queries ─────────────────────────────

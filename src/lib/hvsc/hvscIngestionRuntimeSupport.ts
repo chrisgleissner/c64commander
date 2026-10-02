@@ -168,7 +168,7 @@ export const applyCancelledIngestionState = (
   // the run has already written its own outcome, and a stale "Canceled" would overwrite it.
   if (!runtimeState.activeIngestionRunning) {
     addLog("info", "HVSC cancel arrived after the ingestion had ended; state left unchanged", { message });
-    return;
+    return false;
   }
   updateHvscState(stateAfterCancel(message));
   const summary = loadHvscStatusSummary();
@@ -209,6 +209,7 @@ export const applyCancelledIngestionState = (
     archiveName,
     errorCause: message,
   });
+  return true;
 };
 
 export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;

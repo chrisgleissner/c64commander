@@ -175,7 +175,7 @@ describe("useHvscLibrary progress coverage", () => {
       progressListener = listener;
       return Promise.resolve({ remove: vi.fn().mockResolvedValue(undefined) });
     });
-    mocks.cancelHvscInstallMock.mockResolvedValue(undefined);
+    mocks.cancelHvscInstallMock.mockResolvedValue(true);
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 85, installedVersion: 0, requiredUpdates: [85] });
     mocks.clearHvscStatusSummaryMock.mockResolvedValue(undefined);
     mocks.getDefaultHvscStatusSummaryMock.mockImplementation(() => createSummary());

@@ -173,7 +173,7 @@ describe("useHvscLibrary", () => {
       progressListener = listener;
       return Promise.resolve({ remove: vi.fn().mockResolvedValue(undefined) });
     });
-    mocks.cancelHvscInstallMock.mockResolvedValue(undefined);
+    mocks.cancelHvscInstallMock.mockResolvedValue(true);
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 1, installedVersion: 0, requiredUpdates: [1] });
     mocks.getDefaultHvscStatusSummaryMock.mockImplementation(() => createSummary());
     mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: null, updateVersions: [] });
@@ -790,6 +790,49 @@ describe("useHvscLibrary", () => {
 
     expect(mocks.installOrUpdateHvscMock).not.toHaveBeenCalled();
     expect(mocks.toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ title: "HVSC ready" }));
+  });
+
+  it("reports a Stop during the update check as canceled although no ingestion was running yet", async () => {
+    let resolveCheck: ((value: unknown) => void) | null = null;
+    mocks.checkForHvscUpdatesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = resolve;
+        }),
+    );
+    mocks.cancelHvscInstallMock.mockResolvedValue(false);
+    const { result } = renderHook(() => useHvscLibrary(true));
+    let installPromise: Promise<unknown> | null = null;
+    act(() => {
+      installPromise = result.current.handleHvscInstall();
+    });
+    await waitFor(() => expect(resolveCheck).not.toBeNull());
+
+    await act(async () => {
+      await result.current.handleHvscCancel();
+    });
+    await act(async () => {
+      resolveCheck!({ latestVersion: 1, installedVersion: 0, requiredUpdates: [1] });
+      await installPromise;
+    });
+
+    expect(mocks.toastMock).toHaveBeenCalledWith({ title: "HVSC update canceled" });
+    expect(result.current.hvscInlineError).toBe("Canceled");
+  });
+
+  it("does not report a Stop as a cancellation when the operation had already finished", async () => {
+    mocks.cancelHvscInstallMock.mockResolvedValue(false);
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 85, ingestionState: "ready" }));
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("READY"));
+
+    await act(async () => {
+      await result.current.handleHvscCancel();
+    });
+
+    expect(mocks.toastMock).not.toHaveBeenCalledWith({ title: "HVSC update canceled" });
+    expect(result.current.hvscInlineError).toBeNull();
+    expect(result.current.hvscPreparationState).toBe("READY");
   });
 
   it("reports a fresh install canceled during indexing as an indexing stop, not a failed download", async () => {
