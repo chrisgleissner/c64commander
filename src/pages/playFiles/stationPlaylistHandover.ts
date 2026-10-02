@@ -39,14 +39,24 @@ export type PlaylistPosition = {
   selectedIds: ReadonlySet<string>;
 };
 
-/** Only the first station saves the playlist; a second one started over it keeps that copy. */
+/**
+ * Only the first station saves the playlist; a second one started over it keeps that copy. Tunes the
+ * listener queued while a stopped station's last tune played join the saved copy, since the new
+ * station replaces the queue they are in.
+ */
 export const handoverForStationStart = (
   existing: StationHandover | null,
   current: PlaylistPosition,
   stationItems: readonly PlaylistItem[],
 ): StationHandover => {
   const stationItemIds = stationItems.map((item) => item.id);
-  if (existing) return { ...existing, stationItemIds, phase: "station" };
+  if (existing) {
+    const items =
+      existing.phase === "finishing" && existing.items
+        ? restoredPlaylistState({ ...existing, items: existing.items }, current.playlist).playlist
+        : existing.items;
+    return { ...existing, items, stationItemIds, phase: "station", playsOutLastTune: undefined };
+  }
   return {
     items: [...current.playlist],
     currentItemId: current.playlist[current.currentIndex]?.id ?? null,

@@ -116,7 +116,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
       };
       const next = handoverForStationStart(existing, position, items);
       commit(next);
-      if (!existing && next.items) persistSavedItems(next.items);
+      if (next.items && next.items !== existing?.items) persistSavedItems(next.items);
       const started = await startQueue();
       if (!started) {
         if (existing) commit(existing);

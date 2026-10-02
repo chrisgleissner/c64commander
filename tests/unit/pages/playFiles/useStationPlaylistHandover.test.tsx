@@ -26,8 +26,10 @@ import {
   rememberHandover,
   rememberedHandover,
   SAVED_PLAYLIST_READ,
+  savedPlaylistRepositoryId,
   writeHandoverRecord,
 } from "@/pages/playFiles/stationPlaylistHandover";
+import { SHARED_PLAYLIST_STORAGE_KEY } from "@/pages/playFiles/playFilesUtils";
 import {
   PLAYLIST_RESTORED_TOAST,
   SAVED_PLAYLIST_LOST_TOAST,
@@ -184,6 +186,24 @@ describe("useStationPlaylistHandover", () => {
     harness.rerender({ stationActive: false, isPlaying: false });
 
     expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps the tunes queued during a stopped station's last tune when another station starts", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    harness.rerender({ stationActive: false, isPlaying: true });
+    act(() => harness.result.current.setPlaylist((prev) => [...prev, item("added")]));
+
+    await startStation(harness, stationB);
+    expect(ids(repo.playlists.get(savedPlaylistRepositoryId(SHARED_PLAYLIST_STORAGE_KEY)) as PlaylistItem[])).toEqual([
+      "a",
+      "b",
+      "c",
+      "added",
+    ]);
+    harness.rerender({ stationActive: false, isPlaying: false });
+
+    expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c", "added"]);
   });
 
   it("restores the saved playlist after an app restart while the station ran", async () => {

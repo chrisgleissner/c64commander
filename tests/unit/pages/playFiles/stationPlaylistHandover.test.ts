@@ -63,6 +63,21 @@ describe("stationPlaylistHandover", () => {
     expect(second.stationItemIds).toEqual(["radio:7", "radio:8"]);
   });
 
+  it("adds the tunes queued during a stopped station's last tune to the saved playlist when a new station starts", () => {
+    const finishing: StationHandover = { ...savedFromMine(), phase: "finishing", playsOutLastTune: true };
+    const queue = [item("radio:2"), item("added")];
+
+    const next = handoverForStationStart(
+      finishing,
+      { playlist: queue, currentIndex: 0, selectedIds: new Set() },
+      stationB,
+    );
+
+    expect(ids(next.items)).toEqual(["a", "b", "c", "added"]);
+    expect(next.phase).toBe("station");
+    expect(next.playsOutLastTune).toBeUndefined();
+  });
+
   it("treats the station's own refills as unedited, and an added or removed tune as an edit", () => {
     const saved = withAppendedStationItems(savedFromMine(), [item("radio:3")]);
     const queue = [...stationA, item("radio:3")];
