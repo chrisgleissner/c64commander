@@ -46,7 +46,6 @@ import urllib.request
 import wave
 from pathlib import Path
 
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lan_iface import resolve_iface  # noqa: E402
@@ -326,6 +325,7 @@ GRADED_BAND_HZ = (300.0, 6000.0)
 
 def band_limited(samples: list[float], rate: int) -> list[float]:
     """Keep 300-6000 Hz. The room's rumble sits below 300 Hz and leaks into the 2 ms edge windows."""
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
     signal = np.asarray(samples, dtype=np.float64)
     spectrum = np.fft.rfft(signal)
     freqs = np.fft.rfftfreq(len(signal), 1.0 / rate)
@@ -363,6 +363,7 @@ BRIDGE_WINDOWS = 2
 
 def coarse_levels(samples: list[float], rate: int, hz: float, window: int, steps: int) -> np.ndarray:
     """`goertzel` over consecutive windows of `window` samples, all at once."""
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
     frames = np.asarray(samples[: window * steps], dtype=np.float64).reshape(steps, window)
     basis = np.exp(-2j * np.pi * hz * np.arange(window) / rate)
     return np.abs(frames @ basis) / window
@@ -382,6 +383,7 @@ def identify_tones(levels: np.ndarray) -> np.ndarray:
     A ratio, not a level: room noise and speaker colouration raise every band together, so only one
     note standing clearly above the others means a tone of the barcode is really sounding.
     """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
     fundamentals = levels[:, 0]
     present = (fundamentals >= fundamentals.max(axis=0) * FUNDAMENTAL_PRESENCE) & (
         fundamentals >= levels.max(axis=1) * FUNDAMENTAL_UNDER_PARTIAL
@@ -399,6 +401,7 @@ def bridge_interruptions(sounding: np.ndarray, note_windows: int, max_windows: i
     A run of up to `max_windows` windows between two runs of the same note is bridged when the two runs
     and the interruption together span at most `note_windows` windows.
     """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
     runs: list[list[int]] = []  # [value, start, length]
     for index, value in enumerate(sounding.tolist()):
         if runs and runs[-1][0] == value:
@@ -419,6 +422,7 @@ def detect_bursts(samples: list[float], rate: int) -> list[tuple[int, int, int]]
     Shared with `explain_clarity.py` so an explanation is about the bursts this verdict counted.
     Pass samples from `read_graded_wav`, band-limited, as `analyse` does.
     """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
     if len(samples) < rate * 3:
         raise SystemExit("recording too short to grade")
 
