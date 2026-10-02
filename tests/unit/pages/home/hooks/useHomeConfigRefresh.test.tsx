@@ -456,6 +456,31 @@ describe("useHomeConfigRefresh", () => {
     expect(wildcardRequests()).toBe(2);
   });
 
+  it("does not re-read config after Remote Input keystrokes, stream toggles, memory access or pause", async () => {
+    renderHome();
+    await settle();
+
+    for (const path of [
+      "/v1/machine:input",
+      "/v1/streams/video:start",
+      "/v1/streams/audio:stop",
+      "/v1/machine:writemem",
+      "/v1/machine:pause",
+      "/v1/machine:resume",
+      "/v1/runners:sidplay",
+    ]) {
+      publishDeviceWrite(path);
+      await advance(HOME_CONFIG_REFRESH_ACTION_SETTLE_MS);
+    }
+    expect(wildcardRequests()).toBe(0);
+
+    for (const path of ["/v1/machine:reset", "/v1/drives/a:mount", "/v1/runners:run_prg"]) {
+      publishDeviceWrite(path);
+      await advance(HOME_CONFIG_REFRESH_ACTION_SETTLE_MS);
+    }
+    expect(wildcardRequests()).toBe(3);
+  });
+
   it("keeps one refresh in flight: later triggers queue a single trailing refresh", async () => {
     renderHome();
     await settle();

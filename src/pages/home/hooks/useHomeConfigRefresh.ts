@@ -11,7 +11,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { areBackgroundReadsSuspended } from "@/lib/deviceInteraction/deviceActivityGate";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
-import { subscribeDeviceWrites } from "@/lib/deviceInteraction/deviceWriteEvents";
+import { subscribeDeviceWrites, TELNET_DEVICE_ACTION } from "@/lib/deviceInteraction/deviceWriteEvents";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 import { readHomeConfig } from "./homeConfigRead";
@@ -71,6 +71,18 @@ export const getHomeConfigRefreshBlocker = (configWritePending: boolean): HomeCo
   if (isEditingText()) return "editing-text";
   return null;
 };
+
+// Runners apply a program's .cfg, drive commands change drive settings, and reset, reboot and the
+// menu button can change values the device shows. Input, streams, memory access and pause cannot.
+const HOME_CONFIG_AFFECTING_ACTIONS = [
+  /^\/v1\/machine:(reset|reboot|menu_button)$/,
+  /^\/v1\/drives\//,
+  /^\/v1\/runners:(run_prg|load_prg|run_crt)$/,
+];
+
+/** True when a completed device action can change config values Home shows. */
+export const isHomeConfigAffectingAction = (resourcePath: string) =>
+  resourcePath === TELNET_DEVICE_ACTION || HOME_CONFIG_AFFECTING_ACTIONS.some((pattern) => pattern.test(resourcePath));
 
 const isUserInteracting = () =>
   areBackgroundReadsSuspended() || pollingPauseRegistry.isPollingPaused() || isEditingText();
@@ -195,10 +207,9 @@ export function useHomeConfigRefresh({
       requestRefresh("visible");
     };
     const handleFocus = () => requestRefresh("focus");
-    // Config writes are re-read by the code that made them; any other action (reset, reboot,
-    // menu, Telnet) can change values the device shows, so it gets a full re-read once it settles.
+    // Config writes are re-read by the code that made them.
     const unsubscribeWrites = subscribeDeviceWrites((resourcePath) => {
-      if (resourcePath.startsWith("/v1/configs")) return;
+      if (!isHomeConfigAffectingAction(resourcePath)) return;
       if (actionId !== null) clearTimeout(actionId);
       actionId = setTimeout(() => {
         actionId = null;
