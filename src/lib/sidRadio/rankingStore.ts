@@ -138,10 +138,28 @@ const fallBackToLocalStorage = (operation: string, error: unknown): void => {
   backend = "ls";
 };
 
+// With IndexedDB available, a localStorage copy exists only because an earlier session fell back to
+// it, so it holds the ratings made after that fallback. Fold it in (it wins on conflict) and drop it
+// once IndexedDB holds the result, or those ratings vanish on the next launch.
+const foldInFallbackCopy = async (stored: RankingMap): Promise<RankingMap> => {
+  if (typeof localStorage === "undefined" || localStorage.getItem(STORAGE_KEY) === null) return stored;
+  const merged = { ...stored, ...lsLoad() };
+  try {
+    await idbSave(merged);
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    addLog("warn", "SID Radio rankings: could not move the localStorage fallback copy back to IndexedDB", {
+      service: "sid-radio",
+      error: (error as Error)?.message ?? String(error),
+    });
+  }
+  return merged;
+};
+
 const durableLoad = async (): Promise<RankingMap> => {
   if (resolveBackend() === "idb") {
     try {
-      return await idbLoad();
+      return await foldInFallbackCopy(await idbLoad());
     } catch (error) {
       fallBackToLocalStorage("load", error);
     }
