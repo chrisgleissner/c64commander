@@ -1423,6 +1423,76 @@ describe("hvscIngestionRuntime", () => {
     expect(extractArchiveEntries).not.toHaveBeenCalled();
   });
 
+  const lastIngestionStatePatch = () =>
+    vi
+      .mocked(updateHvscState)
+      .mock.calls.map(([patch]) => patch as Record<string, unknown>)
+      .filter((patch) => "ingestionState" in patch)
+      .at(-1);
+
+  const installedLibraryWithCachedUpdate = () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ["hvsc-baseline-5.complete.json", "hvsc-update-6.complete.json"],
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+  };
+
+  it.each([
+    ["ingestCachedHvsc", () => ingestCachedHvsc("token-cancel-installed")],
+    ["installOrUpdateHvsc", () => installOrUpdateHvsc("token-cancel-installed")],
+  ])("leaves an installed library ready when %s is canceled before it touches the library", async (_, run) => {
+    installedLibraryWithCachedUpdate();
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    vi.mocked(filesystem.ensureHvscDirs).mockImplementationOnce(async () => {
+      await cancelHvscInstall("token-cancel-installed");
+    });
+
+    await expect(run()).rejects.toThrow();
+
+    expect(extractArchiveEntries).not.toHaveBeenCalled();
+    expect(lastIngestionStatePatch()).toEqual({ ingestionState: "ready", ingestionError: null });
+  });
+
+  it("reports Canceled when an update is canceled after it started writing into the installed library", async () => {
+    installedLibraryWithCachedUpdate();
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+      await cancelHvscInstall("token-cancel-mid-update");
+      throw new Error("HVSC update cancelled");
+    });
+
+    await expect(ingestCachedHvsc("token-cancel-mid-update")).rejects.toThrow("HVSC update cancelled");
+
+    expect(writeLibraryFile).toHaveBeenCalled();
+    expect(lastIngestionStatePatch()).toEqual({ ingestionState: "idle", ingestionError: "Canceled" });
+  });
+
+  it("reports Canceled when a native update is canceled while it is ingesting into the installed library", async () => {
+    installedLibraryWithCachedUpdate();
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockImplementationOnce(async () => {
+      await cancelHvscInstall("token-cancel-native-update");
+      throw new Error("HVSC update cancelled");
+    });
+
+    await expect(ingestCachedHvsc("token-cancel-native-update")).rejects.toThrow();
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledWith(expect.objectContaining({ mode: "update" }));
+    expect(lastIngestionStatePatch()).toEqual({ ingestionState: "idle", ingestionError: "Canceled" });
+  });
+
   it("does not start the next ingestion canceled when a stray cancel named another token during the previous one", async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(loadHvscState).mockReturnValue({

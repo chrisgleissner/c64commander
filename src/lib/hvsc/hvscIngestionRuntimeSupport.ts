@@ -20,6 +20,7 @@ type HvscIngestionRuntimeState = {
   activeIngestionRunning: boolean;
   nativeListenersByToken: Map<string, Set<HvscProgressListenerHandle>>;
   cacheStatFailures: Map<string, number>;
+  installedLibraryTouched: boolean;
 };
 
 const runtimeState: HvscIngestionRuntimeState = {
@@ -27,11 +28,22 @@ const runtimeState: HvscIngestionRuntimeState = {
   activeIngestionRunning: false,
   nativeListenersByToken: new Map<string, Set<HvscProgressListenerHandle>>(),
   cacheStatFailures: new Map<string, number>(),
+  installedLibraryTouched: false,
 };
 
 const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
 
 export const getHvscIngestionRuntimeState = () => runtimeState;
+
+/** Called just before an ingestion first writes to, deletes from or replaces the installed library. */
+export const markInstalledLibraryTouched = () => {
+  runtimeState.installedLibraryTouched = true;
+};
+
+/** Called once an archive has been ingested completely, so the library on disk is whole again. */
+export const markInstalledLibraryConsistent = () => {
+  runtimeState.installedLibraryTouched = false;
+};
 
 export const registerNativeProgressListener = (token: string, listener: HvscProgressListenerHandle) => {
   const listeners = runtimeState.nativeListenersByToken.get(token) ?? new Set<HvscProgressListenerHandle>();
@@ -127,7 +139,13 @@ export const applyCancelledIngestionState = (
   emitProgress?: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
   archiveName?: string,
 ) => {
-  updateHvscState({ ingestionState: "idle", ingestionError: message });
+  // A cancel that stopped before the installed library was touched leaves that library valid.
+  const installedLibraryIntact = loadHvscState().installedVersion > 0 && !runtimeState.installedLibraryTouched;
+  updateHvscState(
+    installedLibraryIntact
+      ? { ingestionState: "ready", ingestionError: null }
+      : { ingestionState: "idle", ingestionError: message },
+  );
   const summary = loadHvscStatusSummary();
   const now = new Date().toISOString();
   saveHvscStatusSummary({
@@ -175,6 +193,7 @@ const ingestionIdleListeners = new Set<() => void>();
 /** Ends the running install or ingest and tells everyone who waited for it to finish. */
 export const markIngestionRuntimeIdle = () => {
   runtimeState.activeIngestionRunning = false;
+  runtimeState.installedLibraryTouched = false;
   // Only one ingestion runs at a time, so a token left here is a cancel aimed at a token the finished
   // ingestion never used; kept, it would start the next ingestion under that name already canceled.
   runtimeState.cancelTokens.clear();

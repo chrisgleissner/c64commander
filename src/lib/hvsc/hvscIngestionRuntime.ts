@@ -79,6 +79,8 @@ import {
   formatPathListPreview,
   getHvscIngestionRuntimeState,
   markIngestionRuntimeIdle,
+  markInstalledLibraryConsistent,
+  markInstalledLibraryTouched,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
@@ -301,13 +303,11 @@ export const applyIngestionSuccess = ({
       completedAt: new Date().toISOString(),
       archiveName,
     },
-    // A fresh baseline install invalidates any "update already applied"
-    // records from whatever library was there before - those version
-    // numbers were layered on top of the OLD baseline. Without this, a
-    // direct baseline reinstall (not preceded by an explicit reset) hits
-    // the same permanently-stuck-skipping-updates bug as HARD9-014.
+    // A fresh baseline invalidates "update already applied" records layered on the OLD baseline;
+    // keeping them leaves a direct reinstall permanently skipping updates, as in HARD9-014.
     ...(plan.type === "baseline" ? { updates: {} } : {}),
   });
+  markInstalledLibraryConsistent();
 };
 
 /**
@@ -389,6 +389,9 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   if (plan.type === "baseline") {
     await createLibraryStagingDir();
     baselineInstalled = plan.version;
+  } else {
+    ensureNotCancelledLocal();
+    markInstalledLibraryTouched();
   }
 
   const browseIndex = await createHvscBrowseIndexMutable(plan.type);
@@ -594,6 +597,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
 
   ensureNotCancelledLocal();
   if (plan.type === "baseline") {
+    markInstalledLibraryTouched();
     await promoteLibraryStagingDir();
   }
 
@@ -748,6 +752,7 @@ const ingestArchivePathNative = async (options: {
 
   try {
     ensureNotCancelled(cancelToken);
+    markInstalledLibraryTouched();
     let result;
     const nativeExtractPerfScope = beginHvscPerfScope("ingest:extract", {
       archiveName,
