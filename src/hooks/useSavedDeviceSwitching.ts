@@ -52,6 +52,9 @@ import { hasActivePlaybackToStop, stopActivePlaybackBeforeDeviceSwitch } from "@
 import { areSavedEntriesSameDevice } from "@/lib/savedDevices/sameDevice";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
+// The switch waiting behind the active one. A newer request retargets it rather than queueing
+// behind it, so rapid picks never run every intermediate switch in turn.
+let queuedSavedDeviceSwitchTarget: { deviceId: string } | null = null;
 
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
@@ -264,10 +267,18 @@ export function useSavedDeviceSwitching() {
           activeDeviceId: activeSavedDeviceSwitch.deviceId,
           requestedDeviceId: deviceId,
         });
-        const queuedPromise = activeSavedDeviceSwitch.promise.then(
-          () => executeSavedDeviceSwitch(deviceId),
-          () => executeSavedDeviceSwitch(deviceId),
-        );
+        if (queuedSavedDeviceSwitchTarget) {
+          queuedSavedDeviceSwitchTarget.deviceId = deviceId;
+          activeSavedDeviceSwitch = { deviceId, promise: activeSavedDeviceSwitch.promise };
+          return activeSavedDeviceSwitch.promise;
+        }
+        const target = { deviceId };
+        queuedSavedDeviceSwitchTarget = target;
+        const runQueued = () => {
+          if (queuedSavedDeviceSwitchTarget === target) queuedSavedDeviceSwitchTarget = null;
+          return executeSavedDeviceSwitch(target.deviceId);
+        };
+        const queuedPromise = activeSavedDeviceSwitch.promise.then(runQueued, runQueued);
         activeSavedDeviceSwitch = { deviceId, promise: queuedPromise };
         return queuedPromise.finally(() => {
           if (activeSavedDeviceSwitch?.promise === queuedPromise) {

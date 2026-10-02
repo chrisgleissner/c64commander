@@ -1255,6 +1255,37 @@ describe("useSavedDeviceSwitching", () => {
     });
   });
 
+  it("supersedes a queued switch with a newer request instead of running both after the active one", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    for (const [id, host] of [
+      ["device-first", "192.0.2.10"],
+      ["device-skipped", "192.0.2.11"],
+      ["device-last", "192.0.2.12"],
+    ]) {
+      store.addSavedDevice({ id, name: id, host, httpPort: 80, ftpPort: 21, telnetPort: 64, hasPassword: false });
+    }
+    const firstVerification = createDeferred<{ ok: boolean; deviceInfo: { product: string; unique_id: string } }>();
+    mockVerifyCurrentConnectionTarget
+      .mockReturnValueOnce(firstVerification.promise)
+      .mockResolvedValue({ ok: true, deviceInfo: { product: "C64 Ultimate", unique_id: "UID-LAST" } });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/settings") });
+
+    let switches!: Promise<unknown>[];
+    act(() => {
+      switches = [result.current("device-first"), result.current("device-skipped"), result.current("device-last")];
+    });
+    firstVerification.resolve({ ok: true, deviceInfo: { product: "C64 Ultimate", unique_id: "UID-FIRST" } });
+    await act(async () => {
+      await Promise.all(switches);
+    });
+
+    const verifiedHosts = mockVerifyCurrentConnectionTarget.mock.calls.map(([target]) => target.deviceHost);
+    expect(verifiedHosts).toEqual(["192.0.2.10", "192.0.2.12"]);
+    expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-last");
+  });
+
   it("keeps the selected device and records offline state when verification fails", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
