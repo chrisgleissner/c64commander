@@ -212,3 +212,109 @@ test.describe("Persistent error toast placement", () => {
     await expectNoControlUnderToast(page, "Home with two error toasts");
   });
 });
+
+type Rect = { top: number; bottom: number; left: number; right: number };
+
+const stripRect = (page: Page) =>
+  page.locator(".toast-viewport").evaluate((el): Rect => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+  });
+
+test.describe("Toast strip touch scrolling", () => {
+  let server: Awaited<ReturnType<typeof createMockC64Server>>;
+
+  test.afterEach(async () => {
+    await server?.close();
+  });
+
+  test("a clipped second error toast can be scrolled into view by touch and closed with a tap on the smallest screen", async ({
+    page,
+  }, testInfo) => {
+    test.skip(!testInfo.project.use.hasTouch, "Needs a touch-enabled context.");
+    disableTraceAssertions(testInfo, "Touch-scroll coverage; trace assertions disabled.");
+    const profile = DISPLAY_PROFILE_VIEWPORTS.compact;
+    server = await createMockC64Server();
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript((override) => {
+      localStorage.setItem("c64u_display_profile_override", override);
+    }, profile.override);
+    await page.setViewportSize(profile.viewport);
+    const longError = JSON.stringify({
+      errors: ["The device refused the request because another client holds the machine; try again in a moment."],
+    });
+    for (const action of ["pause", "menu_button"]) {
+      await page.route(`**/v1/machine:${action}**`, (route) =>
+        route.fulfill({ status: 500, contentType: "application/json", body: longError }),
+      );
+    }
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      (expected) => document.documentElement.dataset.displayProfile === expected,
+      profile.expectedProfile,
+    );
+    await page.getByTestId("tab-bar").waitFor({ state: "visible", timeout: 30_000 });
+    const controls = page.getByTestId("home-machine-controls");
+    const openToasts = page.locator('[data-testid="app-toast"][data-state="open"]');
+    await controls.getByRole("button", { name: "Pause", exact: true }).click();
+    await expect(openToasts).toHaveCount(1, { timeout: 20_000 });
+    await controls.getByRole("button", { name: "Menu", exact: true }).click();
+    await expect(openToasts).toHaveCount(2, { timeout: 20_000 });
+    await page.waitForTimeout(600);
+
+    const strip = await stripRect(page);
+    const closeRects = await openToasts.evaluateAll((toasts) =>
+      toasts.map((toast) => {
+        const r = toast.querySelector('[data-testid="app-toast-close"]')!.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      }),
+    );
+    const clippedIndex = closeRects.findIndex((r) => r.top < strip.top || r.bottom > strip.bottom);
+    expect(clippedIndex, "one toast's close button must start outside the strip").toBeGreaterThanOrEqual(0);
+    const clippedClose = openToasts.nth(clippedIndex).getByTestId("app-toast-close");
+    const scrollDown = closeRects[clippedIndex].bottom > strip.bottom;
+
+    const cdp = await page.context().newCDPSession(page);
+    const fingerX = Math.round((strip.left + strip.right) / 2);
+    const closeInStrip = async () => {
+      const box = await clippedClose.boundingBox();
+      const now = await stripRect(page);
+      return box !== null && box.y >= now.top && box.y + box.height <= now.bottom;
+    };
+    for (let attempt = 0; attempt < 6 && !(await closeInStrip()); attempt += 1) {
+      const now = await stripRect(page);
+      const from = Math.round(scrollDown ? now.bottom - 12 : now.top + 12);
+      const to = Math.round(scrollDown ? now.top + 12 : now.bottom - 12);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: fingerX, y: from }] });
+      const steps = 12;
+      for (let step = 1; step <= steps; step += 1) {
+        const y = Math.round(from + ((to - from) * step) / steps);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: fingerX, y }] });
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await page.waitForTimeout(300);
+    }
+    expect(await closeInStrip(), "the clipped toast's close button must scroll into the strip by touch").toBe(true);
+
+    const closeBox = (await clippedClose.boundingBox())!;
+    await page.touchscreen.tap(closeBox.x + closeBox.width / 2, closeBox.y + closeBox.height / 2);
+    await expect(openToasts).toHaveCount(1);
+    await expect(page.getByTestId("diagnostics-dialog")).toHaveCount(0);
+
+    const remainingTitle = openToasts.first().getByTestId("app-toast-title");
+    await remainingTitle.scrollIntoViewIfNeeded();
+    const remaining = (await remainingTitle.boundingBox())!;
+    const swipeY = Math.round(remaining.y + remaining.height / 2);
+    const swipeFrom = Math.round(remaining.x + 8);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: swipeFrom, y: swipeY }] });
+    for (let step = 1; step <= 10; step += 1) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: swipeFrom + step * 15, y: swipeY }],
+      });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect(openToasts, "a horizontal swipe still dismisses a toast").toHaveCount(0);
+  });
+});

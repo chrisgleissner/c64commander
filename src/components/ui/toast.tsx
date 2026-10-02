@@ -51,11 +51,20 @@ const toastVariants = cva(
   },
 );
 
+// Radix sets touch-action: none on each toast for its swipe-to-dismiss, which also stopped a finger from
+// scrolling the strip. pan-y hands vertical drags to the strip and keeps horizontal ones for the swipe.
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
-  return <ToastPrimitives.Root ref={ref} className={cn(toastVariants({ variant }), className)} {...props} />;
+>(({ className, variant, style, ...props }, ref) => {
+  return (
+    <ToastPrimitives.Root
+      ref={ref}
+      className={cn(toastVariants({ variant }), className)}
+      style={{ touchAction: "pan-y", ...style }}
+      {...props}
+    />
+  );
 });
 Toast.displayName = ToastPrimitives.Root.displayName;
 
