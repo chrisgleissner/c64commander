@@ -191,23 +191,6 @@ export interface AvMirrorSessionDeps {
 }
 
 /**
- * Present on the next animation frame, so the video mirror's depth-one present queue can actually
- * coalesce.
- *
- * `VideoMirrorController` is built around a drop-late queue: a frame that arrives while another is
- * still waiting REPLACES it, so only the newest survives. That only works if presentation is
- * deferred. With the controller's synchronous default every arriving frame is decoded and drawn
- * inline, `pending` is consumed before the next frame can supersede it, and the queue never drops
- * anything — `backlogReplacements` is structurally always 0.
- *
- * That is not academic. Capacitor queues `videoframe` events across the bridge while the JS thread
- * is busy (the on-device SID engine, a GC pause, a heavy route), so a stall is followed by a burst
- * of every buffered frame. Measured on a Pixel 4 against a c64u: a 2.5 s stall made the mirror
- * present at 174 fps from a 50 Hz source — ~125 stale frames decoded and painted, one after another,
- * extending the very stall that caused them. Deferring to rAF collapses that burst to the single
- * newest frame, which is the only one anybody can see.
- */
-/**
  * A device switch resets the shared REST queue, which drops a stop still waiting behind another
  * request, and retargets the shared client, which abandons one in flight. Either way the stop never
  * reaches the device, so it is sent again to that device by address.
@@ -228,6 +211,23 @@ const stopStreamAtStopAllHost = async (host: string, name: "audio" | "video"): P
   }
 };
 
+/**
+ * Present on the next animation frame, so the video mirror's depth-one present queue can actually
+ * coalesce.
+ *
+ * `VideoMirrorController` is built around a drop-late queue: a frame that arrives while another is
+ * still waiting REPLACES it, so only the newest survives. That only works if presentation is
+ * deferred. With the controller's synchronous default every arriving frame is decoded and drawn
+ * inline, `pending` is consumed before the next frame can supersede it, and the queue never drops
+ * anything — `backlogReplacements` is structurally always 0.
+ *
+ * That is not academic. Capacitor queues `videoframe` events across the bridge while the JS thread
+ * is busy (the on-device SID engine, a GC pause, a heavy route), so a stall is followed by a burst
+ * of every buffered frame. Measured on a Pixel 4 against a c64u: a 2.5 s stall made the mirror
+ * present at 174 fps from a 50 Hz source — ~125 stale frames decoded and painted, one after another,
+ * extending the very stall that caused them. Deferring to rAF collapses that burst to the single
+ * newest frame, which is the only one anybody can see.
+ */
 const rafPresentScheduler = (): ((present: () => void) => void) | undefined =>
   typeof requestAnimationFrame === "function" ? (present) => void requestAnimationFrame(() => present()) : undefined;
 
