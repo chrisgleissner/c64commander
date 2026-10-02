@@ -1483,6 +1483,61 @@ describe("hvscIngestionRuntime", () => {
     expect(lastIngestionStatePatch()).toEqual({ ingestionState: "error", ingestionError: failure });
   });
 
+  const deferNativeCancel = () => {
+    let release: () => void = () => undefined;
+    nativeHvscPlugin.cancelIngestion.mockImplementationOnce(
+      () => new Promise<undefined>((resolve) => (release = () => resolve(undefined))),
+    );
+    return () => release();
+  };
+
+  it("leaves a ready library ready when the native cancel round trip outlasts the canceled run", async () => {
+    installedLibraryWithCachedUpdate();
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    const releaseNativeCancel = deferNativeCancel();
+    let lateCancel: Promise<void> = Promise.resolve();
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    vi.mocked(filesystem.ensureHvscDirs).mockImplementationOnce(async () => {
+      lateCancel = cancelHvscInstall("token-late-cancel");
+    });
+
+    await expect(ingestCachedHvsc("token-late-cancel")).rejects.toThrow();
+    releaseNativeCancel();
+    await lateCancel;
+
+    expect(lastIngestionStatePatch()).toEqual({ ingestionState: "ready", ingestionError: null });
+  });
+
+  it("leaves a completed update ready when Stop lands as the run finishes", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    const releaseNativeCancel = deferNativeCancel();
+    let lateCancel: Promise<void> = Promise.resolve();
+    vi.mocked(endHvscInstallGuard).mockImplementationOnce(async () => {
+      lateCancel = cancelHvscInstall("token-stop-at-finish");
+    });
+
+    await installOrUpdateHvsc("token-stop-at-finish");
+    releaseNativeCancel();
+    await lateCancel;
+
+    expect(lastIngestionStatePatch()).toEqual(
+      expect.objectContaining({ ingestionState: "ready", installedVersion: 6 }),
+    );
+  });
+
   it("reports Canceled when an update is canceled after it started writing into the installed library", async () => {
     installedLibraryWithCachedUpdate();
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {

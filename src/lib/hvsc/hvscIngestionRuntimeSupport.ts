@@ -164,6 +164,12 @@ export const applyCancelledIngestionState = (
   emitProgress?: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
   archiveName?: string,
 ) => {
+  // A cancel that lands after the run ended (its native round trips outlasted the run) changes nothing:
+  // the run has already written its own outcome, and a stale "Canceled" would overwrite it.
+  if (!runtimeState.activeIngestionRunning) {
+    addLog("info", "HVSC cancel arrived after the ingestion had ended; state left unchanged", { message });
+    return;
+  }
   updateHvscState(stateAfterCancel(message));
   const summary = loadHvscStatusSummary();
   const now = new Date().toISOString();
