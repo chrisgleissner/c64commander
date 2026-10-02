@@ -601,6 +601,30 @@ describe("useHvscLibrary preparation state coverage", () => {
     expect(transitionLogs()).toHaveLength(1);
   });
 
+  it("opens Play on a ready library after a canceled download without logging a failure", async () => {
+    mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
+      createSummary({
+        download: { status: "idle", errorMessage: "Canceled", startedAt: "2026-10-02T14:46:55Z" },
+        extraction: { status: "success" },
+        metadata: { status: "success" },
+      }),
+    );
+    let resolveStatus: (status: ReturnType<typeof createStatus>) => void = () => undefined;
+    mocks.getHvscStatusMock.mockReturnValue(new Promise((resolve) => (resolveStatus = resolve)));
+    const transitions = () =>
+      mocks.addLogMock.mock.calls
+        .filter(([, message]) => message === "HVSC preparation state transition")
+        .map(([, , details]) => (details as { toState: string }).toState);
+
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(mocks.getHvscStatusMock).toHaveBeenCalled());
+    expect(result.current.hvscPreparationState).not.toBe("ERROR");
+
+    resolveStatus(createStatus({ installedVersion: 85, ingestionState: "ready" }));
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("READY"));
+    expect(transitions()).toEqual(["READY"]);
+  });
+
   it("returns hvscPhase as index when metadata is in-progress and hvsc is not updating", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({

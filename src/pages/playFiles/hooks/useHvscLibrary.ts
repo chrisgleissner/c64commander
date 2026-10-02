@@ -1386,7 +1386,10 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     return hvscFolders.filter((folder) => folder.toLowerCase().includes(hvscFolderFilter.toLowerCase()));
   }, [hvscFolders, hvscFolderFilter]);
 
-  useEffect(() => logHvscPreparationTransition(hvscPreparationSnapshot), [hvscPreparationSnapshot]);
+  const hvscStateKnown = hvscStatus !== null || !hvscAvailable;
+  useEffect(() => {
+    if (hvscStateKnown) logHvscPreparationTransition(hvscPreparationSnapshot);
+  }, [hvscPreparationSnapshot, hvscStateKnown]);
 
   useEffect(() => {
     if (!hvscInProgress) return;

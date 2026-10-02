@@ -119,6 +119,7 @@ describe("resolveHvscPreparationSnapshot", () => {
   it("returns ERROR and uses extractionErrorMessage as errorReason when present", () => {
     const snap = resolveHvscPreparationSnapshot({
       ...base,
+      ingestionState: "idle",
       extractionStatus: "failure",
       extractionErrorMessage: "bad zip",
     });
@@ -129,11 +130,52 @@ describe("resolveHvscPreparationSnapshot", () => {
   it("returns ERROR and uses downloadErrorMessage when other errors are absent", () => {
     const snap = resolveHvscPreparationSnapshot({
       ...base,
+      ingestionState: "idle",
       downloadStatus: "failure",
       downloadErrorMessage: "timeout",
     });
     expect(snap.state).toBe("ERROR");
     expect(snap.errorReason).toBe("timeout");
+  });
+
+  it("stays READY for an installed library whose last download was canceled", () => {
+    const snap = resolveHvscPreparationSnapshot({
+      ...base,
+      installedVersion: 85,
+      ingestionState: "ready",
+      downloadStatus: "idle",
+      downloadErrorMessage: "Canceled",
+      extractionStatus: "success",
+      metadataStatus: "success",
+    });
+    expect(snap.state).toBe("READY");
+    expect(snap.errorReason).toBeNull();
+  });
+
+  it("does not report a canceled step's message as a failure once the state has loaded", () => {
+    const snap = resolveHvscPreparationSnapshot({
+      ...base,
+      ingestionState: "idle",
+      downloadStatus: "idle",
+      downloadErrorMessage: "Canceled",
+      hasCachedArchive: true,
+    });
+    expect(snap.state).not.toBe("ERROR");
+    expect(snap.errorReason).toBeNull();
+  });
+
+  it("does not resolve to ERROR from the persisted summary before the library state has loaded", () => {
+    const snap = resolveHvscPreparationSnapshot({
+      ...base,
+      ingestionState: null,
+      downloadStatus: "idle",
+      downloadErrorMessage: "Canceled",
+      extractionStatus: "failure",
+      extractionErrorMessage: "bad zip",
+      extractionFailureCategory: "extraction",
+    });
+    expect(snap.state).not.toBe("ERROR");
+    expect(snap.errorReason).toBeNull();
   });
 
   // Covers L107 binary-expr: ingestionState === "error" — right side evaluated (errorReason is null)
