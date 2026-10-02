@@ -186,6 +186,12 @@ describe("resolveEntry", () => {
     expect(resolved.disabledReason).toBe("Needs a connected C64 Ultimate");
   });
 
+  it("sends a missing HVSC to the Play page's HVSC section, where the download and install controls are", () => {
+    const verdict = resolveRequirement({ kind: "hvsc" }, denyingContext());
+    expect(verdict.met).toBe(false);
+    expect(verdict.remedyTarget).toEqual({ kind: "section", path: "/play", scope: "play", id: "hvsc" });
+  });
+
   it("enables an entry with no requirements at all", () => {
     const resolved = resolveEntry({ ...entryWith([]), requires: undefined }, denyingContext());
     expect(resolved.enabled).toBe(true);
