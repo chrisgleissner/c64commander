@@ -7,7 +7,8 @@
  */
 
 import type { C64API, DriveInfo, DrivesResponse } from "@/lib/c64api";
-import { normalizeDiskPath } from "@/lib/disks/diskPath";
+import { isDiskWorkPath, normalizeDiskPath } from "@/lib/disks/diskPath";
+import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import { waitForMachineTransitionsToSettle } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -57,6 +58,21 @@ const driveStillHoldsLaunchImage = (drives: DrivesResponse, mount: PlayLaunchMou
   return held !== null && imageName(held) === imageName(normalizeDiskPath(mount.launchPath));
 };
 
+// Play's mount over a Home disk's work file already wrote its saves back and closed its write-back record. A plain
+// remount would bring back a disk whose later saves are never written back, from a work file that may by then hold
+// another disk's bytes, so the user remounts it from Home instead.
+const reportWorkFileNotRestored = (mount: PlayLaunchMount) => {
+  const drive = mount.drive.toUpperCase();
+  addLog("warn", "Stop did not put back the disk the drive held before Play: it was a Home disk's work file", {
+    drive: mount.drive,
+    priorImagePath: mount.priorImagePath,
+  });
+  toast({
+    title: `Disk not put back in drive ${drive}`,
+    description: `Its saves were kept. Mount it again from Home to keep using it in drive ${drive}.`,
+  });
+};
+
 /**
  * Stop ends what Play started: eject each image Play mounted on this device and put back the image the user
  * had in that drive before. One request per drive operation; a failure is logged and the next drive is tried.
@@ -97,7 +113,9 @@ export const endPlayLaunchMounts = async (
       await api.unmountDrive(mount.drive);
       forgetPlayLaunchMount(deviceHost, mount.drive);
       addLog("info", "Stop ejected the disk Play mounted", { drive: mount.drive, path: mount.launchPath });
-      if (mount.priorImagePath) {
+      if (mount.priorImagePath && isDiskWorkPath(mount.priorImagePath)) {
+        reportWorkFileNotRestored(mount);
+      } else if (mount.priorImagePath) {
         await api.mountDrive(mount.drive, mount.priorImagePath, mountTypeOf(mount.priorImagePath));
         addLog("info", "Stop put back the disk the drive held before Play", {
           drive: mount.drive,

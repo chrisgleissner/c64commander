@@ -16,8 +16,10 @@ import {
   resolvePriorImageForLaunch,
 } from "@/lib/playback/playLaunchMounts";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
+import { buildDiskWorkPath } from "@/lib/disks/diskPath";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 
 const drivesHolding = (images: Partial<Record<"a" | "b", { image_path?: string; image_file?: string }>>) => ({
   drives: Object.entries(images).map(([drive, info]) => ({ [drive]: { enabled: true, ...info } })),
@@ -192,5 +194,27 @@ describe("Stop returns the drives to how Play found them", () => {
 
     expect(api.unmountDrive).not.toHaveBeenCalled();
     expect(peekPlayLaunchMount("c64u", "a")).not.toBeNull();
+  });
+
+  it("does not put back a Home disk's work file, whose write-back record Play's mount already finalized, and says so", async () => {
+    recordPlayLaunchMount("c64u", {
+      drive: "a",
+      launchPath: "/USB0/Games/game.d64",
+      priorImagePath: buildDiskWorkPath("Usb0", "a", "d64"),
+    });
+    const api = createDriveApi();
+    const { addLog } = await import("@/lib/logging");
+    const { toast } = await import("@/hooks/use-toast");
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).toHaveBeenCalledWith("a");
+    expect(api.mountDrive).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("not put back"),
+      expect.objectContaining({ drive: "a", priorImagePath: buildDiskWorkPath("Usb0", "a", "d64") }),
+    );
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Disk not put back in drive A" }));
   });
 });
