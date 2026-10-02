@@ -7,7 +7,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
-import type { HvscProgressEvent } from "./hvscTypes";
+import type { HvscIngestionState, HvscProgressEvent } from "./hvscTypes";
 import { loadHvscState, updateHvscState } from "./hvscStateStore";
 import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 
@@ -21,7 +21,10 @@ type HvscIngestionRuntimeState = {
   nativeListenersByToken: Map<string, Set<HvscProgressListenerHandle>>;
   cacheStatFailures: Map<string, number>;
   installedLibraryTouched: boolean;
+  stateBeforeIngestion: IngestionOutcome | null;
 };
+
+type IngestionOutcome = { ingestionState: HvscIngestionState; ingestionError: string | null };
 
 const runtimeState: HvscIngestionRuntimeState = {
   cancelTokens: new Map<string, { cancelled: boolean }>(),
@@ -29,11 +32,18 @@ const runtimeState: HvscIngestionRuntimeState = {
   nativeListenersByToken: new Map<string, Set<HvscProgressListenerHandle>>(),
   cacheStatFailures: new Map<string, number>(),
   installedLibraryTouched: false,
+  stateBeforeIngestion: null,
 };
 
 const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
 
 export const getHvscIngestionRuntimeState = () => runtimeState;
+
+/** Called when an ingestion starts, so a cancel that changes nothing can put the state back. */
+export const recordStateBeforeIngestion = () => {
+  const { ingestionState, ingestionError } = loadHvscState();
+  runtimeState.stateBeforeIngestion = { ingestionState, ingestionError: ingestionError ?? null };
+};
 
 /** Called just before an ingestion first writes to, deletes from or replaces the installed library. */
 export const markInstalledLibraryTouched = () => {
@@ -43,6 +53,21 @@ export const markInstalledLibraryTouched = () => {
 /** Called once an archive has been ingested completely, so the library on disk is whole again. */
 export const markInstalledLibraryConsistent = () => {
   runtimeState.installedLibraryTouched = false;
+  runtimeState.stateBeforeIngestion = { ingestionState: "ready", ingestionError: null };
+};
+
+/**
+ * A cancel before the run touched an installed library leaves the library as the run found it, so the
+ * state goes back to what it was then: ready stays ready, and an earlier failure keeps its message.
+ * Any other cancel may have left a partial library behind and is reported as canceled.
+ */
+const stateAfterCancel = (message: string): IngestionOutcome => {
+  const before = runtimeState.stateBeforeIngestion;
+  const untouchedInstall = loadHvscState().installedVersion > 0 && !runtimeState.installedLibraryTouched;
+  if (untouchedInstall && (before?.ingestionState === "ready" || before?.ingestionState === "error")) {
+    return { ...before };
+  }
+  return { ingestionState: "idle", ingestionError: message };
 };
 
 export const registerNativeProgressListener = (token: string, listener: HvscProgressListenerHandle) => {
@@ -139,13 +164,7 @@ export const applyCancelledIngestionState = (
   emitProgress?: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
   archiveName?: string,
 ) => {
-  // A cancel that stopped before the installed library was touched leaves that library valid.
-  const installedLibraryIntact = loadHvscState().installedVersion > 0 && !runtimeState.installedLibraryTouched;
-  updateHvscState(
-    installedLibraryIntact
-      ? { ingestionState: "ready", ingestionError: null }
-      : { ingestionState: "idle", ingestionError: message },
-  );
+  updateHvscState(stateAfterCancel(message));
   const summary = loadHvscStatusSummary();
   const now = new Date().toISOString();
   saveHvscStatusSummary({
@@ -194,6 +213,7 @@ const ingestionIdleListeners = new Set<() => void>();
 export const markIngestionRuntimeIdle = () => {
   runtimeState.activeIngestionRunning = false;
   runtimeState.installedLibraryTouched = false;
+  runtimeState.stateBeforeIngestion = null;
   // Only one ingestion runs at a time, so a token left here is a cancel aimed at a token the finished
   // ingestion never used; kept, it would start the next ingestion under that name already canceled.
   runtimeState.cancelTokens.clear();

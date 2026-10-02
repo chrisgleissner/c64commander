@@ -8,7 +8,11 @@
 
 import { beginHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { cleanupStaleStagingDir, ensureHvscDirs } from "./hvscFilesystem";
-import { getHvscIngestionRuntimeState, markIngestionRuntimeIdle } from "./hvscIngestionRuntimeSupport";
+import {
+  getHvscIngestionRuntimeState,
+  markIngestionRuntimeIdle,
+  recordStateBeforeIngestion,
+} from "./hvscIngestionRuntimeSupport";
 
 /**
  * The storage steps an ingestion takes after claiming the runtime and before the `try` whose `finally`
@@ -17,6 +21,7 @@ import { getHvscIngestionRuntimeState, markIngestionRuntimeIdle } from "./hvscIn
  */
 export const prepareIngestionStorage = async (cancelToken: string) => {
   const { cancelTokens } = getHvscIngestionRuntimeState();
+  recordStateBeforeIngestion();
   try {
     await ensureHvscDirs();
     await cleanupStaleStagingDir();

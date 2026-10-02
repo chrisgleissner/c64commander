@@ -1463,6 +1463,26 @@ describe("hvscIngestionRuntime", () => {
     expect(lastIngestionStatePatch()).toEqual({ ingestionState: "ready", ingestionError: null });
   });
 
+  it("keeps an earlier failure and its message when a retried update is canceled before it touches the library", async () => {
+    installedLibraryWithCachedUpdate();
+    const failure = "HVSC ingestion cleanup failed for 3 file(s): a.sid, b.sid, c.sid.";
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "error",
+      ingestionError: failure,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    vi.mocked(filesystem.ensureHvscDirs).mockImplementationOnce(async () => {
+      await cancelHvscInstall("token-cancel-retry");
+    });
+
+    await expect(ingestCachedHvsc("token-cancel-retry")).rejects.toThrow();
+
+    expect(extractArchiveEntries).not.toHaveBeenCalled();
+    expect(lastIngestionStatePatch()).toEqual({ ingestionState: "error", ingestionError: failure });
+  });
+
   it("reports Canceled when an update is canceled after it started writing into the installed library", async () => {
     installedLibraryWithCachedUpdate();
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
