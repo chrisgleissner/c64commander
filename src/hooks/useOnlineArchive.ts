@@ -241,6 +241,16 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
     });
   }, []);
 
+  // Closing the archive sheet unmounts this hook. A download still running then is abandoned, so it
+  // cannot launch a program the user walked away from; a launch already sent is left to finish,
+  // for the same reason cancel() leaves it (HARD21-003).
+  useEffect(
+    () => () => {
+      if (stateRef.current.phase !== "executing") abortControllerRef.current?.abort();
+    },
+    [],
+  );
+
   useEffect(() => {
     setPresets(presetCache.get(configKey) ?? seededPresets);
     setPresetsLoading(presetRefreshStatus.get(configKey) === "pending");
