@@ -412,7 +412,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       // whether it is seeded by the style or filtered over Likes: refuse the
       // station rather than starting one that can only report itself empty.
       if (styleFilter !== null && !isStyleBitPopulated(readyStats.stylePopulations, styleFilter)) {
-        refuseStart("no-radio", { seedKind, styleFilter, reason: "style has no members" });
+        refuseStart("no-radio-for-style", { seedKind, styleFilter, reason: "style has no members" });
         return;
       }
       // Past this point the previous station is being replaced, so it is retired here rather than
@@ -469,7 +469,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         // to like, and liking would not make a station playable. Name the real blocker. Once music
         // is installed, an empty station is a genuine one and keeps its taste/tune wording.
         const hvscMissing = getMd548PathIndexStats().size === 0;
-        const refusal = hvscMissing ? "no-hvsc" : seedKind === "song" ? "no-radio-for-tune" : "no-radio";
+        // Only the Likes station is seeded by likes, so only its refusal may ask for more of them.
+        const emptyRefusal: Record<ActiveStation["seedKind"], SidRadioNotice> = {
+          song: "no-radio-for-tune",
+          style: "no-radio-for-style",
+          taste: "no-radio",
+        };
+        const refusal = hvscMissing ? "no-hvsc" : emptyRefusal[seedKind];
         refuseStart(refusal, { seedKind, styleFilter, reason: "no playable tracks" });
         return;
       }
@@ -549,7 +555,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     const populations = await ensureStylePopulations();
     const candidates = SID_RADIO_STYLE_TILES.filter((tile) => isStylePopulated(populations, tile.key));
     if (candidates.length === 0) {
-      refuseStart("no-radio", { seedKind: "style", reason: "no style has members" });
+      refuseStart("no-radio-for-style", { seedKind: "style", reason: "no style has members" });
       return;
     }
     const tile = candidates[randomSeed() % candidates.length];

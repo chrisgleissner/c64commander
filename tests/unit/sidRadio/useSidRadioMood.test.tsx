@@ -169,7 +169,7 @@ describe("useSidRadio — a Song station constrained to one mood", () => {
         expect(result.current.active).toBe(false);
         expect(params.startPlaylist).not.toHaveBeenCalled();
         expect(result.current.notice).toBe(
-          everyTrackWithMood(bundle, tile.bit).length === 0 ? "no-radio" : "no-radio-for-tune",
+          everyTrackWithMood(bundle, tile.bit).length === 0 ? "no-radio-for-style" : "no-radio-for-tune",
         );
         return;
       }
@@ -381,7 +381,7 @@ describe("useSidRadio — changing the mood of a running Song station", () => {
       await result.current.setSongStationStyleFilter(MOOD.themeHunter);
     });
 
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(client.compute.mock.calls.length).toBe(computesBefore); // refused ahead of any walk
     expect(result.current.station).toMatchObject({ styleBit: MOOD.fastPaced });
     expect(params.startPlaylist).toHaveBeenCalledTimes(1);

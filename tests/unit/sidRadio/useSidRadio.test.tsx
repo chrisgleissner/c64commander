@@ -422,7 +422,7 @@ describe("useSidRadio", () => {
       await result.current.startSurpriseRadio();
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 
@@ -603,6 +603,30 @@ describe("useSidRadio", () => {
     });
   });
 
+  it("does not ask for likes when a style station comes back empty", async () => {
+    const client = makeClient();
+    client.compute = vi.fn(async () => ({ candidates: [] }));
+    installMusic();
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startStyleRadio(0, "Fast-Paced");
+    });
+    expect(result.current.notice).toBe("no-radio-for-style");
+  });
+
+  it("asks for likes when the Likes station comes back empty", async () => {
+    const client = makeClient();
+    client.compute = vi.fn(async () => ({ candidates: [] }));
+    installMusic();
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startTasteRadio();
+    });
+    expect(result.current.notice).toBe("no-radio");
+  });
+
   it("refuses a station for a style with no members even when the tap beats the counts", async () => {
     // The sheet opens before the populations are read, so the disabled tile
     // cannot be the enforcement point — a tap that lands first must still be
@@ -615,7 +639,7 @@ describe("useSidRadio", () => {
       await result.current.startStyleRadio(8, "Game Themes");
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(client.compute).not.toHaveBeenCalled();
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
@@ -628,7 +652,7 @@ describe("useSidRadio", () => {
       await result.current.startStyleRadio(8, "Game Themes", true);
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(client.compute).not.toHaveBeenCalled();
   });
 });
