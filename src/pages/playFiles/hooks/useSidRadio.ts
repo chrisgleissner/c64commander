@@ -296,7 +296,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       })
       .catch((error: unknown) => {
         stylePopulationsLoadRef.current = null;
-        console.warn("SID Radio: could not read style populations from the similarity bundle", error);
+        addLog("warn", "SID Radio: could not read style populations from the similarity bundle", {
+          service: "sid-radio",
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
         return null;
       });
     return stylePopulationsLoadRef.current;

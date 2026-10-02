@@ -350,15 +350,19 @@ describe("useSidRadio", () => {
   it("leaves the populations unknown rather than failing when the bundle cannot be read", async () => {
     const client = makeClient();
     client.load = vi.fn().mockRejectedValue(new Error("bundle missing"));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(addLog).mockClear();
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     await act(async () => {
       await expect(result.current.ensureStylePopulations()).resolves.toBeNull();
     });
     expect(result.current.stylePopulations).toBeNull();
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
+    // The app's own log, which the diagnostics export carries; console output never reaches it.
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not read style populations"),
+      expect.objectContaining({ error: "bundle missing" }),
+    );
   });
 
   it("Surprise never rolls a style the export left empty", async () => {
@@ -653,7 +657,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
   it("reads the bundle once and answers both callers", async () => {
     const worker = new GatedWorker();
     const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(addLog).mockClear();
     const params = baseParams(client as unknown as ReturnType<typeof makeClient>);
     const { result } = renderHook(() => useSidRadio(params));
 
@@ -669,8 +673,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
     expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced" });
     expect(params.startPlaylist).toHaveBeenCalledTimes(1);
     // The preload resolved on its own load rather than timing out into a warning.
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("style populations"), expect.anything());
     client.terminate();
   });
 });
