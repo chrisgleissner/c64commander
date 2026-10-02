@@ -43,6 +43,8 @@ type HarnessProps = {
   playlistEnded?: boolean;
   initialPlaylist?: PlaylistItem[];
   initialIndex?: number;
+  resumeSettled?: boolean;
+  readSavedPlaylist?: (playlistId: string) => Promise<PlaylistItem[]>;
 };
 
 const stationStop = vi.fn();
@@ -70,9 +72,10 @@ const useHarness = (props: HarnessProps) => {
     },
     persistence: {
       ready: true,
-      readSavedPlaylist: async (playlistId) => (repo.playlists.get(playlistId) ?? []) as PlaylistItem[],
+      readSavedPlaylist:
+        props.readSavedPlaylist ?? (async (playlistId) => (repo.playlists.get(playlistId) ?? []) as PlaylistItem[]),
     },
-    station: { active: props.stationActive, stop: stationStop },
+    station: { active: props.stationActive, resumeSettled: props.resumeSettled ?? true, stop: stationStop },
   });
   return { playlist, currentIndex, selectedPlaylistIds, stationActiveRef, handover, setPlaylist, setCurrentIndex };
 };
@@ -148,7 +151,13 @@ describe("useStationPlaylistHandover", () => {
     before.unmount();
     rememberHandover(null);
 
-    const after = renderHarness({ stationActive: false, isPlaying: false, initialPlaylist: stationA, initialIndex: 0 });
+    const after = renderHarness({
+      stationActive: false,
+      isPlaying: false,
+      initialPlaylist: stationA,
+      initialIndex: 0,
+      resumeSettled: false,
+    });
     after.rerender({ stationActive: true, isPlaying: false });
     await act(async () => {
       await Promise.resolve();
@@ -157,6 +166,48 @@ describe("useStationPlaylistHandover", () => {
 
     await waitFor(() => expect(ids(after.result.current.playlist)).toEqual(["a", "b", "c"]));
     expect(after.result.current.currentIndex).toBe(1);
+  });
+
+  it("brings the playlist back on returning to Play when the station did not resume, as after turning SID Radio off", async () => {
+    const before = renderHarness({ stationActive: false, isPlaying: false });
+    await startStation(before, stationA, false);
+    before.unmount();
+    stationStop.mockClear();
+
+    const after = renderHarness({ stationActive: false, isPlaying: false, initialPlaylist: stationA, initialIndex: 0 });
+
+    await waitFor(() => expect(ids(after.result.current.playlist)).toEqual(["a", "b", "c"]));
+    expect(stationStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets the tune still playing finish when Play comes back to a station that did not resume", async () => {
+    const before = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(before, stationA);
+    before.unmount();
+
+    const after = renderHarness({ stationActive: false, isPlaying: true, initialPlaylist: stationA, initialIndex: 1 });
+
+    expect(ids(after.result.current.playlist)).toEqual(["radio:2"]);
+    expect(after.result.current.stationActiveRef.current).toBe(true);
+    after.rerender({ stationActive: false, isPlaying: false });
+    expect(ids(after.result.current.playlist)).toEqual(["a", "b", "c"]);
+  });
+
+  it("waits for SID Radio to resume the station before deciding it is over", async () => {
+    const before = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(before, stationA);
+    before.unmount();
+
+    const after = renderHarness({
+      stationActive: false,
+      isPlaying: true,
+      initialPlaylist: stationA,
+      initialIndex: 1,
+      resumeSettled: false,
+    });
+    after.rerender({ stationActive: true, isPlaying: true });
+
+    expect(ids(after.result.current.playlist)).toEqual(["radio:1", "radio:2", "radio:3"]);
   });
 
   it("asks before stopping a station whose queue the listener edited", async () => {

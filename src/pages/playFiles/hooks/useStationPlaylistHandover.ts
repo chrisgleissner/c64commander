@@ -66,7 +66,7 @@ export type UseStationPlaylistHandoverParams = {
     ready: boolean;
     readSavedPlaylist: (playlistId: string) => Promise<PlaylistItem[]>;
   };
-  station: { active: boolean; stop: () => void };
+  station: { active: boolean; resumeSettled: boolean; stop: () => void };
 };
 
 /**
@@ -77,7 +77,7 @@ export type UseStationPlaylistHandoverParams = {
  * stops there; the saved playlist is put back once nothing plays.
  */
 export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverParams) => {
-  const stationActive = params.station.active;
+  const { active: stationActive, resumeSettled } = params.station;
   const { ready } = params.persistence;
   const { isPlaying, isPaused, playlistEnded } = params.playback;
   const [handover, setHandoverState] = useState<StationHandover | null>(rememberedHandover);
@@ -156,12 +156,9 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     latestRef.current.station.stop();
   }, []);
 
-  const wasStationActiveRef = useRef(stationActive);
-  useEffect(() => {
-    const wasActive = wasStationActiveRef.current;
-    wasStationActiveRef.current = stationActive;
+  const finishStation = useCallback(() => {
     const current = handoverRef.current;
-    if (!wasActive || stationActive || current?.phase !== "station") return;
+    if (current?.phase !== "station") return;
     const { queue, playback } = latestRef.current;
     const lastTune = lastTuneQueue(queue.playlist, queue.currentIndex);
     if (playback.isPlaying && !playback.isPaused && lastTune.length) {
@@ -172,7 +169,25 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     // Whatever is queued now belongs to the station; only what is queued after this point is kept.
     const stationItemIds = [...new Set([...current.stationItemIds, ...queue.playlist.map((item) => item.id)])];
     commit({ ...current, stationItemIds, phase: "finishing" });
-  }, [stationActive, commit]);
+  }, [commit]);
+
+  const wasStationActiveRef = useRef(stationActive);
+  useEffect(() => {
+    const wasActive = wasStationActiveRef.current;
+    wasStationActiveRef.current = stationActive;
+    if (wasActive && !stationActive) finishStation();
+  }, [stationActive, finishStation]);
+
+  // The station can end while Play is not mounted (SID Radio turned off in Settings), so no edge is
+  // seen here. Once SID Radio has had its chance to resume, a station that did not come back is over.
+  const strandedCheckDoneRef = useRef(false);
+  useEffect(() => {
+    if (strandedCheckDoneRef.current || !resumeSettled) return;
+    strandedCheckDoneRef.current = true;
+    if (stationActive || handoverRef.current?.phase !== "station") return;
+    latestRef.current.station.stop();
+    finishStation();
+  }, [resumeSettled, stationActive, finishStation]);
 
   // After a restart only the record is left; the items come back from the playlist repository.
   const loadingRef = useRef(false);

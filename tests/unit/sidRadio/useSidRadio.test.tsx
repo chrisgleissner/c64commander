@@ -112,6 +112,32 @@ describe("useSidRadio", () => {
     expect(loadSidRadioSession()).toBeNull();
   });
 
+  it("reports the resume as settled only together with the saved station it brings back", async () => {
+    const first = renderHook(() => useSidRadio(baseParams(makeClient())));
+    await act(async () => {
+      await first.result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    first.unmount();
+
+    const seen: Array<{ active: boolean; resumeSettled: boolean }> = [];
+    const resumed = renderHook(() => {
+      const radio = useSidRadio(baseParams(makeClient()));
+      seen.push({ active: radio.active, resumeSettled: radio.resumeSettled });
+      return radio;
+    });
+
+    await waitFor(() => expect(resumed.result.current.resumeSettled).toBe(true));
+    expect(resumed.result.current.active).toBe(true);
+    expect(seen.filter((state) => state.resumeSettled && !state.active)).toEqual([]);
+  });
+
+  it("reports the resume as settled with no station when SID Radio is off", async () => {
+    const { result } = renderHook(() => useSidRadio(baseParams(makeClient(), { enabled: false })));
+
+    await waitFor(() => expect(result.current.resumeSettled).toBe(true));
+    expect(result.current.active).toBe(false);
+  });
+
   it("does nothing when disabled", async () => {
     const client = makeClient();
     const params = baseParams(client, { enabled: false });

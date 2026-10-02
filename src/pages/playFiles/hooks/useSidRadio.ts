@@ -85,6 +85,8 @@ export interface UseSidRadioParams {
 
 export interface UseSidRadioResult {
   active: boolean;
+  /** The saved station has had its chance to resume; `active` false from here on means none did. */
+  resumeSettled: boolean;
   station: ActiveStation | null;
   /**
    * Song station, optionally constrained to a single mood (a style-mask bit).
@@ -565,7 +567,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   // Resume the chip after an app restart (D15): rebuild the provider with the
   // saved exclude set so the next refill continues the identical sequence.
   const restoredRef = useRef(false);
+  const [resumeSettled, setResumeSettled] = useState(false);
   useEffect(() => {
+    setResumeSettled(true);
     if (restoredRef.current || !enabled || station) return;
     restoredRef.current = true;
     const saved: SidRadioSessionDescriptor | null = loadSidRadioSession();
@@ -723,6 +727,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
 
   return {
     active: station !== null,
+    resumeSettled,
     station,
     startSongRadio,
     setSongStationStyleFilter,
