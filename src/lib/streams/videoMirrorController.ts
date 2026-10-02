@@ -373,11 +373,16 @@ export class VideoMirrorController {
       renderResidenceMs: 0,
       maxResidenceMs: 0,
     });
+    // A session that ended in "error" still holds its native receiver, which keeps decoding every frame.
+    const failedReceiver = this.receiver;
+    this.receiver = null;
+    failedReceiver?.close();
 
     const receiver = (this.deps.createReceiver ?? createStreamReceiver)({ name: "video" });
     this.receiver = receiver;
 
     receiver.onStateChange((connection) => {
+      if (this.receiver !== receiver) return;
       if (connection === "open") {
         this.update({ state: "live" });
         this.arrivalWatchdog.start();

@@ -210,6 +210,7 @@ export class AudioMirrorController {
       foreignSenderNotice: null,
       senderMismatch: null,
     });
+    await this.releaseFailedSessionTransport();
 
     // Prefer the native low-latency sink when offered: the plugin's receive thread feeds the
     // AudioTrack directly, so JS drives NO playback (no bridge traffic, no jitter buffer). Fall back
@@ -250,6 +251,7 @@ export class AudioMirrorController {
     this.receiver = receiver;
 
     receiver.onStateChange((connection) => {
+      if (this.receiver !== receiver) return;
       if (connection === "open") {
         this.update({ state: "live" });
         this.lastSeenArrivalPackets = -1;
@@ -418,6 +420,27 @@ export class AudioMirrorController {
     this.lastSeenArrivalPackets = -1;
     this.update({ state: "live", error: null, senderMismatch: null });
     this.arrivalWatchdog.start();
+  }
+
+  /** A session that ended in "error" still holds its receiver and sink, whose stats poll never stops on its own. */
+  private async releaseFailedSessionTransport(): Promise<void> {
+    const failedReceiver = this.receiver;
+    this.receiver = null;
+    failedReceiver?.close();
+    this.playbackBuffer = null;
+    const player = this.player;
+    const sink = this.nativeSink;
+    this.player = null;
+    this.nativeSink = null;
+    try {
+      await player?.stop();
+      await sink?.close();
+    } catch (error) {
+      addLog("warn", "Audio Mirror: could not release the previous session's player or sink", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+    }
   }
 
   async stop(): Promise<void> {
