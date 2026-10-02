@@ -33,10 +33,10 @@ pitch shift at the start of Live View audio (N6, fixed); the keypad harness and 
 did not reproduce in repeated runs; the "Host unreachable after idle" lead was reproduced once and
 traced to DNS resolution while the phone's screen is off.
 
-**Counted defects: 64**, listed in `bugs.md` and below, grouped by surface: 57 from the bash and
-seven (N1 to N7) found afterwards while every repair was being reproduced on the Pixel 4. Each has
+**Counted defects: 66**, listed in `bugs.md` and below, grouped by surface: 58 from the bash and
+eight (N1 to N8) found afterwards while every repair was being reproduced on the Pixel 4. Each has
 a root cause, a repair and a regression test that fails with the repair reverted. **Every one of the
-64 was reproduced as fixed on the Pixel 4.** Where the rig could not produce the fault by itself,
+66 was reproduced as fixed on the Pixel 4.** Where the rig could not produce the fault by itself,
 the fault was injected through the Capacitor bridge, IndexedDB, the SID Radio worker or stored
 state, and removed afterwards; the method and result for each defect are in "Device evidence per
 defect". One finding from the bash (S16) was reclassified as latent, because no control in the
@@ -287,7 +287,7 @@ session ran out before it was shown; the mechanism is proven by the test.
 
 ### Found while closing the verification gaps
 
-These seven were found after the bash, while every remaining repair was being reproduced on the Pixel 4. N1 to N5 and N7 are app defects; N6 is an app defect the av-clarity grader exposed once its own faults were fixed.
+These eight were found after the bash, while every remaining repair was being reproduced on the Pixel 4. N1 to N5, N7 and N8 are app defects; N6 is an app defect the av-clarity grader exposed once its own faults were fixed.
 
 | ID | Surface | Severity | Symptom | Root cause | Regression test | Pixel 4 |
 |---|---|---|---|---|---|---|
@@ -297,7 +297,8 @@ These seven were found after the bash, while every remaining repair was being re
 | N4 | Online Archive | minor | Closing the archive sheet mid-download (or a superseding search) logs the abort as an error | src/lib/archive/client.ts catch blocks used addErrorLog for caller aborts | client.abortLogging.test.ts (3) | yes, see device evidence |
 | N5 | HVSC | major | Stop during an Ingest of an installed library leaves the intact library reported as "Indexing failed / Canceled" (ingestionState idle), which turns off metadata hydration and update checks until a full re-ingest | hvscIngestionRuntimeSupport.ts applyCancelledIngestionState always wrote idle/Canceled; hydration then never restarted | hvscIngestionRuntime.test.ts (5), hvscIngestionRuntimeSupport tests (4) | yes, see device evidence |
 | N6 | Live View audio | minor | At Listen start the phone plays about +8 cents sharp for ~6 s while the jitter buffer drains 156 -> 30 ms (speed correction 1.00464) | AudioPipeline.kt playLoop started playback with the whole primed ring; a Wi-Fi clump during priming put it far above target and driftAuthority drained it at the 0.5% recovery rate | AudioPipelineTest.aBacklogPresentAtStartIsSkippedNotPlayedOutSharp | pending rebuild |
-| N7 | HVSC | minor | After a Stop during "Checking for updates", every Play visit flashes "HVSC preparation failed / Canceled" for ~0.27 s and logs READY -> ERROR -> READY | hvscPreparationState.ts resolver took an idle step's errorMessage as the failure reason, and before the state loaded nothing could resolve READY; the hook logged that as a transition | hvscPreparationState.test.ts (2), useHvscLibrary.preparation.test.tsx (1) | pending rebuild |
+| N7 | HVSC | minor | After a Stop during "Checking for updates", every Play visit flashes "HVSC preparation failed / Canceled" for ~0.27 s and logs READY -> ERROR -> READY | hvscPreparationState.ts resolver took an idle step's errorMessage as the failure reason, and before the state loaded nothing could resolve READY; the hook logged that as a transition | hvscPreparationState.test.ts (2), useHvscLibrary.preparation.test.tsx (1) | yes, see device evidence |
+| N8 | Diagnostics | minor | A cell opened on the REST heat map stays open on the Config (or FTP) heat map | DiagnosticsDialog.tsx:1993 one HeatMapPopup instance for all variants keeps cellDetail state | DiagnosticsDialog.test.tsx › opens the Config heat map without the cell the REST heat map had selected | yes, see device evidence |
 
 
 ## Device evidence per defect
