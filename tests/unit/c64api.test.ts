@@ -1565,6 +1565,26 @@ describe("c64api", () => {
     expect(peekPlayLaunchMount(host, "b")).toBeNull();
   });
 
+  it("keeps Play's launch mount when the firmware rejects a mount or eject, since the drive still holds Play's disk", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ errors: ["Image not found"] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    const api = new C64API("http://c64u");
+    const host = api.getDeviceHost();
+    recordPlayLaunchMount(host, { drive: "a", launchPath: "/USB0/game.d64", priorImagePath: null });
+
+    await expect(api.mountDrive("a", "/USB0/missing.d64", "d64", "readwrite")).rejects.toThrow("Firmware rejected");
+    await expect(api.unmountDrive("a")).rejects.toThrow("Firmware rejected");
+
+    expect(peekPlayLaunchMount(host, "a")).not.toBeNull();
+  });
+
   it("does not throw when the firmware errors array is present but empty or blank", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation(() =>

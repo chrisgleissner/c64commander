@@ -1497,8 +1497,8 @@ export class C64API {
   // callers weren't inspecting, so a rejected mount still showed a "Disk
   // mounted" toast with the drive unchanged. See HARD9-010.
   private assertDriveWriteAccepted(response: { errors?: string[] }, operation: string, drive: string) {
-    signalDriveWritten(this.deviceHost, drive);
     this.assertActionAccepted(response, `drive ${drive.toUpperCase()} ${operation}`);
+    signalDriveWritten(this.deviceHost, drive);
   }
 
   private assertActionAccepted(response: { errors?: string[] }, operation: string) {
