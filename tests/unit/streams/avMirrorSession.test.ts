@@ -262,6 +262,27 @@ describe("AvMirrorSession", () => {
     expect(video.stop).toHaveBeenCalled();
   });
 
+  // A device switch waits only 1500 ms for stopAll and then retargets the API. A video stop queued
+  // behind a slow audio stop would be sent after that, to the new device, and the old one would keep
+  // multicasting video.
+  it("stopAll sends the video stop without waiting for a slow audio stop to finish", async () => {
+    const { session, audio, video } = makeSession();
+    let finishAudioStop!: () => void;
+    audio.stop.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishAudioStop = resolve;
+      }),
+    );
+
+    const stopping = session.stopAll();
+    await vi.waitFor(() => expect(audio.stop).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+
+    expect(video.stop).toHaveBeenCalledTimes(1);
+    finishAudioStop();
+    await stopping;
+  });
+
   it("exposes a shared app-wide singleton", () => {
     expect(avMirrorSession).toBeInstanceOf(AvMirrorSession);
   });

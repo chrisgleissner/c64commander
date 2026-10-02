@@ -740,10 +740,12 @@ export class AvMirrorSession {
   }
 
   stopAudio(): Promise<void> {
-    return this.serialize(async () => {
-      releasePhoneAudio(this);
-      await this.audio.stop();
-    });
+    return this.serialize(() => this.stopAudioNow());
+  }
+
+  private async stopAudioNow(): Promise<void> {
+    releasePhoneAudio(this);
+    await this.audio.stop();
   }
 
   toggleAudio(): Promise<void> {
@@ -758,10 +760,12 @@ export class AvMirrorSession {
   }
 
   stopVideo(): Promise<void> {
-    return this.serialize(async () => {
-      await this.video.stop();
-      this.latestFrame = null;
-    });
+    return this.serialize(() => this.stopVideoNow());
+  }
+
+  private async stopVideoNow(): Promise<void> {
+    await this.video.stop();
+    this.latestFrame = null;
   }
 
   toggleVideo(): Promise<void> {
@@ -787,10 +791,10 @@ export class AvMirrorSession {
   }
 
   async stopAll(): Promise<void> {
-    // allSettled so one failing stop cannot orphan the other, but a rejection must not be silently
-    // swallowed (a failed stop can leave the device streaming / a receiver bound) — log each with
-    // context so it stays diagnosable.
-    const [audio, video] = await Promise.allSettled([this.stopAudio(), this.stopVideo()]);
+    // Both stops go out together in one serialized step. A device switch waits only a bounded time
+    // for this; a video stop queued behind a slow audio stop would reach the next device instead.
+    // allSettled so one failing stop cannot orphan the other; each rejection is logged below.
+    const [audio, video] = await this.serialize(() => Promise.allSettled([this.stopAudioNow(), this.stopVideoNow()]));
     for (const [name, outcome] of [
       ["audio", audio],
       ["video", video],
