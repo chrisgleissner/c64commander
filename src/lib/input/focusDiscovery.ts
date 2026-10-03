@@ -132,6 +132,14 @@ const RETURN_TO_OPENER_WINDOW_MS = 5000;
  * The visible title a dialog names itself by. Without it a dialog's breadcrumb in the keypad
  * guidance bar fell through to its presentation attribute and read "sheet" or "dialog".
  */
+const scheduleAfterNextPaint = (run: () => void): void => {
+  if (typeof requestAnimationFrame !== "function") {
+    queueMicrotask(run);
+    return;
+  }
+  requestAnimationFrame(() => setTimeout(run, 0));
+};
+
 const labelledByText = (element: Element): string | undefined => {
   const ids = element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [];
   const text = ids
@@ -234,14 +242,22 @@ export class FocusDiscoveryEngine {
     return !(this.lastScope !== null && skipped.contains(this.lastScope));
   }
 
-  /** Coalesces many DOM mutations into a single microtask re-scan. */
+  /**
+   * Coalesces DOM mutations into one re-scan after the next paint. Run in a microtask, the scan landed
+   * before the first paint of every page and dialog: on a Pixel 4, 70 to 135 ms each, run up to seven
+   * times while a page loaded. A key runs a pending scan first (see flushPendingRefresh).
+   */
   scheduleRefresh(): void {
     if (!this.started || this.scheduled) return;
     this.scheduled = true;
-    queueMicrotask(() => {
-      this.scheduled = false;
-      if (this.started) this.refresh();
-    });
+    scheduleAfterNextPaint(() => this.flushPendingRefresh());
+  }
+
+  /** Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM. */
+  flushPendingRefresh(): void {
+    if (!this.scheduled) return;
+    this.scheduled = false;
+    if (this.started) this.refresh();
   }
 
   /** The live DOM element for a ring id (explicit resolver or captured element). */

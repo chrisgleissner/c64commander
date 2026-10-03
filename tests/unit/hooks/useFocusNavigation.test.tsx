@@ -1587,3 +1587,26 @@ describe("FocusNavigationProvider — the discovery engine waits for a key (HARD
     expect(observedTargets).toEqual([document.body]);
   });
 });
+
+describe("FocusNavigationProvider re-scan timing", () => {
+  afterEach(() => resetInputModality());
+
+  it("lets a key reach a control added just before it, although the re-scan is scheduled after paint", async () => {
+    render(
+      <FocusNavigationProvider>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+
+    const added = document.createElement("button");
+    added.textContent = "Added";
+    button("B").after(added);
+    // A key is its own task: the DOM change has been observed by then, but nothing has painted.
+    await Promise.resolve();
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(added);
+  });
+});

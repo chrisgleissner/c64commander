@@ -11,6 +11,7 @@ import { closeAllCards, ensureCardOpen } from "../helpers/cards";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterRingRescan } from "../helpers/ringRescan";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
 import {
   FocusNavigationProvider,
@@ -1528,7 +1529,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    await Promise.resolve();
+    await act(() => afterRingRescan());
     const resetButton = screen.getByRole("button", { name: /^reset$/i });
     const refreshButton = screen.getByRole("button", { name: /refresh/i });
     expect(focusContext.current?.engine.sourceForId("config-category-action-audio-mixer")).toBe("dom+explicit");
@@ -1563,7 +1564,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-clock-settings");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    await Promise.resolve();
+    await act(() => afterRingRescan());
     const syncButton = screen.getByRole("button", { name: /sync clock/i });
     expect(focusContext.current?.engine.elementForId("config-category-action-clock-settings")).toBe(syncButton);
 
@@ -1596,7 +1597,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    await Promise.resolve();
+    await act(() => afterRingRescan());
     const refreshButton = screen.getByRole("button", { name: /refresh/i });
     expect(screen.getByRole("button", { name: /^reset$/i })).toBeDisabled();
 

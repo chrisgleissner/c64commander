@@ -419,8 +419,11 @@ export const FocusNavigationProvider = ({
       const isDeviceBackButton = isDeviceBackKey(event);
       const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
       const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
-      // Before any branch below reads the ring, so the first key navigates.
-      if (action !== null) startEngine();
+      // Before any branch below reads the ring, so the first key navigates on a ring as new as the DOM.
+      if (action !== null) {
+        startEngine();
+        engineRef.current?.flushPendingRefresh();
+      }
       // Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring, so
       // Back closes the newest one through its own close button; an open dialog wins. The Pixel 4
       // hardware Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no "back" binding.
