@@ -76,6 +76,7 @@ import {
   applyCancelledIngestionState,
   beginCancelRequest,
   beginPlannedArchive,
+  isLastArchiveToApply,
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
@@ -966,7 +967,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 
     for (let index = 0; index < plans.length; index += 1) {
       const plan = plans[index];
-      beginPlannedArchive(index === plans.length - 1);
+      beginPlannedArchive(isLastArchiveToApply(plans, index));
       if (plan.type === "update" && isUpdateApplied(plan.version)) {
         emitProgress({
           stage: "archive_discovery",
@@ -1242,7 +1243,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
 
     for (let index = 0; index < plans.length; index += 1) {
       const plan = plans[index];
-      beginPlannedArchive(index === plans.length - 1);
+      beginPlannedArchive(isLastArchiveToApply(plans, index));
       if (plan.type === "update" && isUpdateApplied(plan.version)) {
         emitProgress({
           stage: "archive_discovery",

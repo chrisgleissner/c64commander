@@ -1596,6 +1596,27 @@ describe("hvscIngestionRuntime", () => {
     );
   });
 
+  it("does not report a Stop as a cancel when it lands after the last archive that is not already applied", async () => {
+    nativeUpdatesFrom5(7);
+    vi.mocked(isUpdateApplied).mockImplementation((version: number) => version === 7);
+    let stopResult: boolean | null = null;
+    nativeProgressListenerRemove.mockImplementationOnce(async () => {
+      stopResult = await cancelHvscInstall("token-stop-before-skipped-archive");
+    });
+
+    try {
+      await installOrUpdateHvsc("token-stop-before-skipped-archive");
+
+      expect(stopResult).toBe(false);
+      expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
+      expect(lastIngestionStatePatch()).toEqual(
+        expect.objectContaining({ ingestionState: "ready", installedVersion: 6 }),
+      );
+    } finally {
+      vi.mocked(isUpdateApplied).mockReturnValue(false);
+    }
+  });
+
   it("reports a Stop that lands after the first of two archives was applied as a cancel", async () => {
     nativeUpdatesFrom5(7);
     let stopResult: boolean | null = null;

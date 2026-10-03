@@ -8,7 +8,7 @@
 
 import { addErrorLog, addLog } from "@/lib/logging";
 import type { HvscIngestionState, HvscProgressEvent } from "./hvscTypes";
-import { loadHvscState, updateHvscState } from "./hvscStateStore";
+import { isUpdateApplied, loadHvscState, updateHvscState } from "./hvscStateStore";
 import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 
 export type HvscProgressListenerHandle = {
@@ -60,6 +60,12 @@ export const recordStateBeforeIngestion = () => {
 export const markInstalledLibraryTouched = () => {
   runtimeState.installedLibraryTouched = true;
 };
+
+/** True when no archive after `index` will be applied: each later one is an update already applied, which is skipped. */
+export const isLastArchiveToApply = (
+  plans: ReadonlyArray<{ type: "baseline" | "update"; version: number }>,
+  index: number,
+) => plans.slice(index + 1).every((plan) => plan.type === "update" && isUpdateApplied(plan.version));
 
 /** Called as each planned archive starts; `isFinal` marks the last one the run will apply. */
 export const beginPlannedArchive = (isFinal: boolean) => {
