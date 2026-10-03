@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   compareFocusables,
+  createDiscoveryScan,
   discoverInteractiveElements,
   isFocusDisabled,
   isFocusVisible,
@@ -282,5 +283,35 @@ describe("sortIntoReadingOrder", () => {
     const host = mount(`<button id="one">1</button><button id="two">2</button><button id="three">3</button>`);
     const [one, two, three] = ["#one", "#two", "#three"].map((selector) => host.querySelector(selector)!);
     expect(sortIntoReadingOrder([three, one, two]).map((element) => element.id)).toEqual(["one", "two", "three"]);
+  });
+});
+
+describe("discovery scan", () => {
+  it("reads each element's computed style once per scan, however many controls share its ancestors", () => {
+    const depth = 12;
+    const controls = 40;
+    const open = "<div>".repeat(depth);
+    const close = "</div>".repeat(depth);
+    const host = mount(
+      `${open}${Array.from({ length: controls }, (_, i) => `<button>${i}</button>`).join("")}${close}`,
+    );
+    const elementCount = host.querySelectorAll("*").length + 3;
+    const spy = vi.spyOn(window, "getComputedStyle");
+    try {
+      const found = discoverInteractiveElements(host, { scan: createDiscoveryScan() });
+      expect(found).toHaveLength(controls);
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(elementCount);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("gives the same visibility with and without a scan", () => {
+    const host = mount(`<div><button id="shown">a</button></div><div hidden><button id="gone">b</button></div>`);
+    const scan = createDiscoveryScan();
+    for (const id of ["#shown", "#gone"]) {
+      const element = host.querySelector(id)!;
+      expect(isFocusVisible(element, scan)).toBe(isFocusVisible(element));
+    }
   });
 });

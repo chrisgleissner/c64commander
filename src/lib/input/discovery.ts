@@ -108,21 +108,59 @@ const TABBAR_SELECTOR = `[${SCOPE_ATTR}='tabbar']`;
  * legitimately-visible `position:fixed` elements (false negative) and is unusable
  * in jsdom — the ancestor walk is both correct in a real browser and testable.
  */
-export const isFocusVisible = (element: Element): boolean => {
+export const isFocusVisible = (element: Element, scan?: DiscoveryScan): boolean => {
+  if (scan) return isChainVisible(element, scan);
   let node: Element | null = element;
-  const view = element.ownerDocument?.defaultView ?? (typeof window !== "undefined" ? window : null);
   while (node && node instanceof HTMLElement) {
-    if (node.hasAttribute("hidden")) return false;
-    if (node.getAttribute("aria-hidden") === "true") return false;
-    if (node.hasAttribute("inert")) return false;
-    if (view) {
-      const style = view.getComputedStyle(node);
-      if (style.display === "none") return false;
-      if (style.visibility === "hidden" || style.visibility === "collapse") return false;
-    }
+    if (!isNodeShown(node)) return false;
     node = node.parentElement;
   }
   return true;
+};
+
+/**
+ * What one ring scan has already measured. A scan reads every candidate's ancestors, and siblings
+ * share nearly all of them: without this a single tab switch on a Pixel 4 made 27,395
+ * `getComputedStyle` calls for 68 controls. Valid only while the DOM does not change, so it lives
+ * for exactly one synchronous scan.
+ */
+export interface DiscoveryScan {
+  readonly visible: Map<Element, boolean>;
+  readonly styles: Map<Element, CSSStyleDeclaration | null>;
+  readonly positions: Map<Element, ReadingPosition>;
+}
+
+export const createDiscoveryScan = (): DiscoveryScan => ({
+  visible: new Map(),
+  styles: new Map(),
+  positions: new Map(),
+});
+
+const computedStyleOf = (element: Element, scan?: DiscoveryScan): CSSStyleDeclaration | null => {
+  const cached = scan?.styles.get(element);
+  if (cached !== undefined) return cached;
+  const view = element.ownerDocument?.defaultView ?? (typeof window !== "undefined" ? window : null);
+  const style = view?.getComputedStyle ? view.getComputedStyle(element) : null;
+  scan?.styles.set(element, style);
+  return style;
+};
+
+const isNodeShown = (node: HTMLElement, scan?: DiscoveryScan): boolean => {
+  if (node.hasAttribute("hidden")) return false;
+  if (node.getAttribute("aria-hidden") === "true") return false;
+  if (node.hasAttribute("inert")) return false;
+  const style = computedStyleOf(node, scan);
+  if (style?.display === "none") return false;
+  return !(style?.visibility === "hidden" || style?.visibility === "collapse");
+};
+
+const isChainVisible = (node: Element | null, scan: DiscoveryScan): boolean => {
+  if (!(node instanceof HTMLElement)) return true;
+  const cached = scan.visible.get(node);
+  if (cached !== undefined) return cached;
+  const visible = isNodeShown(node, scan) && isChainVisible(node.parentElement, scan);
+  scan.visible.set(node, visible);
+  return visible;
 };
 
 /** Disabled for the ring: the `disabled` property/attribute or `aria-disabled="true"`. */
@@ -180,7 +218,9 @@ interface ReadingPosition {
  * Adding each ancestor's `scrollTop`/`scrollLeft` back cancels the scroll exactly: when a container
  * scrolls by N its descendants' rects drop by N and its own `scrollTop` rises by N.
  */
-const readingPosition = (element: Element): ReadingPosition => {
+const readingPosition = (element: Element, scan?: DiscoveryScan): ReadingPosition => {
+  const cached = scan?.positions.get(element);
+  if (cached) return cached;
   const rect = element.getBoundingClientRect();
   let top = rect.top;
   let left = rect.left;
@@ -193,23 +233,22 @@ const readingPosition = (element: Element): ReadingPosition => {
   // until it sticks, so accumulating is right for all of its travel and only approximate while it
   // is pinned. Nothing in the ring is sticky today.
   for (
-    let node: Element | null = isViewportAnchored(element) ? null : element.parentElement;
+    let node: Element | null = isViewportAnchored(element, scan) ? null : element.parentElement;
     node;
     node = node.parentElement
   ) {
     top += node.scrollTop;
     left += node.scrollLeft;
-    if (isViewportAnchored(node)) break;
+    if (isViewportAnchored(node, scan)) break;
   }
-  return { top, left, hasBox: rect.width > 0 || rect.height > 0 };
+  const position = { top, left, hasBox: rect.width > 0 || rect.height > 0 };
+  scan?.positions.set(element, position);
+  return position;
 };
 
 /** True when the element is taken out of flow and pinned to the viewport. */
-const isViewportAnchored = (element: Element): boolean => {
-  const view = element.ownerDocument?.defaultView;
-  if (!view?.getComputedStyle) return false;
-  return view.getComputedStyle(element).position === "fixed";
-};
+const isViewportAnchored = (element: Element, scan?: DiscoveryScan): boolean =>
+  computedStyleOf(element, scan)?.position === "fixed";
 
 const comparePositions = (a: Element, pa: ReadingPosition, b: Element, pb: ReadingPosition): number => {
   if (pa.hasBox && pb.hasBox) {
@@ -239,10 +278,12 @@ export const compareFocusables = (a: Element, b: Element): number =>
  * measuring inside the comparator would force a reflow per comparison on a ring that is rebuilt
  * whenever the DOM changes.
  */
-export const sortIntoReadingOrder = <T extends Element>(elements: T[]): T[] => {
-  const positions = new Map<Element, ReadingPosition>();
-  for (const element of elements) positions.set(element, readingPosition(element));
-  const at = (element: Element): ReadingPosition => positions.get(element) ?? readingPosition(element);
+export const sortIntoReadingOrder = <T extends Element>(
+  elements: T[],
+  scan: DiscoveryScan = createDiscoveryScan(),
+): T[] => {
+  for (const element of elements) readingPosition(element, scan);
+  const at = (element: Element): ReadingPosition => readingPosition(element, scan);
   return elements.sort((a, b) => comparePositions(a, at(a), b, at(b)));
 };
 
@@ -254,13 +295,13 @@ export interface ActiveScope {
 }
 
 /** Whether `scope` holds at least one discoverable interactive element. */
-const hasInteractive = (scope: Element): boolean => {
+const hasInteractive = (scope: Element, scan?: DiscoveryScan): boolean => {
   // isSkipped climbs to and including the scope, so a skipped scope rejects every candidate in it.
   // The walk below reached that answer one getComputedStyle at a time.
   if (scope.hasAttribute(SKIP_ATTR)) return false;
   const candidates = scope.querySelectorAll(INTERACTIVE_SELECTOR);
   for (const candidate of candidates) {
-    if (isFocusVisible(candidate) && !isFocusDisabled(candidate) && !isSkipped(candidate, scope)) return true;
+    if (isFocusVisible(candidate, scan) && !isFocusDisabled(candidate) && !isSkipped(candidate, scope)) return true;
   }
   return false;
 };
@@ -275,9 +316,9 @@ const hasInteractive = (scope: Element): boolean => {
  *   - Otherwise the page-content region: an explicit `[data-focus-scope='page']`
  *     if present, else `document.body`.
  */
-export const resolveActiveScope = (doc: Document): ActiveScope => {
+export const resolveActiveScope = (doc: Document, scan?: DiscoveryScan): ActiveScope => {
   const overlays = Array.from(doc.querySelectorAll(OVERLAY_SELECTOR)).filter(
-    (overlay) => isFocusVisible(overlay) && hasInteractive(overlay),
+    (overlay) => isFocusVisible(overlay, scan) && hasInteractive(overlay, scan),
   );
   if (overlays.length > 0) {
     // Prefer an overlay not contained by a later one; among siblings, the last in
@@ -295,6 +336,7 @@ export const resolveActiveScope = (doc: Document): ActiveScope => {
 export interface DiscoverOptions {
   /** Selectors whose subtrees are excluded (e.g. the TabBar when scanning the page). */
   readonly excludeSubtrees?: readonly string[];
+  readonly scan?: DiscoveryScan;
 }
 
 /**
@@ -304,19 +346,20 @@ export interface DiscoverOptions {
  */
 export const discoverInteractiveElements = (scope: Element, options: DiscoverOptions = {}): HTMLElement[] => {
   const excluded = options.excludeSubtrees ?? [];
+  const scan = options.scan ?? createDiscoveryScan();
   const seen = new Set<Element>();
   const result: HTMLElement[] = [];
   for (const candidate of scope.querySelectorAll(INTERACTIVE_SELECTOR)) {
     if (!(candidate instanceof HTMLElement)) continue;
     if (seen.has(candidate)) continue;
-    if (!isFocusVisible(candidate)) continue;
+    if (!isFocusVisible(candidate, scan)) continue;
     if (isFocusDisabled(candidate)) continue;
     if (isSkipped(candidate, scope)) continue;
     if (excluded.some((selector) => candidate.closest(selector))) continue;
     seen.add(candidate);
     result.push(candidate);
   }
-  sortIntoReadingOrder(result);
+  sortIntoReadingOrder(result, scan);
   return result;
 };
 
