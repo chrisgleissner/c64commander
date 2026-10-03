@@ -25,9 +25,10 @@ describe("compact profile spacing ramp", () => {
   });
 
   it("rewrites the eight dominant spacing utilities on the compact profile", () => {
-    for (const utility of ["p-4", "p-3", "py-3", "py-4", "gap-3", "gap-4", "space-y-3", "space-y-4"]) {
+    for (const utility of ["p-4", "p-3", "py-3", "py-4", "gap-3", "gap-4"]) {
       expect(ramp, `${utility} is no longer rewritten on compact`).toContain(`[class~="${utility}"]`);
     }
+    expect(ramp).toContain(":where(.space-y-3, .space-y-4) > :not([hidden]) ~ :not([hidden])");
     // One rhythm, not a rescaled ramp: every rewritten vertical value is 8px.
     expect(ramp).toMatch(/padding-block:\s*0\.5rem/);
     expect(ramp).toMatch(/row-gap:\s*0\.5rem/);
