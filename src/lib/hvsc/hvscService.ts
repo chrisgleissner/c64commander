@@ -43,6 +43,7 @@ import {
   getHvscStatus as getRuntimeStatus,
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
+  isIngestionRuntimeActive as isRuntimeIngestionActive,
   resetHvscLibraryData as resetRuntimeLibraryData,
 } from "./hvscIngestionRuntime";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
@@ -183,10 +184,21 @@ const forgetCachedBrowseIndex = () => {
  * installed library still ready - canceled before it changed the library, or with nothing new to
  * ingest - leaves that library's hydration stopped, so it is started again here.
  */
-export const resumeHvscMetadataHydrationIfReady = async () => {
+const installedLibraryIsReady = async () => {
   const status = await getRuntimeStatus();
-  if (status.ingestionState !== "ready" || !status.installedVersion) return;
+  return status.ingestionState === "ready" && Boolean(status.installedVersion);
+};
+
+/**
+ * The runtime keeps the state "ready" until a running ingestion reaches its first archive, so the
+ * state alone cannot say that no ingestion is running; a hydration started inside a run would count
+ * as current for HARD19-019 and could persist over the snapshot that run writes. Both checks are
+ * repeated after every wait, the runtime check last, right before hydration captures its generation.
+ */
+export const resumeHvscMetadataHydrationIfReady = async () => {
+  if (isRuntimeIngestionActive() || !(await installedLibraryIsReady())) return;
   await hvscMetadataHydrationPromise;
+  if (!(await installedLibraryIsReady()) || isRuntimeIngestionActive()) return;
   await ensureHvscMetadataHydration();
 };
 

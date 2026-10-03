@@ -87,6 +87,7 @@ vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
     installedVersion: 84,
   })),
   resetHvscLibraryData: vi.fn(async () => undefined),
+  isIngestionRuntimeActive: vi.fn(() => false),
 }));
 
 vi.mock("@/lib/hvsc/hvscMediaIndex", () => ({
@@ -196,6 +197,7 @@ import {
   getHvscFolderListing as getRuntimeFolderListing,
   getHvscSong as runtimeGetHvscSong,
   cancelHvscInstall as runtimeCancelHvscInstall,
+  isIngestionRuntimeActive as runtimeIngestionActive,
   ingestCachedHvsc as runtimeIngestCachedHvsc,
   installOrUpdateHvsc as runtimeInstallOrUpdateHvsc,
   resetHvscLibraryData as runtimeResetHvscLibraryData,
@@ -858,6 +860,11 @@ describe("hvscService", () => {
         ingestionError: null,
         installedVersion: 85,
       } as any);
+      vi.mocked(getRuntimeStatus).mockResolvedValueOnce({
+        ingestionState: "ready",
+        ingestionError: null,
+        installedVersion: 85,
+      } as any);
       vi.mocked(runtimeIngestCachedHvsc).mockImplementationOnce(async () => {
         invalidateHvscHydration();
         throw new Error("HVSC update cancelled");
@@ -869,6 +876,74 @@ describe("hvscService", () => {
       await vi.waitFor(() => expect(vi.mocked(saveHvscBrowseIndexSnapshot)).toHaveBeenCalledTimes(1));
 
       expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not restart hydration after an ingestion call refused because another ingestion is running", async () => {
+      __resetHvscHydrationGenerationForTests();
+      vi.mocked(runtimeIngestionActive).mockReturnValue(true);
+      vi.mocked(getRuntimeStatus).mockResolvedValue({
+        ingestionState: "ready",
+        ingestionError: null,
+        installedVersion: 85,
+      } as any);
+      vi.mocked(runtimeIngestCachedHvsc).mockRejectedValueOnce(new Error("HVSC ingestion already running"));
+
+      try {
+        await expect(ingestCachedHvsc("hvsc-ingest")).rejects.toThrow("HVSC ingestion already running");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(mediaIndexMocks.loadBrowseSnapshot).not.toHaveBeenCalled();
+      } finally {
+        vi.mocked(runtimeIngestionActive).mockReturnValue(false);
+        vi.mocked(getRuntimeStatus).mockResolvedValue({
+          ingestionState: "idle",
+          ingestionError: null,
+          installedVersion: 83,
+        } as any);
+      }
+    });
+
+    it("does not start hydration when an ingestion starts while the stopped hydration is settling", async () => {
+      __resetHvscHydrationGenerationForTests();
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValue({
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs: {
+          "/DEMOS/0-9/10_Orbyte.sid": {
+            virtualPath: "/DEMOS/0-9/10_Orbyte.sid",
+            fileName: "10_Orbyte.sid",
+            metadataStatus: "seeded",
+          },
+        },
+        folders: { "/": { path: "/", folders: [], songs: [] } },
+      });
+      vi.mocked(getRuntimeStatus).mockResolvedValue({
+        ingestionState: "ready",
+        ingestionError: null,
+        installedVersion: 85,
+      } as any);
+      vi.mocked(runtimeIngestCachedHvsc).mockImplementationOnce(async () => {
+        invalidateHvscHydration();
+        throw new Error("HVSC update cancelled");
+      });
+
+      try {
+        const interrupted = ensureHvscMetadataHydration();
+        await expect(ingestCachedHvsc("hvsc-ingest")).rejects.toThrow("HVSC update cancelled");
+        vi.mocked(runtimeIngestionActive).mockReturnValue(true);
+        await interrupted;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(mediaIndexMocks.loadBrowseSnapshot).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(saveHvscBrowseIndexSnapshot)).not.toHaveBeenCalled();
+      } finally {
+        vi.mocked(runtimeIngestionActive).mockReturnValue(false);
+        vi.mocked(getRuntimeStatus).mockResolvedValue({
+          ingestionState: "idle",
+          ingestionError: null,
+          installedVersion: 83,
+        } as any);
+      }
     });
 
     it("leaves hydration stopped after an ingestion that ended with the library not ready", async () => {

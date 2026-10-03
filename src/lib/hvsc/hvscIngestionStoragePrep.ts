@@ -6,10 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beginHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
+import { beginHvscInstallGuard, endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { cleanupStaleStagingDir, ensureHvscDirs } from "./hvscFilesystem";
 import {
+  drainNativeProgressListeners,
   getHvscIngestionRuntimeState,
+  markIngestionRunEnded,
   markIngestionRuntimeIdle,
   recordStateBeforeIngestion,
 } from "./hvscIngestionRuntimeSupport";
@@ -33,4 +35,16 @@ export const prepareIngestionStorage = async (cancelToken: string) => {
     markIngestionRuntimeIdle();
     throw new Error(`HVSC ingestion could not prepare its storage: ${(error as Error).message}`, { cause: error });
   }
+};
+
+/**
+ * The end of an ingestion's `finally`. The run has written its outcome by now, so a Stop whose native
+ * round trips are still in flight must no longer apply to it (see applyCancelledIngestionState).
+ */
+export const finishIngestionRun = async (cancelToken: string) => {
+  markIngestionRunEnded();
+  await drainNativeProgressListeners(cancelToken);
+  await endHvscInstallGuard();
+  getHvscIngestionRuntimeState().cancelTokens.delete(cancelToken);
+  markIngestionRuntimeIdle();
 };

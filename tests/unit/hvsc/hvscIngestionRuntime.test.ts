@@ -1538,6 +1538,33 @@ describe("hvscIngestionRuntime", () => {
     );
   });
 
+  it("does not report a Stop as a cancel when it applies while a completed update is still finishing", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    let stopResult: boolean | null = null;
+    vi.mocked(endHvscInstallGuard).mockImplementationOnce(async () => {
+      stopResult = await cancelHvscInstall("token-stop-while-finishing");
+    });
+
+    await installOrUpdateHvsc("token-stop-while-finishing");
+
+    expect(stopResult).toBe(false);
+    expect(lastIngestionStatePatch()).toEqual(
+      expect.objectContaining({ ingestionState: "ready", installedVersion: 6 }),
+    );
+  });
+
   it("reports Canceled when an update is canceled after it started writing into the installed library", async () => {
     installedLibraryWithCachedUpdate();
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {

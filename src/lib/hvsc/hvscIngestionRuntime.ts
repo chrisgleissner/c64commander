@@ -41,7 +41,6 @@ import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
@@ -79,7 +78,6 @@ import {
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
-  markIngestionRuntimeIdle,
   markInstalledLibraryConsistent,
   markInstalledLibraryTouched,
   registerNativeProgressListener,
@@ -87,7 +85,7 @@ import {
   reportCacheStatFailure,
   resetCacheStatFailure,
 } from "./hvscIngestionRuntimeSupport";
-import { prepareIngestionStorage } from "./hvscIngestionStoragePrep";
+import { finishIngestionRun, prepareIngestionStorage } from "./hvscIngestionStoragePrep";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { HVSC_CANCELED_STATUS_REASON, createHvscCancellationError } from "./hvscCancellation";
@@ -1171,10 +1169,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     });
     throw error;
   } finally {
-    await drainNativeProgressListeners(cancelToken);
-    await endHvscInstallGuard();
-    runtimeState.cancelTokens.delete(cancelToken);
-    markIngestionRuntimeIdle();
+    await finishIngestionRun(cancelToken);
   }
 };
 
@@ -1384,10 +1379,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     });
     throw error;
   } finally {
-    await drainNativeProgressListeners(cancelToken);
-    await endHvscInstallGuard();
-    runtimeState.cancelTokens.delete(cancelToken);
-    markIngestionRuntimeIdle();
+    await finishIngestionRun(cancelToken);
   }
 };
 

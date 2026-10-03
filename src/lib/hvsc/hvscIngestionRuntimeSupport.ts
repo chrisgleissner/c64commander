@@ -24,6 +24,7 @@ type HvscIngestionRuntimeState = {
   stateBeforeIngestion: IngestionOutcome | null;
   ingestionRun: number;
   canceledIngestionRun: number | null;
+  ingestionRunEnded: boolean;
 };
 
 type IngestionOutcome = { ingestionState: HvscIngestionState; ingestionError: string | null };
@@ -37,6 +38,7 @@ const runtimeState: HvscIngestionRuntimeState = {
   stateBeforeIngestion: null,
   ingestionRun: 0,
   canceledIngestionRun: null,
+  ingestionRunEnded: false,
 };
 
 const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
@@ -46,6 +48,7 @@ export const getHvscIngestionRuntimeState = () => runtimeState;
 /** Called when an ingestion starts, so a cancel that changes nothing can put the state back. */
 export const recordStateBeforeIngestion = () => {
   runtimeState.ingestionRun += 1;
+  runtimeState.ingestionRunEnded = false;
   const { ingestionState, ingestionError } = loadHvscState();
   runtimeState.stateBeforeIngestion = { ingestionState, ingestionError: ingestionError ?? null };
 };
@@ -171,7 +174,7 @@ export const applyCancelledIngestionState = (
 ) => {
   // A cancel that lands after the run ended (its native round trips outlasted the run) changes nothing:
   // the run has already written its own outcome, and a stale "Canceled" would overwrite it.
-  if (!runtimeState.activeIngestionRunning) {
+  if (!runtimeState.activeIngestionRunning || runtimeState.ingestionRunEnded) {
     addLog("info", "HVSC cancel arrived after the ingestion had ended; state left unchanged", { message });
     return false;
   }
@@ -230,6 +233,11 @@ export const beginCancelRequest = () => {
     applyCancelledIngestionState() || (runAtRequest !== null && runtimeState.canceledIngestionRun === runAtRequest);
 };
 
+/** Called when an ingestion's `finally` starts: its outcome is written and a cancel can no longer change it. */
+export const markIngestionRunEnded = () => {
+  runtimeState.ingestionRunEnded = true;
+};
+
 export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;
 
 const ingestionIdleListeners = new Set<() => void>();
@@ -237,6 +245,7 @@ const ingestionIdleListeners = new Set<() => void>();
 /** Ends the running install or ingest and tells everyone who waited for it to finish. */
 export const markIngestionRuntimeIdle = () => {
   runtimeState.activeIngestionRunning = false;
+  runtimeState.ingestionRunEnded = false;
   runtimeState.installedLibraryTouched = false;
   runtimeState.stateBeforeIngestion = null;
   // Only one ingestion runs at a time, so a token left here is a cancel aimed at a token the finished
