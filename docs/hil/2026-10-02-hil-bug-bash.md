@@ -506,11 +506,11 @@ the saved copy is still unreadable when that station ends, the carried queue is 
 
 ## Performance on a slow phone
 
-The release target includes a keypad phone whose CPU runs JavaScript at about half the speed of the
-Pixel 4 (Geekbench 6 single core: 432 for its MediaTek Helio G81, about 883 for the Pixel 4's
-Snapdragon 855; 2x Cortex-A75 at 2.0 GHz and 6x Cortex-A55 at 1.7 GHz, Mali-G52 MC2, 4 GB
-LPDDR4X). It was modeled on the Pixel 4 with Chrome DevTools CPU throttling at 2x. Every change
-below was measured before and after, on the device, and none changes the layout.
+Low-end phones run JavaScript at about half the speed of the Pixel 4: Geekbench 6 single core is
+about 430 for a typical low-end SoC (2x Cortex-A75 at 2.0 GHz, 6x Cortex-A55 at 1.7 GHz, 4 GB of
+memory) against about 880 for the Pixel 4's Snapdragon 855. Such a phone was modeled on the Pixel 4
+with Chrome DevTools CPU throttling at 2x. Every change below was measured before and after, on the
+device, and none changes the layout.
 
 **Method.** A CDP harness taps each tab or opens each popup three times and takes the median.
 "Draw" is the time until the new page's heading (or the popup) has been painted. "Interactive" is
@@ -565,7 +565,7 @@ total, the last ending at about 7 s, to 2.0 to 2.4 s, the last ending at about 4
   time; it is now read once and written only when a song's durations changed.
 
 **Where the targets stand.** The target is 150 ms to first draw and 300 ms to an interactive page
-on that phone. The popups and the light pages come close at 1x but not at 2x, and Config, Play and
+on such a phone. The popups and the light pages come close at 1x but not at 2x, and Config, Play and
 Home remain well above it. What is left is the cost of rendering those pages: hundreds of
 Radix-based controls (selects, sliders, switches) per page, measured as most of the remaining time.
 Reaching the target would need a different rendering approach for those rows. Two options were
