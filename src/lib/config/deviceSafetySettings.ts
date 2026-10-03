@@ -319,6 +319,7 @@ export const getActiveAutoResolutionContext = (): AutoResolutionContext => ({
 });
 
 const broadcast = (key: string, value: unknown) => {
+  configForThisTask = null;
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("c64u-device-safety-updated", { detail: { key, value } }));
 };
@@ -380,9 +381,35 @@ const resolveBooleanOverride = (key: string, fallback: boolean) => {
   return override === null ? fallback : override;
 };
 
+/*
+ * Read once per task. Rendering a page asks once per slider and once per request: 458 rows on Config
+ * read about twenty localStorage keys each. Every write in this module clears it through broadcast,
+ * a different selected device or product resolves AUTO again, and it is dropped when the task ends.
+ */
+let configForThisTask: { config: DeviceSafetyConfig; context: AutoResolutionContext } | null = null;
+
+const isSameAutoResolutionContext = (left: AutoResolutionContext, right: AutoResolutionContext) =>
+  left.activeProduct === right.activeProduct &&
+  left.activeDeviceId === right.activeDeviceId &&
+  left.activeFirmware === right.activeFirmware;
+
 export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
+  const context = getActiveAutoResolutionContext();
+  if (configForThisTask && isSameAutoResolutionContext(configForThisTask.context, context)) {
+    return configForThisTask.config;
+  }
+  if (!configForThisTask) {
+    queueMicrotask(() => {
+      configForThisTask = null;
+    });
+  }
+  configForThisTask = { config: readDeviceSafetyConfig(context), context };
+  return configForThisTask.config;
+};
+
+const readDeviceSafetyConfig = (context: AutoResolutionContext): DeviceSafetyConfig => {
   const mode = loadDeviceSafetyMode();
-  const resolution = resolveAutoSafetyMode(mode, getActiveAutoResolutionContext());
+  const resolution = resolveAutoSafetyMode(mode, context);
   const defaults = MODE_DEFAULTS[resolution.effectiveMode];
   return {
     mode,
