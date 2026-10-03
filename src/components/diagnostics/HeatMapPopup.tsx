@@ -24,7 +24,7 @@ import {
 } from "@/lib/diagnostics/heatMapData";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
-import { useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 
 const VARIANT_TITLES: Record<HeatMapVariant, string> = {
   REST: "REST activity",
@@ -190,7 +190,11 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
     if (openedVariant !== null) setCellDetail(null);
   }
 
-  const matrix: HeatMapMatrix = (() => {
+  // Mounted with Diagnostics, which re-renders while closed: building the matrix there cost 88 ms of
+  // every Home-to-Play switch on a Pixel 4. Closed, the last matrix stays for the closing animation.
+  const lastMatrixRef = useRef<HeatMapMatrix | null>(null);
+  const matrix = useMemo((): HeatMapMatrix => {
+    if (!open) return lastMatrixRef.current ?? { variant, rowGroups: [], columnItems: [], cells: {}, computedAt: "" };
     switch (variant) {
       case "REST":
         return buildRestHeatMap(traceEvents);
@@ -199,7 +203,8 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
       case "CONFIG":
         return buildConfigHeatMap(traceEvents);
     }
-  })();
+  }, [open, variant, traceEvents]);
+  lastMatrixRef.current = matrix;
 
   const maxMetric = getMatrixMaxMetric(matrix, mode);
   const isEmpty = matrix.rowGroups.length === 0;
