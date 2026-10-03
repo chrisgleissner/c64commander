@@ -8,13 +8,11 @@
 
 package uk.gleissner.c64commander
 
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Build
 import android.os.Process
 import android.util.Log
-import java.util.concurrent.locks.LockSupport
 
 /**
  * The audio path from a PCM producer to the speaker, entirely in Kotlin.
@@ -102,6 +100,8 @@ internal class AudioPipeline(
      * with twelve seconds sitting in a ring that was waiting for fifteen.
      */
     primeMs: Int = 0,
+    /** Test seam: the player loop's time source, so tests can run it on virtual time. */
+    private val clock: PipelineClock = PipelineClock.SYSTEM,
 ) {
   data class Stats(
       /** PCM queued ahead of the speaker (ring + track), i.e. the current output latency. */
@@ -581,55 +581,62 @@ internal class AudioPipeline(
   /** Low-water mark of the ring within the current adaptation window (source frames). */
   private var windowMinDepth = Long.MAX_VALUE
   private var windowMaxDepth = 0L
-  private var windowStartNanos = System.nanoTime()
+  private var windowStartNanos = clock.nanoTime()
+
+  private val outFrames: Int
+    get() = maxOf(1, writeFramesPerChunk)
 
   private fun playLoop() {
     Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
-    val outFrames = maxOf(1, writeFramesPerChunk)
-    outScratch = ByteArray(outFrames * BYTES_PER_FRAME)
-    // Worst case source frames for one output chunk, plus one for the interpolator's right-hand
-    // sample and a little slack for the ratio's excursion.
-    val maxRatio = nominalRatio() * (1 + CushionDrift.REBUILD_DRIFT)
-    srcScratch = ShortArray(((outFrames * maxRatio + 2).toInt() + 2) * CHANNELS)
-    while (running) {
-      try {
-        if (paused) {
-          // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
-          // the audio the listener paused on would be gone by the time they came back to it.
-          LockSupport.parkNanos(POLL_NANOS)
-          continue
-        }
-        if (!started) {
-          // Prime for BOTH buffers: the first writes fill the speaker track out of the ring, so
-          // priming to the cushion alone starts the session on a thin cushion it never rebuilds.
-          if ((writeFrames - readFrames) < primeFrames) {
-            LockSupport.parkNanos(POLL_NANOS)
-            continue
-          }
-          dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
-          track.play()
-          started = true
-          startupCeilingFrames = CushionDrift.CEILING_UNKNOWN
-          windowStartNanos = System.nanoTime()
-          windowMinDepth = Long.MAX_VALUE
-          windowMaxDepth = 0L
-        }
-        val depth = (writeFrames - readFrames).coerceAtLeast(0)
-        if (depth > hardMaxFrames) {
-          // Safety net. The converter should have prevented this; if it did not, playing the backlog
-          // out would be permanent added latency, so drop it and say so.
-          val excess = depth - targetFrames
-          synchronized(producerLock) { readFrames += excess }
-          discardedBytes += excess * BYTES_PER_FRAME
-          fraction = 0.0
-          continue
-        }
-        renderChunk(outFrames)
-      } catch (error: Exception) {
-        if (!running) break
-        Log.w(TAG, "Audio player loop error; continuing", error)
-        LockSupport.parkNanos(POLL_NANOS)
+    while (running) step()
+  }
+
+  /** One pass of the player loop. Public to tests, which drive it on virtual time instead of a thread. */
+  internal fun step() {
+    if (!::outScratch.isInitialized) {
+      outScratch = ByteArray(outFrames * BYTES_PER_FRAME)
+      // Worst case source frames for one output chunk, plus one for the interpolator's right-hand
+      // sample and a little slack for the ratio's excursion.
+      val maxRatio = nominalRatio() * (1 + CushionDrift.REBUILD_DRIFT)
+      srcScratch = ShortArray(((outFrames * maxRatio + 2).toInt() + 2) * CHANNELS)
+    }
+    try {
+      if (paused) {
+        // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
+        // the audio the listener paused on would be gone by the time they came back to it.
+        clock.park(POLL_NANOS)
+        return
       }
+      if (!started) {
+        // Prime for BOTH buffers: the first writes fill the speaker track out of the ring, so
+        // priming to the cushion alone starts the session on a thin cushion it never rebuilds.
+        if ((writeFrames - readFrames) < primeFrames) {
+          clock.park(POLL_NANOS)
+          return
+        }
+        dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
+        track.play()
+        started = true
+        startupCeilingFrames = CushionDrift.CEILING_UNKNOWN
+        windowStartNanos = clock.nanoTime()
+        windowMinDepth = Long.MAX_VALUE
+        windowMaxDepth = 0L
+      }
+      val depth = (writeFrames - readFrames).coerceAtLeast(0)
+      if (depth > hardMaxFrames) {
+        // Safety net. The converter should have prevented this; if it did not, playing the backlog
+        // out would be permanent added latency, so drop it and say so.
+        val excess = depth - targetFrames
+        synchronized(producerLock) { readFrames += excess }
+        discardedBytes += excess * BYTES_PER_FRAME
+        fraction = 0.0
+        return
+      }
+      renderChunk(outFrames)
+    } catch (error: Exception) {
+      if (!running) return
+      Log.w(TAG, "Audio player loop error; continuing", error)
+      clock.park(POLL_NANOS)
     }
   }
 
@@ -739,7 +746,7 @@ internal class AudioPipeline(
   private fun adaptCushion(depth: Long) {
     if (depth < windowMinDepth) windowMinDepth = depth
     if (depth > windowMaxDepth) windowMaxDepth = depth
-    val now = System.nanoTime()
+    val now = clock.nanoTime()
     if (now - windowStartNanos < ADAPT_WINDOW_NANOS) return
     val margin = msToFrames(sourceRate, STARTUP_CEILING_MARGIN_MS).toLong()
     startupCeilingFrames = CushionDrift.nextStartupCeiling(startupCeilingFrames, windowMaxDepth, margin)
@@ -766,7 +773,7 @@ internal class AudioPipeline(
   private fun waitForFrames(needed: Int): Boolean {
     var waited = 0L
     while (waited < STARVE_LIMIT_NANOS && running) {
-      LockSupport.parkNanos(POLL_NANOS)
+      clock.park(POLL_NANOS)
       waited += POLL_NANOS
       if ((writeFrames - readFrames) >= needed) return true
     }
@@ -844,7 +851,7 @@ internal class AudioPipeline(
     }
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
-      if (written <= 0) LockSupport.parkNanos(POLL_NANOS)
+      if (written <= 0) clock.park(POLL_NANOS)
     }
     refreshTrackStatsOccasionally()
   }
@@ -859,7 +866,7 @@ internal class AudioPipeline(
    * measuring. Diagnostics must not be able to cause the fault they are there to report.
    */
   private fun refreshTrackStatsOccasionally() {
-    val now = System.nanoTime()
+    val now = clock.nanoTime()
     if (now - lastStatsReadNanos < STATS_READ_INTERVAL_NANOS) return
     lastStatsReadNanos = now
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -884,8 +891,8 @@ internal class AudioPipeline(
     private const val CLOSE_JOIN_TIMEOUT_MS = 250L
     const val BYTES_PER_FRAME = 4 // stereo * S16
     private const val CHANNELS = 2
-    private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
-    private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
+    const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
+    const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
     private const val FALLBACK_BUFFER_BYTES = 8192
 
     /**
@@ -956,39 +963,5 @@ internal class AudioPipeline(
 
     /** Fallback when the platform will not name its burst size: 5 ms, the usual order of magnitude. */
     private fun defaultBurstFrames(outputRate: Int): Int = maxOf(64, outputRate / 200)
-
-    /**
-     * The real speaker track.
-     *
-     * Built at the DEVICE's output rate, not the stream's. A track whose rate the hardware does not
-     * have is resampled by AudioFlinger, and a resampled track cannot use the fast mixer — which is
-     * why asking for the C64's 47983 Hz produced a 60 ms minimum buffer and a permanent per-frame
-     * conversion in the audio server. Converting to the native rate in this pipeline instead costs a
-     * linear interpolation we were going to need anyway for drift correction, and buys the low-latency
-     * path back.
-     */
-    fun buildAudioTrack(outputRate: Int, bufferBytes: Int): AudioTrack {
-      val builder =
-          AudioTrack.Builder()
-              .setAudioAttributes(
-                  AudioAttributes.Builder()
-                      .setUsage(AudioAttributes.USAGE_MEDIA)
-                      .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                      .build(),
-              )
-              .setAudioFormat(
-                  AudioFormat.Builder()
-                      .setEncoding(ENCODING)
-                      .setSampleRate(outputRate)
-                      .setChannelMask(CHANNEL_CONFIG)
-                      .build(),
-              )
-              .setBufferSizeInBytes(bufferBytes)
-              .setTransferMode(AudioTrack.MODE_STREAM)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-      }
-      return builder.build()
-    }
   }
 }
