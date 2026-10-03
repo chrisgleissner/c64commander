@@ -14,6 +14,7 @@ import {
   UnifiedHealthBadge,
   forgetConnectedDeviceAnnouncementForTests,
 } from "@/components/UnifiedHealthBadge";
+import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
 const mockToast = vi.hoisted(() => vi.fn());
@@ -909,6 +910,53 @@ describe("UnifiedHealthBadge", () => {
       switchDeferred.resolve();
       await Promise.resolve();
     });
+  });
+
+  it("keeps the newest picked device pending when an earlier queued pick is superseded", async () => {
+    vi.useFakeTimers();
+    const originalDevices = mockState.savedDevices.devices;
+    mockState.savedDevices.devices = [
+      ...originalDevices,
+      { ...originalDevices[1], id: "device-lab", name: "Lab", host: "lab-c64", lastKnownUniqueId: "UID-LAB" },
+    ];
+    const firstPick = createDeferred<unknown>();
+    const secondPick = createDeferred<unknown>();
+    mockState.switchSavedDevice
+      .mockImplementationOnce(() => firstPick.promise)
+      .mockImplementationOnce(() => secondPick.promise);
+
+    render(<UnifiedHealthBadge />);
+    const openPicker = async () => {
+      fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+      await vi.advanceTimersByTimeAsync(450);
+    };
+
+    await openPicker();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+      await Promise.resolve();
+    });
+    await openPicker();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-lab"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      firstPick.resolve(SAVED_DEVICE_SWITCH_SUPERSEDED);
+      await Promise.resolve();
+    });
+
+    await openPicker();
+    const labCard = screen.getByTestId("switch-device-row-device-lab").closest("[data-selected]");
+    const officeCard = screen.getByTestId("switch-device-row-device-office").closest("[data-selected]");
+    expect(labCard).toHaveAttribute("data-selected", "true");
+    expect(officeCard).toHaveAttribute("data-selected", "false");
+
+    await act(async () => {
+      secondPick.resolve(undefined);
+      await Promise.resolve();
+    });
+    mockState.savedDevices.devices = originalDevices;
   });
 
   it("still lets users switch to an unhealthy saved device", async () => {

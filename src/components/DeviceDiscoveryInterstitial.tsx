@@ -307,6 +307,7 @@ export function DeviceDiscoveryInterstitial() {
 
   const switchToManualDevice = async (deviceId: string, host: string) => {
     const verification = await switchSavedDevice(deviceId);
+    if (isSupersededSavedDeviceSwitch(verification)) return;
     if (isOfflineSwitchResult(verification)) {
       throw new Error(verification.error ?? `Saved ${host}, but it did not answer the connection check.`);
     }

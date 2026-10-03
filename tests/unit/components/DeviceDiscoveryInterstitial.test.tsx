@@ -90,6 +90,7 @@ vi.mock("@/lib/uiErrors", () => ({
 }));
 
 import { DeviceDiscoveryInterstitial } from "@/components/DeviceDiscoveryInterstitial";
+import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 
 const candidate = (requiresPassword = false) => ({
   id: requiresPassword ? "address:192.0.2.14" : "id:38c1ba",
@@ -235,6 +236,19 @@ describe("DeviceDiscoveryInterstitial", () => {
       );
       expect(switchSavedDevice).toHaveBeenCalledWith("manual-c64u-80");
     });
+  });
+
+  it("does not announce a manual host as selected when a newer device switch superseded it", async () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    switchSavedDevice.mockResolvedValueOnce(SAVED_DEVICE_SWITCH_SUPERSEDED as never);
+    renderDialog();
+
+    fireEvent.change(screen.getByTestId("startup-manual-device-host-input"), { target: { value: "c64u" } });
+    fireEvent.click(screen.getByTestId("startup-manual-device-connect"));
+
+    await waitFor(() => expect(switchSavedDevice).toHaveBeenCalledWith("manual-c64u-80"));
+    await waitFor(() => expect(screen.getByTestId("startup-manual-device-connect")).not.toBeDisabled());
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Device selected" }));
   });
 
   it("validates an empty manual host before probing", () => {

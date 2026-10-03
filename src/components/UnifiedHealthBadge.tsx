@@ -474,10 +474,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   const pickerRefreshRequestedRef = useRef(false);
 
   useEffect(() => {
-    if (!pickerOpen) {
-      setExpandedDeviceIds([]);
-      setPendingSwitch(null);
-    }
+    if (!pickerOpen) setExpandedDeviceIds([]);
   }, [pickerOpen]);
 
   useEffect(() => {
@@ -604,7 +601,7 @@ export function UnifiedHealthBadge({ className }: Props) {
           });
         })
         .finally(() => {
-          setPendingSwitch(null);
+          setPendingSwitch((pending) => (pending?.toDeviceId === deviceId ? null : pending));
         });
     },
     [pendingSwitch?.fromDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
