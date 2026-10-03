@@ -17,7 +17,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { C64API } from "@/lib/c64api";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getFileExtension } from "@/lib/playback/fileTypes";
 import { listDirectory, type DiskDirectoryEntry, type DiskImageType } from "@/lib/disks/diskImage";
 import { runDiskEntry, mountAndLoadEntry } from "@/lib/playback/diskLaunch";
@@ -31,6 +31,19 @@ import { fetchUltimateOriginBlob, isOriginOnSelectedDevice } from "@/lib/savedDe
 import type { DiskEntryAction } from "@/components/disks/DiskContentsDialog";
 
 const EXPLORABLE_TYPES = new Set<DiskImageType>(["d64", "d71", "d81"]);
+
+export type DiskMountOutcome = "mounted" | "failed" | "superseded";
+
+/** The mount owner already reported a failed mount, and a superseded one has nothing to report. */
+export class DiskExplorerMountNotCompletedError extends Error {
+  constructor(
+    diskName: string,
+    readonly outcome: Exclude<DiskMountOutcome, "mounted">,
+  ) {
+    super(`${diskName} was not mounted on drive A, so nothing was loaded.`);
+    this.name = "DiskExplorerMountNotCompletedError";
+  }
+}
 
 export const diskTypeForPath = (path: string): DiskImageType | null => {
   const ext = getFileExtension(path);
@@ -160,6 +173,15 @@ export const useDiskExplorer = ({
         onToast?.({ title: `${action === "load" ? "Loaded" : "Launched"} ${entry.name || "program"}` });
         setState((prev) => ({ ...prev, busyIndex: null, open: false }));
       } catch (error) {
+        if (error instanceof DiskExplorerMountNotCompletedError) {
+          addLog("info", "Disk Explorer Mount & Load stopped because the mount did not complete", {
+            path: loaded.disk.path,
+            entry: entry.name,
+            outcome: error.outcome,
+          });
+          setState((prev) => ({ ...prev, busyIndex: null }));
+          return;
+        }
         const message = (error as Error)?.message ?? "Launch failed.";
         addErrorLog("Disk Explorer launch failed", {
           path: loaded.disk.path,

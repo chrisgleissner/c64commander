@@ -60,7 +60,9 @@ vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
   }),
 }));
 vi.mock("@/hooks/useFeatureFlags", () => ({ useFeatureFlagValue: () => true }));
-vi.mock("@/hooks/useDiskExplorer", () => ({
+vi.mock("@/hooks/useDiskExplorer", async (importOriginal) => ({
+  DiskExplorerMountNotCompletedError: (await importOriginal<typeof import("@/hooks/useDiskExplorer")>())
+    .DiskExplorerMountNotCompletedError,
   diskTypeForPath: () => "d64",
   useDiskExplorer: (options: { mount: (disk: DiskEntry) => Promise<void> }) => {
     explorer.mount = options.mount;
@@ -135,8 +137,26 @@ describe("HomeDiskManager reports a failed mount to the flows that continue afte
     render(<HomeDiskManager />);
 
     expect(explorer.mount).not.toBeNull();
-    await expect(explorer.mount!(disk)).rejects.toThrow(/game\.d64 was not mounted on drive A/);
+    await expect(explorer.mount!(disk)).rejects.toMatchObject({
+      name: "DiskExplorerMountNotCompletedError",
+      outcome: "failed",
+    });
     expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({ title: "Mount failed" }));
+  });
+
+  it("tells Disk Explorer a mount was superseded, without reporting it as a failure", async () => {
+    let finishFirst: (value: unknown) => void = () => undefined;
+    (mountDiskToDrive as ReturnType<typeof vi.fn>)
+      .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
+      .mockResolvedValueOnce({ persistence: "device" });
+    render(<HomeDiskManager />);
+
+    const first = explorer.mount!(disk);
+    await expect(explorer.mount!(disk)).resolves.toBeUndefined();
+    finishFirst({ persistence: "device" });
+
+    await expect(first).rejects.toMatchObject({ name: "DiskExplorerMountNotCompletedError", outcome: "superseded" });
+    expect(reportUserError).not.toHaveBeenCalled();
   });
 
   it("resolves the Disk Explorer mount step when the mount succeeds", async () => {

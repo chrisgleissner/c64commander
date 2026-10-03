@@ -77,7 +77,12 @@ import {
 } from "@/lib/disks/diskMount";
 import { ToastAction } from "@/components/ui/toast";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
-import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
+import {
+  DiskExplorerMountNotCompletedError,
+  diskTypeForPath,
+  useDiskExplorer,
+  type DiskMountOutcome,
+} from "@/hooks/useDiskExplorer";
 import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
@@ -685,8 +690,8 @@ export const HomeDiskManager = () => {
     [diskLibrary.disks],
   );
 
-  /** Resolves true only when this mount completed; failures are reported here, not thrown. */
-  const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry): Promise<boolean> => {
+  /** Failures are reported here, not thrown; a mount a newer one replaced reports nothing. */
+  const mountDiskOnDrive = trace(async (drive: DriveKey, disk: DiskEntry): Promise<DiskMountOutcome> => {
     const mountGeneration = (mountCompletionGenerationRef.current[drive] ?? 0) + 1;
     mountCompletionGenerationRef.current = {
       ...mountCompletionGenerationRef.current,
@@ -716,7 +721,7 @@ export const HomeDiskManager = () => {
           mountGeneration,
           currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
         });
-        return false;
+        return "superseded";
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
@@ -753,7 +758,7 @@ export const HomeDiskManager = () => {
             "This disk is from an online archive, so in-game saves are held temporarily and are lost when the app restarts or after a while. Copy it to a local folder to keep changes.",
         });
       }
-      return true;
+      return "mounted";
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -764,7 +769,7 @@ export const HomeDiskManager = () => {
           currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
           error: (error as Error).message,
         });
-        return false;
+        return "superseded";
       }
       setDriveErrors((prev) => ({
         ...prev,
@@ -795,11 +800,13 @@ export const HomeDiskManager = () => {
           demoMode: status.state === "DEMO_ACTIVE",
         },
       });
-      return false;
+      return "failed";
     } finally {
       setDriveMutationPending((prev) => ({ ...prev, [drive]: false }));
     }
   });
+  const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) =>
+    (await mountDiskOnDrive(drive, disk)) === "mounted";
 
   // HARD19-014 (D2): let the user persist a durable local copy of an archive/
   // CommoServe disk's session-only changes (offered on eject). Cancelling the
@@ -1711,9 +1718,8 @@ export const HomeDiskManager = () => {
     api,
     drive: "a",
     mount: async (disk) => {
-      if (!(await handleMountDisk("a", disk))) {
-        throw new Error(`${disk.name} was not mounted on drive A, so nothing was loaded.`);
-      }
+      const outcome = await mountDiskOnDrive("a", disk);
+      if (outcome !== "mounted") throw new DiskExplorerMountNotCompletedError(disk.name, outcome);
     },
     onToast: toast,
   });
