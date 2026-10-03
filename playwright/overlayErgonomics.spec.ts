@@ -350,6 +350,7 @@ test.describe("Now playing links on a phone", () => {
   const cases = [
     { profile: "compact", flags: 0x0014, tunesLine: 1 },
     { profile: "medium", flags: 0x0014, tunesLine: 1 },
+    { profile: "expanded", flags: 0x0014, tunesLine: 1 },
     { profile: "compact", flags: 0x003c, tunesLine: 2 },
   ] as const;
   for (const { profile, flags, tunesLine } of cases) {
@@ -404,10 +405,10 @@ test.describe("Now playing links on a phone", () => {
       });
       expect(composerCenter, "a tap at the composer's center reaches the composer").toBe(true);
 
+      // Every control in the card, not a chosen few: the composer's target grows upward over
+      // whatever sits on the line above it.
       const neighbors = [
-        composer,
-        tunes,
-        ...(await card.getByTestId("now-playing-ranking").getByRole("button").all()),
+        ...(await card.locator("button").all()),
         ...(await activeSlot(page).getByTestId("playback-transport-row").getByRole("button").all()),
       ];
       for (const neighbor of neighbors) {
