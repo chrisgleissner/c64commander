@@ -36,11 +36,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^24.13.6",
+    "@types/node": "^24.19.0",
     "@vitest/coverage-v8": "^4.1.11",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
