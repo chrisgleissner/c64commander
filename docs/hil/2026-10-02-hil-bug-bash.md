@@ -584,29 +584,33 @@ this change for three reasons:
   has not been measured.
 - Hidden pages would keep their test ids in the DOM, which breaks strict Playwright locators
   across the E2E suite.
-- It depends on switching `aria-hidden` and `inert` on mounted page slots. Android's WebView
-  accessibility tree has already been seen to keep stale content when a slot changes from hidden to
-  shown: see "Docs content missing from Android's accessibility tree" below.
+- It depends on switching `aria-hidden` and `inert` on mounted page slots, and Android's WebView
+  accessibility tree has an unexplained stale-content failure on Docs that is still open (see
+  "Docs content missing from Android's accessibility tree" below). That has to be understood
+  first.
 
-## Docs content missing from Android's accessibility tree
+## Docs content missing from Android's accessibility tree (open, predates this branch)
 
 The release showcase walk (in the separate distribution repository) failed on the emulator at
 `extendedWaitUntil: "Getting started"` after Settings, its Quick menu, and then the Docs tab. The
 card was drawn and present in Chromium's own accessibility tree (CDP `Accessibility.getFullAXTree`),
 but Android's tree, read by a new `maestro hierarchy` session minutes later, held only the card's
-empty container. Navigating away and back restored it. The same failure occurred with a build of
-the base commit, so it predates this branch; it reproduced in about one run in three with a
-four-step flow.
+empty container. Any later DOM change near the card restored it, as did navigating away and back.
 
-A DOM mutation log of the failing sequence shows the cause. `SwipeNavigationLayer` rendered an idle
-inactive page as an empty placeholder `div` with `aria-hidden` and `inert`, keyed by page index.
-When that page was selected, React reused the same element: it removed `aria-hidden` and `inert`
-and inserted the whole page into it in one commit. Android's accessibility bridge sometimes kept
-the earlier, empty version of that subtree.
+A build of the base commit failed the same way, so this branch did not introduce it. With a
+four-step flow it reproduced in about one run in three.
 
-The placeholder and the live slot now have different keys, so a selected page is always inserted
-as a new element. `SwipeNavigationLayer.test.tsx` checks that the live slot is not the placeholder
-element; it fails with the previous keys.
+Two explanations were tested and ruled out:
+
+- `SwipeNavigationLayer` reuses an idle page's hidden placeholder element for the live page,
+  removing `aria-hidden` and `inert` and inserting the page in the same commit. Giving the
+  placeholder and the live slot different keys did not stop the failure, so that change was taken
+  back out.
+- A framer-motion fade from `opacity: 0`. A probe element faded in the same way, at the top of the
+  Docs list, appeared in Android's tree at once.
+
+The cause is not yet known. It has been seen only through UiAutomator (Maestro) on the API 34
+emulator, not with TalkBack. The showcase flows navigate away and back when the card is missing.
 
 ## Hardware merge gate
 

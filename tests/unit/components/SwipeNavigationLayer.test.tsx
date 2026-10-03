@@ -537,30 +537,6 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.getByTestId("swipe-slot-config")).toHaveAttribute("data-slot-active", "true");
   });
 
-  it("brings a page in inside a new slot element instead of unhiding its placeholder", async () => {
-    const PlayNavigationProbe = () => {
-      const navigate = useNavigate();
-      return (
-        <button type="button" onClick={() => navigate("/play")}>
-          Go Play
-        </button>
-      );
-    };
-    renderLayer("/", <PlayNavigationProbe />);
-
-    await screen.findByText("Home Page");
-    const placeholder = screen.getByTestId("swipe-slot-play");
-    expect(placeholder).toHaveAttribute("aria-hidden", "true");
-
-    fireEvent.click(screen.getByRole("button", { name: "Go Play" }));
-
-    await screen.findByText("Play Page");
-    const liveSlot = screen.getByTestId("swipe-slot-play");
-    expect(liveSlot).not.toBe(placeholder);
-    expect(placeholder.isConnected).toBe(false);
-    expect(liveSlot).toHaveAttribute("aria-hidden", "false");
-  });
-
   it("suppresses inactive page render failures instead of showing the fallback", async () => {
     shouldThrowDocsPage = true;
     renderLayer("/");
