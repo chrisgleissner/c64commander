@@ -37,6 +37,7 @@ import {
   listFolderFromBrowseIndex,
   listHvscFolderTracks,
   listSongsRecursiveFromBrowseIndex,
+  forgetHvscBrowseIndexSnapshot,
   loadHvscBrowseIndexSnapshot,
   mergeSonglengthDurationsIntoBrowseIndex,
   saveHvscBrowseIndexSnapshot,
@@ -45,6 +46,9 @@ import {
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 
 const BROWSE_INDEX_STORAGE_KEY = "c64u_hvsc_browse_index:v1";
+
+// The store remembers the last snapshot it read or wrote; each test seeds its own storage.
+beforeEach(() => forgetHvscBrowseIndexSnapshot());
 const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
 describe("hvscBrowseIndexStore", () => {
@@ -1088,5 +1092,77 @@ describe("listSongsRecursiveFromBrowseIndex", () => {
       expect(result).toEqual({ totalSongs: 2 });
       expect(streamed.sort()).toEqual(["One.sid", "Two.sid"]);
     });
+  });
+});
+
+describe("hvscBrowseIndexStore remembered snapshot", () => {
+  const seedMediaIndex = async () => {
+    const { buildHvscBrowseIndexFromEntries: build } = await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const snapshot = build([
+      { path: "/GAMES/A.sid", name: "A.sid", type: "sid", durationSeconds: 60 },
+      { path: "/GAMES/B.sid", name: "B.sid", type: "sid", durationSeconds: 90 },
+    ]);
+    localStorage.clear();
+    localStorage.setItem(
+      MEDIA_INDEX_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        updatedAt: snapshot.updatedAt,
+        entries: Object.values(snapshot.songs).map((song) => ({
+          path: song.virtualPath,
+          name: song.fileName,
+          type: "sid",
+          durationSeconds: song.durationSeconds ?? null,
+        })),
+      }),
+    );
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("missing"));
+  };
+
+  it("reads storage once for two loads, and gives each caller its own songs map", async () => {
+    await seedMediaIndex();
+    const getItem = vi.spyOn(Storage.prototype, "getItem");
+    const first = await loadHvscBrowseIndexSnapshot();
+    const readsAfterFirst = getItem.mock.calls.length;
+    const second = await loadHvscBrowseIndexSnapshot();
+
+    expect(getItem.mock.calls.length).toBe(readsAfterFirst);
+    expect(second?.songs["/GAMES/A.sid"]).toBe(first?.songs["/GAMES/A.sid"]);
+    delete first!.songs["/GAMES/A.sid"];
+    expect(second?.songs["/GAMES/A.sid"]).toBeDefined();
+    getItem.mockRestore();
+  });
+
+  it("reads storage again after a save", async () => {
+    await seedMediaIndex();
+    const first = await loadHvscBrowseIndexSnapshot();
+    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error("disk full") as never);
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as never);
+    await saveHvscBrowseIndexSnapshot(first!);
+    const getItem = vi.spyOn(Storage.prototype, "getItem");
+
+    await loadHvscBrowseIndexSnapshot();
+
+    expect(getItem).toHaveBeenCalled();
+    getItem.mockRestore();
+  });
+
+  it("reports no change and leaves songs alone when every duration is already there", async () => {
+    await seedMediaIndex();
+    const { mergeSonglengthDurations } = await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const base = await loadHvscBrowseIndexSnapshot();
+    const songA = base!.songs["/GAMES/A.sid"];
+    const unchanged = mergeSonglengthDurations(base, {
+      pathToSeconds: new Map([
+        ["/GAMES/A.sid", [60]],
+        ["/GAMES/B.sid", [90]],
+      ]),
+    } as never);
+    expect(unchanged.changed).toBe(false);
+    expect(unchanged.snapshot.songs["/GAMES/A.sid"]).toBe(songA);
+
+    const changed = mergeSonglengthDurations(base, { pathToSeconds: new Map([["/GAMES/A.sid", [61]]]) } as never);
+    expect(changed.changed).toBe(true);
+    expect(changed.snapshot.songs["/GAMES/A.sid"].durationSeconds).toBe(61);
   });
 });

@@ -9,7 +9,7 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import {
   loadHvscBrowseIndexSnapshot,
-  mergeSonglengthDurationsIntoBrowseIndex,
+  mergeSonglengthDurations,
   saveHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
@@ -294,12 +294,13 @@ const syncHvscBrowseProjection = async (trigger: "cold-start" | "config-change")
   // instead of replacing it outright - a blind rebuild-and-overwrite here wiped
   // that metadata every time songlengths reloaded. See HARD9-046.
   const existingSnapshot = await loadHvscBrowseIndexSnapshot();
-  const projection = mergeSonglengthDurationsIntoBrowseIndex(existingSnapshot, snapshot);
-  await saveHvscBrowseIndexSnapshot(projection);
+  const { snapshot: projection, changed } = mergeSonglengthDurations(existingSnapshot, snapshot);
+  if (changed) await saveHvscBrowseIndexSnapshot(projection);
   addLog("info", "HVSC browse projection synced from Songlengths", {
     service: "hvsc-songlengths",
     trigger,
     songCount: snapshot.pathToSeconds.size,
+    changed,
   });
 };
 
