@@ -1565,6 +1565,50 @@ describe("hvscIngestionRuntime", () => {
     );
   });
 
+  const nativeUpdatesFrom5 = (updateVersion: number) => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "ready",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+  };
+
+  it("does not report a Stop as a cancel when it lands after the last archive was applied", async () => {
+    nativeUpdatesFrom5(6);
+    let stopResult: boolean | null = null;
+    nativeProgressListenerRemove.mockImplementationOnce(async () => {
+      stopResult = await cancelHvscInstall("token-stop-after-last-archive");
+    });
+
+    await installOrUpdateHvsc("token-stop-after-last-archive");
+
+    expect(stopResult).toBe(false);
+    expect(lastIngestionStatePatch()).toEqual(
+      expect.objectContaining({ ingestionState: "ready", installedVersion: 6 }),
+    );
+  });
+
+  it("reports a Stop that lands after the first of two archives was applied as a cancel", async () => {
+    nativeUpdatesFrom5(7);
+    let stopResult: boolean | null = null;
+    nativeProgressListenerRemove.mockImplementationOnce(async () => {
+      stopResult = await cancelHvscInstall("token-stop-between-archives");
+    });
+
+    await expect(installOrUpdateHvsc("token-stop-between-archives")).rejects.toThrow();
+
+    expect(stopResult).toBe(true);
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
+  });
+
   it("reports Canceled when an update is canceled after it started writing into the installed library", async () => {
     installedLibraryWithCachedUpdate();
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {

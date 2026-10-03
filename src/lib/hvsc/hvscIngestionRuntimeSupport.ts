@@ -25,6 +25,7 @@ type HvscIngestionRuntimeState = {
   ingestionRun: number;
   canceledIngestionRun: number | null;
   ingestionRunEnded: boolean;
+  finalArchiveInProgress: boolean;
 };
 
 type IngestionOutcome = { ingestionState: HvscIngestionState; ingestionError: string | null };
@@ -39,6 +40,7 @@ const runtimeState: HvscIngestionRuntimeState = {
   ingestionRun: 0,
   canceledIngestionRun: null,
   ingestionRunEnded: false,
+  finalArchiveInProgress: false,
 };
 
 const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
@@ -49,6 +51,7 @@ export const getHvscIngestionRuntimeState = () => runtimeState;
 export const recordStateBeforeIngestion = () => {
   runtimeState.ingestionRun += 1;
   runtimeState.ingestionRunEnded = false;
+  runtimeState.finalArchiveInProgress = false;
   const { ingestionState, ingestionError } = loadHvscState();
   runtimeState.stateBeforeIngestion = { ingestionState, ingestionError: ingestionError ?? null };
 };
@@ -58,8 +61,15 @@ export const markInstalledLibraryTouched = () => {
   runtimeState.installedLibraryTouched = true;
 };
 
+/** Called as each planned archive starts; `isFinal` marks the last one the run will apply. */
+export const beginPlannedArchive = (isFinal: boolean) => {
+  runtimeState.finalArchiveInProgress = isFinal;
+};
+
 /** Called once an archive has been ingested completely, so the library on disk is whole again. */
 export const markInstalledLibraryConsistent = () => {
+  // Once the last planned archive is applied, the run's outcome is written and a Stop cannot change it.
+  if (runtimeState.finalArchiveInProgress) runtimeState.ingestionRunEnded = true;
   runtimeState.installedLibraryTouched = false;
   runtimeState.stateBeforeIngestion = { ingestionState: "ready", ingestionError: null };
 };
@@ -246,6 +256,7 @@ const ingestionIdleListeners = new Set<() => void>();
 export const markIngestionRuntimeIdle = () => {
   runtimeState.activeIngestionRunning = false;
   runtimeState.ingestionRunEnded = false;
+  runtimeState.finalArchiveInProgress = false;
   runtimeState.installedLibraryTouched = false;
   runtimeState.stateBeforeIngestion = null;
   // Only one ingestion runs at a time, so a token left here is a cancel aimed at a token the finished
