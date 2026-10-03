@@ -7,11 +7,7 @@
  */
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import {
-  loadHvscBrowseIndexSnapshot,
-  mergeSonglengthDurations,
-  saveHvscBrowseIndexSnapshot,
-} from "@/lib/hvsc/hvscBrowseIndexStore";
+import { loadHvscBrowseIndexSnapshot, saveHvscBrowseIndexSnapshot } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -26,6 +22,7 @@ import {
 } from "@/lib/songlengths";
 import { loadSidRadioEnabled } from "@/lib/config/appSettings";
 import { rebuildMd548PathIndexFromFiles } from "@/lib/sidRadio/md5PathIndex";
+import { mergeSonglengthDurations } from "./hvscSonglengthProjection";
 
 const HVSC_WORK_DIR = "hvsc";
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;

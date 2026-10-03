@@ -87,6 +87,10 @@ vi.mock("@/lib/songlengths", () => ({
 }));
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => browseIndexMocks);
+vi.mock("@/lib/hvsc/hvscSonglengthProjection", () => ({
+  mergeSonglengthDurations: browseIndexMocks.mergeSonglengthDurations,
+  mergeSonglengthDurationsIntoBrowseIndex: browseIndexMocks.mergeSonglengthDurationsIntoBrowseIndex,
+}));
 
 const hvscStateMocks = vi.hoisted(() => ({
   loadHvscState: vi.fn(() => ({

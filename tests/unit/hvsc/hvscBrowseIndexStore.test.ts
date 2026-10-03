@@ -39,11 +39,11 @@ import {
   listSongsRecursiveFromBrowseIndex,
   forgetHvscBrowseIndexSnapshot,
   loadHvscBrowseIndexSnapshot,
-  mergeSonglengthDurationsIntoBrowseIndex,
   saveHvscBrowseIndexSnapshot,
   streamSongsRecursiveFromBrowseIndex,
   verifyHvscBrowseIndexIntegrity,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { mergeSonglengthDurationsIntoBrowseIndex } from "@/lib/hvsc/hvscSonglengthProjection";
 
 const BROWSE_INDEX_STORAGE_KEY = "c64u_hvsc_browse_index:v1";
 
@@ -1149,7 +1149,7 @@ describe("hvscBrowseIndexStore remembered snapshot", () => {
 
   it("reports no change and leaves songs alone when every duration is already there", async () => {
     await seedMediaIndex();
-    const { mergeSonglengthDurations } = await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const { mergeSonglengthDurations } = await import("@/lib/hvsc/hvscSonglengthProjection");
     const base = await loadHvscBrowseIndexSnapshot();
     const songA = base!.songs["/GAMES/A.sid"];
     const unchanged = mergeSonglengthDurations(base, {
