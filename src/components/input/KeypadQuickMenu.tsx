@@ -213,7 +213,15 @@ export function KeypadQuickMenu() {
               variant="ghost"
               className="justify-start"
               data-testid="keypad-quick-menu-toast-action"
-              onClick={() => run(toastAction.press)}
+              onClick={() =>
+                run(() => {
+                  if (toastAction.press()) return;
+                  toast({
+                    title: "Notification already closed",
+                    description: `${toastAction.label} did not run.`,
+                  });
+                })
+              }
             >
               Notification: {toastAction.label}
             </Button>
