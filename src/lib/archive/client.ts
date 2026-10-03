@@ -146,6 +146,20 @@ const parseJsonResponse = async <T>(response: Response): Promise<T> => {
   return payload as T;
 };
 
+// A request the caller aborted (the sheet closed, a newer search replaced it) is not a failure.
+const logArchiveFailure = (
+  message: string,
+  error: Error,
+  signal: AbortSignal | undefined,
+  context: Record<string, unknown>,
+) => {
+  if (signal?.aborted) {
+    addLog("info", `${message}: canceled by the caller`, buildErrorLogDetails(error, context));
+    return;
+  }
+  addErrorLog(message, buildErrorLogDetails(error, context));
+};
+
 export abstract class BaseArchiveClient implements ArchiveClient {
   private readonly resolvedConfig: ArchiveClientResolvedConfig;
   private readonly fetchImpl: ArchiveFetch;
@@ -295,19 +309,16 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       return result;
     } catch (error) {
       const err = error as Error;
-      addErrorLog(
-        "Archive request failed",
-        buildErrorLogDetails(err, {
-          sourceId: this.resolvedConfig.id,
-          sourceName: this.resolvedConfig.name,
-          host: this.getHost(),
-          clientType: this.constructor.name,
-          operation: kind,
-          requestUrl: url,
-          headers: sanitizeArchiveHeadersForLogging(headers),
-          timingMs: Math.round(performance.now() - startedAt),
-        }),
-      );
+      logArchiveFailure("Archive request failed", err, options?.signal, {
+        sourceId: this.resolvedConfig.id,
+        sourceName: this.resolvedConfig.name,
+        host: this.getHost(),
+        clientType: this.constructor.name,
+        operation: kind,
+        requestUrl: url,
+        headers: sanitizeArchiveHeadersForLogging(headers),
+        timingMs: Math.round(performance.now() - startedAt),
+      });
       throw new Error(`${this.resolvedConfig.name} archive request failed for ${this.getHost()}: ${err.message}`);
     }
   }
@@ -391,18 +402,15 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       };
     } catch (error) {
       const err = error as Error;
-      addErrorLog(
-        "Archive binary download failed",
-        buildErrorLogDetails(err, {
-          sourceId: this.resolvedConfig.id,
-          sourceName: this.resolvedConfig.name,
-          host: this.getHost(),
-          clientType: this.constructor.name,
-          requestUrl: url,
-          headers: sanitizeArchiveHeadersForLogging(headers),
-          timingMs: Math.round(performance.now() - startedAt),
-        }),
-      );
+      logArchiveFailure("Archive binary download failed", err, options?.signal, {
+        sourceId: this.resolvedConfig.id,
+        sourceName: this.resolvedConfig.name,
+        host: this.getHost(),
+        clientType: this.constructor.name,
+        requestUrl: url,
+        headers: sanitizeArchiveHeadersForLogging(headers),
+        timingMs: Math.round(performance.now() - startedAt),
+      });
       throw new Error(`${this.resolvedConfig.name} archive download failed for ${this.getHost()}: ${err.message}`);
     }
   }

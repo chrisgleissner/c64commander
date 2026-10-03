@@ -233,6 +233,11 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, [bumpIdle, mode]);
+  // The on-screen controls sit outside the stage, whose pointer handlers are what otherwise keep the view awake.
+  const withIdleReset = (action: () => void) => {
+    bumpIdle();
+    action();
+  };
 
   useImperativeHandle(
     ref,
@@ -601,7 +606,11 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       {/* Minimap — only meaningful once zoomed in. */}
       {videoLive && viewport.scale > 1.05 && (
         <div className="absolute bottom-2 left-2 z-10">
-          <AvMirrorMinimap viewport={viewport} onSeek={(cx, cy) => centerOn(cx, cy)} session={session} />
+          <AvMirrorMinimap
+            viewport={viewport}
+            onSeek={(cx, cy) => withIdleReset(() => centerOn(cx, cy))}
+            session={session}
+          />
         </div>
       )}
 
@@ -614,9 +623,9 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Zoom out"
-            onClick={() => zoomBy(1 / ZOOM_STEP)}
+            onClick={() => withIdleReset(() => zoomBy(1 / ZOOM_STEP))}
             data-testid="av-immersive-zoom-out"
           >
             <Minus className="h-4 w-4" />
@@ -624,9 +633,9 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Zoom in"
-            onClick={() => zoomBy(ZOOM_STEP)}
+            onClick={() => withIdleReset(() => zoomBy(ZOOM_STEP))}
             data-testid="av-immersive-zoom-in"
           >
             <Plus className="h-4 w-4" />
@@ -634,9 +643,9 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Fit to screen"
-            onClick={reset}
+            onClick={() => withIdleReset(reset)}
             data-testid="av-immersive-fit"
           >
             <Maximize className="h-4 w-4" />
@@ -644,11 +653,11 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant={follow ? "default" : "ghost"}
-            className={cn("h-8 w-8", follow ? "" : "text-media-on-scrim hover:bg-media-on-scrim/15")}
+            className={cn(!follow && "text-media-on-scrim hover:bg-media-on-scrim/15")}
             aria-label="Follow motion"
             aria-pressed={follow}
             title={follow ? "Following motion — press and hold the picture to lock on" : "Follow motion"}
-            onClick={() => setFollow((value) => !value)}
+            onClick={() => withIdleReset(() => setFollow((value) => !value))}
             data-testid="av-immersive-follow"
           >
             <Crosshair className="h-4 w-4" />
@@ -656,7 +665,6 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="sm"
             variant={adjust ? "default" : "secondary"}
-            className="h-8"
             aria-pressed={adjust}
             aria-label={adjust ? "Done adjusting the view" : "Fit and pan the view"}
             onClick={toggleMode}

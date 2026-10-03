@@ -126,7 +126,7 @@ export const getHvscDisplayTitle = (
 export const getHvscDisplayAuthor = (song: Pick<HvscBrowseIndexedSong, "displayAuthorSeed" | "canonicalAuthor">) =>
   normalizeDisplayValue(song.canonicalAuthor) ?? normalizeDisplayValue(song.displayAuthorSeed) ?? null;
 
-const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+export const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 const normalizeFolderPath = (path: string) => {
   const normalized = normalizePath(path || "/");
   if (normalized.length > 1 && normalized.endsWith("/")) return normalized.slice(0, -1);
@@ -207,7 +207,7 @@ const buildFullSearchText = (
     .join(" ")
     .toLowerCase();
 
-const createSeededSong = (
+export const createSeededSong = (
   virtualPath: string,
   durationsSeconds: number[] | null | undefined,
 ): HvscBrowseIndexedSong => {
@@ -278,7 +278,7 @@ const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => ({
   trackSubsongs: entry.durationSeconds != null ? [{ songNr: 1, isDefault: true }] : null,
 });
 
-const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
+export const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
   const folderMap = new Map<string, { folders: Set<string>; songs: Set<string> }>();
   const ensureFolder = (path: string) => {
     const normalized = normalizeFolderPath(path);
@@ -554,6 +554,7 @@ const deleteFilesystemFullSnapshot = async () => {
 };
 
 export const clearHvscBrowseIndexSnapshot = async () => {
+  forgetHvscBrowseIndexSnapshot();
   if (typeof window !== "undefined") {
     try {
       await Filesystem.deleteFile({
@@ -612,6 +613,16 @@ const ensureFilesystemIndexDirectory = async () => {
   }
 };
 
+const readStoredBrowseIndexSnapshot = async () => {
+  if (typeof window !== "undefined") {
+    const filesystemSnapshot = await readFilesystemSnapshot();
+    if (filesystemSnapshot) return filesystemSnapshot;
+    const filesystemMediaIndexSnapshot = await readFilesystemMediaIndexSnapshot();
+    if (filesystemMediaIndexSnapshot) return filesystemMediaIndexSnapshot;
+  }
+  return readLocalStorageSnapshot() ?? readLocalStorageMediaIndexSnapshot();
+};
+
 const readLocalStorageSnapshot = () => {
   if (typeof localStorage === "undefined") return null;
   return parseSnapshot(localStorage.getItem(STORAGE_KEY));
@@ -637,18 +648,36 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
   localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, JSON.stringify(buildPersistedMediaIndexSnapshot(snapshot)));
 };
 
+/*
+ * The snapshot last read from storage, until the next write or clear. Startup read and parsed the
+ * 13 MB media index twice, once for the media index and once for the Songlengths projection: about
+ * 1.3 s of main-thread parsing each on a Pixel 4. Callers get their own songs and folders maps, so one
+ * caller's replacements, such as an ingestion canceled half way, never show in what another loads; the
+ * song objects are shared, and nothing outside parsing changes one in place.
+ */
+let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
+
+const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
+  ...snapshot,
+  songs: { ...snapshot.songs },
+  folders: { ...snapshot.folders },
+});
+
+const rememberSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
+  lastStoredSnapshot = snapshot ? copySnapshot(snapshot) : null;
+};
+
+/** Drops the remembered snapshot, so the next load reads storage again. */
+export const forgetHvscBrowseIndexSnapshot = () => rememberSnapshot(null);
+
 export const loadHvscBrowseIndexSnapshot = async () => {
+  if (lastStoredSnapshot) return copySnapshot(lastStoredSnapshot);
   return runWithHvscPerfScope(
     "browse:load-snapshot",
     async () => {
-      if (typeof window !== "undefined") {
-        const filesystemSnapshot = await readFilesystemSnapshot();
-        if (filesystemSnapshot) return filesystemSnapshot;
-        const filesystemMediaIndexSnapshot = await readFilesystemMediaIndexSnapshot();
-        if (filesystemMediaIndexSnapshot) return filesystemMediaIndexSnapshot;
-        return readLocalStorageSnapshot() ?? readLocalStorageMediaIndexSnapshot();
-      }
-      return readLocalStorageSnapshot() ?? readLocalStorageMediaIndexSnapshot();
+      const loaded = await readStoredBrowseIndexSnapshot();
+      rememberSnapshot(loaded);
+      return loaded;
     },
     {
       platform: typeof window !== "undefined" ? "browser" : "node",
@@ -675,6 +704,13 @@ export const saveHvscBrowseIndexSnapshot = async (
     songs: snapshot.songs,
     folders: reuseFolders ? snapshot.folders : buildFoldersFromSongs(snapshot.songs),
   };
+  // Forgotten, not remembered: what is read back is normalized (a seeded song's metadataStatus, for
+  // one), so only a snapshot read from storage stands in for reading it again.
+  forgetHvscBrowseIndexSnapshot();
+  await persistHvscBrowseIndexSnapshot(normalized);
+};
+
+const persistHvscBrowseIndexSnapshot = async (normalized: HvscBrowseIndexSnapshot) => {
   const persistFullSnapshot = shouldPersistFullSnapshot(normalized);
   if (typeof window !== "undefined") {
     try {
@@ -760,34 +796,6 @@ export const buildHvscBrowseIndexFromSonglengthSnapshot = (
     songs,
     folders: buildFoldersFromSongs(songs),
   };
-};
-
-/**
- * Merges songlengths durations into an existing browse index snapshot in place,
- * instead of replacing it with a fresh duration-only projection built purely from
- * buildHvscBrowseIndexFromSonglengthSnapshot. A song already present in
- * [baseSnapshot] (e.g. one that was just ingested, carrying sidMetadata and
- * trackSubsongs parsed straight from its file) only has its duration fields
- * updated; a song with no existing entry (e.g. songlengths ran before any
- * ingestion has ever populated the index) is added as a seeded record, matching
- * the previous behavior for that case. See HARD9-046.
- */
-export const mergeSonglengthDurationsIntoBrowseIndex = (
-  baseSnapshot: HvscBrowseIndexSnapshot | null,
-  songlengthSnapshot: InMemorySongLengthSnapshot,
-): HvscBrowseIndexSnapshot => {
-  const snapshot = baseSnapshot ?? createEmptyHvscBrowseIndexSnapshot();
-  songlengthSnapshot.pathToSeconds.forEach((durationsSeconds, virtualPath) => {
-    const normalizedPath = normalizePath(virtualPath);
-    if (snapshot.songs[normalizedPath]) {
-      updateHvscBrowseSong(snapshot, normalizedPath, { durationsSeconds });
-    } else {
-      snapshot.songs[normalizedPath] = createSeededSong(normalizedPath, durationsSeconds);
-    }
-  });
-  snapshot.updatedAt = new Date().toISOString();
-  snapshot.folders = buildFoldersFromSongs(snapshot.songs);
-  return snapshot;
 };
 
 export const updateHvscBrowseSong = (

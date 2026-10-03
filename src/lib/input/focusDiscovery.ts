@@ -27,6 +27,7 @@ import {
   SECTION_LABEL_ATTR,
   SKIP_ATTR,
   TABBAR_SCOPE_SELECTOR,
+  createDiscoveryScan,
   sortIntoReadingOrder,
   discoverInteractiveElements,
   isFocusDisabled,
@@ -36,6 +37,7 @@ import {
   nearestGroupElement,
   resolveActiveScope,
   type ActiveScope,
+  type DiscoveryScan,
 } from "./discovery";
 
 /**
@@ -130,6 +132,14 @@ const RETURN_TO_OPENER_WINDOW_MS = 5000;
  * The visible title a dialog names itself by. Without it a dialog's breadcrumb in the keypad
  * guidance bar fell through to its presentation attribute and read "sheet" or "dialog".
  */
+const scheduleAfterNextPaint = (run: () => void): void => {
+  if (typeof requestAnimationFrame !== "function") {
+    queueMicrotask(run);
+    return;
+  }
+  requestAnimationFrame(() => setTimeout(run, 0));
+};
+
 const labelledByText = (element: Element): string | undefined => {
   const ids = element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [];
   const text = ids
@@ -232,14 +242,28 @@ export class FocusDiscoveryEngine {
     return !(this.lastScope !== null && skipped.contains(this.lastScope));
   }
 
-  /** Coalesces many DOM mutations into a single microtask re-scan. */
+  /**
+   * Coalesces DOM mutations into one re-scan after the next paint. Run in a microtask, the scan landed
+   * before the first paint of every page and dialog: on a Pixel 4, 70 to 135 ms each, run up to seven
+   * times while a page loaded. A key runs a pending scan first (see flushPendingRefresh).
+   */
   scheduleRefresh(): void {
     if (!this.started || this.scheduled) return;
     this.scheduled = true;
-    queueMicrotask(() => {
-      this.scheduled = false;
-      if (this.started) this.refresh();
-    });
+    scheduleAfterNextPaint(() => this.flushPendingRefresh());
+  }
+
+  /** Re-scans now, for a caller that has just changed the DOM itself; any scheduled re-scan is dropped. */
+  refreshNow(): void {
+    this.scheduled = false;
+    if (this.started) this.refresh();
+  }
+
+  /** Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM. */
+  flushPendingRefresh(): void {
+    if (!this.scheduled) return;
+    this.scheduled = false;
+    if (this.started) this.refresh();
   }
 
   /** The live DOM element for a ring id (explicit resolver or captured element). */
@@ -265,14 +289,15 @@ export class FocusDiscoveryEngine {
       this.onAfterAssemble?.();
       return;
     }
-    const scope = resolveActiveScope(this.doc);
+    const scan = createDiscoveryScan();
+    const scope = resolveActiveScope(this.doc, scan);
     const previousScope = this.lastScope;
     const scopeChanged = previousScope !== scope.element;
     const leavingId = this.controller.current()?.id;
     const leavingElement = leavingId ? this.elementForId(leavingId) : null;
     if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
-    const nodes = this.collectRingNodes(scope);
+    const nodes = this.collectRingNodes(scope, scan);
     const items = this.assemble(nodes, scope.element);
 
     this.applyShims(items.shimTargets);
@@ -340,17 +365,17 @@ export class FocusDiscoveryEngine {
     if (this.controller.setCurrent(pending.id)) this.pendingReturn = null;
   }
 
-  private collectRingNodes(scope: ActiveScope): RingNode[] {
+  private collectRingNodes(scope: ActiveScope, scan: DiscoveryScan): RingNode[] {
     const scopeEl = scope.element;
     const excludeSubtrees = scope.kind === "page" ? [TABBAR_SCOPE_SELECTOR] : [];
-    const discovered = discoverInteractiveElements(scopeEl, { excludeSubtrees });
+    const discovered = discoverInteractiveElements(scopeEl, { excludeSubtrees, scan });
     const discoveredSet = new Set<HTMLElement>(discovered);
     const elements: HTMLElement[] = [...discovered];
 
     // The persistent tab bar is its own scope, appended after page content.
     const tabbar = scope.kind === "page" ? this.doc.querySelector(TABBAR_SCOPE_SELECTOR) : null;
-    if (tabbar instanceof HTMLElement && isFocusVisible(tabbar)) {
-      elements.push(...discoverInteractiveElements(tabbar));
+    if (tabbar instanceof HTMLElement && isFocusVisible(tabbar, scan)) {
+      elements.push(...discoverInteractiveElements(tabbar, { scan }));
     }
 
     const inScope = (element: HTMLElement): boolean =>
@@ -367,7 +392,7 @@ export class FocusDiscoveryEngine {
         skipElements.add(element);
         continue;
       }
-      if (!inScope(element) || !isFocusVisible(element) || isSkipped(element, scopeEl)) continue;
+      if (!inScope(element) || !isFocusVisible(element, scan) || isSkipped(element, scopeEl)) continue;
       registrationByElement.set(element, registration);
       if (registration.descriptor.kind === "group") groupElements.add(element);
       // An explicitly-registered element that discovery missed (e.g. a non-
@@ -381,7 +406,7 @@ export class FocusDiscoveryEngine {
       ...Array.from(scopeEl.querySelectorAll(GROUP_CONTAINER_SELECTOR)),
     ].filter(
       (element): element is HTMLElement =>
-        element instanceof HTMLElement && isFocusVisible(element) && !isSkipped(element, scopeEl),
+        element instanceof HTMLElement && isFocusVisible(element, scan) && !isSkipped(element, scopeEl),
     );
     // A labelled container becomes a group only when it is the INNERMOST group
     // container — it must not contain another group container (explicit or
@@ -431,8 +456,11 @@ export class FocusDiscoveryEngine {
       .filter((element) => !isFocusDisabled(element) || groupElements.has(element));
     const inTabbar = (element: HTMLElement): boolean => tabbar instanceof HTMLElement && tabbar.contains(element);
     const ordered = [
-      ...sortIntoReadingOrder(kept.filter((element) => !inTabbar(element))),
-      ...sortIntoReadingOrder(kept.filter(inTabbar)),
+      ...sortIntoReadingOrder(
+        kept.filter((element) => !inTabbar(element)),
+        scan,
+      ),
+      ...sortIntoReadingOrder(kept.filter(inTabbar), scan),
     ];
 
     return ordered

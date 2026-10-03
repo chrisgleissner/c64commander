@@ -87,10 +87,24 @@ describe("committed stream perf thresholds", () => {
    * measurement the machine produced. A genuine regression still fails, because
    * slower code has no fast run for the maximum to find.
    */
-  it("aggregates benchmark repeats by their best sample, not their median", () => {
-    const script = readFileSync(resolve(process.cwd(), "scripts/assert-stream-perf.mjs"), "utf8");
-    expect(script).toMatch(/current\[name\] = Math\.round\(Math\.max\(\.\.\.values\)\)/);
-    expect(script).not.toMatch(/current\[name\] = Math\.round\(median\(values\)\)/);
+  it("aggregates benchmark repeats by their best sample, not their median", async () => {
+    const { collectBestOf } = (await import("../../../scripts/lib/streamPerfCompare.mjs")) as {
+      collectBestOf: (input: {
+        repeats: number;
+        trees: string[];
+        runBench: (tree: string) => Record<string, number>;
+      }) => Record<string, Record<string, number>>;
+    };
+    const governorSamples = [256743, 574000, 552000];
+    let run = 0;
+
+    const { head } = collectBestOf({
+      repeats: 3,
+      trees: ["head"],
+      runBench: () => ({ "governor tick": governorSamples[run++] }),
+    });
+
+    expect(head["governor tick"]).toBe(574000);
   });
 
   // Asserted through the comparison itself rather than by matching the script's source: the

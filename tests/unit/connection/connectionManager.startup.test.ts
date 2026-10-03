@@ -471,4 +471,122 @@ describe("connectionManager startup coverage", () => {
     await vi.advanceTimersByTimeAsync(200);
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
+
+  const answerInfoAfter = (delayMs: number) => (_input: unknown, init?: RequestInit) =>
+    new Promise<Response>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        resolve(
+          new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }, delayMs);
+      init?.signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+      });
+    });
+
+  const recordStates = (
+    subscribeConnection: (listener: () => void) => () => void,
+    getConnectionSnapshot: () => { state: string },
+  ) => {
+    const states: string[] = [];
+    subscribeConnection(() => states.push(getConnectionSnapshot().state));
+    return states;
+  };
+
+  it.each(["startup", "resume", "settings"] as const)(
+    "lets a %s probe still in flight when the discovery window expires succeed instead of entering Demo Mode",
+    async (trigger) => {
+      const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, subscribeConnection } =
+        await import("../../../src/lib/connection/connectionManager");
+
+      localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+      vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+      vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+      vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+      vi.mocked(fetch).mockImplementation(answerInfoAfter(900));
+
+      await initializeConnectionManager();
+      const states = recordStates(subscribeConnection, getConnectionSnapshot);
+      void discoverConnection(trigger);
+
+      await vi.advanceTimersByTimeAsync(700);
+      expect(getConnectionSnapshot().state).toBe("DISCOVERING");
+
+      await vi.advanceTimersByTimeAsync(300);
+      expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+      expect(states).not.toContain("DEMO_ACTIVE");
+      expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+      expect(startMockServer).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not show a reachable device as offline when Demo Mode is off and the window expires mid-probe", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, subscribeConnection } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+    vi.mocked(fetch).mockImplementation(answerInfoAfter(900));
+
+    await initializeConnectionManager();
+    const states = recordStates(subscribeConnection, getConnectionSnapshot);
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(states).not.toContain("OFFLINE_NO_DEMO");
+    expect(states).not.toContain("DEMO_ACTIVE");
+  });
+
+  const enableDemoFallback = () => {
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+  };
+
+  it("falls back to Demo Mode when the probe in flight at window expiry times out", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { loadDiscoveryProbeTimeoutMs } = await import("../../../src/lib/config/appSettings");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    enableDemoFallback();
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(2500);
+    vi.mocked(fetch).mockImplementation(answerInfoAfter(60_000));
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+
+    await vi.advanceTimersByTimeAsync(2400);
+    expect(getConnectionSnapshot().state).toBe("DISCOVERING");
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+
+  it("stops waiting one probe timeout after the window for an in-flight probe whose own deadline is longer", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { loadDiscoveryProbeTimeoutMs } = await import("../../../src/lib/config/appSettings");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    enableDemoFallback();
+    const startedAt = Date.now();
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockImplementation(() => (Date.now() - startedAt < 600 ? 30_000 : 2500));
+    vi.mocked(fetch).mockImplementation(answerInfoAfter(60_000));
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+
+    await vi.advanceTimersByTimeAsync(600 + 2500 - 100);
+    expect(getConnectionSnapshot().state).toBe("DISCOVERING");
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
 });

@@ -54,8 +54,11 @@ describe("page-shell bounded viewport contract", () => {
     // whole class. (The .page-shell comment must not mention the literal variable name.)
     expect(block).not.toMatch(/--app-tab-bar-reserved-height/);
     expect(block).toMatch(/padding-bottom:\s*var\(--display-profile-page-padding-y\)\s*;/);
-    // The tab-bar reservation lives in the swipe viewport — the one correct place.
-    expect(swipeNavSource).toContain('height: "calc(100dvh - var(--app-tab-bar-reserved-height))"');
+    // The tab-bar reservation lives in the swipe viewport — the one correct place. So does the
+    // toast strip's, which is 0px while no toast is showing.
+    expect(swipeNavSource).toContain(
+      'height: "calc(100dvh - var(--app-tab-bar-reserved-height) - var(--app-toast-reserved-height, 0px))"',
+    );
   });
 
   // The native SafeArea plugin overwrites these four inline on <html> from the Android window

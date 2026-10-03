@@ -174,7 +174,8 @@ const writeLogs = (logs: LogEntry[]) => {
   persistLogsNow(cachedLogs);
 };
 
-const UNREACHABLE_DEVICE_PATTERN = /host unreachable|failed to fetch|failed to connect|timed out|device not connected/i;
+const UNREACHABLE_DEVICE_PATTERN =
+  /host unreachable|did not answer within|failed to fetch|failed to connect|timed out|device not connected/i;
 
 // With the phone known to have no network, failing to reach the device is the expected state rather than
 // a fault, whichever of the many call sites reports it: it is still logged, as info.

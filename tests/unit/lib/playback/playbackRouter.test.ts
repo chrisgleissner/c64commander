@@ -50,7 +50,7 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 }));
 
 vi.mock("@/lib/disks/diskMount", () => ({
-  mountDiskToDrive: vi.fn(async () => undefined),
+  mountDiskToDrive: vi.fn(async () => ({ persistence: "device-native" as const })),
   resolveLocalDiskBlob: vi.fn(),
 }));
 
@@ -83,6 +83,7 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
       mountDriveUpload: vi.fn(async () => ({ errors: [] })),
       machineReset: vi.fn(async () => ({ errors: [] })),
       machineReboot: vi.fn(async () => ({ errors: [] })),
+      getDeviceHost: vi.fn(() => "c64u"),
     } as unknown as C64API;
   };
 

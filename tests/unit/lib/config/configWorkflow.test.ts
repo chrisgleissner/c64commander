@@ -220,6 +220,16 @@ describe("configWorkflow", () => {
     );
   });
 
+  it("logs a Stop-canceled remote apply as canceled, not as a failed workflow", async () => {
+    const { ConfigApplyCancelledError } = await import("@/lib/config/configApplyCancellation");
+    const runApplyRemoteConfig = vi.fn().mockRejectedValue(new ConfigApplyCancelledError("screen read"));
+    const workflow = createConfigWorkflow({ readRemoteFile: vi.fn(), writeRemoteFile: vi.fn(), runApplyRemoteConfig });
+
+    await expect(workflow.applyRemoteSnapshot("/Temp/config.cfg")).rejects.toBeInstanceOf(ConfigApplyCancelledError);
+
+    expect(addErrorLogSpy).not.toHaveBeenCalledWith("Config workflow failed", expect.anything());
+  });
+
   it("selects the more recently modified file when multiple changed cfg files appear in /Temp", () => {
     // Exercises the sort comparator (lines 155-158) whose body only runs with multiple candidates
     const file = detectUpdatedTempConfigFile(

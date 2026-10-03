@@ -34,6 +34,20 @@ vi.mock("@/lib/tracing/traceFormatter", async () => {
   };
 });
 
+const heatMapPopupProps = vi.hoisted(() => ({ calls: [] as Array<{ open: boolean; variant: string }> }));
+vi.mock("@/components/diagnostics/HeatMapPopup", async () => {
+  const actual = await vi.importActual<typeof import("@/components/diagnostics/HeatMapPopup")>(
+    "@/components/diagnostics/HeatMapPopup",
+  );
+  return {
+    ...actual,
+    HeatMapPopup: (props: Parameters<typeof actual.HeatMapPopup>[0]) => {
+      heatMapPopupProps.calls.push({ open: props.open, variant: props.variant });
+      return actual.HeatMapPopup(props);
+    },
+  };
+});
+
 // The connection editor surface reads the keypad/T9 flag; default it off so
 // digit keys insert literal digits (the touch / hardware-keyboard path).
 const connectionStateOverride = vi.hoisted(() => ({ state: null as string | null }));
@@ -869,6 +883,64 @@ describe("DiagnosticsDialog", () => {
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
     expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
+  });
+
+  it("opens the Config heat map without the cell the REST heat map had selected", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
+    const restCell = within(screen.getByTestId("heat-map-popup-rest"))
+      .getAllByRole("button")
+      .find((button) => button.closest("[data-testid^='heat-cell-']") && !button.hasAttribute("disabled"));
+    expect(restCell).toBeDefined();
+    fireEvent.click(restCell!);
+    expect(screen.getByTestId("heat-cell-detail")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
+
+    expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
+    expect(screen.queryByTestId("heat-cell-detail")).toBeNull();
+  });
+
+  it("reopens the same heat map without the cell that was selected before it closed", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
+    const restCell = within(screen.getByTestId("heat-map-popup-rest"))
+      .getAllByRole("button")
+      .find((button) => button.closest("[data-testid^='heat-cell-']") && !button.hasAttribute("disabled"));
+    fireEvent.click(restCell!);
+    expect(screen.getByTestId("heat-cell-detail")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
+
+    expect(screen.getByTestId("heat-map-popup-rest")).toBeVisible();
+    expect(screen.queryByTestId("heat-cell-detail")).toBeNull();
+  });
+
+  it("keeps showing the closing heat map's own variant while it closes", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
+    heatMapPopupProps.calls.length = 0;
+    fireEvent.click(screen.getByTestId("analytic-popup-close"));
+
+    const closing = heatMapPopupProps.calls.filter((call) => !call.open);
+    expect(closing.length).toBeGreaterThan(0);
+    expect(closing.every((call) => call.variant === "CONFIG")).toBe(true);
   });
 
   it("keeps the primary diagnostics menu controls uniquely addressable", () => {

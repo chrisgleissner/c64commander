@@ -32,6 +32,7 @@ export const useAvMirror = (session: AvMirrorSession = avMirrorSession) => {
       audioLive: isLive(snapshot.audio.state),
       videoLive: isLive(snapshot.video.state),
       anyLive: isLive(snapshot.audio.state) || isLive(snapshot.video.state),
+      anyStoppable: snapshot.audio.state !== "off" || snapshot.video.state !== "off",
       toggleAudio,
       toggleVideo,
       stopAll,

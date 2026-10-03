@@ -73,6 +73,7 @@ const { mockAvMirror } = vi.hoisted(() => ({
   mockAvMirror: {
     videoLive: false,
     audioLive: false,
+    anyFeedFailed: false,
     stopAll: vi.fn().mockResolvedValue(undefined),
     startVideo: vi.fn().mockResolvedValue(undefined),
     startAudio: vi.fn().mockResolvedValue(undefined),
@@ -166,6 +167,7 @@ describe("useSavedDeviceSwitching", () => {
     vi.clearAllMocks();
     mockAvMirror.videoLive = false;
     mockAvMirror.audioLive = false;
+    mockAvMirror.anyFeedFailed = false;
   });
 
   it("updates local selection immediately, then persists verified identity and route invalidation on success", async () => {
@@ -1253,6 +1255,75 @@ describe("useSavedDeviceSwitching", () => {
     });
   });
 
+  it("supersedes a queued switch with a newer request instead of running both after the active one", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    for (const [id, host] of [
+      ["device-first", "192.0.2.10"],
+      ["device-skipped", "192.0.2.11"],
+      ["device-last", "192.0.2.12"],
+    ]) {
+      store.addSavedDevice({ id, name: id, host, httpPort: 80, ftpPort: 21, telnetPort: 64, hasPassword: false });
+    }
+    const firstVerification = createDeferred<{ ok: boolean; deviceInfo: { product: string; unique_id: string } }>();
+    mockVerifyCurrentConnectionTarget
+      .mockReturnValueOnce(firstVerification.promise)
+      .mockResolvedValue({ ok: true, deviceInfo: { product: "C64 Ultimate", unique_id: "UID-LAST" } });
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/settings") });
+
+    let switches!: Promise<unknown>[];
+    act(() => {
+      switches = [result.current("device-first"), result.current("device-skipped"), result.current("device-last")];
+    });
+    firstVerification.resolve({ ok: true, deviceInfo: { product: "C64 Ultimate", unique_id: "UID-FIRST" } });
+    await act(async () => {
+      await Promise.all(switches);
+    });
+
+    const verifiedHosts = mockVerifyCurrentConnectionTarget.mock.calls.map(([target]) => target.deviceHost);
+    expect(verifiedHosts).toEqual(["192.0.2.10", "192.0.2.12"]);
+    expect(store.getSavedDevicesSnapshot().selectedDeviceId).toBe("device-last");
+  });
+
+  it("resolves a superseded queued caller with the superseded outcome, not the newer device's verification", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
+    for (const [id, host] of [
+      ["device-first", "192.0.2.10"],
+      ["device-skipped", "192.0.2.11"],
+      ["device-last", "192.0.2.12"],
+    ]) {
+      store.addSavedDevice({ id, name: id, host, httpPort: 80, ftpPort: 21, telnetPort: 64, hasPassword: false });
+    }
+    const firstVerification = createDeferred<{ ok: boolean; deviceInfo: { product: string; unique_id: string } }>();
+    const lastVerification = { ok: false, error: "device-last did not answer" };
+    mockVerifyCurrentConnectionTarget
+      .mockReturnValueOnce(firstVerification.promise)
+      .mockResolvedValueOnce(lastVerification);
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/settings") });
+
+    let switches!: Promise<unknown>[];
+    act(() => {
+      switches = [
+        result.current("device-first"),
+        result.current("device-skipped"),
+        result.current("device-last"),
+        result.current("device-last"),
+      ];
+    });
+    firstVerification.resolve({ ok: true, deviceInfo: { product: "C64 Ultimate", unique_id: "UID-FIRST" } });
+    await act(async () => {
+      await Promise.all(switches);
+    });
+
+    await expect(switches[1]).resolves.toBe(SAVED_DEVICE_SWITCH_SUPERSEDED);
+    await expect(switches[2]).resolves.toEqual(lastVerification);
+    await expect(switches[3]).resolves.toEqual(lastVerification);
+  });
+
   it("keeps the selected device and records offline state when verification fails", async () => {
     const store = await import("@/lib/savedDevices/store");
     const metrics = await import("@/lib/savedDevices/savedDeviceSwitchMetrics");
@@ -1463,6 +1534,35 @@ describe("useSavedDeviceSwitching", () => {
     expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1));
     expect(mockAvMirror.startAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops a failed Live View feed on the old device and does not restart it on the new one", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-backup",
+      name: "Backup Lab",
+      host: "backup-c64",
+      httpPort: 8080,
+      ftpPort: 2021,
+      telnetPort: 2323,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "U64E", core_version: "1.4A", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+    });
+    mockAvMirror.anyFeedFailed = true;
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    await act(async () => {
+      await result.current("device-backup");
+    });
+
+    expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
+    expect(mockAvMirror.startVideo).not.toHaveBeenCalled();
+    expect(mockAvMirror.startAudio).not.toHaveBeenCalled();
   });
 
   it("does not follow Live View to a device that does not stream", async () => {

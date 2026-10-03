@@ -37,6 +37,7 @@ import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from 
 import { startMockServer, stopMockServer } from "@/lib/mock/mockServer";
 import { FeatureFlags } from "@/lib/native/featureFlags";
 import { addLog } from "@/lib/logging";
+import { COVERAGE_PROBE_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
 
 type ProbeStatus = "idle" | "running" | "done" | "error";
 
@@ -51,7 +52,7 @@ const runProbe = async (label: string, runner: () => Promise<void>, errors: stri
 export default function CoverageProbePage() {
   const listPreview = useListPreviewLimit();
   const connection = useC64Connection();
-  const diskLibrary = useDiskLibrary("coverage-probe");
+  const diskLibrary = useDiskLibrary(COVERAGE_PROBE_DISK_LIBRARY_ID);
   const [status, setStatus] = useState<ProbeStatus>("idle");
   const [errors, setErrors] = useState<string[]>([]);
   const [startedAt] = useState(() => Date.now());

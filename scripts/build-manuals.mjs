@@ -959,6 +959,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The app remembers which cards you left open. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config too; these cards just save you the search.",
     "",
+    "The cards show what your C64 reports. While Home is on screen, the app reads those settings again every 10 seconds, when you come back to the app, and right after any action it takes, so a change made in the machine's own menu shows up here within about 10 seconds. A slider you are dragging, a field you are typing in, or a setting still being written is left alone until you are done.",
+    "",
     "At the foot of the page, the system strip shows which app build, device and firmware you are on. Check it before an upgrade, or when something seems wrong.",
     "",
     '**With no C64 connected**, Home rearranges itself. The search field stays, and so do Radio, Last, Recent and Live, with a card below them that explains how to connect. Live needs a machine, so it is grayed out and reads "Needs a connected C64 Ultimate".',
@@ -1000,6 +1002,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.",
     "",
     "The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.",
+    "",
+    "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
     "",
     "Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.",
     "",
@@ -1402,6 +1406,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.",
     "",
+    "A station plays in place of your playlist, but your playlist is kept, even if the app is closed. When you stop the station, the tune playing now finishes, playback stops, and your playlist comes back as you left it. If you added or removed tunes while the station played, the app asks first whether to keep the station's tunes or return to your playlist.",
+    "",
     "#### Finding one particular tune",
     "",
     "To play one particular piece, tap **Find a tune** and type part of a title or a composer's name. The app searches the whole collection, not just one folder. That matters, because the archive is filed by composer.",
@@ -1645,8 +1651,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
           image("Game Mode", profile, "home/remote-input/profiles/{profile}/02-game-mode.png"),
           "",
           isC64uRemoteVariant(variant)
-            ? "The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible**."
-            : "The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.\n\nNothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.",
+            ? "The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible**."
+            : "The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.\n\nNothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible** or **Hidden** instead of **Auto**.",
           "",
           image(
             "Game Mode, played on the physical keys",
@@ -1702,12 +1708,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Lying down, or the sensor cannot tell which way up the phone is? The **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.",
                 "",
-                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centred)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
+                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
+                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
               ]),
           "",
         ]
@@ -1898,7 +1904,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Reading Diagnostics",
     "",
-    "Diagnostics slides up from the bottom of the screen. Open it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.",
+    "Diagnostics slides up from the bottom of the screen. Open it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or choosing **Details** on a notification.",
+    "",
+    "Notifications appear just above the tabs at the bottom of the screen, never on top of a control. An error stays until you close it with its **×** button or the Back key; other messages close by themselves.",
     "",
     "The panel has three parts, from top to bottom:",
     "",
@@ -2242,7 +2250,7 @@ export const INDEX_TERMS = [
   { term: "IP address", match: ["IP address"] },
   { term: "JIFFY probe", match: ["JIFFY"] },
   { term: "joystick", match: ["**Joystick**"] },
-  { term: "joystick keys", match: ["Classic T9", "Diamond (8-centred)"] },
+  { term: "joystick keys", match: ["Classic T9", "Diamond (8-centered)"] },
   { term: "KERNAL", match: ["**KERNAL**", "Classic KERNAL load"] },
   { term: "Key Explorer", match: ["Key Explorer"] },
   { term: "keyboard, on-screen", match: ["**Keys**"] },

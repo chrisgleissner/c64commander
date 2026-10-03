@@ -112,6 +112,32 @@ describe("useSidRadio", () => {
     expect(loadSidRadioSession()).toBeNull();
   });
 
+  it("reports the resume as settled only together with the saved station it brings back", async () => {
+    const first = renderHook(() => useSidRadio(baseParams(makeClient())));
+    await act(async () => {
+      await first.result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    first.unmount();
+
+    const seen: Array<{ active: boolean; resumeSettled: boolean }> = [];
+    const resumed = renderHook(() => {
+      const radio = useSidRadio(baseParams(makeClient()));
+      seen.push({ active: radio.active, resumeSettled: radio.resumeSettled });
+      return radio;
+    });
+
+    await waitFor(() => expect(resumed.result.current.resumeSettled).toBe(true));
+    expect(resumed.result.current.active).toBe(true);
+    expect(seen.filter((state) => state.resumeSettled && !state.active)).toEqual([]);
+  });
+
+  it("reports the resume as settled with no station when SID Radio is off", async () => {
+    const { result } = renderHook(() => useSidRadio(baseParams(makeClient(), { enabled: false })));
+
+    await waitFor(() => expect(result.current.resumeSettled).toBe(true));
+    expect(result.current.active).toBe(false);
+  });
+
   it("does nothing when disabled", async () => {
     const client = makeClient();
     const params = baseParams(client, { enabled: false });
@@ -316,6 +342,42 @@ describe("useSidRadio", () => {
     );
   });
 
+  it("tells the user when a refill on the last queued track fails, since nothing will retry it", async () => {
+    const client = makeClient();
+    let computeCalls = 0;
+    client.compute = vi.fn((request: StationRequest): Promise<StationResult> => {
+      computeCalls += 1;
+      if (computeCalls > 1) return Promise.reject(new Error("worker crashed"));
+      // Exactly one batch, so the provider holds no leftovers and the lookahead refill must compute.
+      const pool = Array.from({ length: 10 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
+      return Promise.resolve({
+        candidates: pool.map((trackOrdinal) => ({
+          trackOrdinal,
+          md5_48: `m${trackOrdinal}`,
+          songNr: 1,
+          score: 10 - trackOrdinal,
+          reason: "similar" as const,
+          fileTrackOrdinals: [trackOrdinal],
+        })),
+      });
+    });
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+
+    await act(async () => {
+      rerender({ ...params, currentIndex: 9, playlistLength: 10 });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    await waitFor(() => expect(result.current.notice).toBe("refill-failed"));
+    expect(result.current.active).toBe(true);
+  });
+
   it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {
     const client = makeClient();
     client.compute = vi.fn(async () => ({ candidates: [], empty: "no-neighbours" }));
@@ -350,15 +412,19 @@ describe("useSidRadio", () => {
   it("leaves the populations unknown rather than failing when the bundle cannot be read", async () => {
     const client = makeClient();
     client.load = vi.fn().mockRejectedValue(new Error("bundle missing"));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(addLog).mockClear();
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     await act(async () => {
       await expect(result.current.ensureStylePopulations()).resolves.toBeNull();
     });
     expect(result.current.stylePopulations).toBeNull();
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
+    // The app's own log, which the diagnostics export carries; console output never reaches it.
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not read style populations"),
+      expect.objectContaining({ error: "bundle missing" }),
+    );
   });
 
   it("Surprise never rolls a style the export left empty", async () => {
@@ -382,7 +448,7 @@ describe("useSidRadio", () => {
       await result.current.startSurpriseRadio();
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 
@@ -475,6 +541,41 @@ describe("useSidRadio", () => {
     await waitFor(() => expect(result.current.notice).toBe("station-ended"));
   });
 
+  it("does not bring a dismissed station-ended notice back as the last tracks play", async () => {
+    installMusic();
+    const client = makeClient();
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    client.compute = vi.fn(async () => ({ candidates: [], empty: "exhausted" as const }));
+    let cursor = 6;
+    for (; cursor <= 9 && result.current.notice === null; cursor += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: cursor, playlistLength: 10 });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    await waitFor(() => expect(result.current.notice).toBe("station-ended"));
+
+    act(() => result.current.dismissNotice());
+    for (; cursor <= 9; cursor += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: cursor, playlistLength: 10 });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    expect(result.current.notice).toBeNull();
+  });
+
   it("resumes the chip from a saved session on mount (D15)", () => {
     saveSidRadioSession({
       seedKind: "style",
@@ -528,6 +629,30 @@ describe("useSidRadio", () => {
     });
   });
 
+  it("does not ask for likes when a style station comes back empty", async () => {
+    const client = makeClient();
+    client.compute = vi.fn(async () => ({ candidates: [] }));
+    installMusic();
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startStyleRadio(0, "Fast-Paced");
+    });
+    expect(result.current.notice).toBe("no-radio-for-style");
+  });
+
+  it("asks for likes when the Likes station comes back empty", async () => {
+    const client = makeClient();
+    client.compute = vi.fn(async () => ({ candidates: [] }));
+    installMusic();
+    const params = baseParams(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startTasteRadio();
+    });
+    expect(result.current.notice).toBe("no-radio");
+  });
+
   it("refuses a station for a style with no members even when the tap beats the counts", async () => {
     // The sheet opens before the populations are read, so the disabled tile
     // cannot be the enforcement point — a tap that lands first must still be
@@ -540,7 +665,7 @@ describe("useSidRadio", () => {
       await result.current.startStyleRadio(8, "Game Themes");
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(client.compute).not.toHaveBeenCalled();
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
@@ -553,7 +678,7 @@ describe("useSidRadio", () => {
       await result.current.startStyleRadio(8, "Game Themes", true);
     });
     expect(result.current.active).toBe(false);
-    expect(result.current.notice).toBe("no-radio");
+    expect(result.current.notice).toBe("no-radio-for-style");
     expect(client.compute).not.toHaveBeenCalled();
   });
 });
@@ -618,7 +743,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
   it("reads the bundle once and answers both callers", async () => {
     const worker = new GatedWorker();
     const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(addLog).mockClear();
     const params = baseParams(client as unknown as ReturnType<typeof makeClient>);
     const { result } = renderHook(() => useSidRadio(params));
 
@@ -634,8 +759,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
     expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced" });
     expect(params.startPlaylist).toHaveBeenCalledTimes(1);
     // The preload resolved on its own load rather than timing out into a warning.
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("style populations"), expect.anything());
     client.terminate();
   });
 });

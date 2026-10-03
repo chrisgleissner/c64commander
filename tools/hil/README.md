@@ -25,6 +25,24 @@ physical rig), while the host-deterministic budget checks run in CI.
   itself as the witness, and the settings file beside each of them. See **Launch matrix** below.
   Its probe files are built by **`build_launch_probes.mjs`**.
 - **`hil_cdp.mjs`** — not a harness: the adb and WebView-DevTools plumbing the harnesses share.
+  **`cdp_page.mjs`** is the smaller variant for tools that hold one socket for a whole run.
+- **Investigation instruments** for gate results that vary between runs. See **Explaining a gate
+  result** below.
+
+## Explaining a gate result
+
+These tools turn a gate number that varies between runs into evidence. None of them makes a sound
+or talks to an Ultimate on its own; the gate stages that call them do.
+
+| Tool                         | Question it answers                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `merge_gate.mjs --keep-dir`  | Keeps each run's mic WAVs, the wire capture of the same span, each probe's output and the app's audio pipeline stats in `<dir>/<timestamp>-<host>/<stage>/` (`gate_evidence.mjs`) |
+| `explain_clarity.py <dir>`   | For each `av-clarity` sequence error, what was heard instead: replay, dropped, silent, undetected, between notes, or room noise; and whether the wire was in order over the same span |
+| `mirror_audio_latency_hil.py` | Reports the barcode-aware per-tone lag as LATENCY, and prints the top three broadband correlation peaks. The barcode's broadband envelope repeats every 239.4 ms slot, so a broadband peak can take a neighbouring slot; when it does, a WARNING line says so and it is not the reading |
+| `app_audio_stats.mjs`        | Samples `StreamUdp.readAudioStats()` every 250 ms (`bufferedMs`, `jitterBufferMs`, `targetJitterMs`, concealment, drops) |
+| `build_sourcemapped.mjs`     | Rebuilds one commit with hidden source maps, using the `VITE_*` values read out of the APK, and checks every chunk against the APK byte for byte |
+| `symbolize_cpuprofile.mjs`   | Self and total time per original function for a `.cpuprofile`, with `--group` and `--stacks` |
+| `search_latency_profile.mjs` | Search keystroke latency with typing and idle CPU profiles, plus the counts that can grow with session age (trace events, fibers, query cache, listeners, heap, localStorage) |
 
 ## Release sweep
 

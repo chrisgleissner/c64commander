@@ -16,7 +16,11 @@ const mirror = vi.hoisted(() => ({ state: { video: { state: "off" } } }));
 const isLive = (s: string) => s === "live" || s === "connecting";
 
 vi.mock("@/hooks/useAvMirror", () => ({
-  useAvMirror: () => ({ video: mirror.state.video, anyLive: isLive(mirror.state.video.state) }),
+  useAvMirror: () => ({
+    video: mirror.state.video,
+    anyLive: isLive(mirror.state.video.state),
+    anyStoppable: mirror.state.video.state !== "off",
+  }),
 }));
 
 vi.mock("@/components/streams/StreamStatsPanel", () => ({
@@ -89,5 +93,11 @@ describe("LiveViewCard", () => {
     openAllCards();
     expect(screen.queryByTestId("preview")).toBeNull();
     expect(screen.queryByTestId("live-view-expand")).toBeNull();
+  });
+
+  it("offers Stop Live View after a feed failed, because the device may still be streaming", () => {
+    mirror.state = { video: { state: "error" } };
+    render(<LiveViewCard />);
+    expect(screen.getByTestId("live-view-stop")).toHaveAccessibleName("Stop Live View");
   });
 });

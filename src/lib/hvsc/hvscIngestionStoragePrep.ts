@@ -6,9 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beginHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
+import { beginHvscInstallGuard, endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { cleanupStaleStagingDir, ensureHvscDirs } from "./hvscFilesystem";
-import { getHvscIngestionRuntimeState, markIngestionRuntimeIdle } from "./hvscIngestionRuntimeSupport";
+import {
+  drainNativeProgressListeners,
+  getHvscIngestionRuntimeState,
+  markIngestionRunEnded,
+  markIngestionRuntimeIdle,
+  recordStateBeforeIngestion,
+} from "./hvscIngestionRuntimeSupport";
 
 /**
  * The storage steps an ingestion takes after claiming the runtime and before the `try` whose `finally`
@@ -17,14 +23,28 @@ import { getHvscIngestionRuntimeState, markIngestionRuntimeIdle } from "./hvscIn
  */
 export const prepareIngestionStorage = async (cancelToken: string) => {
   const { cancelTokens } = getHvscIngestionRuntimeState();
+  recordStateBeforeIngestion();
   try {
     await ensureHvscDirs();
     await cleanupStaleStagingDir();
-    cancelTokens.set(cancelToken, { cancelled: false });
+    // The runtime is already claimed, so a token present here is a cancel that arrived during these steps.
+    if (!cancelTokens.has(cancelToken)) cancelTokens.set(cancelToken, { cancelled: false });
     await beginHvscInstallGuard();
   } catch (error) {
     cancelTokens.delete(cancelToken);
     markIngestionRuntimeIdle();
     throw new Error(`HVSC ingestion could not prepare its storage: ${(error as Error).message}`, { cause: error });
   }
+};
+
+/**
+ * The end of an ingestion's `finally`. The run has written its outcome by now, so a Stop whose native
+ * round trips are still in flight must no longer apply to it (see applyCancelledIngestionState).
+ */
+export const finishIngestionRun = async (cancelToken: string) => {
+  markIngestionRunEnded();
+  await drainNativeProgressListeners(cancelToken);
+  await endHvscInstallGuard();
+  getHvscIngestionRuntimeState().cancelTokens.delete(cancelToken);
+  markIngestionRuntimeIdle();
 };

@@ -39,8 +39,11 @@ const withoutRecord = (state: UploadMountState, key: string): UploadMountState =
 // A drive that still reports another image this long after the mount holds something else.
 const UPLOAD_PATH_LEARN_WINDOW_MS = 15_000;
 
+/** Whether a drive reports the device-side temporary file an uploaded image is mounted from. */
+export const isUploadCachePath = (imagePath: string) => /\/cache\/upload\//i.test(imagePath);
+
 const looksLikeUploadOf = (imagePath: string, diskName: string | undefined) =>
-  /\/cache\/upload\//i.test(imagePath) ||
+  isUploadCachePath(imagePath) ||
   (diskName !== undefined && imagePath.split("/").pop()?.toLowerCase() === diskName.toLowerCase());
 
 export const reconcileUploadMount = (

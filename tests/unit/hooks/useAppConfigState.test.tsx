@@ -273,6 +273,67 @@ describe("useAppConfigState", () => {
     expect(saveInitialSnapshot).toHaveBeenCalled();
   });
 
+  it("re-captures a provisional baseline on the next idle window while nothing has changed", async () => {
+    vi.useFakeTimers();
+    loadInitialSnapshot.mockReturnValue({ savedAt: "t", data: { Audio: {} }, failedCategories: ["Video"] });
+    getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
+    getCategory.mockResolvedValue({ items: {} });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getCategories).toHaveBeenCalledWith(expect.objectContaining({ __c64uIntent: "background" }));
+    expect(saveInitialSnapshot).toHaveBeenCalledWith(
+      "http://c64u",
+      expect.objectContaining({ data: expect.any(Object) }),
+    );
+    expect(result.current.initialSnapshot?.failedCategories).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("retries a provisional baseline only once per launch when a category stays unreadable", async () => {
+    vi.useFakeTimers();
+    loadInitialSnapshot.mockReturnValue({ savedAt: "t", data: { Audio: {} }, failedCategories: ["Video"] });
+    getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
+    getCategory.mockImplementation(async (category: string) => {
+      if (category === "Video") throw new Error("Video unreadable");
+      return { items: {} };
+    });
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    for (let window = 0; window < 4; window += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(5000);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("keeps a provisional baseline at idle once the user has changed settings, so revert still has its target", async () => {
+    vi.useFakeTimers();
+    loadInitialSnapshot.mockReturnValue({ savedAt: "t", data: { Audio: {} }, failedCategories: ["Video"] });
+    loadHasChanges.mockReturnValue(true);
+    renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(10000);
+      await Promise.resolve();
+    });
+
+    expect(getCategories).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it("revertToInitial invalidates c64-config-items/c64-config-item so Home reflects it (HARD9-017)", async () => {
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",

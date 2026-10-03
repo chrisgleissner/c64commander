@@ -14,9 +14,13 @@ import { cn } from "@/lib/utils";
 
 const ToastProvider = ToastPrimitives.Provider;
 
-// Viewport: mobile = left-anchored, below the app bar, content-width with max-width.
-// sm+ = bottom-right (standard placement, clear of header entirely).
-// The --app-bar-height CSS var is written by AppBar.tsx via ResizeObserver.
+// The viewport is a strip directly above the tab bar, and the Toaster reserves its height out of the
+// page area (`--app-toast-reserved-height`), so a toast never lies over a page control. Floating
+// below the app bar, a persistent error toast covered Play's "Stop radio" button and absorbed taps
+// aimed at it. pointer-events-none: the viewport is a container, not a surface; each toast opts
+// back in (toastVariants), so a gap in the strip never swallows a tap. The strip is capped at 40% of
+// the screen and scrolls past that: two persistent error toasts on a 320x426 screen otherwise left
+// the page 84 px.
 const ToastViewport = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Viewport>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
@@ -24,14 +28,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      // pointer-events-none, because the viewport is a container and not a surface. It is a fixed
-      // box the height of every stacked toast plus its own bottom padding, sitting at z-100 over
-      // the page — on a phone that lands squarely on the Play/Pause/Next row. Without this it
-      // swallowed taps in its gaps and padding, so after an error the transport stopped responding
-      // until the toast expired: precisely when the listener is trying to recover from it, and
-      // indistinguishable from a dead button. Each toast sets pointer-events-auto for itself (see
-      // toastVariants), so tapping and swiping a toast still work.
-      "toast-viewport pointer-events-none fixed left-4 top-[calc(var(--safe-area-inset-top)+var(--app-bar-height,3.5rem)+0.5rem)] z-[100] flex w-auto max-w-[min(90vw,22rem)] flex-col-reverse pb-[calc(1rem+var(--safe-area-inset-bottom))] sm:bottom-[var(--safe-area-inset-bottom)] sm:left-auto sm:right-4 sm:top-auto sm:max-w-[26rem] sm:flex-col",
+      "toast-viewport pointer-events-none fixed inset-x-0 bottom-[var(--app-tab-bar-frame-height,0px)] z-[100] mx-auto flex w-full max-w-[min(100vw,32rem)] max-h-[40dvh] flex-col gap-2 overflow-y-auto overflow-x-hidden overscroll-contain px-[calc(0.5rem+var(--safe-area-inset-left))] py-2 empty:p-0",
       className,
     )}
     {...props}
@@ -39,12 +36,8 @@ const ToastViewport = React.forwardRef<
 ));
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
-// Notifications are entry points into Diagnostics — cursor-pointer communicates tappability.
-// Width is intrinsic (w-auto), not full-width.
-// state=closed: fade only (direction-neutral, works for both tap and swipe dismissal).
-// swipe=end: slide-out-to-right-full (Radix rightward native dismiss).
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-auto cursor-pointer items-start gap-3 overflow-hidden rounded-md border p-4 shadow-elev-2 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[swipe=end]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full shrink-0 flex-col gap-1 overflow-hidden rounded-md border px-3 py-2 shadow-elev-2 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[swipe=end]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full",
   {
     variants: {
       variant: {
@@ -58,11 +51,20 @@ const toastVariants = cva(
   },
 );
 
+// Radix sets touch-action: none on each toast for its swipe-to-dismiss, which also stopped a finger from
+// scrolling the strip. pan-y hands vertical drags to the strip and keeps horizontal ones for the swipe.
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
-  return <ToastPrimitives.Root ref={ref} className={cn(toastVariants({ variant }), className)} {...props} />;
+>(({ className, variant, style, ...props }, ref) => {
+  return (
+    <ToastPrimitives.Root
+      ref={ref}
+      className={cn(toastVariants({ variant }), className)}
+      style={{ touchAction: "pan-y", ...style }}
+      {...props}
+    />
+  );
 });
 Toast.displayName = ToastPrimitives.Root.displayName;
 
@@ -73,7 +75,7 @@ const ToastAction = React.forwardRef<
   <ToastPrimitives.Action
     ref={ref}
     className={cn(
-      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors group-[.destructive]:border-muted/40 hover:bg-secondary group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 group-[.destructive]:focus:ring-destructive disabled:pointer-events-none disabled:opacity-50",
+      "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-base font-medium ring-offset-background transition-colors group-[.destructive]:border-muted/40 hover:bg-secondary group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 group-[.destructive]:focus:ring-destructive disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
     {...props}
@@ -85,7 +87,7 @@ const ToastTitle = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Title>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
 >(({ className, ...props }, ref) => (
-  <ToastPrimitives.Title ref={ref} className={cn("text-sm font-semibold", className)} {...props} />
+  <ToastPrimitives.Title ref={ref} className={cn("text-base font-semibold", className)} {...props} />
 ));
 ToastTitle.displayName = ToastPrimitives.Title.displayName;
 
@@ -93,7 +95,7 @@ const ToastDescription = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Description>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
 >(({ className, ...props }, ref) => (
-  <ToastPrimitives.Description ref={ref} className={cn("text-sm opacity-90", className)} {...props} />
+  <ToastPrimitives.Description ref={ref} className={cn("text-base opacity-90", className)} {...props} />
 ));
 ToastDescription.displayName = ToastPrimitives.Description.displayName;
 

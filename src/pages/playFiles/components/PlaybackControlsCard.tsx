@@ -14,7 +14,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
@@ -82,6 +82,8 @@ export type PlaybackControlsCardProps = {
   isPlaylistLoading: boolean;
   /** Stop was pressed during a launch that has not unwound yet; the button waits for it. */
   stopPending?: boolean;
+  /** Stop's request to the device has not been answered yet. */
+  stopping?: boolean;
   canPause: boolean;
   onPrevious: () => void;
   onPlay: () => void;
@@ -325,6 +327,7 @@ export const PlaybackControlsCard = ({
   hasPlaylist,
   isPlaylistLoading,
   stopPending = false,
+  stopping = false,
   canPause,
   onPrevious,
   onPlay,
@@ -359,6 +362,7 @@ export const PlaybackControlsCard = ({
 }: PlaybackControlsCardProps) => {
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
+  const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
   /**
    * One metadata segment, with its separator attached to its own end.
@@ -373,7 +377,7 @@ export const PlaybackControlsCard = ({
       part.kind === "author" && onComposerSelected ? (
         <button
           type="button"
-          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+          className="hit-area-44-above z-[1] underline decoration-dotted underline-offset-2 hover:text-foreground"
           onClick={() => onComposerSelected(part.text)}
           data-testid="playback-current-composer"
           title={`Find more by ${part.text}`}
@@ -383,7 +387,7 @@ export const PlaybackControlsCard = ({
       ) : part.kind === "tunes" && onTunesSelected ? (
         <button
           type="button"
-          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+          className="hit-area-44-clipped underline decoration-dotted underline-offset-2 hover:text-foreground"
           onClick={onTunesSelected}
           data-testid="playback-current-tunes"
           title="Choose a tune from this file"
@@ -422,6 +426,7 @@ export const PlaybackControlsCard = ({
   // A launch can take twenty seconds (a disk whose settings file is applied through the device menu),
   // and the listener must be able to call it off rather than wait for it to finish.
   const stopAvailable = isPlaying || (isPlaylistLoading && !stopPending);
+  const playButtonLabel = stopping ? "Stopping…" : stopAvailable ? "Stop" : "Play";
   const playFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-play",
     order: PLAY_TRANSPORT_FOCUS_ORDER.play,
@@ -493,8 +498,13 @@ export const PlaybackControlsCard = ({
               </p>
             ) : null}
             {factsParts.length || rankingControls ? (
-              <div className="mt-0.5 flex items-start justify-between gap-2">
-                <p className="min-w-0 text-sm leading-snug text-muted-foreground" data-testid="playback-current-facts">
+              <div className={cn("mt-0.5 flex items-start justify-between gap-2", hasTunesLink && "min-h-11")}>
+                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
+                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
+                <p
+                  className="min-w-0 flex-1 self-stretch overflow-clip text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]"
+                  data-testid="playback-current-facts"
+                >
                   {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
                 </p>
                 {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
@@ -565,20 +575,27 @@ export const PlaybackControlsCard = ({
           </Button>
           <Button
             ref={playFocusRef}
-            variant={stopAvailable ? "destructive" : "default"}
+            variant={stopping || stopAvailable ? "destructive" : "default"}
             size="icon"
             className="size-14 rounded-full"
             // aria-disabled rather than disabled while a Stop is pending, so the focus ring keeps its place.
-            onClick={stopPending ? undefined : stopAvailable ? onStop : onPlay}
+            onClick={stopping || stopPending ? undefined : stopAvailable ? onStop : onPlay}
             disabled={!hasPlaylist}
-            aria-disabled={stopPending || undefined}
+            aria-disabled={stopping || stopPending || undefined}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
+            data-stopping={stopping ? "true" : undefined}
             id="playlist-play"
             data-testid="playlist-play"
-            aria-label={stopAvailable ? "Stop" : "Play"}
-            title={stopAvailable ? "Stop" : "Play"}
+            aria-label={playButtonLabel}
+            title={playButtonLabel}
           >
-            {stopAvailable ? <Square className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            {stopping ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : stopAvailable ? (
+              <Square className="h-5 w-5" />
+            ) : (
+              <Play className="h-5 w-5" />
+            )}
           </Button>
           <Button
             ref={pauseFocusRef}
@@ -619,6 +636,15 @@ export const PlaybackControlsCard = ({
             <SkipForward className="h-4 w-4" />
           </Button>
         </div>
+        {stopping ? (
+          <p
+            role="status"
+            className="text-center text-sm font-medium text-foreground"
+            data-testid="playback-stop-status"
+          >
+            Stopping…
+          </p>
+        ) : null}
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span

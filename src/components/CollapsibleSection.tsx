@@ -6,7 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type MutableRefObject,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
@@ -22,6 +31,8 @@ import {
   writeSectionState,
 } from "@/lib/ui/collapsibleSectionStore";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useHeaderActionsFit } from "@/components/useHeaderActionsFit";
+import { useProgressiveMount } from "@/lib/ui/progressiveMount";
 
 export interface CollapsibleSectionProps {
   /** Which page this section belongs to (e.g. "home", "settings", "docs"). Namespaces
@@ -130,14 +141,14 @@ export const CollapsibleSection = ({
   // the accordion effect used to be.
   const compact = profile === "compact";
   /*
-   * A header carrying actions puts them on their own row on both phone profiles.
+   * A header carrying actions puts them on their own row unless the card is measured wide enough.
    *
-   * Title, action and chevron cannot share one row at the largest text size: the toggle absorbs
-   * whatever the other two leave, which left "Drives" 3 CSS px of the 67 it needs at 320 px and
-   * 17 px at 392 px. Dropping the icon tile and the gutter (below) buys back about 59 px, which is
-   * not close to enough. `expanded` keeps the single row, where there is width for all three.
+   * The toggle absorbs whatever the actions and chevron leave, which left "Drives" 3 CSS px of the
+   * 67 it needs at 320 px. The phone profiles always stack. `expanded` (Large display) can be chosen
+   * on a phone too, where "Drive A" was drawn 1 px wide at 392 px, so there the card's width decides.
    */
-  const stackActions = profile !== "expanded";
+  const [fitRefs, fitsOneRow] = useHeaderActionsFit(profile === "expanded" && actions != null, title);
+  const stackActions = profile !== "expanded" || fitsOneRow === false;
   // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
   // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which
   // left "Drives" 48 px for 66 px of text. The icon alone still carries the scanning cue.
@@ -207,7 +218,15 @@ export const CollapsibleSection = ({
     return () => window.removeEventListener("c64u-app-settings-updated", apply);
   }, []);
 
-  const sectionRef = useRef<HTMLElement | null>(null);
+  const sectionRef = fitRefs.section;
+  const toggleRef = useCallback(
+    (element: HTMLButtonElement | null) => {
+      fitRefs.toggle.current = element;
+      if (typeof headerRef === "function") headerRef(element);
+      else if (headerRef) (headerRef as MutableRefObject<HTMLButtonElement | null>).current = element;
+    },
+    [fitRefs.toggle, headerRef],
+  );
   /** True only between a user opening this card and the reveal that follows it. */
   const openedByUserRef = useRef(false);
 
@@ -307,6 +326,12 @@ export const CollapsibleSection = ({
   // Presentation only. `open` is the persisted answer and is what goes back on screen the moment
   // the override lifts; `bodyVisible` is what is drawn right now.
   const bodyVisible = open && !forceClosed;
+  // A body open from the first render below the screen may be built after the page has drawn (see
+  // useProgressiveMount). When it arrives it is simply there: an open animation would look like a card opening.
+  const bodyMayMount = useProgressiveMount(bodyVisible, sectionRef);
+  const bodyArrivesLateRef = useRef(!bodyMayMount);
+  const bodyEntryAnimation = bodyArrivesLateRef.current ? false : { height: 0, opacity: 0 };
+  if (bodyMayMount && bodyVisible) bodyArrivesLateRef.current = false;
 
   return (
     <motion.section
@@ -340,7 +365,7 @@ export const CollapsibleSection = ({
             cannot nest inside another button without breaking the DOM and the a11y tree. */}
           <button
             type="button"
-            ref={headerRef}
+            ref={toggleRef}
             onClick={toggle}
             className={cn(
               // flex-1, so this button — not the actions beside it — absorbs whatever the row is
@@ -450,7 +475,11 @@ export const CollapsibleSection = ({
               </span>
             </span>
           </button>
-          {stackActions && actions ? null : actions}
+          {stackActions || !actions ? null : (
+            <div ref={fitRefs.actions} className="flex shrink-0 items-center">
+              {actions}
+            </div>
+          )}
           {/*
           Fixed order across every card: title, then any actions, then the chevron hard against the
           right edge. The chevron used to sit inside the toggle button, which put `actions` to its
@@ -483,15 +512,17 @@ export const CollapsibleSection = ({
           </button>
         </div>
         {stackActions && actions ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 px-3 pb-2">{actions}</div>
+          <div ref={fitRefs.actions} className="flex flex-wrap items-center justify-end gap-2 px-3 pb-2">
+            {actions}
+          </div>
         ) : null}
       </div>
 
       <AnimatePresence initial={false}>
-        {bodyVisible ? (
+        {bodyVisible && bodyMayMount ? (
           <motion.div
             id={resolvedBodyId}
-            initial={{ height: 0, opacity: 0 }}
+            initial={bodyEntryAnimation}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}

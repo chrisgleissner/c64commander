@@ -35,7 +35,7 @@ import {
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
-import { stopStreamAtForeignHost } from "./foreignSenderStop";
+import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
 import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
@@ -191,6 +191,27 @@ export interface AvMirrorSessionDeps {
 }
 
 /**
+ * A device switch resets the shared REST queue, which drops a stop still waiting behind another
+ * request, and retargets the shared client, which abandons one in flight. Either way the stop never
+ * reaches the device, so it is sent again to that device by address.
+ */
+const stopStreamAtStopAllHost = async (host: string, name: "audio" | "video"): Promise<unknown> => {
+  if (host !== getC64API().getDeviceHost()) return stopStreamAtHost(host, name);
+  try {
+    return await getC64API().stopStream(name);
+  } catch (error) {
+    if (host === getC64API().getDeviceHost()) throw error;
+    addLog("info", "Live View: resending a stream stop dropped by the device switch", {
+      service: "streams",
+      host,
+      stream: name,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return stopStreamAtHost(host, name);
+  }
+};
+
+/**
  * Present on the next animation frame, so the video mirror's depth-one present queue can actually
  * coalesce.
  *
@@ -259,6 +280,8 @@ export class AvMirrorSession {
   private inputPriorityEnabled = true;
   /** Serializes audio/video start/stop and sender adoption so they never interleave. */
   private opChain: Promise<unknown> = Promise.resolve();
+  /** The host a queued `stopAll` was requested for; set only while that stop runs. */
+  private stopAllHost: string | null = null;
 
   constructor(deps: AvMirrorSessionDeps = {}) {
     // Record which machine is streaming to this phone across the two default transports, so a
@@ -275,7 +298,8 @@ export class AvMirrorSession {
     const stopStream =
       deps.stopStream ??
       (async (name) => {
-        const result = await getC64API().stopStream(name);
+        const host = this.stopAllHost;
+        const result = host === null ? await getC64API().stopStream(name) : await stopStreamAtStopAllHost(host, name);
         recordDeviceStreamStopped(name);
         return result;
       });
@@ -663,6 +687,11 @@ export class AvMirrorSession {
     return isLiveState(this.snapshot.video.state);
   }
 
+  /** A feed that failed can leave the device streaming into the shared group, so it still needs a stop. */
+  get anyFeedFailed(): boolean {
+    return this.snapshot.audio.state === "error" || this.snapshot.video.state === "error";
+  }
+
   /** Apply the effective cadence divisor to the video controller (guarded for mocked controllers in tests). */
   private applyKeepFraction(fraction: number): void {
     if (typeof this.video.setKeepFraction === "function") this.video.setKeepFraction(fraction);
@@ -735,10 +764,12 @@ export class AvMirrorSession {
   }
 
   stopAudio(): Promise<void> {
-    return this.serialize(async () => {
-      releasePhoneAudio(this);
-      await this.audio.stop();
-    });
+    return this.serialize(() => this.stopAudioNow());
+  }
+
+  private async stopAudioNow(): Promise<void> {
+    releasePhoneAudio(this);
+    await this.audio.stop();
   }
 
   toggleAudio(): Promise<void> {
@@ -753,10 +784,12 @@ export class AvMirrorSession {
   }
 
   stopVideo(): Promise<void> {
-    return this.serialize(async () => {
-      await this.video.stop();
-      this.latestFrame = null;
-    });
+    return this.serialize(() => this.stopVideoNow());
+  }
+
+  private async stopVideoNow(): Promise<void> {
+    await this.video.stop();
+    this.latestFrame = null;
   }
 
   toggleVideo(): Promise<void> {
@@ -782,10 +815,19 @@ export class AvMirrorSession {
   }
 
   async stopAll(): Promise<void> {
-    // allSettled so one failing stop cannot orphan the other, but a rejection must not be silently
-    // swallowed (a failed stop can leave the device streaming / a receiver bound) — log each with
-    // context so it stays diagnosable.
-    const [audio, video] = await Promise.allSettled([this.stopAudio(), this.stopVideo()]);
+    // Both stops go out together in one serialized step. A device switch waits only a bounded time
+    // for this; a video stop queued behind a slow audio stop would reach the next device instead.
+    // allSettled so one failing stop cannot orphan the other; each rejection is logged below.
+    // The host is captured now: a stop queued behind a slow start can run after the retarget.
+    const deviceHost = getC64API().getDeviceHost();
+    const [audio, video] = await this.serialize(async () => {
+      this.stopAllHost = deviceHost;
+      try {
+        return await Promise.allSettled([this.stopAudioNow(), this.stopVideoNow()]);
+      } finally {
+        this.stopAllHost = null;
+      }
+    });
     for (const [name, outcome] of [
       ["audio", audio],
       ["video", video],

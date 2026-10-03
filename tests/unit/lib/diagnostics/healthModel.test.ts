@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   deriveAppContributorHealth,
   deriveConnectivityState,
@@ -1134,5 +1134,35 @@ describe("getContributorSupportingPhrase", () => {
   it("singularizes App problem when count is 1", () => {
     const h: ContributorHealth = { state: "Degraded", problemCount: 1, totalOperations: 1, failedOperations: 1 };
     expect(getContributorSupportingPhrase("App", h)).toBe("1 recent problem");
+  });
+});
+
+describe("health derivation over the same events", () => {
+  it("parses each event's host once however many times the health is derived again", () => {
+    const events = Array.from({ length: 20 }, (_, index) =>
+      makeEvent("rest-response", -1000 * index, { url: `http://c64u:80/v1/info?${index}`, status: 200 }),
+    );
+    const scope = { deviceId: "device-1", host: "c64u" };
+    const RealURL = globalThis.URL;
+    let constructed = 0;
+    vi.stubGlobal(
+      "URL",
+      class extends RealURL {
+        constructor(...args: ConstructorParameters<typeof URL>) {
+          super(...args);
+          constructed += 1;
+        }
+      },
+    );
+    try {
+      deriveRestContributorHealth(events, scope);
+      const firstPass = constructed;
+      deriveRestContributorHealth(events, scope);
+      deriveRestContributorHealth(events, scope);
+      expect(firstPass).toBe(events.length);
+      expect(constructed).toBe(firstPass);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

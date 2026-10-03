@@ -77,7 +77,12 @@ import {
 } from "@/lib/disks/diskMount";
 import { ToastAction } from "@/components/ui/toast";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
-import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
+import {
+  DiskExplorerMountNotCompletedError,
+  diskTypeForPath,
+  useDiskExplorer,
+  type DiskMountOutcome,
+} from "@/hooks/useDiskExplorer";
 import { DiskContentsDialog } from "@/components/disks/DiskContentsDialog";
 import { NewDiskDialog } from "@/components/disks/NewDiskDialog";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
@@ -94,7 +99,7 @@ import {
   normalizeDiskPath,
   type DiskEntry,
 } from "@/lib/disks/diskTypes";
-import { assignDiskGroupsByPrefix } from "@/lib/disks/diskGrouping";
+import { assignDiskGroupsByPrefix, orderDisksInGroup } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
@@ -685,7 +690,8 @@ export const HomeDiskManager = () => {
     [diskLibrary.disks],
   );
 
-  const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry) => {
+  /** Failures are reported here, not thrown; a mount a newer one replaced reports nothing. */
+  const mountDiskOnDrive = trace(async (drive: DriveKey, disk: DiskEntry): Promise<DiskMountOutcome> => {
     const mountGeneration = (mountCompletionGenerationRef.current[drive] ?? 0) + 1;
     mountCompletionGenerationRef.current = {
       ...mountCompletionGenerationRef.current,
@@ -715,7 +721,7 @@ export const HomeDiskManager = () => {
           mountGeneration,
           currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
         });
-        return;
+        return "superseded";
       }
       mountedByDriveSetAtRef.current[drive] = Date.now();
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
@@ -752,6 +758,7 @@ export const HomeDiskManager = () => {
             "This disk is from an online archive, so in-game saves are held temporarily and are lost when the app restarts or after a while. Copy it to a local folder to keep changes.",
         });
       }
+      return "mounted";
     } catch (error) {
       if (mountCompletionGenerationRef.current[drive] !== mountGeneration) {
         addLog("debug", "Ignoring stale disk mount failure", {
@@ -762,7 +769,7 @@ export const HomeDiskManager = () => {
           currentGeneration: mountCompletionGenerationRef.current[drive] ?? 0,
           error: (error as Error).message,
         });
-        return;
+        return "superseded";
       }
       setDriveErrors((prev) => ({
         ...prev,
@@ -793,10 +800,13 @@ export const HomeDiskManager = () => {
           demoMode: status.state === "DEMO_ACTIVE",
         },
       });
+      return "failed";
     } finally {
       setDriveMutationPending((prev) => ({ ...prev, [drive]: false }));
     }
   });
+  const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) =>
+    (await mountDiskOnDrive(drive, disk)) === "mounted";
 
   // HARD19-014 (D2): let the user persist a durable local copy of an archive/
   // CommoServe disk's session-only changes (offered on eject). Cancelling the
@@ -1153,17 +1163,7 @@ export const HomeDiskManager = () => {
     const current = disksById[currentId];
     if (!current?.group) return;
 
-    const groupDisks = diskLibrary.disks
-      .filter((disk) => disk.group === current.group)
-      .slice()
-      .sort((a, b) => {
-        const orderA = a.importOrder ?? null;
-        const orderB = b.importOrder ?? null;
-        if (orderA !== null && orderB !== null) {
-          return orderA - orderB;
-        }
-        return a.name.localeCompare(b.name);
-      });
+    const groupDisks = orderDisksInGroup(diskLibrary.disks.filter((disk) => disk.group === current.group));
 
     if (groupDisks.length < 2) return;
     const index = groupDisks.findIndex((disk) => disk.id === current.id);
@@ -1717,7 +1717,10 @@ export const HomeDiskManager = () => {
   const diskExplorer = useDiskExplorer({
     api,
     drive: "a",
-    mount: (disk) => handleMountDisk("a", disk),
+    mount: async (disk) => {
+      const outcome = await mountDiskOnDrive("a", disk);
+      if (outcome !== "mounted") throw new DiskExplorerMountNotCompletedError(disk.name, outcome);
+    },
     onToast: toast,
   });
 
@@ -2590,8 +2593,13 @@ export const HomeDiskManager = () => {
                 error: (error as Error)?.message ?? String(error),
               });
             }
-            await handleMountDisk("a", diskEntry);
-            toast({ title: "Disk created", description: `${result.fileName} created and mounted.` });
+            const mounted = await handleMountDisk("a", diskEntry);
+            toast({
+              title: "Disk created",
+              description: mounted
+                ? `${result.fileName} created and mounted.`
+                : `${result.fileName} created, but not mounted.`,
+            });
           }}
         />
       )}

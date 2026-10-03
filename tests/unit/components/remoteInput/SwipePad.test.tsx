@@ -48,6 +48,27 @@ describe("SwipePad (live drag)", () => {
     expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set(["right"]));
   });
 
+  it("sends a still-held direction again after Release all cleared it", () => {
+    const pad = (releaseAllEpoch: number) => (
+      <SwipePad
+        heldInputs={EMPTY_HELD_JOYSTICK_INPUTS}
+        onHeldInputsChange={onHeldInputsChangeMock}
+        releaseAllEpoch={releaseAllEpoch}
+      />
+    );
+    const { rerender } = render(pad(0));
+    const surface = screen.getByTestId("remote-input-swipe-pad");
+    down(surface, { x: 100, y: 100 });
+    move(surface, { x: 170, y: 100 }); // right
+    expect(onHeldInputsChangeMock).toHaveBeenLastCalledWith(new Set(["right"]));
+
+    rerender(pad(1));
+    onHeldInputsChangeMock.mockClear();
+    move(surface, { x: 175, y: 100 }); // still right
+
+    expect(onHeldInputsChangeMock).toHaveBeenCalledWith(new Set(["right"]));
+  });
+
   it("follows the drawn path, switching direction as the pointer moves", () => {
     render(<LivingSwipePad />);
     const pad = screen.getByTestId("remote-input-swipe-pad");

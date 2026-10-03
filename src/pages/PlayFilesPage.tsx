@@ -110,6 +110,8 @@ import { usePlayDeepLinks, useTransportCommands } from "@/pages/playFiles/hooks/
 import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
+import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
+import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
@@ -245,7 +247,7 @@ export default function PlayFilesPage() {
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
-  // Written from `sidRadio.active` below. A ref, because `useSidRadio` is created after the playback
+  // Written by the station playlist handover below. A ref, because `useSidRadio` is created after the playback
   // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
   const stationActiveRef = useRef(false);
   const {
@@ -631,7 +633,7 @@ export default function PlayFilesPage() {
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
-  const { stopPending: stopPendingDuringLaunch, stopPlayback } = useLaunchStopGuard({
+  const { stopPending, stopping, stopPlayback } = useLaunchStopGuard({
     isPlaylistLoading,
     isPlaying,
     stop: handleStop,
@@ -1635,9 +1637,8 @@ export default function PlayFilesPage() {
   );
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
-    // Replace, never merge: the station owns the queue for as long as it runs.
-    startPlaylist: (items) => startPlaylist(items, 0, { replaceQueue: true }),
-    appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
+    startPlaylist: (items) => stationHandover.startStationQueue(items),
+    appendItems: (items) => stationHandover.appendStationItems(items),
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
@@ -1649,10 +1650,6 @@ export default function PlayFilesPage() {
     // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
     ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
   });
-  // Mirrored into the ref the playback controller reads, so a skip resolved at any point after this
-  // render sees the current state of the station rather than the one captured when its handlers were
-  // created.
-  stationActiveRef.current = sidRadio.active;
 
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"
@@ -2199,25 +2196,6 @@ export default function PlayFilesPage() {
   const playbackRunning = isPlaying || activePlayback.any;
   const localPlaybackRunning = isPlaying || activePlayback.local;
   const canPause = playbackRunning;
-  // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
-  // (what tapping them will do), not the linear playlist position.
-  // A running station owns the order, so the enablement has to be computed from the same ordering the
-  // traversal will actually use — see `resolveTraversalOrdering`.
-  const traversalOrdering = resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, sidRadio.active);
-  const hasPrev = canAdvancePrevious(
-    playlist,
-    currentIndex,
-    traversalOrdering.repeatEnabled,
-    traversalOrdering.shuffleEnabled,
-    shuffleSeed,
-  );
-  const hasNext = canAdvanceNext(
-    playlist,
-    currentIndex,
-    traversalOrdering.repeatEnabled,
-    traversalOrdering.shuffleEnabled,
-    shuffleSeed,
-  );
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -2289,7 +2267,7 @@ export default function PlayFilesPage() {
     removePlaylistItemsById(new Set(selectedPlaylistIds));
   }, [removePlaylistItemsById, selectedPlaylistIds]);
 
-  usePlaybackPersistence({
+  const { readRepositoryPlaylist, playlistHydrated } = usePlaybackPersistence({
     playlist,
     setPlaylist,
     currentIndex,
@@ -2328,6 +2306,32 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs,
     setSessionRestoreSettled,
   });
+  const stationHandover = useStationPlaylistHandover({
+    queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
+    playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
+    persistence: { ready: playlistHydrated && sessionRestoreSettled, readSavedPlaylist: readRepositoryPlaylist },
+    station: sidRadio,
+  });
+  // HARD12-005: Next/Prev enablement comes from the ordering the traversal uses. A station owns that
+  // order until its last tune ends, and the traversal reads the same `stationOrdersQueue` flag.
+  const traversalOrdering = resolveTraversalOrdering(
+    { repeatEnabled, shuffleEnabled },
+    stationHandover.stationOrdersQueue,
+  );
+  const hasPrev = canAdvancePrevious(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
+  const hasNext = canAdvanceNext(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
 
   useEffect(() => {
     if (isPlaying || isPaused) return;
@@ -2558,7 +2562,11 @@ export default function PlayFilesPage() {
                 // or stopping a station never shifts the controls underneath.
                 stationIndicator={
                   sidRadioFlags.sidRadioEnabled ? (
-                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
+                    <SidRadioChip
+                      station={sidRadio.station}
+                      whyThisTune={sidRadioWhyThisTune}
+                      onStop={stationHandover.requestStop}
+                    />
                   ) : undefined
                 }
                 stationActive={sidRadio.active}
@@ -2595,7 +2603,8 @@ export default function PlayFilesPage() {
                 onPrevious={() => void handlePrevious()}
                 onPlay={() => void handlePlay()}
                 onStop={stopPlayback}
-                stopPending={stopPendingDuringLaunch}
+                stopPending={stopPending}
+                stopping={stopping}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
                 // Only offered when the tune is actually rendering here: the C64
@@ -3160,6 +3169,8 @@ export default function PlayFilesPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <StationQueueEditedDialog {...stationHandover.editedPrompt} />
 
           {!browserOpen ? (
             <AddItemsProgressOverlay

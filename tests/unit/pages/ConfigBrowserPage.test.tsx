@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { closeAllCards, ensureCardOpen } from "../helpers/cards";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterRingRescan } from "../helpers/ringRescan";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
 import {
   FocusNavigationProvider,
@@ -421,6 +422,38 @@ describe("ConfigBrowserPage", () => {
     });
   });
 
+  it("rolls back only the failed audio mixer item, keeping a newer change to another SID", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({ data: { categories: ["Audio Mixer"] }, isLoading: false });
+    let rejectFirstWrite: (error: Error) => void = () => undefined;
+    const mutateAsync = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((_, reject) => (rejectFirstWrite = reject)))
+      .mockResolvedValue({});
+    mockUseC64SetConfig.mockReturnValue({ mutateAsync, isPending: false });
+    const data = {
+      "Audio Mixer": {
+        items: {
+          "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+          "Vol Ultisid 2": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
+        },
+      },
+    };
+    mockUseC64Category.mockImplementation(() => ({ data, isLoading: false, refetch: vi.fn() }));
+
+    renderConfigBrowserPage();
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Update Vol Ultisid 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update Vol Ultisid 2" }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "updated"));
+
+    await act(async () => rejectFirstWrite(new Error("Update failed")));
+
+    await waitFor(() => expect(screen.getByTestId("row-vol-ultisid-1")).toHaveAttribute("data-value", "0 dB"));
+    expect(screen.getByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "updated");
+  });
+
   it("keeps audio mixer Solo active across item refetch identity changes", async () => {
     sessionStorage.clear();
     setupDefaultMocks();
@@ -586,6 +619,50 @@ describe("ConfigBrowserPage", () => {
         expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "0 dB" }) }),
       ),
     );
+  });
+
+  it("restores the other SID volumes before re-reading the device when Refresh is pressed while Solo is on", async () => {
+    sessionStorage.clear();
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const calls: string[] = [];
+    const updateConfigBatch = vi.fn(async (payload: { updates: Record<string, string> }) => {
+      calls.push(`write:${payload.updates["Vol Ultisid 2"]}`);
+      return { errors: [] };
+    });
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
+    const refetch = vi.fn(async () => {
+      calls.push("refetch");
+      return { data: { "Audio Mixer": { items: audioMixerItems } }, isSuccess: true };
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: audioMixerItems } },
+      isLoading: false,
+      refetch,
+    }));
+
+    renderConfigBrowserPage();
+
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+    await waitFor(() => expect(calls).toContain("write:OFF"));
+    calls.length = 0;
+
+    fireEvent.click(await screen.findByRole("button", { name: /refresh/i }));
+
+    await waitFor(() => expect(calls).toContain("refetch"));
+    expect(calls[0]).toBe("write:0 dB");
+    expect(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1")).not.toBeChecked();
   });
 
   it("keeps the levels Solo replaced where a crash cannot lose them, until Solo ends", async () => {
@@ -1452,7 +1529,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    await Promise.resolve();
+    await act(() => afterRingRescan());
     const resetButton = screen.getByRole("button", { name: /^reset$/i });
     const refreshButton = screen.getByRole("button", { name: /refresh/i });
     expect(focusContext.current?.engine.sourceForId("config-category-action-audio-mixer")).toBe("dom+explicit");
@@ -1487,7 +1564,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-clock-settings");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    await Promise.resolve();
+    await act(() => afterRingRescan());
     const syncButton = screen.getByRole("button", { name: /sync clock/i });
     expect(focusContext.current?.engine.elementForId("config-category-action-clock-settings")).toBe(syncButton);
 
@@ -1520,7 +1597,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    await Promise.resolve();
+    await act(() => afterRingRescan());
     const refreshButton = screen.getByRole("button", { name: /refresh/i });
     expect(screen.getByRole("button", { name: /^reset$/i })).toBeDisabled();
 

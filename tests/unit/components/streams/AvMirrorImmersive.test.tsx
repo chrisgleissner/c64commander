@@ -9,7 +9,11 @@
 import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AvMirrorImmersive, type AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
+import {
+  AvMirrorImmersive,
+  CONTROLS_HIDE_MS,
+  type AvMirrorImmersiveHandle,
+} from "@/components/streams/AvMirrorImmersive";
 import { saveStreamVideoBadges } from "@/lib/config/appSettings";
 
 /** Only the fields this component reads; `fps`/`standard` drive the frame-rate readout. */
@@ -327,6 +331,28 @@ describe("AvMirrorImmersive", () => {
     expect(chip.textContent).not.toContain("Adjusting");
     expect(chip).toHaveAttribute("aria-label", "Adjusting view");
     expect(screen.getByTestId("av-immersive-mode-toggle")).toHaveTextContent("Done");
+  });
+
+  it.each(["av-immersive-zoom-in", "av-immersive-zoom-out", "av-immersive-fit", "av-immersive-follow"])(
+    "stays in View mode while the user keeps tapping %s",
+    (testId) => {
+      vi.useFakeTimers();
+      render(<AvMirrorImmersive />);
+      fireEvent.click(screen.getByTestId("av-immersive-mode-toggle"));
+      act(() => vi.advanceTimersByTime(CONTROLS_HIDE_MS - 600));
+      fireEvent.click(screen.getByTestId(testId));
+      act(() => vi.advanceTimersByTime(1200));
+      expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-mode", "adjust");
+    },
+  );
+
+  it("keeps the control cluster on screen while the user keeps tapping it in C64 mode", () => {
+    vi.useFakeTimers();
+    render(<AvMirrorImmersive />);
+    act(() => vi.advanceTimersByTime(CONTROLS_HIDE_MS - 600));
+    fireEvent.click(screen.getByTestId("av-immersive-zoom-in"));
+    act(() => vi.advanceTimersByTime(1200));
+    expect(screen.getByTestId("av-mirror-immersive-controls")).toBeInTheDocument();
   });
 
   it("exposes an imperative handle for physical-key control", () => {

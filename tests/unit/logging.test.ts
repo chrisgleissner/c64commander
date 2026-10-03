@@ -21,6 +21,7 @@ import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { installConsoleDiagnosticsBridge, logger } from "@/lib/diagnostics/logger";
 import { setTraceDeviceContext } from "@/lib/tracing/traceContext";
+import { resolveTransportFailureMessage } from "@/lib/c64api/requestFailureMessage";
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
@@ -535,8 +536,11 @@ describe("device failures while the phone has no network", () => {
     addErrorLog("PLAYBACK_NEXT: Playback next failed", {
       description: "Device not connected. Check connection settings.",
     });
+    addErrorLog("Disk Explorer launch failed", {
+      error: resolveTransportFailureMessage("timeout", { timedOut: true, timeoutMs: 15_000 }),
+    });
 
-    expect(getLogs().map((entry) => entry.level)).toEqual(["info", "info", "info"]);
+    expect(getLogs().map((entry) => entry.level)).toEqual(["info", "info", "info", "info"]);
   });
 
   it("keeps the level of the same failure while the network is up", async () => {

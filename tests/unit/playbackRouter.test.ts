@@ -22,6 +22,7 @@ import { buildAutostartSequence } from "@/lib/playback/autostart";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
+import { endPlayLaunchMounts, peekPlayLaunchMount } from "@/lib/playback/playLaunchMounts";
 import { loadDiskAutostartMode } from "@/lib/config/appSettings";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
@@ -147,6 +148,7 @@ vi.mock("@/lib/query/queryClientRegistry", () => ({
 }));
 
 beforeEach(() => {
+  localStorage.clear();
   clearRememberedUltimateSidBlobsForTests();
   resetNetworkStatusWatchForTests();
   mockInvalidateQueries.mockClear();
@@ -192,6 +194,7 @@ const createApiMock = () => ({
   machineReboot: vi.fn().mockResolvedValue({ errors: [] }),
   readMemory: vi.fn().mockResolvedValue(new Uint8Array([0])),
   writeMemory: vi.fn().mockResolvedValue({ errors: [] }),
+  getDeviceHost: vi.fn(() => "c64u"),
 });
 
 describe("playbackRouter", () => {
@@ -571,6 +574,100 @@ describe("playbackRouter", () => {
       maxAttempts: 20,
     });
     vi.useRealTimers();
+  });
+
+  describe("what Play mounted, so Stop can end it", () => {
+    const apiWithDriveA = (...driveA: Array<Record<string, unknown>>) => {
+      const getDrives = vi.fn();
+      driveA.forEach((info) => getDrives.mockResolvedValueOnce({ drives: [{ a: info }], errors: [] }));
+      // Read by Stop: the drive still holds the image Play mounted last.
+      getDrives.mockImplementation(async () => ({
+        drives: [{ a: { enabled: true, image_file: peekPlayLaunchMount("c64u", "a")?.launchPath } }],
+        errors: [],
+      }));
+      return {
+        ...createApiMock(),
+        getDrives,
+        driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+        setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+        unmountDrive: vi.fn().mockResolvedValue({ errors: [] }),
+      };
+    };
+    const launchDisk = async (api: ReturnType<typeof apiWithDriveA>, path: string) => {
+      vi.useFakeTimers();
+      const task = executePlayPlan(api as any, buildPlayPlan({ source: "ultimate", path }), { drive: "a" });
+      await vi.runAllTimersAsync();
+      await task;
+      vi.useRealTimers();
+    };
+
+    it("ejects the launch image on Stop and re-mounts the image the user had in the drive", async () => {
+      const api = apiWithDriveA({ enabled: true, type: "1541", image_path: "/USB0/Mine/", image_file: "work.d64" });
+
+      await launchDisk(api, "/USB0/Games/game.d64");
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).toHaveBeenCalledWith("a");
+      expect(api.mountDrive).toHaveBeenCalledWith("a", "/USB0/Mine/work.d64", "d64");
+    });
+
+    it("restores the user's image, not Play's first launch image, after two launches in the same drive", async () => {
+      const api = apiWithDriveA(
+        { enabled: true, type: "1541", image_path: "/USB0/Mine/", image_file: "work.d64" },
+        { enabled: true, type: "1541", image_path: "/USB0/Games/", image_file: "one.d64" },
+      );
+
+      await launchDisk(api, "/USB0/Games/one.d64");
+      await launchDisk(api, "/USB0/Games/two.d64");
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).toHaveBeenCalledTimes(1);
+      expect(api.mountDrive).toHaveBeenCalledTimes(1);
+      expect(api.mountDrive).toHaveBeenCalledWith("a", "/USB0/Mine/work.d64", "d64");
+    });
+
+    const holdingUploadCopy = (api: ReturnType<typeof apiWithDriveA>) =>
+      api.getDrives.mockImplementation(async () => ({
+        drives: [{ a: { enabled: true, image_path: "/Temp/cache/upload/", image_file: "temp0082" } }],
+        errors: [],
+      }));
+
+    it("ejects on Stop a local disk Play mounted by upload, which the drive reports as an upload cache file", async () => {
+      const api = apiWithDriveA({ enabled: true, type: "1541" });
+      vi.mocked(mountDiskToDrive).mockResolvedValueOnce({ persistence: "transient" });
+      vi.useFakeTimers();
+      const plan = buildPlayPlan({ source: "local", path: "/Games/game.d64", file: new File(["disk"], "game.d64") });
+      const task = executePlayPlan(api as any, plan, { drive: "a" });
+      await vi.runAllTimersAsync();
+      await task;
+      vi.useRealTimers();
+      holdingUploadCopy(api);
+
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).toHaveBeenCalledWith("a");
+    });
+
+    it("leaves alone on Stop an upload cache file in a drive where Play mounted an Ultimate disk by path", async () => {
+      const api = apiWithDriveA({ enabled: true, type: "1541" });
+      vi.mocked(mountDiskToDrive).mockResolvedValueOnce({ persistence: "device-native" });
+
+      await launchDisk(api, "/USB0/Games/game.d64");
+      holdingUploadCopy(api);
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).not.toHaveBeenCalled();
+    });
+
+    it("leaves the drive empty on Stop when it was empty before Play", async () => {
+      const api = apiWithDriveA({ enabled: true, type: "1541" });
+
+      await launchDisk(api, "/USB0/Games/game.d64");
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).toHaveBeenCalledWith("a");
+      expect(api.mountDrive).not.toHaveBeenCalled();
+    });
   });
 
   it("HARD19-022: preserves a compatible drive mode (1571 reading a D64) instead of forcing 1541", async () => {

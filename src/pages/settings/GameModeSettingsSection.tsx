@@ -60,7 +60,7 @@ const ACTION_LABEL: Partial<Record<SemanticAction, string>> = {
   dpadDown: "D-pad down",
   dpadLeft: "D-pad left",
   dpadRight: "D-pad right",
-  center: "D-pad centre",
+  center: "D-pad center",
   enter: "OK",
 };
 
@@ -199,7 +199,7 @@ export const GameModeSettingsSection = () => {
 
       <div className="space-y-2">
         <Label htmlFor="settings-game-mode-joystick" className="text-sm">
-          On-screen joystick in Game mode
+          On-screen joystick in Game Mode
         </Label>
         <Select
           value={joystick}

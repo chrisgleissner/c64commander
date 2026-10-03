@@ -474,10 +474,7 @@ export function UnifiedHealthBadge({ className }: Props) {
   const pickerRefreshRequestedRef = useRef(false);
 
   useEffect(() => {
-    if (!pickerOpen) {
-      setExpandedDeviceIds([]);
-      setPendingSwitch(null);
-    }
+    if (!pickerOpen) setExpandedDeviceIds([]);
   }, [pickerOpen]);
 
   useEffect(() => {
@@ -587,8 +584,9 @@ export function UnifiedHealthBadge({ className }: Props) {
   const handleSwitchDevice = useCallback(
     async (deviceId: string) => {
       const fromDeviceId = pendingSwitch?.fromDeviceId ?? savedDevices.selectedDeviceId;
+      const currentTargetId = pendingSwitch?.toDeviceId ?? savedDevices.selectedDeviceId;
 
-      if (deviceId === fromDeviceId) {
+      if (deviceId === currentTargetId) {
         setPickerOpen(false);
         return;
       }
@@ -604,10 +602,10 @@ export function UnifiedHealthBadge({ className }: Props) {
           });
         })
         .finally(() => {
-          setPendingSwitch(null);
+          setPendingSwitch((pending) => (pending?.toDeviceId === deviceId ? null : pending));
         });
     },
-    [pendingSwitch?.fromDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
+    [pendingSwitch?.fromDeviceId, pendingSwitch?.toDeviceId, savedDevices.selectedDeviceId, switchSavedDevice],
   );
 
   const pickerSelectedDeviceId = pendingSwitch?.toDeviceId ?? savedDevices.selectedDeviceId;

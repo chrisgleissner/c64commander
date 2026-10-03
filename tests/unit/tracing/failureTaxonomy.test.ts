@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
+import { resolveTransportFailureMessage } from "@/lib/c64api/requestFailureMessage";
 
 describe("failureTaxonomy", () => {
   it("classifies user cancellation", () => {
@@ -123,6 +124,7 @@ describe("failureTaxonomy", () => {
 
     const unreachable = [
       new Error("Host unreachable"),
+      new Error(resolveTransportFailureMessage("timeout", { timedOut: true, timeoutMs: 15_000 })),
       new TypeError("Failed to fetch"),
       new Error("Request timed out"),
     ];

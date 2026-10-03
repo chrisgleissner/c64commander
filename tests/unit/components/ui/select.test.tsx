@@ -13,13 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 // jsdom runs no CSS animations, so Radix unmounts a closed list at once. `forceMount` keeps the list
 // mounted in the state a browser holds it in while the exit animation plays: `data-state="closed"`.
+// A list can only be closing after it was open, so a closed one is opened first and then closed.
 const renderSelect = (
   open: boolean,
   onValueChange: (value: string) => void,
   onItemKeyDown?: React.KeyboardEventHandler<HTMLDivElement>,
-) =>
-  render(
-    <Select open={open} value="PAL" onValueChange={onValueChange}>
+) => {
+  const tree = (isOpen: boolean) => (
+    <Select open={isOpen} value="PAL" onValueChange={onValueChange}>
       <SelectTrigger aria-label="System mode">
         <SelectValue />
       </SelectTrigger>
@@ -29,8 +30,12 @@ const renderSelect = (
           NTSC
         </SelectItem>
       </SelectContent>
-    </Select>,
+    </Select>
   );
+  const result = render(tree(true));
+  if (!open) result.rerender(tree(false));
+  return result;
+};
 
 describe("SelectItem", () => {
   it("selects the focused option on Enter while the list is open", () => {
@@ -68,5 +73,26 @@ describe("SelectItem", () => {
 
     expect(onItemKeyDown.mock.calls.map(([event]) => event.key)).toEqual(["ArrowDown", "Enter"]);
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("renders only the chosen option of a select nobody has opened or focused, and every option once it is", () => {
+    render(
+      <Select value="PAL" onValueChange={vi.fn()}>
+        <SelectTrigger aria-label="System mode">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent forceMount>
+          <SelectItem value="PAL">PAL</SelectItem>
+          <SelectItem value="NTSC">NTSC</SelectItem>
+        </SelectContent>
+      </Select>,
+    );
+    expect(screen.getByLabelText("System mode")).toHaveTextContent("PAL");
+    expect(screen.queryByRole("option", { name: "NTSC", hidden: true })).toBeNull();
+
+    fireEvent.focus(screen.getByLabelText("System mode"));
+    expect(screen.getByRole("option", { name: "NTSC", hidden: true })).toBeInTheDocument();
+    fireEvent.blur(screen.getByLabelText("System mode"));
+    expect(screen.getByRole("option", { name: "NTSC", hidden: true })).toBeInTheDocument();
   });
 });

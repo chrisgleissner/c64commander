@@ -36,6 +36,8 @@ import {
 } from "@/lib/deviceInteraction/restRequestIdentity";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import { publishDeviceWrite, TELNET_DEVICE_ACTION } from "@/lib/deviceInteraction/deviceWriteEvents";
+import { DEVICE_NO_ANSWER_PHRASE } from "@/lib/c64api/requestFailureMessage";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -440,6 +442,7 @@ const isCriticalRestError = (error: Error) => {
   if (message.includes("smoke mode blocked")) return false;
   if (message.includes("fuzz mode blocked")) return false;
   if (message.includes("host unreachable")) return true;
+  if (message.includes(DEVICE_NO_ANSWER_PHRASE)) return true;
   if (message.includes("network")) return true;
   if (message.includes("timed out")) return true;
   const httpMatch = message.match(/http\s+(\d+)/i);
@@ -617,6 +620,7 @@ const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: 
   if (isReadOnlyRestMethod(method)) return;
 
   const writePath = normalizeRestResourcePath(path, baseUrl);
+  publishDeviceWrite(writePath);
   const invalidatedReadPaths = new Set<string>(["/v1/info"]);
   if (writePath.startsWith("/v1/configs")) {
     invalidatedReadPaths.add("/v1/configs");
@@ -1155,6 +1159,11 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
         return result;
       } catch (error) {
         const err = error as Error;
+        if (err?.name === "ConfigApplyCancelledError") {
+          markDeviceRequestEnd({ success: true });
+          addLog("info", "Telnet request canceled by Stop", { error: err.message, actionId: meta.actionId });
+          throw error;
+        }
         updateTelnetFailure(err);
         markDeviceRequestEnd({ success: false, errorMessage: err.message });
         addErrorLog("Telnet request failed", {
@@ -1171,5 +1180,6 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
     });
   } finally {
     pollingPause.release();
+    publishDeviceWrite(TELNET_DEVICE_ACTION);
   }
 };

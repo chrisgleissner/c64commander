@@ -41,7 +41,6 @@ import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
@@ -75,19 +74,23 @@ import {
 } from "./hvscIngestionProgress";
 import {
   applyCancelledIngestionState,
+  beginCancelRequest,
+  beginPlannedArchive,
+  isLastArchiveToApply,
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
-  markIngestionRuntimeIdle,
+  markInstalledLibraryConsistent,
+  markInstalledLibraryTouched,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
   resetCacheStatFailure,
 } from "./hvscIngestionRuntimeSupport";
-import { prepareIngestionStorage } from "./hvscIngestionStoragePrep";
+import { finishIngestionRun, prepareIngestionStorage } from "./hvscIngestionStoragePrep";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
-import { createHvscCancellationError } from "./hvscCancellation";
+import { HVSC_CANCELED_STATUS_REASON, createHvscCancellationError } from "./hvscCancellation";
 import { isHvscNoNetworkError } from "./hvscNetworkLoss";
 const runtimeState = getHvscIngestionRuntimeState();
 
@@ -301,13 +304,11 @@ export const applyIngestionSuccess = ({
       completedAt: new Date().toISOString(),
       archiveName,
     },
-    // A fresh baseline install invalidates any "update already applied"
-    // records from whatever library was there before - those version
-    // numbers were layered on top of the OLD baseline. Without this, a
-    // direct baseline reinstall (not preceded by an explicit reset) hits
-    // the same permanently-stuck-skipping-updates bug as HARD9-014.
+    // A fresh baseline invalidates "update already applied" records layered on the OLD baseline;
+    // keeping them leaves a direct reinstall permanently skipping updates, as in HARD9-014.
     ...(plan.type === "baseline" ? { updates: {} } : {}),
   });
+  markInstalledLibraryConsistent();
 };
 
 /**
@@ -389,6 +390,9 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   if (plan.type === "baseline") {
     await createLibraryStagingDir();
     baselineInstalled = plan.version;
+  } else {
+    ensureNotCancelledLocal();
+    markInstalledLibraryTouched();
   }
 
   const browseIndex = await createHvscBrowseIndexMutable(plan.type);
@@ -594,6 +598,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
 
   ensureNotCancelledLocal();
   if (plan.type === "baseline") {
+    markInstalledLibraryTouched();
     await promoteLibraryStagingDir();
   }
 
@@ -748,6 +753,7 @@ const ingestArchivePathNative = async (options: {
 
   try {
     ensureNotCancelled(cancelToken);
+    markInstalledLibraryTouched();
     let result;
     const nativeExtractPerfScope = beginHvscPerfScope("ingest:extract", {
       archiveName,
@@ -961,6 +967,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 
     for (let index = 0; index < plans.length; index += 1) {
       const plan = plans[index];
+      beginPlannedArchive(isLastArchiveToApply(plans, index));
       if (plan.type === "update" && isUpdateApplied(plan.version)) {
         emitProgress({
           stage: "archive_discovery",
@@ -1132,7 +1139,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         archiveVersion: currentArchiveVersion,
         pipelineState: currentPipelineState,
       });
-      applyCancelledIngestionState("Cancelled", emitProgress, currentArchive ?? undefined);
+      applyCancelledIngestionState(HVSC_CANCELED_STATUS_REASON, emitProgress, currentArchive ?? undefined);
       throw error;
     }
     if (currentArchiveType === "update" && currentArchiveVersion) {
@@ -1165,10 +1172,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     });
     throw error;
   } finally {
-    await drainNativeProgressListeners(cancelToken);
-    await endHvscInstallGuard();
-    runtimeState.cancelTokens.delete(cancelToken);
-    markIngestionRuntimeIdle();
+    await finishIngestionRun(cancelToken);
   }
 };
 
@@ -1239,6 +1243,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
 
     for (let index = 0; index < plans.length; index += 1) {
       const plan = plans[index];
+      beginPlannedArchive(isLastArchiveToApply(plans, index));
       if (plan.type === "update" && isUpdateApplied(plan.version)) {
         emitProgress({
           stage: "archive_discovery",
@@ -1346,7 +1351,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
         archiveVersion: currentArchiveVersion,
         pipelineState: currentPipelineState,
       });
-      applyCancelledIngestionState("Cancelled", emitProgress, currentArchive ?? undefined);
+      applyCancelledIngestionState(HVSC_CANCELED_STATUS_REASON, emitProgress, currentArchive ?? undefined);
       throw error;
     }
     if (currentArchiveType === "update" && currentArchiveVersion) {
@@ -1378,26 +1383,23 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     });
     throw error;
   } finally {
-    await drainNativeProgressListeners(cancelToken);
-    await endHvscInstallGuard();
-    runtimeState.cancelTokens.delete(cancelToken);
-    markIngestionRuntimeIdle();
+    await finishIngestionRun(cancelToken);
   }
 };
 
 // ── Cancel ───────────────────────────────────────────────────────
 
-export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
+/** Resolves true when a running ingestion was canceled, false when there was nothing left to cancel. */
+export const cancelHvscInstall = async (cancelToken: string): Promise<boolean> => {
   const tokenWasActive = runtimeState.cancelTokens.has(cancelToken);
   if (!tokenWasActive && !runtimeState.activeIngestionRunning) {
     addLog("info", "HVSC cancel ignored; no active ingestion", { token: cancelToken });
-    return;
+    return false;
   }
-  if (!tokenWasActive) {
-    runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
-  } else {
-    runtimeState.cancelTokens.get(cancelToken)!.cancelled = true;
-  }
+  const finishCancel = beginCancelRequest();
+  const tokenEntry = runtimeState.cancelTokens.get(cancelToken);
+  if (tokenEntry) tokenEntry.cancelled = true;
+  else runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
   await drainNativeProgressListeners(cancelToken);
   if (canUseNativeHvscIngestion()) {
     try {
@@ -1409,8 +1411,9 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
       });
     }
   }
-  applyCancelledIngestionState();
-  addLog("info", "HVSC cancel requested", { token: cancelToken });
+  const canceled = finishCancel();
+  addLog("info", "HVSC cancel requested", { token: cancelToken, canceled });
+  return canceled;
 };
 
 // ── Folder / song / duration queries ─────────────────────────────

@@ -68,14 +68,28 @@ const resolveFailedPhase = (input: HvscPreparationStateInput): HvscPreparationPh
   return "download";
 };
 
-export const resolveHvscPreparationSnapshot = (input: HvscPreparationStateInput): HvscPreparationSnapshot => {
-  const errorReason =
-    input.inlineError ??
-    input.metadataErrorMessage ??
-    input.extractionErrorMessage ??
-    input.downloadErrorMessage ??
+const failedStepMessage = (status: HvscStepStatus, message: string | null | undefined) =>
+  status === "failure" ? (message ?? null) : null;
+
+/**
+ * The persisted step summary outlives the run that wrote it, so a step's message is a reason only
+ * while that step failed (a canceled step keeps "Canceled" while idle), and none of it counts
+ * before the library's state has loaded: until then nothing says the library is not ready.
+ */
+const resolveErrorReason = (input: HvscPreparationStateInput): string | null => {
+  if (input.inlineError) return input.inlineError;
+  if (input.ingestionState === null) return null;
+  return (
+    failedStepMessage(input.metadataStatus, input.metadataErrorMessage) ??
+    failedStepMessage(input.extractionStatus, input.extractionErrorMessage) ??
+    failedStepMessage(input.downloadStatus, input.downloadErrorMessage) ??
     input.ingestionError ??
-    null;
+    null
+  );
+};
+
+export const resolveHvscPreparationSnapshot = (input: HvscPreparationStateInput): HvscPreparationSnapshot => {
+  const errorReason = resolveErrorReason(input);
 
   if (!input.available) {
     return {

@@ -47,6 +47,9 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
   let port = TELNET_DEFAULT_PORT;
   let password: string | undefined;
   let authenticated = false;
+  // Set by the caller's disconnect. A read abandoned by Stop that fails afterwards must not reconnect and hold a
+  // session open; the idle timeout closes the connection without setting it, so a later key reconnects.
+  let closedByCaller = false;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let screenBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
   let requestSteps: TelnetTraceSnapshot["requestPayload"]["steps"] = [];
@@ -122,7 +125,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       addLog("info", "Telnet idle timeout — disconnecting", { host });
-      void disconnect();
+      void closeConnection();
     }, IDLE_TIMEOUT_MS);
   };
 
@@ -205,6 +208,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
   }
 
   async function ensureConnected(): Promise<void> {
+    if (closedByCaller) throw new TelnetError("Telnet session was closed", "DISCONNECTED", { host, port });
     if (transport.isConnected() && authenticated) return;
 
     let lastError: Error | null = null;
@@ -249,7 +253,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     await transport.send(textEncoder.encode(data));
   }
 
-  async function readScreen(timeoutMs?: number): Promise<TelnetScreen> {
+  async function readScreen(timeoutMs?: number, signal?: AbortSignal): Promise<TelnetScreen> {
     await ensureConnected();
     resetIdleTimer();
 
@@ -258,7 +262,7 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
     const chunks: Uint8Array[] = screenBuffer.length > 0 ? [screenBuffer] : [];
     screenBuffer = new Uint8Array(0);
 
-    while (emptyReads < MAX_EMPTY_READS) {
+    while (emptyReads < MAX_EMPTY_READS && !signal?.aborted) {
       try {
         const data = await transport.read(timeout);
         if (data.length === 0) {
@@ -304,11 +308,17 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
   }
 
   async function connect(targetHost: string, targetPort: number, targetPassword?: string): Promise<void> {
+    closedByCaller = false;
     resetTraceSnapshot();
     await connectAndAuth(targetHost, targetPort, targetPassword);
   }
 
   async function disconnect(): Promise<void> {
+    closedByCaller = true;
+    await closeConnection();
+  }
+
+  async function closeConnection(): Promise<void> {
     clearIdleTimer();
     authenticated = false;
     screenBuffer = new Uint8Array(0);

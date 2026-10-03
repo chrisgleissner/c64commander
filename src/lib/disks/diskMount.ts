@@ -17,7 +17,7 @@ import { FolderPicker } from "@/lib/native/folderPicker";
 import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 // Reused as-is: the sd/usb/flash-over-temp persistent-root ranking is
 // generic storage-root selection logic, not REU-specific. See HARD18-014.
-import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
+import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuStorageRoot";
 import { noteDiskMountOutcome } from "@/lib/disks/uploadMountRegistry";
 import { resolveDiskDeviceIdentity } from "@/lib/disks/diskDeviceIdentity";
 import {
@@ -42,6 +42,7 @@ import {
 } from "@/lib/sourceNavigation/localSourcesStore";
 import type { DiskEntry } from "./diskTypes";
 import { getDiskName } from "./diskTypes";
+import { buildDiskWorkPath } from "./diskPath";
 
 const MAX_LOCAL_DISK_IMAGE_BYTES = 64 * 1024 * 1024;
 const LOCAL_DISK_READ_TIMEOUT_BASE_MS = 8000;
@@ -103,8 +104,6 @@ type MountDiskToDriveOptions = {
   /** The device the mount must reach; a caller that talked to the drive first passes the host it used. */
   deviceHost?: string;
 };
-
-const DISK_WORK_DIR_NAME = "c64commander-disk-work";
 
 // resolveLocalDiskBlob's own resolution order, mirrored here to find the
 // SAME writable handle it read bytes from (not just "some source with this
@@ -357,16 +356,6 @@ export const markArchiveDiskWriteBackAdvisoryShown = (): void => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(DISK_ARCHIVE_ADVISORY_STORAGE_KEY, "1");
 };
-
-// Flat file directly under the persistent root - NOT a subdirectory. The
-// native FTP plugin's writeFile only ever calls Commons Net's storeFile()
-// (FtpClientPlugin.kt); it has no MKD/mkdir capability, so a work-dir path
-// would silently never materialize on a device where that folder doesn't
-// already exist (hardware-confirmed on c64u fw 1.1.0: STOR into a
-// not-yet-created subfolder fails). Mirrors REU preload's existing flat
-// naming convention (reuWorkflow.ts's `/${folderName}/${REU_PRELOAD_FILE_NAME}`).
-const buildDiskWorkPath = (root: string, drive: "a" | "b", mountType: string) =>
-  `/${root}/${DISK_WORK_DIR_NAME}-${drive}.${mountType}`;
 
 // Deterministic, reused per-drive work filename (overwritten on every
 // materialized mount) rather than one file per mount - the FTP plugin has no

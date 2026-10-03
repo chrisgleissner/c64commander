@@ -43,6 +43,7 @@ import {
   getHvscStatus as getRuntimeStatus,
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
+  isIngestionRuntimeActive as isRuntimeIngestionActive,
   resetHvscLibraryData as resetRuntimeLibraryData,
 } from "./hvscIngestionRuntime";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
@@ -178,6 +179,37 @@ const forgetCachedBrowseIndex = () => {
   verifiedBrowseSnapshot = null;
 };
 
+/**
+ * An ingestion stops any running hydration when it starts (HARD19-019). One that ends with the
+ * installed library still ready - canceled before it changed the library, or with nothing new to
+ * ingest - leaves that library's hydration stopped, so it is started again here.
+ */
+const installedLibraryIsReady = async () => {
+  const status = await getRuntimeStatus();
+  return status.ingestionState === "ready" && Boolean(status.installedVersion);
+};
+
+/**
+ * The runtime keeps the state "ready" until a running ingestion reaches its first archive, so the
+ * state alone cannot say that no ingestion is running; a hydration started inside a run would count
+ * as current for HARD19-019 and could persist over the snapshot that run writes. Both checks are
+ * repeated after every wait, the runtime check last, right before hydration captures its generation.
+ */
+export const resumeHvscMetadataHydrationIfReady = async () => {
+  if (isRuntimeIngestionActive() || !(await installedLibraryIsReady())) return;
+  await hvscMetadataHydrationPromise;
+  if (!(await installedLibraryIsReady()) || isRuntimeIngestionActive()) return;
+  await ensureHvscMetadataHydration();
+};
+
+const resumeHydrationAfterIngestion = () => {
+  void resumeHvscMetadataHydrationIfReady().catch((error) => {
+    addErrorLog("HVSC metadata hydration could not be resumed after an ingestion", {
+      error: { name: (error as Error).name, message: (error as Error).message, stack: (error as Error).stack },
+    });
+  });
+};
+
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
   try {
@@ -187,21 +219,26 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   } finally {
     // Also after a failure: an install from a real release removes Demo Mode's library before it downloads.
     forgetCachedBrowseIndex();
+    if (!mock?.installOrUpdateHvsc) resumeHydrationAfterIngestion();
   }
 };
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
-  const status = mock?.ingestCachedHvsc
-    ? await mock.ingestCachedHvsc({ cancelToken })
-    : await ingestRuntimeCached(cancelToken);
-  forgetCachedBrowseIndex();
-  return status;
+  try {
+    const status = mock?.ingestCachedHvsc
+      ? await mock.ingestCachedHvsc({ cancelToken })
+      : await ingestRuntimeCached(cancelToken);
+    forgetCachedBrowseIndex();
+    return status;
+  } finally {
+    if (!mock?.ingestCachedHvsc) resumeHydrationAfterIngestion();
+  }
 };
 
-export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
+export const cancelHvscInstall = async (cancelToken: string): Promise<boolean> => {
   const mock = getMockBridge();
-  if (mock?.cancelHvscInstall) return mock.cancelHvscInstall({ cancelToken });
+  if (mock?.cancelHvscInstall) return (await mock.cancelHvscInstall({ cancelToken })) !== false;
   return cancelRuntimeInstall(cancelToken);
 };
 

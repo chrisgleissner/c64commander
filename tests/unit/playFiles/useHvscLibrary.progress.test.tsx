@@ -175,7 +175,7 @@ describe("useHvscLibrary progress coverage", () => {
       progressListener = listener;
       return Promise.resolve({ remove: vi.fn().mockResolvedValue(undefined) });
     });
-    mocks.cancelHvscInstallMock.mockResolvedValue(undefined);
+    mocks.cancelHvscInstallMock.mockResolvedValue(true);
     mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 85, installedVersion: 0, requiredUpdates: [85] });
     mocks.clearHvscStatusSummaryMock.mockResolvedValue(undefined);
     mocks.getDefaultHvscStatusSummaryMock.mockImplementation(() => createSummary());
@@ -527,6 +527,33 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscDownloadStatus).toBe("idle");
     expect(result.current.hvscDownloadPercent).toBeNull();
     expect(result.current.hvscActionLabel).toBeNull();
+  });
+
+  it("still applies background metadata hydration progress after an update was canceled", async () => {
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(progressListener).not.toBeNull();
+
+    await act(async () => {
+      await result.current.handleHvscCancel();
+    });
+
+    act(() => {
+      progressListener?.({
+        stage: "sid_metadata_hydration",
+        statusToken: "done",
+        ingestionId: "hvsc-metadata-hydration",
+        processedCount: 10,
+        totalCount: 10,
+        percent: 100,
+        elapsedTimeMs: 50,
+      });
+    });
+
+    expect(result.current.hvscStatusSummary.metadata.status).toBe("success");
+    expect(result.current.hvscStatusSummary.metadata.processedSongs).toBe(10);
   });
 
   it("shows update-in-progress state when required updates are available", async () => {

@@ -6,7 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadDiskLibrary, saveDiskLibrary, SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
+import {
+  COVERAGE_PROBE_DISK_LIBRARY_ID,
+  loadDiskLibrary,
+  saveDiskLibrary,
+  SHARED_DISK_LIBRARY_ID,
+} from "@/lib/disks/diskStore";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
@@ -57,6 +62,37 @@ describe("diskStore", () => {
 
     expect(loaded.disks).toHaveLength(2);
     expect(loaded.disks.map((disk) => disk.path)).toEqual(["/device-a/demo.d64", "/device-b/demo.d81"]);
+  });
+
+  it("keeps a shared library the user emptied empty after a legacy migration", () => {
+    const legacyDisk = createDiskEntry({ path: "/device-a/demo.d64", location: "local" });
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-a`, JSON.stringify({ disks: [legacyDisk] }));
+
+    expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toHaveLength(1);
+    saveDiskLibrary(SHARED_DISK_LIBRARY_ID, { disks: [] });
+
+    expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toEqual([]);
+  });
+
+  it("retires the legacy per-device keys once they are merged into the shared library", () => {
+    const legacyDisk = createDiskEntry({ path: "/device-a/demo.d64", location: "local" });
+    localStorage.setItem(`${DISK_LIBRARY_PREFIX}device-a`, JSON.stringify({ disks: [legacyDisk] }));
+
+    loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
+
+    expect(localStorage.getItem(`${DISK_LIBRARY_PREFIX}device-a`)).toBeNull();
+    expect(
+      JSON.parse(localStorage.getItem(`${DISK_LIBRARY_PREFIX}${SHARED_DISK_LIBRARY_ID}`) ?? "{}").disks,
+    ).toHaveLength(1);
+  });
+
+  it("leaves the coverage probe's own library alone when the shared library is loaded", () => {
+    const probeDisk = createDiskEntry({ path: "/probe/demo.d64", location: "local" });
+    const probeKey = `${DISK_LIBRARY_PREFIX}${COVERAGE_PROBE_DISK_LIBRARY_ID}`;
+    localStorage.setItem(probeKey, JSON.stringify({ disks: [probeDisk] }));
+
+    expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toHaveLength(0);
+    expect(JSON.parse(localStorage.getItem(probeKey) ?? "{}").disks).toHaveLength(1);
   });
 
   it("keeps same-path ultimate disks from different devices distinct when merging legacy libraries", () => {

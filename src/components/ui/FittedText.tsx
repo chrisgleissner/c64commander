@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { observeElementSize } from "@/lib/ui/sharedResizeObserver";
 
 /** Reused across every instance: one canvas is enough to measure text with. */
 let measureContext: CanvasRenderingContext2D | null = null;
@@ -44,8 +45,12 @@ export interface FittedTextProps {
  * on iOS run 33842686343 the "Stable Features" section header was absent from the accessibility
  * tree entirely, leaving its name as just the badge and the summary.
  */
-export const FittedText = ({ variants, label, className }: FittedTextProps) => {
+export const FittedText = ({ variants: variantsProp, label, className }: FittedTextProps) => {
   const hostRef = useRef<HTMLSpanElement | null>(null);
+  // Callers build the list inline, so each parent render handed in a new array: the effect below then
+  // re-measured and re-attached its ResizeObserver on every render of the page around it.
+  const variantsKey = variantsProp.join("\u0000");
+  const variants = useMemo(() => variantsProp, [variantsKey]);
   const [index, setIndex] = useState(0);
 
   const fit = useCallback(() => {
@@ -67,10 +72,7 @@ export const FittedText = ({ variants, label, className }: FittedTextProps) => {
   useLayoutEffect(() => {
     fit();
     const host = hostRef.current;
-    if (!host || typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver(fit);
-    observer.observe(host);
-    return () => observer.disconnect();
+    return host ? observeElementSize(host, fit) : undefined;
   }, [fit]);
 
   const accessibleName = label ?? variants[0] ?? "";

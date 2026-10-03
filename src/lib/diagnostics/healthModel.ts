@@ -11,6 +11,7 @@ import type { TraceEvent } from "@/lib/tracing/types";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
+import { HEALTH_CURRENT_WINDOW_MS } from "@/lib/diagnostics/healthTraceWindow";
 
 // §7.1 — Health states (fixed labels, must not be paraphrased)
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
@@ -258,7 +259,6 @@ export const deriveConnectivityState = (
   }
 };
 
-const FIVE_MINUTES_MS = 5 * 60 * 1000;
 // F-DIAG-3 — recency window for App contributor severity.
 // A single isolated error 4 minutes ago must not push the badge to Degraded;
 // only errors within the last RECENT_APP_ERROR_WINDOW_MS contribute to severity.
@@ -266,15 +266,27 @@ const RECENT_APP_ERROR_WINDOW_MS = 60_000;
 const APP_ERROR_UNHEALTHY_RECENT_THRESHOLD = 5;
 
 // §7.3 — 5-minute current window
-const isInCurrentWindow = (event: TraceEvent): boolean => {
-  const eventMs = new Date(event.timestamp).getTime();
-  return Date.now() - eventMs <= FIVE_MINUTES_MS;
+/*
+ * Trace events are never changed once recorded, and the health model is derived again on every trace
+ * update over the same window of them: parsing each one's timestamp and host on every pass was most of
+ * the derivation's cost. Keyed weakly, so an entry goes when the trace store drops its event.
+ */
+const timestampMsByEvent = new WeakMap<TraceEvent, number>();
+
+const eventTimestampMs = (event: TraceEvent): number => {
+  let eventMs = timestampMsByEvent.get(event);
+  if (eventMs === undefined) {
+    eventMs = new Date(event.timestamp).getTime();
+    timestampMsByEvent.set(event, eventMs);
+  }
+  return eventMs;
 };
 
-const isInRecentAppErrorWindow = (event: TraceEvent): boolean => {
-  const eventMs = new Date(event.timestamp).getTime();
-  return Date.now() - eventMs <= RECENT_APP_ERROR_WINDOW_MS;
-};
+const isInCurrentWindow = (event: TraceEvent): boolean =>
+  Date.now() - eventTimestampMs(event) <= HEALTH_CURRENT_WINDOW_MS;
+
+const isInRecentAppErrorWindow = (event: TraceEvent): boolean =>
+  Date.now() - eventTimestampMs(event) <= RECENT_APP_ERROR_WINDOW_MS;
 
 // F-DIAG-1 — Device scoping for contributor windows.
 // Contributors compute per-active-device health. Saved-but-inactive devices'
@@ -313,7 +325,16 @@ const readEventDeviceContext = (event: TraceEvent) => {
   };
 };
 
+const transportHostByEvent = new WeakMap<TraceEvent, string | null>();
+
 const readEventTransportHost = (event: TraceEvent): string | null => {
+  if (transportHostByEvent.has(event)) return transportHostByEvent.get(event) ?? null;
+  const host = parseEventTransportHost(event);
+  transportHostByEvent.set(event, host);
+  return host;
+};
+
+const parseEventTransportHost = (event: TraceEvent): string | null => {
   const data = event.data as { hostname?: unknown; url?: unknown };
   if (typeof data.hostname === "string" && data.hostname.length > 0) {
     return stripHostPort(data.hostname);
@@ -359,16 +380,26 @@ export const eventMatchesDeviceScope = (event: TraceEvent, scope: DeviceScope | 
     return true;
   }
   if (targetHost) {
-    if (typeof deviceCtx.savedDeviceHostSnapshot === "string") {
-      const snapshotHost = stripHostPort(deviceCtx.savedDeviceHostSnapshot);
-      if (snapshotHost && snapshotHost === targetHost) return true;
-    }
-    if (typeof deviceCtx.verifiedHostname === "string") {
-      const verifiedHost = stripHostPort(deviceCtx.verifiedHostname);
-      if (verifiedHost && verifiedHost === targetHost) return true;
-    }
+    const { snapshotHost, verifiedHost } = readAttributedHosts(event, deviceCtx);
+    if (snapshotHost && snapshotHost === targetHost) return true;
+    if (verifiedHost && verifiedHost === targetHost) return true;
   }
   return false;
+};
+
+const attributedHostsByEvent = new WeakMap<TraceEvent, { snapshotHost: string | null; verifiedHost: string | null }>();
+
+const readAttributedHosts = (event: TraceEvent, deviceCtx: NonNullable<ReturnType<typeof readEventDeviceContext>>) => {
+  let hosts = attributedHostsByEvent.get(event);
+  if (!hosts) {
+    hosts = {
+      snapshotHost:
+        typeof deviceCtx.savedDeviceHostSnapshot === "string" ? stripHostPort(deviceCtx.savedDeviceHostSnapshot) : null,
+      verifiedHost: typeof deviceCtx.verifiedHostname === "string" ? stripHostPort(deviceCtx.verifiedHostname) : null,
+    };
+    attributedHostsByEvent.set(event, hosts);
+  }
+  return hosts;
 };
 
 const scopeEvents = (events: TraceEvent[], scope: DeviceScope | null | undefined): TraceEvent[] => {
@@ -423,7 +454,7 @@ const isSuccessfulTelnetOperation = (event: TraceEvent): boolean => {
 };
 
 const sortEventsByTimestampAscending = (events: TraceEvent[]): TraceEvent[] =>
-  [...events].sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime());
+  [...events].sort((left, right) => eventTimestampMs(left) - eventTimestampMs(right));
 
 const trimToLatestSuccess = (events: TraceEvent[], isSuccess: (event: TraceEvent) => boolean): TraceEvent[] => {
   const latestSuccessIndex = events.findLastIndex(isSuccess);

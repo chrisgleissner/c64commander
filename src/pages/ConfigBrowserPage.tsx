@@ -63,7 +63,13 @@ import {
   type MenuNode,
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
+import {
+  filterCategoriesByQuery,
+  filterMenuPagesByQuery,
+  type MenuPageEntry,
+} from "@/lib/config/menuMapping/searchMenuPages";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
+import { rollbackAudioMixerItem } from "@/pages/config/audioMixerRollback";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
@@ -517,13 +523,12 @@ function CategorySection({
       // was backgrounded for a long time while solo was active). See
       // HARD9-054.
       const snapshot = readFreshSoloSnapshot() ?? fallbackSnapshot;
-      if (snapshot.length) {
-        void applySoloRouting(null, snapshot);
-      }
+      const restored = snapshot.length ? applySoloRouting(null, snapshot) : undefined;
       wasSoloActiveRef.current = false;
       if (reason === "close") {
         resetActiveSolo();
       }
+      return restored;
     },
     [applySoloRouting, isAudioMixer, readFreshSoloSnapshot, resetActiveSolo],
   );
@@ -538,12 +543,12 @@ function CategorySection({
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = isOpen;
     if (!isAudioMixer || isOpen || !wasOpen) return;
-    restoreSoloRouting("close");
+    void restoreSoloRouting("close");
   }, [isAudioMixer, isOpen, restoreSoloRouting]);
 
   useEffect(() => {
     if (!isAudioMixer) return undefined;
-    return () => restoreSoloRouting("unmount");
+    return () => void restoreSoloRouting("unmount");
   }, [isAudioMixer, restoreSoloRouting]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
@@ -624,13 +629,13 @@ function CategorySection({
             category: categoryName,
           },
         });
-        syncAudioConfiguredItems(previousConfiguredItems);
+        syncAudioConfiguredItems(rollbackAudioMixerItem(audioConfiguredRef.current, previousConfiguredItems, itemName));
       }
       return;
     }
     const success = await handleValueChange(itemName, value);
     if (!success) {
-      syncAudioConfiguredItems(previousConfiguredItems);
+      syncAudioConfiguredItems(rollbackAudioMixerItem(audioConfiguredRef.current, previousConfiguredItems, itemName));
       return;
     }
     if (!soloState.soloItem) {
@@ -752,7 +757,8 @@ function CategorySection({
 
   const handleRefresh = async () => {
     if (isAudioMixer) {
-      resetActiveSolo();
+      // Write the levels Solo muted back before re-reading, or the re-read adopts them as configured.
+      await restoreSoloRouting("close");
       soloSnapshotRef.current = [];
       resyncPendingRef.current = true;
       syncAudioConfiguredItems([]);
@@ -927,10 +933,6 @@ function CategorySection({
   );
 }
 
-// A flattened menu page entry for hierarchy-mode rendering: a settings page plus the
-// parent menu group it belongs to (e.g. "Audio setup" › "Audio mixer").
-type MenuPageEntry = { page: MenuNode; groupLabel: string | null };
-
 const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   const entries: MenuPageEntry[] = [];
   for (const node of hierarchy.nodes) {
@@ -943,16 +945,10 @@ const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   return entries;
 };
 
-/** Every REST category a menu page reads from, so a deep link can find the card that holds one. */
-const restCategoriesOfPage = (page: MenuNode): Set<string> => {
-  const categories = new Set<string>();
-  const walk = (node: MenuNode) => {
-    if (node.kind === "item" && node.rest) categories.add(node.rest.category);
-    for (const child of node.children ?? []) walk(child);
-  };
-  walk(page);
-  return categories;
-};
+/** Whether a menu page edits a REST item (or, without `item`, any item of the category). */
+const pageReadsRest = (node: MenuNode, category: string, item?: string): boolean =>
+  (node.kind === "item" && node.rest?.category === category && (item === undefined || node.rest.item === item)) ||
+  (node.children ?? []).some((child) => pageReadsRest(child, category, item));
 
 // The single REST category a page reads from when it is a flat, single-category page
 // (used to delegate the Audio Mixer page to the specialized CategorySection).
@@ -1001,14 +997,7 @@ export default function ConfigBrowserPage() {
   const hierarchy = useMemo(() => resolveMenuMapping({ family, firmwareVersion }), [family, firmwareVersion]);
 
   const menuPages = useMemo(() => (hierarchy ? flattenMenuPages(hierarchy) : []), [hierarchy]);
-  const filteredMenuPages = useMemo(() => {
-    if (!searchQuery) return menuPages;
-    const query = searchQuery.toLowerCase();
-    return menuPages.filter(
-      (entry) =>
-        entry.page.label.toLowerCase().includes(query) || (entry.groupLabel ?? "").toLowerCase().includes(query),
-    );
-  }, [menuPages, searchQuery]);
+  const filteredMenuPages = useMemo(() => filterMenuPagesByQuery(menuPages, searchQuery), [menuPages, searchQuery]);
 
   /*
    * Global search deep-links to one live item (spec.md section 5.9). Which card holds it depends
@@ -1017,8 +1006,11 @@ export default function ConfigBrowserPage() {
    */
   useEffect(
     () =>
-      subscribeConfigItemFocus(({ category }) => {
-        const owningPage = menuPages.find((entry) => restCategoriesOfPage(entry.page).has(category));
+      subscribeConfigItemFocus(({ category, itemName }) => {
+        // One category can be spread over several pages, so the page holding the item itself wins.
+        const owningPage =
+          menuPages.find((entry) => pageReadsRest(entry.page, category, itemName)) ??
+          menuPages.find((entry) => pageReadsRest(entry.page, category));
         // Through the shared rule for both, so the deep link and the section it is looking for
         // cannot drift apart: a menu page slugs its label the same way a category slugs its name.
         const sectionId = owningPage
@@ -1034,13 +1026,13 @@ export default function ConfigBrowserPage() {
   // unknown/future category with no owner, keyword, or default). The residual Advanced
   // section renders ONLY these; when there are none it is omitted entirely (no junk drawer).
   const residualCategories = useMemo(
-    () => (hierarchy ? unroutedCategories(hierarchy, family, liveCategories) : []),
-    [hierarchy, family, liveCategories],
+    () => filterCategoriesByQuery(hierarchy ? unroutedCategories(hierarchy, family, liveCategories) : [], searchQuery),
+    [hierarchy, family, liveCategories, searchQuery],
   );
-  const filteredCategories = useMemo(() => {
-    if (!searchQuery) return liveCategories;
-    return liveCategories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [liveCategories, searchQuery]);
+  const filteredCategories = useMemo(
+    () => filterCategoriesByQuery(liveCategories, searchQuery),
+    [liveCategories, searchQuery],
+  );
   const pageShellClassName = usePrimaryPageShellClassName();
   const { profile } = useDisplayProfile();
 
@@ -1081,7 +1073,7 @@ export default function ConfigBrowserPage() {
               </Button>
             </div>
           ) : hierarchy ? (
-            filteredMenuPages.length === 0 ? (
+            filteredMenuPages.length === 0 && residualCategories.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">No settings match your search</div>
             ) : (
               <>

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 // @ts-expect-error -- plain .mjs build script, no type declarations
-import { compareStages } from "../../../scripts/lib/streamPerfCompare.mjs";
+import { collectBestOf, compareStages, runStreamBenchGate } from "../../../scripts/lib/streamPerfCompare.mjs";
 
 /**
  * The stream host-benchmark gate failed three times on streaming code that had not changed, once
@@ -95,5 +95,107 @@ describe("the stream benchmark gate on a genuine slowdown", () => {
 
     expect(regressions).toEqual([]);
     expect(rows.find((row) => row.name === "a newly added hot path")?.deltaPct).toBeNull();
+  });
+});
+
+/**
+ * Stage numbers from two CI runs of unchanged streaming code. The logs do not name the CPU, but
+ * both runs show the same profile against the committed baseline (concealment fill about -2%,
+ * telemetry about +2%, bytesToInt16 +20 to +24%), which most of the other 36 recorded runs do not,
+ * so they stand in for the parent commit measured on the same runner. On this profile
+ * `governor tick` sits about 25% below its committed share.
+ */
+const RUN_2026_10_02_GOVERNOR_FAILURE = {
+  "VIC frame assembly (68 packets → 1 frame)": 42471,
+  "audio PLC timeline advance (contiguous packet)": 1557484,
+  "audio concealment fill (one 768-byte packet)": 1197061,
+  "governor tick": 555754,
+  "telemetry ingest (one 10 Hz sample)": 245581,
+  "audio bytesToInt16 of one packet": 267374,
+};
+const RUN_2026_09_25_SAME_CPU_MODEL = {
+  "VIC frame assembly (68 packets → 1 frame)": 45171,
+  "audio PLC timeline advance (contiguous packet)": 1516599,
+  "audio concealment fill (one 768-byte packet)": 1138640,
+  "governor tick": 539051,
+  "telemetry ingest (one 10 Hz sample)": 231855,
+  "audio bytesToInt16 of one packet": 262377,
+};
+
+type GateResult = { baselineSource: string; regressions: Array<{ name: string }> };
+
+const gate = (options: { againstBase: boolean; head: Record<string, number>; base?: Record<string, number> }) =>
+  runStreamBenchGate({
+    repeats: 1,
+    runBench: (tree: string) => (tree === "base" ? options.base : options.head),
+    againstBase: options.againstBase,
+    committedBaseline: BASELINE,
+    maxRegressionPct: MAX_REGRESSION_PCT,
+  }) as GateResult;
+
+describe("the stream benchmark gate against the parent commit on the same runner", () => {
+  it("fails the 2026-10-02 run on governor tick when it is compared with the committed baseline", () => {
+    const result = gate({ againstBase: false, head: RUN_2026_10_02_GOVERNOR_FAILURE });
+
+    expect(result.baselineSource).toBe("committed");
+    expect(names(result.regressions)).toEqual(["governor tick"]);
+  });
+
+  it("passes the same run when the baseline is unchanged code measured on the same CPU model", () => {
+    const result = gate({
+      againstBase: true,
+      head: RUN_2026_10_02_GOVERNOR_FAILURE,
+      base: RUN_2026_09_25_SAME_CPU_MODEL,
+    });
+
+    expect(names(result.regressions)).toEqual([]);
+    expect(result.baselineSource).toBe("base");
+  });
+
+  it("still fails a governor tick that lost 30% against the parent on the same runner", () => {
+    const result = gate({
+      againstBase: true,
+      head: {
+        ...RUN_2026_10_02_GOVERNOR_FAILURE,
+        "governor tick": Math.round(RUN_2026_10_02_GOVERNOR_FAILURE["governor tick"] * 0.7),
+      },
+      base: RUN_2026_09_25_SAME_CPU_MODEL,
+    });
+
+    expect(names(result.regressions)).toEqual(["governor tick"]);
+  });
+
+  it("fails every stage when this commit slows all of them by the same factor against the parent", () => {
+    const uniformlySlower = Object.fromEntries(
+      Object.entries(RUN_2026_09_25_SAME_CPU_MODEL).map(([name, hz]) => [name, Math.round(hz * 0.6)]),
+    );
+    const result = gate({ againstBase: true, head: uniformlySlower, base: RUN_2026_09_25_SAME_CPU_MODEL });
+
+    expect(names(result.regressions)).toEqual(Object.keys(RUN_2026_09_25_SAME_CPU_MODEL).sort());
+  });
+
+  it("still divides out the runner speed when comparing a uniformly slower runner with the committed baseline", () => {
+    const uniformlySlowerRunner = Object.fromEntries(
+      Object.entries(BASELINE).map(([name, hz]) => [name, Math.round(hz * 0.6)]),
+    );
+    const result = gate({ againstBase: false, head: uniformlySlowerRunner });
+
+    expect(names(result.regressions)).toEqual([]);
+  });
+
+  it("alternates between the two trees and keeps each stage's fastest sample per tree", () => {
+    const calls: string[] = [];
+    const samples: Record<string, number[]> = { head: [100, 300, 200], base: [50, 40, 60] };
+    const best = collectBestOf({
+      repeats: 3,
+      trees: ["head", "base"],
+      runBench: (tree: string) => {
+        calls.push(tree);
+        return { stage: samples[tree][calls.filter((call) => call === tree).length - 1] };
+      },
+    });
+
+    expect(calls).toEqual(["head", "base", "head", "base", "head", "base"]);
+    expect(best).toEqual({ head: { stage: 300 }, base: { stage: 60 } });
   });
 });

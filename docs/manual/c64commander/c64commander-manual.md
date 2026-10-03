@@ -162,6 +162,8 @@ The rest of Home is a stack of cards. Tap a header to open or close one.
 
 The app remembers which cards you left open. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config too; these cards just save you the search.
 
+The cards show what your C64 reports. While Home is on screen, the app reads those settings again every 10 seconds, when you come back to the app, and right after any action it takes, so a change made in the machine's own menu shows up here within about 10 seconds. A slider you are dragging, a field you are typing in, or a setting still being written is left alone until you are done.
+
 At the foot of the page, the system strip shows which app build, device and firmware you are on. Check it before an upgrade, or when something seems wrong.
 
 **With no C64 connected**, Home rearranges itself. The search field stays, and so do Radio, Last, Recent and Live, with a card below them that explains how to connect. Live needs a machine, so it is grayed out and reads "Needs a connected C64 Ultimate".
@@ -203,6 +205,8 @@ Every item remembers where it came from. Local files stay local, C64U files poin
 Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.
 
 The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.
+
+**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
 
 Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.
 
@@ -567,6 +571,8 @@ Your choices stay on your phone or tablet. They belong to the music itself, not 
 While a station runs, it chooses what comes next, so Shuffle, Repeat and Reshuffle step aside. They come back, settings intact, the moment you stop it.
 
 The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
+
+A station plays in place of your playlist, but your playlist is kept, even if the app is closed. When you stop the station, the tune playing now finishes, playback stops, and your playlist comes back as you left it. If you added or removed tunes while the station played, the app asks first whether to keep the station's tunes or return to your playlist.
 
 #### Finding one particular tune
 
@@ -945,7 +951,9 @@ You add and edit saved devices in **Settings → Connection**, under **Saved dev
 
 ### Reading Diagnostics
 
-Diagnostics slides up from the bottom of the screen. Open it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.
+Diagnostics slides up from the bottom of the screen. Open it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or choosing **Details** on a notification.
+
+Notifications appear just above the tabs at the bottom of the screen, never on top of a control. An error stays until you close it with its **×** button or the Back key; other messages close by themselves.
 
 The panel has three parts, from top to bottom:
 

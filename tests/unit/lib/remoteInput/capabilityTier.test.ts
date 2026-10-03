@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { remoteInputSupportsJoystick, resolveRemoteInputTier } from "@/lib/remoteInput/capabilityTier";
+import {
+  REMOTE_INPUT_AUTH_REQUIRED_HINT,
+  REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT,
+  remoteInputSupportsJoystick,
+  resolveRemoteInputTier,
+} from "@/lib/remoteInput/capabilityTier";
 import type { MachineInputCapabilityStatus } from "@/lib/deviceCapabilities";
 
 describe("resolveRemoteInputTier", () => {
@@ -36,5 +41,16 @@ describe("remoteInputSupportsJoystick", () => {
     expect(remoteInputSupportsJoystick("full")).toBe(true);
     expect(remoteInputSupportsJoystick("kernal-fallback")).toBe(false);
     expect(remoteInputSupportsJoystick("auth-required")).toBe(false);
+  });
+});
+
+describe("Remote Input hints", () => {
+  // The sheet's two modes are labeled "Joystick" and "Keys"; a hint naming another tab sends the user looking for it.
+  it.each([
+    ["auth-required", REMOTE_INPUT_AUTH_REQUIRED_HINT],
+    ["joystick-unavailable", REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
+  ])("names only tabs the sheet shows in the %s hint", (_name, hint) => {
+    expect(hint).not.toMatch(/\bType\b/);
+    expect(hint).toMatch(/\bKeys\b/);
   });
 });

@@ -319,6 +319,7 @@ export const getActiveAutoResolutionContext = (): AutoResolutionContext => ({
 });
 
 const broadcast = (key: string, value: unknown) => {
+  configForThisTask = null;
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("c64u-device-safety-updated", { detail: { key, value } }));
 };
@@ -380,9 +381,35 @@ const resolveBooleanOverride = (key: string, fallback: boolean) => {
   return override === null ? fallback : override;
 };
 
+/*
+ * Read once per task. Rendering a page asks once per slider and once per request: 458 rows on Config
+ * read about twenty localStorage keys each. Every write in this module clears it through broadcast,
+ * a different selected device or product resolves AUTO again, and it is dropped when the task ends.
+ */
+let configForThisTask: { config: DeviceSafetyConfig; context: AutoResolutionContext } | null = null;
+
+const isSameAutoResolutionContext = (left: AutoResolutionContext, right: AutoResolutionContext) =>
+  left.activeProduct === right.activeProduct &&
+  left.activeDeviceId === right.activeDeviceId &&
+  left.activeFirmware === right.activeFirmware;
+
 export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
+  const context = getActiveAutoResolutionContext();
+  if (configForThisTask && isSameAutoResolutionContext(configForThisTask.context, context)) {
+    return configForThisTask.config;
+  }
+  if (!configForThisTask) {
+    queueMicrotask(() => {
+      configForThisTask = null;
+    });
+  }
+  configForThisTask = { config: readDeviceSafetyConfig(context), context };
+  return configForThisTask.config;
+};
+
+const readDeviceSafetyConfig = (context: AutoResolutionContext): DeviceSafetyConfig => {
   const mode = loadDeviceSafetyMode();
-  const resolution = resolveAutoSafetyMode(mode, getActiveAutoResolutionContext());
+  const resolution = resolveAutoSafetyMode(mode, context);
   const defaults = MODE_DEFAULTS[resolution.effectiveMode];
   return {
     mode,
@@ -493,6 +520,40 @@ export const saveDiscoveryProbeIntervalMs = (value: number) =>
 
 export const saveAllowUserOverrideCircuit = (value: boolean) =>
   saveBooleanOverride(ALLOW_USER_OVERRIDE_CIRCUIT_KEY, value);
+
+export type DeviceSafetyTunable = Exclude<keyof DeviceSafetyConfig, "mode" | "resolution">;
+
+const OVERRIDE_KEY_BY_TUNABLE: Record<DeviceSafetyTunable, string> = {
+  ftpMaxConcurrency: FTP_MAX_CONCURRENCY_KEY,
+  restMaxConcurrency: REST_MAX_CONCURRENCY_KEY,
+  infoCacheMs: INFO_CACHE_MS_KEY,
+  configsCacheMs: CONFIGS_CACHE_MS_KEY,
+  configsCooldownMs: CONFIGS_COOLDOWN_MS_KEY,
+  drivesCooldownMs: DRIVES_COOLDOWN_MS_KEY,
+  ftpListCooldownMs: FTP_LIST_COOLDOWN_MS_KEY,
+  telnetConnectCooldownMs: TELNET_CONNECT_COOLDOWN_MS_KEY,
+  machineInputCooldownMs: MACHINE_INPUT_COOLDOWN_MS_KEY,
+  backoffBaseMs: BACKOFF_BASE_MS_KEY,
+  backoffMaxMs: BACKOFF_MAX_MS_KEY,
+  backoffFactor: BACKOFF_FACTOR_KEY,
+  circuitBreakerThreshold: CIRCUIT_BREAKER_THRESHOLD_KEY,
+  circuitBreakerCooldownMs: CIRCUIT_BREAKER_COOLDOWN_MS_KEY,
+  discoveryProbeIntervalMs: DISCOVERY_PROBE_INTERVAL_MS_KEY,
+  allowUserOverrideCircuit: ALLOW_USER_OVERRIDE_CIRCUIT_KEY,
+};
+
+export const clearDeviceSafetyOverride = (tunable: DeviceSafetyTunable) => {
+  if (typeof localStorage === "undefined") return;
+  const key = OVERRIDE_KEY_BY_TUNABLE[tunable];
+  localStorage.removeItem(key);
+  broadcast(key, null);
+};
+
+const PRESETS_AUTO_CAN_RESOLVE: ConcreteDeviceSafetyMode[] = ["BALANCED", "CONSERVATIVE"];
+
+/** Whether `value` is what `mode` itself yields for `tunable`, i.e. it need not be stored as an override. */
+export const isDeviceSafetyPresetValue = (mode: DeviceSafetyMode, tunable: DeviceSafetyTunable, value: unknown) =>
+  (mode === "AUTO" ? PRESETS_AUTO_CAN_RESOLVE : [mode]).some((preset) => MODE_DEFAULTS[preset][tunable] === value);
 
 export const DEVICE_SAFETY_SETTING_KEYS = {
   DEVICE_SAFETY_MODE_KEY,

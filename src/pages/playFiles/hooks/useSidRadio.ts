@@ -85,6 +85,8 @@ export interface UseSidRadioParams {
 
 export interface UseSidRadioResult {
   active: boolean;
+  /** The saved station has had its chance to resume; `active` false from here on means none did. */
+  resumeSettled: boolean;
   station: ActiveStation | null;
   /**
    * Song station, optionally constrained to a single mood (a style-mask bit).
@@ -266,6 +268,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
    * record or persist anything.
    */
   const stationGenerationRef = useRef(0);
+  // The provider latches exhaustion, so every later refill reports it again; the notice is said once per station.
+  const stationEndedNoticeGenerationRef = useRef(-1);
 
   const ensureClient = useCallback((): SidRadioWorkerClient => {
     if (!clientRef.current) {
@@ -294,7 +298,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       })
       .catch((error: unknown) => {
         stylePopulationsLoadRef.current = null;
-        console.warn("SID Radio: could not read style populations from the similarity bundle", error);
+        addLog("warn", "SID Radio: could not read style populations from the similarity bundle", {
+          service: "sid-radio",
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
         return null;
       });
     return stylePopulationsLoadRef.current;
@@ -406,7 +414,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       // whether it is seeded by the style or filtered over Likes: refuse the
       // station rather than starting one that can only report itself empty.
       if (styleFilter !== null && !isStyleBitPopulated(readyStats.stylePopulations, styleFilter)) {
-        refuseStart("no-radio", { seedKind, styleFilter, reason: "style has no members" });
+        refuseStart("no-radio-for-style", { seedKind, styleFilter, reason: "style has no members" });
         return;
       }
       // Past this point the previous station is being replaced, so it is retired here rather than
@@ -463,7 +471,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         // to like, and liking would not make a station playable. Name the real blocker. Once music
         // is installed, an empty station is a genuine one and keeps its taste/tune wording.
         const hvscMissing = getMd548PathIndexStats().size === 0;
-        const refusal = hvscMissing ? "no-hvsc" : seedKind === "song" ? "no-radio-for-tune" : "no-radio";
+        // Only the Likes station is seeded by likes, so only its refusal may ask for more of them.
+        const emptyRefusal: Record<ActiveStation["seedKind"], SidRadioNotice> = {
+          song: "no-radio-for-tune",
+          style: "no-radio-for-style",
+          taste: "no-radio",
+        };
+        const refusal = hvscMissing ? "no-hvsc" : emptyRefusal[seedKind];
         refuseStart(refusal, { seedKind, styleFilter, reason: "no playable tracks" });
         return;
       }
@@ -543,7 +557,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     const populations = await ensureStylePopulations();
     const candidates = SID_RADIO_STYLE_TILES.filter((tile) => isStylePopulated(populations, tile.key));
     if (candidates.length === 0) {
-      refuseStart("no-radio", { seedKind: "style", reason: "no style has members" });
+      refuseStart("no-radio-for-style", { seedKind: "style", reason: "no style has members" });
       return;
     }
     const tile = candidates[randomSeed() % candidates.length];
@@ -553,7 +567,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   // Resume the chip after an app restart (D15): rebuild the provider with the
   // saved exclude set so the next refill continues the identical sequence.
   const restoredRef = useRef(false);
+  const [resumeSettled, setResumeSettled] = useState(false);
   useEffect(() => {
+    setResumeSettled(true);
     if (restoredRef.current || !enabled || station) return;
     restoredRef.current = true;
     const saved: SidRadioSessionDescriptor | null = loadSidRadioSession();
@@ -654,7 +670,10 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           // 4 — a Chill / Ambient station advertised as holding 17,574 tracks stopped dead after 25
           // and left no way to tell why. The provider latches this, so it will not resolve itself:
           // the station is over and picking another is the only way on.
-          setNotice("station-ended");
+          if (stationEndedNoticeGenerationRef.current !== generation) {
+            stationEndedNoticeGenerationRef.current = generation;
+            setNotice("station-ended");
+          }
         }
         recordRefill({
           lastRefillMs: settledAt - started,
@@ -679,6 +698,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           service: "sid-radio",
           error: error instanceof Error ? error.message : String(error),
         });
+        // With tracks still queued, the next advance retries the refill. On the last track nothing
+        // will, so the station stops after it, and the user is told why.
+        if (stationGenerationRef.current === generation && remaining === 0) setNotice("refill-failed");
       });
   }, [station, currentIndex, playlistLength, appendItems]);
 
@@ -705,6 +727,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
 
   return {
     active: station !== null,
+    resumeSettled,
     station,
     startSongRadio,
     setSongStationStyleFilter,

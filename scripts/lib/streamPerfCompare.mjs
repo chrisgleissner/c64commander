@@ -47,23 +47,26 @@ export const median = (values) => {
  * shape signal alone — is what produced three false failures on unchanged code, and a gate that
  * fails on documentation commits is one that gets ignored rather than read.
  *
- * The durable fix is to measure the parent commit on the SAME runner in the same job and compare
- * against that, which removes machine variation instead of trying to model it. That needs the
- * workflow to fetch more than one commit and to run the benchmarks twice, so it is deliberately
- * left as a separate change rather than folded into a build fix.
+ * Neither guard is enough against a committed baseline. Across 38 recorded CI runs of unchanged
+ * code, `governor tick` lost between 9% and 29% of its share depending on which CPU model the
+ * runner had, so the 25% tolerance sits inside the spread of the runner fleet. CI therefore
+ * compares against the parent commit measured in the same job (`runStreamBenchGate`).
  */
-export const compareStages = ({ current, baseline, maxRegressionPct }) => {
+export const compareStages = ({ current, baseline, maxRegressionPct, divideOutRunnerSpeed = true }) => {
   const shared = Object.keys(current).filter((name) => typeof baseline[name] === "number");
   if (shared.length === 0) return { scale: null, rows: [], regressions: [] };
 
   // Median rather than mean: one stage that happens to scale differently on a given CPU must not
   // drag every other stage's share with it.
   const scale = median(shared.map((name) => current[name] / baseline[name]));
+  // A baseline measured on the same runner has no machine speed to cancel; dividing by the median
+  // there would let a change that slows most stages by one factor pass as "unchanged shape".
+  const divisor = divideOutRunnerSpeed ? scale : 1;
 
   const rows = Object.entries(current).map(([name, hz]) => {
     const base = baseline[name];
     if (typeof base !== "number") return { name, hz, base: null, deltaPct: null, regressed: false, suppressed: false };
-    const deltaPct = (hz / base / scale - 1) * 100;
+    const deltaPct = (hz / base / divisor - 1) * 100;
     const lostShare = -deltaPct > maxRegressionPct;
     const slowerThanBaseline = hz < base;
     return {
@@ -79,4 +82,54 @@ export const compareStages = ({ current, baseline, maxRegressionPct }) => {
   });
 
   return { scale, rows, regressions: rows.filter((row) => row.regressed) };
+};
+
+/**
+ * Run the benchmark `repeats` times for each tree, alternating between the trees so that a slow
+ * stretch on the runner lands on both, and keep each stage's fastest sample per tree.
+ *
+ * The fastest sample, not the median: interference only ever makes a microbenchmark slower, so
+ * the fastest sample is the least contaminated one. A genuine regression makes every sample
+ * slower, so the fastest sample still drops with it.
+ */
+export const collectBestOf = ({ repeats, trees, runBench }) => {
+  const samples = Object.fromEntries(trees.map((tree) => [tree, {}]));
+  for (let i = 0; i < repeats; i += 1) {
+    for (const tree of trees) {
+      for (const [name, hz] of Object.entries(runBench(tree))) (samples[tree][name] ??= []).push(hz);
+    }
+  }
+  return Object.fromEntries(
+    trees.map((tree) => [
+      tree,
+      Object.fromEntries(
+        Object.entries(samples[tree]).map(([name, values]) => [name, Math.round(Math.max(...values))]),
+      ),
+    ]),
+  );
+};
+
+/**
+ * The whole gate decision. With `againstBase`, the baseline is the parent commit benchmarked on the
+ * same runner in the same job (`runBench("base")`), which removes the CPU-model differences that a
+ * committed baseline cannot account for. Without it, the committed baseline is used, which is only
+ * meaningful on the machine that seeded it.
+ */
+export const runStreamBenchGate = ({ repeats, runBench, againstBase, committedBaseline, maxRegressionPct }) => {
+  if (againstBase) {
+    const { head, base } = collectBestOf({ repeats, trees: ["head", "base"], runBench });
+    return {
+      baselineSource: "base",
+      current: head,
+      baseline: base,
+      ...compareStages({ current: head, baseline: base, maxRegressionPct, divideOutRunnerSpeed: false }),
+    };
+  }
+  const { head } = collectBestOf({ repeats, trees: ["head"], runBench });
+  return {
+    baselineSource: "committed",
+    current: head,
+    baseline: committedBaseline,
+    ...compareStages({ current: head, baseline: committedBaseline, maxRegressionPct }),
+  };
 };

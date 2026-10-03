@@ -185,6 +185,28 @@ describe("OnlineArchiveDialog", () => {
     });
   });
 
+  it("keeps the results and the entry list on screen after a failed launch", () => {
+    vi.mocked(useOnlineArchive).mockReturnValue({
+      ...baseReturn,
+      state: {
+        phase: "error",
+        message: "Device unreachable",
+        recoverableState: {
+          phase: "entries",
+          params: { name: "joyride" },
+          result: { id: "100", category: 40, name: "Joyride" },
+          results: [{ id: "100", category: 40, name: "Joyride" }],
+          entries: [{ id: 0, path: "joyride.prg" }],
+        },
+      },
+    } as never);
+
+    render(<OnlineArchiveDialog open onOpenChange={() => undefined} config={defaultConfig} />);
+
+    expect(screen.getByText("joyride.prg")).toBeInTheDocument();
+    expect(screen.queryByText("Search results appear here.")).toBeNull();
+  });
+
   it("does not report archive errors while the dialog is closed", async () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,

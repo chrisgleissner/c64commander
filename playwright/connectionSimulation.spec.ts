@@ -23,6 +23,11 @@ import { enableGoldenTrace } from "./goldenTraceRegistry";
 
 const snap = attachStepScreenshotTolerant;
 
+// The startup window ends discovery in Demo Mode even while a probe is still in flight, so a short
+// window races the probe on a loaded runner (CI saw DEMO_ACTIVE against a reachable mock). The
+// longest window the app accepts means only a probe that takes 15 s to be answered can lose.
+const REACHABLE_DEVICE_DISCOVERY_WINDOW_MS = 15000;
+
 const hostnameFromHost = (host: string) => new URL(`http://${host}`).hostname;
 
 const portFromHost = (host: string) => new URL(`http://${host}`).port || "80";
@@ -259,9 +264,9 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(
-      ({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
+      ({ host: hostArg, demoBaseUrl, windowMs }: { host: string; demoBaseUrl: string; windowMs: number }) => {
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-        localStorage.setItem("c64u_startup_discovery_window_ms", "1500");
+        localStorage.setItem("c64u_startup_discovery_window_ms", String(windowMs));
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
         localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", hostArg);
@@ -273,12 +278,20 @@ test.describe("Deterministic Connectivity Simulation", () => {
         }
         delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       },
-      { host, demoBaseUrl: demoServer.baseUrl },
+      { host, demoBaseUrl: demoServer.baseUrl, windowMs: REACHABLE_DEVICE_DISCOVERY_WINDOW_MS },
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect
+      .poll(() => server.requests.some((req) => req.url.startsWith("/v1/info")), {
+        message: "the startup discovery probe never reached the reachable mock device",
+        timeout: REACHABLE_DEVICE_DISCOVERY_WINDOW_MS,
+      })
+      .toBe(true);
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
+      timeout: REACHABLE_DEVICE_DISCOVERY_WINDOW_MS,
+    });
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toHaveCount(0);
     expect(demoServer.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(false);
 

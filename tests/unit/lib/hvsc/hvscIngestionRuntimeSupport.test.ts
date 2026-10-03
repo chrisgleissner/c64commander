@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const addErrorLogMock = vi.fn();
 const addLogMock = vi.fn();
@@ -24,9 +24,14 @@ vi.mock("@/lib/hvsc/hvscStatusStore", () => ({
 
 import {
   applyCancelledIngestionState,
+  beginCancelRequest,
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
+  markIngestionRuntimeIdle,
+  markInstalledLibraryConsistent,
+  markInstalledLibraryTouched,
+  recordStateBeforeIngestion,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
@@ -101,6 +106,8 @@ describe("hvscIngestionRuntimeSupport", () => {
   });
 
   it("formats path previews and applies cancellation state updates", () => {
+    loadHvscStateMock.mockReturnValue({ installedVersion: 0 });
+    getHvscIngestionRuntimeState().activeIngestionRunning = true;
     loadHvscStatusSummaryMock.mockReturnValue({
       download: { status: "in-progress", startedAt: "earlier" },
       extraction: { status: "idle" },
@@ -112,6 +119,7 @@ describe("hvscIngestionRuntimeSupport", () => {
     expect(formatPathListPreview(Array.from({ length: 12 }, (_, index) => `file-${index}`))).toContain("(+2 more)");
 
     applyCancelledIngestionState(undefined, emitProgress, "HVSC.7z");
+    markIngestionRuntimeIdle();
 
     expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Canceled" });
     expect(saveHvscStatusSummaryMock).toHaveBeenCalledWith(
@@ -129,6 +137,111 @@ describe("hvscIngestionRuntimeSupport", () => {
     expect(emitProgress).toHaveBeenCalledWith(
       expect.objectContaining({ stage: "cancelled", archiveName: "HVSC.7z", errorCause: "Canceled" }),
     );
+  });
+
+  describe("cancellation of an ingestion over an installed library", () => {
+    const startIngestion = () => {
+      getHvscIngestionRuntimeState().activeIngestionRunning = true;
+      recordStateBeforeIngestion();
+    };
+
+    beforeEach(() => {
+      markIngestionRuntimeIdle();
+      loadHvscStateMock.mockReturnValue({ installedVersion: 85, ingestionState: "ready", ingestionError: null });
+      loadHvscStatusSummaryMock.mockReturnValue({ download: { status: "idle" }, extraction: { status: "idle" } });
+      startIngestion();
+    });
+
+    afterEach(() => {
+      markIngestionRuntimeIdle();
+    });
+
+    it("returns the library to ready when the canceled run had not touched it", () => {
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "ready", ingestionError: null });
+    });
+
+    it("reports Canceled when the canceled run had touched the library", () => {
+      markInstalledLibraryTouched();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Canceled" });
+    });
+
+    it("returns the library to ready when the touched archive had been applied completely", () => {
+      markInstalledLibraryTouched();
+      markInstalledLibraryConsistent();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "ready", ingestionError: null });
+    });
+
+    it("forgets a touch from the previous ingestion once that ingestion has ended", () => {
+      markInstalledLibraryTouched();
+      markIngestionRuntimeIdle();
+      startIngestion();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "ready", ingestionError: null });
+    });
+
+    it("leaves the state unchanged when the cancel is applied after the ingestion has ended", () => {
+      markInstalledLibraryTouched();
+      markIngestionRuntimeIdle();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).not.toHaveBeenCalled();
+      expect(saveHvscStatusSummaryMock).not.toHaveBeenCalled();
+    });
+
+    it("counts a Stop as effective when the run it found unwound through its own cancel before the Stop applied", () => {
+      const finishCancel = beginCancelRequest();
+      applyCancelledIngestionState();
+      markIngestionRuntimeIdle();
+
+      expect(finishCancel()).toBe(true);
+    });
+
+    it("counts a Stop as ineffective when the run it found finished normally before the Stop applied", () => {
+      const finishCancel = beginCancelRequest();
+      markIngestionRuntimeIdle();
+
+      expect(finishCancel()).toBe(false);
+    });
+
+    it("does not credit a Stop with the cancel of a later run", () => {
+      markIngestionRuntimeIdle();
+      const finishCancel = beginCancelRequest();
+      startIngestion();
+      applyCancelledIngestionState();
+      markIngestionRuntimeIdle();
+
+      expect(finishCancel()).toBe(false);
+    });
+
+    it("keeps an earlier failure and its message when a retry is canceled before touching the library", () => {
+      const failure = "HVSC ingestion cleanup failed for 3 file(s)";
+      loadHvscStateMock.mockReturnValue({ installedVersion: 85, ingestionState: "error", ingestionError: failure });
+      startIngestion();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "error", ingestionError: failure });
+    });
+
+    it("reports Canceled when the run started from a state that was neither ready nor failed", () => {
+      loadHvscStateMock.mockReturnValue({ installedVersion: 85, ingestionState: "updating", ingestionError: null });
+      startIngestion();
+
+      applyCancelledIngestionState();
+
+      expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Canceled" });
+    });
   });
 
   it("recovers stale ingestion state only when a crashed install or update is detected", () => {

@@ -55,6 +55,8 @@ import {
 import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { variant } from "@/generated/variant";
 import {
+  clearDeviceSafetyOverride,
+  isDeviceSafetyPresetValue,
   loadDeviceSafetyConfig,
   saveAllowUserOverrideCircuit,
   saveBackoffBaseMs,
@@ -74,6 +76,7 @@ import {
   saveRestMaxConcurrency,
   saveTelnetConnectCooldownMs,
   type DeviceSafetyMode,
+  type DeviceSafetyTunable,
 } from "@/lib/config/deviceSafetySettings";
 
 export const SETTINGS_EXPORT_VERSION = 3 as const;
@@ -368,7 +371,8 @@ export const importSettingsJson = async (
   if (safetyError) return { ok: false, error: safetyError };
 
   let importedFeatureFlags: Partial<Record<FeatureFlagId, boolean>> = {};
-  if (version === SETTINGS_EXPORT_VERSION) {
+  // Version 1 kept its only flag in appSettings.commoserveEnabled; every later version has featureFlags.
+  if (version !== 1) {
     try {
       const sanitized = sanitizeFeatureFlags(payload.featureFlags, getDeveloperModeEnabled());
       if ("error" in sanitized) {
@@ -404,25 +408,36 @@ export const importSettingsJson = async (
   saveRemoteFunctionActions(...resolveImportedFunctionActions(appSettings as Record<string, unknown>));
 
   saveDeviceSafetyMode(safeSafety.mode);
-  const safetyDefaults = loadDeviceSafetyConfig();
-  saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);
-  // HARD19-029: apply the two optional Device Safety values (clamping save
-  // functions guard bad input); fall back to defaults for pre-19 files.
-  saveRestMaxConcurrency(safeSafety.restMaxConcurrency ?? safetyDefaults.restMaxConcurrency);
-  saveMachineInputCooldownMs(safeSafety.machineInputCooldownMs ?? safetyDefaults.machineInputCooldownMs);
-  saveInfoCacheMs(safeSafety.infoCacheMs);
-  saveConfigsCacheMs(safeSafety.configsCacheMs);
-  saveConfigsCooldownMs(safeSafety.configsCooldownMs);
-  saveDrivesCooldownMs(safeSafety.drivesCooldownMs);
-  saveFtpListCooldownMs(safeSafety.ftpListCooldownMs);
-  saveTelnetConnectCooldownMs(safeSafety.telnetConnectCooldownMs ?? safetyDefaults.telnetConnectCooldownMs);
-  saveBackoffBaseMs(safeSafety.backoffBaseMs);
-  saveBackoffMaxMs(safeSafety.backoffMaxMs);
-  saveBackoffFactor(safeSafety.backoffFactor);
-  saveCircuitBreakerThreshold(safeSafety.circuitBreakerThreshold);
-  saveCircuitBreakerCooldownMs(safeSafety.circuitBreakerCooldownMs);
-  saveDiscoveryProbeIntervalMs(safeSafety.discoveryProbeIntervalMs);
-  saveAllowUserOverrideCircuit(Boolean(safeSafety.allowUserOverrideCircuit));
+  // An export holds the values the mode resolved to, not which ones the user overrode. Storing a
+  // preset value as an override would pin it, so Auto could no longer pick per device (Conservative
+  // for C64U 1.1.0). An absent optional value (pre-HARD19-029 files) also defers to the mode.
+  const importSafetyValue = <K extends DeviceSafetyTunable>(
+    tunable: K,
+    value: SettingsExportPayload["deviceSafety"][K] | undefined,
+    save: (value: NonNullable<SettingsExportPayload["deviceSafety"][K]>) => void,
+  ) => {
+    if (value === undefined || isDeviceSafetyPresetValue(safeSafety.mode, tunable, value)) {
+      clearDeviceSafetyOverride(tunable);
+    } else {
+      save(value);
+    }
+  };
+  importSafetyValue("ftpMaxConcurrency", safeSafety.ftpMaxConcurrency, saveFtpMaxConcurrency);
+  importSafetyValue("restMaxConcurrency", safeSafety.restMaxConcurrency, saveRestMaxConcurrency);
+  importSafetyValue("machineInputCooldownMs", safeSafety.machineInputCooldownMs, saveMachineInputCooldownMs);
+  importSafetyValue("infoCacheMs", safeSafety.infoCacheMs, saveInfoCacheMs);
+  importSafetyValue("configsCacheMs", safeSafety.configsCacheMs, saveConfigsCacheMs);
+  importSafetyValue("configsCooldownMs", safeSafety.configsCooldownMs, saveConfigsCooldownMs);
+  importSafetyValue("drivesCooldownMs", safeSafety.drivesCooldownMs, saveDrivesCooldownMs);
+  importSafetyValue("ftpListCooldownMs", safeSafety.ftpListCooldownMs, saveFtpListCooldownMs);
+  importSafetyValue("telnetConnectCooldownMs", safeSafety.telnetConnectCooldownMs, saveTelnetConnectCooldownMs);
+  importSafetyValue("backoffBaseMs", safeSafety.backoffBaseMs, saveBackoffBaseMs);
+  importSafetyValue("backoffMaxMs", safeSafety.backoffMaxMs, saveBackoffMaxMs);
+  importSafetyValue("backoffFactor", safeSafety.backoffFactor, saveBackoffFactor);
+  importSafetyValue("circuitBreakerThreshold", safeSafety.circuitBreakerThreshold, saveCircuitBreakerThreshold);
+  importSafetyValue("circuitBreakerCooldownMs", safeSafety.circuitBreakerCooldownMs, saveCircuitBreakerCooldownMs);
+  importSafetyValue("discoveryProbeIntervalMs", safeSafety.discoveryProbeIntervalMs, saveDiscoveryProbeIntervalMs);
+  importSafetyValue("allowUserOverrideCircuit", safeSafety.allowUserOverrideCircuit, saveAllowUserOverrideCircuit);
   await featureFlagManager.load();
   // HARD12-002: preserve existing hidden/developer-only flag overrides when
   // importing outside developer mode. Otherwise `replaceOverrides` would clear

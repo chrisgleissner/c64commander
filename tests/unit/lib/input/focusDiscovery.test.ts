@@ -7,6 +7,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterRingRescan } from "../../helpers/ringRescan";
 import { FocusController } from "@/lib/input/focusController";
 import { FocusDiscoveryEngine, type ExplicitRegistration } from "@/lib/input/focusDiscovery";
 
@@ -496,7 +497,7 @@ describe("FocusDiscoveryEngine", () => {
     added.id = "three";
     added.textContent = "3";
     host.appendChild(added);
-    await new Promise((resolve) => setTimeout(resolve, 0)); // flush observer → coalesced refresh
+    await afterRingRescan();
 
     expect(controller.list().map((i) => engine.elementForId(i.id)?.id)).toContain("three");
     expect(controller.current()?.id).toBe(currentId); // selection survived the re-scan
@@ -536,7 +537,7 @@ describe("mutations inside a skipped subtree", () => {
     const refresh = vi.spyOn(engine, "refresh");
 
     el("rows").appendChild(document.createElement("li"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await afterRingRescan();
 
     expect(refresh).not.toHaveBeenCalled();
     engine.stop();
@@ -551,7 +552,7 @@ describe("mutations inside a skipped subtree", () => {
     const refresh = vi.spyOn(engine, "refresh");
 
     el("overlay").removeAttribute("data-key-nav-skip");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await afterRingRescan();
 
     expect(refresh).toHaveBeenCalled();
     engine.stop();
@@ -568,7 +569,7 @@ describe("mutations inside a skipped subtree", () => {
     const refresh = vi.spyOn(engine, "refresh");
 
     el("overlay").appendChild(document.createElement("button"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await afterRingRescan();
 
     expect(refresh).toHaveBeenCalled();
     engine.stop();
@@ -590,7 +591,7 @@ describe("mutations inside a skipped subtree", () => {
     dialog.setAttribute("role", "dialog");
     dialog.innerHTML = `<button id="b">B</button>`;
     el("outer").appendChild(dialog);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await afterRingRescan();
 
     expect(refresh).toHaveBeenCalled();
     engine.stop();
@@ -615,7 +616,7 @@ describe("mutations inside a skipped subtree", () => {
       row.setAttribute("role", "option");
       el("rows").appendChild(row);
     }
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await afterRingRescan();
 
     expect(refresh).not.toHaveBeenCalled();
     engine.stop();
@@ -634,6 +635,27 @@ describe("a skipped overlay", () => {
 
     expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toContain("a");
     expect(spy).not.toHaveBeenCalled();
+    engine.stop();
+  });
+});
+
+describe("re-scan scheduling", () => {
+  it("waits for the next paint after a DOM change, and runs at once when flushed", async () => {
+    mount(`<button id="one">1</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    document.body.querySelector("div")!.appendChild(Object.assign(document.createElement("button"), { id: "two" }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refresh).not.toHaveBeenCalled();
+
+    engine.flushPendingRefresh();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toContain("two");
+
+    await afterRingRescan();
+    expect(refresh).toHaveBeenCalledTimes(1);
     engine.stop();
   });
 });

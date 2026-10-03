@@ -24,7 +24,7 @@ import {
 } from "@/lib/diagnostics/heatMapData";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
-import { useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 
 const VARIANT_TITLES: Record<HeatMapVariant, string> = {
   REST: "REST activity",
@@ -87,7 +87,7 @@ const MetricToggle = ({ mode, onChange }: { mode: HeatMapMetricMode; onChange: (
         onClick={() => onChange(m)}
         aria-pressed={mode === m}
         className={cn(
-          "px-2.5 py-0.5 text-xs font-medium rounded-sm border transition-colors",
+          "min-h-11 px-2.5 py-0.5 text-xs font-medium rounded-sm border transition-colors",
           mode === m
             ? "border-primary bg-primary/10 text-primary"
             : "border-border text-muted-foreground hover:border-primary/40",
@@ -134,7 +134,7 @@ function CellDetail({ cell, mode, onClose }: { cell: HeatMapCell; mode: HeatMapM
         <button
           type="button"
           onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="flex size-11 shrink-0 items-center justify-center text-xs text-muted-foreground hover:text-foreground"
           aria-label="Close cell detail"
         >
           ✕
@@ -183,8 +183,18 @@ function CellDetail({ cell, mode, onClose }: { cell: HeatMapCell; mode: HeatMapM
 export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
   const [mode, setMode] = useState<HeatMapMetricMode>("Count");
   const [cellDetail, setCellDetail] = useState<CellDetailState>(null);
+  const openedVariant = open ? variant : null;
+  const [shownVariant, setShownVariant] = useState(openedVariant);
+  if (openedVariant !== shownVariant) {
+    setShownVariant(openedVariant);
+    if (openedVariant !== null) setCellDetail(null);
+  }
 
-  const matrix: HeatMapMatrix = (() => {
+  // Mounted with Diagnostics, which re-renders while closed: building the matrix there cost 88 ms of
+  // every Home-to-Play switch on a Pixel 4. Closed, the last matrix stays for the closing animation.
+  const lastMatrixRef = useRef<HeatMapMatrix | null>(null);
+  const matrix = useMemo((): HeatMapMatrix => {
+    if (!open) return lastMatrixRef.current ?? { variant, rowGroups: [], columnItems: [], cells: {}, computedAt: "" };
     switch (variant) {
       case "REST":
         return buildRestHeatMap(traceEvents);
@@ -193,7 +203,8 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
       case "CONFIG":
         return buildConfigHeatMap(traceEvents);
     }
-  })();
+  }, [open, variant, traceEvents]);
+  lastMatrixRef.current = matrix;
 
   const maxMetric = getMatrixMaxMetric(matrix, mode);
   const isEmpty = matrix.rowGroups.length === 0;
@@ -277,7 +288,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                         <td
                           key={col}
                           className={cn(
-                            "h-9 rounded-md border px-1 py-0.5 text-center transition-transform duration-150",
+                            "rounded-md border p-0 text-center transition-transform duration-150",
                             "hover:scale-[1.02] hover:ring-1 hover:ring-primary/70",
                           )}
                           style={heatCellStyle(intensity)}
@@ -286,7 +297,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                         >
                           <button
                             type="button"
-                            className="flex h-full w-full cursor-pointer items-center justify-center rounded-[inherit] font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
+                            className="flex min-h-11 w-full min-w-11 cursor-pointer items-center justify-center rounded-[inherit] font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
                             onClick={() => cell && setCellDetail({ cell })}
                             title={cell ? `${cell.rowGroup}/${cell.columnItem}: ${value}` : "—"}
                             aria-label={label}

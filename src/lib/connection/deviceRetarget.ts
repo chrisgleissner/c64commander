@@ -44,6 +44,11 @@ export function hasLiveAvMirror(state: AvMirrorRetargetState): boolean {
   return state.videoWasLive || state.audioWasLive;
 }
 
+/** True when a retarget must stop the mirror: a live feed, or a failed one the device may still be sending. */
+export function avMirrorNeedsStop(state: AvMirrorRetargetState): boolean {
+  return hasLiveAvMirror(state) || avMirrorSession.anyFeedFailed;
+}
+
 /**
  * Stop the A/V mirror while `getC64API()` still targets the OLD device.
  *
@@ -161,7 +166,7 @@ export async function prepareForDeviceRetarget(
     await stopActivePlaybackBeforeDeviceSwitch();
   }
   const mirrorState = readAvMirrorRetargetState();
-  if (hasLiveAvMirror(mirrorState)) {
+  if (avMirrorNeedsStop(mirrorState)) {
     await stopAvMirrorForDeviceRetarget(fromDeviceId);
   }
 

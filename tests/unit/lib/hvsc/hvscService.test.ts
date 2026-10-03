@@ -59,6 +59,7 @@ vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
   getHvscStatus: vi.fn(),
   ingestCachedHvsc: vi.fn(),
   installOrUpdateHvsc: vi.fn(),
+  isIngestionRuntimeActive: vi.fn(() => false),
 }));
 
 vi.mock("@/lib/hvsc/hvscMediaIndex", () => ({

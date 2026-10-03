@@ -40,10 +40,23 @@ uncertainty, which is stated in the output rather than hidden: the quantities of
 are one to three hundred milliseconds, and a conclusion that depends on 15 ms of it should be
 reached with a different instrument.
 
+WHICH PEAK
+
+The barcode's broadband envelope is the same shape in every 239.4 ms slot, so the broadband
+correlation has a peak every slot and only the speaker's per-tone loudness tells them apart. The
+three strongest peaks are printed so a neighbouring one is visible, and a second, barcode-aware
+correlation is run per ladder tone: each tone sounds once per 1.9 s cycle, so the sum of the eight
+per-tone correlations has one peak in the window. The reported LATENCY is therefore the per-tone
+lag. When the broadband peak lands in another slot, that is printed as a WARNING line and kept in
+latency.json; it is not the reading. Without the barcode (per-tone score under 0.3) the reading
+falls back to the broadband peak, with a warning that it can be off by whole slots.
+
 USAGE
 
   python3 tools/hil/mirror_audio_latency_hil.py [--seconds 12] [--iface <this host's LAN address>]
-                                                [--device plughw:CARD=SF558,DEV=0]
+                                                [--device plughw:CARD=SF558,DEV=0] [--keep-dir <dir>]
+
+`--keep-dir` writes wire.wav, mic.wav, correlation.csv (lag, broadband, per-tone) and latency.json.
 
 The C64 must be making a sound and the phone must be Listening. Play something first — the
 barcode stimulus from `audio_e2e_probe.py play` is ideal because it is loud, band-limited and
@@ -53,17 +66,20 @@ constantly changing, which is what a correlation likes.
 from __future__ import annotations
 
 import argparse
+import json
 import socket
 import struct
 import subprocess
 import sys
 import threading
 import time
+import wave
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audio_e2e_probe import SLOT_MS, TONES_HZ  # noqa: E402
 from lan_iface import resolve_iface  # noqa: E402
 
 GROUP = "239.0.1.65"
@@ -73,6 +89,12 @@ MIC_RATE = 48000
 BAND = (300.0, 6000.0)
 ENVELOPE_MS = 2.0
 MAX_LAG_MS = 800.0
+PEAK_SEPARATION_MS = 60.0
+TONE_BAND = 0.025
+TONE_ENVELOPE_MS = 10.0
+# Below this the per-tone curve has nothing to lock onto (no barcode playing), and the reading falls
+# back to the broadband peak with a warning that it may be off by whole slots.
+MIN_TONE_SCORE = 0.3
 
 
 def capture_wire(seconds: float, iface: str, out: dict) -> None:
@@ -97,6 +119,7 @@ def capture_wire(seconds: float, iface: str, out: dict) -> None:
             break
         if first_at is None:
             first_at = time.monotonic()
+            out["first_at_epoch"] = time.time()
         pcm += data[2:]  # strip the u16 sequence prefix
     sock.close()
     out["pcm"] = bytes(pcm)
@@ -120,6 +143,7 @@ def capture_mic(seconds: float, device: str, out: dict) -> None:
                 break
             if first_at is None:
                 first_at = time.monotonic()
+                out["first_at_epoch"] = time.time()
             raw += chunk
     finally:
         proc.terminate()
@@ -149,11 +173,113 @@ def envelope(signal: np.ndarray, rate: int) -> np.ndarray:
     return smooth - smooth.mean()
 
 
+def correlate_valid(signal: np.ndarray, template: np.ndarray) -> np.ndarray:
+    """`np.correlate(signal, template, "valid")` by FFT: out[k] = sum(signal[n + k] * template[n])."""
+    count = len(signal) - len(template) + 1
+    size = 1 << int(np.ceil(np.log2(len(signal) + len(template))))
+    product = np.fft.rfft(signal, size) * np.conj(np.fft.rfft(template, size))
+    return np.fft.irfft(product, size)[:count]
+
+
+def lag_curve(wire_env: np.ndarray, mic_env: np.ndarray, max_lag: int) -> np.ndarray:
+    """Normalised correlation of the mic against the wire for lags 0..max_lag samples."""
+    span = min(len(wire_env), len(mic_env))
+    wire_env, mic_env = wire_env[:span], mic_env[:span]
+    template = wire_env[: span - max_lag]
+    norm = np.linalg.norm(template) * np.linalg.norm(mic_env)
+    curve = correlate_valid(mic_env, template)[: max_lag + 1]
+    return curve / norm if norm else np.zeros(max_lag + 1)
+
+
+def top_peaks(curve: np.ndarray, rate: int, count: int = 3, separation_ms: float = PEAK_SEPARATION_MS) -> list[tuple[int, float]]:
+    """The `count` highest local maxima, each at least `separation_ms` from a higher one: (index, value)."""
+    inner = np.arange(1, len(curve) - 1)
+    maxima = inner[(curve[1:-1] >= curve[:-2]) & (curve[1:-1] >= curve[2:])]
+    candidates = list(maxima)
+    if len(curve) and (len(curve) < 2 or curve[0] > curve[1]):
+        candidates.append(0)
+    if len(curve) > 1 and curve[-1] > curve[-2]:
+        candidates.append(len(curve) - 1)
+    separation = rate * separation_ms / 1000.0
+    chosen: list[tuple[int, float]] = []
+    for index in sorted(candidates, key=lambda i: curve[i], reverse=True):
+        if all(abs(index - other) >= separation for other, _ in chosen):
+            chosen.append((int(index), float(curve[index])))
+        if len(chosen) == count:
+            break
+    return chosen
+
+
+def tone_envelope(signal: np.ndarray, rate: int, hz: float) -> np.ndarray:
+    """The envelope of one ladder tone alone: a narrow band around it, rectified and smoothed."""
+    spectrum = np.fft.rfft(signal)
+    freqs = np.fft.rfftfreq(len(signal), 1.0 / rate)
+    spectrum[np.abs(freqs - hz) > hz * TONE_BAND] = 0
+    band = np.fft.irfft(spectrum, n=len(signal))
+    width = max(1, int(rate * TONE_ENVELOPE_MS / 1000.0))
+    smooth = np.convolve(np.abs(band), np.ones(width) / width, mode="same")
+    return smooth - smooth.mean()
+
+
+def tone_lag_curve(wire: np.ndarray, mic: np.ndarray, rate: int, max_lag: int) -> np.ndarray:
+    """The mean of the per-tone correlations: one peak per 1.9 s barcode cycle, not one per slot."""
+    curves = [lag_curve(tone_envelope(wire, rate, hz), tone_envelope(mic, rate, hz), max_lag) for hz in TONES_HZ]
+    return np.mean(curves, axis=0)
+
+
+def latency_reading(lags_ms: np.ndarray, broadband: np.ndarray, per_tone: np.ndarray) -> dict:
+    """The latency to report from the two correlation curves over the same lags, and any warning.
+
+    The per-tone curve has one peak per 1.9 s barcode cycle, so its peak is the latency. The broadband
+    curve has a peak every 239.4 ms slot and only the speaker's per-tone loudness picks between them:
+    run 2026-10-02T13-54-22 took the one two slots out and reported 750 ms for a 272 ms path. A
+    broadband peak in another slot is therefore a measurement warning, not the reading.
+    """
+    tone_index = int(np.argmax(per_tone))
+    broad_index = int(np.argmax(broadband))
+    tone_ms, broad_ms = float(lags_ms[tone_index]), float(lags_ms[broad_index])
+    tone_score = float(per_tone[tone_index])
+    slots_apart = (broad_ms - tone_ms) / SLOT_MS
+    reading = {
+        "latencyMs": tone_ms,
+        "source": "per-tone",
+        "toneLagMs": tone_ms,
+        "toneScore": tone_score,
+        "broadbandLagMs": broad_ms,
+        "broadbandStrength": float(broadband[broad_index]),
+        "broadbandMinusToneSlots": slots_apart,
+        "warning": None,
+    }
+    if tone_score < MIN_TONE_SCORE:
+        reading["latencyMs"], reading["source"] = broad_ms, "broadband"
+        reading["warning"] = (
+            f"per-tone correlation is weak ({tone_score:.3f}): is the barcode playing? Reporting the broadband "
+            f"peak, which can be off by whole {SLOT_MS:.1f} ms slots"
+        )
+    elif abs(broad_ms - tone_ms) > SLOT_MS / 2:
+        reading["warning"] = (
+            f"broadband peak {broad_ms:.0f} ms is {slots_apart:+.2f} slots ({broad_ms - tone_ms:+.0f} ms) from the "
+            f"per-tone lag: the barcode's envelope repeats every {SLOT_MS:.1f} ms, so the broadband correlation "
+            "took another slot; the reading is the per-tone lag"
+        )
+    return reading
+
+
+def write_wav(path: Path, samples: np.ndarray | bytes, rate: int, channels: int) -> None:
+    data = samples if isinstance(samples, bytes) else np.clip(samples, -32768, 32767).astype("<i2").tobytes()
+    with wave.open(str(path), "wb") as fh:
+        fh.setnchannels(channels)
+        fh.setsampwidth(2)
+        fh.setframerate(rate)
+        fh.writeframes(data)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=float, default=12.0)
     ap.add_argument("--iface", default=None, help="local IPv4 to join the group on (default: detected)")
     ap.add_argument("--device", default="plughw:CARD=SF558,DEV=0")
+    ap.add_argument("--keep-dir", default=None, help="write both captures and the correlation curves here")
     args = ap.parse_args()
     iface = resolve_iface(args.iface)
 
@@ -192,27 +318,66 @@ def main() -> int:
     wire_env = envelope(bandpass(wire_mono, MIC_RATE), MIC_RATE)
     mic_env = envelope(bandpass(mic_mono, MIC_RATE), MIC_RATE)
 
-    # Trim both to the same length so the correlation is over the same span.
-    span = min(len(wire_env), len(mic_env))
-    wire_env, mic_env = wire_env[:span], mic_env[:span]
-
     max_lag = int(MIC_RATE * MAX_LAG_MS / 1000.0)
     # Correlate only over the plausible lag window: the mic hears the sound AFTER the wire, so
     # only positive lags are physical, and a peak outside the window would be an artefact.
-    correlation = np.correlate(mic_env, wire_env[: span - max_lag], mode="valid")[: max_lag + 1]
-    norm = np.linalg.norm(wire_env[: span - max_lag]) * np.linalg.norm(mic_env)
-    peak = int(np.argmax(correlation))
-    strength = float(correlation[peak] / norm) if norm else 0.0
+    curve = lag_curve(wire_env, mic_env, max_lag)
+    peak = int(np.argmax(curve))
+    strength = float(curve[peak])
+    tone_curve = tone_lag_curve(wire_mono[: len(mic_mono)], mic_mono[: len(wire_mono)], MIC_RATE, max_lag)
 
     # The two captures did not start at the same instant; that difference is part of the lag.
     start_skew_ms = (mic["first_at"] - wire["first_at"]) * 1000.0
-    lag_ms = peak * 1000.0 / MIC_RATE + start_skew_ms
+    to_ms = lambda index: index * 1000.0 / MIC_RATE + start_skew_ms  # noqa: E731
+    reading = latency_reading(to_ms(np.arange(len(curve))), curve, tone_curve)
 
     print(f"wire      {len(wire_mono) / MIC_RATE:.1f}s from {GROUP}:{PORT}")
     print(f"mic       {len(mic_mono) / MIC_RATE:.1f}s from {args.device}")
     print(f"skew      capture starts differ by {start_skew_ms:+.1f} ms (already included below)")
     print(f"peak      correlation {strength:.3f} at {peak * 1000.0 / MIC_RATE:.1f} ms into the window")
-    print(f"LATENCY   {lag_ms:.0f} ms  Ultimate wire -> phone speaker (+-15 ms)")
+    print(f"LATENCY   {reading['latencyMs']:.0f} ms  Ultimate wire -> phone speaker, {reading['source']} (+-15 ms)")
+
+    peaks = top_peaks(curve, MIC_RATE)
+    print("peaks     " + "   ".join(f"#{n + 1} {to_ms(i):.0f} ms ({v:.3f})" for n, (i, v) in enumerate(peaks)))
+    tone_peaks = top_peaks(tone_curve, MIC_RATE)
+    print(
+        f"per-tone  barcode-aware lag {reading['toneLagMs']:.0f} ms (score {reading['toneScore']:.3f}); next "
+        + ", ".join(f"{to_ms(i):.0f} ms ({v:.3f})" for i, v in tone_peaks[1:])
+    )
+    if reading["warning"]:
+        print(f"WARNING   {reading['warning']}")
+
+    if args.keep_dir:
+        keep = Path(args.keep_dir)
+        keep.mkdir(parents=True, exist_ok=True)
+        write_wav(keep / "wire.wav", wire["pcm"][: len(wire["pcm"]) // 4 * 4], WIRE_RATE, 2)
+        write_wav(keep / "mic.wav", mic_mono, MIC_RATE, 1)
+        step = max(1, MIC_RATE // 1000)
+        with open(keep / "correlation.csv", "w") as fh:
+            fh.write("lag_ms,broadband,per_tone\n")
+            for index in range(0, len(curve), step):
+                fh.write(f"{to_ms(index):.3f},{curve[index]:.5f},{tone_curve[index]:.5f}\n")
+        summary = {
+            "latencyMs": reading["latencyMs"],
+            "latencySource": reading["source"],
+            "warning": reading["warning"],
+            "broadbandLagMs": reading["broadbandLagMs"],
+            "strength": strength,
+            "skewMs": start_skew_ms,
+            "wireFirstEpoch": wire.get("first_at_epoch"),
+            "micFirstEpoch": mic.get("first_at_epoch"),
+            "wireSeconds": len(wire_mono) / MIC_RATE,
+            "micSeconds": len(mic_mono) / MIC_RATE,
+            "peaks": [{"lagMs": to_ms(i), "strength": v} for i, v in peaks],
+            "toneLagMs": reading["toneLagMs"],
+            "toneScore": reading["toneScore"],
+            "tonePeaks": [{"lagMs": to_ms(i), "score": v} for i, v in tone_peaks],
+            "slotMs": SLOT_MS,
+            "broadbandMinusToneSlots": reading["broadbandMinusToneSlots"],
+        }
+        (keep / "latency.json").write_text(json.dumps(summary, indent=2) + "\n")
+        print(f"kept      {keep}")
+
     if strength < 0.15:
         print("  the correlation is weak — is the C64 actually making a sound, and is the phone Listening?")
         return 1

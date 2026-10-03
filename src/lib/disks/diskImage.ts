@@ -27,6 +27,9 @@
 import { addLog } from "@/lib/logging";
 
 const SECTOR_SIZE = 256;
+/** Standard 35-track images plus the extended 36–42-track variants; New disk creates up to 41. */
+const D64_MIN_TRACKS = 35;
+const D64_MAX_TRACKS = 42;
 const FILE_TYPE_MASK = 0x07;
 const FILE_TYPE_CLOSED = 0x80;
 const FILE_TYPE_LOCKED = 0x40;
@@ -92,7 +95,7 @@ const sectorsPerTrack1581 = () => 40;
 
 export const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
   if (type === "d64") {
-    for (const tracks of [35, 40]) {
+    for (let tracks = D64_MIN_TRACKS; tracks <= D64_MAX_TRACKS; tracks += 1) {
       const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1541(idx + 1)).reduce(
         (sum, value) => sum + value,
         0,

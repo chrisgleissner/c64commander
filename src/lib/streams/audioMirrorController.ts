@@ -17,7 +17,7 @@
 import { addLog } from "@/lib/logging";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
 import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
-import { describeStreamStartFailure } from "./streamStartFailure";
+import { describeReceiverOpenFailure, describeStreamStartFailure } from "./streamStartFailure";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -202,6 +202,7 @@ export class AudioMirrorController {
     this.batcher.reset();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
+    this.foreignHandled.clear();
     this.update({
       state: "connecting",
       error: null,
@@ -210,6 +211,7 @@ export class AudioMirrorController {
       foreignSenderNotice: null,
       senderMismatch: null,
     });
+    await this.releaseFailedSessionTransport();
 
     // Prefer the native low-latency sink when offered: the plugin's receive thread feeds the
     // AudioTrack directly, so JS drives NO playback (no bridge traffic, no jitter buffer). Fall back
@@ -250,6 +252,7 @@ export class AudioMirrorController {
     this.receiver = receiver;
 
     receiver.onStateChange((connection) => {
+      if (this.receiver !== receiver) return;
       if (connection === "open") {
         this.update({ state: "live" });
         this.lastSeenArrivalPackets = -1;
@@ -286,15 +289,20 @@ export class AudioMirrorController {
       this.playbackBuffer?.push(parsed.seq, parsed.body, arrivalMs);
     });
 
+    let socketOpen = false;
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
+      socketOpen = true;
       await this.deps.startStream("audio", receiver.destination);
     } catch (error) {
-      addLog("warn", "Audio Mirror: device stream start failed", {
+      addLog("warn", socketOpen ? "Audio Mirror: device stream start failed" : "Audio Mirror: receive socket failed", {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: describeStreamStartFailure(error, "audio") });
+      this.update({
+        state: "error",
+        error: socketOpen ? describeStreamStartFailure(error, "audio") : describeReceiverOpenFailure(error, "audio"),
+      });
     }
   }
 
@@ -336,6 +344,8 @@ export class AudioMirrorController {
     if (typeof packets !== "number") return false;
     const previous = this.lastSeenArrivalPackets;
     this.lastSeenArrivalPackets = packets;
+    // No baseline yet: a socket whose filter refuses every sender still reads 0, which is not an arrival.
+    if (previous < 0) return packets > 0;
     // A counter that went BACKWARDS was reset or wrapped, not stalled — the plugin rebinding its
     // socket restarts it from zero — so it counts as arrival rather than as silence.
     //
@@ -418,6 +428,27 @@ export class AudioMirrorController {
     this.lastSeenArrivalPackets = -1;
     this.update({ state: "live", error: null, senderMismatch: null });
     this.arrivalWatchdog.start();
+  }
+
+  /** A session that ended in "error" still holds its receiver and sink, whose stats poll never stops on its own. */
+  private async releaseFailedSessionTransport(): Promise<void> {
+    const failedReceiver = this.receiver;
+    this.receiver = null;
+    failedReceiver?.close();
+    this.playbackBuffer = null;
+    const player = this.player;
+    const sink = this.nativeSink;
+    this.player = null;
+    this.nativeSink = null;
+    try {
+      await player?.stop();
+      await sink?.close();
+    } catch (error) {
+      addLog("warn", "Audio Mirror: could not release the previous session's player or sink", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+    }
   }
 
   async stop(): Promise<void> {

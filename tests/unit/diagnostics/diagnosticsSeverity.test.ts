@@ -76,4 +76,24 @@ describe("diagnosticsSeverity", () => {
     expect(resolveTraceSeverity({ type: "error", data: { failureClass: "user-cancellation" } })).toBe("warn");
     expect(resolveTraceSeverity({ type: "rest-request" })).toBe("info");
   });
+
+  it("rates failed REST, FTP and Telnet traces as errors so the Errors filter keeps the Problems they raise", () => {
+    expect(resolveTraceSeverity({ type: "rest-response", data: { status: 500 } } as never)).toBe("error");
+    expect(
+      resolveTraceSeverity({ type: "rest-response", data: { status: null, error: "Failed to fetch" } } as never),
+    ).toBe("error");
+    expect(resolveTraceSeverity({ type: "ftp-operation", data: { result: "failure" } } as never)).toBe("error");
+    expect(resolveTraceSeverity({ type: "telnet-operation", data: { result: "failure" } } as never)).toBe("error");
+    expect(
+      resolveTraceSeverity({
+        type: "rest-response",
+        data: { status: 503, failureClass: "network-transient" },
+      } as never),
+    ).toBe("warn");
+    expect(resolveTraceSeverity({ type: "rest-response", data: { status: 200 } } as never)).toBe("info");
+    expect(resolveTraceSeverity({ type: "ftp-operation", data: { result: "success" } } as never)).toBe("info");
+    expect(resolveTraceSeverity({ type: "rest-response", data: { status: 404, expectedFailure: true } } as never)).toBe(
+      "info",
+    );
+  });
 });

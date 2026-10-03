@@ -7,7 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -19,6 +19,7 @@ import { NavigationController, resetInputModality, setInputModality } from "@/li
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
 import { Checkbox } from "@/components/ui/checkbox";
+import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
 
 const SELECTED = "data-key-selected";
 
@@ -1399,30 +1400,60 @@ describe("one-shot keypad commands ignore key repeat", () => {
 });
 
 /*
- * Destructive toasts persist until dismissed (ERROR_POLICY §4), render in their own portal
- * outside the keypad ring's reach, and have no Tab-reachable close button — only a touch
- * swipe/tap dismisses one (`components/ui/toaster.tsx` `ToastItem.handleClick`). On a Pixel 4
- * emulating a keypad-only profile, an error toast survived 19 minutes of further navigation
- * because no key, Back included, could reach it.
+ * Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring. On a
+ * Pixel 4 emulating a keypad-only profile, an error toast survived 19 minutes of further
+ * navigation because no key could reach it. Back closes it through its own close button, and
+ * closing is all it does: opening Diagnostics belongs to the toast's separate Details button.
  */
 describe("Back dismisses a persistent error toast the keypad ring cannot otherwise reach", () => {
-  const Toast = ({ onDismiss }: { onDismiss: () => void }) => (
-    <li data-testid="app-toast" tabIndex={0} onClick={onDismiss}>
+  const Toast = ({
+    onDismiss,
+    onDetails = vi.fn(),
+    state = "open",
+  }: {
+    onDismiss: () => void;
+    onDetails?: () => void;
+    state?: "open" | "closed";
+  }) => (
+    <li data-testid="app-toast" data-state={state}>
       Playback next failed
+      <button type="button" data-testid="app-toast-close" onClick={onDismiss}>
+        Close
+      </button>
+      <button type="button" data-testid="app-toast-details" onClick={onDetails}>
+        Details
+      </button>
     </li>
   );
 
-  it("clicks the toast (dismiss + open Diagnostics, same as a tap) on Back", () => {
+  it("presses the toast's close button on Back, and not its Details button", () => {
     const onDismiss = vi.fn();
+    const onDetails = vi.fn();
     render(
       <FocusNavigationProvider profileId="keypad">
-        <Toast onDismiss={onDismiss} />
+        <Toast onDismiss={onDismiss} onDetails={onDetails} />
       </FocusNavigationProvider>,
     );
 
     fireEvent.keyDown(document.body, { code: "GoBack" });
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDetails).not.toHaveBeenCalled();
+  });
+
+  it("leaves a toast that is already closing alone and lets Back navigate", () => {
+    const onDismiss = vi.fn();
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad" onNavigateBack={onNavigateBack}>
+        <Toast onDismiss={onDismiss} state="closed" />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "GoBack" });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
   });
 
   it("also dismisses on the device's own physical Back key ({key:'Escape',code:'',keyCode:0} — none of the keymap's declared back bindings match that on their own)", () => {
@@ -1555,5 +1586,61 @@ describe("FocusNavigationProvider — the discovery engine waits for a key (HARD
     );
 
     expect(observedTargets).toEqual([document.body]);
+  });
+});
+
+describe("FocusNavigationProvider re-scan timing", () => {
+  afterEach(() => resetInputModality());
+
+  it("lets a key reach a control added just before it, although the re-scan is scheduled after paint", async () => {
+    render(
+      <FocusNavigationProvider>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+
+    const added = document.createElement("button");
+    added.textContent = "Added";
+    button("B").after(added);
+    // A key is its own task: the DOM change has been observed by then, but nothing has painted.
+    await Promise.resolve();
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(added);
+  });
+});
+
+describe("FocusNavigationProvider with cards still waiting to be built", () => {
+  afterEach(() => {
+    setProgressiveMountEnabled(false);
+    vi.restoreAllMocks();
+    resetInputModality();
+  });
+
+  const WaitingCard = ({ name }: { name: string }) => {
+    const anchor = useRef<HTMLDivElement | null>(null);
+    const mounted = useProgressiveMount(true, anchor);
+    return <div ref={anchor}>{mounted ? <button type="button">{name}</button> : null}</div>;
+  };
+
+  it("builds every waiting card before a key reads the ring, so the key reaches what is in them", () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000 } as DOMRect);
+    render(
+      <FocusNavigationProvider>
+        {["First", "Second", "Third"].map((name) => (
+          <WaitingCard key={name} name={name} />
+        ))}
+      </FocusNavigationProvider>,
+    );
+    expect(queryButton("Third")).toBeNull();
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(button("Third")).toBeInTheDocument();
+    expect(document.activeElement).toBe(button("Third"));
   });
 });

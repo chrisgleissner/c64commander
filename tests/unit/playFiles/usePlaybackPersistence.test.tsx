@@ -12,7 +12,8 @@ import { useRef, useState } from "react";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
-import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
+import { getPlaylistDataRepository, resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
+import { resetPlaylistRepositorySyncForTests } from "@/pages/playFiles/playlistRepositorySync";
 import {
   noteRestartedPhoneTune,
   readStoredPlaybackSession,
@@ -2069,5 +2070,79 @@ describe("usePlaybackPersistence", () => {
     expect(result.current.elapsedMs).toBe(34599);
     expect(restoreOrder.indexOf("paused")).toBeGreaterThanOrEqual(0);
     expect(restoreOrder.indexOf("paused")).toBeLessThan(restoreOrder.indexOf("settled"));
+  });
+});
+
+describe("usePlaybackPersistence when the stored playlist cannot be read at startup", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    resetPlaylistDataRepositoryForTests();
+    resetPlaylistRepositorySyncForTests();
+  });
+
+  const seedStoredPlaylist = async (playlistStorageKey: string) => {
+    const now = new Date().toISOString();
+    await getPlaylistDataRepository().replacePlaylistSnapshot(playlistStorageKey, {
+      tracks: [
+        {
+          trackId: "hvsc::/MUSICIANS/Test/kept.sid",
+          sourceKind: "hvsc",
+          sourceLocator: "/MUSICIANS/Test/kept.sid",
+          category: "sid",
+          title: "kept.sid",
+          author: null,
+          released: null,
+          path: "/MUSICIANS/Test/kept.sid",
+          sizeBytes: null,
+          modifiedAt: null,
+          defaultDurationMs: 1000,
+          subsongCount: 1,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      playlistItems: [
+        {
+          playlistItemId: "kept-item",
+          playlistId: playlistStorageKey,
+          trackId: "hvsc::/MUSICIANS/Test/kept.sid",
+          songNr: 1,
+          sortKey: "00000001",
+          durationOverrideMs: null,
+          status: "ready",
+          unavailableReason: null,
+          addedAt: now,
+        },
+      ],
+    } as never);
+  };
+
+  it.each([
+    ["the read is rejected", "reject"],
+    ["a swallowed read error yields no items", "empty"],
+  ])("does not overwrite the stored playlist with an empty one when %s", async (_label, failure) => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    await seedStoredPlaylist(playlistStorageKey);
+    const repository = getPlaylistDataRepository();
+    const getItems = vi.spyOn(repository, "getPlaylistItems");
+    if (failure === "reject") getItems.mockRejectedValueOnce(new Error("read failed"));
+    else getItems.mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+    await waitFor(() => expect(getItems).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    getItems.mockRestore();
+
+    expect(result.current.playlist).toEqual([]);
+    expect((await repository.getPlaylistItems(playlistStorageKey)).map((item) => item.playlistItemId)).toEqual([
+      "kept-item",
+    ]);
   });
 });

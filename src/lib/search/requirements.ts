@@ -41,6 +41,9 @@ const settingsSection = (id: string): SearchTarget => ({
   id,
 });
 
+/** Settings only holds the HVSC mirror and update interval; the download and install controls are on Play. */
+const HVSC_INSTALL_SECTION: SearchTarget = { kind: "section", path: "/play", scope: "play", id: "hvsc" };
+
 /** Where a user goes to turn a named switch on. Feature flags land on their own chapter. */
 const remedyForFlag = (flag: string): SearchTarget => {
   if (isKnownFeatureFlagId(flag)) {
@@ -153,7 +156,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
         : {
             met: false,
             reason: "Needs the HVSC music collection installed",
-            remedyTarget: settingsSection("hvsc"),
+            remedyTarget: HVSC_INSTALL_SECTION,
           };
     case "session":
       return ctx.hasRestorableSession

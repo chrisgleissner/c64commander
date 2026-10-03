@@ -16,27 +16,73 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { usePopoverBackDismissRoot } from "@/components/ui/interstitial-state";
 import { wrapValueChange } from "@/lib/tracing/userTrace";
 
+/*
+ * Radix renders every option of a CLOSED select too, off screen, so the trigger can show the chosen
+ * option's text and type-ahead can search the list. On Home, re-rendered as each piece of device
+ * state arrives, that came to about 400 ms of a start on a Pixel 4. Closed and unfocused, a select
+ * now renders only its chosen option, which is all the trigger shows; focused or open, it renders
+ * them all, so type-ahead and the list behave as before, and keeps them all once it has been used.
+ */
+type SelectOptionsScope = {
+  renderEveryOption: boolean;
+  chosenValue: string | undefined;
+  setTriggerFocused: (focused: boolean) => void;
+};
+
+const SelectOptionsScopeContext = React.createContext<SelectOptionsScope | null>(null);
+
 const Select = ({
   open,
   defaultOpen,
   onOpenChange,
+  value,
+  defaultValue,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) => {
   const backDismiss = usePopoverBackDismissRoot({ open, defaultOpen, onOpenChange });
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
+  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue);
+  const [triggerFocused, setTriggerFocused] = React.useState(false);
+  const isOpen = open ?? uncontrolledOpen;
+  const chosenValue = value ?? uncontrolledValue;
+  const handleOpenChange = backDismiss.onOpenChange;
+  const trackedOpenChange = React.useCallback(
+    (next: boolean) => {
+      setUncontrolledOpen(next);
+      handleOpenChange(next);
+    },
+    [handleOpenChange],
+  );
+  const tracedValueChange = wrapValueChange(
+    props.onValueChange,
+    "select",
+    "Select",
+    props as unknown as Record<string, unknown>,
+    "Select",
+  );
+  // Once used, a select keeps every option: a list that has just closed stays on screen, focused, for
+  // its closing animation, before Radix hands focus back to the trigger.
+  const [used, setUsed] = React.useState(false);
+  if (!used && (isOpen || triggerFocused)) setUsed(true);
+  const scope = React.useMemo(
+    () => ({ renderEveryOption: used || isOpen || triggerFocused, chosenValue, setTriggerFocused }),
+    [chosenValue, isOpen, triggerFocused, used],
+  );
   return (
-    <SelectPrimitive.Root
-      {...props}
-      open={backDismiss.open}
-      defaultOpen={defaultOpen}
-      onOpenChange={backDismiss.onOpenChange}
-      onValueChange={wrapValueChange(
-        props.onValueChange,
-        "select",
-        "Select",
-        props as unknown as Record<string, unknown>,
-        "Select",
-      )}
-    />
+    <SelectOptionsScopeContext.Provider value={scope}>
+      <SelectPrimitive.Root
+        {...props}
+        value={value}
+        defaultValue={defaultValue}
+        open={backDismiss.open}
+        defaultOpen={defaultOpen}
+        onOpenChange={trackedOpenChange}
+        onValueChange={(next) => {
+          setUncontrolledValue(next);
+          void tracedValueChange?.(next);
+        }}
+      />
+    </SelectOptionsScopeContext.Provider>
   );
 };
 Select.displayName = SelectPrimitive.Root.displayName;
@@ -48,12 +94,21 @@ const SelectValue = SelectPrimitive.Value;
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => {
+>(({ className, children, onFocus, onBlur, ...props }, ref) => {
   const { profile } = useDisplayProfile();
+  const optionsScope = React.useContext(SelectOptionsScopeContext);
 
   return (
     <SelectPrimitive.Trigger
       ref={ref}
+      onFocus={(event) => {
+        optionsScope?.setTriggerFocused(true);
+        onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        optionsScope?.setTriggerFocused(false);
+        onBlur?.(event);
+      }}
       className={cn(
         // min-h-11 is the 44px target size, on the base so a call site that shrinks the
         // height to fit a dense row cannot take the trigger below it.
@@ -154,6 +209,16 @@ const isSelectionKey = (key: string) => key === "Enter" || key === " ";
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
+>((props, ref) => {
+  const optionsScope = React.useContext(SelectOptionsScopeContext);
+  if (optionsScope && !optionsScope.renderEveryOption && props.value !== optionsScope.chosenValue) return null;
+  return <RenderedSelectItem ref={ref} {...props} />;
+});
+SelectItem.displayName = SelectPrimitive.Item.displayName;
+
+const RenderedSelectItem = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
 >(({ className, children, onKeyDown, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
@@ -181,7 +246,7 @@ const SelectItem = React.forwardRef<
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
   </SelectPrimitive.Item>
 ));
-SelectItem.displayName = SelectPrimitive.Item.displayName;
+RenderedSelectItem.displayName = "RenderedSelectItem";
 
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,

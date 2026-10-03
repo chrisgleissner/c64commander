@@ -22,7 +22,7 @@ import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { toast } from "@/hooks/use-toast";
-import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
+import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { variant } from "@/generated/variant";
@@ -34,6 +34,7 @@ import {
   saveShowSectionDescriptions,
   subscribeShowSectionDescriptions,
 } from "@/lib/ui/collapsibleSectionStore";
+import { findNewestToastAction, type ToastActionTarget } from "@/lib/input/toastAction";
 
 /** Lands on the F1/F3 card in Settings, the same way a search result for it would. */
 const REMOTE_FUNCTION_SETTINGS_TARGET = {
@@ -111,6 +112,11 @@ export function KeypadQuickMenu() {
    * one you want is always in the same place. Whichever would do nothing is disabled, so the menu
    * still says which of them is available.
    */
+  const [toastAction, setToastAction] = useState<ToastActionTarget | null>(null);
+  useEffect(() => {
+    if (open) setToastAction(findNewestToastAction());
+  }, [open]);
+
   const [sectionCounts, setSectionCounts] = useState({ total: 0, closed: 0 });
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -202,6 +208,24 @@ export function KeypadQuickMenu() {
             {fromKeypad ? <ShortcutKey>7</ShortcutKey> : null}
             Search
           </Button>
+          {toastAction ? (
+            <Button
+              variant="ghost"
+              className="justify-start"
+              data-testid="keypad-quick-menu-toast-action"
+              onClick={() =>
+                run(() => {
+                  if (toastAction.press()) return;
+                  toast({
+                    title: "Notification already closed",
+                    description: `${toastAction.label} did not run.`,
+                  });
+                })
+              }
+            >
+              Notification: {toastAction.label}
+            </Button>
+          ) : null}
           {fromKeypad
             ? TAB_ROUTES.map((route, index) => (
                 <Button
@@ -248,7 +272,13 @@ export function KeypadQuickMenu() {
               variant="ghost"
               className="justify-start gap-3"
               data-testid="keypad-quick-menu-game-mode"
-              onClick={() => run(() => void startGameMode())}
+              onClick={() =>
+                run(() => {
+                  // Only Home and Play mount the Remote Input sheet that answers the request.
+                  if (!GAME_MODE_HOST_PATHS.has(location.pathname)) navigate(TAB_ROUTES[0].path);
+                  void startGameMode();
+                })
+              }
             >
               {fromKeypad ? <ShortcutKey>0</ShortcutKey> : null}
               Game Mode

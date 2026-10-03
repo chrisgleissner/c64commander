@@ -8,13 +8,11 @@
 
 package uk.gleissner.c64commander
 
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Build
 import android.os.Process
 import android.util.Log
-import java.util.concurrent.locks.LockSupport
 
 /**
  * The audio path from a PCM producer to the speaker, entirely in Kotlin.
@@ -102,6 +100,8 @@ internal class AudioPipeline(
      * with twelve seconds sitting in a ring that was waiting for fifteen.
      */
     primeMs: Int = 0,
+    /** Test seam: the player loop's time source, so tests can run it on virtual time. */
+    private val clock: PipelineClock = PipelineClock.SYSTEM,
 ) {
   data class Stats(
       /** PCM queued ahead of the speaker (ring + track), i.e. the current output latency. */
@@ -148,6 +148,7 @@ internal class AudioPipeline(
 
   private val ring: ByteArray
   private val ringFrames: Int
+  private val pitchPeriod: RingPitchPeriod
 
   /**
    * Held only for the ring memcpy. The mirror feeds from the receive thread and the on-device engine
@@ -166,12 +167,9 @@ internal class AudioPipeline(
    * Bumped by every [flush]. The player reads it before rendering a chunk and again before
    * committing what that chunk consumed.
    *
-   * `readFrames` is advanced by the player and reset by [flush], and `+=` on a volatile is a read,
-   * an add and a write rather than one atomic step — so a flush landing between the player's read
-   * and its write was simply overwritten, and the ring kept playing the second or two of audio the
-   * flush existed to throw away. A pause or a seek would carry on with the old position for as long
-   * as the ring was deep. Comparing the counter is what makes the player able to notice it has been
-   * overtaken, and to drop the chunk it had already converted rather than write it.
+   * `+=` on the volatile `readFrames` is not atomic, so a flush landing mid-update was overwritten and
+   * the ring played on the audio the flush threw away. The counter lets the player notice and drop
+   * the chunk it had already converted.
    */
   @Volatile private var flushSeq: Long = 0
 
@@ -188,14 +186,9 @@ internal class AudioPipeline(
   /**
    * Master attenuation, applied as samples leave the ring.
    *
-   * On-device playback keeps up to twenty seconds of audio scheduled ahead, so attenuating where the
-   * samples are produced means a listener hears a volume change twenty seconds after making it. That
-   * is not a volume control. Applying it here — on the player thread, as each frame is written out —
-   * means the change is heard within the AudioTrack's own buffer instead, which is tens of
-   * milliseconds.
-   *
-   * Set from any thread, read only by the player thread, and ramped rather than stepped: a gain that
-   * jumps between one frame and the next is audible as a click.
+   * On-device playback schedules up to twenty seconds ahead, so attenuating at the producer is heard
+   * twenty seconds late; here it is heard within the track's buffer. Set from any thread, read by the
+   * player thread, and ramped, because a stepped gain clicks.
    */
   @Volatile private var targetGain: Double = 1.0
   /** Ducking attenuation, multiplied with [targetGain]. See [setDucked]. */
@@ -203,6 +196,8 @@ internal class AudioPipeline(
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
+  /** How deep the depth the stream started with reaches — see [CushionDrift.authority]. */
+  private var startupCeilingFrames = CushionDrift.CEILING_UNKNOWN
   @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
@@ -264,6 +259,7 @@ internal class AudioPipeline(
     hardMaxFrames = maxTargetFrames * 2
     ringFrames = hardMaxFrames * 2
     ring = ByteArray(ringFrames * BYTES_PER_FRAME)
+    pitchPeriod = RingPitchPeriod(ring, ringFrames, sourceRate)
   }
 
   /** Output latency this pipeline targets once primed (ms) — ring target plus the track's buffer. */
@@ -395,15 +391,20 @@ internal class AudioPipeline(
       val gainTail = Math.cos(t * Math.PI / 2)
       val idx = ((realStart + i) % ringFrames).toInt() * BYTES_PER_FRAME
       val tail = i * BYTES_PER_FRAME
-      for (c in 0 until CHANNELS) {
-        val o = c * 2
-        val fresh = ((ring[idx + o].toInt() and 0xFF) or (ring[idx + o + 1].toInt() shl 8)).toShort()
-        val prior = ((blendTail[tail + o].toInt() and 0xFF) or (blendTail[tail + o + 1].toInt() shl 8)).toShort()
-        val mixed = (fresh * gainFresh + prior * gainTail).toInt().coerceIn(-32768, 32767)
-        ring[idx + o] = (mixed and 0xFF).toByte()
-        ring[idx + o + 1] = ((mixed shr 8) and 0xFF).toByte()
+      for (o in 0 until CHANNELS * 2 step 2) {
+        val prior = readSample(blendTail, tail + o) * gainTail
+        writeSample(ring, idx + o, readSample(ring, idx + o) * gainFresh + prior)
       }
     }
+  }
+
+  private fun readSample(buf: ByteArray, at: Int): Int =
+      ((buf[at].toInt() and 0xFF) or (buf[at + 1].toInt() shl 8)).toShort().toInt()
+
+  private fun writeSample(buf: ByteArray, at: Int, value: Double) {
+    val v = value.toInt().coerceIn(-32768, 32767)
+    buf[at] = (v and 0xFF).toByte()
+    buf[at + 1] = ((v shr 8) and 0xFF).toByte()
   }
 
   /** The concealment's continuation past the hole, held for the cross-fade back into real audio. */
@@ -411,110 +412,6 @@ internal class AudioPipeline(
 
   /** Frames of the next real packet still owed a cross-fade against the concealment before it. */
   private var blendFrames = 0
-
-  /**
-   * The length of one repetition of the audio just before a hole, in frames.
-   *
-   * Found by autocorrelation over the recent past: the lag at which the signal most resembles itself
-   * is its pitch period, and repeating exactly that keeps the waveform continuous across the join.
-   * The search runs on a decimated, mono-summed copy so it costs tens of microseconds rather than
-   * milliseconds — it happens on the receive thread, and nothing there may be slow.
-   */
-  private fun estimatePeriod(available: Int): Int {
-    val minLag = msToFrames(sourceRate, 1)
-    val maxLag = minOf(msToFrames(sourceRate, 12), available / 2)
-    if (maxLag <= minLag) return maxOf(1, minOf(available, msToFrames(sourceRate, 4)))
-    val window = minOf(available, maxLag * 2)
-    val stride = 4
-    val n = window / stride
-    if (n < 8) return maxOf(1, minOf(available, msToFrames(sourceRate, 4)))
-    val base = writeFrames - window
-    val history = DoubleArray(n)
-    for (i in 0 until n) {
-      val idx = ((base + i.toLong() * stride) % ringFrames).toInt() * BYTES_PER_FRAME
-      val l = ((ring[idx].toInt() and 0xFF) or (ring[idx + 1].toInt() shl 8)).toShort().toInt()
-      val r = ((ring[idx + 2].toInt() and 0xFF) or (ring[idx + 3].toInt() shl 8)).toShort().toInt()
-      history[i] = (l + r).toDouble()
-    }
-    var bestLag = msToFrames(sourceRate, 4)
-    var bestScore = -1.0
-    var lag = minLag / stride
-    val maxLagDecimated = maxLag / stride
-    while (lag <= maxLagDecimated) {
-      var num = 0.0
-      var energy = 0.0
-      var i = lag
-      while (i < n) {
-        num += history[i] * history[i - lag]
-        energy += history[i - lag] * history[i - lag]
-        i++
-      }
-      var current = 0.0
-      var j = lag
-      while (j < n) {
-        current += history[j] * history[j]
-        j++
-      }
-      // Normalise by BOTH windows. Dividing by the lagged window alone makes the score shrink as the
-      // lag grows and the overlap shortens, which quietly biases every estimate towards short lags.
-      val denom = Math.sqrt(energy * current)
-      val score = if (denom > 0) num / denom else 0.0
-      if (score > bestScore) {
-        bestScore = score
-        bestLag = lag * stride
-      }
-      lag++
-    }
-    return refinePeriod(bestLag, stride, window, available)
-  }
-
-  /**
-   * Sharpen the period estimate to a single frame, around the decimated search's answer.
-   *
-   * The coarse search steps four frames at a time, so it can be two frames out — and two frames of a
-   * 1350 Hz tone is a fifth of a period, which is a real step in the waveform where the repeat joins.
-   * Concealment is only as good as this number: get it wrong and the hole is filled with something
-   * audibly at the wrong pitch, which is exactly what a listener reports as a note briefly going off.
-   */
-  private fun refinePeriod(coarseLag: Int, stride: Int, window: Int, available: Int): Int {
-    val lowest = maxOf(1, coarseLag - stride)
-    val highest = minOf(available / 2, coarseLag + stride)
-    if (highest <= lowest) return coarseLag.coerceIn(1, available)
-    var bestLag = coarseLag
-    var bestScore = -1.0
-    val base = writeFrames - window
-    var lag = lowest
-    while (lag <= highest) {
-      var num = 0.0
-      var energyLag = 0.0
-      var energyCur = 0.0
-      var i = lag
-      while (i < window) {
-        val cur = sampleAt(base + i)
-        val prev = sampleAt(base + i - lag)
-        num += cur * prev
-        energyLag += prev * prev
-        energyCur += cur * cur
-        i += 2
-      }
-      val denom = Math.sqrt(energyLag * energyCur)
-      val score = if (denom > 0) num / denom else 0.0
-      if (score > bestScore) {
-        bestScore = score
-        bestLag = lag
-      }
-      lag++
-    }
-    return bestLag.coerceIn(1, available)
-  }
-
-  /** Mono sum of one ring frame, for the period search. */
-  private fun sampleAt(frame: Long): Double {
-    val idx = ((frame % ringFrames + ringFrames) % ringFrames).toInt() * BYTES_PER_FRAME
-    val l = ((ring[idx].toInt() and 0xFF) or (ring[idx + 1].toInt() shl 8)).toShort().toInt()
-    val r = ((ring[idx + 2].toInt() and 0xFF) or (ring[idx + 3].toInt() shl 8)).toShort().toInt()
-    return (l + r).toDouble()
-  }
 
   /**
    * Fill the hole a lost packet left, using what came just before it.
@@ -545,7 +442,7 @@ internal class AudioPipeline(
       // Search over everything the ring still holds, not just the size of the hole. Passing the hole
       // size capped the search at 96 frames, and a 440 Hz tone repeats every 109 — so the true period
       // was outside the range the estimator could ever return, and it settled on a fraction of it.
-      val period = estimatePeriod(available)
+      val period = pitchPeriod.estimate(writeFrames, available)
       val from = writeFrames - period
       // Held at full level for a short fill: fading the repeat out and then splicing the next real
       // packet in at full level trades one discontinuity for two, and the second — arriving exactly
@@ -683,53 +580,79 @@ internal class AudioPipeline(
 
   /** Low-water mark of the ring within the current adaptation window (source frames). */
   private var windowMinDepth = Long.MAX_VALUE
-  private var windowStartNanos = System.nanoTime()
+  private var windowMaxDepth = 0L
+  private var windowStartNanos = clock.nanoTime()
+
+  private val outFrames: Int
+    get() = maxOf(1, writeFramesPerChunk)
 
   private fun playLoop() {
     Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
-    val outFrames = maxOf(1, writeFramesPerChunk)
-    outScratch = ByteArray(outFrames * BYTES_PER_FRAME)
-    // Worst case source frames for one output chunk, plus one for the interpolator's right-hand
-    // sample and a little slack for the ratio's excursion.
-    srcScratch = ShortArray(((outFrames * nominalRatio() * (1 + MAX_DRIFT) + 2).toInt() + 2) * CHANNELS)
-    while (running) {
-      try {
-        if (paused) {
-          // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
-          // the audio the listener paused on would be gone by the time they came back to it.
-          LockSupport.parkNanos(POLL_NANOS)
-          continue
-        }
-        if (!started) {
-          // Prime for BOTH buffers, not just the cushion. The first writes fill the speaker track,
-          // and every frame of that comes out of the ring — so priming to the cushion target alone
-          // leaves the ring starved the moment playback begins, and it never recovers: the converter
-          // sees a thin cushion from the very first chunk and spends the whole session easing off to
-          // rebuild something that was never there.
-          if ((writeFrames - readFrames) < primeFrames) {
-            LockSupport.parkNanos(POLL_NANOS)
-            continue
-          }
-          track.play()
-          started = true
-        }
-        val depth = (writeFrames - readFrames).coerceAtLeast(0)
-        if (depth > hardMaxFrames) {
-          // Safety net. The converter should have prevented this; if it did not, playing the backlog
-          // out would be permanent added latency, so drop it and say so.
-          val excess = depth - targetFrames
-          synchronized(producerLock) { readFrames += excess }
-          discardedBytes += excess * BYTES_PER_FRAME
-          fraction = 0.0
-          continue
-        }
-        renderChunk(outFrames)
-      } catch (error: Exception) {
-        if (!running) break
-        Log.w(TAG, "Audio player loop error; continuing", error)
-        LockSupport.parkNanos(POLL_NANOS)
-      }
+    while (running) step()
+  }
+
+  /** One pass of the player loop. Public to tests, which drive it on virtual time instead of a thread. */
+  internal fun step() {
+    if (!::outScratch.isInitialized) {
+      outScratch = ByteArray(outFrames * BYTES_PER_FRAME)
+      // Worst case source frames for one output chunk, plus one for the interpolator's right-hand
+      // sample and a little slack for the ratio's excursion.
+      val maxRatio = nominalRatio() * (1 + CushionDrift.REBUILD_DRIFT)
+      srcScratch = ShortArray(((outFrames * maxRatio + 2).toInt() + 2) * CHANNELS)
     }
+    try {
+      if (paused) {
+        // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
+        // the audio the listener paused on would be gone by the time they came back to it.
+        clock.park(POLL_NANOS)
+        return
+      }
+      if (!started) {
+        // Prime for BOTH buffers: the first writes fill the speaker track out of the ring, so
+        // priming to the cushion alone starts the session on a thin cushion it never rebuilds.
+        if ((writeFrames - readFrames) < primeFrames) {
+          clock.park(POLL_NANOS)
+          return
+        }
+        dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
+        track.play()
+        started = true
+        startupCeilingFrames = CushionDrift.CEILING_UNKNOWN
+        windowStartNanos = clock.nanoTime()
+        windowMinDepth = Long.MAX_VALUE
+        windowMaxDepth = 0L
+      }
+      val depth = (writeFrames - readFrames).coerceAtLeast(0)
+      if (depth > hardMaxFrames) {
+        // Safety net. The converter should have prevented this; if it did not, playing the backlog
+        // out would be permanent added latency, so drop it and say so.
+        val excess = depth - targetFrames
+        synchronized(producerLock) { readFrames += excess }
+        discardedBytes += excess * BYTES_PER_FRAME
+        fraction = 0.0
+        return
+      }
+      renderChunk(outFrames)
+    } catch (error: Exception) {
+      if (!running) return
+      Log.w(TAG, "Audio player loop error; continuing", error)
+      clock.park(POLL_NANOS)
+    }
+  }
+
+  /**
+   * Start at the live edge: a Wi-Fi clump that lands while the ring primes left 156 ms against a 30 ms
+   * target, eight cents sharp while it drained. Nothing has been heard yet, so it is skipped. Depth
+   * after the first sound is not skipped (see [CushionDrift.authority]). On-device playback never skips.
+   */
+  private fun dropSurplusAbove(keepFrames: Long) {
+    synchronized(producerLock) {
+      val surplus = (writeFrames - readFrames) - keepFrames
+      if (surplus <= 0) return
+      readFrames += surplus
+      discardedBytes += surplus * BYTES_PER_FRAME
+    }
+    fraction = 0.0
   }
 
   /**
@@ -752,11 +675,11 @@ internal class AudioPipeline(
     }
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
-    // Slew-limited, never stepped. The correction IS a change of playback rate, so moving it abruptly
-    // is an abrupt change of pitch — and the authority below can change fivefold when the cushion
-    // crosses a threshold, which put an audible lurch in the middle of a held note. Ramping it over
-    // tens of milliseconds makes the same correction inaudible.
-    val wanted = nominalRatio() * (1.0 + driftAuthority(depth) * cushionError(depth))
+    val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS).toLong()
+    val authority = CushionDrift.authority(depth, floor, recoveryDepthFrames(), startupCeilingFrames)
+    // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
+    // fivefold at a threshold, which put an audible lurch in a held note.
+    val wanted = nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
     val ratio =
         when {
           appliedRatio <= 0.0 -> wanted
@@ -765,11 +688,8 @@ internal class AudioPipeline(
         }
     appliedRatio = ratio
 
-    // How many output frames the ring can actually support, leaving the one extra source frame the
-    // interpolator reads ahead. Producing a SHORT chunk is the right answer to a shallow ring: the
-    // blocking write still paces us, and coming back for the rest a moment later is inaudible.
-    // Concealing a whole chunk because the ring was one frame short is not — that quantises every
-    // near-miss into 10 ms of silence, which is most of what the listener was hearing as crackle.
+    // Output frames the ring supports (keeping the interpolator's look-ahead frame). A SHORT chunk is
+    // the answer to a shallow ring; concealing a whole chunk for one missing frame was the crackle.
     val usable = ((depth - 1) - fraction) / ratio
     val renderFrames = minOf(outFrames.toLong(), Math.floor(usable).toLong()).toInt()
     if (renderFrames <= 0) {
@@ -805,54 +725,13 @@ internal class AudioPipeline(
             true
           }
         }
-    // Written only after the position is committed, so a chunk built from audio a flush has since
-    // discarded never reaches the speaker. Outside the lock: this blocks on the AudioTrack, and the
-    // producer must never wait on that.
+    // Written after the commit so flushed audio never plays; outside the lock so the producer never
+    // waits on the AudioTrack.
     if (!committed) {
       fraction = 0.0
       return
     }
     writeBlocking(outScratch, renderFrames * BYTES_PER_FRAME)
-  }
-
-  /**
-   * How far the cushion is from target, as -1..+1, with a deadband around the target.
-   *
-   * The deadband matters more than the gain. A loop that corrects continuously sits at its limit
-   * whenever the depth is anywhere but exactly on target, and since the correction IS a change of
-   * playback rate, that is a permanent detune — measurably 997.75 Hz for a 1000 Hz tone before the
-   * deadband existed, which is the "sometimes it speeds up" the listener hears. Inside the band the
-   * pipeline plays at exactly the right rate and lets the buffer absorb the difference, which is what
-   * a buffer is for.
-   */
-  private fun cushionError(depth: Long): Double {
-    val target = targetFrames.toDouble()
-    if (target <= 0) return 0.0
-    val error = (depth - target) / target
-    if (Math.abs(error) < CUSHION_DEADBAND) return 0.0
-    return error.coerceIn(-1.0, 1.0)
-  }
-
-  /**
-   * How far the rate may be moved right now.
-   *
-   * Normally a whisper — well under the threshold of a noticeable pitch change — because the buffer,
-   * not the rate, is what absorbs jitter. But a whisper cannot move the cushion far, and it needs to
-   * move far in both directions:
-   *
-   *  - **Too thin** and the next gap is a hole. At 0.1% it would take two minutes to gain a tenth of
-   *    a second, so the target would climb while the ring stayed empty and the holes kept coming.
-   *  - **Too deep** and the latency is permanent. Absorbing one 148 ms burst left the mirror 241 ms
-   *    behind the picture, and at 0.1% it would have taken twenty-five minutes to hand that back.
-   *
-   * So when the cushion is far from where it should be, in either direction, the pipeline may ease
-   * on or off harder until it is close again. Half a percent is about eight cents, it lasts tens of
-   * seconds rather than permanently, and it is far cheaper than either a gap or a lip-sync error.
-   */
-  private fun driftAuthority(depth: Long): Double {
-    val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
-    val far = targetFrames + maxTargetFrames / 4
-    return if (depth < floor || depth > far) REBUILD_DRIFT else MAX_DRIFT
   }
 
   /**
@@ -866,8 +745,11 @@ internal class AudioPipeline(
    */
   private fun adaptCushion(depth: Long) {
     if (depth < windowMinDepth) windowMinDepth = depth
-    val now = System.nanoTime()
+    if (depth > windowMaxDepth) windowMaxDepth = depth
+    val now = clock.nanoTime()
     if (now - windowStartNanos < ADAPT_WINDOW_NANOS) return
+    val margin = msToFrames(sourceRate, STARTUP_CEILING_MARGIN_MS).toLong()
+    startupCeilingFrames = CushionDrift.nextStartupCeiling(startupCeilingFrames, windowMaxDepth, margin)
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS).toLong()
     targetFrames =
         when {
@@ -878,8 +760,12 @@ internal class AudioPipeline(
           else -> targetFrames
         }
     windowMinDepth = Long.MAX_VALUE
+    windowMaxDepth = 0L
     windowStartNanos = now
   }
+
+  /** Depth above which the ring is far too deep — see [CushionDrift.authority]. */
+  private fun recoveryDepthFrames(): Long = targetFrames + maxTargetFrames / 4L
 
   private fun nominalRatio(): Double = sourceRate.toDouble() / outputRate.toDouble()
 
@@ -887,7 +773,7 @@ internal class AudioPipeline(
   private fun waitForFrames(needed: Int): Boolean {
     var waited = 0L
     while (waited < STARVE_LIMIT_NANOS && running) {
-      LockSupport.parkNanos(POLL_NANOS)
+      clock.park(POLL_NANOS)
       waited += POLL_NANOS
       if ((writeFrames - readFrames) >= needed) return true
     }
@@ -965,7 +851,7 @@ internal class AudioPipeline(
     }
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
-      if (written <= 0) LockSupport.parkNanos(POLL_NANOS)
+      if (written <= 0) clock.park(POLL_NANOS)
     }
     refreshTrackStatsOccasionally()
   }
@@ -980,7 +866,7 @@ internal class AudioPipeline(
    * measuring. Diagnostics must not be able to cause the fault they are there to report.
    */
   private fun refreshTrackStatsOccasionally() {
-    val now = System.nanoTime()
+    val now = clock.nanoTime()
     if (now - lastStatsReadNanos < STATS_READ_INTERVAL_NANOS) return
     lastStatsReadNanos = now
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -1005,8 +891,8 @@ internal class AudioPipeline(
     private const val CLOSE_JOIN_TIMEOUT_MS = 250L
     const val BYTES_PER_FRAME = 4 // stereo * S16
     private const val CHANNELS = 2
-    private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
-    private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
+    const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
+    const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
     private const val FALLBACK_BUFFER_BYTES = 8192
 
     /**
@@ -1015,11 +901,8 @@ internal class AudioPipeline(
      * survives an ordinary scheduling hiccup without the DAC drying out.
      */
     /**
-     * How many output frames a full-scale gain change is spread over.
-     *
-     * ~20 ms at 48 kHz, matching the ramp the JavaScript sinks use, so a level change sounds the
-     * same whichever path is playing. Long enough that no step is audible as a click, short enough
-     * that the control still feels immediate.
+     * Output frames a full-scale gain change is spread over: ~20 ms at 48 kHz, as in the JavaScript
+     * sinks, so no step clicks and the control still feels immediate.
      */
     /** How far output drops while ducking. The usual platform duck is about this deep. */
     private const val DUCK_GAIN = 0.2
@@ -1052,19 +935,8 @@ internal class AudioPipeline(
     /** Long enough to contain several of this link's bursts, short enough to settle in seconds. */
     private const val ADAPT_WINDOW_NANOS = 2_000_000_000L
 
-    /**
-     * How far the resampling ratio may be pushed from nominal to hold the cushion.
-     *
-     * 0.1% is under two cents — below the threshold at which a pitch change is noticeable even on a
-     * sustained tone — and still three times the 0.035% clock difference between the C64's 47983 Hz
-     * and the phone's DAC that it exists to absorb. It was ten times this at first, and a tone test
-     * showed the result: a steady 1000 Hz came out at 997.75 Hz, which is audible as the tune
-     * wandering in speed.
-     */
-    private const val MAX_DRIFT = 0.001
-
-    /** The wider authority allowed only while the cushion is below its floor — see [driftAuthority]. */
-    private const val REBUILD_DRIFT = 0.005
+    /** Ordinary jitter above a window's peak depth: a few packets and a chunk, not a burst. */
+    private const val STARTUP_CEILING_MARGIN_MS = 20
 
     /**
      * The most the playback rate may change per written chunk. At one HAL burst per chunk this takes
@@ -1079,13 +951,6 @@ internal class AudioPipeline(
     /** How long a concealment may hold at full level before fading out. */
     private const val CONCEAL_HOLD_MS = 30
 
-    /**
-     * How far the cushion may sit from target before the rate is touched at all. Without a deadband
-     * the loop corrects permanently, so the correction stops being a correction and becomes a detune.
-     */
-    private const val CUSHION_DEADBAND = 0.35
-
-
     private const val POLL_NANOS = 500_000L // 0.5 ms
 
     /** How often the track's own counters are worth a binder round trip. */
@@ -1098,39 +963,5 @@ internal class AudioPipeline(
 
     /** Fallback when the platform will not name its burst size: 5 ms, the usual order of magnitude. */
     private fun defaultBurstFrames(outputRate: Int): Int = maxOf(64, outputRate / 200)
-
-    /**
-     * The real speaker track.
-     *
-     * Built at the DEVICE's output rate, not the stream's. A track whose rate the hardware does not
-     * have is resampled by AudioFlinger, and a resampled track cannot use the fast mixer — which is
-     * why asking for the C64's 47983 Hz produced a 60 ms minimum buffer and a permanent per-frame
-     * conversion in the audio server. Converting to the native rate in this pipeline instead costs a
-     * linear interpolation we were going to need anyway for drift correction, and buys the low-latency
-     * path back.
-     */
-    fun buildAudioTrack(outputRate: Int, bufferBytes: Int): AudioTrack {
-      val builder =
-          AudioTrack.Builder()
-              .setAudioAttributes(
-                  AudioAttributes.Builder()
-                      .setUsage(AudioAttributes.USAGE_MEDIA)
-                      .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                      .build(),
-              )
-              .setAudioFormat(
-                  AudioFormat.Builder()
-                      .setEncoding(ENCODING)
-                      .setSampleRate(outputRate)
-                      .setChannelMask(CHANNEL_CONFIG)
-                      .build(),
-              )
-              .setBufferSizeInBytes(bufferBytes)
-              .setTransferMode(AudioTrack.MODE_STREAM)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-      }
-      return builder.build()
-    }
   }
 }

@@ -26,6 +26,10 @@ vi.mock("@/lib/logging", () => ({
 
 const browseIndexMocks = vi.hoisted(() => ({
   loadHvscBrowseIndexSnapshot: vi.fn(async () => null),
+  mergeSonglengthDurations: vi.fn((baseSnapshot: unknown, snapshot: unknown) => ({
+    snapshot: browseIndexMocks.mergeSonglengthDurationsIntoBrowseIndex(baseSnapshot, snapshot),
+    changed: true,
+  })),
   mergeSonglengthDurationsIntoBrowseIndex: vi.fn((baseSnapshot, snapshot) => ({
     schemaVersion: 2,
     updatedAt: new Date().toISOString(),
@@ -83,6 +87,10 @@ vi.mock("@/lib/songlengths", () => ({
 }));
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => browseIndexMocks);
+vi.mock("@/lib/hvsc/hvscSonglengthProjection", () => ({
+  mergeSonglengthDurations: browseIndexMocks.mergeSonglengthDurations,
+  mergeSonglengthDurationsIntoBrowseIndex: browseIndexMocks.mergeSonglengthDurationsIntoBrowseIndex,
+}));
 
 const hvscStateMocks = vi.hoisted(() => ({
   loadHvscState: vi.fn(() => ({
@@ -163,6 +171,17 @@ describe("hvscSongLengthService", () => {
       await ensureHvscSonglengthsReadyOnColdStart();
       expect(mockFacade.loadOnColdStart).toHaveBeenCalledTimes(1);
       expect(saveHvscBrowseIndexSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not write the browse index back when the songlengths changed no song", async () => {
+      vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+      vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
+      browseIndexMocks.mergeSonglengthDurations.mockImplementationOnce((baseSnapshot: unknown) => ({
+        snapshot: baseSnapshot as never,
+        changed: false,
+      }));
+      await ensureHvscSonglengthsReadyOnColdStart();
+      expect(saveHvscBrowseIndexSnapshot).not.toHaveBeenCalled();
     });
 
     it("is idempotent on second invocation", async () => {

@@ -151,4 +151,17 @@ describe("FittedText", () => {
 
     expect(HTMLCanvasElement.prototype.getContext).not.toHaveBeenCalled();
   });
+
+  it("does not measure again when a parent re-renders it with the same wordings in a new list", () => {
+    setAvailableWidth("Soft IEC Drive".length * CHAR_PX);
+    const measure = vi.spyOn(window, "getComputedStyle");
+    const { rerender } = render(<FittedText variants={[...VARIANTS]} />);
+    const afterMount = measure.mock.calls.length;
+    rerender(<FittedText variants={[...VARIANTS]} />);
+    rerender(<FittedText variants={[...VARIANTS]} />);
+    expect(measure.mock.calls.length).toBe(afterMount);
+
+    rerender(<FittedText variants={["Soft IEC Drive", "IEC"]} />);
+    expect(measure.mock.calls.length).toBeGreaterThan(afterMount);
+  });
 });

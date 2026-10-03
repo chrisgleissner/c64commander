@@ -76,6 +76,22 @@ describe("useAvMirror", () => {
     expect(result.current.videoLive).toBe(true); // connecting counts as live
   });
 
+  it("keeps a failed feed stoppable although it no longer counts as live", () => {
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useAvMirror(asSession(fake)));
+    expect(result.current.anyStoppable).toBe(false);
+
+    act(() => {
+      fake.push({
+        audio: { state: "error", droppedPackets: 0, error: "The audio stream stopped arriving." },
+        video: { state: "off", fps: 0, error: null },
+      });
+    });
+
+    expect(result.current.anyLive).toBe(false);
+    expect(result.current.anyStoppable).toBe(true);
+  });
+
   it("forwards toggle/stop callbacks to the session", async () => {
     const fake = new FakeSession();
     const { result } = renderHook(() => useAvMirror(asSession(fake)));

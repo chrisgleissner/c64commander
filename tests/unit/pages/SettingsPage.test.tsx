@@ -544,7 +544,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveSidRadioMinSeconds: vi.fn(),
   clampConfigWriteIntervalMs: (value: number) => value,
   clampDiscoveryProbeTimeoutMs: (value: number) => value,
-  clampVolumeSliderPreviewIntervalMs: (value: number) => value,
+  clampVolumeSliderPreviewIntervalMs: (value: number) => Math.min(500, Math.max(100, value)),
   loadConfigWriteIntervalMs: vi.fn(() => 500),
   clampBackgroundRediscoveryIntervalMs: (value: number) => value,
   clampStartupDiscoveryWindowMs: (value: number) => value,
@@ -1063,6 +1063,44 @@ describe("SettingsPage", () => {
       expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device");
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Discovered device selected" }));
     });
+  });
+
+  it("stays silent when a newer device switch supersedes the discovered-device selection", async () => {
+    const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
+    mockSwitchSavedDevice.mockResolvedValueOnce(SAVED_DEVICE_SWITCH_SUPERSEDED as never);
+    deviceDiscoveryStateRef.current = {
+      ...deviceDiscoveryStateRef.current,
+      phase: "complete",
+      candidates: [
+        {
+          id: "id:38c1ba",
+          address: "192.0.2.13",
+          host: null,
+          httpPort: 80,
+          source: ["lan-scan"],
+          product: "Ultimate 64 Elite",
+          firmwareVersion: "3.14e",
+          fpgaVersion: "122",
+          coreVersion: "1.4B",
+          hostname: "u64",
+          uniqueId: "38C1BA",
+          requiresPassword: false,
+          alreadySavedDeviceId: null,
+          confidence: "verified",
+          lastSeenAt: "2026-06-21T00:00:00.000Z",
+        },
+      ],
+      scannedHosts: 254,
+      elapsedMs: 500,
+    };
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+
+    await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use" })).not.toBeDisabled());
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Discovered device selected" }));
+    expect(reportUserError).not.toHaveBeenCalled();
   });
 
   it("explains when automatic discovery is unsupported on this platform", () => {
@@ -2836,6 +2874,24 @@ describe("SettingsPage", () => {
     });
 
     expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(callsBefore);
+  });
+
+  it("lets a slider preview interval be typed one digit at a time and clamps it only on commit", () => {
+    renderSettingsPage();
+    const input = screen.getByLabelText(/slider preview interval/i) as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "3" } });
+    fireEvent.change(input, { target: { value: `${input.value}0` } });
+    fireEvent.change(input, { target: { value: `${input.value}0` } });
+    fireEvent.blur(input);
+
+    expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenLastCalledWith(300);
+    expect(input.value).toBe("300");
+
+    fireEvent.change(input, { target: { value: "9000" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenLastCalledWith(500);
+    expect(input.value).toBe("500");
   });
 
   it("saves the device slider preview interval on blur and enter", () => {

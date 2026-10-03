@@ -245,6 +245,7 @@ export function useAppConfigState() {
   const captureInFlightRef = useRef(false);
   const idleCaptureTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idleCaptureAbortControllerRef = useRef<AbortController | null>(null);
+  const provisionalRecaptureBaseUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     setInitialSnapshot(loadInitialSnapshot(resolvedBaseUrl));
@@ -374,7 +375,14 @@ export function useAppConfigState() {
       setSnapshotLoading(false);
       return;
     }
-    if (initialSnapshot || captureInFlightRef.current) {
+    // A provisional baseline is retried once per device per launch, and only while nothing has changed:
+    // a later capture would otherwise adopt the user's edits as the revert target.
+    const retryProvisional =
+      Boolean(initialSnapshot?.failedCategories?.length) &&
+      !hasChanges &&
+      provisionalRecaptureBaseUrlRef.current !== resolvedBaseUrl;
+    const wantsCapture = !initialSnapshot || retryProvisional;
+    if (!wantsCapture || captureInFlightRef.current) {
       return;
     }
 
@@ -394,7 +402,7 @@ export function useAppConfigState() {
       });
     };
     const scheduleIdleCapture = () => {
-      if (cancelled || initialSnapshot || isDocumentHidden()) {
+      if (cancelled || isDocumentHidden()) {
         return;
       }
       idleCaptureTimeoutRef.current = globalThis.setTimeout(() => {
@@ -410,6 +418,7 @@ export function useAppConfigState() {
           scheduleIdleCapture();
           return;
         }
+        if (retryProvisional) provisionalRecaptureBaseUrlRef.current = resolvedBaseUrl;
         const controller = new AbortController();
         idleCaptureAbortControllerRef.current = controller;
         void captureIdleInitialSnapshot(controller.signal);
@@ -420,7 +429,7 @@ export function useAppConfigState() {
         cancelIdleCapture("hidden");
         return;
       }
-      if (!cancelled && !initialSnapshot && !captureInFlightRef.current) {
+      if (!cancelled && !captureInFlightRef.current) {
         scheduleIdleCapture();
       }
     };
@@ -438,7 +447,7 @@ export function useAppConfigState() {
       idleCaptureAbortControllerRef.current?.abort();
       idleCaptureAbortControllerRef.current = null;
     };
-  }, [captureIdleInitialSnapshot, initialSnapshot, resolvedBaseUrl, status.isConnected]);
+  }, [captureIdleInitialSnapshot, hasChanges, initialSnapshot, resolvedBaseUrl, status.isConnected]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {

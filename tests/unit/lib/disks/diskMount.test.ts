@@ -28,10 +28,8 @@ const { mockResolvePersistentReuStorageRoot } = vi.hoisted(() => ({
   ),
 }));
 
-// HARD18-025 reuses HARD18-014's persistent-root ranking as-is; stubbed here
-// so these tests don't also need reuWorkflow.ts's full dependency graph
-// (snapshot storage/store) just to exercise a pure ranking helper.
-vi.mock("@/lib/reu/reuWorkflow", () => ({
+// HARD18-025 reuses HARD18-014's persistent-root ranking as-is; stubbed here.
+vi.mock("@/lib/reu/reuStorageRoot", () => ({
   resolvePersistentReuStorageRoot: mockResolvePersistentReuStorageRoot,
 }));
 

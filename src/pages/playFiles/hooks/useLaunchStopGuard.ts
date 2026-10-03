@@ -8,12 +8,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 /**
- * One Stop per launch. A launch that Stop overtook keeps its start claim until its .cfg apply returns,
- * about 20 s, and every further Stop in that time sent another reset into the device menu the apply
- * was still walking.
+ * One Stop per launch, and a visible "Stopping…" until the device has answered it.
+ *
+ * `stopPending` lasts until the stopped launch unwinds: every further Stop in that time sent another reset into
+ * the device menu a `.cfg` apply was still walking. `stopping` lasts until Stop's own request settles, so a press
+ * shows at once even when the reset takes a moment.
  */
 export const useLaunchStopGuard = ({
   isPlaylistLoading,
@@ -26,6 +28,8 @@ export const useLaunchStopGuard = ({
 }) => {
   const [stopPending, setStopPending] = useState(false);
   const stopPendingRef = useRef(false);
+  const [stopping, setStopping] = useState(false);
+  const stoppingRef = useRef(false);
 
   useEffect(() => {
     if (isPlaylistLoading) return;
@@ -34,6 +38,10 @@ export const useLaunchStopGuard = ({
   }, [isPlaylistLoading]);
 
   const stopPlayback = useCallback(() => {
+    if (stoppingRef.current) {
+      addLog("info", "Playback: Stop already sent; waiting for the device to answer it");
+      return;
+    }
     if (isPlaylistLoading && !isPlaying) {
       if (stopPendingRef.current) {
         addLog("info", "Playback: Stop already sent; waiting for the stopped launch to unwind");
@@ -42,8 +50,22 @@ export const useLaunchStopGuard = ({
       stopPendingRef.current = true;
       setStopPending(true);
     }
-    void stop();
+    stoppingRef.current = true;
+    setStopping(true);
+    void (async () => {
+      try {
+        await stop();
+      } catch (error) {
+        addErrorLog("Playback: Stop failed", {
+          error: (error as Error).message,
+          stack: (error as Error).stack,
+        });
+      } finally {
+        stoppingRef.current = false;
+        setStopping(false);
+      }
+    })();
   }, [isPlaying, isPlaylistLoading, stop]);
 
-  return { stopPending, stopPlayback };
+  return { stopPending, stopping, stopPlayback };
 };

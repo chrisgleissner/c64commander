@@ -22,6 +22,7 @@ import { getC64API } from "@/lib/c64api";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
+import { observeElementSize } from "@/lib/ui/sharedResizeObserver";
 
 interface ConfigItemRowProps {
   name: string;
@@ -81,19 +82,12 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number, profile: 
   }, [measureLayout, label]);
 
   useEffect(() => {
-    const observer =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            measureLayout();
-          })
-        : null;
-    if (observer) {
-      if (containerRef.current) observer.observe(containerRef.current);
-      if (labelRef.current) observer.observe(labelRef.current);
-    }
+    const stops = [containerRef.current, labelRef.current]
+      .filter((element): element is HTMLElement => element !== null)
+      .map((element) => observeElementSize(element, measureLayout));
     window.addEventListener("resize", measureLayout);
     return () => {
-      observer?.disconnect();
+      stops.forEach((stop) => stop());
       window.removeEventListener("resize", measureLayout);
     };
   }, [measureLayout]);

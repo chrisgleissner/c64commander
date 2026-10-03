@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-const { requestDiagnosticsOpen, requestDeviceSwitcherOpen, devices } = vi.hoisted(() => ({
+const { requestDiagnosticsOpen, requestDeviceSwitcherOpen, devices, toast } = vi.hoisted(() => ({
   requestDiagnosticsOpen: vi.fn(),
+  toast: vi.fn(),
   requestDeviceSwitcherOpen: vi.fn(),
   devices: vi.fn(() => ({ devices: [{ id: "a" }, { id: "b" }] })),
 }));
@@ -13,6 +14,7 @@ vi.mock("@/lib/input/keypadCommands", async (importOriginal) => ({
   requestDeviceSwitcherOpen,
 }));
 vi.mock("@/hooks/useSavedDevices", () => ({ useSavedDevices: () => devices() }));
+vi.mock("@/hooks/use-toast", () => ({ toast }));
 
 const variantId = vi.hoisted(() => ({ current: "c64commander" }));
 vi.mock("@/generated/variant", async (importOriginal) => {
@@ -53,6 +55,81 @@ describe("KeypadQuickMenu", () => {
 
     fireEvent.click(screen.getByTestId("keypad-quick-menu-diagnostics"));
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+  });
+
+  it("offers the newest notification's action, so a keypad can press Retry", async () => {
+    const retry = vi.fn();
+    render(
+      <MemoryRouter>
+        <div data-testid="app-toast" data-state="open">
+          <div data-testid="app-toast-action">
+            <button type="button" onClick={retry}>
+              Retry
+            </button>
+          </div>
+        </div>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+
+    requestQuickMenuOpen();
+    const entry = await screen.findByTestId("keypad-quick-menu-toast-action");
+    expect(entry).toHaveTextContent("Notification: Retry");
+
+    fireEvent.click(entry);
+    expect(retry).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+  });
+
+  it("says the action did not run when its notification closed while the menu was open", async () => {
+    const retry = vi.fn();
+    render(
+      <MemoryRouter>
+        <div data-testid="app-toast" data-state="open">
+          <div data-testid="app-toast-action">
+            <button type="button" onClick={retry}>
+              Retry
+            </button>
+          </div>
+        </div>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+
+    requestQuickMenuOpen();
+    const entry = await screen.findByTestId("keypad-quick-menu-toast-action");
+    screen.getByText("Retry").closest('[data-testid="app-toast"]')!.setAttribute("data-state", "closed");
+    fireEvent.click(entry);
+
+    expect(retry).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Notification already closed" }));
+  });
+
+  it("offers no notification entry when the newest notification has no action", async () => {
+    render(
+      <MemoryRouter>
+        <div data-testid="app-toast" data-state="open">
+          Saved
+        </div>
+        <div data-testid="app-toast" data-state="open">
+          <div data-testid="app-toast-action">
+            <button type="button">Retry</button>
+          </div>
+        </div>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+    expect(screen.queryByTestId("keypad-quick-menu-toast-action")).toBeNull();
+  });
+
+  it("lists no notification entry when no open notification has an action", async () => {
+    renderMenu();
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+    expect(screen.queryByTestId("keypad-quick-menu-toast-action")).toBeNull();
   });
 
   it("invokes the device switcher and a page jump", async () => {

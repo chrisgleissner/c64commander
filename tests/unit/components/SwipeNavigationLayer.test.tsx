@@ -429,11 +429,13 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
-  it("reserves the bottom navigation band from the swipe viewport height", async () => {
+  it("reserves the bottom navigation band and the toast strip from the swipe viewport height", async () => {
     renderLayer("/");
 
     const container = await screen.findByTestId("swipe-navigation-container");
-    expect(container.getAttribute("style")).toContain("height: calc(100dvh - var(--app-tab-bar-reserved-height))");
+    expect(container.getAttribute("style")).toContain(
+      "height: calc(100dvh - var(--app-tab-bar-reserved-height) - var(--app-toast-reserved-height, 0px))",
+    );
   });
 
   it("resets accidental horizontal runway scroll drift", async () => {

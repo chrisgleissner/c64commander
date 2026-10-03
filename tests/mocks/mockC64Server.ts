@@ -615,6 +615,16 @@ export async function createMockC64Server(
       // A category this device does not have is a 404, the way a cartridge answers for "Data
       // Streams". Answering 200 with an empty item list instead is what let a mock that had been
       // told to omit the category still report a device that streams.
+      if (category === "*") {
+        // The firmware's category wildcard answers every category in one response, one flat value per item.
+        const all: Record<string, unknown> = { errors: [] };
+        Object.entries(state)
+          .filter(([name]) => !omitted.has(name))
+          .forEach(([name, entries]) => {
+            all[name] = Object.fromEntries(Object.entries(entries).map(([item, entry]) => [item, entry.value]));
+          });
+        return sendJson(200, all);
+      }
       if (omitted.has(category)) return sendJson(404, { errors: ["No such category"] });
       const items = state[category] ?? {};
       const details = itemDetails?.[category] ?? {};

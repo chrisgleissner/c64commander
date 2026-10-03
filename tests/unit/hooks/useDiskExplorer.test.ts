@@ -8,7 +8,7 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
+import { DiskExplorerMountNotCompletedError, useDiskExplorer, diskTypeForPath } from "@/hooks/useDiskExplorer";
 import type { DiskEntry } from "@/lib/disks/diskTypes";
 
 vi.mock("@/lib/remoteInput/kernalFallbackInjector", () => ({
@@ -115,6 +115,27 @@ describe("useDiskExplorer", () => {
     expect(api.runPrgUpload).toHaveBeenCalledTimes(1);
     expect(result.current.open).toBe(false);
     expect(onToast).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("Launched") }));
+  });
+
+  it("leaves the report to the mount owner when Mount & Load's mount did not complete", async () => {
+    const onToast = vi.fn();
+    const mount = vi.fn(async () => {
+      throw new DiskExplorerMountNotCompletedError("game.d64", "failed");
+    });
+    const { result } = renderHook(() =>
+      useDiskExplorer({ api: {} as never, loadImage: vi.fn(async () => makeD64()), mount, onToast }),
+    );
+    await act(async () => {
+      await result.current.openDisk(diskEntry());
+    });
+    await waitFor(() => expect(result.current.entries).not.toBeNull());
+    await act(async () => {
+      await result.current.runAction("mountAndLoad", result.current.entries![0]);
+    });
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(onToast).not.toHaveBeenCalled();
+    expect(result.current.open).toBe(true);
+    expect(result.current.busyIndex).toBeNull();
   });
 
   it("errors Mount & Load when no mount function is provided", async () => {

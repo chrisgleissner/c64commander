@@ -16,12 +16,14 @@ import { ensureCardOpen } from "../helpers/cards";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { requestConfigItemFocus } from "@/lib/search/configDeepLink";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
+import { reportUserError } from "@/lib/uiErrors";
 
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
 
@@ -138,8 +140,10 @@ const FocusCapture = ({ target }: { target: { current: FocusNavigationContextVal
   return null;
 };
 
-const renderPage = (focusContext?: { current: FocusNavigationContextValue | null }) => {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const renderPage = (
+  focusContext?: { current: FocusNavigationContextValue | null },
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) => {
   const router = createMemoryRouter([{ path: "*", element: <ConfigBrowserPage /> }], {
     initialEntries: ["/"],
     future: { v7_startTransition: true, v7_relativeSplatPath: true },
@@ -165,6 +169,20 @@ beforeEach(() => {
   // opened — the same behaviour the Settings cards have. Without clearing it, one test's open
   // page is restored in the next one, whose click then closes it.
   localStorage.clear();
+});
+
+describe("ConfigBrowserPage — global search deep link (C64U menu mode)", () => {
+  it("opens the menu page that holds the searched item, not the first page reading its category", async () => {
+    renderPage();
+    const turboBoost = screen.getByTestId("config-menu-page-turbo-boost");
+    const videoSetup = screen.getByTestId("config-menu-page-video-setup");
+    expect(videoSetup).toHaveAttribute("aria-expanded", "false");
+
+    act(() => requestConfigItemFocus("U64 Specific Settings", "System Mode"));
+
+    await waitFor(() => expect(videoSetup).toHaveAttribute("aria-expanded", "true"));
+    expect(turboBoost).toHaveAttribute("aria-expanded", "false");
+  });
 });
 
 describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
@@ -201,6 +219,33 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
       item: "System Mode",
       value: "updated",
     });
+  });
+
+  it("keeps a pending value and reports the failure when a menu page's Refresh cannot re-read the device", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const unsubscribe = new QueryObserver(queryClient, {
+      queryKey: ["c64-category", "U64 Specific Settings"],
+      queryFn: () => Promise.reject(new Error("Device unreachable")),
+    }).subscribe(() => undefined);
+    await waitFor(() =>
+      expect(queryClient.getQueryState(["c64-category", "U64 Specific Settings"])?.status).toBe("error"),
+    );
+    mockSetConfig.mockReturnValue(new Promise(() => undefined));
+    renderPage(undefined, queryClient);
+    ensureCardOpen(screen.getByTestId("config-menu-page-video-setup"));
+    const row = await screen.findByTestId("row-system-mode");
+    fireEvent.click(within(row).getByText("Update System Mode"));
+    await waitFor(() => expect(row).toHaveAttribute("data-value", "updated"));
+
+    fireEvent.click(within(document.getElementById("config-menu-section-video-setup")!).getByText("Refresh"));
+
+    await waitFor(() =>
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "CONFIG_REFRESH", title: "Refresh failed" }),
+      ),
+    );
+    expect(screen.getByTestId("row-system-mode")).toHaveAttribute("data-value", "updated");
+    unsubscribe();
   });
 
   it("shows drive ROM aliases under BOTH Memory & ROMs and Built-in drive A, one REST source", async () => {
@@ -290,5 +335,39 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     ]) {
       expect(focusContext.current?.engine.sourceForId(id)).toBe("dom+explicit");
     }
+  });
+});
+
+describe("ConfigBrowserPage — search (C64U)", () => {
+  const search = (query: string) =>
+    fireEvent.change(screen.getByPlaceholderText("Search categories..."), { target: { value: query } });
+
+  it("finds the page that holds a setting when the search names the setting", () => {
+    renderPage();
+    search("CPU speed");
+    expect(screen.queryByText("No settings match your search")).not.toBeInTheDocument();
+    expect(screen.getByTestId("config-menu-page-turbo-boost")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-menu-page-video-setup")).not.toBeInTheDocument();
+  });
+
+  it("finds the Audio mixer by a volume it shows", () => {
+    renderPage();
+    search("vol ultisid");
+    expect(screen.getByTestId("config-category-audio-mixer")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-menu-page-turbo-boost")).not.toBeInTheDocument();
+  });
+
+  it("hides the categories without a menu page that do not match the search", () => {
+    renderPage();
+    search("turbo");
+    expect(screen.getByTestId("config-menu-page-turbo-boost")).toBeInTheDocument();
+    expect(screen.queryByTestId("config-unrouted-softiec-drive-settings")).not.toBeInTheDocument();
+  });
+
+  it("shows a category without a menu page when only that category matches", () => {
+    renderPage();
+    search("softiec");
+    expect(screen.queryByText("No settings match your search")).not.toBeInTheDocument();
+    expect(screen.getByTestId("config-unrouted-softiec-drive-settings")).toBeInTheDocument();
   });
 });

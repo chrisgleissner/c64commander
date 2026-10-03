@@ -26,6 +26,8 @@ import { buildMenuBlocks } from "./menuBlocks";
 import { MenuBlock } from "./MenuBlock";
 import { FallbackCategoryBlock } from "./FallbackCategoryBlock";
 import { useConfigLeafWrite } from "./useConfigLeafWrite";
+import { refreshConfigCategories } from "./refreshConfigCategories";
+import { reportUserError } from "@/lib/uiErrors";
 
 interface MenuPageSectionProps {
   page: MenuNode;
@@ -97,17 +99,19 @@ export function MenuPageSection({
     [restCategories, advancedCategories],
   );
 
-  const handleRefresh = () => {
-    for (const category of renderedCategories) {
-      void queryClient.invalidateQueries({ queryKey: ["c64-category", category] });
-      // Refresh is an explicit "re-sync from device truth": drop the page-shared
-      // optimistic pins for this category so a value changed out-of-band reconciles
-      // to the device value instead of staying latched (a pin would never echo its
-      // pinned value back through a Refresh, which fetches the device's value). The
-      // store is page-scoped (canonical `category::item` keys), so clear per category
-      // — `restCategories` is plural because one menu page reads several (BUG-033).
-      authoritativeValues.clearMatching(`${category}::`);
-    }
+  const handleRefresh = async () => {
+    // Refresh is an explicit "re-sync from device truth": a pin would never echo its value back
+    // through a Refresh, so each category's pins are dropped once its re-read lands (BUG-033).
+    const failures = await refreshConfigCategories(queryClient, renderedCategories, authoritativeValues.clearMatching);
+    if (failures.length === 0) return;
+    const [first] = failures;
+    reportUserError({
+      operation: "CONFIG_REFRESH",
+      title: "Refresh failed",
+      description: first.error instanceof Error ? first.error.message : "The device did not respond to refresh.",
+      error: first.error,
+      context: { page: page.label, categories: failures.map((failure) => failure.category) },
+    });
   };
 
   return (

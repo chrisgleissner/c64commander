@@ -50,4 +50,4 @@ export const REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT =
  * this one instead wherever `tier === "auth-required"`.
  */
 export const REMOTE_INPUT_AUTH_REQUIRED_HINT =
-  "This device needs its password entered in Settings before Remote Input can send anything - Joystick and Type both need it.";
+  "This device needs its password entered in Settings before Remote Input can send anything - Joystick and Keys both need it.";

@@ -280,7 +280,7 @@ const shareDiagnosticsExport = async (scope: DiagnosticsExportScope, data: unkno
 
       try {
         await Share.share({
-          title: "Diagnostics Export",
+          title: "Diagnostics export",
           files: [uriResult.uri],
         });
       } catch (error) {

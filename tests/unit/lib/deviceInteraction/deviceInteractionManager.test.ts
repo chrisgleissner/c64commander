@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import type { DeviceState } from "@/lib/deviceInteraction/deviceStateStore";
 import type { TraceActionContext } from "@/lib/tracing/types";
+import { resolveTransportFailureMessage } from "@/lib/c64api/requestFailureMessage";
 
 const createConfig = (): DeviceSafetyConfig => ({
   mode: "BALANCED",
@@ -987,6 +988,29 @@ describe("deviceInteractionManager", () => {
     await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
   });
 
+  it("treats a request the C64 did not answer within its time limit as a critical REST error", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-no-answer"),
+      method: "GET",
+      path: "/v1/drives",
+      normalizedUrl: "http://device/v1/drives",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+
+    const handler = vi
+      .fn()
+      .mockRejectedValue(new Error(resolveTransportFailureMessage("timeout", { timedOut: true, timeoutMs: 15_000 })));
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("did not answer within");
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("did not answer within");
+
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
+  });
+
   it("does not treat HTTP 4xx (except 429) as critical", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
@@ -1443,6 +1467,24 @@ describe("deviceInteractionManager", () => {
       "Telnet request failed",
       expect.objectContaining({ actionId: "telnet-fail" }),
     );
+  });
+
+  it("withTelnetInteraction: does not count a Stop-canceled settings-file apply as a Telnet failure", async () => {
+    const { withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    const { ConfigApplyCancelledError } = await import("@/lib/config/configApplyCancellation");
+    resetInteractionState("test");
+
+    const action = makeAction("telnet-canceled");
+    const meta = { action, actionId: "telnet-canceled", intent: "system" as const };
+    const handler = vi.fn().mockRejectedValue(new ConfigApplyCancelledError("screen read"));
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(withTelnetInteraction(meta, handler)).rejects.toBeInstanceOf(ConfigApplyCancelledError);
+    }
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(addErrorLog).not.toHaveBeenCalledWith("Telnet request failed", expect.anything());
+    expect(markDeviceRequestEnd).not.toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   });
 
   it("withTelnetInteraction: blocks system intent when Telnet circuit is open", async () => {
@@ -1903,5 +1945,36 @@ describe("deviceInteractionManager", () => {
     releaseSecond?.();
     await expect(first).resolves.toBe("first");
     await expect(second).resolves.toBe("second");
+  });
+
+  it("publishes each completed REST write and Telnet session, but no REST read, so Home can re-read the device", async () => {
+    const { withRestInteraction, withTelnetInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    const { subscribeDeviceWrites } = await import("@/lib/deviceInteraction/deviceWriteEvents");
+    resetInteractionState("test");
+    const published: string[] = [];
+    const unsubscribe = subscribeDeviceWrites((path) => published.push(path));
+    const rest = (method: string, path: string) =>
+      withRestInteraction(
+        {
+          action: makeAction(`${method}-${path}`),
+          method,
+          path,
+          normalizedUrl: `http://device${path}`,
+          intent: "user" as const,
+          baseUrl: "http://device",
+        },
+        async () => ({ ok: true }),
+      );
+
+    await rest("GET", "/v1/configs/Audio%20Mixer");
+    await rest("PUT", "/v1/machine:menu_button");
+    await withTelnetInteraction(
+      { action: makeAction("telnet-action"), actionId: "power-cycle", intent: "user" as const },
+      async () => "done",
+    );
+    unsubscribe();
+
+    expect(published).toEqual(["/v1/machine:menu_button", "telnet"]);
   });
 });

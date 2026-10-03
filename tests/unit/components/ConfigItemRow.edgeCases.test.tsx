@@ -553,3 +553,39 @@ describe("ConfigItemRow — formatOptionLabel", () => {
     expect(screen.getByText("PAL (formatted)")).toBeTruthy();
   });
 });
+
+describe("ConfigItemRow size observation", () => {
+  it("shares one ResizeObserver across every row instead of creating one per row", () => {
+    const RealResizeObserver = globalThis.ResizeObserver;
+    let constructed = 0;
+    class CountingResizeObserver {
+      constructor() {
+        constructed += 1;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", CountingResizeObserver);
+    try {
+      renderWithQuery(
+        <>
+          {Array.from({ length: 12 }, (_, index) => (
+            <ConfigItemRow
+              key={index}
+              category="Test Category"
+              name={`Item ${index}`}
+              value="Enabled"
+              options={["Enabled", "Disabled"]}
+              onValueChange={() => undefined}
+            />
+          ))}
+        </>,
+      );
+      expect(constructed).toBeLessThanOrEqual(1);
+    } finally {
+      vi.stubGlobal("ResizeObserver", RealResizeObserver);
+      vi.unstubAllGlobals();
+    }
+  });
+});

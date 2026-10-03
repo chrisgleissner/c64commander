@@ -42,7 +42,7 @@ import { drainKernalFallbackInjectionQueue } from "@/lib/remoteInput/kernalFallb
 import { isBackgroundExecutionActive, stopBackgroundExecution } from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
 import {
-  hasLiveAvMirror,
+  avMirrorNeedsStop,
   readAvMirrorRetargetState,
   restartAvMirrorAfterDeviceRetarget,
   stopAvMirrorForDeviceRetarget,
@@ -50,8 +50,20 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { hasActivePlaybackToStop, stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
 import { areSavedEntriesSameDevice } from "@/lib/savedDevices/sameDevice";
+import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 
 let activeSavedDeviceSwitch: { deviceId: string; promise: Promise<unknown> } | null = null;
+// The switch waiting behind the active one. A newer request retargets it rather than queueing
+// behind it, so rapid picks never run every intermediate switch in turn. Callers waiting for the
+// retargeted-away device are resolved as superseded, never with another device's result.
+type QueuedSavedDeviceSwitch = { deviceId: string; supersedeWaiters: Array<() => void> };
+let queuedSavedDeviceSwitchTarget: QueuedSavedDeviceSwitch | null = null;
+
+const awaitQueuedSavedDeviceSwitch = (target: QueuedSavedDeviceSwitch, queuedPromise: Promise<unknown>) =>
+  new Promise<unknown>((resolve, reject) => {
+    target.supersedeWaiters.push(() => resolve(SAVED_DEVICE_SWITCH_SUPERSEDED));
+    queuedPromise.then(resolve, reject);
+  });
 
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
@@ -116,7 +128,7 @@ export function useSavedDeviceSwitching() {
       // re-start on the new device after it verifies. Shared with the reachable-saved-device
       // fallback (HARD27-010) so the two switch paths cannot drift apart again.
       const mirrorState = readAvMirrorRetargetState();
-      if (hasLiveAvMirror(mirrorState)) {
+      if (avMirrorNeedsStop(mirrorState)) {
         await stopAvMirrorForDeviceRetarget(fromDeviceId);
       }
 
@@ -256,24 +268,39 @@ export function useSavedDeviceSwitching() {
   return useCallback(
     async (deviceId: string) => {
       if (activeSavedDeviceSwitch) {
+        const queued = queuedSavedDeviceSwitchTarget;
         if (activeSavedDeviceSwitch.deviceId === deviceId) {
-          return activeSavedDeviceSwitch.promise;
+          return queued?.deviceId === deviceId
+            ? awaitQueuedSavedDeviceSwitch(queued, activeSavedDeviceSwitch.promise)
+            : activeSavedDeviceSwitch.promise;
         }
 
         addLog("info", "Saved-device switch request coalesced while another switch is in flight", {
           activeDeviceId: activeSavedDeviceSwitch.deviceId,
           requestedDeviceId: deviceId,
         });
-        const queuedPromise = activeSavedDeviceSwitch.promise.then(
-          () => executeSavedDeviceSwitch(deviceId),
-          () => executeSavedDeviceSwitch(deviceId),
-        );
+        if (queued) {
+          const supersededWaiters = queued.supersedeWaiters.splice(0);
+          queued.deviceId = deviceId;
+          supersededWaiters.forEach((resolveSuperseded) => resolveSuperseded());
+          activeSavedDeviceSwitch = { deviceId, promise: activeSavedDeviceSwitch.promise };
+          return awaitQueuedSavedDeviceSwitch(queued, activeSavedDeviceSwitch.promise);
+        }
+        const target: QueuedSavedDeviceSwitch = { deviceId, supersedeWaiters: [] };
+        queuedSavedDeviceSwitchTarget = target;
+        const runQueued = () => {
+          if (queuedSavedDeviceSwitchTarget === target) queuedSavedDeviceSwitchTarget = null;
+          return executeSavedDeviceSwitch(target.deviceId);
+        };
+        const queuedPromise = activeSavedDeviceSwitch.promise.then(runQueued, runQueued);
         activeSavedDeviceSwitch = { deviceId, promise: queuedPromise };
-        return queuedPromise.finally(() => {
+        const releaseActiveSlot = () => {
           if (activeSavedDeviceSwitch?.promise === queuedPromise) {
             activeSavedDeviceSwitch = null;
           }
-        });
+        };
+        queuedPromise.then(releaseActiveSlot, releaseActiveSlot);
+        return awaitQueuedSavedDeviceSwitch(target, queuedPromise);
       }
       const switchPromise = executeSavedDeviceSwitch(deviceId);
       activeSavedDeviceSwitch = { deviceId, promise: switchPromise };

@@ -11,6 +11,9 @@ import { repairLegacyDiskGroups } from "./diskGrouping";
 
 const STORE_PREFIX = "c64u_disk_library:";
 export const SHARED_DISK_LIBRARY_ID = "shared";
+export const COVERAGE_PROBE_DISK_LIBRARY_ID = "coverage-probe";
+/** Libraries that never belonged to one device, so they are not old per-device copies of the shared one. */
+const NON_DEVICE_DISK_LIBRARY_IDS = new Set([SHARED_DISK_LIBRARY_ID, COVERAGE_PROBE_DISK_LIBRARY_ID]);
 
 export type DiskLibraryState = {
   disks: DiskEntry[];
@@ -50,13 +53,20 @@ export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
   if (uniqueId !== SHARED_DISK_LIBRARY_ID || direct.disks.length > 0) {
     return direct;
   }
-  const legacyStates: DiskLibraryState[] = [];
+  const legacyKeys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (!key || !key.startsWith(STORE_PREFIX) || key === getKey(SHARED_DISK_LIBRARY_ID)) continue;
-    legacyStates.push(parseState(localStorage.getItem(key), key));
+    if (!key || !key.startsWith(STORE_PREFIX) || NON_DEVICE_DISK_LIBRARY_IDS.has(key.slice(STORE_PREFIX.length))) {
+      continue;
+    }
+    legacyKeys.push(key);
   }
-  return mergeLibraries(legacyStates);
+  if (legacyKeys.length === 0) return direct;
+  const merged = mergeLibraries(legacyKeys.map((key) => parseState(localStorage.getItem(key), key)));
+  // Retire the per-device keys, or an emptied shared library would re-import them on every load.
+  saveDiskLibrary(SHARED_DISK_LIBRARY_ID, merged);
+  legacyKeys.forEach((key) => localStorage.removeItem(key));
+  return merged;
 };
 
 export const saveDiskLibrary = (uniqueId: string, state: DiskLibraryState) => {

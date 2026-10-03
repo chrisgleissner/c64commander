@@ -124,9 +124,13 @@ describe("PlayFilesPage feature-flag contracts", () => {
     // A station turns Shuffle and Repeat off for the traversal. If the enablement kept reading the
     // raw switches, Previous could be shown as available at a position only the shuffled walk can
     // reach, and Next as available at the end of the queue because Repeat says it wraps.
-    expect(playFilesPageSource).toContain(
-      "const traversalOrdering = resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, sidRadio.active);",
+    // The station keeps owning the order while its last tune plays out after Stop, and the playback
+    // traversal reads that from the handover. Reading `sidRadio.active` here showed Next as enabled on
+    // that last tune when Repeat was on, while tapping it did nothing.
+    expect(playFilesPageSource).toMatch(
+      /const traversalOrdering = resolveTraversalOrdering\(\s*\{ repeatEnabled, shuffleEnabled \},\s*stationHandover\.stationOrdersQueue,?\s*\);/,
     );
+    expect(playFilesPageSource).toContain("stationActiveRef },");
     for (const helper of ["canAdvancePrevious", "canAdvanceNext"]) {
       const call = playFilesPageSource.slice(playFilesPageSource.indexOf(`${helper}(`));
       expect(call.slice(0, 200)).toContain("traversalOrdering.repeatEnabled");

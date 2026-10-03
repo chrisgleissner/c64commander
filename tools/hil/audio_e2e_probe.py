@@ -31,7 +31,7 @@ Usage:
   audio_e2e_probe.py play      [--host c64u] [--password pwd]
   audio_e2e_probe.py record    [--seconds 30] [--device ...] [--out capture.wav]
   audio_e2e_probe.py analyse   capture.wav
-  audio_e2e_probe.py run       [--seconds 30]      # play, record and grade in one go
+  audio_e2e_probe.py run       [--seconds 30] [--wire-out wire.wav]   # play, record and grade in one go
 """
 
 from __future__ import annotations
@@ -40,10 +40,12 @@ import argparse
 import math
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import wave
 from pathlib import Path
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lan_iface import resolve_iface  # noqa: E402
@@ -318,8 +320,109 @@ def goertzel(samples: list[float], rate: int, hz: float, start: int, count: int)
     return math.sqrt(max(0.0, s1 * s1 + s2 * s2 - coeff * s1 * s2)) / max(1, count)
 
 
-def analyse(path: str) -> int:
+GRADED_BAND_HZ = (300.0, 6000.0)
+
+
+def band_limited(samples: list[float], rate: int) -> list[float]:
+    """Keep 300-6000 Hz. The room's rumble sits below 300 Hz and leaks into the 2 ms edge windows."""
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
+    signal = np.asarray(samples, dtype=np.float64)
+    spectrum = np.fft.rfft(signal)
+    freqs = np.fft.rfftfreq(len(signal), 1.0 / rate)
+    spectrum[(freqs < GRADED_BAND_HZ[0]) | (freqs > GRADED_BAND_HZ[1])] = 0
+    return np.fft.irfft(spectrum, n=len(signal)).tolist()
+
+
+def read_graded_wav(path: str) -> tuple[list[float], int]:
+    """A recording as every grader in this file and `explain_clarity.py` reads it."""
     samples, rate = read_wav(path)
+    return band_limited(samples, rate), rate
+
+
+# A phone speaker at low volume can carry a tone's third harmonic louder than the tone itself; a
+# grader that only listens at the fundamental then loses the note in room noise.
+PARTIALS = (1, 2, 3, 4)
+# A note's harmonics may vote for it only while its own fundamental is present: at least this share of
+# the strongest ladder fundamental, and of the note's own strongest partial. A lone sound at 3630 Hz
+# is then never read as a 1210 Hz note.
+FUNDAMENTAL_PRESENCE = 0.5
+FUNDAMENTAL_UNDER_PARTIAL = 0.1
+# A ratio between near-silent bands means nothing: the band-limit's own ringing in a gap is enough to
+# put one band of a digital silence twice above the rest. Bursts are read from windows within 26 dB
+# of the recording's loud windows.
+SILENCE_BELOW_LOUD = 0.05
+# A note's edge is where its tone stays gone for this many 1 ms steps.
+EDGE_CONFIRM = 3
+# A knock in the room can swamp every ladder band for a window or two while a note carries on under
+# it. Up to this many 25 ms windows between two runs of the same note are that note, provided the
+# whole span is no longer than one note: the ladder's 79.8 ms silence can leave as few as two clear
+# windows between two of the same note, and a note played again must still read as a replay. A real
+# gap inside a note is still graded by the 5 ms dropout pass.
+BRIDGE_WINDOWS = 2
+
+
+def coarse_levels(samples: list[float], rate: int, hz: float, window: int, steps: int) -> np.ndarray:
+    """`goertzel` over consecutive windows of `window` samples, all at once."""
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
+    frames = np.asarray(samples[: window * steps], dtype=np.float64).reshape(steps, window)
+    basis = np.exp(-2j * np.pi * hz * np.arange(window) / rate)
+    return np.abs(frames @ basis) / window
+
+
+def strongest_partial(samples: list[float], rate: int, tone: int, start: int, count: int) -> int:
+    """Which partial of a ladder note carries it best over `start..start+count`: 1 is the fundamental."""
+    usable = [k for k in PARTIALS if k * TONES_HZ[tone] < GRADED_BAND_HZ[1]]
+    return max(usable, key=lambda k: goertzel(samples, rate, k * TONES_HZ[tone], start, count))
+
+
+def identify_tones(levels: np.ndarray) -> np.ndarray:
+    """Per coarse window, the index of the ladder note sounding, or -1.
+
+    `levels[t, k - 1, i]` is note t's level at partial k in window i (0 above the graded band). A note
+    scores the sum of its partials while its fundamental is present, and its fundamental otherwise.
+    A ratio, not a level: room noise and speaker colouration raise every band together, so only one
+    note standing clearly above the others means a tone of the barcode is really sounding.
+    """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
+    fundamentals = levels[:, 0]
+    present = (fundamentals >= fundamentals.max(axis=0) * FUNDAMENTAL_PRESENCE) & (
+        fundamentals >= levels.max(axis=1) * FUNDAMENTAL_UNDER_PARTIAL
+    )
+    scores = np.where(present, levels.sum(axis=1), fundamentals)
+    order = np.sort(scores, axis=0)
+    loud = order[-1] >= np.percentile(order[-1], 95) * SILENCE_BELOW_LOUD
+    clear = (order[-1] >= order[-2] * 2.0) & loud
+    return np.where(clear, np.argmax(scores, axis=0), -1)
+
+
+def bridge_interruptions(sounding: np.ndarray, note_windows: int, max_windows: int = BRIDGE_WINDOWS) -> np.ndarray:
+    """`sounding` with a short interruption inside one note set to that note.
+
+    A run of up to `max_windows` windows between two runs of the same note is bridged when the two runs
+    and the interruption together span at most `note_windows` windows.
+    """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
+    runs: list[list[int]] = []  # [value, start, length]
+    for index, value in enumerate(sounding.tolist()):
+        if runs and runs[-1][0] == value:
+            runs[-1][2] += 1
+        else:
+            runs.append([value, index, 1])
+    bridged = sounding.copy()
+    for before, gap, after in zip(runs, runs[1:], runs[2:]):
+        span = after[1] + after[2] - before[1]
+        if before[0] >= 0 and after[0] == before[0] and gap[2] <= max_windows and span <= note_windows:
+            bridged[gap[1] : gap[1] + gap[2]] = before[0]
+    return bridged
+
+
+def detect_bursts(samples: list[float], rate: int) -> list[tuple[int, int, int]]:
+    """Every tone burst the grader reads, as (onset, offset, tone index), first and last trimmed.
+
+    Shared with `explain_clarity.py` so an explanation is about the bursts this verdict counted.
+    Pass samples from `read_graded_wav`, band-limited, as `analyse` does.
+    """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
     if len(samples) < rate * 3:
         raise SystemExit("recording too short to grade")
 
@@ -338,24 +441,26 @@ def analyse(path: str) -> int:
     steps = (len(samples) - coarse) // coarse
     if steps < 8:
         raise SystemExit("recording too short to grade")
-    per_tone = [[goertzel(samples, rate, hz, i * coarse, coarse) for i in range(steps)] for hz in TONES_HZ]
+    levels = np.array(
+        [
+            [
+                coarse_levels(samples, rate, k * hz, coarse, steps) if k * hz < GRADED_BAND_HZ[1] else np.zeros(steps)
+                for k in PARTIALS
+            ]
+            for hz in TONES_HZ
+        ]
+    )
+    sounding = bridge_interruptions(identify_tones(levels), note_windows=math.ceil(ON_MS / coarse_ms) + 1)
 
     bursts: list[tuple[int, int, int]] = []
     i = 0
     while i < steps:
-        levels = [per_tone[t][i] for t in range(len(TONES_HZ))]
-        top = max(range(len(levels)), key=lambda t: levels[t])
-        rest = sorted(levels)[-2]
-        # A ratio, not a level: room noise and speaker colouration raise every band together, so only
-        # one band standing clearly above the others means a tone of the barcode is really sounding.
-        if levels[top] < rest * 2.0:
+        top = int(sounding[i])
+        if top < 0:
             i += 1
             continue
         j = i
-        while j < steps:
-            row = [per_tone[t][j] for t in range(len(TONES_HZ))]
-            if max(range(len(row)), key=lambda t: row[t]) != top or row[top] < sorted(row)[-2] * 2.0:
-                break
+        while j < steps and sounding[j] == top:
             j += 1
         if (j - i) * coarse_ms >= ON_MS * 0.4:
             bursts.append((i * coarse, j * coarse, top))
@@ -369,47 +474,59 @@ def analyse(path: str) -> int:
     probe = refine * 2
     refined: list[tuple[int, int, int]] = []
     for start, end, tone in bursts:
-        hz = TONES_HZ[tone]
-        # Measure the reference level with the SAME window the search uses. A Goertzel's magnitude
-        # depends on how many cycles it sees, so a level taken over 25 ms is not comparable with one
-        # taken over 2 ms, and comparing them made the threshold unreachable — the refinement
-        # silently did nothing and every onset stayed on the coarse grid.
-        probe = refine * 2
-        mid = goertzel(samples, rate, hz, (start + end) // 2, probe)
+        hz = TONES_HZ[tone] * strongest_partial(samples, rate, tone, start, end - start)
+        # The reference uses the SAME 2 ms window as the search (a Goertzel's magnitude depends on how
+        # many cycles it sees), and is the median over the coarse span: one reading from the middle of
+        # a weak note can sit twice above its plateau, and the walk then stops at an ordinary ripple.
+        mid = float(np.median([goertzel(samples, rate, hz, pos, probe) for pos in range(start, end - probe, refine)]))
+
+        def gone(cursor: int, step: int) -> bool:
+            """The tone stays below half its plateau for EDGE_CONFIRM steps: one low reading is a ripple."""
+            return all(
+                goertzel(samples, rate, hz, cursor + n * step, probe) < mid * 0.5
+                for n in range(EDGE_CONFIRM)
+                if 0 <= cursor + n * step <= len(samples) - probe
+            )
+
         # Walk BACKWARD from inside the burst to the first window where the tone is not yet there.
-        # Searching forward from before the coarse mark does not work: the tone is usually already
-        # sounding at that point, so every onset moved back by the same amount and the intervals —
-        # which are all that timing is measured from — came out completely unchanged.
+        # Searching forward from before the coarse mark moved every onset back by the same amount,
+        # so the intervals that timing is measured from came out unchanged.
         cursor = min(len(samples) - probe, start + coarse // 2)
         onset = cursor
         limit = max(0, start - 2 * coarse)
-        while cursor > limit:
-            if goertzel(samples, rate, hz, cursor, probe) < mid * 0.5:
-                break
+        while cursor > limit and not gone(cursor, -refine):
             onset = cursor
             cursor -= refine
-        # Refine the OFFSET too, not just the onset. The coarse segmentation carries a note's end into
-        # the window that straddles gate-off, so anything measured up to it includes the silence that
-        # follows — which read as a 13% dropout rate against a note whose body was in fact flat to
-        # within 5%. Every later measurement uses these two edges, so both have to be real.
+        # The OFFSET too: the coarse segmentation carries a note's end into the window that straddles
+        # gate-off, which read as a 13% dropout rate against a note whose body was flat to within 5%.
         cursor = min(len(samples) - probe, (start + end) // 2)
         offset = cursor
-        while cursor < min(len(samples) - probe, end + coarse):
-            if goertzel(samples, rate, hz, cursor, probe) < mid * 0.5:
-                break
+        while cursor < min(len(samples) - probe, end + coarse) and not gone(cursor, refine):
             offset = cursor
             cursor += refine
         refined.append((onset, offset, tone))
     # The first and last bursts are cut off by the recording boundaries, so their onsets and durations
     # are artefacts of when the microphone started, not of the pipeline. One truncated leading burst
     # was on its own contributing an 80 ms "worst case" to an otherwise ±5 ms measurement.
-    bursts = refined[1:-1] if len(refined) > 4 else refined
+    return refined[1:-1] if len(refined) > 4 else refined
+
+
+def analyse(path: str) -> int:
+    samples, rate = read_graded_wav(path)
+    bursts = detect_bursts(samples, rate)
+    coarse_ms = 25.0
+    coarse = int(rate * coarse_ms / 1000)
 
     print(f"recording       {len(samples) / rate:.1f}s at {rate} Hz")
     print(f"stimulus        {len(TONES_HZ)} tones, {ON_MS:.1f}ms on / {SLOT_MS - ON_MS:.1f}ms off, slot {SLOT_MS:.2f}ms")
     if len(bursts) < 6:
         print(f"only {len(bursts)} tone bursts found - is the probe running and the phone audible?")
         return 2
+
+    # Every per-note measurement is taken at the partial that carries the note, and read as the note.
+    partial_hz = [
+        TONES_HZ[tone] * strongest_partial(samples, rate, tone, start, end - start) for start, end, tone in bursts
+    ]
 
     # 1. Structure: the barcode must read in order, nothing missing, nothing repeated.
     sequence_errors = sum(1 for (_, _, a), (_, _, b) in zip(bursts, bursts[1:]) if b != (a + 1) % len(TONES_HZ))
@@ -426,8 +543,7 @@ def analyse(path: str) -> int:
     fine_ms = 5.0
     fine = int(rate * fine_ms / 1000)
     dropouts = graded = 0
-    for start, end, tone in bursts:
-        hz = TONES_HZ[tone]
+    for (start, end, _), hz in zip(bursts, partial_hz):
         # Grade the middle of the burst only. The edges are where the coarse segmentation is least
         # certain, and a window straddling gate-on or gate-off is legitimately quiet — counting those
         # as dropouts put 6.45% on a wire capture that was in fact perfect.
@@ -448,12 +564,14 @@ def analyse(path: str) -> int:
     dropout_pct = 100.0 * dropouts / max(1, graded)
 
     # 4. Speed: the pitch produced, against the pitch the SID was given.
-    longest = max(bursts, key=lambda b: b[1] - b[0])
+    longest_index = max(range(len(bursts)), key=lambda b: bursts[b][1] - bursts[b][0])
+    longest = bursts[longest_index]
     expected = float(TONES_HZ[longest[2]])
+    partial = partial_hz[longest_index] / expected
     best_level, measured = -1.0, expected
     for delta in range(-60, 61):
         hz = expected * (1 + delta / 1000.0)
-        level = goertzel(samples, rate, hz, longest[0] + fine, longest[1] - longest[0] - 2 * fine)
+        level = goertzel(samples, rate, hz * partial, longest[0] + fine, longest[1] - longest[0] - 2 * fine)
         if level > best_level:
             best_level, measured = level, hz
     cents = 1200 * math.log2(measured / expected)
@@ -464,8 +582,7 @@ def analyse(path: str) -> int:
     # worst offenders are named.
     notes: list[dict] = []
     fine_for_notes = int(rate * 5 / 1000)
-    for start, end, tone in bursts:
-        hz = float(TONES_HZ[tone])
+    for (start, end, tone), hz in zip(bursts, partial_hz):
         offset = end
         duration_ms = (offset - start) / rate * 1000
 
@@ -610,6 +727,12 @@ def main() -> int:
         p.add_argument("--device", default="plughw:CARD=SF558,DEV=0")
         p.add_argument("--out", default="/tmp/audio-e2e.wav")
         p.add_argument("--iface", default=None, help="local IPv4 to join the group on (default: detected)")
+        if name == "run":
+            p.add_argument(
+                "--wire-out",
+                default=None,
+                help="also capture the multicast audio to this WAV while the microphone records",
+            )
         if name == "analyse":
             p.add_argument("file")
     args = ap.parse_args()
@@ -643,7 +766,18 @@ def main() -> int:
 
     play(args.host, args.password, build_prg())
     time.sleep(3)  # let the program start and the mirror settle
-    if record(args.out, args.seconds, args.device) != 0:
+    wire_thread = None
+    if args.wire_out:
+        # The wire and the room over the same span, so a tone out of order in the room can be checked
+        # against what the Ultimate actually sent at that moment. Only captured; the verdict is the mic's.
+        wire_thread = threading.Thread(
+            target=capture_wire, args=(args.wire_out, args.seconds, resolve_iface(args.iface)), daemon=True
+        )
+        wire_thread.start()
+    recorded = record(args.out, args.seconds, args.device)
+    if wire_thread is not None:
+        wire_thread.join(timeout=10)
+    if recorded != 0:
         print("recording failed")
         return 2
     return analyse(args.out)

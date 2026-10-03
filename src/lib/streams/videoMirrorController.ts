@@ -35,7 +35,7 @@ import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
-import { describeStreamStartFailure } from "./streamStartFailure";
+import { describeReceiverOpenFailure, describeStreamStartFailure } from "./streamStartFailure";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -373,11 +373,16 @@ export class VideoMirrorController {
       renderResidenceMs: 0,
       maxResidenceMs: 0,
     });
+    // A session that ended in "error" still holds its native receiver, which keeps decoding every frame.
+    const failedReceiver = this.receiver;
+    this.receiver = null;
+    failedReceiver?.close();
 
     const receiver = (this.deps.createReceiver ?? createStreamReceiver)({ name: "video" });
     this.receiver = receiver;
 
     receiver.onStateChange((connection) => {
+      if (this.receiver !== receiver) return;
       if (connection === "open") {
         this.update({ state: "live" });
         this.arrivalWatchdog.start();
@@ -436,15 +441,20 @@ export class VideoMirrorController {
       );
     });
 
+    let socketOpen = false;
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
+      socketOpen = true;
       await this.deps.startStream("video", receiver.destination);
     } catch (error) {
-      addLog("warn", "Video Mirror: device stream start failed", {
+      addLog("warn", socketOpen ? "Video Mirror: device stream start failed" : "Video Mirror: receive socket failed", {
         error: (error as Error)?.message ?? String(error),
       });
       await this.stop();
-      this.update({ state: "error", error: describeStreamStartFailure(error, "video") });
+      this.update({
+        state: "error",
+        error: socketOpen ? describeStreamStartFailure(error, "video") : describeReceiverOpenFailure(error, "video"),
+      });
     }
   }
 

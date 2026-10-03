@@ -55,7 +55,11 @@ export function DiskContentsDialog({
             {diskName}
           </DialogTitle>
           <DialogDescription>
-            {entries ? `${entries.length} file${entries.length === 1 ? "" : "s"}` : "Reading directory…"}
+            {entries
+              ? `${entries.length} file${entries.length === 1 ? "" : "s"}`
+              : error
+                ? "The directory could not be read."
+                : "Reading directory…"}
           </DialogDescription>
         </DialogHeader>
 
@@ -80,7 +84,7 @@ export function DiskContentsDialog({
             <ul className="space-y-2" data-testid="disk-contents-list">
               {entries.map((entry) => {
                 const reason = launchReason(entry);
-                const disabled = reason != null || busyIndex === entry.index;
+                const disabled = reason != null || busyIndex !== null;
                 const loadAddr = formatLoadAddress(entry);
                 return (
                   <li

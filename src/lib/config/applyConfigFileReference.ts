@@ -11,6 +11,14 @@ import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigValueOverride } from "@/lib/config/playbackConfig";
 import { applyRemoteConfigFromTemp, saveRemoteConfigFromTemp } from "@/lib/config/configTelnetWorkflow";
+import {
+  createCancellableTelnetSession,
+  isConfigApplyCancelledError,
+  leaveDeviceMenu,
+  raceConfigApplyCancellation,
+  runCancellableConfigApply,
+  throwIfConfigApplyCancelled,
+} from "@/lib/config/configApplyCancellation";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
@@ -201,13 +209,23 @@ export const ensureConfigFileReferenceAccessible = async ({
   }
 };
 
-export const applyConfigFileReference = async ({
-  configRef,
-  configOverrides,
-  deviceProduct,
-  localEntriesBySourceId,
-  localSourceTreeUris,
-}: ApplyConfigFileReferenceOptions) => {
+/**
+ * Apply an item's settings file and overrides. Stop cancels it through `cancelActiveConfigApply`: the menu walk
+ * ends between keystrokes, backs out of the menu and closes its Telnet session.
+ */
+export const applyConfigFileReference = (options: ApplyConfigFileReferenceOptions) =>
+  runCancellableConfigApply((signal) => applyConfigFileReferenceUntil(options, signal));
+
+const applyConfigFileReferenceUntil = async (
+  {
+    configRef,
+    configOverrides,
+    deviceProduct,
+    localEntriesBySourceId,
+    localSourceTreeUris,
+  }: ApplyConfigFileReferenceOptions,
+  signal: AbortSignal,
+) => {
   if (!configRef && !(configOverrides?.length ?? 0)) {
     return;
   }
@@ -228,19 +246,25 @@ export const applyConfigFileReference = async ({
   ) =>
     runWithImplicitAction(`config-reference.${actionId}`, (action) =>
       withTelnetInteraction({ action, actionId, intent: "user", host, port: telnetPort }, async () => {
+        throwIfConfigApplyCancelled(signal, "Telnet connect");
         const transport = createTelnetClient();
         const session = createTelnetSession(transport);
         await session.connect(host, telnetPort, password ?? undefined);
         try {
-          await callback(session);
+          await callback(createCancellableTelnetSession(session, signal));
+        } catch (error) {
+          // Only on a live connection: a key sent on a dropped one reconnects, and the firmware allows four sessions.
+          if (session.isConnected()) await leaveDeviceMenu(session, actionId);
+          throw error;
         } finally {
           await session.disconnect();
         }
       }),
     );
+  const step = <T>(name: string, run: () => Promise<T>) => raceConfigApplyCancellation(signal, name, run);
   const workflow = createConfigWorkflow({
     listRemoteTempFiles: async () => {
-      const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
+      const result = await step("FTP list", () => listFtpDirectory({ ...ftpOptions, path: "/Temp" }));
       return result.entries
         .filter((entry) => entry.type === "file")
         .map((entry) => ({
@@ -251,11 +275,11 @@ export const applyConfigFileReference = async ({
         }));
     },
     readRemoteFile: async (path) => {
-      const result = await readFtpFile({ ...ftpOptions, path });
+      const result = await step("FTP read", () => readFtpFile({ ...ftpOptions, path }));
       return base64ToUint8(result.data);
     },
     writeRemoteFile: async (path, bytes) => {
-      await writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) });
+      await step("FTP write", () => writeFtpFile({ ...ftpOptions, path, data: uint8ToBase64(bytes) }));
     },
     runSaveRemoteConfig: async () => {
       await runTelnetWorkflow("config-reference-save-remote", (session) => saveRemoteConfigFromTemp(session, menuKey));
@@ -287,6 +311,7 @@ export const applyConfigFileReference = async ({
     }
 
     if (configOverrides?.length) {
+      throwIfConfigApplyCancelled(signal, "config overrides");
       const payload = buildOverridePayload(configOverrides);
       addLog("info", "Applying playback config overrides", {
         categories: Object.keys(payload),
@@ -295,6 +320,10 @@ export const applyConfigFileReference = async ({
       await getC64API().updateConfigBatch(payload);
     }
   } catch (error) {
+    if (isConfigApplyCancelledError(error)) {
+      addLog("info", "Playback config application canceled by Stop", { fileName: configRef?.fileName ?? null });
+      throw error;
+    }
     addErrorLog("Playback config application failed", {
       fileName: configRef?.fileName ?? null,
       configKind: configRef?.kind ?? null,

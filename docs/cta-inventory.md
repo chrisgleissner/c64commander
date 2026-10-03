@@ -302,7 +302,7 @@ not-connected / empty / single-device).
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
   - _Live View precedence:_ while Live View is receiving a feed (VIC↔video, Audio↔audio) that row goes **read-only** — edit/start/stop are hidden/disabled, replaced by a `home-stream-liveview-badge-*` chip + `home-stream-liveview-note-*` explanation (display-only); controls return when Live View stops.
 - **Live View** (`live-view-card`) _(Content Explorer A/V Mirror; mounted only when the device advertises streaming and `audio_mirror_enabled` or `video_mirror_enabled` is on)_
-  - Reset — button — `live-view-stop` — R✅ I✅ `[visible only while a feed is live]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
+  - Reset — button — `live-view-stop` — R✅ I✅ `[visible while a feed is live or has failed]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
   - Adopt this sender — button — `av-mirror-adopt-sender` `[only while packets arrive from a
@@ -329,7 +329,7 @@ not-connected / empty / single-device).
 
 ### 4.2 Play (`/play`)
 
-- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading (Previous, Pause, Next), or no previous/next item in the current repeat/shuffle traversal; while a launch is in flight Play shows Stop and stays enabled; once that Stop is pressed it shows Play with `aria-disabled` (still focusable) until the stopped launch unwinds]`
+- Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading (Previous, Pause, Next), or no previous/next item in the current repeat/shuffle traversal; while a launch is in flight Play shows Stop and stays enabled; after Stop is pressed the button is labelled "Stopping…" with a spinner and `aria-disabled` (still focusable), and a "Stopping…" line (`playback-stop-status`) shows under the transport, until the device answers the reset or reboot; if a stopped launch is still unwinding after that, it shows Play with `aria-disabled` until the launch returns]`
 - Now playing: where the queue comes from — `now-playing-source` — the first row of the card, present
   in both states and the same height in both (`data-station-active`); a running station renders
   `sid-radio-chip` inside it, otherwise `now-playing-source-idle` names the playlist
@@ -398,7 +398,14 @@ Listed below in the order they are rendered and walked by the focus ring.
   - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: no HVSC installed, or not enough rankings yet — see hint `sid-radio-taste-hint`]`
   - Surprise me — button — `sid-radio-surprise` — R✅ I✅ `[disabled: no HVSC installed]`
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
-  top of the Now Playing card, beside the station it ends
+  top of the Now Playing card, beside the station it ends. Starting a station sets the playlist aside;
+  stopping it lets the playing tune finish, then puts the playlist back. If the queue was edited during
+  the station, Stop first opens the alert dialog titled **Keep the station's tunes or return to your
+  playlist?** (`station-queue-edited-dialog`), an overlay scope that adds nothing to the page count in §3.
+  Code-verified, not yet enumerated on hardware:
+  - Keep station tunes — button — `station-queue-keep` — ends the station and keeps its queue as the playlist
+  - Return to my playlist — button — `station-queue-return` — ends the station and puts the saved playlist back
+  - Close — button — the dialog's header close control — leaves the station running
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
 - Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
@@ -573,7 +580,7 @@ past it to anything below.
   (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
   Live View audio through a native low-latency track — Android only)_
 - **Remote Input** _(the Game Mode block, then autofire)_: Joystick keys — select —
-  `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centred) / Classic T9 /
+  `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centered) / Classic T9 /
   Custom; per-variant default from `variant.runtime.defaultJoystickKeyLayout`)_ ;
   per-slot press-to-bind — button ×9 — `settings-joystick-bind-<slot>` (slots
   `up|upRight|right|downRight|down|downLeft|left|upLeft|fire`) with
@@ -581,7 +588,7 @@ past it to anything below.
 capture is by PRESSING the key, which is the only route that works with no
 touchscreen. A reserved action (✱/Menu, #, Back) is refused with
 settings-joystick-bind-rejection naming what the key already does]` ;
-  On-screen joystick in Game mode — select — `settings-game-mode-joystick` — R✅ I✅
+  On-screen joystick in Game Mode — select — `settings-game-mode-joystick` — R✅ I✅
   _(Auto / Visible / Hidden; per-variant default from
   `variant.runtime.defaultGameModeJoystick` — `hidden` on c64u-remote, which has no
   touchscreen. **Auto** waits for a physical key that steers the GAME, not the app-wide
@@ -812,10 +819,10 @@ ordinary focus-ring CTAs in both output modes.
   Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
   separate Hide-controls step); leaving restores it. Auto-exits if the tier
   downgrades mid-session. One testid, two placements: the way IN sits on the
-  size-stepper row (beside Joystick options on the compact profile) and reads "Game mode"
+  size-stepper row (beside Joystick options on the compact profile) and reads "Game Mode"
   ("Game" on the compact display profile);
   the way OUT rides the Game mode heading row (`remote-input-game-mode-title`),
-  right-aligned, reads "Exit", and carries the accessible name "Exit game mode"
+  right-aligned, reads "Exit", and carries the accessible name "Exit Game Mode"
 - Orientation override (inside Game mode) — buttons —
   `remote-input-rotation-override` (group), `remote-input-rotation-{auto,0,90,270}`
   — R✅ I✅ _(pins the picture rotation and the key permutation for this session;
@@ -1011,6 +1018,12 @@ screen, and it was ten and eight presses from a cold arrival. They raise the sam
 requests the `8` and `9` keys do, so both paths run one implementation — the same
 SID-mixer handling before a pause, and the same confirmation before a reset.
 
+While the newest open notification (the one Back would close) carries an action
+(Retry, Save a local copy), the entry under Search is "Notification: <action>"
+(`keypad-quick-menu-toast-action`), which presses that action, because
+notifications are outside the focus ring. If the notification closed while the
+menu was open, the entry runs nothing and says so.
+
 Always present: Game Mode (flag `remote_input_enabled`), Diagnostics, Switch
 device (when >1 saved device), and — on a page that has collapsible cards —
 `keypad-quick-menu-sections-expand` and `keypad-quick-menu-sections-collapse`
@@ -1029,7 +1042,7 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
-`keypad-quick-menu-section-descriptions`.
+`keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`.
 
 ### 5.1 Lighting Studio (`lighting-studio-sheet`)
 
@@ -1284,6 +1297,29 @@ are out of reach.
 
 - Cancel — button — no testid — stops the import. Escape and the device Back key do the
   same
+
+### 5.4 Notifications (`app-toast`)
+
+Notifications sit in a strip directly above the tab bar. The page area ends above that strip
+(the Toaster reserves its height as `--app-toast-reserved-height`), so a notification never
+covers a page control; dialogs and sheets draw over it. Error notifications stay until closed.
+Notices close themselves after the Notifications duration. Each notification is one
+`app-toast` (the container, not a control). Tapping its body does nothing; swiping it sideways
+closes it. Code-verified against source and `playwright/toastPlacement.spec.ts`, **not yet
+enumerated on hardware**.
+
+- Details — button — `app-toast-details` — closes the notification and opens Diagnostics on
+  the error log (§5.2)
+- Close notification — icon button (44x44) — `app-toast-close` — closes the notification
+- Retry (or another action, such as Save a local copy) — button — no testid, inside
+  `app-toast-action` `[only on a notification raised with an action]`
+
+Keypad: notifications render outside the focus ring, so the ring does not move onto them. The
+device Back key (and the keymap's Back binding) presses `app-toast-close` on the newest open
+notification before doing anything else, unless a dialog or sheet is open, which takes Back
+first. Details is reached by keypad through `*`, which opens Diagnostics directly. A
+notification's action is reached through the Quick Menu (Menu key), which lists it as
+"Notification: <action>" (`keypad-quick-menu-toast-action`) while that notification is the newest open one.
 
 ---
 

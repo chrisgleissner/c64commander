@@ -41,6 +41,17 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class AudioPipelineTest {
   private val sampleRate = 47983
+
+  /**
+   * Speaker silence tolerated per second, against the wall clock. A loaded host can deschedule the
+   * player thread for a few milliseconds; a pipeline that cannot keep up dries the speaker for tens of
+   * milliseconds every second (a feed 10% slower than the speaker drains: about 90 ms/s).
+   */
+  private val STARVED_MS_PER_S = 10.0
+
+  /** [CushionDrift.STARTUP_DRAIN_DRIFT] plus the converter's slew: the depth a stream started with. */
+  private val STARTUP_BOUND = 1.0021
+
   private val bytesPerFrame = 4
 
   private val TONE_AMPLITUDE = 12000
@@ -60,6 +71,8 @@ class AudioPipelineTest {
       private val sampleRate: Int,
       /** Keep what was played, so a test can ask what the listener actually heard. */
       private val record: Boolean = false,
+      /** The DAC's time source; a [VirtualClock] shared with the pipeline makes a run independent of host load. */
+      private val clock: PipelineClock = PipelineClock.SYSTEM,
   ) {
     /**
      * Set from the buffer size the pipeline actually asks for.
@@ -77,13 +90,24 @@ class AudioPipelineTest {
     @Volatile var underruns = 0
       private set
 
+    /**
+     * How long the DAC played silence because the buffer was empty, in total.
+     *
+     * A duration, not a count: a host that deschedules the player thread for a millisecond dries the
+     * speaker once, which a count reports exactly like a pipeline that cannot keep up. Real starvation
+     * costs tens of milliseconds per second; a scheduling hiccup costs a few.
+     */
+    @Volatile private var starvedFrames = 0L
+    val starvedMs: Double
+      get() = starvedFrames * 1000.0 / sampleRate
+
     /** Frozen while the track is paused, exactly as a real AudioTrack's head position is. */
     @Volatile private var pausedAtFrames = -1L
 
     private fun framesPlayed(): Long {
       if (startedAtNanos == 0L) return 0
       if (pausedAtFrames >= 0) return minOf(pausedAtFrames, framesWritten)
-      val elapsed = System.nanoTime() - startedAtNanos
+      val elapsed = clock.nanoTime() - startedAtNanos
       val played = elapsed * sampleRate / 1_000_000_000L
       return minOf(played, framesWritten)
     }
@@ -101,8 +125,8 @@ class AudioPipelineTest {
       `when`(track.play()).thenAnswer {
         // A resume continues from the head position the pause froze; only a first start is from zero.
         startedAtNanos =
-            if (pausedAtFrames >= 0) System.nanoTime() - pausedAtFrames * 1_000_000_000L / sampleRate
-            else System.nanoTime()
+            if (pausedAtFrames >= 0) clock.nanoTime() - pausedAtFrames * 1_000_000_000L / sampleRate
+            else clock.nanoTime()
         pausedAtFrames = -1
         null
       }
@@ -118,11 +142,19 @@ class AudioPipelineTest {
         val length = call.getArgument<Int>(2)
         val frames = length / 4
         while (startedAtNanos != 0L && framesWritten - framesPlayed() + frames > capacityFrames) {
-          Thread.sleep(1)
+          clock.park(1_000_000L)
         }
         // The buffer ran dry before this write arrived: the DAC pulled silence, which is precisely
-        // what AudioTrack reports as an underrun.
-        if (startedAtNanos != 0L && framesWritten <= framesPlayed()) underruns++
+        // what AudioTrack reports as an underrun. Playback resumes from here, as a real track's does,
+        // so the silence is counted once rather than on every write that follows it.
+        if (startedAtNanos != 0L && pausedAtFrames < 0 && framesWritten <= framesPlayed()) {
+          underruns++
+          val dryFrames = (clock.nanoTime() - startedAtNanos) * sampleRate / 1_000_000_000L - framesWritten
+          if (dryFrames > 0) {
+            starvedFrames += dryFrames
+            startedAtNanos += dryFrames * 1_000_000_000L / sampleRate
+          }
+        }
         framesWritten += frames
         if (record) synchronized(played) { played.write(data, offset, length) }
         length
@@ -151,6 +183,7 @@ class AudioPipelineTest {
       val endAt = System.nanoTime() + seconds * 1_000_000_000L
       var baseline: AudioPipeline.Stats? = null
       var baselineAtNanos = 0L
+      var starvedAtBaseline = 0.0
       var owedNanos = 0L
       var sinceStallNanos = 0L
       var nextPacketAtNanos = System.nanoTime()
@@ -159,6 +192,7 @@ class AudioPipelineTest {
         if (baseline == null && System.nanoTime() >= settleAt) {
           baseline = pipeline.stats()
           baselineAtNanos = System.nanoTime()
+          starvedAtBaseline = speaker.starvedMs
         }
         val now = System.nanoTime()
         if (now < nextPacketAtNanos) {
@@ -188,9 +222,9 @@ class AudioPipelineTest {
       val elapsedS = (System.nanoTime() - maxOf(baselineAtNanos, 1L)) / 1_000_000_000.0
       return Defects(
           concealedMsPerSecond = (end.concealedMs - start.concealedMs) / elapsedS,
+          starvedMsPerSecond = (speaker.starvedMs - starvedAtBaseline) / elapsedS,
           droppedMsPerSecond =
               ((end.droppedBytes - start.droppedBytes) / bytesPerFrame.toDouble() / sampleRate * 1000.0) / elapsedS,
-          underruns = end.underruns - start.underruns,
           bufferedMs = end.bufferedMs,
           driftCorrection = end.driftCorrection,
       )
@@ -319,8 +353,8 @@ class AudioPipelineTest {
 
   private data class Defects(
       val concealedMsPerSecond: Double,
+      val starvedMsPerSecond: Double,
       val droppedMsPerSecond: Double,
-      val underruns: Int,
       val bufferedMs: Double,
       val driftCorrection: Double,
   ) {
@@ -367,7 +401,11 @@ class AudioPipelineTest {
     // pipeline itself is broken rather than the link.
     val defects = runBurstyFeed(targetLatencyMs = 60, seconds = 5, stallEveryMs = 100_000, stallMs = 0)
     assertTrue("even stream should not conceal or drop, got $defects", defects.defectMsPerSecond < 1.0)
-    assertEquals("even stream should not underrun, got $defects", 0, defects.underruns)
+    // Starvation is judged by the pipeline's own concealment, which only grows when the ring is
+    // empty. The fake speaker's underrun count is wall-clock based and also moves when a loaded host
+    // deschedules the player thread while the ring is full, which made this test fail on load alone.
+    assertEquals("even stream ran the ring dry, got $defects", 0.0, defects.concealedMsPerSecond, 0.0)
+    assertTrue("even stream starved the speaker, got $defects", defects.starvedMsPerSecond < STARVED_MS_PER_S)
     // And it must play at true speed while it is doing so. The wide recovery authority exists for
     // getting back to target; a stream that is already there must not be detuned at all, which is
     // what the deadband is for.
@@ -427,9 +465,11 @@ class AudioPipelineTest {
     val speaker = FakeSpeaker(sampleRate)
     val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory)
     try {
-      // Start it deep, as a burst would: 250 ms in the ring against a 40 ms target.
-      repeat(62) { pipeline.offer(packet, 0, packet.size) }
+      // Drive it deep mid-stream, as a burst would: 250 ms more in the ring against a 40 ms target.
+      // A backlog in the first second is skipped instead (see the startup tests below).
       pipeline.start()
+      feedEven(pipeline, seconds = 2, rateMultiplier = 1.0)
+      repeat(62) { pipeline.offer(packet, 0, packet.size) }
       feedEven(pipeline, seconds = 3, rateMultiplier = 1.0)
       val stats = pipeline.stats()
       assertTrue(
@@ -448,6 +488,176 @@ class AudioPipelineTest {
     } finally {
       pipeline.close()
     }
+  }
+
+  /**
+   * Time for a single-threaded run: the pipeline's player loop and the speaker both read it, and
+   * waiting on it delivers whatever packets fall due. A run is then the same on any host, however
+   * loaded, which the start-up drain tests need: on real threads a descheduled feeder or player makes
+   * a burst of its own that the pipeline is right to drain hard.
+   */
+  private class VirtualClock : PipelineClock {
+    private class Event(val atNanos: Long, val order: Long, val action: () -> Unit)
+
+    private val events = java.util.PriorityQueue<Event>(compareBy<Event>({ it.atNanos }, { it.order }))
+    private var scheduled = 0L
+    val startNanos = 1_000_000_000L
+    private var now = startNanos
+
+    val elapsedNanos: Long
+      get() = now - startNanos
+
+    override fun nanoTime(): Long = now
+
+    override fun park(nanos: Long) {
+      val until = now + nanos
+      while (events.isNotEmpty() && events.peek()!!.atNanos <= until) {
+        val event = events.poll()!!
+        now = maxOf(now, event.atNanos)
+        event.action()
+      }
+      now = until
+    }
+
+    fun at(elapsedNanos: Long, action: () -> Unit) {
+      events.add(Event(startNanos + elapsedNanos, scheduled++, action))
+    }
+  }
+
+  private val packetNanos = packetFrames * 1_000_000_000L / sampleRate
+
+  /** Drift corrections a virtual run saw, split at [splitAtMs], and the audio it concealed. */
+  private data class VirtualRun(
+      val maxCorrectionBefore: Double,
+      val maxCorrectionAfter: Double,
+      val concealedMs: Double,
+      val starvedMs: Double,
+      val bufferedMs: Double,
+  )
+
+  /**
+   * Run the player loop on virtual time for [seconds]. [arrivalNanos] gives packet n's arrival, and
+   * packets keep arriving until the run ends; [extra] lists further deliveries as (time, packets).
+   * Concealment and starvation are counted from [settleMs], once playback has begun.
+   */
+  private fun runVirtual(
+      seconds: Double,
+      preloadPackets: Int = 0,
+      extra: List<Pair<Long, Int>> = emptyList(),
+      splitAtMs: Long = Long.MAX_VALUE,
+      settleMs: Long = 0,
+      arrivalNanos: (Long) -> Long = { n -> n * packetNanos },
+  ): VirtualRun {
+    val clock = VirtualClock()
+    val speaker = FakeSpeaker(sampleRate, clock = clock)
+    val pipeline = AudioPipeline(sampleRate, 60, sampleRate, 0, speaker.factory, clock = clock)
+    val endNanos = (seconds * 1e9).toLong()
+    try {
+      repeat(preloadPackets) { pipeline.offer(packet, 0, packet.size) }
+      fun deliver(n: Long) {
+        val at = arrivalNanos(n)
+        if (at >= endNanos) return
+        clock.at(at) {
+          pipeline.offer(packet, 0, packet.size)
+          deliver(n + 1)
+        }
+      }
+      deliver(0)
+      for ((atMs, packets) in extra) clock.at(atMs * 1_000_000L) { repeat(packets) { pipeline.offer(packet, 0, packet.size) } }
+      var before = 1.0
+      var after = 1.0
+      var concealedAtSettle = -1.0
+      var starvedAtSettle = 0.0
+      while (clock.elapsedNanos < endNanos) {
+        pipeline.step()
+        val atMs = clock.elapsedNanos / 1_000_000L
+        if (concealedAtSettle < 0 && atMs >= settleMs) {
+          concealedAtSettle = pipeline.stats().concealedMs
+          starvedAtSettle = speaker.starvedMs
+        }
+        val correction = pipeline.stats().driftCorrection
+        if (atMs < splitAtMs) before = maxOf(before, correction) else after = maxOf(after, correction)
+      }
+      val stats = pipeline.stats()
+      return VirtualRun(
+          before,
+          after,
+          stats.concealedMs - maxOf(concealedAtSettle, 0.0),
+          speaker.starvedMs - starvedAtSettle,
+          stats.bufferedMs,
+      )
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun aBacklogPresentAtStartIsSkippedNotPlayedOutSharp() {
+    // On a Pixel 4 the mirror started with 156 ms in the ring against a 30 ms target, and the
+    // converter drained it at its 0.5% recovery rate: the first six seconds of every note were eight
+    // cents sharp. A clump that lands while the ring primes has not been heard by anyone, so the
+    // pipeline must start at the live edge and play at true speed from the first sound.
+    val run = runVirtual(seconds = 3.0, preloadPackets = 62, settleMs = 500)
+    // 0.1% is the steady-state authority, about 1.7 cents; the 0.5% recovery rate is what was heard.
+    assertTrue("a startup backlog was played out sharp: ${run.maxCorrectionBefore}", run.maxCorrectionBefore <= 1.0011)
+    assertTrue("the startup backlog was kept as latency: ${run.bufferedMs} ms", run.bufferedMs < 150.0)
+    assertEquals("skipping the backlog emptied the ring", 0.0, run.concealedMs, 0.0)
+  }
+
+  @Test
+  fun aClumpJustAfterTheStartIsNotPlayedOutSharp() {
+    // On a Pixel 4 arrivals in the first second after playback began put the ring at 112 ms against
+    // a 30 ms target, and the recovery rate ran the stream 8.6 cents sharp until about 1.0 s.
+    val run = runVirtual(seconds = 2.0, extra = listOf(300L to 40), splitAtMs = 1000, settleMs = 300)
+    assertTrue("a clump after the start was played out sharp: ${run.maxCorrectionBefore}", run.maxCorrectionBefore <= STARTUP_BOUND)
+    assertEquals("the clump emptied the ring", 0.0, run.concealedMs, 0.0)
+  }
+
+  @Test
+  fun depthJustAfterTheStartIsKeptForTheGapsThatFollow() {
+    // Wi-Fi delivers multicast in clumps: about 120 ms of nothing, then everything that was owed. On a
+    // Pixel 4 the depth a clump leaves just after the start is the cushion the next gap spends.
+    // Skipping it as a surplus emptied the ring in the following gaps: underruns, and a target the
+    // adaptation then grew to 320 ms. The start-up depth has to be kept, and drained gently.
+    val clumpAt = 300_000_000L
+    val period = 360_000_000L
+    val delivering = 240_000_000L
+    val run =
+        runVirtual(seconds = 2.0, extra = listOf(300L to 30), settleMs = 300) { n ->
+          // After the clump: 240 ms of even delivery, then 120 ms of nothing, then the backlog at once.
+          val due = n * packetNanos
+          val phase = (due - clumpAt).mod(period)
+          if (due < clumpAt || phase < delivering) due else due - phase + period
+        }
+    assertEquals("the gaps after the start starved the speaker", 0.0, run.starvedMs, 0.0)
+    assertEquals("the gaps after the start emptied the ring", 0.0, run.concealedMs, 0.0)
+    assertTrue("the start-up depth was drained sharp: ${run.maxCorrectionBefore}", run.maxCorrectionBefore <= STARTUP_BOUND)
+  }
+
+  @Test
+  fun startUpDepthOnAnEvenFeedDrainsAtTheStartUpRateAndNeverSharperLater() {
+    // A clump at the start and then a clean link: nothing ever spends the extra depth. Holding the
+    // gentle rate for a fixed two seconds only postponed the defect: the ring was still that deep
+    // when the window closed, and the stream then played half a percent sharp for about eight seconds.
+    // The depth does drain, at 0.2% (about 3.5 cents, 45 ms in about 22 s) rather than the 0.1%
+    // steady-state rate, which would take twice as long to hand it back.
+    val run = runVirtual(seconds = 10.5, extra = listOf(300L to 39), settleMs = 300)
+    assertTrue("the start-up depth was drained sharp: ${run.maxCorrectionBefore}", run.maxCorrectionBefore <= STARTUP_BOUND)
+    assertTrue(
+        "the start-up depth drained at less than the start-up rate: ${run.maxCorrectionBefore}",
+        run.maxCorrectionBefore >= 1.0019,
+    )
+    assertEquals("draining the start-up depth emptied the ring", 0.0, run.concealedMs, 0.0)
+  }
+
+  @Test
+  fun aBurstAfterTheStartUpDepthStillDrainsAtTheRecoveryRate() {
+    // The start-up depth drains gently, but it must not shelter what arrives later: a burst on top of
+    // it is latency the stream did not start with, and holding it at a whisper took minutes to hand
+    // back. It drains at the recovery rate, in a bounded time, while the start-up depth stays gentle.
+    val run = runVirtual(seconds = 7.0, extra = listOf(300L to 39, 4000L to 40), splitAtMs = 4000)
+    assertTrue("the start-up depth was drained sharp: ${run.maxCorrectionBefore}", run.maxCorrectionBefore <= STARTUP_BOUND)
+    assertTrue("the burst was held, not drained: ${run.maxCorrectionAfter}", run.maxCorrectionAfter >= 1.004)
   }
 
   @Test

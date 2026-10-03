@@ -11,6 +11,16 @@ import { act, render, renderHook, screen } from "@testing-library/react";
 import React from "react";
 import { fitPathToWidth, getFileNameFromPath, type TextMeasureFn, useResponsivePathLabel } from "@/lib/ui/pathDisplay";
 
+const sizeObserver = vi.hoisted(() => ({ listeners: [] as Array<() => void>, stops: 0 }));
+vi.mock("@/lib/ui/sharedResizeObserver", () => ({
+  observeElementSize: (_element: Element, listener: () => void) => {
+    sizeObserver.listeners.push(listener);
+    return () => {
+      sizeObserver.stops += 1;
+    };
+  },
+}));
+
 const charMeasure: TextMeasureFn = (value: string) => value.length;
 
 describe("pathDisplay", () => {
@@ -158,23 +168,10 @@ describe("pathDisplay", () => {
 
     it("uses ResizeObserver when available and updates label on observer callback", () => {
       const originalResizeObserver = (globalThis as any).ResizeObserver;
-      let callback: (() => void) | null = null;
-      const disconnect = vi.fn();
+      const stopsBefore = sizeObserver.stops;
 
       try {
-        (globalThis as any).ResizeObserver = class {
-          constructor(cb: () => void) {
-            callback = cb;
-          }
-
-          observe() {
-            return undefined;
-          }
-
-          disconnect() {
-            disconnect();
-          }
-        };
+        (globalThis as any).ResizeObserver = class {};
 
         const Probe = ({ path }: { path: string }) => {
           const { elementRef, label } = useResponsivePathLabel(path, "start-and-filename");
@@ -189,12 +186,12 @@ describe("pathDisplay", () => {
         });
 
         act(() => {
-          callback?.();
+          sizeObserver.listeners.at(-1)?.();
         });
 
         expect(element.textContent).toContain("song.sid");
         unmount();
-        expect(disconnect).toHaveBeenCalled();
+        expect(sizeObserver.stops).toBe(stopsBefore + 1);
       } finally {
         (globalThis as any).ResizeObserver = originalResizeObserver;
       }
@@ -213,8 +210,6 @@ describe("pathDisplay", () => {
         fontFamily: "sans-serif",
       } as unknown as CSSStyleDeclaration);
 
-      let callback: (() => void) | null = null;
-
       const originalCreateElement = document.createElement.bind(document);
       const createElementSpy = vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
         if (tagName === "canvas") {
@@ -229,19 +224,7 @@ describe("pathDisplay", () => {
       });
 
       try {
-        (globalThis as any).ResizeObserver = class {
-          constructor(cb: () => void) {
-            callback = cb;
-          }
-
-          observe() {
-            return undefined;
-          }
-
-          disconnect() {
-            return undefined;
-          }
-        };
+        (globalThis as any).ResizeObserver = class {};
 
         const Probe = ({ path }: { path: string }) => {
           const { elementRef, label } = useResponsivePathLabel(path, "filename-fallback");
@@ -256,7 +239,7 @@ describe("pathDisplay", () => {
         });
 
         act(() => {
-          callback?.();
+          sizeObserver.listeners.at(-1)?.();
         });
 
         expect(element.textContent).not.toBe("/very/long/path/to/song.sid");

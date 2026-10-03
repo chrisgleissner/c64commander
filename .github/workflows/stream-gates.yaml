@@ -20,6 +20,7 @@ on:
       - "tests/unit/streams/**"
       - "tests/benchmarks/streamHotPaths.bench.ts"
       - "scripts/assert-stream-perf.mjs"
+      - "scripts/lib/streamPerfCompare.mjs"
       - "scripts/ci/stream-gates.mjs"
       - "scripts/streams-hil.mjs"
       - "tools/hil/**"
@@ -43,6 +44,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The benchmark gate measures HEAD^1 on this runner as its baseline: the PR's base branch
+          # tip for a pull_request merge commit, the previous commit for a push.
+          fetch-depth: 2
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -55,5 +60,7 @@ jobs:
 
       - name: Run streaming host gates
         run: node scripts/ci/stream-gates.mjs
+        env:
+          STREAM_BENCH_AGAINST: HEAD^1
         # The mandatory Pixel-4 -> C64U HIL gate is not run here — it runs on the LOCAL build with the
         # physical rig (./build --stream-hil). See tools/hil/README.md.

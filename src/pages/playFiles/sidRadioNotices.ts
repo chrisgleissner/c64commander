@@ -9,14 +9,23 @@
 import { toast } from "@/hooks/use-toast";
 import { addLog } from "@/lib/logging";
 
-export type SidRadioNotice = "no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | "start-failed";
+export type SidRadioNotice =
+  | "no-radio-for-tune"
+  | "no-radio"
+  | "no-radio-for-style"
+  | "no-hvsc"
+  | "station-ended"
+  | "start-failed"
+  | "refill-failed";
 
 export const SID_RADIO_NOTICE_TEXT: Record<SidRadioNotice, string> = {
   "no-radio-for-tune": "No radio for this tune yet — try a style or your likes.",
   "no-radio": "No radio available yet — like a few tunes to seed one.",
+  "no-radio-for-style": "No tunes found for this style — try another style or your likes.",
   "no-hvsc": "No HVSC music is installed yet. Install HVSC, then any station will play.",
   "station-ended": "This station has played everything it could find — pick another to keep going.",
   "start-failed": "SID Radio could not start this station. The diagnostics log has the details.",
+  "refill-failed": "SID Radio could not find more tunes for this station. The diagnostics log has the details.",
 };
 
 /**

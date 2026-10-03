@@ -587,6 +587,25 @@ describe("savedDevices store", () => {
     });
   });
 
+  it("keeps the verified firmware across a restart and a later failed verification", async () => {
+    const store = await loadStore();
+    const deviceId = store.getSavedDevicesSnapshot().selectedDeviceId;
+    store.completeSavedDeviceVerification(deviceId, {
+      product: "C64 Ultimate",
+      hostname: "c64u",
+      unique_id: "5D0464",
+      firmware_version: "1.1.1",
+    });
+    store.failSavedDeviceVerification(deviceId);
+    expect(store.getSelectedSavedDeviceFirmwareSync()).toBe("1.1.1");
+
+    vi.resetModules();
+    const reloadedStore = await loadStore();
+
+    expect(reloadedStore.getSelectedSavedDeviceFirmwareSync()).toBe("1.1.1");
+    expect(reloadedStore.getSavedDevicesSnapshot().summaries[deviceId]?.lastVerifiedFirmware).toBe("1.1.1");
+  });
+
   it("does not mark a first verification as mismatch when the configured host is an IP alias", async () => {
     const store = await loadStore();
     const initialDeviceId = store.getSavedDevicesSnapshot().selectedDeviceId;

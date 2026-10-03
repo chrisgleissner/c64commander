@@ -178,6 +178,9 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const hvscExtractionTimerRef = useRef<number | null>(null);
   const hvscExtractionThrottleRef = useRef(0);
   const hvscIgnoreProgressRef = useRef(false);
+  // A Stop pressed before the runtime has started has no ingestion to cancel, so the install has to see it itself.
+  const hvscCancelGenerationRef = useRef(0);
+  const hvscUpdateCheckPendingRef = useRef(false);
 
   const runHvscAction = useCallback(<T>(name: string, fn: () => Promise<T> | T) => {
     const context = createActionContext(name, "user", "HvscLibrary");
@@ -406,7 +409,9 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     let removeListener: (() => Promise<void>) | null = null;
     let disposed = false;
     const registration = addHvscProgressListener((event) => {
-      if (hvscIgnoreProgressRef.current) return;
+      // Only the canceled install is muted. Metadata hydration is a separate background run of the
+      // installed library and never comes from an install, so its progress still has to land.
+      if (hvscIgnoreProgressRef.current && event.stage !== "sid_metadata_hydration") return;
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
       const applyExtractionCounts = (payload: { processedCount?: number; totalCount?: number }) => {
@@ -762,7 +767,13 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
             lastUpdatedAt: startedAt,
           }));
           markHvscUpdateCheckAt(startedAt);
-          const updateStatus = await checkForHvscUpdates();
+          const cancelGeneration = hvscCancelGenerationRef.current;
+          hvscUpdateCheckPendingRef.current = true;
+          const updateStatus = await checkForHvscUpdates().finally(() => (hvscUpdateCheckPendingRef.current = false));
+          if (hvscCancelGenerationRef.current !== cancelGeneration) {
+            addLog("info", "HVSC install canceled during the update check; not starting the download");
+            return;
+          }
           if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
             toast({
               title: "HVSC up to date",
@@ -849,17 +860,21 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         } catch (error) {
           if (isHvscCancellationError(error)) {
             const cancelledAt = new Date().toISOString();
-            updateHvscSummary((prev) => ({
-              ...prev,
-              download: {
-                ...prev.download,
-                status: "failure",
-                finishedAt: cancelledAt,
-                errorCategory: null,
-                errorMessage: null,
-              },
-              lastUpdatedAt: cancelledAt,
-            }));
+            updateHvscSummary((prev) => {
+              // A download that already finished was not what the cancel stopped.
+              const stoppedStep = prev.download.status === "success" ? "extraction" : "download";
+              return {
+                ...prev,
+                [stoppedStep]: {
+                  ...prev[stoppedStep],
+                  status: "failure",
+                  finishedAt: cancelledAt,
+                  errorCategory: null,
+                  errorMessage: null,
+                },
+                lastUpdatedAt: cancelledAt,
+              };
+            });
             return;
           }
           const failedAt = new Date().toISOString();
@@ -1004,8 +1019,14 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
 
   const handleHvscCancel = useCallback(async () => {
     const token = hvscActiveToken ?? "hvsc-install";
+    hvscCancelGenerationRef.current += 1;
+    const stopHonoredByUpdateCheck = hvscUpdateCheckPendingRef.current;
     try {
-      await cancelHvscInstall(token);
+      const canceledIngestion = await cancelHvscInstall(token);
+      if (!canceledIngestion && !stopHonoredByUpdateCheck) {
+        addLog("info", "HVSC Stop arrived after the operation had finished; nothing was canceled", { token });
+        return;
+      }
       const stoppedAt = new Date().toISOString();
       hvscIgnoreProgressRef.current = true;
       clearPendingHvscProgress();
@@ -1372,7 +1393,10 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     return hvscFolders.filter((folder) => folder.toLowerCase().includes(hvscFolderFilter.toLowerCase()));
   }, [hvscFolders, hvscFolderFilter]);
 
-  useEffect(() => logHvscPreparationTransition(hvscPreparationSnapshot), [hvscPreparationSnapshot]);
+  const hvscStateKnown = hvscStatus !== null || !hvscAvailable;
+  useEffect(() => {
+    if (hvscStateKnown) logHvscPreparationTransition(hvscPreparationSnapshot);
+  }, [hvscPreparationSnapshot, hvscStateKnown]);
 
   useEffect(() => {
     if (!hvscInProgress) return;

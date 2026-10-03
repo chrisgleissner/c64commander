@@ -453,6 +453,40 @@ describe("useOnlineArchive", () => {
     spy.mockRestore();
   });
 
+  it("does not launch a download that finishes after the archive sheet was closed", async () => {
+    const executeSpy = vi.spyOn(archiveExecution, "executeArchiveEntry").mockResolvedValue(undefined);
+    let finishDownload!: (binary: unknown) => void;
+    const client = createArchiveClientStub();
+    client.downloadBinary.mockReturnValue(
+      new Promise((resolve) => {
+        finishDownload = resolve;
+      }),
+    );
+    const spy = vi.spyOn(archiveClient, "createArchiveClient").mockReturnValue(client as never);
+
+    const { result, unmount } = renderHook(() => useOnlineArchive(buildDefaultArchiveClientConfig()));
+    await waitFor(() => expect(result.current.presetsLoading).toBe(false));
+    let execution!: Promise<void>;
+    act(() => {
+      execution = result.current.execute(
+        { name: "joyride", category: "apps" },
+        { id: "100", category: 40, name: "Joyride" },
+        [{ id: "100", category: 40, name: "Joyride" }],
+        { id: 0, path: "joyride.prg" },
+        [{ id: 0, path: "joyride.prg" }],
+      );
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe("downloading"));
+
+    unmount();
+    finishDownload({ fileName: "joyride.prg", bytes: new Uint8Array([1, 8, 0]), contentType: null, url: "u" });
+    await execution;
+
+    expect(executeSpy).not.toHaveBeenCalled();
+    spy.mockRestore();
+    executeSpy.mockRestore();
+  });
+
   it("returns to entries when a download is cancelled", async () => {
     const downloadBinary = vi.fn(
       () =>

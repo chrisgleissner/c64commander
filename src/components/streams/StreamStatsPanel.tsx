@@ -70,9 +70,9 @@ function Sparkline({ values, testid, ariaLabel }: { values: number[]; testid: st
 }
 
 /**
- * Title case, not uppercase: the medium profile's four-column grid leaves a 48px label box, where
+ * Sentence case, not uppercase: the medium profile's four-column grid leaves a 48px label box, where
  * "UNDERRUNS" measured 104px and spilled out of the card. Dropping `uppercase tracking-wide` alone
- * leaves "Underruns" at 80px, so long labels are split: "Audio Buf" and "Under Runs" each fit 48px.
+ * leaves "Underruns" at 80px, so long labels are split: "Audio buf" and "Under runs" each fit 48px.
  */
 function Stat({ label, value, testid, tone }: { label: string; value: string; testid: string; tone?: "warn" }) {
   return (
@@ -157,7 +157,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         </span>
         <button
           type="button"
-          className="flex items-center gap-1 text-xs text-muted-foreground"
+          className="flex min-h-11 min-w-11 items-center justify-end gap-1 text-xs text-muted-foreground"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
           data-testid="stream-stats-toggle"
@@ -201,13 +201,13 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         <Stat label="FPS" value={num(live.fps)} testid="fps" />
         <Stat label="Rate" value={pct(governor.effectivePercent)} testid="rate" />
         <Stat
-          label="Audio Buf"
+          label="Audio buf"
           value={ms(live.audioBufferMs)}
           testid="audio-buffer"
           tone={live.audioBufferMs > 0 && live.audioBufferMs < 30 ? "warn" : undefined}
         />
         <Stat
-          label="Under Runs"
+          label="Under runs"
           value={num(live.audioUnderruns)}
           testid="underruns"
           tone={live.audioUnderruns > 0 ? "warn" : undefined}

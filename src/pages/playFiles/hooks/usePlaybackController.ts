@@ -47,7 +47,7 @@ import {
   releaseSingleFlight,
 } from "@/pages/playFiles/playFilesUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
-
+import { endPlayLaunchMounts } from "@/lib/playback/playLaunchMounts";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
 import {
@@ -99,6 +99,7 @@ import {
   ensureConfigFileReferenceAccessible,
   isConfigReferenceUnavailableError,
 } from "@/lib/config/applyConfigFileReference";
+import { cancelActiveConfigApply, isConfigApplyCancelledError } from "@/lib/config/configApplyCancellation";
 import { buildPlaybackConfigSignature, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import {
   resolveNextPlaylistIndex,
@@ -1090,6 +1091,7 @@ export function usePlaybackController({
                     localEntriesBySourceId,
                     localSourceTreeUris,
                   });
+                  if (playGenerationRef.current !== myPlayGeneration) throw new PlaybackLaunchOvertakenError();
                   await applyConfigFileReference({
                     configRef: item.configRef ?? null,
                     configOverrides,
@@ -1100,6 +1102,10 @@ export function usePlaybackController({
                   sessionDeclinedPlaybackConfigRef.current.delete(item.id);
                   lastAppliedPlaybackConfigSignatureRef.current = nextPlaybackConfigSignature;
                 } catch (error) {
+                  if (error instanceof PlaybackLaunchOvertakenError || isConfigApplyCancelledError(error)) {
+                    lastAppliedPlaybackConfigSignatureRef.current = null;
+                    throw new PlaybackLaunchOvertakenError();
+                  }
                   if (isConfigReferenceUnavailableError(error) && resolveUnavailableConfigDecision) {
                     const decision = await resolveUnavailableConfigDecision(item, {
                       configFileName: item.configRef?.fileName ?? null,
@@ -1230,16 +1236,9 @@ export function usePlaybackController({
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
           markRemotePlaybackStarted(stopRequiresReboot(item.category));
-          // Bring the tune to this device's speakers too, unless the listener has said not to.
-          // Without this the tune plays on the Ultimate in silence as far as the phone is concerned,
-          // and the listener has to know to go to Home and switch Listen on by hand. Best-effort:
-          // the mirror is a convenience, and a device that will not stream must not stop the tune
-          // from playing.
-          //
-          // The preference check is what makes "Listen on: <device>" mean anything. This used to run
-          // unconditionally — written when the toggle had only two options and the C64 one promised
-          // "hear via Live View" — so after the control grew a third option, choosing the C64's own
-          // speakers was undone by the next track change, or by the single tap that got you there.
+          // Bring the tune to this device's speakers too, unless the listener chose otherwise: the preference
+          // check is what makes "Listen on: <device>" mean anything. Best-effort, as a device that will not
+          // stream must not stop the tune from playing.
           if (
             featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
             loadMirrorC64Audio() &&
@@ -1269,8 +1268,8 @@ export function usePlaybackController({
             setCurrentPlaybackIsLocal(false);
           } else {
             try {
-              const reboot = stopRequiresReboot(item.category);
-              await withTimeout(reboot ? api.machineReboot() : api.machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+              await stopMachineWithGracePeriod(api, stopRequiresReboot(item.category));
+              await endPlayLaunchMounts(api);
             } catch (error) {
               addErrorLog("Follow-up reset after superseded playback launch failed", {
                 itemId: item.id,
@@ -1609,12 +1608,10 @@ export function usePlaybackController({
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
       const shouldReboot = stopRequiresReboot(currentItem?.category);
-      // Track B (LE2): silence any on-device tune first. When the current track
-      // is playing locally there is no C64 involved, so skip the device stop
-      // entirely (it would hang if no Ultimate is connected).
-      // Shared controller, not the per-page ref — see the engine-switch stop
-      // above. A null ref here meant Stop did nothing at all.
+      // Silence an on-device tune through the shared controller; a local track involves no C64 to stop.
       getLocalSidPlayback().stop();
+      // A .cfg apply walks the device menu over Telnet; it backs out and closes before the reset goes out.
+      await cancelActiveConfigApply();
       if (currentPlaybackIsLocalRef.current) {
         setCurrentPlaybackIsLocal(false);
       } else {
@@ -1632,6 +1629,7 @@ export function usePlaybackController({
             }
           }
           await stopMachineWithGracePeriod(api, shouldReboot);
+          await endPlayLaunchMounts(api);
           // Keep the resumed program muted until reset/reboot finishes, so Stop
           // cannot replay a fragment. Restore Pause's snapshot only afterwards.
           if (isPaused && pauseMuteSnapshotRef.current) {

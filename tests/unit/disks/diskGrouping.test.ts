@@ -7,8 +7,35 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { assignDiskGroupsByPrefix, inferDiskGroupBase, repairLegacyDiskGroups } from "@/lib/disks/diskGrouping";
+import {
+  assignDiskGroupsByPrefix,
+  inferDiskGroupBase,
+  orderDisksInGroup,
+  repairLegacyDiskGroups,
+} from "@/lib/disks/diskGrouping";
 import { loadDiskLibrary } from "@/lib/disks/diskStore";
+
+describe("orderDisksInGroup", () => {
+  const names = (disks: Array<{ name: string }>) => disks.map((disk) => disk.name);
+
+  it("keeps disk order when a group's disks came from separate imports", () => {
+    const disks = [
+      { name: "Ultima IV 1.d64", importOrder: 0 },
+      { name: "Ultima IV 2.d64", importOrder: 1 },
+      { name: "Ultima IV 3.d64", importOrder: 0 },
+    ];
+    expect(names(orderDisksInGroup(disks))).toEqual(["Ultima IV 1.d64", "Ultima IV 2.d64", "Ultima IV 3.d64"]);
+  });
+
+  it("puts disk 2 before disk 10", () => {
+    const disks = [
+      { name: "Game disk 10.d64", importOrder: null },
+      { name: "Game disk 2.d64", importOrder: null },
+      { name: "Game disk 1.d64", importOrder: null },
+    ];
+    expect(names(orderDisksInGroup(disks))).toEqual(["Game disk 1.d64", "Game disk 2.d64", "Game disk 10.d64"]);
+  });
+});
 
 describe("assignDiskGroupsByPrefix", () => {
   it("groups numeric suffixes in the same folder", () => {

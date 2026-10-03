@@ -29,7 +29,7 @@ import {
   getPlayCategory,
   type PlayFileCategory,
 } from "./fileTypes";
-import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
+import { mountDiskToDrive, resolveLocalDiskBlob, type DiskMountOutcome } from "@/lib/disks/diskMount";
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import {
@@ -41,6 +41,7 @@ import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
 import { loadFirstDiskPrgViaDma } from "./diskFirstPrg";
 import { withCartridgeParked } from "./launchSafety";
+import { peekPlayLaunchMount, recordPlayLaunchMount, resolvePriorImageForLaunch } from "./playLaunchMounts";
 
 export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
 
@@ -149,20 +150,21 @@ const ensureDiskAutoplayDriveReady = async (
   notify?: ((notice: PlaybackNotice) => void) | null,
 ) => {
   const desiredMode = getDiskAutoplayDriveMode(path);
-  if (!desiredMode) return 8;
+  if (!desiredMode) return { busId: 8, driveBeforeMount: null };
 
   if (
     typeof api.getDrives !== "function" ||
     typeof api.driveOn !== "function" ||
     typeof api.setDriveMode !== "function"
   ) {
-    return 8;
+    return { busId: 8, driveBeforeMount: null };
   }
 
   const compatibleModes = getDiskAutoplayCompatibleModes(path);
 
   const drives = await api.getDrives();
-  let driveInfo = getDriveInfo(drives, drive);
+  const driveBeforeMount = getDriveInfo(drives, drive);
+  let driveInfo = driveBeforeMount;
   let requiresRefresh = false;
   // HARD19-022 (D3): whether we powered on or reconfigured the drive, so the
   // Home/Disks drive-card query is invalidated afterwards and stops showing the
@@ -217,7 +219,7 @@ const ensureDiskAutoplayDriveReady = async (
     void getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
   }
 
-  return typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8;
+  return { busId: typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8, driveBeforeMount };
 };
 
 const emitDurationPropagationEvent = (payload: {
@@ -685,7 +687,14 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           await delay(resetDelayMs);
         }
 
-        const driveBusId = await ensureDiskAutoplayDriveReady(api, drive, plan.path, notify);
+        const { busId: driveBusId, driveBeforeMount } = await ensureDiskAutoplayDriveReady(
+          api,
+          drive,
+          plan.path,
+          notify,
+        );
+        const deviceHost = api.getDeviceHost();
+        const priorImagePath = resolvePriorImageForLaunch(peekPlayLaunchMount(deviceHost, drive), driveBeforeMount);
 
         // HARD19-008: mount through mountDiskToDrive with write-back deps so a
         // pending Home-mounted disk's saves on this drive are finalized (not
@@ -693,6 +702,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         const diskWriteBack = buildDiskWriteBackDependencies();
 
         let localBlob: Blob | null = null;
+        let mountOutcome: DiskMountOutcome;
 
         if (plan.source === "ultimate") {
           const diskEntry = createDiskEntry({
@@ -700,7 +710,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             location: "ultimate",
             origin: plan.origin ?? null,
           });
-          await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
+          mountOutcome = await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
         } else if (plan.file) {
           localBlob = await toBlob(plan.file);
           if (!localBlob) throw new Error("Missing local disk data.");
@@ -709,14 +719,20 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           // leaving a stale materialized entry that a later eject misattributed).
           // Pass the resolved blob as the runtime file so no extra read occurs.
           const diskEntry = createDiskEntry({ path: plan.path, location: "local" });
-          await mountDiskToDrive(api, drive, diskEntry, localBlob as File, { writeBack: diskWriteBack });
+          mountOutcome = await mountDiskToDrive(api, drive, diskEntry, localBlob as File, { writeBack: diskWriteBack });
         } else {
           const diskEntry = createDiskEntry({
             path: plan.path,
             location: "local",
           });
-          await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
+          mountOutcome = await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
         }
+        recordPlayLaunchMount(deviceHost, {
+          drive,
+          launchPath: plan.path,
+          priorImagePath,
+          mountedByUpload: mountOutcome.persistence === "transient",
+        });
 
         if (beforeLaunch) {
           await beforeLaunch();

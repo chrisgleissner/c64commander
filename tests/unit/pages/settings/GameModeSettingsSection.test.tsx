@@ -10,7 +10,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
-import { loadCustomBinding, loadJoystickLayout, saveJoystickLayout } from "@/lib/remoteInput/joystickKeyBindings";
+import {
+  loadCustomBinding,
+  loadJoystickLayout,
+  saveCustomBinding,
+  saveJoystickLayout,
+} from "@/lib/remoteInput/joystickKeyBindings";
 import { loadGameModeJoystick, saveGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
 import { loadGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
 
@@ -112,7 +117,7 @@ describe("GameModeSettingsSection", () => {
 
 /**
  * The layout picker is the control that makes the assignment configurable, and it is the one
- * route by which a user reaches the 8-centred diamond on an edition that does not ship it as
+ * route by which a user reaches the 8-centered diamond on an edition that does not ship it as
  * the default. Asserted through the select rather than through `saveJoystickLayout`, because
  * writing storage proves nothing about whether anybody can reach it.
  */
@@ -130,14 +135,21 @@ describe("choosing between the shipped layouts", () => {
   it("offers both defaults and Custom, named the way the manual names them", () => {
     render(<GameModeSettingsSection />);
     fireEvent.click(screen.getByTestId("settings-joystick-key-layout"));
-    expect(screen.getByRole("option", { name: "Diamond (8-centred)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Diamond (8-centered)" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Classic T9" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Custom" })).toBeInTheDocument();
   });
 
-  it("stores the 8-centred diamond when it is chosen", async () => {
+  it("names the D-pad center key in American English in a custom binding", () => {
+    saveJoystickLayout("custom");
+    saveCustomBinding({ fire: "center" });
     render(<GameModeSettingsSection />);
-    await chooseLayout("Diamond (8-centred)");
+    expect(screen.getByTestId("settings-joystick-bind-fire")).toHaveTextContent("D-pad center");
+  });
+
+  it("stores the 8-centered diamond when it is chosen", async () => {
+    render(<GameModeSettingsSection />);
+    await chooseLayout("Diamond (8-centered)");
     expect(loadJoystickLayout()).toBe("diamond8");
   });
 
@@ -172,6 +184,11 @@ describe("choosing the on-screen joystick visibility setting", () => {
     const option = await screen.findByRole("option", { name: label });
     fireEvent.click(option);
   };
+
+  it("names Game Mode with its capitals, as the rest of the app does", () => {
+    render(<GameModeSettingsSection />);
+    expect(screen.getByText("On-screen joystick in Game Mode")).toBeInTheDocument();
+  });
 
   it("offers Auto, Visible and Hidden", () => {
     render(<GameModeSettingsSection />);

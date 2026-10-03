@@ -16,6 +16,10 @@ import {
   type FeatureFlagId,
 } from "@/lib/config/featureFlagsRegistry.generated";
 import { resetInputModality } from "@/lib/input/inputModality";
+import { setProgressiveMountEnabled } from "@/lib/ui/progressiveMount";
+
+// Unit tests assert on a page right after rendering it; progressiveMount.test.ts covers the staggering.
+setProgressiveMountEnabled(false);
 
 const FEATURE_FLAG_STORAGE_PREFIX = "c64u_feature_flag:";
 const DEVELOPER_MODE_KEY = "c64u_dev_mode_enabled";

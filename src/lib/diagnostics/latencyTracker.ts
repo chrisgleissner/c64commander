@@ -33,8 +33,9 @@ export type LatencyPercentiles = {
 };
 
 /** Derive endpoint class from a REST/FTP path per §12.6 */
-export const classifyEndpoint = (transport: TransportFamily, path: string): EndpointClass => {
+export const classifyEndpoint = (transport: TransportFamily, path: string, ftpOperation?: string): EndpointClass => {
   if (transport === "FTP") {
+    if (ftpOperation === "read") return "FTP read";
     if (/^\/v1\/ftp\/list/i.test(path) || path === "/" || path === "") return "FTP list";
     if (/^\/v1\/ftp\/read/i.test(path)) return "FTP read";
     return "FTP list"; // default for FTP list operations
@@ -57,13 +58,18 @@ const prune = () => {
 };
 
 /** Record a latency sample. */
-export const recordLatencySample = (transport: TransportFamily, path: string, durationMs: number): void => {
+export const recordLatencySample = (
+  transport: TransportFamily,
+  path: string,
+  durationMs: number,
+  ftpOperation?: string,
+): void => {
   prune();
   samples.push({
     timestampMs: Date.now(),
     durationMs,
     transport,
-    endpoint: classifyEndpoint(transport, path),
+    endpoint: classifyEndpoint(transport, path, ftpOperation),
   });
 };
 

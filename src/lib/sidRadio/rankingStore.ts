@@ -103,10 +103,18 @@ const lsLoad = (): RankingMap => {
   }
 };
 
+// Set beside the localStorage copy when it was written from a cache that already held everything
+// IndexedDB had, so the copy is the whole state and replaces IndexedDB rather than merging into it.
+const COMPLETE_COPY_KEY = "c64u_sid_rankings_complete";
+let cacheHoldsIndexedDbState = false;
+
+const lsCopyIsComplete = (): boolean => localStorage.getItem(COMPLETE_COPY_KEY) === "1";
+
 const lsSave = (map: RankingMap): void => {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    if (cacheHoldsIndexedDbState) localStorage.setItem(COMPLETE_COPY_KEY, "1");
   } catch (error) {
     // Quota / disabled storage — ambient ranking is best-effort.
     addErrorLog("Failed to persist SID rankings to localStorage", { error: (error as Error).message });
@@ -138,14 +146,35 @@ const fallBackToLocalStorage = (operation: string, error: unknown): void => {
   backend = "ls";
 };
 
+// With IndexedDB available, a localStorage copy exists only because an earlier session fell back to
+// it. A complete copy replaces IndexedDB, so ratings removed after the fallback stay removed; a copy
+// from a session that never read IndexedDB is merged over it. If the write-back fails, this session
+// stays on localStorage, or IndexedDB would take writes the copy then overrides on the next launch.
+const foldInFallbackCopy = async (stored: RankingMap): Promise<RankingMap> => {
+  if (typeof localStorage === "undefined" || localStorage.getItem(STORAGE_KEY) === null) return stored;
+  const folded = lsCopyIsComplete() ? lsLoad() : { ...stored, ...lsLoad() };
+  try {
+    await idbSave(folded);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(COMPLETE_COPY_KEY);
+  } catch (error) {
+    fallBackToLocalStorage("fold-in", error);
+    lsSave(folded);
+  }
+  return folded;
+};
+
 const durableLoad = async (): Promise<RankingMap> => {
   if (resolveBackend() === "idb") {
     try {
-      return await idbLoad();
+      const stored = await idbLoad();
+      cacheHoldsIndexedDbState = true;
+      return await foldInFallbackCopy(stored);
     } catch (error) {
       fallBackToLocalStorage("load", error);
     }
   }
+  cacheHoldsIndexedDbState = typeof localStorage !== "undefined" && lsCopyIsComplete();
   return lsLoad();
 };
 
@@ -220,6 +249,7 @@ export const clearRanking = async (md5: string): Promise<void> => {
 export const clearAllRankings = async (): Promise<void> => {
   cache.clear();
   loaded = true;
+  cacheHoldsIndexedDbState = true;
   await durableSave({});
   broadcast();
 };

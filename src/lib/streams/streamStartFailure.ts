@@ -22,3 +22,7 @@ export const describeStreamStartFailure = (error: unknown, stream: "audio" | "vi
   }
   return `Could not tell the device to start streaming ${stream}.`;
 };
+
+/** The receive socket on this side failed to open, so the device was never asked to stream. */
+export const describeReceiverOpenFailure = (error: unknown, stream: "audio" | "video"): string =>
+  `The app could not open a network socket for the ${stream} stream: ${(error as Error)?.message ?? String(error)}`;

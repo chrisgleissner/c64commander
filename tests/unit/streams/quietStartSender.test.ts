@@ -108,6 +108,39 @@ describe("a new stream whose packets the sender filter refuses", () => {
     });
   });
 
+  it("reports the refused sender on the native audio path, whose arrival counter stays at zero", async () => {
+    const receiver = refusingReceiver(refused);
+    const sink = {
+      open: vi.fn(async () => true),
+      close: vi.fn(async () => {}),
+      getStats: () => ({
+        bufferedMs: 0,
+        underruns: 0,
+        arrival: { packets: 0, meanGapMs: 0, maxGapMs: 0, gapsOver20ms: 0, gapsOver50ms: 0, maxClump: 0 },
+      }),
+      senders: [],
+      bufferCapacityMs: 40,
+    };
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sink as never,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "192.0.2.46",
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.open();
+
+    await advance(2000);
+
+    expect(controller.getSnapshot()).toMatchObject({
+      state: "live",
+      error: null,
+      senderMismatch: { source: "192.0.2.47", expected: "192.0.2.46" },
+    });
+  });
+
   it("reports nothing when the filter has refused nothing", async () => {
     const receiver = refusingReceiver({ rejectedPackets: 0 });
     const controller = new VideoMirrorController({

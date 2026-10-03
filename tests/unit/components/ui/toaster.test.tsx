@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, render, screen } from "@testing-library/react";
+import { forwardRef } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted mocks ────────────────────────────────────────────────────────────
@@ -27,9 +28,7 @@ const {
   mockLoadNotificationDurationMs: vi.fn(() => 4000),
   capturedToastHandlers: {
     onClick: undefined as (() => void) | undefined,
-    onSwipeStart: undefined as (() => void) | undefined,
     onSwipeEnd: undefined as ((e: any) => void) | undefined,
-    onSwipeCancel: undefined as (() => void) | undefined,
   },
   // HARD19-037: record the per-root duration/variant passed to each Radix
   // Toast so we can assert destructive toasts opt out of the notice duration.
@@ -49,24 +48,18 @@ vi.mock("@/components/ui/toast", () => ({
     ({
       children,
       onClick,
-      onSwipeStart,
       onSwipeEnd,
-      onSwipeCancel,
       duration,
       variant,
     }: {
       children?: React.ReactNode;
       onClick?: () => void;
-      onSwipeStart?: () => void;
       onSwipeEnd?: (e: any) => void;
-      onSwipeCancel?: () => void;
       duration?: number;
       variant?: string;
     }) => {
       capturedToastHandlers.onClick = onClick;
-      capturedToastHandlers.onSwipeStart = onSwipeStart;
       capturedToastHandlers.onSwipeEnd = onSwipeEnd;
-      capturedToastHandlers.onSwipeCancel = onSwipeCancel;
       capturedToastProps.value.push({ duration, variant });
       return (
         <div data-testid="mock-toast" data-duration={String(duration)} data-variant={variant} onClick={onClick}>
@@ -84,7 +77,7 @@ vi.mock("@/components/ui/toast", () => ({
       {children}
     </div>
   )),
-  ToastViewport: vi.fn(() => <div data-testid="toast-viewport" />),
+  ToastViewport: forwardRef<HTMLOListElement>((_props, ref) => <ol ref={ref} data-testid="toast-viewport" />),
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
@@ -107,10 +100,25 @@ describe("Toaster", () => {
     vi.clearAllMocks();
     mockToasts.value = [];
     capturedToastHandlers.onClick = undefined;
-    capturedToastHandlers.onSwipeStart = undefined;
     capturedToastHandlers.onSwipeEnd = undefined;
-    capturedToastHandlers.onSwipeCancel = undefined;
     capturedToastProps.value = [];
+  });
+
+  it("marks a toast's action slot so the Quick Menu can offer it to the keypad", () => {
+    mockToasts.value = [
+      {
+        id: "retry",
+        title: "Mount failed",
+        action: (
+          <button type="button" data-testid="retry-button">
+            Retry
+          </button>
+        ),
+      } as unknown as (typeof mockToasts.value)[number],
+    ];
+    render(<Toaster />);
+
+    expect(screen.getByTestId("app-toast-action")).toContainElement(screen.getByTestId("retry-button"));
   });
 
   // `alwaysVisible` only steers the errors-only filter; spread onto the Radix root it would reach the DOM.
@@ -248,35 +256,50 @@ describe("Toaster destructive-toast persistence (HARD19-037)", () => {
   });
 });
 
-describe("ToastItem handlers", () => {
+describe("ToastItem controls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedToastHandlers.onClick = undefined;
-    capturedToastHandlers.onSwipeStart = undefined;
     capturedToastHandlers.onSwipeEnd = undefined;
-    capturedToastHandlers.onSwipeCancel = undefined;
-    mockToasts.value = [{ id: "toast-1", title: "Test" }];
+    mockToasts.value = [{ id: "toast-1", title: "Stop failed", description: "Device unreachable" }];
   });
 
-  it("click calls dismiss and opens diagnostics", () => {
+  it("tapping the toast body neither dismisses it nor opens Diagnostics", () => {
     render(<Toaster />);
-    act(() => {
-      capturedToastHandlers.onClick?.();
-    });
-    expect(mockDismiss).toHaveBeenCalledWith("toast-1");
-    expect(mockRequestDiagnosticsOpen).toHaveBeenCalledWith("error-logs");
-  });
-
-  it("click does not dismiss when swipe is active", () => {
-    render(<Toaster />);
-    act(() => {
-      capturedToastHandlers.onSwipeStart?.();
-    });
-    act(() => {
-      capturedToastHandlers.onClick?.();
-    });
+    fireEvent.click(screen.getByTestId("toast-title"));
+    fireEvent.click(screen.getByTestId("toast-desc"));
+    fireEvent.click(screen.getByTestId("mock-toast"));
     expect(mockDismiss).not.toHaveBeenCalled();
     expect(mockRequestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
+  it("the close button dismisses the toast without opening Diagnostics", () => {
+    render(<Toaster />);
+    const close = screen.getByRole("button", { name: "Close notification" });
+    expect(close).toHaveAttribute("data-testid", "app-toast-close");
+    fireEvent.click(close);
+    expect(mockDismiss).toHaveBeenCalledExactlyOnceWith("toast-1");
+    expect(mockRequestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
+  it("the Details button dismisses the toast and opens Diagnostics on the error logs", () => {
+    render(<Toaster />);
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(mockDismiss).toHaveBeenCalledExactlyOnceWith("toast-1");
+    expect(mockRequestDiagnosticsOpen).toHaveBeenCalledExactlyOnceWith("error-logs");
+  });
+
+  it("gives each toast its own close and Details buttons", () => {
+    mockToasts.value = [
+      { id: "err-1", title: "Stop failed", variant: "destructive" } as any,
+      { id: "note-1", title: "Saved" },
+    ];
+    render(<Toaster />);
+    const closeButtons = screen.getAllByTestId("app-toast-close");
+    expect(closeButtons).toHaveLength(2);
+    expect(screen.getAllByTestId("app-toast-details")).toHaveLength(2);
+    fireEvent.click(closeButtons[1]);
+    expect(mockDismiss).toHaveBeenCalledExactlyOnceWith("note-1");
   });
 
   it("left swipe (delta.x < -50) calls dismiss", () => {
@@ -285,6 +308,7 @@ describe("ToastItem handlers", () => {
       capturedToastHandlers.onSwipeEnd?.({ detail: { delta: { x: -60 } } });
     });
     expect(mockDismiss).toHaveBeenCalledWith("toast-1");
+    expect(mockRequestDiagnosticsOpen).not.toHaveBeenCalled();
   });
 
   it("right swipe (delta.x >= 0) does not call dismiss", () => {
@@ -302,33 +326,24 @@ describe("ToastItem handlers", () => {
     });
     expect(mockDismiss).not.toHaveBeenCalled();
   });
+});
 
-  it("swipeCancel resets swiping state so next click fires normally", () => {
-    render(<Toaster />);
-    act(() => {
-      capturedToastHandlers.onSwipeStart?.();
-    });
-    act(() => {
-      capturedToastHandlers.onSwipeCancel?.();
-    });
-    act(() => {
-      capturedToastHandlers.onClick?.();
-    });
-    expect(mockDismiss).toHaveBeenCalledWith("toast-1");
-    expect(mockRequestDiagnosticsOpen).toHaveBeenCalledWith("error-logs");
+describe("Toaster page-area reservation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockToasts.value = [];
+    document.documentElement.style.removeProperty("--app-toast-reserved-height");
   });
 
-  it("swipeEnd resets swiping state so next click fires normally", () => {
-    render(<Toaster />);
-    act(() => {
-      capturedToastHandlers.onSwipeStart?.();
-    });
-    act(() => {
-      capturedToastHandlers.onSwipeEnd?.({ detail: { delta: { x: 10 } } });
-    });
-    act(() => {
-      capturedToastHandlers.onClick?.();
-    });
-    expect(mockDismiss).toHaveBeenCalledWith("toast-1");
+  it("reserves the toast strip's height out of the page area and releases it on unmount", () => {
+    const heightSpy = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(132);
+    try {
+      const { unmount } = render(<Toaster />);
+      expect(document.documentElement.style.getPropertyValue("--app-toast-reserved-height")).toBe("132px");
+      unmount();
+      expect(document.documentElement.style.getPropertyValue("--app-toast-reserved-height")).toBe("0px");
+    } finally {
+      heightSpy.mockRestore();
+    }
   });
 });

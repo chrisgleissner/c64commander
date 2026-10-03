@@ -19,6 +19,11 @@ import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChalleng
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
 import { handleWebProxyGate } from "@/lib/c64api/webProxyGate";
 import { CategoryPresence } from "@/lib/c64api/categoryPresence";
+import {
+  hasStructuredConfigMetadata,
+  mergeListedConfigItems,
+  seedConfigItemsFromCache,
+} from "@/lib/c64api/configItemsMerge";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
@@ -41,6 +46,13 @@ import {
 } from "@/lib/config/configFlashPersistence";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
+import { signalDriveWritten } from "@/lib/c64api/driveWriteSignal";
+import {
+  DEVICE_NO_ANSWER_PHRASE,
+  isDnsFailure,
+  isNetworkFailureMessage,
+  resolveTransportFailureMessage,
+} from "@/lib/c64api/requestFailureMessage";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
@@ -61,6 +73,7 @@ import {
   resolvePlatformApiBaseUrl,
   resolvePreferredDeviceHost,
 } from "@/lib/c64api/hostConfig";
+import { decodeNativeBase64ToArrayBuffer, NULL_BODY_HTTP_STATUSES } from "@/lib/c64api/nativeResponseBody";
 import {
   awaitPromiseWithAbortSignal,
   buildReadRequestDedupeKey,
@@ -75,6 +88,7 @@ import {
   wait,
 } from "@/lib/c64api/requestRuntime";
 import {
+  areConfigEnrichmentItemsEqual,
   loadConfigEnrichmentAbsentDomains,
   loadConfigEnrichmentCategory,
   loadConfigEnrichmentNamespaceForHost,
@@ -125,14 +139,12 @@ export const INTERACTIVE_CONTROL_TIMEOUT_MS = 1500;
 export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
 // Backwards-compatible aliases (kept until all call sites are migrated).
 const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
-const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
-const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
-// Drive mount/eject are heavier firmware ops than a tappable control: real
-// c64u-resident mounts were measured at ~0.8-1.8 s and can be slower under
-// load. The default INTERACTIVE budget (1500 ms) aborts a slow-but-successful
-// mount and mislabels it "Host unreachable" (the abort failure message), which
-// then sticks in the per-drive status. Give mount/eject an intentional, larger
-// budget so a normal mount is never falsely timed out.
+// Runner endpoints answer only after the firmware has reset the machine and loaded the program:
+// a 195-byte PRG upload to run_prg took 5.67 s on a healthy c64u, so 5 s failed real launches.
+const UPLOAD_REQUEST_TIMEOUT_MS = 15_000;
+const PLAYBACK_REQUEST_TIMEOUT_MS = 15_000;
+// Real c64u-resident mounts took ~0.8-1.8 s and can be slower under load, so the
+// interactive budget (1500 ms) failed slow-but-successful mounts.
 const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 // Formatting a blank image on slow USB media can exceed the normal control budget.
@@ -175,7 +187,7 @@ const singleConfigEntry = (
 // instrumentation across parallel CI shards, all of which inflate wall-clock
 // time far beyond the production-tuned interactive budget. Floor every timed
 // request's effective timeout in those builds so a healthy-but-slow mocked
-// response is not aborted as "Host unreachable". Production budgets are unchanged.
+// response is not aborted. Production budgets are unchanged.
 const TEST_PROBE_REQUEST_TIMEOUT_FLOOR_MS = 8000;
 
 // Read lazily and defensively: `import.meta.env` is undefined when this module is
@@ -359,16 +371,6 @@ const resolveConfigWriteValue = (category: string, item: string, value: string |
     resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
   );
 
-// Includes Android's "Unable to resolve host", which CapacitorHttp reports for
-// an unresolvable device hostname and which the other patterns do not match.
-const isDnsFailure = (message: string) =>
-  /unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(message);
-const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(
-    message,
-  );
-const resolveHostErrorMessage = (message: string) =>
-  isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
 const isUnsupportedSignalError = (error: unknown) =>
   error instanceof Error && error.message.includes("Expected signal") && error.message.includes("AbortSignal");
@@ -390,28 +392,6 @@ const fetchWithSignalCompatibility = async (
     }
     throw error;
   }
-};
-
-// Statuses whose responses must not carry a body; the Response constructor throws
-// ("Response with null body status cannot have body") if we pass one.
-const NULL_BODY_HTTP_STATUSES = new Set([101, 103, 204, 205, 304]);
-
-// Decode the binary body CapacitorHttp returns for a responseType:"arraybuffer" request
-// (base64 string on native; raw byte array as a defensive fallback). Mirrors the
-// production-proven decoder in src/lib/archive/client.ts (kept inline to avoid coupling
-// the device API client to the archive module). `atob` performs forgiving-base64 decode,
-// so the line-wrapped Android Base64.DEFAULT output decodes correctly.
-const decodeNativeBase64ToArrayBuffer = (value: unknown): ArrayBuffer => {
-  if (value instanceof ArrayBuffer) return value;
-  if (Array.isArray(value)) return Uint8Array.from(value as number[]).buffer;
-  if (typeof value === "string") {
-    if (typeof atob === "function") {
-      const decoded = atob(value);
-      return Uint8Array.from(decoded, (char) => char.charCodeAt(0)).buffer;
-    }
-    return Uint8Array.from(Buffer.from(value, "base64")).buffer;
-  }
-  return new ArrayBuffer(0);
 };
 
 // Native device REST transport.
@@ -549,7 +529,11 @@ const normalizeNativeBinaryRequestBody = (
 
 const isSidUploadTransientFailure = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  if (isNetworkFailureMessage(message) || /timed out|timeout|host unreachable/i.test(message)) {
+  if (
+    isNetworkFailureMessage(message) ||
+    /timed out|timeout|host unreachable/i.test(message) ||
+    message.includes(DEVICE_NO_ANSWER_PHRASE)
+  ) {
     return true;
   }
   const status = parseHttpStatusFromErrorMessage(message);
@@ -711,6 +695,7 @@ const createTimedRequestSignal = (outerSignal: AbortSignal | undefined, timeoutM
 
   return {
     signal: controller ? controller.signal : outerSignal,
+    effectiveTimeoutMs,
     didTimeout: () => timedOut,
     cleanup: () => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -1038,32 +1023,6 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uSuppressAuthChallenge?: boolean;
 };
 
-const hasStructuredConfigMetadata = (config: unknown) => {
-  if (typeof config !== "object" || config === null || Array.isArray(config)) return false;
-
-  const record = config as Record<string, unknown>;
-  return [
-    "selected",
-    "value",
-    "current",
-    "current_value",
-    "currentValue",
-    "default",
-    "default_value",
-    "defaultValue",
-    "options",
-    "values",
-    "choices",
-    "details",
-    "presets",
-    "min",
-    "max",
-    "minimum",
-    "maximum",
-    "format",
-  ].some((key) => Object.prototype.hasOwnProperty.call(record, key));
-};
-
 export interface DriveInfo {
   enabled?: boolean;
   bus_id?: number;
@@ -1107,24 +1066,27 @@ export class C64API {
   }
 
   setBaseUrl(url: string) {
-    if (readViteEnv()?.VITE_WEB_PLATFORM !== "1") {
-      this.deviceHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(url));
-    }
-    this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
-    this.resetRequestReadState();
-    this.bumpRequestGeneration();
-    this.setActiveConfigEnrichmentNamespaceForCurrentHost();
+    const host = readViteEnv()?.VITE_WEB_PLATFORM !== "1" ? normalizeDeviceHost(getDeviceHostFromBaseUrl(url)) : null;
+    this.applyRouting(host ?? this.deviceHost, url);
   }
 
   setPassword(password?: string) {
+    if (password === this.password) return;
     this.password = password;
     this.resetRequestReadState();
     this.bumpRequestGeneration();
   }
 
   setDeviceHost(deviceHost?: string) {
-    this.deviceHost = normalizeDeviceHost(deviceHost);
-    this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, buildBaseUrlFromDeviceHost(this.deviceHost));
+    const host = normalizeDeviceHost(deviceHost);
+    this.applyRouting(host, buildBaseUrlFromDeviceHost(host));
+  }
+
+  private applyRouting(deviceHost: string, url: string) {
+    const baseUrl = resolvePlatformApiBaseUrl(deviceHost, url);
+    if (deviceHost === this.deviceHost && baseUrl === this.apiBaseUrl) return;
+    this.deviceHost = deviceHost;
+    this.apiBaseUrl = baseUrl;
     this.resetRequestReadState();
     this.bumpRequestGeneration();
     this.setActiveConfigEnrichmentNamespaceForCurrentHost();
@@ -1394,6 +1356,7 @@ export class C64API {
       }
       mergedItems[itemName] = nextItem;
     });
+    if (areConfigEnrichmentItemsEqual(previousItems, mergedItems)) return;
     this.configCategoryItemsCache.set(category, mergedItems);
     saveConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category, mergedItems);
   }
@@ -1533,13 +1496,8 @@ export class C64API {
   // callers weren't inspecting, so a rejected mount still showed a "Disk
   // mounted" toast with the drive unchanged. See HARD9-010.
   private assertDriveWriteAccepted(response: { errors?: string[] }, operation: string, drive: string) {
-    const firmwareErrors = Array.isArray(response.errors)
-      ? response.errors.filter((entry) => entry.trim().length > 0)
-      : [];
-    if (firmwareErrors.length === 0) {
-      return;
-    }
-    throw new Error(`Firmware rejected drive ${drive.toUpperCase()} ${operation}: ${firmwareErrors.join("; ")}`);
+    this.assertActionAccepted(response, `drive ${drive.toUpperCase()} ${operation}`);
+    signalDriveWritten(this.deviceHost, drive);
   }
 
   private assertActionAccepted(response: { errors?: string[] }, operation: string) {
@@ -1908,6 +1866,8 @@ export class C64API {
                   const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
                   const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
                   const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                  const timedOut = timedSignal.didTimeout() || /timed out/i.test(rawMessage);
+                  const timeoutMs = timedSignal.effectiveTimeoutMs;
                   // Leaving the network fails requests before the platform's callback says so; asking now lets
                   // everything below see the real cause.
                   const transportFailure = (isNetworkFailure || timedSignal.didTimeout()) && !callerAborted;
@@ -1920,7 +1880,7 @@ export class C64API {
                   const failure = classifyError(error);
                   const normalizedError =
                     !callerAborted && !superseded && (isAbort || isNetworkFailure)
-                      ? resolveHostErrorMessage(rawMessage)
+                      ? resolveTransportFailureMessage(rawMessage, { timedOut, timeoutMs })
                       : rawMessage;
                   const durationMs = Math.max(
                     0,
@@ -2041,11 +2001,9 @@ export class C64API {
                   }
 
                   if (isAbort || isNetworkFailure) {
-                    throw annotateRestFailure(
-                      new Error(resolveHostErrorMessage(rawMessage)),
-                      timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
-                      { expected: expectedFailureOption },
-                    );
+                    throw annotateRestFailure(new Error(normalizedError), timedOut ? "timeout" : "network", {
+                      expected: expectedFailureOption,
+                    });
                   }
                   throw error;
                 } finally {
@@ -2210,7 +2168,11 @@ export class C64API {
               timedSignal.didTimeout() ||
               /timed out/i.test(rawMessage);
             const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-            const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
+            const timedOut = timedSignal.didTimeout() || /timed out/i.test(rawMessage);
+            const normalizedError =
+              isAbort || isNetworkFailure
+                ? resolveTransportFailureMessage(rawMessage, { timedOut, timeoutMs: timedSignal.effectiveTimeoutMs })
+                : rawMessage;
             const durationMs = Math.max(
               0,
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
@@ -2279,10 +2241,7 @@ export class C64API {
               throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
             }
             if (isAbort || isNetworkFailure) {
-              throw annotateRestFailure(
-                new Error(resolveHostErrorMessage(rawMessage)),
-                timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
-              );
+              throw annotateRestFailure(new Error(normalizedError), timedOut ? "timeout" : "network");
             }
             throw error;
           } finally {
@@ -2344,14 +2303,9 @@ export class C64API {
     }
 
     const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
-    const mergedItems: Record<string, unknown> = {};
-    const itemsNeedingEnrichment = new Set<string>();
     const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
-    uniqueItems.forEach((item) => {
-      if (cachedItems[item] !== undefined) {
-        mergedItems[item] = cloneBudgetValue(cachedItems[item]);
-      }
-    });
+    const mergedItems = seedConfigItemsFromCache(uniqueItems, cachedItems);
+    let itemsNeedingEnrichment = new Set<string>();
     // An item the category listing omits is one the device does not have; asking for it only earns a 404.
     let categoryListed = false;
     try {
@@ -2364,27 +2318,7 @@ export class C64API {
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
       if (itemsBlock && typeof itemsBlock === "object") {
-        uniqueItems.forEach((item) => {
-          if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
-            const itemConfig = (itemsBlock as Record<string, unknown>)[item];
-            const cachedConfig = cachedItems[item];
-            if (hasStructuredConfigMetadata(itemConfig)) {
-              mergedItems[item] = itemConfig;
-            } else if (hasStructuredConfigMetadata(cachedConfig)) {
-              mergedItems[item] = {
-                ...(cachedConfig as Record<string, unknown>),
-                selected: extractConfigValue(itemConfig),
-              };
-            } else {
-              mergedItems[item] = itemConfig;
-            }
-            if (!hasStructuredConfigMetadata(itemConfig)) {
-              if (!hasStructuredConfigMetadata(cachedConfig)) {
-                itemsNeedingEnrichment.add(item);
-              }
-            }
-          }
-        });
+        itemsNeedingEnrichment = mergeListedConfigItems(uniqueItems, itemsBlock, cachedItems, mergedItems);
       }
     } catch (error) {
       const categoryErrorMessage = error instanceof Error ? error.message : String(error ?? "");
@@ -2453,6 +2387,27 @@ export class C64API {
       },
       errors: [],
     };
+  }
+
+  /** Every category's current values in one read (firmware wildcard), recorded for categories the cache tracks. */
+  async getAllConfigCategories(options: C64ReadRequestOptions = {}): Promise<Record<string, unknown>> {
+    const response = await this.request<Record<string, unknown>>("/v1/configs/*", options);
+    Object.keys(response ?? {}).forEach((category) => {
+      if (category === "errors" || !this.getCachedConfigCategoryItems(category)) return;
+      this.rememberConfigCategoryItems(category, { [category]: response[category] });
+    });
+    return response;
+  }
+
+  /** What `getConfigItems(category, items)` would return, built from a `getAllConfigCategories` response. */
+  selectConfigItems(allCategories: Record<string, unknown>, category: string, items: string[]): ConfigResponse | null {
+    if (!Object.prototype.hasOwnProperty.call(allCategories, category)) return null;
+    const uniqueItems = Array.from(new Set(items));
+    const cachedItems = this.getCachedConfigCategoryItems(category) ?? {};
+    const mergedItems = seedConfigItemsFromCache(uniqueItems, cachedItems);
+    const itemsBlock = getConfigCategoryItems({ [category]: allCategories[category] }, category);
+    mergeListedConfigItems(uniqueItems, itemsBlock, cachedItems, mergedItems);
+    return { [category]: { items: mergedItems }, errors: [] };
   }
 
   async setConfigValue(

@@ -71,6 +71,8 @@ vi.mock("@/lib/config/featureFlags", () => ({
 
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: vi.fn(),
+  clearDeviceSafetyOverride: vi.fn(),
+  isDeviceSafetyPresetValue: vi.fn(),
 
   saveDeviceSafetyMode: vi.fn(),
   saveFtpMaxConcurrency: vi.fn(),
@@ -384,6 +386,18 @@ describe("settingsTransfer", () => {
           hvsc_enabled: false,
           unknown_flag: true,
         },
+      };
+      await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({ ok: true });
+      expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ hvsc_enabled: false });
+    });
+
+    it("applies the feature flags of a version 2 export, the format before function-key assignments", async () => {
+      const { remoteFunction1Action: _f1, remoteFunction3Action: _f3, ...v2AppSettings } = validPayload.appSettings;
+      const payload = {
+        ...validPayload,
+        version: 2,
+        appSettings: v2AppSettings,
+        featureFlags: { hvsc_enabled: false },
       };
       await expect(importSettingsJson(JSON.stringify(payload))).resolves.toEqual({ ok: true });
       expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({ hvsc_enabled: false });

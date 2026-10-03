@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { observeElementSize } from "@/lib/ui/sharedResizeObserver";
 
 export type PathDisplayMode = "filename-fallback" | "start-and-filename";
 export type TextMeasureFn = (value: string) => number;
@@ -129,11 +130,7 @@ export const useResponsivePathLabel = (path: string, mode: PathDisplayMode) => {
 
     recalculate();
 
-    if (typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(() => recalculate());
-      observer.observe(element);
-      return () => observer.disconnect();
-    }
+    if (typeof ResizeObserver !== "undefined") return observeElementSize(element, recalculate);
 
     window.addEventListener("resize", recalculate);
     return () => {

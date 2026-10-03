@@ -385,3 +385,30 @@ describe("deviceSafetySettings AUTO mode", () => {
     });
   });
 });
+
+describe("deviceSafetySettings read per task", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("reads storage once for every call in a task, again after a save in that task, and again in the next task", async () => {
+    const { safety } = await loadModules();
+    const getItem = vi.spyOn(Storage.prototype, "getItem");
+
+    safety.loadDeviceSafetyConfig();
+    const firstReadCount = getItem.mock.calls.length;
+    for (let i = 0; i < 50; i += 1) safety.loadDeviceSafetyConfig();
+    const sameTaskReads = getItem.mock.calls.length - firstReadCount;
+
+    safety.saveFtpMaxConcurrency(3);
+    expect(safety.loadDeviceSafetyConfig().ftpMaxConcurrency).toBe(3);
+
+    await Promise.resolve();
+    const beforeNextTask = getItem.mock.calls.length;
+    safety.loadDeviceSafetyConfig();
+
+    expect(sameTaskReads).toBeLessThan(firstReadCount);
+    expect(getItem.mock.calls.length).toBeGreaterThan(beforeNextTask);
+  });
+});
