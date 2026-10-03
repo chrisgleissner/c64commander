@@ -32,6 +32,7 @@ import {
 } from "@/lib/ui/collapsibleSectionStore";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useHeaderActionsFit } from "@/components/useHeaderActionsFit";
+import { useProgressiveMount } from "@/lib/ui/progressiveMount";
 
 export interface CollapsibleSectionProps {
   /** Which page this section belongs to (e.g. "home", "settings", "docs"). Namespaces
@@ -325,6 +326,12 @@ export const CollapsibleSection = ({
   // Presentation only. `open` is the persisted answer and is what goes back on screen the moment
   // the override lifts; `bodyVisible` is what is drawn right now.
   const bodyVisible = open && !forceClosed;
+  // A body open from the first render below the screen may be built after the page has drawn (see
+  // useProgressiveMount). When it arrives it is simply there: an open animation would look like a card opening.
+  const bodyMayMount = useProgressiveMount(bodyVisible, sectionRef);
+  const bodyArrivesLateRef = useRef(!bodyMayMount);
+  const bodyEntryAnimation = bodyArrivesLateRef.current ? false : { height: 0, opacity: 0 };
+  if (bodyMayMount && bodyVisible) bodyArrivesLateRef.current = false;
 
   return (
     <motion.section
@@ -512,10 +519,10 @@ export const CollapsibleSection = ({
       </div>
 
       <AnimatePresence initial={false}>
-        {bodyVisible ? (
+        {bodyVisible && bodyMayMount ? (
           <motion.div
             id={resolvedBodyId}
-            initial={{ height: 0, opacity: 0 }}
+            initial={bodyEntryAnimation}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
