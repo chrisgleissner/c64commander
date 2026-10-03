@@ -7,6 +7,7 @@ import {
   ProfileActionGrid,
   ProfileSplitSection,
   fitColumnCount,
+  useFittingColumns,
 } from "@/components/layout/PageContainer";
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
@@ -152,6 +153,26 @@ describe("profile layout primitives", () => {
       );
 
       expect(screen.getByTestId("grid")).toHaveStyle({ gridTemplateColumns: "repeat(1, minmax(9rem, 1fr))" });
+    });
+
+    it("measures a grid that appears after the first render, as one in a card body built later does", () => {
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe() {}
+          disconnect() {}
+        },
+      );
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 200 } as DOMRect);
+      const Drives = ({ showGrid }: { showGrid: boolean }) => {
+        const { ref, columns } = useFittingColumns(3, "0px", true, "90px");
+        return showGrid ? <div ref={ref} data-testid="late-grid" data-columns={columns} /> : null;
+      };
+
+      const { rerender } = render(<Drives showGrid={false} />);
+      rerender(<Drives showGrid />);
+
+      expect(screen.getByTestId("late-grid")).toHaveAttribute("data-columns", "2");
     });
   });
 

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useAppChromeMode } from "@/components/layout/AppChromeContext";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -66,11 +66,12 @@ const cssLengthToPx = (length: string, rootFontSize: number) => {
  * that did not fit were clipped off the side together with their controls.
  */
 export const useFittingColumns = (requested: number, gap: string, enabled: boolean, minTrack = "0px") => {
-  const ref = useRef<HTMLDivElement | null>(null);
+  // The grid element as state, not a ref read once: a grid inside a card body that is built after the
+  // page has drawn appears after this hook's first effect, and must still be measured when it does.
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
   const [columns, setColumns] = useState(requested);
 
   useEffect(() => {
-    const element = ref.current;
     if (!enabled || !element || typeof ResizeObserver === "undefined") {
       setColumns(requested);
       return undefined;
@@ -92,9 +93,9 @@ export const useFittingColumns = (requested: number, gap: string, enabled: boole
       observer.disconnect();
       window.removeEventListener("c64u-ui-preferences-changed", measure);
     };
-  }, [requested, gap, enabled, minTrack]);
+  }, [requested, gap, enabled, minTrack, element]);
 
-  return { ref, columns };
+  return { ref: setElement, columns };
 };
 
 export function PageContainer({ children, className, size = "default", as = "main" }: PageContainerProps) {
