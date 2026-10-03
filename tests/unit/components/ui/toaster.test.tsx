@@ -104,6 +104,23 @@ describe("Toaster", () => {
     capturedToastProps.value = [];
   });
 
+  it("marks a toast's action slot so the Quick Menu can offer it to the keypad", () => {
+    mockToasts.value = [
+      {
+        id: "retry",
+        title: "Mount failed",
+        action: (
+          <button type="button" data-testid="retry-button">
+            Retry
+          </button>
+        ),
+      } as unknown as (typeof mockToasts.value)[number],
+    ];
+    render(<Toaster />);
+
+    expect(screen.getByTestId("app-toast-action")).toContainElement(screen.getByTestId("retry-button"));
+  });
+
   // `alwaysVisible` only steers the errors-only filter; spread onto the Radix root it would reach the DOM.
   it("does not hand the always-visible marker to the toast element", async () => {
     mockToasts.value = [{ id: "offline", title: "Offline", alwaysVisible: true } as (typeof mockToasts.value)[number]];

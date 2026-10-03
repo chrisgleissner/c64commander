@@ -155,7 +155,11 @@ function ToastItem({ id, title, description, action, dismiss, variant, ...props 
           {description}
         </ToastDescription>
       )}
-      {action ? <div className="flex justify-end">{action}</div> : null}
+      {action ? (
+        <div className="flex justify-end" data-testid="app-toast-action">
+          {action}
+        </div>
+      ) : null}
     </Toast>
   );
 }

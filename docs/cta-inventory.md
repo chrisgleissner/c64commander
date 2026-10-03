@@ -1018,6 +1018,11 @@ screen, and it was ten and eight presses from a cold arrival. They raise the sam
 requests the `8` and `9` keys do, so both paths run one implementation — the same
 SID-mixer handling before a pause, and the same confirmation before a reset.
 
+While an open notification carries an action (Retry, Save a local copy), the
+entry under Search is "Notification: <action>" (`keypad-quick-menu-toast-action`),
+which presses that action on the newest notification — the one Back would close —
+because notifications are outside the focus ring.
+
 Always present: Game Mode (flag `remote_input_enabled`), Diagnostics, Switch
 device (when >1 saved device), and — on a page that has collapsible cards —
 `keypad-quick-menu-sections-expand` and `keypad-quick-menu-sections-collapse`
@@ -1036,7 +1041,7 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
-`keypad-quick-menu-section-descriptions`.
+`keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`.
 
 ### 5.1 Lighting Studio (`lighting-studio-sheet`)
 
@@ -1305,12 +1310,15 @@ enumerated on hardware**.
 - Details — button — `app-toast-details` — closes the notification and opens Diagnostics on
   the error log (§5.2)
 - Close notification — icon button (44x44) — `app-toast-close` — closes the notification
-- Retry — button — no testid `[only on an error raised with a retry action]`
+- Retry (or another action, such as Save a local copy) — button — no testid, inside
+  `app-toast-action` `[only on a notification raised with an action]`
 
 Keypad: notifications render outside the focus ring, so the ring does not move onto them. The
 device Back key (and the keymap's Back binding) presses `app-toast-close` on the newest open
 notification before doing anything else, unless a dialog or sheet is open, which takes Back
-first. Details is reached by keypad through `*`, which opens Diagnostics directly.
+first. Details is reached by keypad through `*`, which opens Diagnostics directly. A
+notification's action is reached through the Quick Menu (Menu key), which lists it as
+"Notification: <action>" (`keypad-quick-menu-toast-action`) while that notification is open.
 
 ---
 

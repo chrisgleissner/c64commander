@@ -34,6 +34,7 @@ import {
   saveShowSectionDescriptions,
   subscribeShowSectionDescriptions,
 } from "@/lib/ui/collapsibleSectionStore";
+import { findNewestToastAction, type ToastActionTarget } from "@/lib/input/toastAction";
 
 /** Lands on the F1/F3 card in Settings, the same way a search result for it would. */
 const REMOTE_FUNCTION_SETTINGS_TARGET = {
@@ -111,6 +112,11 @@ export function KeypadQuickMenu() {
    * one you want is always in the same place. Whichever would do nothing is disabled, so the menu
    * still says which of them is available.
    */
+  const [toastAction, setToastAction] = useState<ToastActionTarget | null>(null);
+  useEffect(() => {
+    if (open) setToastAction(findNewestToastAction());
+  }, [open]);
+
   const [sectionCounts, setSectionCounts] = useState({ total: 0, closed: 0 });
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -202,6 +208,16 @@ export function KeypadQuickMenu() {
             {fromKeypad ? <ShortcutKey>7</ShortcutKey> : null}
             Search
           </Button>
+          {toastAction ? (
+            <Button
+              variant="ghost"
+              className="justify-start"
+              data-testid="keypad-quick-menu-toast-action"
+              onClick={() => run(toastAction.press)}
+            >
+              Notification: {toastAction.label}
+            </Button>
+          ) : null}
           {fromKeypad
             ? TAB_ROUTES.map((route, index) => (
                 <Button

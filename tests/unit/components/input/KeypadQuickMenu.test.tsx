@@ -55,6 +55,37 @@ describe("KeypadQuickMenu", () => {
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
   });
 
+  it("offers the newest notification's action, so a keypad can press Retry", async () => {
+    const retry = vi.fn();
+    render(
+      <MemoryRouter>
+        <div data-testid="app-toast" data-state="open">
+          <div data-testid="app-toast-action">
+            <button type="button" onClick={retry}>
+              Retry
+            </button>
+          </div>
+        </div>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+
+    requestQuickMenuOpen();
+    const entry = await screen.findByTestId("keypad-quick-menu-toast-action");
+    expect(entry).toHaveTextContent("Notification: Retry");
+
+    fireEvent.click(entry);
+    expect(retry).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+  });
+
+  it("lists no notification entry when no open notification has an action", async () => {
+    renderMenu();
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+    expect(screen.queryByTestId("keypad-quick-menu-toast-action")).toBeNull();
+  });
+
   it("invokes the device switcher and a page jump", async () => {
     renderMenu();
     requestQuickMenuOpen();
