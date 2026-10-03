@@ -24,6 +24,7 @@ vi.mock("@/lib/hvsc/hvscStatusStore", () => ({
 
 import {
   applyCancelledIngestionState,
+  beginCancelRequest,
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
@@ -196,6 +197,31 @@ describe("hvscIngestionRuntimeSupport", () => {
 
       expect(updateHvscStateMock).not.toHaveBeenCalled();
       expect(saveHvscStatusSummaryMock).not.toHaveBeenCalled();
+    });
+
+    it("counts a Stop as effective when the run it found unwound through its own cancel before the Stop applied", () => {
+      const finishCancel = beginCancelRequest();
+      applyCancelledIngestionState();
+      markIngestionRuntimeIdle();
+
+      expect(finishCancel()).toBe(true);
+    });
+
+    it("counts a Stop as ineffective when the run it found finished normally before the Stop applied", () => {
+      const finishCancel = beginCancelRequest();
+      markIngestionRuntimeIdle();
+
+      expect(finishCancel()).toBe(false);
+    });
+
+    it("does not credit a Stop with the cancel of a later run", () => {
+      markIngestionRuntimeIdle();
+      const finishCancel = beginCancelRequest();
+      startIngestion();
+      applyCancelledIngestionState();
+      markIngestionRuntimeIdle();
+
+      expect(finishCancel()).toBe(false);
     });
 
     it("keeps an earlier failure and its message when a retry is canceled before touching the library", () => {

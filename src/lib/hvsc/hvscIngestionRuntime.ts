@@ -75,6 +75,7 @@ import {
 } from "./hvscIngestionProgress";
 import {
   applyCancelledIngestionState,
+  beginCancelRequest,
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
@@ -1399,11 +1400,10 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<boolean> =
     addLog("info", "HVSC cancel ignored; no active ingestion", { token: cancelToken });
     return false;
   }
-  if (!tokenWasActive) {
-    runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
-  } else {
-    runtimeState.cancelTokens.get(cancelToken)!.cancelled = true;
-  }
+  const finishCancel = beginCancelRequest();
+  const tokenEntry = runtimeState.cancelTokens.get(cancelToken);
+  if (tokenEntry) tokenEntry.cancelled = true;
+  else runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
   await drainNativeProgressListeners(cancelToken);
   if (canUseNativeHvscIngestion()) {
     try {
@@ -1415,7 +1415,7 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<boolean> =
       });
     }
   }
-  const canceled = applyCancelledIngestionState();
+  const canceled = finishCancel();
   addLog("info", "HVSC cancel requested", { token: cancelToken, canceled });
   return canceled;
 };

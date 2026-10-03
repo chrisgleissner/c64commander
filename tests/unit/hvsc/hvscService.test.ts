@@ -44,7 +44,7 @@ vi.mock("@/lib/hvsc/hvscIngestionRuntime", () => ({
   addHvscProgressListener: vi.fn(async (listener: any) => ({
     remove: async () => {},
   })),
-  cancelHvscInstall: vi.fn(async () => undefined),
+  cancelHvscInstall: vi.fn(async () => true),
   checkForHvscUpdates: vi.fn(async () => ({
     latestVersion: 84,
     installedVersion: 83,
@@ -195,6 +195,7 @@ import {
   getHvscStatus as getRuntimeStatus,
   getHvscFolderListing as getRuntimeFolderListing,
   getHvscSong as runtimeGetHvscSong,
+  cancelHvscInstall as runtimeCancelHvscInstall,
   ingestCachedHvsc as runtimeIngestCachedHvsc,
   installOrUpdateHvsc as runtimeInstallOrUpdateHvsc,
   resetHvscLibraryData as runtimeResetHvscLibraryData,
@@ -317,8 +318,11 @@ describe("hvscService", () => {
       expect(status.installedVersion).toBe(83);
     });
 
-    it("cancelHvscInstall delegates to runtime", async () => {
-      await cancelHvscInstall("token-3");
+    it.each([true, false])("cancelHvscInstall passes the runtime's answer %s through", async (canceled) => {
+      vi.mocked(runtimeCancelHvscInstall).mockResolvedValueOnce(canceled);
+
+      await expect(cancelHvscInstall("token-3")).resolves.toBe(canceled);
+      expect(runtimeCancelHvscInstall).toHaveBeenCalledWith("token-3");
     });
 
     it("addHvscProgressListener delegates to runtime", async () => {
@@ -628,8 +632,14 @@ describe("hvscService", () => {
       const mockCancel = vi.fn().mockResolvedValue(undefined);
       (window as any).__hvscMock__ = { cancelHvscInstall: mockCancel };
 
-      await cancelHvscInstall("t1");
+      await expect(cancelHvscInstall("t1")).resolves.toBe(true);
       expect(mockCancel).toHaveBeenCalledWith({ cancelToken: "t1" });
+    });
+
+    it("reports nothing canceled when the mock bridge answers false", async () => {
+      (window as any).__hvscMock__ = { cancelHvscInstall: vi.fn().mockResolvedValue(false) };
+
+      await expect(cancelHvscInstall("t1")).resolves.toBe(false);
     });
   });
 

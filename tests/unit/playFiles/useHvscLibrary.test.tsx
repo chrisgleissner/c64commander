@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { createHvscDemoLibraryCleanup } from "@/lib/hvsc/hvscDemoLibraryCleanup";
 import type { HvscState } from "@/lib/hvsc/hvscStateStore";
+import { createHvscCancellationError } from "@/lib/hvsc/hvscCancellation";
 
 const mocks = vi.hoisted(() => ({
   toastMock: vi.fn(),
@@ -814,6 +815,33 @@ describe("useHvscLibrary", () => {
     await act(async () => {
       resolveCheck!({ latestVersion: 1, installedVersion: 0, requiredUpdates: [1] });
       await installPromise;
+    });
+
+    expect(mocks.toastMock).toHaveBeenCalledWith({ title: "HVSC update canceled" });
+    expect(result.current.hvscInlineError).toBe("Canceled");
+  });
+
+  it("reports a Stop as canceled when the ingest it stopped ended before the cancel round trip returned", async () => {
+    mocks.getHvscCacheStatusMock.mockResolvedValue({ baselineVersion: 3, updateVersions: [] });
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 3, ingestionState: "ready" }));
+    let rejectIngest: (error: Error) => void = () => undefined;
+    mocks.ingestCachedHvscMock.mockImplementation(() => new Promise((_, reject) => (rejectIngest = reject)));
+    mocks.cancelHvscInstallMock.mockImplementation(async () => {
+      rejectIngest(createHvscCancellationError());
+      await Promise.resolve();
+      return true;
+    });
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(result.current.hvscCanIngest).toBe(true));
+    let ingest: Promise<void> = Promise.resolve();
+    act(() => {
+      ingest = result.current.handleHvscIngest();
+    });
+    await waitFor(() => expect(mocks.ingestCachedHvscMock).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.handleHvscCancel();
+      await ingest;
     });
 
     expect(mocks.toastMock).toHaveBeenCalledWith({ title: "HVSC update canceled" });

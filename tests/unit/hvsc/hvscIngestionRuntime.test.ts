@@ -1491,7 +1491,7 @@ describe("hvscIngestionRuntime", () => {
     return () => release();
   };
 
-  it("leaves a ready library ready when the native cancel round trip outlasts the canceled run", async () => {
+  it("reports the Stop that ended the run and leaves a ready library ready when the native cancel round trip outlasts the run", async () => {
     installedLibraryWithCachedUpdate();
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
@@ -1504,7 +1504,7 @@ describe("hvscIngestionRuntime", () => {
 
     await expect(ingestCachedHvsc("token-late-cancel")).rejects.toThrow();
     releaseNativeCancel();
-    await expect(lateCancel).resolves.toBe(false);
+    await expect(lateCancel).resolves.toBe(true);
 
     expect(lastIngestionStatePatch()).toEqual({ ingestionState: "ready", ingestionError: null });
   });

@@ -22,6 +22,8 @@ type HvscIngestionRuntimeState = {
   cacheStatFailures: Map<string, number>;
   installedLibraryTouched: boolean;
   stateBeforeIngestion: IngestionOutcome | null;
+  ingestionRun: number;
+  canceledIngestionRun: number | null;
 };
 
 type IngestionOutcome = { ingestionState: HvscIngestionState; ingestionError: string | null };
@@ -33,6 +35,8 @@ const runtimeState: HvscIngestionRuntimeState = {
   cacheStatFailures: new Map<string, number>(),
   installedLibraryTouched: false,
   stateBeforeIngestion: null,
+  ingestionRun: 0,
+  canceledIngestionRun: null,
 };
 
 const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
@@ -41,6 +45,7 @@ export const getHvscIngestionRuntimeState = () => runtimeState;
 
 /** Called when an ingestion starts, so a cancel that changes nothing can put the state back. */
 export const recordStateBeforeIngestion = () => {
+  runtimeState.ingestionRun += 1;
   const { ingestionState, ingestionError } = loadHvscState();
   runtimeState.stateBeforeIngestion = { ingestionState, ingestionError: ingestionError ?? null };
 };
@@ -171,6 +176,7 @@ export const applyCancelledIngestionState = (
     return false;
   }
   updateHvscState(stateAfterCancel(message));
+  runtimeState.canceledIngestionRun = runtimeState.ingestionRun;
   const summary = loadHvscStatusSummary();
   const now = new Date().toISOString();
   saveHvscStatusSummary({
@@ -210,6 +216,18 @@ export const applyCancelledIngestionState = (
     errorCause: message,
   });
   return true;
+};
+
+/**
+ * Starts a Stop request. Its native round trips can outlast the run: when the run saw the cancel and
+ * unwound through its own cancel path meanwhile, the Stop still ended it; when the run had finished
+ * normally instead, there was nothing to cancel. The returned function applies the cancel and says
+ * whether this Stop ended the run that was in progress when it started.
+ */
+export const beginCancelRequest = () => {
+  const runAtRequest = runtimeState.activeIngestionRunning ? runtimeState.ingestionRun : null;
+  return (): boolean =>
+    applyCancelledIngestionState() || (runAtRequest !== null && runtimeState.canceledIngestionRun === runAtRequest);
 };
 
 export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;
