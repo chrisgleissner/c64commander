@@ -959,6 +959,42 @@ describe("UnifiedHealthBadge", () => {
     mockState.savedDevices.devices = originalDevices;
   });
 
+  it("switches back to the original device when it is picked again while the first switch is pending", async () => {
+    vi.useFakeTimers();
+    const firstPick = createDeferred<unknown>();
+    mockState.switchSavedDevice
+      .mockImplementationOnce(async (deviceId: string) => {
+        mockState.savedDevices.selectedDeviceId = deviceId;
+        return firstPick.promise;
+      })
+      .mockResolvedValueOnce(undefined);
+
+    render(<UnifiedHealthBadge />);
+    const openPicker = async () => {
+      fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+      await vi.advanceTimersByTimeAsync(450);
+    };
+
+    await openPicker();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
+      await Promise.resolve();
+    });
+    await openPicker();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("switch-device-row-device-office"));
+      await Promise.resolve();
+    });
+
+    expect(mockState.switchSavedDevice.mock.calls.map(([id]) => id)).toEqual(["device-backup", "device-office"]);
+
+    await act(async () => {
+      firstPick.resolve(SAVED_DEVICE_SWITCH_SUPERSEDED);
+      await Promise.resolve();
+    });
+    mockState.savedDevices.selectedDeviceId = "device-office";
+  });
+
   it("still lets users switch to an unhealthy saved device", async () => {
     vi.useFakeTimers();
     const previousSnapshot = mockState.savedDeviceHealthChecks.byDeviceId["device-backup"];
