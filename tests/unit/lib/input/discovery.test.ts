@@ -306,6 +306,23 @@ describe("discovery scan", () => {
     }
   });
 
+  it("reads each ancestor's scroll offset once per scan, however many controls sit below it", () => {
+    const open = "<div>".repeat(12);
+    const close = "</div>".repeat(12);
+    const host = mount(`${open}${Array.from({ length: 40 }, (_, i) => `<button>${i}</button>`).join("")}${close}`);
+    let reads = 0;
+    const scrollTop = vi.spyOn(Element.prototype, "scrollTop", "get").mockImplementation(() => {
+      reads += 1;
+      return 0;
+    });
+    try {
+      sortIntoReadingOrder(Array.from(host.querySelectorAll("button")), createDiscoveryScan());
+      expect(reads).toBeLessThanOrEqual(host.querySelectorAll("div").length + 3);
+    } finally {
+      scrollTop.mockRestore();
+    }
+  });
+
   it("gives the same visibility with and without a scan", () => {
     const host = mount(`<div><button id="shown">a</button></div><div hidden><button id="gone">b</button></div>`);
     const scan = createDiscoveryScan();

@@ -128,12 +128,14 @@ export interface DiscoveryScan {
   readonly visible: Map<Element, boolean>;
   readonly styles: Map<Element, CSSStyleDeclaration | null>;
   readonly positions: Map<Element, ReadingPosition>;
+  readonly scrollOffsets: Map<Element, { top: number; left: number }>;
 }
 
 export const createDiscoveryScan = (): DiscoveryScan => ({
   visible: new Map(),
   styles: new Map(),
   positions: new Map(),
+  scrollOffsets: new Map(),
 });
 
 const computedStyleOf = (element: Element, scan?: DiscoveryScan): CSSStyleDeclaration | null => {
@@ -232,18 +234,31 @@ const readingPosition = (element: Element, scan?: DiscoveryScan): ReadingPositio
   // `sticky` is deliberately not treated the same way: a sticky element scrolls with its container
   // until it sticks, so accumulating is right for all of its travel and only approximate while it
   // is pinned. Nothing in the ring is sticky today.
-  for (
-    let node: Element | null = isViewportAnchored(element, scan) ? null : element.parentElement;
-    node;
-    node = node.parentElement
-  ) {
-    top += node.scrollTop;
-    left += node.scrollLeft;
-    if (isViewportAnchored(node, scan)) break;
+  if (!isViewportAnchored(element, scan) && element.parentElement) {
+    const scrolled = scrollOffsetFrom(element.parentElement, scan);
+    top += scrolled.top;
+    left += scrolled.left;
   }
   const position = { top, left, hasBox: rect.width > 0 || rect.height > 0 };
   scan?.positions.set(element, position);
   return position;
+};
+
+/**
+ * The scroll offsets of `node` and its ancestors, up to and including the first viewport-anchored
+ * one. Siblings share all of it, so a scan sums each ancestor's once instead of once per control
+ * below it: about 1000 controls under 25 ancestors on Config.
+ */
+const scrollOffsetFrom = (node: Element, scan?: DiscoveryScan): { top: number; left: number } => {
+  const cached = scan?.scrollOffsets.get(node);
+  if (cached) return cached;
+  const above =
+    isViewportAnchored(node, scan) || !node.parentElement
+      ? { top: 0, left: 0 }
+      : scrollOffsetFrom(node.parentElement, scan);
+  const offset = { top: node.scrollTop + above.top, left: node.scrollLeft + above.left };
+  scan?.scrollOffsets.set(node, offset);
+  return offset;
 };
 
 /** True when the element is taken out of flow and pinned to the viewport. */
