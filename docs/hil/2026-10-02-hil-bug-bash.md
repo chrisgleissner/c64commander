@@ -64,7 +64,10 @@ and repaired, the latent S16, and the build and instrument fixes are listed sepa
 minute (its audio stream started and stopped over REST). Its device lock was free, but `AGENTS.md`
 reserves the U64 for other work, so this should not have been done. Nothing else ran on the U64.
 
-**Validation.** RESULT_SUMMARY_PLACEHOLDER
+**Validation.** The final build `1.0.7-rc3-0ed38` passed the hardware merge gate 9 of 9 on the
+C64U. The unit suites, lint, the Android unit tests and the CI workflows are listed under
+"Validation". A performance pass for slow phones followed the bug bash; see "Performance on a slow
+phone".
 
 ## Bench and builds
 
@@ -296,7 +299,7 @@ These eight were found after the bash, while every remaining repair was being re
 | N3 | Live View | major | Device switch with a slow stop: the switch resets the REST queue after 1.5 s and drops the queued video stop; the old device keeps streaming until the new device reaches REAL_CONNECTED | avMirrorSession.ts stopAll + deviceRetarget bounded wait + resetInteractionState cancelAll | avMirrorStopAllRetarget.test.ts (2) | yes, see device evidence |
 | N4 | Online Archive | minor | Closing the archive sheet mid-download (or a superseding search) logs the abort as an error | src/lib/archive/client.ts catch blocks used addErrorLog for caller aborts | client.abortLogging.test.ts (3) | yes, see device evidence |
 | N5 | HVSC | major | Stop during an Ingest of an installed library leaves the intact library reported as "Indexing failed / Canceled" (ingestionState idle), which turns off metadata hydration and update checks until a full re-ingest | hvscIngestionRuntimeSupport.ts applyCancelledIngestionState always wrote idle/Canceled; hydration then never restarted | hvscIngestionRuntime.test.ts (5), hvscIngestionRuntimeSupport tests (4) | yes, see device evidence |
-| N6 | Live View audio | minor | At Listen start the phone plays about +8 cents sharp for ~6 s while the jitter buffer drains 156 -> 30 ms (speed correction 1.00464) | AudioPipeline.kt playLoop started playback with the whole primed ring; a Wi-Fi clump during priming put it far above target and driftAuthority drained it at the 0.5% recovery rate | AudioPipelineTest.aBacklogPresentAtStartIsSkippedNotPlayedOutSharp | pending rebuild |
+| N6 | Live View audio | minor | At Listen start the phone plays about +8 cents sharp for ~6 s while the jitter buffer drains 156 -> 30 ms (speed correction 1.00464) | AudioPipeline.kt playLoop started playback with the whole primed ring; a Wi-Fi clump during priming put it far above target and driftAuthority drained it at the 0.5% recovery rate | AudioPipelineTest.startUpDepthOnAnEvenFeedDrainsAtTheStartUpRateAndNeverSharperLater | yes, see device evidence |
 | N7 | HVSC | minor | After a Stop during "Checking for updates", every Play visit flashes "HVSC preparation failed / Canceled" for ~0.27 s and logs READY -> ERROR -> READY | hvscPreparationState.ts resolver took an idle step's errorMessage as the failure reason, and before the state loaded nothing could resolve READY; the hook logged that as a transition | hvscPreparationState.test.ts (2), useHvscLibrary.preparation.test.tsx (1) | yes, see device evidence |
 | N8 | Diagnostics | minor | A cell opened on the REST heat map stays open on the Config (or FTP) heat map | DiagnosticsDialog.tsx:1993 one HeatMapPopup instance for all variants keeps cellDetail state | DiagnosticsDialog.test.tsx › opens the Config heat map without the cell the REST heat map had selected | yes, see device evidence |
 
@@ -329,6 +332,7 @@ Each repair below was reproduced as fixed on the Pixel 4 with the C64U (or the U
 - N4 15:24Z (build 0213d, Online Archive): /bin/ download delayed 5 s, Play on nosetrimmer.sid, sheet closed at 1 s -> log "info Archive binary download failed: canceled by the caller"; no error entry, no sidplay request. On 23aaf the same close logged "error Archive binary download failed" (AbortError).
 - N5 15:20Z (build 0213d, HVSC v85): Filesystem delayed 3 s, Ingest, Stop at 1.5 s -> cancelIngestion, LibraryInstall start/stop, state ready with no error, card "HVSC ready" (on 23aaf: "Indexing failed / Canceled", ingestionState idle). Follow-up: one entry marked un-hydrated and its reads delayed 15 s; Ingest + Stop at 26 s during hydration -> a second hydration run started (stat at 53.9 s, readFile at 68.9 s), the index was written with the entry hydrated:true and the card read "HVSC META 1/1 done"; state ready. Index file size back to the original 13,168,376 bytes.
 - N6 19:17–19:30Z (build 1e939 = 1e9390825, which keeps the start-up cushion and drains it at 0.1% for 2 s): three av-clarity/av-latency runs n6c-1..3 -> av-clarity 82 tones, 0 defective, 0% dropout in all three; "notes over 10 cents" 0, 0, 0 (graders-3 on 23aaf: 7, worst wobble 10.4 cents); worst wobble 3.5/6.9/6.9 cents; app stats: underruns 0, cushion target median 30–78 ms; av-latency 288/296/289 ms. The intermediate b4190 build (first-second skip, 716af928e) starved the speaker (11 underruns, target to 320 ms, 370 ms latency) and was superseded.
+- N6 3 October, build 0ed38 (start-up depth held under a ceiling and drained at 0.2%, later bursts at 0.5%): the final gate's av-clarity stage graded 82 tones, 0 defective, 0% dropout; av-latency 283 ms; the app's audio stats during av-latency showed no underruns.
 - N7 17:39Z (build b4190, stored download.errorMessage still "Canceled"): three Home -> Play visits sampled every 20 ms for 3 s showed no "failed"/"Canceled" text in the HVSC card; the log held one "unknown -> READY" transition and no READY -> ERROR. On d1228 each Play visit logged READY -> ERROR -> READY (~0.27 s).
 - N8 16:20Z (build d1228, before the fix): Diagnostics > REST heat map, opened cell "Device info Info: 85 calls" (detail panel shown); back to Diagnostics; Config heat map -> heat-map-popup-config showed the detail "Device info / Info | Calls 85 | Failures 32 (38%)".
 - N8 17:41Z (build b4190): REST heat map, opened "Device info Info: 13 calls" (detail shown); back; Config heat map -> no cell detail.
@@ -464,10 +468,110 @@ substance. These were defects in this branch's own new code and are not counted 
     per request running and could wait forever for its socket to open; the classifiers' tests used
     a copy of the "did not answer" text instead of the produced message; a doc comment sat above
     the wrong function.
+- **Repairs after review 6.** Found while re-reading the review 6 repairs:
+  - Holding the start-up depth at 0.1% until the ring came down left a clean link 156 ms deep for
+    about 45 s, and held any later burst at 0.1% too. The start-up depth is now bounded by a
+    ceiling (each adaptation window's peak plus 20 ms, never rising) and drains at 0.2%; depth
+    above the ceiling drains at the 0.5% recovery rate.
+  - HVSC Stop: a Stop whose native round trips outlasted the run wrote "Canceled" over the
+    outcome the run had already written; a Stop that canceled nothing still said "HVSC update
+    canceled"; a Stop that did end the run was reported as canceling nothing; metadata hydration
+    could resume inside a running ingestion; and a Stop after the last archive to be applied was
+    still reported as a cancel, including when the remaining planned updates were already
+    applied.
+  - The device switcher dropped the pending switch when it closed, so a superseded queued pick
+    took the newer pick's pending state with it.
+  - A failed Disk Explorer Mount & Load showed a second "Launch failed" toast after the mount's own
+    report, and claimed nothing was mounted when a newer mount had replaced it.
+  - Loading an empty shared disk library merged the coverage probe's own library into it.
+  - A notification's action had no keypad route; the Quick Menu now lists it.
+- **Review 7 (the repairs after review 6).** Repaired:
+  - Picking the original device again while a switch to another device was still pending did
+    nothing, because the picker compared the pick with the device the switch started from. It now
+    compares it with the current target, so the second pick is sent and replaces the first.
+  - The Quick Menu's notification entry pressed the first open notification that had an action,
+    which was not the newest one when the newest had none, and pressed a detached button when the
+    notification had closed while the menu was open. It now offers only the newest notification's
+    action and says so when that notification has closed.
+  - Two HVSC guards had no test that failed without them: the run-ended mark for a failed run, and
+    the final-archive rule in the cached-ingest loop. Both now have one.
+  - The Live View start-up drain tests ran on the wall clock, so two of them skipped themselves on
+    a loaded host and the rest had loosened tolerances. They now run the player loop on virtual
+    time, so they cannot skip, and their concealment and starvation checks are exact. One of them
+    also checks the 0.2% start-up drain rate, which no test checked before.
 
 Two limits remain, both requiring an IndexedDB copy that stays unreadable: a queue carried over an
 unread saved playlist is held in memory only, so a restart during that station loses it; and if
 the saved copy is still unreadable when that station ends, the carried queue is not restored.
+
+## Performance on a slow phone
+
+The release target includes a keypad phone whose CPU runs JavaScript at about half the speed of the
+Pixel 4 (Geekbench 6 single core: 432 for its MediaTek Helio G81, about 883 for the Pixel 4's
+Snapdragon 855; 2x Cortex-A75 at 2.0 GHz and 6x Cortex-A55 at 1.7 GHz, Mali-G52 MC2, 4 GB
+LPDDR4X). It was modeled on the Pixel 4 with Chrome DevTools CPU throttling at 2x. Every change
+below was measured before and after, on the device, and none changes the layout.
+
+**Method.** A CDP harness taps each tab or opens each popup three times and takes the median.
+"Draw" is the time until the new page's heading (or the popup) has been painted. "Interactive" is
+the end of the last long task after that, when a tap is handled without delay. The tab draw
+condition is the page's own `h1`; an earlier version waited only for `<main>` and under-reported tab
+switches, so the tab numbers before that fix are not used. The baseline is `81cf95ba0` (this branch
+before the performance work), built and measured the same way.
+
+**First draw, ms (median of three).**
+
+| Activity | 2x before | 2x after | 1x before | 1x after |
+|---|---|---|---|---|
+| Home to Play | 1850 | 1314 | 1040 | 652 |
+| Play to Disks | 882 | 778 | 511 | 461 |
+| Disks to Config | 6247 | 3135 | 3253 | 1585 |
+| Config to Settings | 9861 | 1380 | 2825 | 785 |
+| Settings to Docs | 853 | 434 | 406 | 247 |
+| Docs to Home | 1862 | 1158 | 1017 | 619 |
+| Open Quick Menu | 859 | 442 | 397 | 267 |
+| Open Search | 615 | 363 | 369 | 265 |
+| Open Diagnostics | 1127 | 724 | 642 | 372 |
+| Open device switcher | 961 | 494 | 512 | 280 |
+
+Popup timings varied by up to about 150 ms between runs of the same build.
+
+**Start (warm reload, 1x).** The launch splash is designed to take 1.05 s. It reached its last phase
+at 3.2 to 3.6 s before and at 1.4 to 1.5 s after. Long tasks after launch went from 5.2 to 5.7 s in
+total, the last ending at about 7 s, to 2.0 to 2.4 s, the last ending at about 4 s.
+
+**Idle on Home (WebView renderer, 1x).** 7.5 to 8.4 % of one core before, 5.4 to 6.5 % after.
+
+**What was changed, and why.**
+
+- Two stylesheet rules made every restyle of the page several times slower: the reduced-motion
+  rule set a transition on every element (on by default on phones with 4 GB or less), and a
+  `[class~=]` test on a parent made every class change restyle the subtree below it. A forced
+  restyle of Home went from 107 to 29 ms.
+- The keypad focus ring measured every ancestor of every control on each re-scan (27,395
+  `getComputedStyle` calls in one tab switch) and re-scanned before the page painted. It now measures
+  each element once per scan, sums scroll offsets once per ancestor, and re-scans after the paint;
+  a key always runs any pending re-scan first.
+- Pages build their visible cards before the first paint and the rest one per task after it; a
+  navigation key builds the rest at once, so keypad navigation always sees the whole page.
+- The header height is applied before the page is first styled, which removes a second restyle of
+  the whole document on every switch to a page whose header differs in height.
+- Per-row ResizeObservers became one shared observer, removing a layout per row.
+- Device-safety settings are read once per task instead of once per slider render; health
+  derivation parses each trace event's timestamp and host once; the heat map is built only while
+  open; a fitted label measures again only when its text changes.
+- Closed selects that nobody has used render only their chosen option instead of every option.
+- At start, the 13 MB HVSC media index was read and parsed twice and written back in full every
+  time; it is now read once and written only when a song's durations changed.
+
+**Where the targets stand.** The target is 150 ms to first draw and 300 ms to an interactive page
+on that phone. The popups and the light pages come close at 1x but not at 2x, and Config, Play and
+Home remain well above it. What is left is the cost of rendering those pages: hundreds of
+Radix-based controls (selects, sliders, switches) per page, measured as most of the remaining time.
+Reaching the target would need a different rendering approach for those rows. Two options were
+rejected because they change behavior the user can see: keeping visited pages mounted (pages would
+keep their scroll position, search text and filters between visits) and building only the page
+header in the first frame (the content would visibly pop in).
 
 ## Hardware merge gate
 
@@ -493,7 +597,9 @@ volume 3 for the audible stages.
 | srseq-1..3 (`--only` av stages + `sid-remote`) | `d1228` | 4 of 4 each | `sid-remote` 100% tone present |
 | n6b-1..3 (`--only` av stages) | `b4190` | pass, but 11 underruns and a 320 ms cushion target | superseded build, see N6 |
 | n6c-1..3 (`--only` av stages) | `1e939` | pass each | av-clarity 0/82 defective in all three, 0 underruns, av-latency 288–296 ms |
-| **gate-1e939** | **`1e939` (release candidate)** | **9 of 9** | search p95 44.4 ms, av-clarity 0/82, av-latency 283 ms, sid-remote and sid-local 100% tone present, crossfade seamless |
+| gate-1e939 | `1e939` (first release candidate) | 9 of 9 | search p95 44.4 ms, av-clarity 0/82, av-latency 283 ms, sid-remote and sid-local 100% tone present, crossfade seamless |
+| gate-81cf9, -81cf9-2 (3 October) | `81cf9` (review 7 repairs) | 8 of 9, then 9 of 9 | the `sid-local` failure and two of seven later `sid-local` reruns were acoustic: in one the microphone clipped at full scale for 200 ms, in the other two the tone stayed within 6 dB while room noise rose above the grader's margin; the app's audio counters showed no underrun and no concealment in every instrumented run |
+| **gate-0ed38** | **`0ed38` (final, with the performance work)** | **9 of 9** | search p95 25.7 ms, av-clarity 0/82, av-latency 283 ms, sid-remote and sid-local 100% tone present, crossfade seamless |
 
 The failures on the final build between 11:00 and 11:12Z were not tied to code. The commits
 between fix4 and the final build change logging, module boundaries and two link styles; none
@@ -505,9 +611,27 @@ cause is unexplained, most likely acoustic or in the microphone path.
 
 ## Validation
 
-VALIDATION_PLACEHOLDER
+- Unit and contract tests (`npm run test`): 1147 files, 14,176 tests, all passing, on `0ed38`.
+- `npm run lint`: clean, including the file-size, bundle-budget and generated-artifact checks.
+- Android unit tests (`./gradlew testDebugUnitTest`): passing. The Live View start-up drain tests
+  now run on virtual time and no longer skip on a loaded host.
+- Playwright: the layout, typography, keypad, tour and overlay specs were run locally on the CSS,
+  focus-ring and card-building changes; the full E2E suite runs in CI on the pull request.
+- Hardware merge gate on `0ed38`: 9 of 9 (see "Hardware merge gate").
+- On the Pixel 4: device switching back to the first device during a switch, keypad walks through
+  Config while cards are still being built (the section order matches a fully built page), and a
+  select opened by keypad showing all its options.
 
 ## Rig left as found
+
+On 3 October, after the final gate on `0ed38`: the C64U was the only device driven. The saved U64
+and U2 entries were taken out of the app for each gate run, so a C64U dropout could not make the app
+fall back to them, and were put back afterwards with the C64U selected. Once, while checking a device
+switch, the app connected to the U2's second address (`192.168.1.74`) for about four seconds and ran
+its read-only health probes against it. Debug logging, which this session switched off for the idle
+CPU measurements, was switched back on. Media volume 3, screen on, Wi-Fi on.
+
+The state recorded on 2 October follows.
 
 Checked at 19:30Z against `state-before-*.json`:
 
