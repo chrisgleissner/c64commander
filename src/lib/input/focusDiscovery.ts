@@ -253,6 +253,12 @@ export class FocusDiscoveryEngine {
     scheduleAfterNextPaint(() => this.flushPendingRefresh());
   }
 
+  /** Re-scans now, for a caller that has just changed the DOM itself; any scheduled re-scan is dropped. */
+  refreshNow(): void {
+    this.scheduled = false;
+    if (this.started) this.refresh();
+  }
+
   /** Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM. */
   flushPendingRefresh(): void {
     if (!this.scheduled) return;

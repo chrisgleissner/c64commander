@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
+import { flushSync } from "react-dom";
 
 /**
  * Lets a page draw at once and fill in behind the first paint. Rendering a page with every card open
@@ -115,6 +116,19 @@ const queueMount = (entry: WaitingMount): (() => void) => {
     if (index >= 0) waiting.splice(index, 1);
     if (waiting.length === 0) stopWatchingScroll();
   };
+};
+
+/**
+ * Builds every waiting card now. A navigation key calls this before the focus ring reads the page:
+ * a card's own labelled sections are ring stops once its body is built, so a key pressed while cards
+ * were still waiting took a different path through the page. Returns whether anything was built.
+ */
+export const mountAllWaiting = (): boolean => {
+  if (waiting.length === 0) return false;
+  const entries = waiting.splice(0);
+  stopWatchingScroll();
+  flushSync(() => entries.forEach((entry) => entry.mount()));
+  return true;
 };
 
 /**

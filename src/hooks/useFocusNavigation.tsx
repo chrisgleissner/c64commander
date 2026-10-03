@@ -81,6 +81,7 @@ import {
 } from "@/lib/input/ringDom";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
+import { mountAllWaiting } from "@/lib/ui/progressiveMount";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
@@ -422,7 +423,8 @@ export const FocusNavigationProvider = ({
       // Before any branch below reads the ring, so the first key navigates on a ring as new as the DOM.
       if (action !== null) {
         startEngine();
-        engineRef.current?.flushPendingRefresh();
+        if (mountAllWaiting()) engineRef.current?.refreshNow();
+        else engineRef.current?.flushPendingRefresh();
       }
       // Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring, so
       // Back closes the newest one through its own close button; an open dialog wins. The Pixel 4

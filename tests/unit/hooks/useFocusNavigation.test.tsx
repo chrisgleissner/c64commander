@@ -7,7 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -19,6 +19,7 @@ import { NavigationController, resetInputModality, setInputModality } from "@/li
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
 import { Checkbox } from "@/components/ui/checkbox";
+import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
 
 const SELECTED = "data-key-selected";
 
@@ -1608,5 +1609,38 @@ describe("FocusNavigationProvider re-scan timing", () => {
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
 
     expect(document.activeElement).toBe(added);
+  });
+});
+
+describe("FocusNavigationProvider with cards still waiting to be built", () => {
+  afterEach(() => {
+    setProgressiveMountEnabled(false);
+    vi.restoreAllMocks();
+    resetInputModality();
+  });
+
+  const WaitingCard = ({ name }: { name: string }) => {
+    const anchor = useRef<HTMLDivElement | null>(null);
+    const mounted = useProgressiveMount(true, anchor);
+    return <div ref={anchor}>{mounted ? <button type="button">{name}</button> : null}</div>;
+  };
+
+  it("builds every waiting card before a key reads the ring, so the key reaches what is in them", () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000 } as DOMRect);
+    render(
+      <FocusNavigationProvider>
+        {["First", "Second", "Third"].map((name) => (
+          <WaitingCard key={name} name={name} />
+        ))}
+      </FocusNavigationProvider>,
+    );
+    expect(queryButton("Third")).toBeNull();
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(button("Third")).toBeInTheDocument();
+    expect(document.activeElement).toBe(button("Third"));
   });
 });
