@@ -495,10 +495,14 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           // cost during the animation. Revealed panels are never dropped before
           // the runway settles, so a reversed drag reveals the other neighbour
           // instead of churning mounts.
+          //
+          // The placeholder and the live slot carry different keys, so a page always arrives in a
+          // new element. Unhiding the placeholder while inserting the page into it, in one commit,
+          // left Android's WebView accessibility tree holding the old, empty slot.
           if (renderPlaceholderOnly) {
             return (
               <div
-                key={pageIndex}
+                key={`placeholder-${pageIndex}`}
                 className="relative h-full overflow-hidden overflow-clip"
                 style={{ width: "33.333333%", flexShrink: 0 }}
                 aria-hidden={true}
@@ -513,7 +517,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
           return (
             <div
-              key={pageIndex}
+              key={`page-${pageIndex}`}
               // `overflow-clip` where supported: a hidden box can still be scrolled by a
               // scrollIntoView, which slid the page header up under the status bar.
               className="relative h-full overflow-hidden overflow-clip"

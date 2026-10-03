@@ -568,10 +568,45 @@ total, the last ending at about 7 s, to 2.0 to 2.4 s, the last ending at about 4
 on such a phone. The popups and the light pages come close at 1x but not at 2x, and Config, Play and
 Home remain well above it. What is left is the cost of rendering those pages: hundreds of
 Radix-based controls (selects, sliders, switches) per page, measured as most of the remaining time.
-Reaching the target would need a different rendering approach for those rows. Two options were
-rejected because they change behavior the user can see: keeping visited pages mounted (pages would
-keep their scroll position, search text and filters between visits) and building only the page
-header in the first frame (the content would visibly pop in).
+Reaching the target would need a different rendering approach for those rows.
+
+Building only the page header in the first frame was rejected because the content would visibly pop
+in.
+
+Keeping visited pages mounted is deferred to a separate change rather than rejected. A revisited
+page would then keep its scroll position, search text and filters, which is what Android and iOS
+tab bars do and what users expect; re-selecting the active tab would reset it. It is not part of
+this change for three reasons:
+
+- React 18 has no way to pause a hidden subtree, so a mounted page keeps its polling, observers
+  and timers running unless every page gates them on `ScreenActivityProvider`. That is an audit of
+  six pages, and it puts the idle CPU measured above at risk. The memory cost of the mounted pages
+  has not been measured.
+- Hidden pages would keep their test ids in the DOM, which breaks strict Playwright locators
+  across the E2E suite.
+- It depends on switching `aria-hidden` and `inert` on mounted page slots. Android's WebView
+  accessibility tree has already been seen to keep stale content when a slot changes from hidden to
+  shown: see "Docs content missing from Android's accessibility tree" below.
+
+## Docs content missing from Android's accessibility tree
+
+The release showcase walk (in the separate distribution repository) failed on the emulator at
+`extendedWaitUntil: "Getting started"` after Settings, its Quick menu, and then the Docs tab. The
+card was drawn and present in Chromium's own accessibility tree (CDP `Accessibility.getFullAXTree`),
+but Android's tree, read by a new `maestro hierarchy` session minutes later, held only the card's
+empty container. Navigating away and back restored it. The same failure occurred with a build of
+the base commit, so it predates this branch; it reproduced in about one run in three with a
+four-step flow.
+
+A DOM mutation log of the failing sequence shows the cause. `SwipeNavigationLayer` rendered an idle
+inactive page as an empty placeholder `div` with `aria-hidden` and `inert`, keyed by page index.
+When that page was selected, React reused the same element: it removed `aria-hidden` and `inert`
+and inserted the whole page into it in one commit. Android's accessibility bridge sometimes kept
+the earlier, empty version of that subtree.
+
+The placeholder and the live slot now have different keys, so a selected page is always inserted
+as a new element. `SwipeNavigationLayer.test.tsx` checks that the live slot is not the placeholder
+element; it fails with the previous keys.
 
 ## Hardware merge gate
 
