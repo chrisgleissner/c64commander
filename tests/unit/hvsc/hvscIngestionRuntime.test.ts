@@ -1617,6 +1617,45 @@ describe("hvscIngestionRuntime", () => {
     }
   });
 
+  it("does not report a Stop as a cancel when a cached ingest lands it after the last archive that is not already applied", async () => {
+    nativeUpdatesFrom5(7);
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ["hvsc-baseline-5.complete.json", "hvsc-update-6.complete.json", "hvsc-update-7.complete.json"],
+    } as any);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    vi.mocked(isUpdateApplied).mockImplementation((version: number) => version === 7);
+    let stopResult: boolean | null = null;
+    nativeProgressListenerRemove.mockImplementationOnce(async () => {
+      stopResult = await cancelHvscInstall("token-cached-stop-before-skipped-archive");
+    });
+
+    try {
+      await ingestCachedHvsc("token-cached-stop-before-skipped-archive");
+
+      expect(stopResult).toBe(false);
+      expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
+      expect(lastIngestionStatePatch()).toEqual(
+        expect.objectContaining({ ingestionState: "ready", installedVersion: 6 }),
+      );
+    } finally {
+      vi.mocked(isUpdateApplied).mockReturnValue(false);
+    }
+  });
+
+  it("keeps a failed run's error when a Stop lands while the run releases its install guard", async () => {
+    nativeUpdatesFrom5(6);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(new Error("native ingest failed"));
+    let stopResult: boolean | null = null;
+    vi.mocked(endHvscInstallGuard).mockImplementationOnce(async () => {
+      stopResult = await cancelHvscInstall("token-stop-after-failure");
+    });
+
+    await expect(installOrUpdateHvsc("token-stop-after-failure")).rejects.toThrow("native ingest failed");
+
+    expect(stopResult).toBe(false);
+    expect(lastIngestionStatePatch()).toEqual(expect.objectContaining({ ingestionState: "error" }));
+  });
+
   it("reports a Stop that lands after the first of two archives was applied as a cancel", async () => {
     nativeUpdatesFrom5(7);
     let stopResult: boolean | null = null;
