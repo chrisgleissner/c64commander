@@ -105,3 +105,46 @@ describe("AppBar", () => {
     expect(screen.getByTestId("app-bar-title-zone").className).toContain("min-h-11");
   });
 });
+
+describe("AppBar header height", () => {
+  it("puts a revisited page's header height in place before measuring, so the measurement writes nothing", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+    const events: string[] = [];
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.tagName === "HEADER") events.push("measure");
+      return this.tagName === "HEADER" ? 61 : 0;
+    });
+    const setProperty = vi.spyOn(document.documentElement.style, "setProperty").mockImplementation(function (
+      this: CSSStyleDeclaration,
+      name: string,
+      value: string | null,
+    ) {
+      if (name === "--app-bar-height") events.push(`write ${value}`);
+      CSSStyleDeclaration.prototype.setProperty.call(this, name, value);
+    });
+    const page = () => (
+      <DisplayProfileProvider>
+        <ScreenActivityProvider active>
+          <AppBar title="Revisited" />
+        </ScreenActivityProvider>
+      </DisplayProfileProvider>
+    );
+    try {
+      render(page()).unmount();
+      document.documentElement.style.setProperty("--app-bar-height", "49px");
+      events.length = 0;
+
+      render(page()).unmount();
+
+      expect(events.slice(0, 2)).toEqual(["write 61px", "measure"]);
+      expect(events.filter((event) => event.startsWith("write"))).toEqual(["write 61px"]);
+    } finally {
+      offsetHeight.mockRestore();
+      setProperty.mockRestore();
+      document.documentElement.style.removeProperty("--app-bar-height");
+    }
+  });
+});

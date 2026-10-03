@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
-import { useLayoutEffect, useRef } from "react";
+import { useInsertionEffect, useLayoutEffect, useRef } from "react";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { AvMirrorLivePip } from "@/components/streams/AvMirrorLivePip";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -37,6 +37,19 @@ type Props = {
   children?: ReactNode;
 };
 
+/*
+ * Each page's header height, from its last visit. Writing a new --app-bar-height on <html> after the
+ * page has been styled restyled the whole document a second time: 3433 elements, 123 ms, switching to
+ * Config on a Pixel 4, whose header is taller than the others. Applied before the page is first
+ * measured, the measurement then finds it already in place.
+ */
+const appBarHeightByPage = new Map<string, string>();
+
+const writeAppBarHeight = (value: string) => {
+  const rootStyle = document.documentElement.style;
+  if (rootStyle.getPropertyValue("--app-bar-height") !== value) rootStyle.setProperty("--app-bar-height", value);
+};
+
 export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, titleTestId, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile } = useDisplayProfile();
@@ -45,6 +58,15 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
   const isCompact = profile === "compact";
   const screenActive = useScreenActivity();
   const appChromeMode = useAppChromeMode();
+
+  const pageKey = typeof title === "string" ? title : titleTestId;
+  const heightKey = pageKey ? `${pageKey}|${profile}|${children ? "with-row" : "bare"}` : null;
+
+  useInsertionEffect(() => {
+    if (typeof window === "undefined" || !screenActive || !heightKey) return;
+    const remembered = appBarHeightByPage.get(heightKey);
+    if (remembered) writeAppBarHeight(remembered);
+  }, [screenActive, heightKey]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,7 +77,9 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
     const updateHeight = () => {
       const nextHeight = element.offsetHeight;
       if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
-      document.documentElement.style.setProperty("--app-bar-height", `${nextHeight}px`);
+      const value = `${nextHeight}px`;
+      if (heightKey) appBarHeightByPage.set(heightKey, value);
+      writeAppBarHeight(value);
     };
 
     updateHeight();
@@ -72,7 +96,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
       observer?.disconnect();
       globalThis.removeEventListener("resize", updateHeight);
     };
-  }, [screenActive]);
+  }, [screenActive, heightKey]);
 
   return (
     <header
