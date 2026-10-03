@@ -196,9 +196,8 @@ internal class AudioPipeline(
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
-  /** Set at the first sound; cleared when, after the first window, the ring is down to recovery. */
-  private var holdingStartupDepth = false
-  private var firstWindowEndNanos = 0L
+  /** How deep the depth the stream started with reaches — see [CushionDrift.authority]. */
+  private var startupCeilingFrames = CushionDrift.CEILING_UNKNOWN
   @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
@@ -581,6 +580,7 @@ internal class AudioPipeline(
 
   /** Low-water mark of the ring within the current adaptation window (source frames). */
   private var windowMinDepth = Long.MAX_VALUE
+  private var windowMaxDepth = 0L
   private var windowStartNanos = System.nanoTime()
 
   private fun playLoop() {
@@ -589,7 +589,8 @@ internal class AudioPipeline(
     outScratch = ByteArray(outFrames * BYTES_PER_FRAME)
     // Worst case source frames for one output chunk, plus one for the interpolator's right-hand
     // sample and a little slack for the ratio's excursion.
-    srcScratch = ShortArray(((outFrames * nominalRatio() * (1 + MAX_DRIFT) + 2).toInt() + 2) * CHANNELS)
+    val maxRatio = nominalRatio() * (1 + CushionDrift.REBUILD_DRIFT)
+    srcScratch = ShortArray(((outFrames * maxRatio + 2).toInt() + 2) * CHANNELS)
     while (running) {
       try {
         if (paused) {
@@ -608,10 +609,10 @@ internal class AudioPipeline(
           dropSurplusAbove(targetFrames + trackBufferFrames.toLong() * sourceRate / outputRate)
           track.play()
           started = true
-          holdingStartupDepth = true
+          startupCeilingFrames = CushionDrift.CEILING_UNKNOWN
           windowStartNanos = System.nanoTime()
           windowMinDepth = Long.MAX_VALUE
-          firstWindowEndNanos = windowStartNanos + ADAPT_WINDOW_NANOS
+          windowMaxDepth = 0L
         }
         val depth = (writeFrames - readFrames).coerceAtLeast(0)
         if (depth > hardMaxFrames) {
@@ -635,7 +636,7 @@ internal class AudioPipeline(
   /**
    * Start at the live edge: a Wi-Fi clump that lands while the ring primes left 156 ms against a 30 ms
    * target, eight cents sharp while it drained. Nothing has been heard yet, so it is skipped. Depth
-   * after the first sound is not skipped (see [driftAuthority]). On-device playback never skips.
+   * after the first sound is not skipped (see [CushionDrift.authority]). On-device playback never skips.
    */
   private fun dropSurplusAbove(keepFrames: Long) {
     synchronized(producerLock) {
@@ -667,11 +668,11 @@ internal class AudioPipeline(
     }
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
-    val firstWindowOver = System.nanoTime() >= firstWindowEndNanos
-    if (firstWindowOver && depth <= recoveryDepthFrames()) holdingStartupDepth = false
+    val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS).toLong()
+    val authority = CushionDrift.authority(depth, floor, recoveryDepthFrames(), startupCeilingFrames)
     // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
     // fivefold at a threshold, which put an audible lurch in a held note.
-    val wanted = nominalRatio() * (1.0 + driftAuthority(depth) * cushionError(depth))
+    val wanted = nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
     val ratio =
         when {
           appliedRatio <= 0.0 -> wanted
@@ -727,40 +728,6 @@ internal class AudioPipeline(
   }
 
   /**
-   * How far the cushion is from target, as -1..+1, with a deadband around the target.
-   *
-   * The deadband matters more than the gain: without it the loop sat at its limit off target, a
-   * permanent detune (997.75 Hz for a 1000 Hz tone). Inside the band the buffer absorbs the difference.
-   */
-  private fun cushionError(depth: Long): Double {
-    val target = targetFrames.toDouble()
-    if (target <= 0) return 0.0
-    val error = (depth - target) / target
-    if (Math.abs(error) < CUSHION_DEADBAND) return 0.0
-    return error.coerceIn(-1.0, 1.0)
-  }
-
-  /**
-   * How far the rate may be moved right now.
-   *
-   * Normally a whisper, because the buffer, not the rate, absorbs jitter. Far from target it may ease
-   * on or off harder (half a percent, about eight cents) for tens of seconds: too thin, the next gap
-   * is a hole and 0.1% takes two minutes to gain 100 ms; too deep, one 148 ms burst left the mirror
-   * 241 ms behind the picture, which 0.1% would take twenty-five minutes to hand back.
-   *
-   * Except depth the stream started with. On a Pixel 4 the ring held 112–156 ms just after the first
-   * sound: draining it at half a percent was eight cents sharp, and skipping it starved the speaker
-   * (underruns, target grown to 320 ms), because over Wi-Fi it is the cushion the next gap spends.
-   * So through the first adaptation window, and after it until the ring first comes down to the
-   * recovery threshold, too deep drains at [MAX_DRIFT]; only depth gained later drains harder.
-   */
-  private fun driftAuthority(depth: Long): Double {
-    val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
-    val drainHard = depth > recoveryDepthFrames() && !holdingStartupDepth
-    return if (depth < floor || drainHard) REBUILD_DRIFT else MAX_DRIFT
-  }
-
-  /**
    * Steer the cushion from its own low-water mark.
    *
    * The question a jitter buffer has to answer is "how close to empty did I come", not "how deep am I
@@ -771,8 +738,11 @@ internal class AudioPipeline(
    */
   private fun adaptCushion(depth: Long) {
     if (depth < windowMinDepth) windowMinDepth = depth
+    if (depth > windowMaxDepth) windowMaxDepth = depth
     val now = System.nanoTime()
     if (now - windowStartNanos < ADAPT_WINDOW_NANOS) return
+    val margin = msToFrames(sourceRate, STARTUP_CEILING_MARGIN_MS).toLong()
+    startupCeilingFrames = CushionDrift.nextStartupCeiling(startupCeilingFrames, windowMaxDepth, margin)
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS).toLong()
     targetFrames =
         when {
@@ -783,10 +753,11 @@ internal class AudioPipeline(
           else -> targetFrames
         }
     windowMinDepth = Long.MAX_VALUE
+    windowMaxDepth = 0L
     windowStartNanos = now
   }
 
-  /** Depth above which [driftAuthority] drains at the recovery rate. */
+  /** Depth above which the ring is far too deep — see [CushionDrift.authority]. */
   private fun recoveryDepthFrames(): Long = targetFrames + maxTargetFrames / 4L
 
   private fun nominalRatio(): Double = sourceRate.toDouble() / outputRate.toDouble()
@@ -957,16 +928,8 @@ internal class AudioPipeline(
     /** Long enough to contain several of this link's bursts, short enough to settle in seconds. */
     private const val ADAPT_WINDOW_NANOS = 2_000_000_000L
 
-    /**
-     * How far the resampling ratio may be pushed from nominal to hold the cushion.
-     *
-     * 0.1% is under two cents, below audibility on a sustained tone, and three times the 0.035% clock
-     * difference it absorbs. Ten times this put a steady 1000 Hz at an audible 997.75 Hz.
-     */
-    private const val MAX_DRIFT = 0.001
-
-    /** The wider authority allowed only while the cushion is below its floor — see [driftAuthority]. */
-    private const val REBUILD_DRIFT = 0.005
+    /** Ordinary jitter above a window's peak depth: a few packets and a chunk, not a burst. */
+    private const val STARTUP_CEILING_MARGIN_MS = 20
 
     /**
      * The most the playback rate may change per written chunk. At one HAL burst per chunk this takes
@@ -980,13 +943,6 @@ internal class AudioPipeline(
 
     /** How long a concealment may hold at full level before fading out. */
     private const val CONCEAL_HOLD_MS = 30
-
-    /**
-     * How far the cushion may sit from target before the rate is touched at all. Without a deadband
-     * the loop corrects permanently, so the correction stops being a correction and becomes a detune.
-     */
-    private const val CUSHION_DEADBAND = 0.35
-
 
     private const val POLL_NANOS = 500_000L // 0.5 ms
 
