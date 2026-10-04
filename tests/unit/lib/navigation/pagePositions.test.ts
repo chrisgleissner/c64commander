@@ -140,6 +140,78 @@ describe("pagePositions", () => {
     vi.restoreAllMocks();
   });
 
+  it("opens at the remembered offset when the card that was at the top is gone", () => {
+    const { slot, scroller } = buildSlot(8);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 300 } as DOMRect);
+    scroller.scrollTop = 700;
+    rememberPagePosition(8, slot);
+    slot.querySelectorAll("section").forEach((card) => card.remove());
+
+    scroller.scrollTop = 0;
+    restorePagePosition(8, slot);
+    expect(scroller.scrollTop).toBe(700);
+    vi.restoreAllMocks();
+  });
+
+  describe("holding the top card after a restore", () => {
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const reopenWithDrift = () => {
+      const { slot, scroller } = buildSlot(7);
+      const [video, audio] = slot.querySelectorAll<HTMLElement>("section");
+      let height = 4000;
+      Object.defineProperty(scroller, "scrollHeight", { configurable: true, get: () => height });
+      const tops = new Map<Element, number>([
+        [scroller, 0],
+        [video, -500],
+        [audio, -20],
+      ]);
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+        const top = tops.get(this) ?? 0;
+        return { top, bottom: top + (this === video ? 420 : 300) } as DOMRect;
+      });
+      scroller.scrollTop = 900;
+      rememberPagePosition(7, slot);
+      scroller.scrollTop = 0;
+      restorePagePosition(7, slot);
+      const growAbove = () => {
+        height += 100;
+        tops.set(audio, (tops.get(audio) ?? 0) + 100);
+      };
+      return { slot, scroller, growAbove };
+    };
+    afterEach(() => vi.restoreAllMocks());
+
+    it("lets go after three seconds", async () => {
+      const { scroller, growAbove } = reopenWithDrift();
+      const now = performance.now();
+      vi.spyOn(performance, "now").mockReturnValue(now + 3001);
+      await nextFrame();
+      const settled = scroller.scrollTop;
+
+      growAbove();
+      await nextFrame();
+      expect(scroller.scrollTop).toBe(settled);
+    });
+
+    it("lets go as soon as the user touches the page", async () => {
+      const { scroller, growAbove } = reopenWithDrift();
+      scroller.dispatchEvent(new Event("pointerdown"));
+
+      growAbove();
+      await nextFrame();
+      expect(scroller.scrollTop).toBe(900);
+    });
+
+    it("lets go when the page leaves the screen", async () => {
+      const { slot, scroller, growAbove } = reopenWithDrift();
+      slot.remove();
+
+      growAbove();
+      await nextFrame();
+      expect(scroller.scrollTop).toBe(900);
+    });
+  });
+
   it("ignores a slot without a scroll container", () => {
     const slot = document.createElement("div");
     rememberPagePosition(4, slot);

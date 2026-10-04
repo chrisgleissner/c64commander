@@ -30,7 +30,7 @@ const cardsIn = (scroller: HTMLElement) => [
   ...scroller.querySelectorAll<HTMLElement>("[data-section-scope][data-section-id]"),
 ];
 
-const keyOf = (card: HTMLElement) => cardKey(card.dataset.sectionScope ?? "", card.dataset.sectionId ?? "");
+const keyOf = (card: HTMLElement) => `${card.dataset.sectionScope}:${card.dataset.sectionId}`;
 
 const offsetWithin = (scroller: HTMLElement, card: HTMLElement) =>
   card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
@@ -54,7 +54,6 @@ const alignAnchor = (scroller: HTMLElement, anchor: NonNullable<PagePositionReco
  * is scrolled by something else (the tour, a search result) while its content height stood still.
  */
 const keepAnchorWhileSettling = (scroller: HTMLElement, anchor: NonNullable<PagePositionRecord["anchor"]>) => {
-  if (typeof requestAnimationFrame !== "function") return;
   const started = performance.now();
   let stopped = false;
   const stop = () => {
@@ -88,10 +87,9 @@ export const rememberPagePosition = (pageIndex: number, slot: Element | null): v
     scrollTop: scroller.scrollTop,
     anchor: card ? { key: keyOf(card), offset: offsetWithin(scroller, card) } : null,
   });
-  slot.querySelectorAll<HTMLElement>('[data-section-id][data-body-mounted="true"]').forEach((card) => {
-    const { sectionScope, sectionId } = card.dataset;
-    if (sectionScope && sectionId) cardHeights.set(cardKey(sectionScope, sectionId), card.offsetHeight);
-  });
+  for (const card of cardsIn(scroller)) {
+    if (card.dataset.bodyMounted === "true") cardHeights.set(keyOf(card), card.offsetHeight);
+  }
 };
 
 /** The page opens at the top next time, including when the page now showing is torn down to reopen it. */
