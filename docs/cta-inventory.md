@@ -159,7 +159,7 @@ persistent status badge that appear on every page).
 | --------------------- | ------------ | ---------------------- | --------- | ------------------ | -------------------------------------------------------------------------- |
 | Quick menu            | button       | `app-bar-quick-menu`   | ✅        | ✅                 | Opens the **Quick Menu** (§5) — the same dialog the keypad Menu key opens. |
 | Status / health badge | button       | `unified-health-badge` | ✅        | ✅ (tap = details) | Tap = details; long-press / keypad `#` / Menu → **Device Switcher**.       |
-| Tab: Home             | tab (button) | `tab-home`             | ✅        | ✅                 | Persistent bottom TabBar.                                                  |
+| Tab: Home             | tab (button) | `tab-home`             | ✅        | ✅                 | Persistent bottom TabBar. On the selected tab: reopens the page at top.    |
 | Tab: Play             | tab (button) | `tab-play`             | ✅        | ✅                 |                                                                            |
 | Tab: Disks            | tab (button) | `tab-disks`            | ✅        | ✅                 |                                                                            |
 | Tab: Config           | tab (button) | `tab-config`           | ✅        | ✅                 |                                                                            |

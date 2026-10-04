@@ -24,6 +24,7 @@ import {
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useHeaderActionsFit } from "@/components/useHeaderActionsFit";
 import { useProgressiveMount } from "@/lib/ui/progressiveMount";
+import { rememberedCardHeight } from "@/lib/navigation/pagePositions";
 
 export interface CollapsibleSectionProps {
   /** Which page this section belongs to (e.g. "home", "settings", "docs"). Namespaces
@@ -324,6 +325,8 @@ export const CollapsibleSection = ({
   const bodyEntryAnimation = bodyArrivesLateRef.current ? false : { height: 0, opacity: 0 };
   if (bodyMayMount && bodyVisible) bodyArrivesLateRef.current = false;
 
+  const reservedHeight = bodyVisible && !bodyMayMount ? rememberedCardHeight(scope, id) : undefined;
+
   return (
     <motion.section
       ref={sectionRef}
@@ -331,7 +334,7 @@ export const CollapsibleSection = ({
       animate={{ opacity: 1, y: 0 }}
       // Clear the fixed guidance bar when this section is scrolled into view. The variable is 0px
       // whenever the bar is not showing, so nothing is reserved for it then.
-      style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)" }}
+      style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)", minHeight: reservedHeight }}
       className={cn("overflow-hidden rounded-panel border border-border bg-card", className)}
       data-testid={testId ?? `${scope}-section-${id}`}
       // Scope and id, always, whatever testid the caller chose. Search and the tour address a card
@@ -339,6 +342,7 @@ export const CollapsibleSection = ({
       data-section-scope={scope}
       data-section-id={id}
       data-open={bodyVisible ? "true" : "false"}
+      data-body-mounted={bodyVisible && bodyMayMount ? "true" : undefined}
       data-force-closed={forceClosed ? "true" : undefined}
       data-section-label={sectionLabel ?? title}
     >

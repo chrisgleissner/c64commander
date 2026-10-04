@@ -7,6 +7,7 @@
  */
 
 import type { GuardedNavigate } from "@/lib/navigation/navigationGuards";
+import { requestPageReset } from "@/lib/navigation/pageReset";
 
 /**
  * Authoritative ordered list of primary tab routes.
@@ -54,5 +55,7 @@ export const createTabJumpShortcut =
   (navigate: GuardedNavigate) =>
   (index: number): void => {
     const route = TAB_ROUTES[index];
-    if (route) navigate(route.path);
+    if (!route) return;
+    if (tabIndexForPath(window.location.pathname) === index) requestPageReset(index);
+    navigate(route.path);
   };

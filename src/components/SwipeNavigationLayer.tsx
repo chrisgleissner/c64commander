@@ -29,6 +29,8 @@ import {
   type RunwayPanelIndexes,
 } from "@/lib/navigation/swipeNavigationModel";
 import { PageLoadingFallback } from "@/components/PageLoadingFallback";
+import { subscribePageReset } from "@/lib/navigation/pageReset";
+import { forgetPagePosition, rememberPagePosition, restorePagePosition } from "@/lib/navigation/pagePositions";
 
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const PlayFilesPage = lazy(() => import("@/pages/PlayFilesPage"));
@@ -98,6 +100,21 @@ const SLOT_COMPONENTS: Array<() => React.ReactNode> = [
   DocsSlot,
 ];
 
+const RUNWAY_SELECTOR = '[data-testid="swipe-navigation-runway"]';
+const slotFor = (pageIndex: number) => document.querySelector(`${RUNWAY_SELECTOR} > [data-route-index="${pageIndex}"]`);
+
+/*
+ * Rendered before the page, so its layout effect puts the scroll offset back before the page's cards
+ * decide which of them are in view, and its cleanup reads the position before the page leaves the DOM.
+ */
+const PagePosition = ({ pageIndex }: { pageIndex: number }) => {
+  useLayoutEffect(() => {
+    restorePagePosition(pageIndex, slotFor(pageIndex));
+    return () => rememberPagePosition(pageIndex, slotFor(pageIndex));
+  }, [pageIndex]);
+  return null;
+};
+
 const buildIdleState = (index: number): RunwayState => ({
   phase: "idle",
   centerIndex: index,
@@ -165,6 +182,7 @@ export function SwipeNavigationLayer() {
 function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps) {
   const interstitialActive = useInterstitialActive();
   const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
+  const [pageGenerations, setPageGenerations] = useState<Readonly<Record<number, number>>>({});
   const [swipeNavigationEnabled, setSwipeNavigationEnabled] = useState(() => loadEnableSwipeNavigation());
   // Disabled outright while the tour runs: a swipe that changed the page under a spotlight would
   // leave the spotlight pointing at nothing (spec.md section 8.1).
@@ -241,6 +259,15 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       }
     };
   }, [resetContainerScroll, scheduleContainerScrollReset]);
+
+  useEffect(
+    () =>
+      subscribePageReset((tabIndex) => {
+        forgetPagePosition(tabIndex);
+        setPageGenerations((generations) => ({ ...generations, [tabIndex]: (generations[tabIndex] ?? 0) + 1 }));
+      }),
+    [],
+  );
 
   useEffect(() => {
     const current = runwayRef.current;
@@ -498,7 +525,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           if (renderPlaceholderOnly) {
             return (
               <div
-                key={pageIndex}
+                key={`${pageIndex}:${pageGenerations[pageIndex] ?? 0}`}
                 className="relative h-full overflow-hidden overflow-clip"
                 style={{ width: "33.333333%", flexShrink: 0 }}
                 aria-hidden={true}
@@ -513,7 +540,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
           return (
             <div
-              key={pageIndex}
+              key={`${pageIndex}:${pageGenerations[pageIndex] ?? 0}`}
               // `overflow-clip` where supported: a hidden box can still be scrolled by a
               // scrollIntoView, which slid the page header up under the status bar.
               className="relative h-full overflow-hidden overflow-clip"
@@ -534,6 +561,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
                 <Suspense fallback={<PageLoadingFallback />}>
                   <ScreenActivityProvider active={isActive}>
                     <AppChromeModeProvider mode="sticky">
+                      <PagePosition pageIndex={pageIndex} />
                       <Component />
                     </AppChromeModeProvider>
                   </ScreenActivityProvider>

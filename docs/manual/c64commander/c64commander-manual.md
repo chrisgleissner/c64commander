@@ -95,6 +95,10 @@ The badge in the top right corner tells you how your C64 is doing: healthy, degr
 
 If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
 
+### Moving Between Pages
+
+Each page opens where you left it. Scroll down a long page, look at another one, and come back: you are at the same card again. To start a page over from the top, tap its tab while you are on it.
+
 ### Finding Your Way
 
 Search covers the whole app: every page, every card, every app setting, your disk collection, the HVSC archive, and the tunes you have liked or played lately. Type two or three letters and pick what you want.
@@ -781,7 +785,7 @@ Start it with the **Game** tile on Home, the **Game Mode** button on Play (**Gam
 
 The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.
 
-Nothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.
+Nothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible** or **Hidden** instead of **Auto**.
 
 ![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/medium/07-game-mode-keys.png)
 
@@ -797,7 +801,7 @@ With the joystick **Hidden** and the picture off, there is nothing to draw, so G
 
 #### Steering with a physical keyboard
 
-**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.
+**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.
 
 A hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.
 
@@ -1146,6 +1150,8 @@ Outside text fields, the number keys jump to pages, **8** and **9** pause and re
 | 0 | Game Mode |
 
 `7` opens search even with **Keyboard and keypad navigation** switched off.
+
+Pressing the number of the page you are already on starts that page over from the top.
 
 #### Transport Keys
 
