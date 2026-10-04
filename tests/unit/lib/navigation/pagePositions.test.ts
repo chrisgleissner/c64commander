@@ -231,6 +231,74 @@ describe("pagePositions", () => {
       expect(scroller.scrollTop).toBe(2500);
     });
 
+    it("observes newly inserted cards and schedules one anchor correction for the mutation batch", async () => {
+      const observe = vi.fn();
+      const disconnect = vi.fn();
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe = observe;
+          disconnect = disconnect;
+        },
+      );
+      const { slot, scroller, growAbove } = reopenWithDrift();
+      await nextFrame();
+      const inserted = document.createElement("section");
+      inserted.dataset.sectionScope = "home";
+      inserted.dataset.sectionId = "inserted";
+      growAbove();
+      scroller.appendChild(inserted);
+      await nextFrame();
+      expect(observe.mock.calls.filter(([element]) => element === inserted)).toHaveLength(1);
+      expect(scroller.scrollTop).toBe(1000);
+      expect(observe).toHaveBeenCalledTimes(4);
+      slot.remove();
+      scroller.dispatchEvent(new Event("pointerdown"));
+      expect(disconnect).toHaveBeenCalledOnce();
+    });
+
+    it("keeps tracking when browser scroll anchoring accompanies a content-height change", async () => {
+      let resized: () => void = () => undefined;
+      const disconnect = vi.fn();
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          constructor(callback: () => void) {
+            resized = callback;
+          }
+          observe() {}
+          disconnect = disconnect;
+        },
+      );
+      const { scroller, growAbove } = reopenWithDrift();
+      await nextFrame();
+      growAbove();
+      scroller.scrollTop = 1100;
+      scroller.dispatchEvent(new Event("scroll"));
+      expect(disconnect).not.toHaveBeenCalled();
+      resized();
+      await nextFrame();
+      expect(scroller.scrollTop).toBe(1200);
+      scroller.dispatchEvent(new Event("pointerdown"));
+      expect(disconnect).toHaveBeenCalledOnce();
+    });
+
+    it("disconnects tracking when the restored page detaches before its scheduled frame", async () => {
+      const disconnect = vi.fn();
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe() {}
+          disconnect = disconnect;
+        },
+      );
+      const { slot, scroller } = reopenWithDrift();
+      slot.remove();
+      await nextFrame();
+      expect(disconnect).toHaveBeenCalledOnce();
+      expect(scroller.scrollTop).toBe(900);
+    });
+
     it("disconnects resize tracking after the settling window even when the page never resizes", async () => {
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       const disconnected = vi.fn();

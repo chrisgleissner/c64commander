@@ -51,6 +51,23 @@ for (const viewport of [
       return page.locator('[data-slot-active="true"]');
     };
 
+    test("revealing a header control cannot horizontally scroll the transformed page runway @layout", async ({
+      page,
+    }) => {
+      await page.goto("/");
+      const indicator = page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge");
+      await expect(indicator).toBeVisible();
+      const movement = await indicator.evaluate((element) => {
+        const container = element.closest('[data-testid="swipe-navigation-container"]') as HTMLElement;
+        const before = element.getBoundingClientRect().left;
+        element.scrollIntoView({ block: "nearest", inline: "center", behavior: "instant" });
+        return { offset: container.scrollLeft, delta: element.getBoundingClientRect().left - before };
+      });
+      expect(movement).toEqual({ offset: 0, delta: 0 });
+      await indicator.click();
+      await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
+    });
+
     test("keeps distant measured bodies deferred, paints visible bodies, and builds a jumped-to chapter @layout", async ({
       page,
     }) => {

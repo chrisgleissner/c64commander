@@ -18,16 +18,18 @@ const Card = ({
   wanted,
   top = 5000,
   rememberedHeight,
+  attachAnchor = true,
 }: {
   id: string;
   wanted: boolean;
   top?: number;
   rememberedHeight?: number;
+  attachAnchor?: boolean;
 }) => {
   const anchor = useRef<HTMLElement | null>(null);
   const mounted = useProgressiveMount(wanted, anchor, rememberedHeight);
   return (
-    <section ref={anchor} data-top={top} data-section-scope="test" data-section-id={id}>
+    <section ref={attachAnchor ? anchor : undefined} data-top={top} data-section-scope="test" data-section-id={id}>
       {wanted && mounted ? <div data-testid={`body-${id}`} /> : <div data-testid={`pending-${id}`} />}
     </section>
   );
@@ -131,6 +133,115 @@ describe("useProgressiveMount", () => {
       </>,
     );
     expect(screen.getByTestId("body-c")).toBeInTheDocument();
+  });
+
+  it("shares viewport observation, ignores distant callbacks, and commits a newly nearby body synchronously", () => {
+    let intersected: () => void = () => undefined;
+    const observe = vi.fn();
+    const unobserve = vi.fn();
+    const disconnect = vi.fn();
+    const constructed = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: () => void) {
+          constructed();
+          intersected = callback;
+        }
+        observe = observe;
+        unobserve = unobserve;
+        disconnect = disconnect;
+      },
+    );
+    const view = render(
+      <>
+        {["a", "b", "c"].map((id) => (
+          <Card key={id} id={id} wanted rememberedHeight={400} />
+        ))}
+      </>,
+    );
+    expect(constructed).toHaveBeenCalledOnce();
+    expect(observe).toHaveBeenCalledTimes(3);
+    act(() => intersected());
+    expect(screen.getByTestId("pending-c")).toBeInTheDocument();
+    const card = screen.getByTestId("pending-c").parentElement!;
+    card.setAttribute("data-top", "300");
+    act(() => intersected());
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+    expect(screen.getByTestId("pending-a")).toBeInTheDocument();
+    expect(unobserve).toHaveBeenCalledWith(card);
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+    act(() => intersected());
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("mounts reserved bodies before the next paint when a resize brings them into view", async () => {
+    render(
+      <>
+        {["a", "b", "c"].map((id) => (
+          <Card key={id} id={id} wanted rememberedHeight={400} />
+        ))}
+      </>,
+    );
+    expect(screen.getByTestId("pending-c")).toBeInTheDocument();
+    vi.stubGlobal("innerHeight", 4000);
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(screen.getByTestId("body-a")).toBeInTheDocument();
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+  });
+
+  it("discards an unknown-body drain after its page has unmounted", async () => {
+    const view = render(
+      <>
+        {["a", "b", "c"].map((id) => (
+          <Card key={id} id={id} wanted />
+        ))}
+      </>,
+    );
+    expect(screen.getByTestId("pending-c")).toBeInTheDocument();
+    view.unmount();
+    await nextPaintAndTask();
+    expect(screen.queryByTestId("body-c")).not.toBeInTheDocument();
+    expect(mountAllWaiting()).toBe(false);
+  });
+
+  it("finishes unknown bodies without draining a neighbouring reserved body", async () => {
+    render(
+      <>
+        <Card id="reserved" wanted rememberedHeight={400} />
+        <Card id="a" wanted />
+        <Card id="b" wanted />
+        <Card id="unknown" wanted />
+      </>,
+    );
+    await nextPaintAndTask();
+    await nextTask();
+    expect(screen.getByTestId("body-unknown")).toBeInTheDocument();
+    expect(screen.getByTestId("pending-reserved")).toBeInTheDocument();
+    act(() => requestSectionOpen("test", "reserved"));
+    expect(screen.getByTestId("body-reserved")).toBeInTheDocument();
+  });
+
+  it("can finish a body whose host ref is absent without consuming a scoped request for another card", async () => {
+    const view = render(
+      <>
+        <Card id="a" wanted />
+        <Card id="b" wanted />
+        <Card id="unanchored" wanted attachAnchor={false} />
+        <Card id="reserved" wanted rememberedHeight={400} />
+      </>,
+    );
+    act(() => requestSectionOpen("test", "reserved"));
+    expect(screen.getByTestId("pending-unanchored")).toBeInTheDocument();
+    expect(screen.getByTestId("body-reserved")).toBeInTheDocument();
+    await nextPaintAndTask();
+    expect(screen.getByTestId("body-unanchored")).toBeInTheDocument();
+    view.unmount();
+    expect(mountAllWaiting()).toBe(false);
   });
 
   it("mounts the first two open cards at once and the rest one per task after the first paint", async () => {

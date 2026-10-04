@@ -138,7 +138,17 @@ or coverage instrumentation were included in the measured APKs.
   explicit page readiness, scrolling to a deferred chapter, and waiting for a completed
   asynchronous save; all three focused reruns passed. Additional full-suite and merged/patch
   coverage results are recorded in [PR #453](https://github.com/chrisgleissner/c64commander/pull/453).
-- No screenshot files changed: labels, controls, styles and documented visible content are unchanged.
+- Follow-up diagnostics interaction tests exposed a scroll race in the transformed page
+  runway: `scrollIntoView` could shift a header control horizontally before activation.
+  The runway now clips programmatic overflow, matching its page slots. The regression
+  reproduced a 109 px shift before the fix on the compact layout and also failed on tablet.
+- The startup-discovery test helper waits for its animated portal to detach before the
+  next interaction. Its prolonged-exit regression failed before the fix.
+- Local merged-coverage collection now uses the documented Vitest 4 CI thresholds
+  (93% lines, 85% branches), preserves stricter explicit thresholds, and has four
+  failing-before/passing-after collector checks. REVIEW.md records the same global
+  thresholds while retaining 91% changed-branch and 94% Codecov patch requirements.
+- No screenshot files changed: labels, controls and documented visible content are unchanged.
 
 The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed at CPU
 rate 2, using the native phone viewport for physical input coordinates:

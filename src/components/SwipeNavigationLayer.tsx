@@ -480,7 +480,9 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   return (
     <div
       ref={containerRef}
-      className="relative w-screen overflow-hidden bg-background"
+      // Clip the transformed runway: hidden overflow still lets focus/scrollIntoView
+      // move the page horizontally between choosing a control and activating it.
+      className="relative w-screen overflow-hidden overflow-clip bg-background"
       style={{
         height: "calc(100dvh - var(--app-tab-bar-reserved-height) - var(--app-toast-reserved-height, 0px))",
         touchAction: "pan-y pinch-zoom",
