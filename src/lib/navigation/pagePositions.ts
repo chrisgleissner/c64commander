@@ -50,7 +50,8 @@ const alignAnchor = (scroller: HTMLElement, anchor: NonNullable<PagePositionReco
 /*
  * Cards above the remembered position can still change height after it is restored: one that was
  * not built when the page was left, or rows filling in as data arrives. The top card is put back in
- * place each frame until the page settles, or until the user scrolls or presses a key.
+ * place each frame until the page settles, until the user scrolls or presses a key, or until the page
+ * is scrolled by something else (the tour, a search result) while its content height stood still.
  */
 const keepAnchorWhileSettling = (scroller: HTMLElement, anchor: NonNullable<PagePositionRecord["anchor"]>) => {
   if (typeof requestAnimationFrame !== "function") return;
@@ -63,9 +64,16 @@ const keepAnchorWhileSettling = (scroller: HTMLElement, anchor: NonNullable<Page
   for (const type of ["pointerdown", "wheel", "keydown", "touchstart"]) {
     scroller.addEventListener(type, stop, { passive: true });
   }
+  let expectedScrollTop = scroller.scrollTop;
+  let expectedScrollHeight = scroller.scrollHeight;
   const step = () => {
     if (stopped || !scroller.isConnected) return stop();
+    const scrolledElsewhere =
+      Math.abs(scroller.scrollTop - expectedScrollTop) >= 1 && scroller.scrollHeight === expectedScrollHeight;
+    if (scrolledElsewhere) return stop();
     alignAnchor(scroller, anchor);
+    expectedScrollTop = scroller.scrollTop;
+    expectedScrollHeight = scroller.scrollHeight;
     if (performance.now() - started < SETTLE_MS) requestAnimationFrame(step);
     else stop();
   };

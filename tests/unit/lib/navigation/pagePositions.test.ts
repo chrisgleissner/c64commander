@@ -104,6 +104,42 @@ describe("pagePositions", () => {
     vi.restoreAllMocks();
   });
 
+  it("stops holding the top card once something else scrolls the page while its content stands still", async () => {
+    const { slot, scroller } = buildSlot(6);
+    const [video, audio] = slot.querySelectorAll<HTMLElement>("section");
+    let height = 4000;
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, get: () => height });
+    const tops = new Map<Element, number>([
+      [scroller, 0],
+      [video, -500],
+      [audio, -20],
+    ]);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const top = tops.get(this) ?? 0;
+      return { top, bottom: top + (this === video ? 420 : 300) } as DOMRect;
+    });
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    scroller.scrollTop = 900;
+    rememberPagePosition(6, slot);
+    scroller.scrollTop = 0;
+    restorePagePosition(6, slot);
+    expect(scroller.scrollTop).toBe(900);
+
+    // A card above grows: the content gets taller and the top card drifts, so it is put back.
+    height = 4100;
+    tops.set(audio, 80);
+    await nextFrame();
+    expect(scroller.scrollTop).toBe(1000);
+
+    // The tour scrolls the page somewhere else without the content changing: the hold lets go.
+    tops.set(audio, 700);
+    scroller.scrollTop = 2500;
+    await nextFrame();
+    await nextFrame();
+    expect(scroller.scrollTop).toBe(2500);
+    vi.restoreAllMocks();
+  });
+
   it("ignores a slot without a scroll container", () => {
     const slot = document.createElement("div");
     rememberPagePosition(4, slot);
