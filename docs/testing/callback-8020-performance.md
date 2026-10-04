@@ -132,20 +132,36 @@ or coverage instrumentation were included in the measured APKs.
   resize behavior, overlay scoping, and complete keypad traversal.
 - Production web build, Capacitor sync, Android debug APK build and lint passed.
 - Corrected APK installed and exercised on the Pixel 4 at rate 2.
-- The complete browser suite and merged/patch coverage are still pending.
+- The calibrated complete browser run passed 822 tests. Three failures were addressed with
+  explicit page readiness, scrolling to a deferred chapter, and waiting for a completed
+  asynchronous save; all three focused reruns passed. Merged/patch coverage is pending.
 - No screenshot files changed: labels, controls, styles and documented visible content are unchanged.
 
-The hardware merge gate is **not yet green**. The first candidate run passed search latency
-(p95 47.2 ms), wire, A/V latency, remote/local SID playback and crossfade. Its input harness
-closed an already-open deferred chapter; that preparation now scrolls to the chapter before
-checking its open state and has a failing-before regression test.
+The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed at CPU
+rate 2, using the native phone viewport for physical input coordinates:
 
-The subsequent full run exposed a rotation-probe error and search-harness timeout. A separate
-20-check rotation run passed, followed by a complete quiet-gate pass: input moved nine cells
-with all 20 rotation checks passing, search p95 was 28.8 ms over 120 samples, and wire loss
-was 0% with 3.97 ms inter-arrival p99. The earlier failures remain recorded; their cause has
-not been established from a passing repeat.
+| Stage          | Result | Evidence                                        |
+| -------------- | ------ | ----------------------------------------------- |
+| Preflight      | Pass   | Pixel 4; speaker volume 3/25                    |
+| Input          | Pass   | Nine cells moved; all 20 rotation checks passed |
+| Search latency | Pass   | 120 samples; p95 43.1 ms                        |
+| Wire           | Pass   | 0% loss; inter-arrival p99 4.15 ms              |
+| A/V clarity    | Pass   | 82 tones; zero defects; 0% dropout              |
+| A/V latency    | Pass   | 268 ms wire to speaker; correlation 0.866       |
+| Remote SID     | Pass   | Tone present 100%; +1 cent; no gap              |
+| Local SID      | Pass   | Tone present 100%; −10.2 cents; no gap          |
+| Crossfade      | Pass   | Seamless crossfade                              |
 
-A/V clarity skipped a pair of notes in both candidate and unchanged baseline recordings,
-while their wire captures retained the notes. This remains a release blocker; the PR is
-not represented as merge-ready and the release tag has not been created.
+Earlier failures are retained in the local evidence. The input preparation originally
+closed an already-open deferred chapter; it now scrolls there before checking its open
+state, with a regression that fails against the old helper. One rotation-probe error and
+subsequent search timeout did not recur in a separate 20-check rotation run or the quiet
+and final full gates; their cause was not established from a passing repeat.
+
+Audible clarity initially lost a pair of notes on both candidate and unchanged baseline.
+A wire pacing capture measured 49,808 stereo frames/s despite the configured PAL mode,
+3.8% above the documented 47,983 rate. Native ring depth grew until it discarded a backlog.
+Reapplying the original PAL mode with sequential NTSC then PAL single-item PUTs restored
+the expected 4.00 ms packet cadence and the complete gate passed, with no audio pipeline
+change or relaxed assertion. Benchmark baseline and candidate measurements preceded this
+rig correction and used the same clock state. Phone speaker volume remained 3/25.

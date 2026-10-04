@@ -245,6 +245,7 @@ test.describe("display profiles", () => {
   }) => {
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await applyDisplayProfileViewport(page, "medium");
+    await expect(page.locator(".page-shell")).toBeVisible();
 
     const mediumSizing = await page.evaluate(() => ({
       rootFontSize: getComputedStyle(document.documentElement).fontSize,
@@ -253,6 +254,7 @@ test.describe("display profiles", () => {
     }));
 
     await applyDisplayProfileViewport(page, "expanded");
+    await expect(page.locator(".page-shell")).toBeVisible();
 
     const expandedSizing = await page.evaluate(() => ({
       rootFontSize: getComputedStyle(document.documentElement).fontSize,

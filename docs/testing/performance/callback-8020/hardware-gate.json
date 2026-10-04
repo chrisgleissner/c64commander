@@ -1,0 +1,60 @@
+{
+  "host": "c64u",
+  "results": [
+    {
+      "name": "preflight",
+      "status": "pass",
+      "detail": "Pixel 4, route /, speaker volume 3, mirror audio=true video=false",
+      "seconds": 5.399
+    },
+    {
+      "name": "input",
+      "status": "pass",
+      "detail": "held direction moved 9 cells; 20 rotation checks passed",
+      "seconds": 88.75
+    },
+    {
+      "name": "search-latency",
+      "status": "pass",
+      "detail": "120 samples, p50 19.7 ms, p90 32.5 ms, p95 43.1 ms, max 98.3 ms",
+      "seconds": 28.737
+    },
+    {
+      "name": "wire",
+      "status": "pass",
+      "detail": "sender loss 0%, inter-arrival p99 4.15 ms",
+      "seconds": 16.474
+    },
+    {
+      "name": "av-clarity",
+      "status": "pass",
+      "detail": "82 tones, 0 defective, 0% dropout",
+      "seconds": 37.388
+    },
+    {
+      "name": "av-latency",
+      "status": "pass",
+      "detail": "268 ms wire -> speaker (per-tone lag; broadband correlation 0.866)",
+      "seconds": 23.362
+    },
+    {
+      "name": "sid-remote",
+      "status": "pass",
+      "detail": "Remote: tone present 100.0%, +1 cents, longest gap 0 ms",
+      "seconds": 18.864
+    },
+    {
+      "name": "sid-local",
+      "status": "pass",
+      "detail": "Local: tone present 100.0%, -10.2 cents, longest gap 0 ms",
+      "seconds": 18.276
+    },
+    {
+      "name": "crossfade",
+      "status": "pass",
+      "detail": "join graded \"SEAMLESS CROSSFADE\"",
+      "seconds": 53.968
+    }
+  ],
+  "audibleSeconds": 62
+}

@@ -129,6 +129,9 @@ test("Small Display 480x640 profile supports core interactions without overflow"
     await host.fill("u64-480");
     await expect(host).toHaveValue("u64-480");
 
+    // Returning to Settings can leave remembered offscreen bodies deferred. Reach the
+    // chapter as a user would before looking for a control inside its body.
+    await page.getByTestId("settings-section-play-and-disk").scrollIntoViewIfNeeded();
     await page.locator("#disk-autostart-mode").click();
     await page.getByRole("option", { name: /DMA/ }).click();
     await expect(page.locator("#disk-autostart-mode")).toContainText("DMA");

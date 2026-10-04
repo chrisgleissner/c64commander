@@ -573,11 +573,15 @@ test.describe("Automatic Demo Mode", () => {
 
     await expect.poll(() => server.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(true);
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
-    const stored = await page.evaluate(
-      (currentDeviceHostKey: string) => localStorage.getItem(currentDeviceHostKey),
-      CURRENT_DEVICE_HOST_KEY,
-    );
-    expect(stored).toBe(new URL(server.baseUrl).host);
+    // Reachability can connect before the asynchronous save has persisted the host.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (currentDeviceHostKey: string) => localStorage.getItem(currentDeviceHostKey),
+          CURRENT_DEVICE_HOST_KEY,
+        ),
+      )
+      .toBe(new URL(server.baseUrl).host);
     await expectRestTraceSequence(page, testInfo, "/v1/info");
     await snap(page, testInfo, "demo-exit-connected");
   });
