@@ -9,14 +9,25 @@
 import { act, render, screen } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
+import { mountAllWaiting, setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
+import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 
 /** `top` is where the card starts, in px; the test viewport is 768 px tall. */
-const Card = ({ id, wanted, top = 5000 }: { id: string; wanted: boolean; top?: number }) => {
+const Card = ({
+  id,
+  wanted,
+  top = 5000,
+  rememberedHeight,
+}: {
+  id: string;
+  wanted: boolean;
+  top?: number;
+  rememberedHeight?: number;
+}) => {
   const anchor = useRef<HTMLElement | null>(null);
-  const mounted = useProgressiveMount(wanted, anchor);
+  const mounted = useProgressiveMount(wanted, anchor, rememberedHeight);
   return (
-    <section ref={anchor} data-top={top}>
+    <section ref={anchor} data-top={top} data-section-scope="test" data-section-id={id}>
       {wanted && mounted ? <div data-testid={`body-${id}`} /> : <div data-testid={`pending-${id}`} />}
     </section>
   );
@@ -34,15 +45,94 @@ const nextTask = () => act(() => new Promise<void>((resolve) => setTimeout(resol
 beforeEach(() => {
   setProgressiveMountEnabled(true);
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
-    return { top: Number(this.getAttribute("data-top") ?? 0) } as DOMRect;
+    const top = Number(this.getAttribute("data-top") ?? 0);
+    return { top, bottom: top + 100 } as DOMRect;
   });
 });
 afterEach(() => {
   setProgressiveMountEnabled(false);
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("useProgressiveMount", () => {
+  it("does not spend the first two immediate mounts on measured cards outside the viewport", async () => {
+    render(
+      <>
+        <Card id="a" wanted rememberedHeight={400} />
+        <Card id="b" wanted rememberedHeight={400} />
+        <Card id="c" wanted top={300} rememberedHeight={400} />
+      </>,
+    );
+    await nextPaintAndTask();
+    expect(screen.getByTestId("pending-a")).toBeInTheDocument();
+    expect(screen.getByTestId("pending-b")).toBeInTheDocument();
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+  });
+
+  it("leaves measured offscreen bodies unmounted after idle tasks and mounts them before scrolling into view", async () => {
+    render(
+      <>
+        <Card id="a" wanted />
+        <Card id="b" wanted />
+        <Card id="c" wanted rememberedHeight={400} />
+      </>,
+    );
+    await nextPaintAndTask();
+    await nextTask();
+    expect(screen.getByTestId("pending-c")).toBeInTheDocument();
+    screen.getByTestId("pending-c").parentElement!.setAttribute("data-top", "300");
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+  });
+
+  it("does not build measured bodies above the restored viewport", async () => {
+    render(
+      <>
+        <Card id="a" wanted />
+        <Card id="b" wanted />
+        <Card id="c" wanted top={-5000} rememberedHeight={400} />
+      </>,
+    );
+    await nextPaintAndTask();
+    expect(screen.getByTestId("pending-c")).toBeInTheDocument();
+    act(() => {
+      expect(mountAllWaiting()).toBe(true);
+    });
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+    expect(mountAllWaiting()).toBe(false);
+  });
+
+  it("builds an explicitly requested measured section while it is still offscreen", async () => {
+    render(
+      <>
+        <Card id="a" wanted />
+        <Card id="b" wanted />
+        <Card id="c" wanted rememberedHeight={400} />
+      </>,
+    );
+    await nextPaintAndTask();
+    act(() => requestSectionOpen("other", "c"));
+    expect(screen.getByTestId("pending-c")).toBeInTheDocument();
+    act(() => requestSectionOpen("test", "c"));
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+  });
+
+  it("mounts more measured content immediately when a larger viewport can show it", () => {
+    vi.stubGlobal("innerHeight", 4000);
+    render(
+      <>
+        <Card id="a" wanted />
+        <Card id="b" wanted />
+        <Card id="c" wanted top={3000} rememberedHeight={400} />
+      </>,
+    );
+    expect(screen.getByTestId("body-c")).toBeInTheDocument();
+  });
+
   it("mounts the first two open cards at once and the rest one per task after the first paint", async () => {
     render(
       <>
@@ -124,7 +214,7 @@ describe("useProgressiveMount", () => {
     render(
       <>
         {["a", "b", "c"].map((id) => (
-          <Card key={id} id={id} wanted />
+          <Card key={id} id={id} wanted rememberedHeight={400} />
         ))}
       </>,
     );

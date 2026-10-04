@@ -50,6 +50,7 @@ import {
   NavigationController,
   digitForAction,
   findContextMenuTrigger,
+  resolveActiveScope,
   getInputModality,
   isHorizontalKeyOwner,
   normalizeKeyEvent,
@@ -420,10 +421,34 @@ export const FocusNavigationProvider = ({
       const isDeviceBackButton = isDeviceBackKey(event);
       const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
       const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
+      const shortcuts = shortcutsRef.current;
+      const shortcutDigit = action === null ? null : digitForAction(action);
+      const isGlobalCommand = Boolean(
+        (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) ||
+        (action === "star" && shortcuts.openDiagnostics) ||
+        (action === "hash" && shortcuts.openDeviceSwitcher) ||
+        (action === "digit0" && shortcuts.openGameMode) ||
+        (action === "digit8" && shortcuts.machinePauseResume) ||
+        (action === "digit9" && shortcuts.machineReset) ||
+        ((action === "function1" || action === "function3") && shortcuts.runFunctionShortcut),
+      );
       // Before any branch below reads the ring, so the first key navigates on a ring as new as the DOM.
-      if (action !== null) {
+      // Global commands do not traverse it. Building all waiting bodies of the page
+      // being left delayed tab jumps and overlays for content that could not be seen.
+      if (action !== null && !isGlobalCommand) {
         startEngine();
-        if (mountAllWaiting()) engineRef.current?.refreshNow();
+        const traversesRing = [
+          "dpadUp",
+          "dpadDown",
+          "dpadLeft",
+          "dpadRight",
+          "center",
+          "enter",
+          "activate",
+          "nextField",
+          "previousField",
+        ].includes(action);
+        if (traversesRing && mountAllWaiting(resolveActiveScope(document).element)) engineRef.current?.refreshNow();
         else engineRef.current?.flushPendingRefresh();
       }
       // Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring, so
@@ -561,8 +586,6 @@ export const FocusNavigationProvider = ({
       // Always-reachable global shortcuts. Text fields and open overlays are
       // already excluded above, so digits/✱/# here mean "command", not T9 entry.
       // Digits 1–N jump to a tab; ✱ opens Diagnostics; # opens the Device Switcher.
-      const shortcuts = shortcutsRef.current;
-      const shortcutDigit = digitForAction(action);
       if (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) {
         // The tab bar stays in the ring across routes, so a ring standing on it would stay there;
         // a jump lands on the page it opened instead.

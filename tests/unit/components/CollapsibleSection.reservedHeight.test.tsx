@@ -54,6 +54,14 @@ describe("CollapsibleSection remembered height", () => {
 
     await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))));
 
+    expect(screen.queryByText("body c")).not.toBeInTheDocument();
+    expect(waiting.style.minHeight).toBe("333px");
+    vi.mocked(Element.prototype.getBoundingClientRect).mockReturnValue({ top: 300, bottom: 633 } as DOMRect);
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
     expect(screen.getByText("body c")).toBeInTheDocument();
     expect(waiting.style.minHeight).toBe("");
   });

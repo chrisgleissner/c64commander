@@ -31,12 +31,29 @@ const subscribe = <T>(name: string, handler: (detail: T) => void): (() => void) 
   return () => window.removeEventListener(name, listener);
 };
 
+// A page transition briefly has no active badge subscribed. Keep one intent across
+// that gap; inactive swipe previews must not consume it or open their own picker.
+let deviceSwitcherPending = false;
+
 /** Ask the status badge to open the Device Switcher (keypad `#` / Menu → Switch Device). */
-export const requestDeviceSwitcherOpen = (): void => emit(DEVICE_SWITCHER_OPEN_EVENT);
+export const requestDeviceSwitcherOpen = (): void => {
+  deviceSwitcherPending = true;
+  emit(DEVICE_SWITCHER_OPEN_EVENT);
+};
+
+export const acknowledgeDeviceSwitcherOpen = (): void => {
+  deviceSwitcherPending = false;
+};
 
 /** Subscribe the status badge to Device-Switcher open requests. Returns an unsubscribe. */
-export const subscribeDeviceSwitcherOpen = (handler: () => void): (() => void) =>
-  subscribe(DEVICE_SWITCHER_OPEN_EVENT, handler);
+export const subscribeDeviceSwitcherOpen = (handler: () => boolean | void): (() => void) => {
+  const deliver = () => {
+    if (deviceSwitcherPending && handler() !== false) deviceSwitcherPending = false;
+  };
+  const unsubscribe = subscribe(DEVICE_SWITCHER_OPEN_EVENT, deliver);
+  deliver();
+  return unsubscribe;
+};
 
 /**
  * How the Quick menu was opened.

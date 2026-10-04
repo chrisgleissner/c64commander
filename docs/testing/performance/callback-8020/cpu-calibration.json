@@ -1,0 +1,52 @@
+[
+  {
+    "rate": 1,
+    "elapsedMs": 173.69999992847443,
+    "checksum": -525702195
+  },
+  {
+    "rate": 1,
+    "elapsedMs": 100.60000002384186,
+    "checksum": -525702195
+  },
+  {
+    "rate": 1,
+    "elapsedMs": 85,
+    "checksum": -525702195
+  },
+  {
+    "rate": 1,
+    "elapsedMs": 84.90000009536743,
+    "checksum": -525702195
+  },
+  {
+    "rate": 1,
+    "elapsedMs": 85,
+    "checksum": -525702195
+  },
+  {
+    "rate": 2,
+    "elapsedMs": 172.39999997615814,
+    "checksum": -525702195
+  },
+  {
+    "rate": 2,
+    "elapsedMs": 171.30000007152557,
+    "checksum": -525702195
+  },
+  {
+    "rate": 2,
+    "elapsedMs": 171.30000007152557,
+    "checksum": -525702195
+  },
+  {
+    "rate": 2,
+    "elapsedMs": 172.10000002384186,
+    "checksum": -525702195
+  },
+  {
+    "rate": 2,
+    "elapsedMs": 171.80000007152557,
+    "checksum": -525702195
+  }
+]

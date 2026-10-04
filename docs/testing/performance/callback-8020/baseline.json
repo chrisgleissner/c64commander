@@ -1,0 +1,2624 @@
+{
+  "cpuRate": 2,
+  "rounds": 10,
+  "samples": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 549.6000000238419,
+      "taskMs": 1288.0810000000001,
+      "scriptMs": 774.926,
+      "layoutMs": 60.02300000000002,
+      "heapBytes": 107125348
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 4450.799999952316,
+      "taskMs": 4966.362999999999,
+      "scriptMs": 3955.449,
+      "layoutMs": 79.47900000000003,
+      "heapBytes": 129639100
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 864.2999999523163,
+      "taskMs": 1476.2259999999987,
+      "scriptMs": 986.2470000000005,
+      "layoutMs": 33.48199999999996,
+      "heapBytes": 135463620
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 719.3999999761581,
+      "taskMs": 1337.288000000001,
+      "scriptMs": 693.2780000000002,
+      "layoutMs": 56.94300000000002,
+      "heapBytes": 136122032
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6228.600000023842,
+      "taskMs": 6960.4890000000005,
+      "scriptMs": 5524.849,
+      "layoutMs": 159.064,
+      "heapBytes": 198442092
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 541.2999999523163,
+      "taskMs": 1057.8839999999977,
+      "scriptMs": 549.5380000000001,
+      "layoutMs": 42.22999999999999,
+      "heapBytes": 201155560
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1172.3999999761581,
+      "taskMs": 1763.2820000000002,
+      "scriptMs": 1217.917,
+      "layoutMs": 131.93500000000003,
+      "heapBytes": 103596528
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 3133.5,
+      "taskMs": 3620.967,
+      "scriptMs": 2849.481999999998,
+      "layoutMs": 42.939999999999976,
+      "heapBytes": 116142308
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 690.6000000238419,
+      "taskMs": 1162.3029999999978,
+      "scriptMs": 692.0639999999985,
+      "layoutMs": 36.03299999999998,
+      "heapBytes": 119059840
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3684.600000023842,
+      "taskMs": 4266.368,
+      "scriptMs": 3264.7460000000024,
+      "layoutMs": 183.118,
+      "heapBytes": 160527464
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1233.3999999761581,
+      "taskMs": 1547.1920000000025,
+      "scriptMs": 973.8569999999988,
+      "layoutMs": 91.55899999999994,
+      "heapBytes": 170406864
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 467.60000002384186,
+      "taskMs": 900.9819999999991,
+      "scriptMs": 351.0920000000013,
+      "layoutMs": 51.888000000000154,
+      "heapBytes": 171452180
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1299.6000000238419,
+      "taskMs": 1838.1600000000021,
+      "scriptMs": 1321.4180000000013,
+      "layoutMs": 63.69499999999984,
+      "heapBytes": 187583648
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1210.3999999761581,
+      "taskMs": 1665.016999999999,
+      "scriptMs": 1166.1539999999989,
+      "layoutMs": 31.743000000000077,
+      "heapBytes": 193143888
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 863.2999999523163,
+      "taskMs": 1426.4200000000003,
+      "scriptMs": 940.2349999999977,
+      "layoutMs": 32.59499999999993,
+      "heapBytes": 198697524
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3168.2999999523163,
+      "taskMs": 3760.969000000003,
+      "scriptMs": 2844.066999999999,
+      "layoutMs": 158.66400000000013,
+      "heapBytes": 232134572
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1493.6000000238419,
+      "taskMs": 1787.7700000000018,
+      "scriptMs": 1278.1640000000002,
+      "layoutMs": 76.17600000000002,
+      "heapBytes": 244844760
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 460.5,
+      "taskMs": 920.1369999999969,
+      "scriptMs": 406.91299999999944,
+      "layoutMs": 53.908999999999985,
+      "heapBytes": 245861384
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1160.6000000238419,
+      "taskMs": 1727.1509999999992,
+      "scriptMs": 1285.6850000000045,
+      "layoutMs": 50.7439999999999,
+      "heapBytes": 257002608
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1433.8999999761581,
+      "taskMs": 1907.0660000000003,
+      "scriptMs": 1363.8440000000003,
+      "layoutMs": 32.69300000000008,
+      "heapBytes": 266432968
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 844.7999999523163,
+      "taskMs": 1446.4139999999973,
+      "scriptMs": 960.4679999999987,
+      "layoutMs": 33.450999999999894,
+      "heapBytes": 272324196
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3143,
+      "taskMs": 3793.0040000000035,
+      "scriptMs": 2844.766,
+      "layoutMs": 162.18500000000003,
+      "heapBytes": 307837620
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6185.600000023842,
+      "taskMs": 6807.417999999999,
+      "scriptMs": 5774.302000000006,
+      "layoutMs": 79.21100000000014,
+      "heapBytes": 171094960
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 403.5,
+      "taskMs": 937.8099999999989,
+      "scriptMs": 420.219000000003,
+      "layoutMs": 40.429000000000045,
+      "heapBytes": 167349308
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1123.8999999761581,
+      "taskMs": 1303.8430000000005,
+      "scriptMs": 843.0900000000037,
+      "layoutMs": 56.60899999999991,
+      "heapBytes": 179226388
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 737.7000000476837,
+      "taskMs": 1156.1579999999979,
+      "scriptMs": 615.3580000000005,
+      "layoutMs": 43.93599999999998,
+      "heapBytes": 178973796
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 782.6000000238419,
+      "taskMs": 1094.6440000000025,
+      "scriptMs": 594.7529999999972,
+      "layoutMs": 46.44300000000001,
+      "heapBytes": 182378852
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 2883.7000000476837,
+      "taskMs": 3490.4560000000088,
+      "scriptMs": 2612.4030000000002,
+      "layoutMs": 149.02499999999998,
+      "heapBytes": 218139600
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6226.899999976158,
+      "taskMs": 6836.692999999997,
+      "scriptMs": 6028.749999999995,
+      "layoutMs": 69.78499999999998,
+      "heapBytes": 292940016
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 355.5,
+      "taskMs": 793.3570000000003,
+      "scriptMs": 315.0100000000009,
+      "layoutMs": 42.05799999999993,
+      "heapBytes": 293634824
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1109.7000000476837,
+      "taskMs": 1642.8879999999992,
+      "scriptMs": 1235.5149999999994,
+      "layoutMs": 49.844999999999914,
+      "heapBytes": 310544708
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1240.7000000476837,
+      "taskMs": 1694.7509999999966,
+      "scriptMs": 1194.9600000000019,
+      "layoutMs": 31.18500000000024,
+      "heapBytes": 318400064
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 750.6000000238419,
+      "taskMs": 1312.2400000000027,
+      "scriptMs": 843.6820000000012,
+      "layoutMs": 31.590000000000007,
+      "heapBytes": 324355944
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3064.600000023842,
+      "taskMs": 3684.8340000000094,
+      "scriptMs": 2786.684000000001,
+      "layoutMs": 156.9219999999998,
+      "heapBytes": 357764196
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1497,
+      "taskMs": 1772.2160000000003,
+      "scriptMs": 1261.8660000000048,
+      "layoutMs": 79.19400000000022,
+      "heapBytes": 366452424
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 468.5,
+      "taskMs": 945.9309999999874,
+      "scriptMs": 394.7779999999952,
+      "layoutMs": 61.033000000000115,
+      "heapBytes": 366793464
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1276.2000000476837,
+      "taskMs": 1837.0050000000049,
+      "scriptMs": 1349.3520000000033,
+      "layoutMs": 66.28899999999982,
+      "heapBytes": 379038244
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 2709.2000000476837,
+      "taskMs": 3237.9490000000005,
+      "scriptMs": 2433.400000000006,
+      "layoutMs": 35.40199999999993,
+      "heapBytes": 114333468
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 803.7999999523163,
+      "taskMs": 1344.5770000000011,
+      "scriptMs": 868.39599999999,
+      "layoutMs": 32.54100000000015,
+      "heapBytes": 116219876
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 2986.899999976158,
+      "taskMs": 3593.137000000013,
+      "scriptMs": 2664.0879999999925,
+      "layoutMs": 169.3229999999999,
+      "heapBytes": 152974216
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6342.200000047684,
+      "taskMs": 7003.117000000003,
+      "scriptMs": 6137.209000000013,
+      "layoutMs": 79.34900000000012,
+      "heapBytes": 227830308
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 515.2000000476837,
+      "taskMs": 1044.7530000000002,
+      "scriptMs": 505.746000000002,
+      "layoutMs": 40.604000000000084,
+      "heapBytes": 231089708
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1076.7000000476837,
+      "taskMs": 1645.0490000000002,
+      "scriptMs": 1209.8390000000022,
+      "layoutMs": 49.19099999999999,
+      "heapBytes": 241678212
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1182.2000000476837,
+      "taskMs": 1675.077999999999,
+      "scriptMs": 1176.4170000000008,
+      "layoutMs": 30.788999999999955,
+      "heapBytes": 250067108
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 804.8999999761581,
+      "taskMs": 1276.4729999999959,
+      "scriptMs": 834.8070000000121,
+      "layoutMs": 30.100000000000016,
+      "heapBytes": 255411712
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 2895.100000023842,
+      "taskMs": 3555.541000000005,
+      "scriptMs": 2659.1640000000043,
+      "layoutMs": 150.2889999999999,
+      "heapBytes": 293501924
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1163,
+      "taskMs": 1472.3160000000064,
+      "scriptMs": 972.4610000000098,
+      "layoutMs": 74.95800000000008,
+      "heapBytes": 303004872
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 412.7999999523163,
+      "taskMs": 924.2579999999947,
+      "scriptMs": 405.233999999993,
+      "layoutMs": 52.009999999999664,
+      "heapBytes": 304859488
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1084.3999999761581,
+      "taskMs": 1668.4139999999984,
+      "scriptMs": 1250.0380000000036,
+      "layoutMs": 50.539000000000115,
+      "heapBytes": 316261816
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1216.5,
+      "taskMs": 1718.9180000000022,
+      "scriptMs": 1188.1580000000013,
+      "layoutMs": 31.71999999999997,
+      "heapBytes": 325446124
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 688.6000000238419,
+      "taskMs": 1243.614000000008,
+      "scriptMs": 792.2879999999992,
+      "layoutMs": 30.620000000000314,
+      "heapBytes": 333128620
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3519.2999999523163,
+      "taskMs": 4199.695000000005,
+      "scriptMs": 3200.5869999999986,
+      "layoutMs": 164.00399999999982,
+      "heapBytes": 129851524
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1612,
+      "taskMs": 1979.538000000005,
+      "scriptMs": 1319.377000000003,
+      "layoutMs": 81.31499999999959,
+      "heapBytes": 145250936
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 385.89999997615814,
+      "taskMs": 814.280999999994,
+      "scriptMs": 332.9209999999989,
+      "layoutMs": 41.49500000000028,
+      "heapBytes": 146035824
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1201.6000000238419,
+      "taskMs": 1747.448999999989,
+      "scriptMs": 1264.628000000002,
+      "layoutMs": 57.36399999999975,
+      "heapBytes": 157768236
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1252,
+      "taskMs": 1752.551000000011,
+      "scriptMs": 1196.9370000000054,
+      "layoutMs": 34.93000000000013,
+      "heapBytes": 166559220
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 846,
+      "taskMs": 1365.663000000012,
+      "scriptMs": 874.0219999999965,
+      "layoutMs": 30.79500000000035,
+      "heapBytes": 168843984
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3324.100000023842,
+      "taskMs": 3932.1649999999977,
+      "scriptMs": 2996.8140000000003,
+      "layoutMs": 148.62999999999982,
+      "heapBytes": 206243512
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 5899.100000023842,
+      "taskMs": 6546.547000000004,
+      "scriptMs": 5749.348999999995,
+      "layoutMs": 69.71900000000008,
+      "heapBytes": 286003492
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 425.2000000476837,
+      "taskMs": 991.564000000011,
+      "scriptMs": 488.7949999999961,
+      "layoutMs": 41.92700000000027,
+      "heapBytes": 283585284
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 711.7000000476837,
+      "taskMs": 794.9570000000108,
+      "scriptMs": 308.0889999999954,
+      "layoutMs": 24.187999999999654,
+      "heapBytes": 290704316
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 475.39999997615814,
+      "taskMs": 523.9019999999925,
+      "scriptMs": 163.08899999999937,
+      "layoutMs": 13.393999999999906,
+      "heapBytes": 292310176
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 296,
+      "taskMs": 377.41099999999506,
+      "scriptMs": 134.3909999999937,
+      "layoutMs": 7.630999999999943,
+      "heapBytes": 291877516
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 580.7000000476837,
+      "taskMs": 610.5699999999956,
+      "scriptMs": 279.4499999999971,
+      "layoutMs": 18.633000000000344,
+      "heapBytes": 292503524
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 347.7000000476837,
+      "taskMs": 405.0459999999987,
+      "scriptMs": 132.82200000000444,
+      "layoutMs": 8.03900000000013,
+      "heapBytes": 296415780
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 396.2000000476837,
+      "taskMs": 439.5279999999957,
+      "scriptMs": 135.34800000000757,
+      "layoutMs": 8.911000000000335,
+      "heapBytes": 296223792
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 556.1000000238419,
+      "taskMs": 583.9249999999936,
+      "scriptMs": 268.7609999999978,
+      "layoutMs": 19.530999999999743,
+      "heapBytes": 295763716
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 352.60000002384186,
+      "taskMs": 403.87300000000437,
+      "scriptMs": 128.81799999999544,
+      "layoutMs": 7.9779999999995965,
+      "heapBytes": 296910736
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 365.39999997615814,
+      "taskMs": 423.05999999999244,
+      "scriptMs": 102.30799999999363,
+      "layoutMs": 9.788999999999604,
+      "heapBytes": 297796372
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 481.89999997615814,
+      "taskMs": 533.0030000000079,
+      "scriptMs": 261.367000000007,
+      "layoutMs": 16.753000000000462,
+      "heapBytes": 302756280
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 462.10000002384186,
+      "taskMs": 545.0409999999977,
+      "scriptMs": 184.8009999999931,
+      "layoutMs": 11.623000000000161,
+      "heapBytes": 304662284
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 379.7000000476837,
+      "taskMs": 449.8490000000004,
+      "scriptMs": 130.57100000000332,
+      "layoutMs": 9.561999999999848,
+      "heapBytes": 304337492
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 532.3999999761581,
+      "taskMs": 569.4349999999986,
+      "scriptMs": 247.22799999999268,
+      "layoutMs": 18.322999999999645,
+      "heapBytes": 302845480
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 373.60000002384186,
+      "taskMs": 431.1659999999904,
+      "scriptMs": 106.2909999999988,
+      "layoutMs": 8.740999999999666,
+      "heapBytes": 304794140
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 278.5,
+      "taskMs": 374.8459999999909,
+      "scriptMs": 137.1599999999944,
+      "layoutMs": 5.926000000000542,
+      "heapBytes": 305792288
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 472.39999997615814,
+      "taskMs": 527.136999999982,
+      "scriptMs": 252.9570000000092,
+      "layoutMs": 16.623000000000054,
+      "heapBytes": 310667900
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 419.60000002384186,
+      "taskMs": 493.70900000002393,
+      "scriptMs": 155.93800000000613,
+      "layoutMs": 8.97699999999979,
+      "heapBytes": 311995012
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 5,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 353.7000000476837,
+      "taskMs": 413.89200000000415,
+      "scriptMs": 109.33400000000404,
+      "layoutMs": 8.033000000000179,
+      "heapBytes": 311700628
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 505.5,
+      "taskMs": 566.4219999999887,
+      "scriptMs": 249.85200000000418,
+      "layoutMs": 20.961000000000674,
+      "heapBytes": 310812872
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 353.89999997615814,
+      "taskMs": 416.93499999999517,
+      "scriptMs": 141.50300000000016,
+      "layoutMs": 7.800000000000473,
+      "heapBytes": 312775768
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 6,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 368.1999999284744,
+      "taskMs": 426.05499999999097,
+      "scriptMs": 108.09000000000424,
+      "layoutMs": 8.447000000000315,
+      "heapBytes": 313208168
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 534.2999999523163,
+      "taskMs": 617.7340000000129,
+      "scriptMs": 295.8550000000031,
+      "layoutMs": 19.52400000000054,
+      "heapBytes": 319419164
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 351.2000000476837,
+      "taskMs": 420.8280000000002,
+      "scriptMs": 144.66499999998916,
+      "layoutMs": 9.026999999999674,
+      "heapBytes": 320890916
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 7,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 282.60000002384186,
+      "taskMs": 382.583000000011,
+      "scriptMs": 143.23699999999917,
+      "layoutMs": 6.231999999999793,
+      "heapBytes": 320449804
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 475.5,
+      "taskMs": 514.8450000000082,
+      "scriptMs": 229.28399999999272,
+      "layoutMs": 19.34900000000006,
+      "heapBytes": 318904756
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 332.89999997615814,
+      "taskMs": 427.3390000000177,
+      "scriptMs": 143.28500000000588,
+      "layoutMs": 8.36400000000026,
+      "heapBytes": 320935296
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 8,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 282.5,
+      "taskMs": 392.376999999982,
+      "scriptMs": 144.08599999998728,
+      "layoutMs": 6.922999999999568,
+      "heapBytes": 321895676
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 552.1000000238419,
+      "taskMs": 582.5440000000128,
+      "scriptMs": 255.51299999999344,
+      "layoutMs": 20.780000000000243,
+      "heapBytes": 325519056
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 360.2000000476837,
+      "taskMs": 420.0969999999984,
+      "scriptMs": 148.64199999999528,
+      "layoutMs": 8.008999999999489,
+      "heapBytes": 328237856
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 9,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 367.7000000476837,
+      "taskMs": 445.3850000000159,
+      "scriptMs": 140.52599999999416,
+      "layoutMs": 9.767000000000081,
+      "heapBytes": 328255892
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1066.2000000476837,
+      "taskMs": 1995.882999999992,
+      "scriptMs": 1347.7859999999991,
+      "layoutMs": 106.12400000000034,
+      "heapBytes": 113465392
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 3197.7000000476837,
+      "taskMs": 3806.7519999999886,
+      "scriptMs": 2984.724,
+      "layoutMs": 65.47999999999999,
+      "heapBytes": 140947408
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 1126.5,
+      "taskMs": 1614.709999999974,
+      "scriptMs": 1040.9679999999923,
+      "layoutMs": 33.78000000000014,
+      "heapBytes": 144429556
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3357.7999999523163,
+      "taskMs": 3989.335000000011,
+      "scriptMs": 2829.976000000002,
+      "layoutMs": 159.68499999999963,
+      "heapBytes": 182236016
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6263.200000047684,
+      "taskMs": 6982.188999999977,
+      "scriptMs": 6002.452999999989,
+      "layoutMs": 95.28700000000079,
+      "heapBytes": 159197012
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 588.1000000238419,
+      "taskMs": 1157.194000000004,
+      "scriptMs": 595.0129999999945,
+      "layoutMs": 43.87199999999947,
+      "heapBytes": 165317624
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1189.7999999523163,
+      "taskMs": 1773.5130000000083,
+      "scriptMs": 1287.4399999999753,
+      "layoutMs": 66.90899999999988,
+      "heapBytes": 177694952
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1396.6000000238419,
+      "taskMs": 1964.0449999999987,
+      "scriptMs": 1346.837000000022,
+      "layoutMs": 45.98200000000041,
+      "heapBytes": 188156808
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 1003.1000000238419,
+      "taskMs": 1585.4180000000042,
+      "scriptMs": 1009.6389999999928,
+      "layoutMs": 33.87899999999977,
+      "heapBytes": 190773480
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3005.2999999523163,
+      "taskMs": 3615.6970000000115,
+      "scriptMs": 2769.8910000000014,
+      "layoutMs": 138.27899999999983,
+      "heapBytes": 228688172
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1228.2000000476837,
+      "taskMs": 1556.7470000000014,
+      "scriptMs": 1028.1350000000202,
+      "layoutMs": 85.59500000000054,
+      "heapBytes": 239130088
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 381,
+      "taskMs": 830.0160000000005,
+      "scriptMs": 359.44299999999885,
+      "layoutMs": 49.06800000000011,
+      "heapBytes": 241368508
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1260.7000000476837,
+      "taskMs": 1854.2559999999924,
+      "scriptMs": 1364.2810000000054,
+      "layoutMs": 62.67099999999992,
+      "heapBytes": 254576284
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1368.7000000476837,
+      "taskMs": 1918.7580000000253,
+      "scriptMs": 1357.321000000013,
+      "layoutMs": 41.26399999999997,
+      "heapBytes": 262674764
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 849.2000000476837,
+      "taskMs": 1466.8979999999863,
+      "scriptMs": 949.5049999999878,
+      "layoutMs": 32.254000000000005,
+      "heapBytes": 270368364
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3010.5,
+      "taskMs": 3649.0149999999912,
+      "scriptMs": 2797.4590000000035,
+      "layoutMs": 138.92300000000012,
+      "heapBytes": 303248632
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1219.7999999523163,
+      "taskMs": 1562.061,
+      "scriptMs": 1027.6309999999853,
+      "layoutMs": 90.02699999999919,
+      "heapBytes": 313953464
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 466.60000002384186,
+      "taskMs": 1014.00000000001,
+      "scriptMs": 468.3029999999917,
+      "layoutMs": 66.61000000000072,
+      "heapBytes": 316504020
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1229.2999999523163,
+      "taskMs": 1720.168000000001,
+      "scriptMs": 1246.4510000000075,
+      "layoutMs": 65.8979999999998,
+      "heapBytes": 325805996
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1922.7999999523163,
+      "taskMs": 2435.658999999987,
+      "scriptMs": 1818.037000000004,
+      "layoutMs": 42.5519999999997,
+      "heapBytes": 345449144
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 853.7000000476837,
+      "taskMs": 1378.8370000000043,
+      "scriptMs": 885.9789999999919,
+      "layoutMs": 32.25200000000061,
+      "heapBytes": 349811504
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3638.600000023842,
+      "taskMs": 4495.665000000003,
+      "scriptMs": 3544.877999999983,
+      "layoutMs": 141.32499999999925,
+      "heapBytes": 124466332
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6191.799999952316,
+      "taskMs": 6859.853999999985,
+      "scriptMs": 5785.416999999996,
+      "layoutMs": 94.62800000000016,
+      "heapBytes": 195827204
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 529.5,
+      "taskMs": 1111.0230000000172,
+      "scriptMs": 566.8299999999817,
+      "layoutMs": 48.26499999999978,
+      "heapBytes": 196484252
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1215.2999999523163,
+      "taskMs": 1781.5710000000138,
+      "scriptMs": 1281.1920000000043,
+      "layoutMs": 67.56100000000043,
+      "heapBytes": 211417336
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1666.8999999761581,
+      "taskMs": 2182.377000000002,
+      "scriptMs": 1555.3440000000194,
+      "layoutMs": 43.95599999999966,
+      "heapBytes": 223549372
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 889,
+      "taskMs": 1476.2139999999988,
+      "scriptMs": 948.7749999999835,
+      "layoutMs": 32.1700000000007,
+      "heapBytes": 231104352
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 2903.5,
+      "taskMs": 3506.648000000013,
+      "scriptMs": 2683.535000000006,
+      "layoutMs": 133.7279999999996,
+      "heapBytes": 263387508
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1176.1000000238419,
+      "taskMs": 1522.67599999999,
+      "scriptMs": 1005.3580000000011,
+      "layoutMs": 83.01300000000023,
+      "heapBytes": 273636604
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 444,
+      "taskMs": 946.0240000000226,
+      "scriptMs": 415.898999999996,
+      "layoutMs": 60.60599999999994,
+      "heapBytes": 275927972
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1157.6000000238419,
+      "taskMs": 1788.2140000000106,
+      "scriptMs": 1315.4540000000168,
+      "layoutMs": 60.48999999999971,
+      "heapBytes": 290075040
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1238.8999999761581,
+      "taskMs": 1779.3709999999692,
+      "scriptMs": 1233.9379999999949,
+      "layoutMs": 41.62900000000036,
+      "heapBytes": 298172072
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 889.3999999761581,
+      "taskMs": 1453.4249999999815,
+      "scriptMs": 929.3440000000146,
+      "layoutMs": 32.15599999999963,
+      "heapBytes": 303535064
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3002,
+      "taskMs": 3669.8450000000093,
+      "scriptMs": 2808.64600000001,
+      "layoutMs": 132.87600000000043,
+      "heapBytes": 338455712
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1511.7000000476837,
+      "taskMs": 1830.9070000000247,
+      "scriptMs": 1304.4430000000204,
+      "layoutMs": 84.32799999999929,
+      "heapBytes": 348516532
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 411.7999999523163,
+      "taskMs": 933.4419999999568,
+      "scriptMs": 412.2370000000046,
+      "layoutMs": 61.517000000000266,
+      "heapBytes": 349449132
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1237.8999999761581,
+      "taskMs": 1700.634999999977,
+      "scriptMs": 1224.9350000000163,
+      "layoutMs": 61.979000000000006,
+      "heapBytes": 360846696
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1487.1000000238419,
+      "taskMs": 2020.228999999972,
+      "scriptMs": 1455.949000000004,
+      "layoutMs": 41.698000000000235,
+      "heapBytes": 376728044
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 853.7999999523163,
+      "taskMs": 1384.3099999999708,
+      "scriptMs": 898.3780000000081,
+      "layoutMs": 31.56599999999976,
+      "heapBytes": 381719356
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3983,
+      "taskMs": 4621.051000000023,
+      "scriptMs": 3628.793999999999,
+      "layoutMs": 146.61199999999928,
+      "heapBytes": 133918672
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6234.299999952316,
+      "taskMs": 6983.814000000052,
+      "scriptMs": 5940.839000000011,
+      "layoutMs": 94.39700000000073,
+      "heapBytes": 204877224
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 579.2999999523163,
+      "taskMs": 1183.1770000000006,
+      "scriptMs": 641.5200000000141,
+      "layoutMs": 43.77099999999956,
+      "heapBytes": 206853772
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1225.2000000476837,
+      "taskMs": 1683.903999999984,
+      "scriptMs": 1187.357999999989,
+      "layoutMs": 68.60600000000083,
+      "heapBytes": 222526172
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1450.3999999761581,
+      "taskMs": 1974.1089999999986,
+      "scriptMs": 1376.7440000000022,
+      "layoutMs": 42.577999999998895,
+      "heapBytes": 235655556
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 878.7000000476837,
+      "taskMs": 1460.4249999999865,
+      "scriptMs": 927.2580000000232,
+      "layoutMs": 31.73600000000043,
+      "heapBytes": 233828340
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3420.600000023842,
+      "taskMs": 4333.923000000027,
+      "scriptMs": 3318.351000000007,
+      "layoutMs": 156.45199999999983,
+      "heapBytes": 278849540
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 1113.2999999523163,
+      "taskMs": 1502.5839999999562,
+      "scriptMs": 992.3359999999946,
+      "layoutMs": 82.8710000000008,
+      "heapBytes": 282826716
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 428.39999997615814,
+      "taskMs": 925.7069999999885,
+      "scriptMs": 411.2520000000188,
+      "layoutMs": 59.913999999999135,
+      "heapBytes": 285270500
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1187.7000000476837,
+      "taskMs": 1773.8300000000322,
+      "scriptMs": 1316.7119999999954,
+      "layoutMs": 60.448000000000945,
+      "heapBytes": 299054280
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1392.7000000476837,
+      "taskMs": 1923.7300000000346,
+      "scriptMs": 1369.940000000014,
+      "layoutMs": 38.427999999999685,
+      "heapBytes": 307969644
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 863.5,
+      "taskMs": 1406.3869999999952,
+      "scriptMs": 939.0539999999987,
+      "layoutMs": 31.11200000000025,
+      "heapBytes": 314103456
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 2888.2999999523163,
+      "taskMs": 3576.947999999959,
+      "scriptMs": 2728.421999999995,
+      "layoutMs": 134.1359999999998,
+      "heapBytes": 347866320
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 2014.2000000476837,
+      "taskMs": 2350.1580000000217,
+      "scriptMs": 1779.5859999999948,
+      "layoutMs": 85.93600000000023,
+      "heapBytes": 365056152
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 355.89999997615814,
+      "taskMs": 816.502000000014,
+      "scriptMs": 342.6819999999964,
+      "layoutMs": 47.64699999999955,
+      "heapBytes": 366863848
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/",
+      "drawMs": 1233.6000000238419,
+      "taskMs": 1834.1369999999984,
+      "scriptMs": 1335.9710000000007,
+      "layoutMs": 62.127000000000265,
+      "heapBytes": 376174224
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/play",
+      "drawMs": 1637.3999999761581,
+      "taskMs": 2253.6719999999946,
+      "scriptMs": 1695.2949999999873,
+      "layoutMs": 41.27300000000034,
+      "heapBytes": 104470628
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/disks",
+      "drawMs": 1059.2999999523163,
+      "taskMs": 1692.4960000000056,
+      "scriptMs": 969.2469999999958,
+      "layoutMs": 36.7879999999996,
+      "heapBytes": 112071960
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/config",
+      "drawMs": 3740.7999999523163,
+      "taskMs": 4366.387999999972,
+      "scriptMs": 3415.319000000011,
+      "layoutMs": 154.35599999999994,
+      "heapBytes": 148998740
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/settings",
+      "drawMs": 6159.5,
+      "taskMs": 6801.074000000028,
+      "scriptMs": 5922.1490000000185,
+      "layoutMs": 95.05000000000052,
+      "heapBytes": 217357512
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "page",
+      "name": "/docs",
+      "drawMs": 480.60000002384186,
+      "taskMs": 1063.6639999999602,
+      "scriptMs": 517.2319999999786,
+      "layoutMs": 52.32999999999954,
+      "heapBytes": 221177464
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 710.7999999523163,
+      "taskMs": 775.0859999999875,
+      "scriptMs": 336.5169999999864,
+      "layoutMs": 20.998999999999768,
+      "heapBytes": 227748084
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 401,
+      "taskMs": 470.1170000000161,
+      "scriptMs": 163.38000000001784,
+      "layoutMs": 9.038000000000324,
+      "heapBytes": 231712588
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 320,
+      "taskMs": 401.2960000000021,
+      "scriptMs": 131.91000000000486,
+      "layoutMs": 8.727999999999625,
+      "heapBytes": 232128704
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 627.6000000238419,
+      "taskMs": 652.6720000000523,
+      "scriptMs": 315.71199999999067,
+      "layoutMs": 15.864000000000544,
+      "heapBytes": 235050760
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 379.60000002384186,
+      "taskMs": 481.1840000000416,
+      "scriptMs": 174.85100000001808,
+      "layoutMs": 8.68900000000039,
+      "heapBytes": 232473104
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 369,
+      "taskMs": 436.8400000000179,
+      "scriptMs": 107.24700000000098,
+      "layoutMs": 8.297999999999917,
+      "heapBytes": 233398820
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 553.6000000238419,
+      "taskMs": 579.7509999999875,
+      "scriptMs": 299.9120000000062,
+      "layoutMs": 14.756000000000213,
+      "heapBytes": 235228700
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 349.5,
+      "taskMs": 471.73600000002125,
+      "scriptMs": 182.42899999998485,
+      "layoutMs": 7.134999999999891,
+      "heapBytes": 237622924
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 408.10000002384186,
+      "taskMs": 521.8409999999949,
+      "scriptMs": 192.22099999998932,
+      "layoutMs": 8.145000000000735,
+      "heapBytes": 239247852
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 592.8999999761581,
+      "taskMs": 621.2999999999624,
+      "scriptMs": 286.0589999999945,
+      "layoutMs": 16.728999999999772,
+      "heapBytes": 242853080
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 355.89999997615814,
+      "taskMs": 449.6459999999729,
+      "scriptMs": 171.4020000000005,
+      "layoutMs": 8.641000000000787,
+      "heapBytes": 245642356
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 395.89999997615814,
+      "taskMs": 456.92900000000236,
+      "scriptMs": 140.70999999998435,
+      "layoutMs": 8.47999999999871,
+      "heapBytes": 246691680
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 582.2999999523163,
+      "taskMs": 607.9599999999914,
+      "scriptMs": 282.4200000000019,
+      "layoutMs": 16.740999999999673,
+      "heapBytes": 248736568
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 381.5,
+      "taskMs": 476.07000000004973,
+      "scriptMs": 185.4940000000056,
+      "layoutMs": 8.009000000001265,
+      "heapBytes": 244809232
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 391.89999997615814,
+      "taskMs": 524.8250000000212,
+      "scriptMs": 190.49300000000358,
+      "layoutMs": 8.793000000000717,
+      "heapBytes": 245632112
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 590.2000000476837,
+      "taskMs": 625.5179999999996,
+      "scriptMs": 285.1519999999823,
+      "layoutMs": 17.227000000000103,
+      "heapBytes": 248417760
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 361.10000002384186,
+      "taskMs": 463.5690000000068,
+      "scriptMs": 169.5359999999937,
+      "layoutMs": 7.5939999999992125,
+      "heapBytes": 251010088
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 5,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 293.8000000715256,
+      "taskMs": 417.8459999999973,
+      "scriptMs": 166.71800000000303,
+      "layoutMs": 5.492000000000274,
+      "heapBytes": 252114800
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 538.7999999523163,
+      "taskMs": 573.3720000000062,
+      "scriptMs": 288.692999999995,
+      "layoutMs": 15.394999999999825,
+      "heapBytes": 252881852
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 372.5,
+      "taskMs": 466.6639999999802,
+      "scriptMs": 174.62000000000444,
+      "layoutMs": 7.975000000000065,
+      "heapBytes": 255323856
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 6,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 384.7999999523163,
+      "taskMs": 447.6649999999722,
+      "scriptMs": 115.93799999999987,
+      "layoutMs": 8.750000000000924,
+      "heapBytes": 257807972
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 485.89999997615814,
+      "taskMs": 555.4710000000114,
+      "scriptMs": 267.2680000000014,
+      "layoutMs": 15.294999999998282,
+      "heapBytes": 263080132
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 461.5,
+      "taskMs": 524.8250000000212,
+      "scriptMs": 162.94999999999504,
+      "layoutMs": 9.717000000000198,
+      "heapBytes": 259063500
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 7,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 297.39999997615814,
+      "taskMs": 382.1609999999964,
+      "scriptMs": 131.84400000000096,
+      "layoutMs": 5.424999999998903,
+      "heapBytes": 260195504
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 497.2999999523163,
+      "taskMs": 569.5499999999925,
+      "scriptMs": 278.3759999999802,
+      "layoutMs": 15.423999999999438,
+      "heapBytes": 263163408
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 353,
+      "taskMs": 470.68500000000313,
+      "scriptMs": 177.76800000001458,
+      "layoutMs": 7.3139999999991545,
+      "heapBytes": 265637644
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 8,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 295,
+      "taskMs": 424.3579999999838,
+      "scriptMs": 172.45799999997757,
+      "layoutMs": 5.146000000001649,
+      "heapBytes": 266634772
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "overlay",
+      "name": "diagnostics",
+      "drawMs": 492.2999999523163,
+      "taskMs": 565.0899999999979,
+      "scriptMs": 281.3229999999862,
+      "layoutMs": 14.87000000000016,
+      "heapBytes": 268596996
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "overlay",
+      "name": "device-switcher",
+      "drawMs": 372.7000000476837,
+      "taskMs": 466.6480000000206,
+      "scriptMs": 178.2790000000034,
+      "layoutMs": 7.086999999998511,
+      "heapBytes": 272582584
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 9,
+      "kind": "overlay",
+      "name": "quick-menu",
+      "drawMs": 397.2999999523163,
+      "taskMs": 465.8110000000306,
+      "scriptMs": 141.45899999999756,
+      "layoutMs": 8.384999999998755,
+      "heapBytes": 272788444
+    }
+  ],
+  "retained": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "Timestamp": 958469.191861,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 1,
+      "Frames": 1,
+      "JSEventListeners": 6556,
+      "LayoutObjects": 1579,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 4513,
+      "Resources": 1,
+      "ContextLifecycleStateObservers": 8,
+      "V8PerContextDatas": 1,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 1,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 0,
+      "ArrayBufferContents": 8,
+      "LayoutCount": 1156,
+      "RecalcStyleCount": 1533,
+      "LayoutDuration": 4.952037,
+      "RecalcStyleDuration": 29.914999,
+      "DevToolsCommandDuration": 0.322222,
+      "ScriptDuration": 116.015509,
+      "V8CompileDuration": 0.001322,
+      "TaskDuration": 176.694258,
+      "TaskOtherDuration": 25.488169,
+      "ThreadTime": 186.835174,
+      "ProcessTime": 735.71,
+      "JSHeapUsedSize": 99275464,
+      "JSHeapTotalSize": 105619456,
+      "FirstMeaningfulPaint": 0,
+      "DomContentLoaded": 957520.480624,
+      "NavigationStart": 957520.154497,
+      "document": {
+        "profile": "compact",
+        "textScale": "default",
+        "elements": 1114,
+        "mountedBodies": 12
+      }
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "Timestamp": 958671.228832,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 1,
+      "Frames": 1,
+      "JSEventListeners": 6557,
+      "LayoutObjects": 1735,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 4661,
+      "Resources": 1,
+      "ContextLifecycleStateObservers": 8,
+      "V8PerContextDatas": 1,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 1,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 0,
+      "ArrayBufferContents": 8,
+      "LayoutCount": 2319,
+      "RecalcStyleCount": 2978,
+      "LayoutDuration": 9.97439,
+      "RecalcStyleDuration": 59.920829,
+      "DevToolsCommandDuration": 0.634438,
+      "ScriptDuration": 235.124399,
+      "V8CompileDuration": 0.002817,
+      "TaskDuration": 357.448249,
+      "TaskOtherDuration": 51.791376,
+      "ThreadTime": 377.214512,
+      "ProcessTime": 974.54,
+      "JSHeapUsedSize": 103331500,
+      "JSHeapTotalSize": 109813760,
+      "FirstMeaningfulPaint": 0,
+      "DomContentLoaded": 957520.480624,
+      "NavigationStart": 957520.154497,
+      "document": {
+        "profile": "expanded",
+        "textScale": "default",
+        "elements": 1182,
+        "mountedBodies": 12
+      }
+    }
+  ]
+}

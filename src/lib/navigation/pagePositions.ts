@@ -21,7 +21,10 @@ type PagePositionRecord = { scrollTop: number; anchor: { key: string; offset: nu
 const SETTLE_MS = 3000;
 
 const positions = new Map<number, PagePositionRecord>();
-const cardHeights = new Map<string, number>();
+type CardHeight = { height: number; layout: string };
+const cardHeights = new Map<string, CardHeight>();
+const layoutKey = () =>
+  `${window.innerWidth}:${window.innerHeight}:${document.documentElement.dataset.displayProfile ?? ""}:${document.documentElement.dataset.textScale ?? ""}`;
 const discardNextRecord = new Set<number>();
 
 const cardKey = (scope: string, id: string) => `${scope}:${id}`;
@@ -56,8 +59,18 @@ const alignAnchor = (scroller: HTMLElement, anchor: NonNullable<PagePositionReco
 const keepAnchorWhileSettling = (scroller: HTMLElement, anchor: NonNullable<PagePositionRecord["anchor"]>) => {
   const started = performance.now();
   let stopped = false;
+  let frame: number | null = null;
+  let expiry: ReturnType<typeof setTimeout> | undefined;
+  let resizeObserver: ResizeObserver | null = null;
+  let mutationObserver: MutationObserver | null = null;
   const stop = () => {
+    if (stopped) return;
     stopped = true;
+    if (frame !== null) cancelAnimationFrame(frame);
+    clearTimeout(expiry);
+    resizeObserver?.disconnect();
+    mutationObserver?.disconnect();
+    scroller.removeEventListener("scroll", checkExternalScroll);
     for (const type of ["pointerdown", "wheel", "keydown", "touchstart"]) scroller.removeEventListener(type, stop);
   };
   for (const type of ["pointerdown", "wheel", "keydown", "touchstart"]) {
@@ -65,7 +78,11 @@ const keepAnchorWhileSettling = (scroller: HTMLElement, anchor: NonNullable<Page
   }
   let expectedScrollTop = scroller.scrollTop;
   let expectedScrollHeight = scroller.scrollHeight;
+  const checkExternalScroll = () => {
+    if (Math.abs(scroller.scrollTop - expectedScrollTop) >= 1 && scroller.scrollHeight === expectedScrollHeight) stop();
+  };
   const step = () => {
+    frame = null;
     if (stopped || !scroller.isConnected) return stop();
     const scrolledElsewhere =
       Math.abs(scroller.scrollTop - expectedScrollTop) >= 1 && scroller.scrollHeight === expectedScrollHeight;
@@ -73,10 +90,35 @@ const keepAnchorWhileSettling = (scroller: HTMLElement, anchor: NonNullable<Page
     alignAnchor(scroller, anchor);
     expectedScrollTop = scroller.scrollTop;
     expectedScrollHeight = scroller.scrollHeight;
-    if (performance.now() - started < SETTLE_MS) requestAnimationFrame(step);
-    else stop();
+    if (performance.now() - started < SETTLE_MS) {
+      if (!resizeObserver) frame = requestAnimationFrame(step);
+    } else stop();
   };
-  requestAnimationFrame(step);
+  const schedule = () => {
+    if (!stopped && frame === null) frame = requestAnimationFrame(step);
+  };
+  if (typeof ResizeObserver === "function") {
+    // Keep the same anchor, but read geometry only when the page actually changes.
+    // Polling a settled page every frame forced layout for three seconds on each return.
+    resizeObserver = new ResizeObserver(schedule);
+    const observed = new WeakSet<Element>();
+    const observeCards = () => {
+      for (const element of [scroller, ...cardsIn(scroller)]) {
+        if (observed.has(element)) continue;
+        observed.add(element);
+        resizeObserver?.observe(element);
+      }
+    };
+    observeCards();
+    mutationObserver = new MutationObserver(() => {
+      observeCards();
+      schedule();
+    });
+    mutationObserver.observe(scroller, { childList: true, subtree: true });
+    scroller.addEventListener("scroll", checkExternalScroll, { passive: true });
+    expiry = setTimeout(stop, SETTLE_MS);
+  }
+  schedule();
 };
 
 export const rememberPagePosition = (pageIndex: number, slot: Element | null): void => {
@@ -88,7 +130,8 @@ export const rememberPagePosition = (pageIndex: number, slot: Element | null): v
     anchor: card ? { key: keyOf(card), offset: offsetWithin(scroller, card) } : null,
   });
   for (const card of cardsIn(scroller)) {
-    if (card.dataset.bodyMounted === "true") cardHeights.set(keyOf(card), card.offsetHeight);
+    if (card.dataset.bodyMounted === "true")
+      cardHeights.set(keyOf(card), { height: card.offsetHeight, layout: layoutKey() });
   }
 };
 
@@ -108,8 +151,10 @@ export const restorePagePosition = (pageIndex: number, slot: Element | null): vo
   keepAnchorWhileSettling(scroller, position.anchor);
 };
 
-export const rememberedCardHeight = (scope: string, id: string): number | undefined =>
-  cardHeights.get(cardKey(scope, id));
+export const rememberedCardHeight = (scope: string, id: string): number | undefined => {
+  const cached = cardHeights.get(cardKey(scope, id));
+  return cached?.layout === layoutKey() ? cached.height : undefined;
+};
 
 export const resetPagePositionsForTests = (): void => {
   positions.clear();

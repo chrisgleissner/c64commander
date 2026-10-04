@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
@@ -23,13 +23,15 @@ import { Button } from "@/components/ui/button";
 import { useHealthState } from "@/hooks/useHealthState";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTargetDeviceIdentity } from "@/hooks/useTargetDeviceIdentity";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { toast } from "@/hooks/use-toast";
-import { subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
+import { acknowledgeDeviceSwitcherOpen, subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
+import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import {
   HEALTH_GLYPHS,
@@ -396,6 +398,7 @@ export function UnifiedHealthBadge({ className }: Props) {
     status: { state: rawConnectionState, deviceInfo },
   } = useC64Connection();
   const { profile } = useDisplayProfile();
+  const screenActive = useScreenActivity();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedDeviceIds, setExpandedDeviceIds] = useState<string[]>([]);
   const [pendingSwitch, setPendingSwitch] = useState<PendingSwitchState | null>(null);
@@ -509,19 +512,32 @@ export function UnifiedHealthBadge({ className }: Props) {
   // Only the badge on the page in view answers, or one # opened a picker or a message per page.
   // The slot marker is checked rather than `inert`: the whole layer is inert while a dialog is
   // open, and the Quick menu asks for the switcher in the same moment it closes itself.
+  const ownsCurrentPage = useCallback(() => {
+    const slot = badgeRef.current?.closest<HTMLElement>("[data-slot-active]");
+    return (
+      screenActive &&
+      slot?.dataset.slotActive !== "false" &&
+      (slot?.dataset.routeIndex === undefined ||
+        Number(slot.dataset.routeIndex) === tabIndexForPath(window.location.pathname))
+    );
+  }, [screenActive]);
   const openSwitchPickerOnRequest = useCallback(() => {
-    if (badgeRef.current?.closest('[data-slot-active="false"]')) return;
+    if (!ownsCurrentPage()) return false;
     if (canSwitchDevices) {
       openSwitchPicker();
-      return;
+      return pickerOpen;
     }
     toast({
       title: "No other device to switch to",
       description: "Add another device in Settings, under Saved devices.",
       alwaysVisible: true,
     });
-  }, [canSwitchDevices, openSwitchPicker]);
+    return true;
+  }, [canSwitchDevices, openSwitchPicker, ownsCurrentPage, pickerOpen]);
   useEffect(() => subscribeDeviceSwitcherOpen(openSwitchPickerOnRequest), [openSwitchPickerOnRequest]);
+  useLayoutEffect(() => {
+    if (pickerOpen && ownsCurrentPage()) acknowledgeDeviceSwitcherOpen();
+  }, [ownsCurrentPage, pickerOpen]);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {

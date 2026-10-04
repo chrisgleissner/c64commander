@@ -84,10 +84,21 @@ const compositeKey = (scope: string, id: string): string => `${scope}:${id}`;
 // can't distinguish "never touched" from "explicitly closed", which used to collapse
 // every untouched defaultOpen section the moment any sibling was toggled (HARD25-001).
 // An id absent from this map was never touched and keeps its own defaultOpen.
+// Keep one parsed store, checking its serialized value for external rewrites on every read.
+let cachedRaw: string | null = null;
+let cachedEntries: Map<string, boolean> | null = null;
 const readRawEntries = (key: string): Map<string, boolean> => {
   if (typeof localStorage === "undefined") return new Map();
   const raw = localStorage.getItem(key);
   if (!raw) return new Map();
+  if (key === OPEN_SECTIONS_KEY && raw === cachedRaw && cachedEntries) return new Map(cachedEntries);
+  const remember = (entries: Map<string, boolean>) => {
+    if (key === OPEN_SECTIONS_KEY) {
+      cachedRaw = raw;
+      cachedEntries = new Map(entries);
+    }
+    return entries;
+  };
   try {
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) {
@@ -99,14 +110,14 @@ const readRawEntries = (key: string): Map<string, boolean> => {
       for (const id of parsed) {
         if (typeof id === "string") entries.set(id, true);
       }
-      return entries;
+      return remember(entries);
     }
     if (parsed && typeof parsed === "object") {
       const entries = new Map<string, boolean>();
       for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
         if (typeof value === "boolean") entries.set(id, value);
       }
-      return entries;
+      return remember(entries);
     }
     return new Map();
   } catch (error) {

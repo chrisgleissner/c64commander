@@ -56,6 +56,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { createDroidDevice } from "./droidctl_device.mjs";
+import { revealJoystickSetting } from "./joystick_setting.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -220,11 +221,7 @@ const selectJoystickSetting = async (setting) => {
   const before = await js(
     inPage(`q("remote-input-close")?.click();await wait(600);
 q("tab-settings")?.click();await wait(2500);
-if(!q("settings-game-mode-joystick")){q("settings-section-toggle-play-and-disk")?.click();await wait(2000);}
-const t=q("settings-game-mode-joystick");
-if(!t) return JSON.stringify({error:"the on-screen joystick setting is not reachable in Settings"});
-t.scrollIntoView({block:"center"});await wait(300);
-return JSON.stringify({was:localStorage.getItem("c64u_game_mode_controls_visibility"),label:t.innerText});`),
+return JSON.stringify(await (${revealJoystickSetting.toString()})());`),
   );
   if (before.error) throw new Error(before.error);
 

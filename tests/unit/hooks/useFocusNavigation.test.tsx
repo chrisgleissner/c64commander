@@ -1613,6 +1613,27 @@ describe("FocusNavigationProvider re-scan timing", () => {
 });
 
 describe("FocusNavigationProvider with cards still waiting to be built", () => {
+  it.each([
+    ["tab jump", "Digit3", "3", "jumpToTab"],
+    ["diagnostics", "", "*", "openDiagnostics"],
+    ["device switcher", "", "#", "openDeviceSwitcher"],
+    ["quick menu", "ContextMenu", "ContextMenu", "openQuickMenu"],
+  ] as const)("runs %s without building the page's deferred bodies", (_label, code, key, handler) => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const command = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ [handler]: command }}>
+        {["First", "Second", "Third"].map((name) => (
+          <WaitingCard key={name} name={name} />
+        ))}
+      </FocusNavigationProvider>,
+    );
+    expect(queryButton("Third")).toBeNull();
+    fireEvent.keyDown(document.body, { code, key });
+    expect(command).toHaveBeenCalledOnce();
+    expect(queryButton("Third")).toBeNull();
+  });
   afterEach(() => {
     setProgressiveMountEnabled(false);
     vi.restoreAllMocks();
@@ -1624,6 +1645,25 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
     const mounted = useProgressiveMount(true, anchor);
     return <div ref={anchor}>{mounted ? <button type="button">{name}</button> : null}</div>;
   };
+
+  it("navigates a popup without mounting deferred bodies on the page behind it", () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    render(
+      <FocusNavigationProvider>
+        {["First", "Second", "Third"].map((name) => (
+          <WaitingCard key={name} name={name} />
+        ))}
+        <div role="dialog" aria-label="Popup">
+          <button type="button">Popup first</button>
+          <button type="button">Popup second</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Popup second"));
+    expect(queryButton("Third")).toBeNull();
+  });
 
   it("builds every waiting card before a key reads the ring, so the key reaches what is in them", () => {
     setProgressiveMountEnabled(true);

@@ -30,6 +30,7 @@ import { addLog } from "@/lib/logging";
 import {
   buildHvscBrowseIndexFromSonglengthSnapshot,
   buildHvscBrowseIndexFromEntries,
+  buildFoldersFromSongs,
   clearHvscBrowseIndexSnapshot,
   getHvscDisplayAuthor,
   getHvscFoldersWithParent,
@@ -52,6 +53,34 @@ beforeEach(() => forgetHvscBrowseIndexSnapshot());
 const MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
 describe("hvscBrowseIndexStore", () => {
+  it("preserves canonical folder hierarchy for repeated separators and trailing separators in stored song paths", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "MUSICIANS//A///Author/Tune.sid", name: "Tune.sid", type: "sid" },
+      { path: "/DEMOS/Tune.sid/", name: "Tune.sid", type: "sid" },
+      { path: "/Root.sid", name: "Root.sid", type: "sid" },
+    ]);
+    expect(snapshot.folders["/MUSICIANS/A/Author"].songs).toEqual(["/MUSICIANS//A///Author/Tune.sid"]);
+    expect(snapshot.folders["/DEMOS"].songs).toEqual(["/DEMOS/Tune.sid/"]);
+    expect(snapshot.folders["/"].songs).toEqual(["/Root.sid"]);
+  });
+
+  it("resolves a shared folder hierarchy once while retaining every sorted tune", () => {
+    const songs = Object.fromEntries(
+      Array.from({ length: 1024 }, (_, index) => {
+        const virtualPath = `/MUSICIANS/A/Author/Tune_${index}.sid`;
+        return [virtualPath, { virtualPath, fileName: `Tune_${index}.sid` }];
+      }),
+    );
+    const split = vi.spyOn(String.prototype, "split");
+    const folders = buildFoldersFromSongs(songs);
+    const pathSplits = split.mock.calls.filter(([separator]) => separator === "/").length;
+    split.mockRestore();
+    expect(pathSplits).toBe(1);
+    expect(folders["/"].folders).toEqual(["/MUSICIANS"]);
+    expect(folders["/MUSICIANS/A"].folders).toEqual(["/MUSICIANS/A/Author"]);
+    expect(folders["/MUSICIANS/A/Author"].songs).toEqual(Object.keys(songs).sort((a, b) => a.localeCompare(b)));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -120,9 +120,9 @@ export const GlobalDiagnosticsOverlay = () => {
   const routePanel = resolveDiagnosticsPanelFromPath(location.pathname);
   const diagnosticsOpenActionRef = useRef<ReturnType<typeof createActionContext> | null>(null);
 
-  const [logs, setLogs] = useState(getLogs());
-  const [errorLogs, setErrorLogs] = useState(getErrorLogs());
-  const [traceEvents, setTraceEvents] = useState(getTraceEvents());
+  const [logs, setLogs] = useState(getLogs);
+  const [errorLogs, setErrorLogs] = useState(getErrorLogs);
+  const [traceEvents, setTraceEvents] = useState(getTraceEvents);
   const actionSummariesReady = overlayOpen && overlayFirstVisible;
   const actionSummaries = useMemo(
     () => (actionSummariesReady ? buildActionSummaries(traceEvents) : []),

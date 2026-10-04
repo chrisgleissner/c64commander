@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   requestDeviceSwitcherOpen,
   subscribeDeviceSwitcherOpen,
@@ -7,6 +7,25 @@ import {
 } from "@/lib/input/keypadCommands";
 
 describe("keypadCommands window-event bus", () => {
+  afterEach(() => subscribeDeviceSwitcherOpen(() => {})());
+
+  it("retains one request across a missing owner and lets only an active owner consume it", () => {
+    requestDeviceSwitcherOpen();
+    requestDeviceSwitcherOpen();
+    const inactive = vi.fn(() => false);
+    const offInactive = subscribeDeviceSwitcherOpen(inactive);
+    const active = vi.fn(() => true);
+    const offActive = subscribeDeviceSwitcherOpen(active);
+    const later = vi.fn();
+    const offLater = subscribeDeviceSwitcherOpen(later);
+    expect(inactive).toHaveBeenCalledOnce();
+    expect(active).toHaveBeenCalledOnce();
+    expect(later).not.toHaveBeenCalled();
+    offInactive();
+    offActive();
+    offLater();
+  });
+
   it("delivers device-switcher open requests to subscribers and stops after unsubscribe", () => {
     const handler = vi.fn();
     const off = subscribeDeviceSwitcherOpen(handler);
