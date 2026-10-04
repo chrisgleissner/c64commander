@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { TabBar } from "@/components/TabBar";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import { subscribePageReset } from "@/lib/navigation/pageReset";
 
 const InterstitialRegistrar = ({ active }: { active: boolean }) => {
   useRegisterInterstitial("modal", active);
@@ -85,6 +86,26 @@ describe("TabBar", () => {
 
     expect(screen.getByLabelText("Play")).toHaveAttribute("aria-current", "page");
     expect(screen.getByLabelText("Home")).not.toHaveAttribute("aria-current");
+  });
+
+  it("asks the selected page to open fresh when its own tab is tapped, and only then", () => {
+    const resets: number[] = [];
+    const unsubscribe = subscribePageReset((tabIndex) => resets.push(tabIndex));
+    try {
+      render(
+        <MemoryRouter initialEntries={["/play"]}>
+          <TabBar />
+        </MemoryRouter>,
+      );
+
+      fireEvent.click(screen.getByLabelText("Home"));
+      expect(resets).toEqual([]);
+
+      fireEvent.click(screen.getByLabelText("Home"));
+      expect(resets).toEqual([0]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("slides out of view when an interstitial is active", () => {

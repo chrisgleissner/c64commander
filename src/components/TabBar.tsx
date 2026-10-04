@@ -17,6 +17,7 @@ import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { useGuardedNavigate, type GuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
+import { requestPageReset } from "@/lib/navigation/pageReset";
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/": Home,
@@ -73,6 +74,7 @@ function TabBarButton({
       onClick={wrapUserEvent(
         (event) => {
           handlePointerButtonClick(event);
+          if (isActive) requestPageReset(tabIndexForPath(tab.path));
           navigate(tab.path);
         },
         "click",

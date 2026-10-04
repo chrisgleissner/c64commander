@@ -123,7 +123,7 @@ With nothing connected, Home does not become a wall of "Not available": search s
   <tr>
     <td><img src="docs/img/app/home/sections/04-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
     <td><img src="docs/img/app/home/sections/09-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/11-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/12-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
     <td><img src="docs/img/app/home/sections/14-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
@@ -283,7 +283,7 @@ Configure connections, appearance, diagnostics, playback, HVSC, and device safet
     <td><img src="docs/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
+    <td><img src="docs/img/app/settings/sections/15-sid-radio.png" alt="Settings SID Radio" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="360"/></td>
     <td><img src="docs/img/app/settings/sections/09-hvsc.png" alt="Settings HVSC" width="360"/></td>
   </tr>

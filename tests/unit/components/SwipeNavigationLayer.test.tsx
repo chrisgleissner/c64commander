@@ -13,6 +13,9 @@ import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
 import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
+import { requestPageReset } from "@/lib/navigation/pageReset";
+import { resetPagePositionsForTests } from "@/lib/navigation/pagePositions";
+import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 type GestureCallbacks = {
@@ -33,6 +36,7 @@ const mocks = vi.hoisted(() => ({
     settings: 0,
     docs: 0,
   },
+  playInstances: { count: 0 },
   unmountCounts: {
     home: 0,
     play: 0,
@@ -94,7 +98,12 @@ vi.mock("@/pages/PlayFilesPage", () => ({
         mocks.unmountCounts.play += 1;
       };
     }, []);
-    return <div>Play Page</div>;
+    const [instance] = React.useState(() => ++mocks.playInstances.count);
+    return (
+      <div data-page-scroll-container="true" data-testid="play-scroller" data-instance={instance}>
+        Play Page
+      </div>
+    );
   },
 }));
 vi.mock("@/pages/DisksPage", () => ({
@@ -151,6 +160,19 @@ const NavigationProbe = () => {
   );
 };
 
+const PathNavigationProbe = () => {
+  const navigate = useNavigate();
+  return (
+    <>
+      {["/play", "/disks"].map((path) => (
+        <button key={path} type="button" onClick={() => navigate(path)}>
+          {`Go ${path}`}
+        </button>
+      ))}
+    </>
+  );
+};
+
 const SettingsOverlayNavigationProbe = () => {
   const navigate = useNavigate();
   return (
@@ -202,6 +224,8 @@ describe("SwipeNavigationLayer", () => {
     Object.keys(mocks.unmountCounts).forEach((key) => {
       mocks.unmountCounts[key as keyof typeof mocks.unmountCounts] = 0;
     });
+    mocks.playInstances.count = 0;
+    resetPagePositionsForTests();
     mocks.addLog.mockReset();
     mocks.addErrorLog.mockReset();
     document.documentElement.dataset.c64MotionMode = "standard";
@@ -535,6 +559,41 @@ describe("SwipeNavigationLayer", () => {
     fireEvent.transitionEnd(runway, { target: runway });
     expect(mocks.mountCounts.config).toBe(1);
     expect(screen.getByTestId("swipe-slot-config")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  describe("page positions", () => {
+    const visit = (path: string) => {
+      fireEvent.click(screen.getByRole("button", { name: `Go ${path}` }));
+      const runway = screen.getByTestId("swipe-navigation-runway");
+      fireEvent.transitionEnd(runway, { target: runway });
+    };
+
+    it("opens a page again at the scroll offset it was left at", async () => {
+      renderLayer("/play", <PathNavigationProbe />);
+      (await screen.findByTestId("play-scroller")).scrollTop = 480;
+
+      visit("/disks");
+      expect(screen.queryByTestId("play-scroller")).not.toBeInTheDocument();
+      visit("/play");
+
+      const scroller = await screen.findByTestId("play-scroller");
+      expect(Number(scroller.getAttribute("data-instance"))).toBeGreaterThan(1);
+      expect(scroller.scrollTop).toBe(480);
+    });
+
+    it("opens the page fresh and at the top when its tab is tapped while it is selected", async () => {
+      renderLayer("/play", <PathNavigationProbe />);
+      (await screen.findByTestId("play-scroller")).scrollTop = 480;
+      visit("/disks");
+      visit("/play");
+      const before = Number((await screen.findByTestId("play-scroller")).getAttribute("data-instance"));
+
+      act(() => requestPageReset(tabIndexForPath("/play")));
+
+      const scroller = await screen.findByTestId("play-scroller");
+      expect(Number(scroller.getAttribute("data-instance"))).toBe(before + 1);
+      expect(scroller.scrollTop).toBe(0);
+    });
   });
 
   it("suppresses inactive page render failures instead of showing the fallback", async () => {

@@ -93,6 +93,10 @@ The badge in the top right corner tells you how your C64 is doing: healthy, degr
 
 If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
 
+### Moving Between Pages
+
+Each page opens where you left it. Scroll down a long page, look at another one, and come back: you are at the same card again. To start a page over from the top, tap its tab while you are on it.
+
 ### Finding Your Way
 
 Search covers the whole app: every page, every card, every app setting, your disk collection, the HVSC archive, and the tunes you have liked or played lately. Type two or three letters and pick what you want.
@@ -775,7 +779,7 @@ Start it with the **Game** tile on Home, the **Game Mode** button on Play (**Gam
 
 ![Game Mode](../../img/app/home/remote-input/profiles/compact/02-game-mode.png)
 
-The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible**.
+The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible**.
 
 ![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/compact/07-game-mode-keys.png)
 
@@ -813,7 +817,7 @@ The mapping turns with your phone. Hold it sideways like a gamepad and the keys 
 
 Lying down, or the sensor cannot tell which way up the phone is? The **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.
 
-To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centred)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.
+To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.
 
 ### File Sources
 
@@ -1160,6 +1164,8 @@ Outside text fields, the number keys jump to pages, **8** and **9** pause and re
 | 0 | Game Mode |
 
 `7` opens search even with **Keyboard and keypad navigation** switched off.
+
+Pressing the number of the page you are already on starts that page over from the top.
 
 #### Function Keys
 
