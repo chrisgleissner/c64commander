@@ -6,16 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-  type MutableRefObject,
-  type ReactNode,
-  type Ref,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
@@ -223,7 +214,7 @@ export const CollapsibleSection = ({
     (element: HTMLButtonElement | null) => {
       fitRefs.toggle.current = element;
       if (typeof headerRef === "function") headerRef(element);
-      else if (headerRef) (headerRef as MutableRefObject<HTMLButtonElement | null>).current = element;
+      else if (headerRef) headerRef.current = element;
     },
     [fitRefs.toggle, headerRef],
   );

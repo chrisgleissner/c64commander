@@ -21,6 +21,22 @@ vi.mock("@/lib/tracing/actionTrace", () => ({
 
 import { useActionTrace } from "@/hooks/useActionTrace";
 
+/*
+ * Replaces the global Error so that the hook's own `new Error()` carries `stack`. React 19 also calls
+ * `Error(message)` without `new` for its owner stacks, so the replacement must stay callable and leave
+ * those errors untouched.
+ */
+const stubHookErrorStack = (stack: string | undefined) => {
+  const RealError = Error;
+  function StackError(message?: string) {
+    const error = new RealError(message);
+    if (message === undefined) error.stack = stack as string;
+    return error;
+  }
+  StackError.prototype = RealError.prototype;
+  vi.stubGlobal("Error", StackError as unknown as typeof Error);
+};
+
 describe("useActionTrace", () => {
   it("wraps actions with inferred names", async () => {
     createActionContext.mockReset();
@@ -56,14 +72,7 @@ describe("useActionTrace", () => {
     createActionContext.mockReturnValue({ correlationId: "COR-2" });
     runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
 
-    class MockError extends Error {
-      constructor() {
-        super("stack");
-        this.stack = "Error\n  at FakeComponent (fake.tsx:1:1)\n  at useActionTrace (hook.ts:1:1)";
-      }
-    }
-
-    vi.stubGlobal("Error", MockError as unknown as typeof Error);
+    stubHookErrorStack("Error\n  at FakeComponent (fake.tsx:1:1)\n  at useActionTrace (hook.ts:1:1)");
 
     const { result } = renderHook(() => useActionTrace());
     const handler = result.current(function doThing() {
@@ -107,15 +116,10 @@ describe("useActionTrace", () => {
     createActionContext.mockReturnValue({ correlationId: "COR-4" });
     runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
 
-    class MockError extends Error {
-      constructor() {
-        super();
-        // Stack only contains filtered frame names → candidates = []
-        this.stack =
-          "\n  at useActionTrace (hook.ts:1:1)\n  at renderWithHooks (react.js:1:1)\n  at beginWork (react.js:2:1)";
-      }
-    }
-    vi.stubGlobal("Error", MockError as unknown as typeof Error);
+    // Stack only contains filtered frame names → candidates = []
+    stubHookErrorStack(
+      "\n  at useActionTrace (hook.ts:1:1)\n  at renderWithHooks (react.js:1:1)\n  at beginWork (react.js:2:1)",
+    );
 
     const { result } = renderHook(() => useActionTrace());
     const fn = function myFunc() {
@@ -135,13 +139,7 @@ describe("useActionTrace", () => {
     createActionContext.mockReturnValue({ correlationId: "COR-5" });
     runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
 
-    class MockError extends Error {
-      constructor() {
-        super();
-        this.stack = undefined as unknown as string;
-      }
-    }
-    vi.stubGlobal("Error", MockError as unknown as typeof Error);
+    stubHookErrorStack(undefined);
 
     const { result } = renderHook(() => useActionTrace());
     // Anonymous function (no name) covers inferActionName line 17 FALSE → "anonymousAction"
