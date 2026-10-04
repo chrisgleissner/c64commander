@@ -123,7 +123,7 @@ Both wrappers restore/close their test sessions. The HIL wrapper assumes the Pix
 uses rate 2; it is not a calibration for arbitrary Android hardware. No runtime test probes
 or coverage instrumentation were included in the measured APKs.
 
-## Validation status
+## Validation performed for these measurements
 
 - 14,217 unit/contract tests passed; six existing skips were unchanged.
 - Focused regression suites passed. Twenty-two regressions failed against the original
@@ -131,10 +131,13 @@ or coverage instrumentation were included in the measured APKs.
 - Four calibrated browser checks passed at both widths: visible-body readiness, scroll and
   resize behavior, overlay scoping, and complete keypad traversal.
 - Production web build, Capacitor sync, Android debug APK build and lint passed.
+- The session-gate unit test now models the browser-location boundary and explicitly
+  asserts its login redirect, avoiding JSDOM's unsupported full-document navigation.
 - Corrected APK installed and exercised on the Pixel 4 at rate 2.
 - The calibrated complete browser run passed 822 tests. Three failures were addressed with
   explicit page readiness, scrolling to a deferred chapter, and waiting for a completed
-  asynchronous save; all three focused reruns passed. Merged/patch coverage is pending.
+  asynchronous save; all three focused reruns passed. Additional full-suite and merged/patch
+  coverage results are recorded in [PR #453](https://github.com/chrisgleissner/c64commander/pull/453).
 - No screenshot files changed: labels, controls, styles and documented visible content are unchanged.
 
 The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed at CPU

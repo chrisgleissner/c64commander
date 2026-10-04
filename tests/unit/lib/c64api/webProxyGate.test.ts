@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const fetchMock = vi.fn();
+const loginAssign = vi.fn();
 
 const gatedResponse = (status: number, gate: string | null) =>
   new Response(JSON.stringify({ error: "gated" }), {
@@ -27,11 +28,24 @@ const gatedResponse = (status: number, gate: string | null) =>
 beforeEach(() => {
   Object.defineProperty(globalThis, "fetch", { value: fetchMock, configurable: true });
   fetchMock.mockReset();
+  loginAssign.mockReset();
+  const browserWindow = window;
+  const location = { pathname: "/", search: "", hash: "", assign: loginAssign };
+  // JSDOM cannot leave the document. Model the browser boundary and assert its redirect.
+  vi.stubGlobal(
+    "window",
+    new Proxy(browserWindow, {
+      get(target, property) {
+        return property === "location" ? location : Reflect.get(target, property, target);
+      },
+    }),
+  );
   resetAuthChallengeForTests();
   resetWebProxyGateForTests();
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   resetAuthChallengeForTests();
 });
 
@@ -54,6 +68,7 @@ describe("web proxy gate (HARD27-029, HARD27-030)", () => {
     // The password the dialog asks for is the device's; no device saw this
     // request, so asking for it cannot help and the answer is never accepted.
     expect(getAuthChallengeSnapshot()).toBeNull();
+    expect(loginAssign).toHaveBeenCalledExactlyOnceWith("/login?next=%2F");
   });
 
   it("does not raise it when the proxy refused the host by policy", async () => {
