@@ -50,7 +50,7 @@ function TabBarButton({
   readonly order: number;
   readonly isActive: boolean;
   readonly navigate: GuardedNavigate;
-  readonly activeRef?: React.RefObject<HTMLButtonElement>;
+  readonly activeRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
   const Icon = tab.icon;
   const tabId = `tab-${tab.label.toLowerCase().replace(/\s+/g, "-")}`;
@@ -59,7 +59,7 @@ function TabBarButton({
   const focusRef = (node: HTMLButtonElement | null) => {
     if (typeof keypadRef === "function") keypadRef(node);
     else if (keypadRef) (keypadRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
-    if (isActive && activeRef) (activeRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+    if (isActive && activeRef) activeRef.current = node;
   };
 
   return (

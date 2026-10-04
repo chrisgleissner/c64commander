@@ -458,7 +458,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         height: "calc(100dvh - var(--app-tab-bar-reserved-height) - var(--app-toast-reserved-height, 0px))",
         touchAction: "pan-y pinch-zoom",
       }}
-      inert={interstitialActive ? "" : undefined}
+      inert={interstitialActive}
       data-testid="swipe-navigation-container"
       data-swipe-enabled={swipeEnabled ? "true" : "false"}
       data-swipe-motion-mode={runtimeMotionMode}
@@ -502,7 +502,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
                 className="relative h-full overflow-hidden overflow-clip"
                 style={{ width: "33.333333%", flexShrink: 0 }}
                 aria-hidden={true}
-                inert=""
+                inert
                 data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
                 data-route-index={pageIndex}
                 data-slot-active="false"
@@ -519,7 +519,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
               className="relative h-full overflow-hidden overflow-clip"
               style={{ width: "33.333333%", flexShrink: 0 }}
               aria-hidden={!isActive}
-              inert={isActive ? undefined : ""}
+              inert={!isActive}
               // Only the active slot carries this id, so exactly one `page-*` id exists at a
               // time and it names the tab on screen. Maestro matches `id:` against the HTML id
               // attribute, and the tab-bar labels it would otherwise assert on render outside

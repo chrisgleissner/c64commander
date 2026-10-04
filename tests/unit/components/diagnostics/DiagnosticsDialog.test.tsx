@@ -670,7 +670,7 @@ describe("DiagnosticsDialog", () => {
     fireEvent.click(within(screen.getByTestId("connection-edit-surface")).getByRole("button", { name: "Close" }));
 
     fireEvent.pointerDown(screen.getByTestId("diagnostics-device-line"));
-    await vi.advanceTimersByTimeAsync(500);
+    await act(() => vi.advanceTimersByTimeAsync(500));
 
     expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
 

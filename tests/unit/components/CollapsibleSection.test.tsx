@@ -65,6 +65,17 @@ describe("CollapsibleSection", () => {
     });
   });
 
+  it("hands the toggle button to an object headerRef", () => {
+    const headerRef = { current: null as HTMLButtonElement | null };
+    render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" icon={Radio} headerRef={headerRef}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+
+    expect(headerRef.current).toBe(screen.getByTestId("test-section-toggle-audio"));
+  });
+
   it("renders closed by default and opens on tap", () => {
     render(
       <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>

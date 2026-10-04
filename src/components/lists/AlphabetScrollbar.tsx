@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   items: Array<{ title: string; id: string }>;
-  scrollContainerRef: React.RefObject<HTMLElement>;
+  scrollContainerRef: React.RefObject<HTMLElement | null>;
   onLetterSelect?: (letter: string) => void;
   onScrollToIndex?: (index: number) => void;
 };

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactElement } from "react";
 import { addErrorLog } from "@/lib/logging";
 import { StatefulButton } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -148,7 +148,7 @@ const renderTextWithBreaks = (text: string, keyPrefix: string) => {
 
 const renderInlineText = (value: string) => {
   const tokenRegex = /(`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
-  const nodes: JSX.Element[] = [];
+  const nodes: ReactElement[] = [];
   let cursor = 0;
   let keyIndex = 0;
 

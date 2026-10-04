@@ -1331,15 +1331,22 @@ export function DiagnosticsDialog({
     setHistoryOpen(requestedPanel === "history");
     setConfigDriftOpen(requestedPanel === "config-drift");
     setDecisionStateOpen(requestedPanel === "decision-state");
-    setHeatMapVariant(
+    const heatMapVariant =
       requestedPanel === "rest-heatmap"
         ? "REST"
         : requestedPanel === "ftp-heatmap"
           ? "FTP"
           : requestedPanel === "config-heatmap"
             ? "CONFIG"
-            : null,
-    );
+            : null;
+    if (heatMapVariant === null) {
+      setHeatMapVariant(null);
+      return;
+    }
+    // Both are modal dialogs, and each hides everything else from assistive technology when it opens.
+    // Opened in the sheet's own commit, each hid the other; a frame later the heat map hides the sheet.
+    const frame = requestAnimationFrame(() => setHeatMapVariant(heatMapVariant));
+    return () => cancelAnimationFrame(frame);
   }, [open, requestedPanel]);
 
   const filteredEntries = useMemo(

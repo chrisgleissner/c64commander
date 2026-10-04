@@ -761,7 +761,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
 
@@ -824,7 +824,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
 
@@ -838,7 +838,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
     expect(mockState.switchSavedDevice).toHaveBeenCalledWith("device-backup");
@@ -862,7 +862,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
@@ -890,7 +890,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("switch-device-row-device-backup"));
@@ -898,7 +898,7 @@ describe("UnifiedHealthBadge", () => {
     });
 
     fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     const selectedCard = screen.getByTestId("switch-device-row-device-backup").closest("[data-selected]");
     const previousCard = screen.getByTestId("switch-device-row-device-office").closest("[data-selected]");
@@ -928,7 +928,7 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
     const openPicker = async () => {
       fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-      await vi.advanceTimersByTimeAsync(450);
+      await act(() => vi.advanceTimersByTimeAsync(450));
     };
 
     await openPicker();
@@ -972,7 +972,7 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
     const openPicker = async () => {
       fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-      await vi.advanceTimersByTimeAsync(450);
+      await act(() => vi.advanceTimersByTimeAsync(450));
     };
 
     await openPicker();
@@ -1033,7 +1033,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     expect(screen.getByTestId("switch-device-status-device-backup").textContent).toContain("Unhealthy");
 
@@ -1054,7 +1054,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     expect(screen.queryByText("Checking all saved devices")).toBeNull();
     expect(screen.queryByText("Saved-device health")).toBeNull();
@@ -1086,7 +1086,7 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     const row = screen.getByTestId("switch-device-row-device-office").textContent;
     expect(row).toContain("Last check 10h 16m ago");
@@ -1103,7 +1103,7 @@ describe("UnifiedHealthBadge", () => {
     try {
       render(<UnifiedHealthBadge />);
       fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-      await vi.advanceTimersByTimeAsync(450);
+      await act(() => vi.advanceTimersByTimeAsync(450));
 
       expect(screen.getByTestId("switch-device-same-as-device-backup").textContent).toBe("Same device as Office U64");
       expect(screen.getByTestId("switch-device-same-as-device-office").textContent).toBe("Same device as Backup Lab");
@@ -1121,7 +1121,7 @@ describe("UnifiedHealthBadge", () => {
     try {
       render(<UnifiedHealthBadge />);
       fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-      await vi.advanceTimersByTimeAsync(450);
+      await act(() => vi.advanceTimersByTimeAsync(450));
 
       expect(screen.queryByTestId("switch-device-same-as-device-backup")).toBeNull();
       expect(screen.queryByTestId("switch-device-same-as-device-office")).toBeNull();
@@ -1134,7 +1134,7 @@ describe("UnifiedHealthBadge", () => {
     vi.useFakeTimers();
     render(<UnifiedHealthBadge />);
     fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     expect(screen.queryByTestId("switch-device-same-as-device-backup")).toBeNull();
   });
@@ -1149,7 +1149,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     const selectedRow = screen.getByTestId("switch-device-row-device-office");
     const backupRow = screen.getByTestId("switch-device-row-device-backup");
@@ -1166,7 +1166,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     const selectedCard = screen.getByTestId("switch-device-row-device-office").closest("[data-selected]");
     const otherCard = screen.getByTestId("switch-device-row-device-backup").closest("[data-selected]");
@@ -1187,7 +1187,7 @@ describe("UnifiedHealthBadge", () => {
 
       const badge = screen.getByTestId("unified-health-badge");
       fireEvent.pointerDown(badge);
-      await vi.advanceTimersByTimeAsync(450);
+      await act(() => vi.advanceTimersByTimeAsync(450));
 
       const row = screen.getByTestId("switch-device-row-device-office");
       expect(row).toHaveAttribute("data-badge-layout", "stacked");
@@ -1206,7 +1206,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     const row = screen.getByTestId("switch-device-row-device-office");
     expect(row).toHaveAttribute("data-badge-layout", "inline");
@@ -1220,7 +1220,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     const expandButton = screen.getByTestId("switch-device-expand-device-office");
     expect(expandButton).toHaveAttribute("aria-label", "Expand device health detail");
@@ -1243,7 +1243,7 @@ describe("UnifiedHealthBadge", () => {
 
     const badge = screen.getByTestId("unified-health-badge");
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     fireEvent.click(screen.getByTestId("switch-device-expand-device-office"));
     expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
@@ -1257,7 +1257,7 @@ describe("UnifiedHealthBadge", () => {
 
     vi.useFakeTimers();
     fireEvent.pointerDown(badge);
-    await vi.advanceTimersByTimeAsync(450);
+    await act(() => vi.advanceTimersByTimeAsync(450));
 
     expect(screen.queryByTestId("health-check-detail-view")).toBeNull();
     expect(screen.getByTestId("switch-device-expand-device-office")).toHaveAttribute("aria-expanded", "false");
