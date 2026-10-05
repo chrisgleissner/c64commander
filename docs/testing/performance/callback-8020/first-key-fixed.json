@@ -1,0 +1,86 @@
+{
+  "label": "fixed",
+  "cpuRate": 2,
+  "samples": [
+    {
+      "width": 320,
+      "round": 0,
+      "mounted": 1,
+      "old": "",
+      "ms": 112.5,
+      "target": "c64u "
+    },
+    {
+      "width": 320,
+      "round": 1,
+      "mounted": 1,
+      "old": "",
+      "ms": 52.60000002384186,
+      "target": "c64u "
+    },
+    {
+      "width": 320,
+      "round": 2,
+      "mounted": 1,
+      "old": "",
+      "ms": 47.299999952316284,
+      "target": "c64u "
+    },
+    {
+      "width": 320,
+      "round": 3,
+      "mounted": 1,
+      "old": "",
+      "ms": 56.799999952316284,
+      "target": "c64u "
+    },
+    {
+      "width": 320,
+      "round": 4,
+      "mounted": 1,
+      "old": "",
+      "ms": 51.39999997615814,
+      "target": "c64u "
+    },
+    {
+      "width": 800,
+      "round": 0,
+      "mounted": 2,
+      "old": "",
+      "ms": 154.79999995231628,
+      "target": "c64u  Healthy"
+    },
+    {
+      "width": 800,
+      "round": 1,
+      "mounted": 2,
+      "old": "",
+      "ms": 49.700000047683716,
+      "target": "c64u  Healthy"
+    },
+    {
+      "width": 800,
+      "round": 2,
+      "mounted": 2,
+      "old": "",
+      "ms": 60.299999952316284,
+      "target": "c64u  Healthy"
+    },
+    {
+      "width": 800,
+      "round": 3,
+      "mounted": 2,
+      "old": "",
+      "ms": 49.700000047683716,
+      "target": "c64u  Healthy"
+    },
+    {
+      "width": 800,
+      "round": 4,
+      "mounted": 2,
+      "old": "",
+      "ms": 50,
+      "target": "c64u  Healthy"
+    }
+  ]
+}

@@ -7,6 +7,8 @@ import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { reportUserError } from "@/lib/uiErrors";
 import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { getLogs, getErrorLogs } from "@/lib/logging";
+import { getTraceEvents } from "@/lib/tracing/traceSession";
 import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 import {
   getHealthCheckStateSnapshot,
@@ -221,6 +223,17 @@ const expandDiagnosticsHeader = () => {
 let uninstallDeviceBackButton: (() => void) | null = null;
 
 describe("GlobalDiagnosticsOverlay", () => {
+  it("does not copy closed diagnostics stores again when unrelated health state rerenders the host", () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+    renderOverlay();
+    vi.mocked(getLogs).mockClear();
+    vi.mocked(getErrorLogs).mockClear();
+    vi.mocked(getTraceEvents).mockClear();
+    act(() => setHealthCheckStateSnapshot({ ...getHealthCheckStateSnapshot(), latestResult: null }));
+    expect(getLogs).not.toHaveBeenCalled();
+    expect(getErrorLogs).not.toHaveBeenCalled();
+    expect(getTraceEvents).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     uninstallDeviceBackButton?.();
     uninstallDeviceBackButton = null;

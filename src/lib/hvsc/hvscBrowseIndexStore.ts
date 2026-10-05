@@ -252,31 +252,33 @@ const getFileName = (virtualPath: string) => {
   return index >= 0 ? normalized.substring(index + 1) : normalized;
 };
 
-const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => ({
-  virtualPath: normalizePath(entry.path),
-  fileName: entry.name,
-  displayTitleSeed: deriveSeedTitle(entry.name),
-  displayAuthorSeed: deriveSeedAuthor(entry.path),
-  canonicalTitle: null,
-  canonicalAuthor: null,
-  released: null,
-  durationSeconds: entry.durationSeconds ?? null,
-  durationsSeconds: entry.durationSeconds != null ? [entry.durationSeconds] : null,
-  subsongCount: entry.durationSeconds != null ? 1 : null,
-  defaultSong: 1,
-  metadataStatus: entry.durationSeconds != null ? "seeded" : null,
-  metadataUpdatedAt: null,
-  searchTextSeed: [entry.path, entry.name, deriveSeedTitle(entry.name), deriveSeedAuthor(entry.path)]
+const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => {
+  const displayTitleSeed = deriveSeedTitle(entry.name);
+  const displayAuthorSeed = deriveSeedAuthor(entry.path);
+  const searchText = [entry.path, entry.name, displayTitleSeed, displayAuthorSeed]
     .filter((value): value is string => Boolean(value))
     .join(" ")
-    .toLowerCase(),
-  searchTextFull: [entry.path, entry.name, deriveSeedTitle(entry.name), deriveSeedAuthor(entry.path)]
-    .filter((value): value is string => Boolean(value))
-    .join(" ")
-    .toLowerCase(),
-  sidMetadata: null,
-  trackSubsongs: entry.durationSeconds != null ? [{ songNr: 1, isDefault: true }] : null,
-});
+    .toLowerCase();
+  return {
+    virtualPath: normalizePath(entry.path),
+    fileName: entry.name,
+    displayTitleSeed,
+    displayAuthorSeed,
+    canonicalTitle: null,
+    canonicalAuthor: null,
+    released: null,
+    durationSeconds: entry.durationSeconds ?? null,
+    durationsSeconds: entry.durationSeconds != null ? [entry.durationSeconds] : null,
+    subsongCount: entry.durationSeconds != null ? 1 : null,
+    defaultSong: 1,
+    metadataStatus: entry.durationSeconds != null ? "seeded" : null,
+    metadataUpdatedAt: null,
+    searchTextSeed: searchText,
+    searchTextFull: searchText,
+    sidMetadata: null,
+    trackSubsongs: entry.durationSeconds != null ? [{ songNr: 1, isDefault: true }] : null,
+  };
+};
 
 export const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
   const folderMap = new Map<string, { folders: Set<string>; songs: Set<string> }>();
@@ -289,21 +291,30 @@ export const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSon
     return next;
   };
 
-  ensureFolder("/");
-  Object.values(songs).forEach((song) => {
+  const root = ensureFolder("/");
+  // Most tunes share a composer folder. Resolve each hierarchy once, rather than
+  // splitting and rebuilding the same parent chain for every one of 60,000 songs.
+  // This map belongs to this build only; no additional library stays resident.
+  const parents = new Map<string, ReturnType<typeof ensureFolder>>([["", root]]);
+  for (const song of Object.values(songs)) {
     const normalizedSongPath = normalizePath(song.virtualPath);
-    const segments = normalizedSongPath.split("/").filter(Boolean);
-    let currentPath = "/";
-    for (let index = 0; index < segments.length - 1; index += 1) {
-      const folderName = segments[index];
-      const parent = ensureFolder(currentPath);
-      const nextPath = normalizeFolderPath(`${currentPath === "/" ? "" : currentPath}/${folderName}`);
-      parent.folders.add(nextPath);
-      ensureFolder(nextPath);
-      currentPath = nextPath;
+    const hierarchyPath = normalizedSongPath.endsWith("/")
+      ? normalizedSongPath.replace(/\/+$/, "")
+      : normalizedSongPath;
+    const parentPath = hierarchyPath.slice(0, hierarchyPath.lastIndexOf("/"));
+    let parent = parents.get(parentPath);
+    if (!parent) {
+      let currentPath = "/";
+      for (const folderName of parentPath.split("/").filter(Boolean)) {
+        const nextPath = normalizeFolderPath(`${currentPath === "/" ? "" : currentPath}/${folderName}`);
+        ensureFolder(currentPath).folders.add(nextPath);
+        currentPath = nextPath;
+      }
+      parent = ensureFolder(currentPath);
+      parents.set(parentPath, parent);
     }
-    ensureFolder(currentPath).songs.add(normalizedSongPath);
-  });
+    parent.songs.add(normalizedSongPath);
+  }
 
   const folders: Record<string, HvscBrowseFolderRow> = {};
   folderMap.forEach((value, path) => {

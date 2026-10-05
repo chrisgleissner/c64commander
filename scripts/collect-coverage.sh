@@ -39,7 +39,9 @@ npx nextcov merge coverage coverage/e2e -o coverage/merged --reporters lcov,text
 cp coverage/merged/lcov.info coverage/lcov-merged.info
 
 echo "==> Enforcing merged coverage threshold..."
-COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91 COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs
+# Use the Vitest 4 CI gate, while preserving explicitly requested stricter thresholds.
+COVERAGE_MIN=${COVERAGE_MIN:-93} COVERAGE_MIN_BRANCH=${COVERAGE_MIN_BRANCH:-85} \
+  COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs
 
 echo ""
 echo "==> Coverage collection complete!"

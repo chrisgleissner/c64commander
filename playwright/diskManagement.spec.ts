@@ -31,6 +31,42 @@ const getLatestDriveRequest = (
   matcher: (req: { method: string; url: string }) => boolean,
 ) => [...requests].reverse().find(matcher);
 
+// Card-opening animation can move both rows between protocol calls. Compare
+// connected nodes from the active page in the same browser task.
+const sampleDosStatusOrder = (page: Page) =>
+  page.evaluate(() => {
+    const y = (id: string) => {
+      const element = document.querySelector(`[data-slot-active="true"] [data-testid="${id}"]`);
+      return element?.getClientRects().length ? element.getBoundingClientRect().y : null;
+    };
+    return { messageY: y("drive-status-message-soft-iec"), rawY: y("drive-status-raw-soft-iec") };
+  });
+
+test("DOS status geometry stays consistent when the card shifts between separate locator reads", async ({ page }) => {
+  await page.setContent(`<div data-slot-active="true" id="moving-card" style="position:absolute;top:160px">
+    <div data-testid="drive-status-message-soft-iec" style="height:40px">OK</div>
+    <div data-testid="drive-status-raw-soft-iec">73,U64IEC</div>
+  </div>`);
+  const lookup = page.getByTestId.bind(page);
+  page.getByTestId = (id) => {
+    const locator = lookup(id);
+    if (id === "drive-status-raw-soft-iec") {
+      const boundingBox = locator.boundingBox.bind(locator);
+      locator.boundingBox = async (options) => {
+        await page.evaluate(() => {
+          document.getElementById("moving-card")!.style.transform = "translateY(-80px)";
+        });
+        return boundingBox(options);
+      };
+    }
+    return locator;
+  };
+  const { messageY, rawY } = await sampleDosStatusOrder(page);
+  expect(messageY).not.toBeNull();
+  expect(rawY).not.toBeNull();
+  expect(messageY!).toBeLessThan(rawY!);
+});
+
 /**
  * Opens every drive card.
  *
@@ -447,12 +483,11 @@ test.describe("Disk management", () => {
 
     await expect(page.getByTestId("drive-status-message-soft-iec")).toHaveClass(/text-success|text-amber-600/);
 
-    const messageBox = await page.getByTestId("drive-status-message-soft-iec").boundingBox();
-    const rawBox = await page.getByTestId("drive-status-raw-soft-iec").boundingBox();
-    expect(messageBox).not.toBeNull();
-    expect(rawBox).not.toBeNull();
-    if (messageBox && rawBox) {
-      expect(messageBox.y).toBeLessThan(rawBox.y);
+    const { messageY, rawY } = await sampleDosStatusOrder(page);
+    expect(messageY).not.toBeNull();
+    expect(rawY).not.toBeNull();
+    if (messageY !== null && rawY !== null) {
+      expect(messageY).toBeLessThan(rawY);
     }
 
     await expect(page.getByText("Message:", { exact: true })).toHaveCount(0);

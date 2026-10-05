@@ -348,6 +348,12 @@ const settle = async (page: Page, profile = "compact") => {
   // to a real page. Without this the measurement can land on the startup screen and
   // report that everything is fine because almost nothing is on screen yet.
   await page.locator("nav.tab-bar").first().waitFor({ state: "visible", timeout: 30_000 });
+  // The tab bar can precede a lazy page chunk. Measure the active content,
+  // rather than a loading placeholder that happens to share its navigation.
+  await page.locator('[data-slot-active="true"] [data-page-scroll-container]').waitFor({
+    state: "visible",
+    timeout: 30_000,
+  });
   // Let the page paint before anything is measured.
   await page.waitForTimeout(600);
 };
@@ -367,6 +373,31 @@ test.describe("Small screen ergonomics", () => {
 
   test.afterEach(async () => {
     await server.close();
+  });
+
+  test("ergonomics settlement waits for the active page behind an already visible tab bar", async ({ page }) => {
+    let releaseChunk = () => {};
+    const chunkReady = new Promise<void>((resolve) => {
+      releaseChunk = resolve;
+    });
+    await page.route("**/PlayFilesPage-*.js", async (route) => {
+      await chunkReady;
+      await route.continue();
+    });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await page.locator("nav.tab-bar").first().waitFor({ state: "visible" });
+    let settled = false;
+    const settlement = settle(page).then(() => {
+      settled = true;
+    });
+    try {
+      await page.waitForTimeout(1000);
+      expect(settled).toBe(false);
+    } finally {
+      releaseChunk();
+      await settlement;
+    }
+    await expect(page.locator('[data-slot-active="true"] [data-page-scroll-container]')).toBeVisible();
   });
 
   for (const route of TAB_ROUTES) {

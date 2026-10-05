@@ -169,6 +169,28 @@ test.describe("Automatic Demo Mode", () => {
     await snap(page, testInfo, "real-connected-indicator");
   });
 
+  test("startup discovery dismissal waits for its animated portal to detach", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, "Expected probe failures during offline discovery.");
+    server = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_automatic_demo_mode_enabled", "0");
+      localStorage.setItem("c64u_startup_discovery_window_ms", "500");
+      localStorage.setItem("c64u_discovery_probe_timeout_ms", "500");
+      localStorage.setItem("c64u_device_host", "127.0.0.1:1");
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:1";
+    });
+    await page.goto("/");
+    const dismiss = page.getByTestId("startup-device-discovery-dismiss");
+    await expect(dismiss).toBeVisible();
+    await page.addStyleTag({
+      content: '[role="dialog"][data-state="closed"] { animation-duration: 800ms !important; }',
+    });
+    await dismissStartupDiscoveryDialog(page);
+    expect(await dismiss.count()).toBe(0);
+  });
+
   test("connection status surface covers checking, not yet connected, online, and offline states", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
@@ -573,11 +595,15 @@ test.describe("Automatic Demo Mode", () => {
 
     await expect.poll(() => server.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(true);
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
-    const stored = await page.evaluate(
-      (currentDeviceHostKey: string) => localStorage.getItem(currentDeviceHostKey),
-      CURRENT_DEVICE_HOST_KEY,
-    );
-    expect(stored).toBe(new URL(server.baseUrl).host);
+    // Reachability can connect before the asynchronous save has persisted the host.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (currentDeviceHostKey: string) => localStorage.getItem(currentDeviceHostKey),
+          CURRENT_DEVICE_HOST_KEY,
+        ),
+      )
+      .toBe(new URL(server.baseUrl).host);
     await expectRestTraceSequence(page, testInfo, "/v1/info");
     await snap(page, testInfo, "demo-exit-connected");
   });

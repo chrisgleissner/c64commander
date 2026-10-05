@@ -1,0 +1,500 @@
+{
+  "cpuRate": 2,
+  "rounds": 5,
+  "samples": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 402.60000002384186,
+      "taskMs": 1067.6239999999996,
+      "scriptMs": 524.5280000000001,
+      "layoutMs": 68.60299999999997,
+      "heapBytes": 119339636
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 189.5,
+      "taskMs": 863.474,
+      "scriptMs": 373.7769999999996,
+      "layoutMs": 55.71500000000007,
+      "heapBytes": 117144504
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 400.7000000476837,
+      "taskMs": 1052.871999999999,
+      "scriptMs": 513.312,
+      "layoutMs": 70.25800000000004,
+      "heapBytes": 115499248
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 236.5,
+      "taskMs": 893.305999999999,
+      "scriptMs": 339.5850000000005,
+      "layoutMs": 57.495999999999995,
+      "heapBytes": 124060676
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 936.7999999523163,
+      "taskMs": 1392.4669999999999,
+      "scriptMs": 433.4470000000001,
+      "layoutMs": 64.68299999999994,
+      "heapBytes": 111275876
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 371.89999997615814,
+      "taskMs": 1045.8210000000001,
+      "scriptMs": 492.79699999999946,
+      "layoutMs": 67.87100000000001,
+      "heapBytes": 118095464
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 223.89999997615814,
+      "taskMs": 977.5200000000019,
+      "scriptMs": 452.13099999999963,
+      "layoutMs": 60.867999999999924,
+      "heapBytes": 119560000
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 370.89999997615814,
+      "taskMs": 1048.8649999999993,
+      "scriptMs": 531.998999999999,
+      "layoutMs": 69.24600000000014,
+      "heapBytes": 124075072
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 191.19999992847443,
+      "taskMs": 956.9940000000017,
+      "scriptMs": 437.3380000000004,
+      "layoutMs": 58.110000000000106,
+      "heapBytes": 120779976
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 410.7999999523163,
+      "taskMs": 1086.866999999998,
+      "scriptMs": 531.3309999999998,
+      "layoutMs": 71.91900000000007,
+      "heapBytes": 124827388
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 1177.7999999523163,
+      "taskMs": 1566.1830000000023,
+      "scriptMs": 616.9520000000012,
+      "layoutMs": 71.28400000000012,
+      "heapBytes": 118400888
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 447.2000000476837,
+      "taskMs": 1209.9290000000024,
+      "scriptMs": 566.3909999999994,
+      "layoutMs": 85.0080000000002,
+      "heapBytes": 127952096
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 295.59999990463257,
+      "taskMs": 1127.695000000003,
+      "scriptMs": 450.23800000000233,
+      "layoutMs": 89.37000000000018,
+      "heapBytes": 125336952
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 377.5,
+      "taskMs": 1070.5010000000002,
+      "scriptMs": 499.79500000000246,
+      "layoutMs": 80.9359999999999,
+      "heapBytes": 125369668
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 227.10000002384186,
+      "taskMs": 1106.4039999999977,
+      "scriptMs": 424.19500000000096,
+      "layoutMs": 85.45599999999976,
+      "heapBytes": 124656528
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 343.10000002384186,
+      "taskMs": 968.4629999999999,
+      "scriptMs": 470.90999999999997,
+      "layoutMs": 77.09799999999989,
+      "heapBytes": 132020276
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 188.89999997615814,
+      "taskMs": 902.1629999999874,
+      "scriptMs": 374.37600000000157,
+      "layoutMs": 67.73799999999986,
+      "heapBytes": 127005824
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 469.60000002384186,
+      "taskMs": 1244.372999999996,
+      "scriptMs": 580.6210000000008,
+      "layoutMs": 83.51200000000026,
+      "heapBytes": 125522600
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 243.60000002384186,
+      "taskMs": 923.7490000000008,
+      "scriptMs": 340.34799999999876,
+      "layoutMs": 70.12399999999985,
+      "heapBytes": 128548332
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 1011,
+      "taskMs": 1440.2189999999991,
+      "scriptMs": 452.5499999999951,
+      "layoutMs": 72.31900000000024,
+      "heapBytes": 119661740
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 347,
+      "taskMs": 993.8389999999941,
+      "scriptMs": 460.31200000000183,
+      "layoutMs": 75.38100000000014,
+      "heapBytes": 130736408
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": null,
+      "error": "Contextful draw timed out"
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 1400.5,
+      "taskMs": 1852.6530000000037,
+      "scriptMs": 685.6909999999984,
+      "layoutMs": 105.12499999999925,
+      "heapBytes": 125058880
+    }
+  ],
+  "retained": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "Timestamp": 959576.913141,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 1,
+      "Frames": 1,
+      "JSEventListeners": 6560,
+      "LayoutObjects": 1579,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 4455,
+      "Resources": 1,
+      "ContextLifecycleStateObservers": 7,
+      "V8PerContextDatas": 1,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 1,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 0,
+      "ArrayBufferContents": 8,
+      "LayoutCount": 577,
+      "RecalcStyleCount": 848,
+      "LayoutDuration": 1.923312,
+      "RecalcStyleDuration": 12.584722,
+      "DevToolsCommandDuration": 0.061712,
+      "ScriptDuration": 18.701333,
+      "V8CompileDuration": 0.001203,
+      "TaskDuration": 47.663796,
+      "TaskOtherDuration": 14.391514,
+      "ThreadTime": 75.813741,
+      "ProcessTime": 1309.41,
+      "JSHeapUsedSize": 114373744,
+      "JSHeapTotalSize": 119906304,
+      "FirstMeaningfulPaint": 0,
+      "DomContentLoaded": 957520.480624,
+      "NavigationStart": 957520.154497,
+      "document": {
+        "profile": "compact",
+        "textScale": "default",
+        "elements": 1115,
+        "mountedBodies": 12
+      }
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "Timestamp": 959679.585184,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 1,
+      "Frames": 1,
+      "JSEventListeners": 6552,
+      "LayoutObjects": 1735,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 4605,
+      "Resources": 1,
+      "ContextLifecycleStateObservers": 7,
+      "V8PerContextDatas": 1,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 1,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 0,
+      "ArrayBufferContents": 8,
+      "LayoutCount": 1171,
+      "RecalcStyleCount": 1686,
+      "LayoutDuration": 4.237547,
+      "RecalcStyleDuration": 25.774858,
+      "DevToolsCommandDuration": 0.132664,
+      "ScriptDuration": 37.607841,
+      "V8CompileDuration": 0.002422,
+      "TaskDuration": 96.52902,
+      "TaskOtherDuration": 28.773688,
+      "ThreadTime": 153.45406,
+      "ProcessTime": 1409.15,
+      "JSHeapUsedSize": 120098280,
+      "JSHeapTotalSize": 125149184,
+      "FirstMeaningfulPaint": 0,
+      "DomContentLoaded": 957520.480624,
+      "NavigationStart": 957520.154497,
+      "document": {
+        "profile": "expanded",
+        "textScale": "default",
+        "elements": 1183,
+        "mountedBodies": 12
+      }
+    }
+  ]
+}

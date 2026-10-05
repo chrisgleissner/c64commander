@@ -257,8 +257,10 @@ Required — each site is its own actionable finding with an unambiguous state:
   assertions never weakened.
 - **UI change:** keypad / D-pad / T9 and screen-reader reachability preserved;
   `docs/cta-inventory.md` updated; only the affected screenshots regenerated.
-- **Coverage:** ≥ **91%** branch coverage globally and on changed lines (patch
-  coverage), via the merged coverage report — never inferred from global totals.
+- **Coverage:** merged unit + E2E coverage meets the Vitest 4 CI gate: ≥ **93%**
+  lines and ≥ **85%** branches (see AGENTS.md, "Coverage gates"). Changed branches
+  still meet ≥ **91%**, and Codecov patch coverage meets ≥ **94%**. Measure patch
+  coverage separately — never infer it from global totals.
   Changes under `agents/` also keep ≥ **90%** branch coverage.
 - **Scope of validation:** run the _smallest honest_ set matching the change
   classification in AGENTS.md — no build/test ceremony for doc-only changes, full

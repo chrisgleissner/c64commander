@@ -85,10 +85,13 @@ export async function dismissStartupDiscoveryDialog(page: Page) {
 
   const dismissButton = page.getByTestId("startup-device-discovery-dismiss");
   if (await clickIfVisible(dismissButton, "dismiss button")) {
+    await dismissButton.waitFor({ state: "detached", timeout: 5000 });
     return true;
   }
   const closeButton = page.getByTestId("startup-device-discovery-close");
-  return clickIfVisible(closeButton, "close button");
+  const dismissed = await clickIfVisible(closeButton, "close button");
+  if (dismissed) await closeButton.waitFor({ state: "detached", timeout: 5000 });
+  return dismissed;
 }
 
 const configState = JSON.parse(

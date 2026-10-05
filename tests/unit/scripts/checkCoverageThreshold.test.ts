@@ -18,7 +18,7 @@ const runScript = (cwd: string, env: Record<string, string> = {}) => {
 };
 
 describe("check-coverage-threshold", () => {
-  it("defaults to the CI gate: 94 percent lines and 91 percent branches", () => {
+  it("defaults to the CI gate and rejects 90 percent line coverage", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "coverage-default-threshold-"));
     try {
       mkdirSync(path.join(root, "coverage"), { recursive: true });

@@ -1,0 +1,524 @@
+{
+  "cpuRate": 2,
+  "rounds": 5,
+  "samples": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 384.89999997615814,
+      "taskMs": 881.5359999999996,
+      "scriptMs": 378.4720000000004,
+      "layoutMs": 44.47300000000004,
+      "heapBytes": 34741900
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 707.6000000238419,
+      "taskMs": 997.4770000000017,
+      "scriptMs": 405.087,
+      "layoutMs": 35.352999999999966,
+      "heapBytes": 37670844
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 626.7000000476837,
+      "taskMs": 868.3739999999993,
+      "scriptMs": 311.56399999999974,
+      "layoutMs": 44.238,
+      "heapBytes": 39200780
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 245.29999995231628,
+      "taskMs": 768.4119999999997,
+      "scriptMs": 262.68199999999985,
+      "layoutMs": 39.928999999999995,
+      "heapBytes": 45871948
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 831,
+      "taskMs": 1043.8069999999993,
+      "scriptMs": 361.2570000000002,
+      "layoutMs": 44.799999999999955,
+      "heapBytes": 23237040
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 457.5,
+      "taskMs": 699.8929999999995,
+      "scriptMs": 249.98499999999967,
+      "layoutMs": 32.17599999999998,
+      "heapBytes": 25298336
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 319.7999999523163,
+      "taskMs": 913.5450000000027,
+      "scriptMs": 327.93899999999974,
+      "layoutMs": 54.48799999999998,
+      "heapBytes": 25727104
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 501.5,
+      "taskMs": 733.4420000000001,
+      "scriptMs": 252.62700000000038,
+      "layoutMs": 33.00000000000003,
+      "heapBytes": 28509496
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 447.10000002384186,
+      "taskMs": 740.036,
+      "scriptMs": 243.14099999999962,
+      "layoutMs": 33.04399999999996,
+      "heapBytes": 29366916
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 275.2000000476837,
+      "taskMs": 821.361999999997,
+      "scriptMs": 266.97599999999966,
+      "layoutMs": 45.703000000000046,
+      "heapBytes": 36335700
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 705.3999999761581,
+      "taskMs": 986.1629999999977,
+      "scriptMs": 345.36100000000044,
+      "layoutMs": 47.79899999999992,
+      "heapBytes": 34412156
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 596.5,
+      "taskMs": 855.8749999999975,
+      "scriptMs": 281.9130000000012,
+      "layoutMs": 44.41700000000015,
+      "heapBytes": 35788200
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 326.2000000476837,
+      "taskMs": 924.0309999999994,
+      "scriptMs": 263.1040000000002,
+      "layoutMs": 43.671000000000014,
+      "heapBytes": 24656060
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 598.2000000476837,
+      "taskMs": 834.8039999999983,
+      "scriptMs": 289.68799999999993,
+      "layoutMs": 38.22199999999998,
+      "heapBytes": 25756772
+    },
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 597.8000000715256,
+      "taskMs": 874.7879999999988,
+      "scriptMs": 319.4510000000008,
+      "layoutMs": 42.93799999999992,
+      "heapBytes": 27932696
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 337.89999997615814,
+      "taskMs": 870.4299999999989,
+      "scriptMs": 324.249,
+      "layoutMs": 52.170999999999964,
+      "heapBytes": 27414112
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 855,
+      "taskMs": 1046.8180000000018,
+      "scriptMs": 364.8239999999987,
+      "layoutMs": 53.08999999999986,
+      "heapBytes": 32605196
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 0,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 723.1999999284744,
+      "taskMs": 994.9650000000006,
+      "scriptMs": 359.6959999999996,
+      "layoutMs": 54.48199999999992,
+      "heapBytes": 35217064
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 264.2999999523163,
+      "taskMs": 791.717999999996,
+      "scriptMs": 301.8390000000011,
+      "layoutMs": 41.24799999999995,
+      "heapBytes": 38142684
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 751.1000000238419,
+      "taskMs": 1074.2410000000007,
+      "scriptMs": 347.1080000000022,
+      "layoutMs": 54.72699999999975,
+      "heapBytes": 36743688
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 1,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 508.6999999284744,
+      "taskMs": 967.1199999999942,
+      "scriptMs": 308.40600000000154,
+      "layoutMs": 39.24299999999992,
+      "heapBytes": 19304516
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 312.2999999523163,
+      "taskMs": 858.7409999999949,
+      "scriptMs": 284.46299999999883,
+      "layoutMs": 43.533000000000044,
+      "heapBytes": 25955704
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 825.7999999523163,
+      "taskMs": 1017.5850000000039,
+      "scriptMs": 346.78700000000265,
+      "layoutMs": 49.62499999999981,
+      "heapBytes": 25547436
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 2,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 510.60000002384186,
+      "taskMs": 783.5490000000007,
+      "scriptMs": 267.9740000000024,
+      "layoutMs": 35.28799999999998,
+      "heapBytes": 27147192
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 275.89999997615814,
+      "taskMs": 804.9769999999938,
+      "scriptMs": 292.59899999999914,
+      "layoutMs": 40.916999999999874,
+      "heapBytes": 34959472
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 858.6000000238419,
+      "taskMs": 1064.345000000003,
+      "scriptMs": 337.2010000000003,
+      "layoutMs": 50.92400000000019,
+      "heapBytes": 24950352
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 3,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 642.2999999523163,
+      "taskMs": 872.0199999999991,
+      "scriptMs": 298.94900000000035,
+      "layoutMs": 45.93999999999987,
+      "heapBytes": 26117864
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "diagnostics",
+      "drawMs": 252.70000004768372,
+      "taskMs": 743.3669999999993,
+      "scriptMs": 281.20400000000245,
+      "layoutMs": 42.263999999999854,
+      "heapBytes": 29237728
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "device-switcher",
+      "drawMs": 667.6000000238419,
+      "taskMs": 975.7749999999987,
+      "scriptMs": 313.25599999999906,
+      "layoutMs": 50.7620000000002,
+      "heapBytes": 33439452
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "round": 4,
+      "kind": "urgent-overlay",
+      "name": "quick-menu",
+      "drawMs": 591.8999999761581,
+      "taskMs": 860.627000000008,
+      "scriptMs": 311.38500000000136,
+      "layoutMs": 44.06100000000013,
+      "heapBytes": 35750220
+    }
+  ],
+  "retained": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 426
+      },
+      "Timestamp": 960683.242748,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 1,
+      "Frames": 1,
+      "JSEventListeners": 4643,
+      "LayoutObjects": 555,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 1995,
+      "Resources": 1,
+      "ContextLifecycleStateObservers": 8,
+      "V8PerContextDatas": 1,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 1,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 0,
+      "ArrayBufferContents": 8,
+      "LayoutCount": 532,
+      "RecalcStyleCount": 924,
+      "LayoutDuration": 1.350797,
+      "RecalcStyleDuration": 10.797215,
+      "DevToolsCommandDuration": 0.075728,
+      "ScriptDuration": 12.784319,
+      "V8CompileDuration": 0.00074,
+      "TaskDuration": 32.80211,
+      "TaskOtherDuration": 7.793311,
+      "ThreadTime": 37.263083,
+      "ProcessTime": 47.71,
+      "JSHeapUsedSize": 18066964,
+      "JSHeapTotalSize": 20197376,
+      "FirstMeaningfulPaint": 0,
+      "DomContentLoaded": 960640.396446,
+      "NavigationStart": 960640.026166,
+      "document": {
+        "profile": "compact",
+        "textScale": "default",
+        "elements": 529,
+        "mountedBodies": 1
+      }
+    },
+    {
+      "viewport": {
+        "width": 800,
+        "height": 1280
+      },
+      "Timestamp": 960724.515214,
+      "AudioHandlers": 0,
+      "AudioWorkletProcessors": 0,
+      "Documents": 1,
+      "Frames": 1,
+      "JSEventListeners": 4662,
+      "LayoutObjects": 720,
+      "MediaKeySessions": 0,
+      "MediaKeys": 0,
+      "Nodes": 2157,
+      "Resources": 1,
+      "ContextLifecycleStateObservers": 8,
+      "V8PerContextDatas": 1,
+      "WorkerGlobalScopes": 0,
+      "UACSSResources": 0,
+      "RTCPeerConnections": 0,
+      "ResourceFetchers": 1,
+      "AdSubframes": 0,
+      "DetachedScriptStates": 0,
+      "ArrayBufferContents": 8,
+      "LayoutCount": 1086,
+      "RecalcStyleCount": 1836,
+      "LayoutDuration": 2.885325,
+      "RecalcStyleDuration": 22.385257,
+      "DevToolsCommandDuration": 0.152297,
+      "ScriptDuration": 24.666188,
+      "V8CompileDuration": 0.002385,
+      "TaskDuration": 65.606026,
+      "TaskOtherDuration": 15.514574,
+      "ThreadTime": 74.339504,
+      "ProcessTime": 91.64,
+      "JSHeapUsedSize": 19730300,
+      "JSHeapTotalSize": 22294528,
+      "FirstMeaningfulPaint": 0,
+      "DomContentLoaded": 960640.396446,
+      "NavigationStart": 960640.026166,
+      "document": {
+        "profile": "expanded",
+        "textScale": "default",
+        "elements": 630,
+        "mountedBodies": 2
+      }
+    }
+  ]
+}

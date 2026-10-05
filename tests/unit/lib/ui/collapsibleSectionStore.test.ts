@@ -13,6 +13,22 @@ const OPEN_SECTIONS_KEY = "c64u_open_sections";
 const LEGACY_SETTINGS_KEY = "c64u_settings_open_sections";
 
 describe("collapsibleSectionStore", () => {
+  it("parses unchanged section state once across card reads and invalidates an external rewrite", () => {
+    localStorage.setItem(OPEN_SECTIONS_KEY, '{"cached:first":true,"cached:second":false}');
+    const parse = vi.spyOn(JSON, "parse");
+    const first = readSectionStates("cached");
+    readSectionStates("other");
+    readSectionStates("cached");
+    expect(parse).toHaveBeenCalledTimes(1);
+    first.set("first", false);
+    expect(readSectionStates("cached").get("first")).toBe(true);
+    localStorage.setItem(OPEN_SECTIONS_KEY, '{"cached:first":false}');
+    expect(readSectionStates("cached").get("first")).toBe(false);
+    expect(parse).toHaveBeenCalledTimes(2);
+    localStorage.clear();
+    expect(readSectionStates("cached").size).toBe(0);
+    parse.mockRestore();
+  });
   beforeEach(() => {
     localStorage.clear();
   });

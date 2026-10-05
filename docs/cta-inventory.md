@@ -12,6 +12,11 @@ It complements:
 - `docs/keyboard-input.md` — the keypad/keyboard/T9 feature design and semantics.
 - `docs/features-by-page.md` — the broader user-facing feature surface.
 
+Open card bodies with remembered heights can wait outside the viewport. Scrolling toward a card,
+an explicit search/tour section request, or keypad traversal of its active surface builds the body.
+Tab shortcuts and global overlays do not build the page they leave; navigating an overlay builds
+only bodies inside that overlay. The controls and their focus grouping below remain the same.
+
 > **MAINTENANCE (mandatory).** Whenever a CTA is added, removed, re-typed,
 > re-grouped, or moved to a different page/route, **update this document in the
 > same change**. See the rule in `AGENTS.md` ("CTA inventory upkeep"). Counts in

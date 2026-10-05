@@ -82,7 +82,7 @@ const MIN_HEADER_ELEMENTS = 10;
 const auditHeader = (page: Page): Promise<HeaderAudit> =>
   page.evaluate(() => {
     const defects: { kind: string; where: string; detail: string }[] = [];
-    const header = document.querySelector("header");
+    const header = document.querySelector('[data-slot-active="true"] header');
     if (!header)
       return {
         defects: [{ kind: "missing-header", where: "header", detail: "no <header> on the page" }],
@@ -273,6 +273,14 @@ test.describe("Header states are drawn whole", () => {
 
   test.afterEach(async () => {
     await server.close();
+  });
+
+  test("header audit measures the active page when an earlier inactive header remains mounted", async ({ page }) => {
+    await page.setContent(
+      `<div data-slot-active="false"><header hidden></header></div>
+       <div data-slot-active="true"><header>${"<span>Visible</span>".repeat(12)}</header></div>`,
+    );
+    expect((await auditHeader(page)).inspected).toBe(12);
   });
 
   for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {

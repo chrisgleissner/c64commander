@@ -47,6 +47,11 @@ export const enableKeypad = (page: Page) =>
  * performs.
  */
 export const ringFocus = async (page: Page, target: Locator, maxSteps = 80): Promise<boolean> => {
+  // A visible navbar can still be inert while the launch portal owns every key.
+  await page.waitForFunction(() => {
+    const shell = document.querySelector('[data-testid="app-shell"]');
+    return !shell || shell.getAttribute("data-launch-phase") === "app-ready";
+  });
   for (let step = 0; step < maxSteps; step += 1) {
     if ((await target.getAttribute(KEY_SELECTED_ATTRIBUTE)) === "true") return true;
 

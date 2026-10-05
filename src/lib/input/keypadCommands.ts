@@ -31,12 +31,37 @@ const subscribe = <T>(name: string, handler: (detail: T) => void): (() => void) 
   return () => window.removeEventListener(name, listener);
 };
 
+// A page transition briefly has no active badge subscribed. Keep one intent across
+// that gap; inactive swipe previews must not consume it or open their own picker.
+// The intent expires, so a request nobody could answer cannot open a picker later.
+const DEVICE_SWITCHER_REQUEST_TTL_MS = 1500;
+let deviceSwitcherPending = false;
+let deviceSwitcherExpiry: ReturnType<typeof setTimeout> | undefined;
+
+const settleDeviceSwitcherRequest = (): void => {
+  deviceSwitcherPending = false;
+  clearTimeout(deviceSwitcherExpiry);
+};
+
 /** Ask the status badge to open the Device Switcher (keypad `#` / Menu → Switch Device). */
-export const requestDeviceSwitcherOpen = (): void => emit(DEVICE_SWITCHER_OPEN_EVENT);
+export const requestDeviceSwitcherOpen = (): void => {
+  deviceSwitcherPending = true;
+  clearTimeout(deviceSwitcherExpiry);
+  deviceSwitcherExpiry = setTimeout(settleDeviceSwitcherRequest, DEVICE_SWITCHER_REQUEST_TTL_MS);
+  emit(DEVICE_SWITCHER_OPEN_EVENT);
+};
+
+export const acknowledgeDeviceSwitcherOpen = settleDeviceSwitcherRequest;
 
 /** Subscribe the status badge to Device-Switcher open requests. Returns an unsubscribe. */
-export const subscribeDeviceSwitcherOpen = (handler: () => void): (() => void) =>
-  subscribe(DEVICE_SWITCHER_OPEN_EVENT, handler);
+export const subscribeDeviceSwitcherOpen = (handler: () => boolean | void): (() => void) => {
+  const deliver = () => {
+    if (deviceSwitcherPending && handler() !== false) settleDeviceSwitcherRequest();
+  };
+  const unsubscribe = subscribe(DEVICE_SWITCHER_OPEN_EVENT, deliver);
+  deliver();
+  return unsubscribe;
+};
 
 /**
  * How the Quick menu was opened.

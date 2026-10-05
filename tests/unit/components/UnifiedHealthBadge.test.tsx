@@ -7,7 +7,8 @@
  */
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { requestDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
+import { requestDeviceSwitcherOpen, subscribeDeviceSwitcherOpen } from "@/lib/input/keypadCommands";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CONNECTED_DEVICE_ANNOUNCEMENT_MS,
@@ -245,6 +246,7 @@ const defaultSavedDeviceHealthByDeviceId = structuredClone(mockState.savedDevice
 
 describe("UnifiedHealthBadge", () => {
   beforeEach(() => {
+    subscribeDeviceSwitcherOpen(() => {})();
     forgetConnectedDeviceAnnouncementForTests();
     mockState.currentProfile = "compact";
     (mockState.healthState as { state: string }).state = "Degraded";
@@ -753,6 +755,61 @@ describe("UnifiedHealthBadge", () => {
 
     expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
     expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it("opens a queued switcher request when an inactive swipe preview becomes the active page", () => {
+    const { rerender } = render(
+      <ScreenActivityProvider active={false}>
+        <UnifiedHealthBadge />
+      </ScreenActivityProvider>,
+    );
+    act(() => requestDeviceSwitcherOpen());
+    expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+    rerender(
+      <ScreenActivityProvider active>
+        <UnifiedHealthBadge />
+      </ScreenActivityProvider>,
+    );
+    expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+  });
+
+  it("opens a switcher requested between the departing and arriving badge mounts", () => {
+    act(() => requestDeviceSwitcherOpen());
+    render(<UnifiedHealthBadge />);
+    expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+  });
+
+  it("keeps an open request when its departing badge unmounts before rendering the picker", () => {
+    const departing = render(<UnifiedHealthBadge />);
+    act(() => {
+      requestDeviceSwitcherOpen();
+      departing.unmount();
+    });
+    render(<UnifiedHealthBadge />);
+    expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+  });
+
+  it("leaves a request for the arriving page when the URL changes before the active slot marker", () => {
+    const originalPath = window.location.pathname;
+    window.history.replaceState({}, "", "/settings");
+    try {
+      const departing = render(
+        <div data-slot-active="true" data-route-index="5">
+          <UnifiedHealthBadge />
+        </div>,
+      );
+      act(() => requestDeviceSwitcherOpen());
+      expect(screen.queryByTestId("switch-device-sheet")).toBeNull();
+      departing.unmount();
+      render(
+        <div data-slot-active="true" data-route-index="4">
+          <UnifiedHealthBadge />
+        </div>,
+      );
+      expect(screen.getByTestId("switch-device-sheet")).toBeVisible();
+    } finally {
+      window.history.replaceState({}, "", originalPath);
+    }
   });
 
   it("opens the switch picker on long press without also opening diagnostics", async () => {
