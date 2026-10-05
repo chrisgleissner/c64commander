@@ -448,8 +448,39 @@ export const FocusNavigationProvider = ({
           "nextField",
           "previousField",
         ].includes(action);
-        if (traversesRing && mountAllWaiting(resolveActiveScope(document).element)) engineRef.current?.refreshNow();
-        else engineRef.current?.flushPendingRefresh();
+        const engine = engineRef.current;
+        engine?.flushPendingRefresh();
+        if (traversesRing) {
+          const scope = resolveActiveScope(document).element;
+          if (!scope.querySelector("[data-section-scope]")) {
+            // Consumers without persistent card headers still need their full ring.
+            if (mountAllWaiting(scope)) engine?.refreshNow();
+          } else {
+            const mountCardFor = (id: string | undefined) => {
+              const card = id ? engine?.elementForId(id)?.closest("[data-section-scope]") : null;
+              if (card && scope.contains(card) && mountAllWaiting(card)) engine?.refreshNow();
+            };
+            // Discover the current card's real stops before predicting the next sibling.
+            mountCardFor(controller.focus.current()?.id);
+            const delta = ["dpadDown", "dpadRight", "nextField"].includes(action)
+              ? 1
+              : ["dpadUp", "dpadLeft", "previousField"].includes(action)
+                ? -1
+                : 0;
+            if (delta) {
+              const parent = controller.focus.currentScopeParentId();
+              const siblings = controller.focus
+                .list()
+                .filter((item) => !item.disabled && (item.parentId ?? null) === parent);
+              const current = siblings.findIndex((item) => item.id === controller.focus.current()?.id);
+              const start = current < 0 ? (delta > 0 ? -1 : 0) : current;
+              const destination = siblings[(start + delta + siblings.length) % siblings.length];
+              // Build before dispatch: backward traversal must reach the LAST real stop,
+              // rather than the first stop substituted for an empty card placeholder.
+              mountCardFor(destination?.id);
+            }
+          }
+        }
       }
       // Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring, so
       // Back closes the newest one through its own close button; an open dialog wins. The Pixel 4

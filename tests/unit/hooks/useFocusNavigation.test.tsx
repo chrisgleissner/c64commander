@@ -1646,6 +1646,67 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
     return <div ref={anchor}>{mounted ? <button type="button">{name}</button> : null}</div>;
   };
 
+  const MeasuredCard = ({ name }: { name: string }) => {
+    const anchor = useRef<HTMLDivElement | null>(null);
+    const mounted = useProgressiveMount(true, anchor, 400);
+    return (
+      <div ref={anchor} data-section-scope="fixture" data-section-id={name} data-section-label={name}>
+        <button type="button">{name} header</button>
+        {mounted ? (
+          <div data-section-label={`${name} inner`}>
+            <button type="button">{name} first</button>
+            <button type="button">{name} last</button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  it("the first arrow builds its card without building unrelated measured cards", () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5400 } as DOMRect);
+    render(
+      <FocusNavigationProvider>
+        {["First", "Second", "Third"].map((name) => (
+          <MeasuredCard key={name} name={name} />
+        ))}
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(button("First first")).toBeInTheDocument();
+    expect(queryButton("Second first")).toBeNull();
+    expect(queryButton("Third first")).toBeNull();
+  });
+
+  it.each(["ArrowDown", "ArrowUp"])(
+    "measured cards preserve eager sibling and child order while walking %s",
+    (direction) => {
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5400 } as DOMRect);
+      const walk = (deferred: boolean) => {
+        setProgressiveMountEnabled(deferred);
+        const view = render(
+          <FocusNavigationProvider>
+            {["First", "Second", "Third"].map((name) => (
+              <MeasuredCard key={name} name={name} />
+            ))}
+          </FocusNavigationProvider>,
+        );
+        const labels: string[] = [];
+        for (let step = 0; step < 12; step++) {
+          for (const code of [direction, "Enter", direction, "Escape"]) {
+            fireEvent.keyDown(document.body, { code });
+            labels.push(document.querySelector('[data-key-selected="true"]')?.textContent ?? "");
+          }
+        }
+        view.unmount();
+        resetInputModality();
+        return labels;
+      };
+      const eager = walk(false);
+      expect(walk(true)).toEqual(eager);
+    },
+  );
+
   it("navigates a popup without mounting deferred bodies on the page behind it", () => {
     setProgressiveMountEnabled(true);
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);

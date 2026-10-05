@@ -128,6 +128,22 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "state4-cleared");
   });
 
+  test("ring walking waits for launch handover before spending its key budget", async ({ page }) => {
+    await enableKeypad(page);
+    await page.goto("/");
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
+    await page.evaluate(() => {
+      document.body.innerHTML =
+        '<main data-testid="app-shell" data-launch-phase="hold" inert><button data-testid="ready-target" style="width:100px;height:44px;font-size:16px">Ready target</button></main>';
+      setTimeout(() => {
+        const shell = document.querySelector<HTMLElement>('[data-testid="app-shell"]')!;
+        shell.inert = false;
+        shell.dataset.launchPhase = "app-ready";
+      }, 700);
+    });
+    expect(await ringFocus(page, page.getByTestId("ready-target"), 1)).toBe(true);
+  });
+
   test("State 3: a primary CTA (tab) is reachable by key and activates with Enter", async ({ page }, testInfo) => {
     await enableKeypad(page);
     await page.goto("/");

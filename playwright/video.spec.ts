@@ -241,9 +241,11 @@ const tourPlay = async (page: Page) => {
   await smoothScrollToBottom(page, SCROLL_DURATION_MS);
 };
 
+const configPageHeading = (page: Page) => page.getByRole("heading", { name: "Config", exact: true, level: 1 });
+
 const tourConfig = async (page: Page) => {
   await page.goto("/config");
-  await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
+  await expect(configPageHeading(page)).toBeVisible();
   await pauseAtTop(page);
 
   const audioMixerToggle = page.getByTestId("config-category-audio-mixer");
@@ -356,6 +358,14 @@ test.describe("App video tour", () => {
       await saveCoverageFromPage(page, testInfo.title);
       await finalizeEvidence(page, testInfo);
     }
+  });
+
+  test("the tour identifies the Config page heading when configuration category headings are loaded", async ({
+    page,
+  }) => {
+    await page.goto("/config");
+    await expect(page.getByRole("heading", { name: "SID sockets configuration", exact: true })).toBeAttached();
+    await expect(configPageHeading(page)).toBeVisible();
   });
 
   test("records full app walkthrough", { tag: "@video" }, async ({ page }: { page: Page }) => {

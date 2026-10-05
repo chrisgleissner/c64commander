@@ -200,13 +200,26 @@ const waitForFadeOutSampleOrCompletion = async (page: Page) => {
     return;
   }
 
-  const appShell = page.getByTestId("app-shell");
-  const overlayOpacity = await launchSequence.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity));
-  const appOpacity = await appShell.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity));
-  expect(overlayOpacity).toBeGreaterThan(0);
-  expect(overlayOpacity).toBeLessThan(1);
-  expect(appOpacity).toBeGreaterThan(0);
-  expect(appOpacity).toBeLessThan(1);
+  // The animated portal can detach between a locator lookup and evaluation.
+  // Sample both connected nodes in one browser task rather than reading a stale handle.
+  const sample = await page.evaluate(() => {
+    const overlay = document.querySelector('[data-testid="startup-launch-sequence"]');
+    const shell = document.querySelector('[data-testid="app-shell"]');
+    if (!overlay) return null;
+    if (!shell) throw new Error("Launch fade has no app shell");
+    return {
+      overlayOpacity: Number.parseFloat(getComputedStyle(overlay).opacity),
+      appOpacity: Number.parseFloat(getComputedStyle(shell).opacity),
+    };
+  });
+  if (!sample) {
+    await expect(page.getByTestId(HOME_READY_TEST_ID)).toBeVisible();
+    return;
+  }
+  expect(sample.overlayOpacity).toBeGreaterThan(0);
+  expect(sample.overlayOpacity).toBeLessThan(1);
+  expect(sample.appOpacity).toBeGreaterThan(0);
+  expect(sample.appOpacity).toBeLessThan(1);
 };
 
 const waitForLaunchSequenceComplete = async (page: Page) => {
@@ -354,6 +367,37 @@ test.describe("launch sequence", () => {
 
     await page.waitForTimeout(200);
     await expect(page.getByTestId("startup-launch-sequence")).toHaveCount(0);
+  });
+
+  test("fade sampling reads connected launch nodes atomically", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
+    await page.evaluate(() => {
+      document.body.innerHTML =
+        '<main data-testid="app-shell" style="opacity:.5"><div data-testid="home-system-info">Home ready</div></main><div data-testid="startup-launch-sequence" data-phase="fade-out" style="opacity:.5">Launch</div>';
+    });
+    const getByTestId = page.getByTestId.bind(page);
+    page.getByTestId = (id) => {
+      const locator = getByTestId(id);
+      if (id === "startup-launch-sequence") {
+        locator.evaluate = async (fn) => {
+          const handle = await locator.elementHandle();
+          if (!handle) throw new Error("Missing launch fixture");
+          await handle.evaluate((node) => node.remove());
+          try {
+            return await handle.evaluate(fn);
+          } finally {
+            await handle.dispose();
+          }
+        };
+      }
+      return locator;
+    };
+    try {
+      await waitForFadeOutSampleOrCompletion(page);
+    } finally {
+      page.getByTestId = getByTestId;
+    }
   });
 
   test("keeps compact launch fade-out smooth when runtime motion remains standard", async ({ page }) => {

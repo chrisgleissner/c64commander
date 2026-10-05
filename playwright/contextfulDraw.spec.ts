@@ -110,7 +110,14 @@ for (const viewport of [
         await expect(about).not.toHaveAttribute("data-body-mounted", "true");
       }
       await page.keyboard.press("ArrowDown");
+      await expect(about).not.toHaveAttribute("data-body-mounted", "true");
+      for (let step = 0; step < 80; step++) {
+        const reached = await about.evaluate((card) => Boolean(card.querySelector('[data-key-selected="true"]')));
+        if (reached) break;
+        await page.keyboard.press("ArrowDown");
+      }
       await expect(about).toHaveAttribute("data-body-mounted", "true");
+      await expect(about.locator('[data-key-selected="true"]')).toHaveCount(1);
     });
   });
 }
