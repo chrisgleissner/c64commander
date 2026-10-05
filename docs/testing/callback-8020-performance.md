@@ -97,8 +97,31 @@ Timeouts are recorded as failures, not omitted from latency summaries.
 
 One pending switcher intent spans subscriber gaps. The departing badge cannot consume it
 when the URL already identifies another page, and opening is acknowledged after its commit.
-Popup focus navigation builds only its own active scope; page traversal still builds every
-waiting body in the page's keypad ring.
+Popup focus navigation builds only its own active scope. Page traversal builds the current
+card before predicting its next sibling, then builds that destination before dispatch. This
+preserves forward and backward order without building unrelated distant cards.
+
+## First keypad action
+
+A further native-APK check caught cost shifted onto the first arrow key: building every
+waiting Settings body took longer than the baseline. The final implementation builds only
+the current and destination cards. Forward/backward sibling and child sequences are tested
+against eager rendering; the control selected by the native probe is identical across builds.
+
+Five warm Settings visits per width, CPU rate 2; medians include all five samples. The timer
+runs from the real Android arrow event to two frames after the selected control changes:
+
+| Layout | Baseline | Intermediate candidate | Final candidate |
+| ------ | -------: | ---------------------: | --------------: |
+| 320px  | 199.4 ms |               344.6 ms |         51.4 ms |
+| 800px  | 212.4 ms |               392.0 ms |         50.0 ms |
+
+[Baseline samples](performance/callback-8020/first-key-baseline.json),
+[intermediate samples](performance/callback-8020/first-key-candidate.json), and
+[final samples](performance/callback-8020/first-key-fixed.json). This is one first-action
+probe, not a guarantee for every later key or a strong tail estimate. An initial final-build
+attempt timed out while Android was dozing with the app in the background; it was retained
+locally and repeated after waking the phone through droidctl.
 
 ## Reproduce
 
@@ -109,6 +132,8 @@ saved devices, library and section-open decisions for both runs.
 ```bash
 node scripts/contextful-draw-perf.mjs --rounds 10 --output artifacts/contextful-draw/report.json
 node scripts/contextful-draw-perf.mjs --rounds 5 --urgent-only --output artifacts/contextful-draw/urgent.json
+
+node scripts/contextful-first-key-perf.mjs artifacts/contextful-draw/first-key.json candidate
 
 # Host Chromium: all created pages are constrained before their scripts run.
 PLAYWRIGHT_DEVICES=phone node scripts/run-callback-browser.mjs -- npx playwright test contextfulDraw.spec.ts
@@ -153,17 +178,23 @@ or coverage instrumentation were included in the measured APKs.
 The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed at CPU
 rate 2, using the native phone viewport for physical input coordinates:
 
-| Stage          | Result | Evidence                                        |
-| -------------- | ------ | ----------------------------------------------- |
-| Preflight      | Pass   | Pixel 4; speaker volume 3/25                    |
-| Input          | Pass   | Nine cells moved; all 20 rotation checks passed |
-| Search latency | Pass   | 120 samples; p95 43.1 ms                        |
-| Wire           | Pass   | 0% loss; inter-arrival p99 4.15 ms              |
-| A/V clarity    | Pass   | 82 tones; zero defects; 0% dropout              |
-| A/V latency    | Pass   | 268 ms wire to speaker; correlation 0.866       |
-| Remote SID     | Pass   | Tone present 100%; +1 cent; no gap              |
-| Local SID      | Pass   | Tone present 100%; −10.2 cents; no gap          |
-| Crossfade      | Pass   | Seamless crossfade                              |
+| Stage          | Result | Evidence                                          |
+| -------------- | ------ | ------------------------------------------------- |
+| Preflight      | Pass   | Pixel 4; speaker volume 3/25                      |
+| Input          | Pass   | Eight cells moved; all 20 rotation checks passed  |
+| Search latency | Pass   | 120 samples; p95 45.8 ms                          |
+| Wire           | Pass   | 0% loss; inter-arrival p99 4.12 ms                |
+| A/V clarity    | Pass   | 82 tones; zero defects; 0% dropout                |
+| A/V latency    | Pass   | 263 ms wire to speaker; correlation 0.868         |
+| Remote SID     | Pass   | Tone present 100%; −17.2 cents; no gap            |
+| Local SID      | Pass   | 91.5% above SNR threshold; −2.9 cents; 100 ms gap |
+| Crossfade      | Pass   | Seamless crossfade                                |
+
+The latency grader warned that the repeating barcode envelope put the broadband peak one
+239 ms slot beyond the per-tone lag; the reported latency is the per-tone estimate. In the
+local SID recording, 17 of 200 windows fell below the SNR criterion, while zero windows
+fell below the tone-energy floor (minimum tone energy was 25.8% of the recording peak).
+The 100 ms gap is therefore a grader threshold result, not proof of an audio dropout.
 
 Earlier failures are retained in the local evidence. The input preparation originally
 closed an already-open deferred chapter; it now scrolls there before checking its open
