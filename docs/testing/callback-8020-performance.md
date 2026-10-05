@@ -183,26 +183,28 @@ or coverage instrumentation were included in the measured APKs.
   thresholds while retaining 91% changed-branch and 94% Codecov patch requirements.
 - No screenshot files changed: labels, controls and documented visible content are unchanged.
 
-The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed at CPU
-rate 2, using the native phone viewport for physical input coordinates:
+The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed on the final
+application source (commit `f5acc5bc2`, debug APK installed through droidctl) with the Pixel 4
+at its native viewport, using c64u. Phone speaker volume stayed at 3/25 and the original volume
+and display state were unchanged afterwards:
 
 | Stage          | Result | Evidence                                          |
 | -------------- | ------ | ------------------------------------------------- |
 | Preflight      | Pass   | Pixel 4; speaker volume 3/25                      |
-| Input          | Pass   | Eight cells moved; all 20 rotation checks passed  |
-| Search latency | Pass   | 120 samples; p95 45.8 ms                          |
-| Wire           | Pass   | 0% loss; inter-arrival p99 4.12 ms                |
+| Input          | Pass   | Nine cells moved; all 20 rotation checks passed   |
+| Search latency | Pass   | 120 samples; p95 27.9 ms                          |
+| Wire           | Pass   | 0% loss; inter-arrival p99 4.09 ms                |
 | A/V clarity    | Pass   | 82 tones; zero defects; 0% dropout                |
-| A/V latency    | Pass   | 263 ms wire to speaker; correlation 0.868         |
-| Remote SID     | Pass   | Tone present 100%; −17.2 cents; no gap            |
-| Local SID      | Pass   | 91.5% above SNR threshold; −2.9 cents; 100 ms gap |
+| A/V latency    | Pass   | 269 ms wire to speaker; correlation 0.862         |
+| Remote SID     | Pass   | Tone present 100%; −10.9 cents; no gap            |
+| Local SID      | Pass   | Tone present 100%; −9.5 cents; no gap             |
 | Crossfade      | Pass   | Seamless crossfade                                |
 
+This run did not apply CPU throttling. The u2 cartridge was not exercised through the app:
+it is not a saved device in the app on this phone, and this PR does not change capability gating.
+
 The latency grader warned that the repeating barcode envelope put the broadband peak one
-239 ms slot beyond the per-tone lag; the reported latency is the per-tone estimate. In the
-local SID recording, 17 of 200 windows fell below the SNR criterion, while zero windows
-fell below the tone-energy floor (minimum tone energy was 25.8% of the recording peak).
-The 100 ms gap is therefore a grader threshold result, not proof of an audio dropout.
+239 ms slot beyond the per-tone lag; the reported latency is the per-tone estimate.
 
 Earlier failures are retained in the local evidence. The input preparation originally
 closed an already-open deferred chapter; it now scrolls there before checking its open
