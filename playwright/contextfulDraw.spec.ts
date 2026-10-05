@@ -112,12 +112,16 @@ for (const viewport of [
       await page.keyboard.press("ArrowDown");
       await expect(about).not.toHaveAttribute("data-body-mounted", "true");
       for (let step = 0; step < 80; step++) {
-        const reached = await about.evaluate((card) => Boolean(card.querySelector('[data-key-selected="true"]')));
+        const reached = await about.evaluate((card) =>
+          card.contains(document.querySelector('[data-key-selected="true"]')),
+        );
         if (reached) break;
         await page.keyboard.press("ArrowDown");
       }
       await expect(about).toHaveAttribute("data-body-mounted", "true");
-      await expect(about.locator('[data-key-selected="true"]')).toHaveCount(1);
+      await expect
+        .poll(() => about.evaluate((card) => card.contains(document.querySelector('[data-key-selected="true"]'))))
+        .toBe(true);
     });
   });
 }
