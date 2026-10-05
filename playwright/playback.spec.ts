@@ -30,6 +30,24 @@ const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
 };
 
+const waitForSidUploadRequest = async (requests: Array<{ method: string; url: string }>) => {
+  const matches = (request: { method: string; url: string }) =>
+    request.method === "POST" && request.url.startsWith("/v1/runners:sidplay");
+  await waitForRequests(() => requests.some(matches));
+  return [...requests].reverse().find(matches);
+};
+
+test("SID upload observation waits past an OPTIONS preflight for the POST", async () => {
+  const requests = [{ method: "OPTIONS", url: "/v1/runners:sidplay" }];
+  const observation = waitForSidUploadRequest(requests);
+  const timer = setTimeout(() => requests.push({ method: "POST", url: "/v1/runners:sidplay" }), 100);
+  try {
+    expect((await observation)?.method).toBe("POST");
+  } finally {
+    clearTimeout(timer);
+  }
+});
+
 const openAddItemsDialog = async (page: Page) => {
   await page.getByRole("button", { name: /Add items|Add more items/i }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -422,9 +440,7 @@ test.describe("Playback file browser", () => {
     await clearTraces(page);
 
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
-
-    const lastRequest = [...server.requests].reverse().find((req) => req.url.startsWith("/v1/runners:sidplay"));
+    const lastRequest = await waitForSidUploadRequest(server.requests);
     // Ultimate SIDs with a known song length upload via POST (multipart) so the
     // derived song-length (.ssl) travels alongside the SID payload — the device
     // otherwise has no duration metadata. See playbackRouter "ultimate-ssl-upload".
