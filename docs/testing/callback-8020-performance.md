@@ -70,11 +70,16 @@ One explicit garbage collection preceded the retained-heap checkpoint:
 | 320px  |      94.7 MiB |       86.1 MiB |   1114 → 543 |                 12 → 1 |
 | 800px  |      98.5 MiB |       89.8 MiB |   1182 → 644 |                 12 → 2 |
 
+Each heap figure is one checkpoint per width after one garbage collection, not a distribution.
+The difference mainly reflects fewer mounted section bodies at the checkpoint, not a measured
+change in leaked memory.
+
 Only remembered heights can reserve space for deferred bodies. Unknown bodies still mount
 progressively on the first visit. Visible and near-viewport bodies mount before paint;
 scrolling, resize, explicit section requests and keypad traversal can demand them later.
 The margin follows viewport height, so larger screens build more content. Height records
-are invalidated by viewport, display-profile or text-scale changes.
+are invalidated by viewport width, display-profile or text-scale changes. Viewport height is not
+part of the record, because card body height does not depend on it and a soft keyboard changes it.
 
 No page component trees are kept resident. There is one latest height/layout record per
 section and one parsed section-state store, checked against the serialized value on each
@@ -95,7 +100,7 @@ All thirty candidate overlay draws succeeded.
 [candidate](performance/callback-8020/candidate-urgent.json).
 Timeouts are recorded as failures, not omitted from latency summaries.
 
-One pending switcher intent spans subscriber gaps. The departing badge cannot consume it
+One pending switcher intent spans subscriber gaps and expires after 1.5 s if no badge answers it. The departing badge cannot consume it
 when the URL already identifies another page, and opening is acknowledged after its commit.
 Popup focus navigation builds only its own active scope. Page traversal builds the current
 card before predicting its next sibling, then builds that destination before dispatch. This
@@ -116,7 +121,7 @@ runs from the real Android arrow event to two frames after the selected control 
 
 | Layout | Baseline | Intermediate candidate | Final candidate |
 | ------ | -------: | ---------------------: | --------------: |
-| 320px  | 199.4 ms |               344.6 ms |         51.4 ms |
+| 320px  | 199.4 ms |               344.6 ms |         52.6 ms |
 | 800px  | 212.4 ms |               392.0 ms |         50.0 ms |
 
 [Baseline samples](performance/callback-8020/first-key-baseline.json),

@@ -24,7 +24,7 @@ const positions = new Map<number, PagePositionRecord>();
 type CardHeight = { height: number; layout: string };
 const cardHeights = new Map<string, CardHeight>();
 const layoutKey = () =>
-  `${window.innerWidth}:${window.innerHeight}:${document.documentElement.dataset.displayProfile ?? ""}:${document.documentElement.dataset.textScale ?? ""}`;
+  `${window.innerWidth}:${document.documentElement.dataset.displayProfile ?? ""}:${document.documentElement.dataset.textScale ?? ""}`;
 const discardNextRecord = new Set<number>();
 
 const cardKey = (scope: string, id: string) => `${scope}:${id}`;

@@ -64,7 +64,14 @@ describe("pagePositions", () => {
     expect(rememberedCardHeight("home", "audio")).toBeUndefined();
   });
 
-  it("invalidates remembered heights after viewport or text size changes", () => {
+  it("keeps remembered heights when only the viewport height changes, as a soft keyboard does", () => {
+    const { slot } = buildSlot(0);
+    rememberPagePosition(0, slot);
+    vi.stubGlobal("innerHeight", window.innerHeight - 300);
+    expect(rememberedCardHeight("home", "video")).toBe(420);
+  });
+
+  it("invalidates remembered heights after viewport width or text size changes", () => {
     const { slot } = buildSlot(0);
     rememberPagePosition(0, slot);
     expect(rememberedCardHeight("home", "video")).toBe(420);
