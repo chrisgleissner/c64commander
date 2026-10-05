@@ -456,17 +456,20 @@ export const FocusNavigationProvider = ({
             // Consumers without persistent card headers still need their full ring.
             if (mountAllWaiting(scope)) engine?.refreshNow();
           } else {
+            // A pointer-focused control can differ from the ring's last selection.
+            // Predict sibling movement from that control, including Up/Down leaving a field.
+            const delta = ["dpadDown", "dpadRight", "nextField"].includes(action)
+              ? 1
+              : ["dpadUp", "dpadLeft", "previousField"].includes(action)
+                ? -1
+                : 0;
+            if (delta && getInputModality() === "pointer") adoptActiveElement();
             const mountCardFor = (id: string | undefined) => {
               const card = id ? engine?.elementForId(id)?.closest("[data-section-scope]") : null;
               if (card && scope.contains(card) && mountAllWaiting(card)) engine?.refreshNow();
             };
             // Discover the current card's real stops before predicting the next sibling.
             mountCardFor(controller.focus.current()?.id);
-            const delta = ["dpadDown", "dpadRight", "nextField"].includes(action)
-              ? 1
-              : ["dpadUp", "dpadLeft", "previousField"].includes(action)
-                ? -1
-                : 0;
             if (delta) {
               const parent = controller.focus.currentScopeParentId();
               const siblings = controller.focus

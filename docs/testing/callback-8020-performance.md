@@ -107,6 +107,9 @@ A further native-APK check caught cost shifted onto the first arrow key: buildin
 waiting Settings body took longer than the baseline. The final implementation builds only
 the current and destination cards. Forward/backward sibling and child sequences are tested
 against eager rendering; the control selected by the native probe is identical across builds.
+Pointer-to-key handover adopts the tapped control before predicting its destination. Two
+regressions reproduced the wrong backward stop for a focused button and text field before
+that fix.
 
 Five warm Settings visits per width, CPU rate 2; medians include all five samples. The timer
 runs from the real Android arrow event to two frames after the selected control changes:

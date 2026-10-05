@@ -1678,6 +1678,33 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
     expect(queryButton("Third first")).toBeNull();
   });
 
+  it.each(["button", "input"])(
+    "pointer-to-key handover predicts from the focused %s before mounting a backward destination",
+    (kind) => {
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5400 } as DOMRect);
+      const walk = (deferred: boolean) => {
+        setProgressiveMountEnabled(deferred);
+        const view = render(
+          <FocusNavigationProvider>
+            {["First", "Second", "Third"].map((name) => (
+              <MeasuredCard key={name} name={name} />
+            ))}
+            {kind === "input" ? <input aria-label="After" /> : <button type="button">After</button>}
+          </FocusNavigationProvider>,
+        );
+        const target = kind === "input" ? screen.getByRole("textbox", { name: "After" }) : button("After");
+        fireEvent.pointerDown(target);
+        target.focus();
+        fireEvent.keyDown(target, { code: "ArrowUp" });
+        const selected = document.querySelector('[data-key-selected="true"]')?.textContent;
+        view.unmount();
+        resetInputModality();
+        return selected;
+      };
+      expect(walk(true)).toEqual(walk(false));
+    },
+  );
+
   it.each(["ArrowDown", "ArrowUp"])(
     "measured cards preserve eager sibling and child order while walking %s",
     (direction) => {
