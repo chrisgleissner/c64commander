@@ -177,6 +177,60 @@ describe("useRemoteSidSeek", () => {
     expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan(89);
   });
 
+  /** The page's position after its last rebase, at `now`, against where the simulated clock is. */
+  const shownAgainstClock = (rebase: ReturnType<typeof vi.fn>) => {
+    const [positionMs] = rebase.mock.calls.at(-1) ?? [NaN];
+    const rebasedAt = rebase.mock.invocationCallOrder.length ? rebaseTimes.at(-1)! : NaN;
+    return positionMs + (Date.now() - rebasedAt) - device.current!.player.tunePositionSeconds * 1000;
+  };
+  const rebaseTimes: number[] = [];
+  const timedRebase = () => {
+    rebaseTimes.length = 0;
+    return (positionMs: number) => {
+      rebaseTimes.push(Date.now());
+      return positionMs;
+    };
+  };
+
+  it("puts the page's elapsed time on the C64's own second once it has found the player", async () => {
+    vi.setSystemTime(5_000_000);
+    device.current = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    const { rebasePlaybackPosition } = render();
+    rebasePlaybackPosition.mockImplementation(timedRebase());
+    await advance(PROBED_MS + 2000);
+    expect(rebasePlaybackPosition).toHaveBeenCalled();
+    expect(Math.abs(shownAgainstClock(rebasePlaybackPosition))).toBeLessThanOrEqual(30);
+  });
+
+  it("follows the C64's clock again after a landing, and every 30 seconds while it plays", async () => {
+    device.current = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    const { result, rebasePlaybackPosition } = render();
+    rebasePlaybackPosition.mockImplementation(timedRebase());
+    await advance(PROBED_MS + 2000);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.4));
+    await advance(10_000);
+    expect(Math.abs(shownAgainstClock(rebasePlaybackPosition))).toBeLessThanOrEqual(30);
+    const calls = rebasePlaybackPosition.mock.calls.length;
+    await advance(31_000);
+    expect(rebasePlaybackPosition.mock.calls.length).toBeGreaterThan(calls);
+    expect(Math.abs(shownAgainstClock(rebasePlaybackPosition))).toBeLessThanOrEqual(30);
+  });
+
+  it("leaves the position to a held Next rather than following the clock under it", async () => {
+    device.current = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    // Of unknown length, so the hold cannot reach an end and land by itself.
+    const { result, rebasePlaybackPosition } = render({ durationMs: undefined });
+    await advance(PROBED_MS + 2000);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    const calls = rebasePlaybackPosition.mock.calls.length;
+    await advance(35_000);
+    expect(rebasePlaybackPosition.mock.calls.length).toBe(calls);
+    act(() => result.current.handlers?.onScrubEnd?.());
+  });
+
   it("leaves Previous and Next as track controls for an RSID tune", async () => {
     const { result } = render({ item: item(rsid()) });
     await advance(PROBED_MS);

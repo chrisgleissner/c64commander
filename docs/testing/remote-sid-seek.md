@@ -226,7 +226,7 @@ The same suites run in CI against the mock server and on the bench against real 
 without key input) for the mock server. The soak and the corpus play generated tunes whose play
 routine counts its calls at `$10F0`, so every landing is checked against where the tune really is.
 On a real machine the corpus also plays HVSC tunes picked for the extremes (from `../C64Music`, or
-`CORPUS_HVSC`) at -42 dB. The parity run plays a steady 550 Hz tone at media volume 5 of 25 and
+`CORPUS_HVSC`) at -42 dB. The parity run plays a steady 550 Hz tone at media volume 7 of 25 and
 listens for it with the microphone at the phone's grille.
 
 The proof of concept measures the device directly, without the app:

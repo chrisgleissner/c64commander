@@ -74,3 +74,45 @@ export const readSidPlayerClock = async (
     await readMemory(hex(clock.rowAddress), SCREEN_COLUMNS, { __c64uIntent: "user", __c64uBypassCooldown: fast }),
     clock,
   );
+
+/** The instant the player's clock turned to `clockSeconds`, as seen through back-to-back reads. */
+export type ClockTick = { clockSeconds: number; tickAtMs: number };
+
+/** A clock turns within a second of any value it shows, so it is given this long from first seeing one. */
+const TICK_WITHIN_MS = 1100;
+/** However slow the reads, the whole measurement ends after this. */
+const TICK_TIMEOUT_MS = 4000;
+/** Between reads: bounds the request rate, and costs the tick about half of it in precision. */
+const TICK_READ_GAP_MS = 20;
+
+/**
+ * Read the clock back to back until it moves on by one second, and place that tick between the two
+ * reads that saw it: each read saw the clock somewhere within its own round trip, so the tick lies
+ * between their midpoints, within half a round trip of where this puts it. A read that steps back
+ * caught the player rewriting its digits and is skipped, and one that jumps on by more than a
+ * second (a slow read) waits for the next tick. Null if the clock does not tick within a second of
+ * a value, e.g. while the machine is paused.
+ */
+export const measureClockTick = async (
+  read: () => Promise<number | null>,
+  isCurrent: () => boolean = () => true,
+): Promise<ClockTick | null> => {
+  const hardDeadline = Date.now() + TICK_TIMEOUT_MS;
+  let deadline = hardDeadline;
+  let previous: { value: number; midAt: number } | null = null;
+  for (let first = true; Date.now() < deadline && isCurrent(); first = false) {
+    if (!first) await sleep(TICK_READ_GAP_MS);
+    const startedAt = Date.now();
+    const value = await read();
+    const endedAt = Date.now();
+    const midAt = (startedAt + endedAt) / 2;
+    if (value === null || (previous && value < previous.value)) continue;
+    if (previous && value === previous.value + 1)
+      return { clockSeconds: value, tickAtMs: (previous.midAt + midAt) / 2 };
+    // The value may have been taken as late as the end of the read; the clock turns within a second of that.
+    const isNewValue = previous === null || previous.value !== value;
+    if (isNewValue) deadline = Math.min(hardDeadline, endedAt + TICK_WITHIN_MS);
+    previous = { value, midAt };
+  }
+  return null;
+};

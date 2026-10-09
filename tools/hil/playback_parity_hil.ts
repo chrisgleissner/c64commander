@@ -21,7 +21,7 @@
  *   against where the tune really is;
  * - Tone-Low, a steady 550 Hz tone, for the scenario that listens: no sound while a seek rewinds.
  *
- * The phone's media volume is held at --volume (5 of 25 by default, never above 10) and restored.
+ * The phone's media volume is held at --volume (7 of 25 by default, never above 10) and restored.
  * The Ultimate-II+(L) shares its C64 with the c64u on this bench; it can only start the player while
  * the c64u's Cartridge Preference is External (see the memory note), which the run sets for the u2
  * and puts back afterwards.
@@ -49,7 +49,11 @@ const arg = (name: string, fallback: string) => {
 const HOSTS = arg("hosts", "c64u,u64,u2").split(",");
 const ROUTES = arg("routes", "phone,c64").split(",") as ParityRoute[];
 const OUT = arg("json", "artifacts/playback-parity.json");
-const VOLUME = Math.min(10, Number(arg("volume", "5")));
+/**
+ * 7 of 25: the on-phone path reaches the microphone 7.5 dB quieter than the mirror, and the merge gate
+ * found it too quiet to grade at 3 and 5. Never above 10.
+ */
+const VOLUME = Math.min(10, Number(arg("volume", "7")));
 const MIC_DEVICE = arg("mic", "plughw:CARD=SF558,DEV=0");
 const ONLY = arg("only", "");
 const PACKAGE = "uk.gleissner.c64commander";
@@ -222,24 +226,47 @@ const row=rows.find(r=>(r.innerText||"").toLowerCase().includes(${JSON.stringify
   throw new Error(`the app did not connect to ${host}`);
 };
 
-const playlistTitles = () =>
-  js<string[]>(
-    `[...document.querySelectorAll('[data-testid="playlist-item"]')].map(e=>(e.innerText||"").split(String.fromCharCode(10))[0].trim())`,
-  );
+/** Titles as the playlist shows them; friendly names show `Seek_Counter` as "Seek Counter". */
+const playlistTitles = async () =>
+  (
+    await js<string[]>(
+      `[...document.querySelectorAll('[data-testid="playlist-item"]')].map(e=>(e.innerText||"").split(String.fromCharCode(10))[0].trim())`,
+    )
+  ).map((title) => title.replace(/_/g, " "));
+const shownTitle = (title: string) => title.replace(/_/g, " ");
 
 /** Add the two tunes from the Ultimate's storage through the app's own picker, as a user would. */
 const ensureInPlaylist = async (host: string) => {
+  // The playlist hydrates from storage after the page shows; an empty list may only not be there yet.
+  for (let waited = 0; waited < 10000 && (await playlistTitles()).length === 0; waited += 250) await sleep(250);
   const titles = await playlistTitles();
-  const missing = ["Seek_Counter", "Tone-Low"].filter((title) => !titles.some((t) => t.startsWith(title)));
+  const missing = ["Seek_Counter", "Tone-Low"].filter((title) => !titles.some((t) => t.startsWith(shownTitle(title))));
   if (!missing.length) return;
-  await click('[aria-label="Add items"], [aria-label="Add more items"]');
+  await click('[data-testid="add-items-to-playlist"]');
   await waitFor('[data-testid="import-option-c64u"]');
   await click('[data-testid="import-option-c64u"]');
-  await waitFor('[data-testid="navigate-root"]');
-  await click('[data-testid="navigate-root"]');
-  for (const folder of STORAGE[host].split("/").filter(Boolean)) {
+  // The picker reopens the folder it last showed, and that listing can land after a click on Root.
+  const pathIs = (expected: string) =>
+    js<boolean>(
+      `document.querySelector('[data-testid="source-path-label"]')?.innerText?.trim()===${JSON.stringify(expected)}`,
+    );
+  await sleep(1500);
+  const alreadyThere = await pathIs(STORAGE[host]);
+  for (let attempt = 0; !alreadyThere && !(await pathIs("/")); attempt += 1) {
+    if (attempt === 20) throw new Error("the picker did not go to the root");
+    await waitFor('[data-testid="navigate-root"]');
+    await click('[data-testid="navigate-root"]');
+    await sleep(1000);
+  }
+  let shown = "";
+  for (const folder of alreadyThere ? [] : STORAGE[host].split("/").filter(Boolean)) {
     await waitFor(`[aria-label="Open ${folder}"]`);
     await click(`[aria-label="Open ${folder}"]`);
+    shown += `/${folder}`;
+    for (let waited = 0; !(await pathIs(shown)); waited += 250) {
+      if (waited > 15000) throw new Error(`the picker did not open ${shown}`);
+      await sleep(250);
+    }
   }
   for (const title of missing) {
     await waitFor(`[aria-label="Select ${title}.sid"]`);
@@ -248,7 +275,7 @@ const ensureInPlaylist = async (host: string) => {
   await click('[data-testid="add-items-confirm"]');
   for (let waited = 0; waited < 20000; waited += 500) {
     const now = await playlistTitles();
-    if (["Seek_Counter", "Tone-Low"].every((title) => now.some((t) => t.startsWith(title)))) return;
+    if (["Seek_Counter", "Tone-Low"].every((title) => now.some((t) => t.startsWith(shownTitle(title))))) return;
     await sleep(500);
   }
   throw new Error("the tunes did not reach the playlist");
@@ -326,12 +353,31 @@ const benchDriver = (host: string, tune: () => string, baseline: Record<string, 
   label: `the phone against ${host}`,
   async startTune(route) {
     await openPlay();
-    await pickRoute(route);
     const title = tune();
-    const started = await js<boolean>(`(()=>{const rows=[...document.querySelectorAll('[data-testid="playlist-item"]')];
-const row=rows.find(r=>(r.innerText||"").startsWith(${JSON.stringify(title)}));
+    const playRowOnce = () =>
+      js<boolean>(`(()=>{const rows=[...document.querySelectorAll('[data-testid="playlist-item"]')];
+const row=rows.find(r=>(r.innerText||"").replace(/_/g," ").startsWith(${JSON.stringify(shownTitle(title))}));
 const play=row?.querySelector('button[aria-label^="Play "]');if(!play)return false;play.click();return true;})()`);
-    if (!started) throw new ParityFailure(`${title} has no Play button in the playlist`);
+    const playRow = async () => {
+      for (let waited = 0; waited < 10000; waited += 250) {
+        if (await playRowOnce()) return true;
+        await sleep(250);
+      }
+      return false;
+    };
+    // The output chooser is only on the page while a SID is the current tune; changing the output
+    // hands the tune over, so it is started once more on the route it is meant for.
+    if (!(await playRow())) throw new ParityFailure(`${title} has no Play button in the playlist`);
+    await sleep(2500);
+    const engine = await js<string | null>(
+      `document.querySelector('[data-testid="playback-engine-toggle"]')?.getAttribute("data-engine") ?? null`,
+    );
+    if (engine !== (route === "phone" ? "local" : "c64")) {
+      await pickRoute(route);
+      if (!(await playRow())) throw new ParityFailure(`${title} has no Play button in the playlist`);
+    }
+    // The previous instance's seek is still offered for a moment after the tune starts again.
+    await sleep(4000);
     for (let waited = 0; waited < 20000; waited += 500) {
       const ready = await js<boolean>(
         `/hold to fast forward/.test(document.querySelector('[data-testid="playlist-next"]')?.title ?? "")`,

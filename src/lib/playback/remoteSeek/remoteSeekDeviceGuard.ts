@@ -13,9 +13,13 @@ import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { isSidVolumeOffValue } from "@/lib/config/sidVolumeControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
+import { grantSeekKeyPress } from "./seekKeyPermit";
 import { FAST_FORWARD_HELD, FAST_FORWARD_RELEASED, isFastForwardPatchSite } from "./sidPlayerFastForwardPatch";
 
 export { RemoteSeekSessionClosedError };
+
+/** The SID player was not on screen when a seek was about to press a key or write the patch. */
+export class RemoteSeekPlayerGoneError extends Error {}
 
 /**
  * The device state a remote seek borrows, and the guarantee that it is given back.
@@ -293,21 +297,25 @@ export class RemoteSeekDeviceSession {
     journal: RemoteSeekJournal,
     readonly cpuSpeedOptions: string[],
     private readonly fastForward: FastForwardMethod,
+    private readonly playerOnScreen: () => Promise<boolean>,
   ) {
     this.journal = journal;
     this.currentCpuSpeed = journal.originalCpuSpeed;
   }
 
   /**
-   * `withCpuSpeed: false` for a machine without CPU Speed, such as the Ultimate-II+(L): nothing is
-   * read or written there, and the session only ever fast forwards at the machine's own speed.
+   * `playerOnScreen` says whether the SID player is still what the C64 shows; it is asked right
+   * before every key press and patch write, which only go ahead when it says yes. `withCpuSpeed:
+   * false` is for a machine without CPU Speed, such as the Ultimate-II+(L): nothing is read or
+   * written there, and the session only ever fast forwards at the machine's own speed.
    */
   static async open(
     api: RemoteSeekDeviceApi,
     {
+      playerOnScreen,
       fastForward = { kind: "key" },
       withCpuSpeed = true,
-    }: { fastForward?: FastForwardMethod; withCpuSpeed?: boolean } = {},
+    }: { playerOnScreen: () => Promise<boolean>; fastForward?: FastForwardMethod; withCpuSpeed?: boolean },
   ): Promise<RemoteSeekDeviceSession> {
     const deviceKey = api.currentDeviceKey();
     if (deviceKey === null) throw new Error("The connected device has not identified itself");
@@ -334,7 +342,7 @@ export class RemoteSeekDeviceSession {
       startedAtMs: Date.now(),
     };
     writeJournal(deviceKey, journal);
-    const session = new RemoteSeekDeviceSession(api, journal, cpuSpeed.options, fastForward);
+    const session = new RemoteSeekDeviceSession(api, journal, cpuSpeed.options, fastForward, playerOnScreen);
     liveSessions.set(deviceKey, session);
     return session;
   }
@@ -378,7 +386,7 @@ export class RemoteSeekDeviceSession {
   pressKey(): Promise<void> {
     return this.mutate(async () => {
       await this.muteOnce();
-      this.assertOpen();
+      await this.confirmPlayerFor(FAST_FORWARD_KEY);
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
       if (this.fastForward.kind === "key") {
@@ -396,7 +404,7 @@ export class RemoteSeekDeviceSession {
     return this.mutate(async () => {
       if (this.fastForward.kind !== "key") throw new Error("This machine takes no key input");
       await this.muteOnce();
-      this.assertOpen();
+      await this.confirmPlayerFor(key);
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
       await sendKey(this.api, "press", key);
@@ -461,6 +469,17 @@ export class RemoteSeekDeviceSession {
     await this.api.setConfigValue(AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM, off, {
       __c64uTransientConfigWrite: true,
     });
+  }
+
+  /**
+   * Refuse `key` unless the SID player is on screen right now, and otherwise grant the one press the
+   * REST layer will let through (see seekKeyPermit.ts). Outside the player the key would be typed.
+   */
+  private async confirmPlayerFor(key: string) {
+    const onScreen = await this.playerOnScreen();
+    this.assertOpen();
+    if (!onScreen) throw new RemoteSeekPlayerGoneError(`${key} not pressed: the SID player is no longer on screen`);
+    grantSeekKeyPress(this.journal.deviceKey, key);
   }
 
   private mutate(change: () => Promise<void>): Promise<void> {

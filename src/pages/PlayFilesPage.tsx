@@ -149,6 +149,7 @@ import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
 import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOverlayState";
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { useSecondAlignedTicks } from "@/pages/playFiles/hooks/useSecondAlignedTicks";
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
 import { isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
@@ -1525,12 +1526,7 @@ export default function PlayFilesPage() {
     syncPlaybackTimelineRef.current = syncPlaybackTimeline;
   }, [syncPlaybackTimeline]);
 
-  useEffect(() => {
-    if (!isPlaying || isPaused || currentIndex < 0) return;
-    syncPlaybackTimeline();
-    const timer = window.setInterval(syncPlaybackTimeline, 1000);
-    return () => window.clearInterval(timer);
-  }, [currentIndex, isPaused, isPlaying, syncPlaybackTimeline]);
+  useSecondAlignedTicks(syncPlaybackTimeline, isPlaying && !isPaused && currentIndex >= 0, trackStartedAtRef);
 
   usePlaybackResumeTriggers(syncPlaybackTimeline);
 

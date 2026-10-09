@@ -17,6 +17,9 @@ const connection = vi.hoisted(() => ({
 }));
 const device = vi.hoisted(() => ({ current: null as ReturnType<typeof createFakeRemoteSeekDevice> | null }));
 
+/** The SID player is on screen: what the controller confirms before every key. */
+const ON_SCREEN = async () => true;
+
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: () => ({ state: connection.state }),
@@ -40,9 +43,7 @@ const connect = (state: string) => {
  * and the journal the earlier process wrote, with no session of this process owning it.
  */
 const leaveUnfinishedSeek = async () => {
-  await device.current!.api.sendMachineInputBatch({
-    events: [{ kind: "keyboard", inputs: ["arrow_left"], transition: "press" }],
-  });
+  device.current!.player.pressKey("arrow_left");
   await device.current!.api.setConfigValue("U64 Specific Settings", "CPU Speed", "64");
   const journal = {
     sessionId: "earlier-process",
@@ -113,7 +114,7 @@ describe("remote seek recovery", () => {
   });
 
   it("leaves the journal of a seek this app is still running to that seek", async () => {
-    const session = await RemoteSeekDeviceSession.open(device.current!.api);
+    const session = await RemoteSeekDeviceSession.open(device.current!.api, { playerOnScreen: ON_SCREEN });
     await session.pressKey();
     await session.setCpuSpeed("64");
     const uninstall = installRemoteSeekRecovery();

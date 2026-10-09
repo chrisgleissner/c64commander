@@ -598,6 +598,32 @@ describe("remote SID seek controller", () => {
     }
   });
 
+  it("treats the clock as the position only for a tune called once a frame on its own machine", () => {
+    const device = createFakeRemoteSeekDevice();
+    expect(new RemoteSidSeekController(device.api, profile()).clockIsPosition).toBe(true);
+    expect(new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 60 })).clockIsPosition).toBe(false);
+    expect(new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: null })).clockIsPosition).toBe(false);
+  });
+
+  it("finds when the player's clock ticks, to within a few hundredths of a second", async () => {
+    vi.setSystemTime(2_000_000);
+    const device = createFakeRemoteSeekDevice({ latencyMs: 12 });
+    await vi.advanceTimersByTimeAsync(3_370);
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const tick = await settle(controller.clockTick());
+    // The simulated clock turned a second every 1000 ms since 2_000_000.
+    expect(tick?.clockSeconds).toBe(4);
+    expect(Math.abs((tick?.tickAtMs ?? 0) - 2_004_000)).toBeLessThanOrEqual(25);
+  });
+
+  it("does not follow the clock of a multi-speed tune, which runs ahead of its music", async () => {
+    const device = createFakeRemoteSeekDevice({ playCallHz: 200 });
+    const read = vi.spyOn(device.api, "readMemory");
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: null }));
+    expect(await controller.clockTick()).toBeNull();
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("does not jump back when the tune can be restarted neither by key nor by playing it again", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile({ restart: "replay" }));
@@ -644,6 +670,46 @@ describe("remote SID seek controller", () => {
     expect(device.settings["CPU Speed"]).toBe(" 1");
   });
 });
+
+/** Every System Mode the Ultimate offers, with a PAL and an NTSC tune on each. */
+describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
+  "remote seek on a machine in %s",
+  (mode) => {
+    beforeEach(() => {
+      localStorage.clear();
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each(["pal", "ntsc"] as const)("finds the clock and lands every seek of a %s tune", async (tuneClock) => {
+      const timing = machineTimingFor(mode);
+      const playCallHz = tuneClock === "pal" ? 50 : 60;
+      const device = createFakeRemoteSeekDevice({
+        settings: { "System Mode": mode },
+        playCallHz,
+        machineFrameHz: timing.frameHz,
+        ciaClockHz: timing.ciaClockHz,
+      });
+      const found = await settle(probeRemoteTuneSeek(device.api, header({ clock: tuneClock }), 1));
+      expect(found?.timing).toEqual(timing);
+      expect(found?.headerPlayCallHz).toBe(playCallHz);
+      const controller = new RemoteSidSeekController(device.api, found!);
+      expect(controller.clockIsPosition).toBe(playCallHz === timing.frameHz);
+      const at = () => device.player.tunePositionSeconds;
+      await settle(controller.jumpTo(at, 150));
+      expect(Math.abs(at() - 150)).toBeLessThan(2);
+      await settle(controller.beginFastForward(at, () => undefined));
+      await vi.advanceTimersByTimeAsync(1500);
+      const held = await settle(controller.endFastForward());
+      expect(Math.abs((held?.seconds ?? 0) - at())).toBeLessThan(1.5);
+      await settle(controller.jumpTo(at, 30));
+      expect(Math.abs(at() - 30)).toBeLessThan(2);
+      expect(device.player.heldKeys).toEqual([]);
+    });
+  },
+);
 
 describe("remote seek support", () => {
   beforeEach(() => {
@@ -911,6 +977,91 @@ describe("remote SID seek controller when the device misbehaves", () => {
     const landed = await settle(controller.jumpTo(() => 100, 20));
     expect(landed?.completed).toBe(false);
     expect(device.player.heldKeys).toEqual([]);
+  });
+
+  /** The C64 back at BASIC: the VIC shows $0400 and no clock is drawn where the player's was. */
+  const basicOnScreen = (device: ReturnType<typeof createFakeRemoteSeekDevice>) => {
+    const read = device.api.readMemory;
+    device.api.readMemory = async (address, length, options) => {
+      if (address === "DD00") return Uint8Array.of(0x97);
+      if (address === "D018") return Uint8Array.of(0x15);
+      if (address === "0B98") return new TextEncoder().encode("READY.");
+      return read(address, length, options);
+    };
+  };
+  const keyPresses = (device: ReturnType<typeof createFakeRemoteSeekDevice>) =>
+    device.log.filter((entry) => entry.startsWith("key press"));
+
+  it("presses no fast forward key once the C64 has left the SID player", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    basicOnScreen(device);
+    await expect(
+      settle(
+        controller.beginFastForward(
+          () => 0,
+          () => undefined,
+        ),
+      ),
+    ).rejects.toThrow();
+    // No clock, so no position to report: the jump gives up before it has one.
+    expect((await settle(controller.jumpTo(() => 0, 100)))?.completed ?? false).toBe(false);
+    expect(keyPresses(device)).toEqual([]);
+  });
+
+  it("refuses a key when the VIC shows another screen, even if a time appears where the clock was", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const read = device.api.readMemory;
+    device.api.readMemory = async (address, length, options) =>
+      address === "D018" ? Uint8Array.of(0x15) : read(address, length, options);
+    expect(await settle(controller.jumpTo(() => 0, 100))).toMatchObject({ completed: false });
+    expect(keyPresses(device)).toEqual([]);
+  });
+
+  it("lets go of a held fast forward within two reads of the SID player leaving the screen", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(device.player.heldKeys).toEqual(["arrow_left"]);
+    basicOnScreen(device);
+    await vi.advanceTimersByTimeAsync(700);
+    expect(device.player.heldKeys).toEqual([]);
+    expect(controller.isFastForwarding).toBe(false);
+  });
+
+  it("lets go of a jump's key at the first read that finds no clock", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const jump = controller.jumpTo(() => 0, 1200);
+    for (let waited = 0; !device.player.heldKeys.length && waited < 5000; waited += 10)
+      await vi.advanceTimersByTimeAsync(10);
+    expect(device.player.heldKeys).toEqual(["arrow_left"]);
+    const read = device.api.readMemory;
+    device.api.readMemory = async (address, length, options) =>
+      address === "0B98" ? new Uint8Array(length) : read(address, length, options);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(device.player.heldKeys).toEqual([]);
+    await settle(jump);
+  });
+
+  it("sends no restart keys once the SID player has left the screen, where BASIC would type them", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(() => 0, 100));
+    device.log.length = 0;
+    const read = device.api.readMemory;
+    device.api.readMemory = async (address, length, options) =>
+      address === "0B98" ? new TextEncoder().encode("READY.") : read(address, length, options);
+    const landed = await settle(controller.jumpTo(() => 100, 20));
+    expect(landed?.completed).toBe(false);
+    expect(device.log.filter((entry) => entry.startsWith("key press"))).toEqual([]);
   });
 
   it("does not take one read of a clock caught mid-update for a restart", async () => {

@@ -11,15 +11,17 @@ import { getConnectedDeviceIdentity } from "@/lib/connection/connectedDeviceIden
 import { addLog } from "@/lib/logging";
 import { machineIdentityKey } from "@/lib/savedDevices/machineIdentity";
 import type { RemoteSeekApi, RemoteSidSeekController } from "./remoteSidSeekController";
+import { withSeekKeyPermits } from "./seekKeyPermit";
 
 /** The REST API as remote seeking uses it, bound to the identity of the device it talks to now. */
 export const createRemoteSeekApi = (): RemoteSeekApi => {
   const api = getC64API();
+  const currentDeviceKey = () => machineIdentityKey(getConnectedDeviceIdentity());
   return {
-    currentDeviceKey: () => machineIdentityKey(getConnectedDeviceIdentity()),
+    currentDeviceKey,
     getConfigItem: (category, item, options) => api.getConfigItem(category, item, options),
     setConfigValue: (category, item, value, options) => api.setConfigValue(category, item, value, options),
-    sendMachineInputBatch: (batch) => api.sendMachineInputBatch(batch),
+    sendMachineInputBatch: withSeekKeyPermits((batch) => api.sendMachineInputBatch(batch), currentDeviceKey),
     getMachineInputState: () => api.getMachineInputState({ __c64uIntent: "user" }),
     readMemory: (address, length, options) => api.readMemory(address, length, options),
     writeMemory: (address, data) => api.writeMemory(address, data, { __c64uIntent: "user" }),

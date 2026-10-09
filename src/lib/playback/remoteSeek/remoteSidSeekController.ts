@@ -17,7 +17,8 @@ import {
   JumpSpeedPlanner,
   RATE_WINDOW_SECONDS,
 } from "./remoteSeekPlan";
-import { readSidPlayerClock } from "./sidPlayerClock";
+import { measureClockTick, readSidPlayerClock, type ClockTick } from "./sidPlayerClock";
+import { sidPlayerScreenAddress } from "./sidPlayerScreen";
 import type { RemoteTuneSeekProfile } from "./remoteTuneSeekProbe";
 import {
   isRemoteSeekSuperseded,
@@ -81,6 +82,8 @@ const KEY_GAP_MS = 50;
 /** A target this close is reached by playing on, unless the fast forward rate is already known. */
 const NORMAL_PLAY_GAP_SECONDS = 4;
 const NORMAL_PLAY_READ_INTERVAL_MS = 250;
+/** A held fast forward ends after this many clock reads in a row that find no clock. */
+const PLAYER_GONE_READS = 2;
 /**
  * The fastest the player can possibly fast forward, in clock seconds a second per MHz: its loop
  * spends at least about 100 cycles on each play call, so 1 MHz runs at most 10000 calls a second.
@@ -106,6 +109,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 type FastForwardRun = {
   session: RemoteSeekDeviceSession;
   polling: boolean;
+  /** Clock reads in a row that found no clock: the player may have left the screen. */
+  missedReads: number;
   model: PositionModel;
   rampTimer: ReturnType<typeof setInterval> | null;
   pollTimer: ReturnType<typeof setInterval> | null;
@@ -144,6 +149,28 @@ export class RemoteSidSeekController {
     await this.resolveClockPerTuneSecond();
   }
 
+  /**
+   * True when the player's clock is the tune's position: a tune called once a frame on its own
+   * machine. A multi-speed tune's clock runs ahead of its music while fast forwarding.
+   */
+  get clockIsPosition() {
+    return this.profile.headerPlayCallHz !== null && this.profile.headerPlayCallHz === this.profile.timing.frameHz;
+  }
+
+  /**
+   * The moment the player's clock last ticked, read when nothing else runs, so the page can show the
+   * C64's own second at the C64's own moment. Null when the clock is not the position, or does not tick.
+   */
+  clockTick(): Promise<ClockTick | null> {
+    if (!this.clockIsPosition) return Promise.resolve(null);
+    return this.serialize((generation) =>
+      measureClockTick(
+        () => this.readClock(true),
+        () => generation === this.cancelGeneration,
+      ),
+    );
+  }
+
   get canRewind() {
     return this.profile.restart === "keys" || this.replayTune !== null;
   }
@@ -165,6 +192,7 @@ export class RemoteSidSeekController {
         const run: FastForwardRun = {
           session,
           polling: false,
+          missedReads: 0,
           model: new PositionModel(fromSeconds, clock, ratio, this.profile.clock.wrapSeconds),
           rampTimer: null,
           pollTimer: null,
@@ -297,7 +325,14 @@ export class RemoteSidSeekController {
           const period = (JUMP_POLL_MIN_INTERVAL_MS + readAt - readStartedAt) / 1000;
           readPeriodSeconds = 0.7 * readPeriodSeconds + 0.3 * period;
           lastReadAt = readAt;
-          if (clock === null) continue;
+          if (clock === null) {
+            // Never hold a key while the player may not be there to take it.
+            if (held) {
+              await session.releaseKey();
+              held = false;
+            }
+            continue;
+          }
           const position = model.advance(clock, held || fastSinceLastRead);
           const stopReason = progress.observe(position, held || fastSinceLastRead, readAt);
           if (stopReason) throw new Error(stopReason);
@@ -474,11 +509,20 @@ export class RemoteSidSeekController {
 
   private async openSession() {
     const session = await RemoteSeekDeviceSession.open(this.api, {
+      playerOnScreen: () => this.playerOnScreen(),
       fastForward: this.profile.fastForward,
       withCpuSpeed: this.profile.cpuSpeedOptions.length > 0,
     });
     this.activeSession = session;
     return session;
+  }
+
+  /** The VIC still shows the screen the player's clock was found on, and the clock reads as a time there. */
+  private async playerOnScreen(): Promise<boolean> {
+    const [dd00] = await this.api.readMemory("DD00", 1, { __c64uIntent: "user", __c64uBypassCooldown: true });
+    const [d018] = await this.api.readMemory("D018", 1, { __c64uIntent: "user", __c64uBypassCooldown: true });
+    if (sidPlayerScreenAddress(dd00, d018) !== this.profile.clock.screenAddress) return false;
+    return (await this.readClock(true)) !== null;
   }
 
   private async giveBack(session: RemoteSeekDeviceSession, reason: string) {
@@ -499,7 +543,14 @@ export class RemoteSidSeekController {
     run.polling = true;
     try {
       const clock = await this.readClockFor(run.model, false);
-      if (clock === null || this.fastForward !== run) return;
+      if (this.fastForward !== run) return;
+      if (clock === null) {
+        // The player has gone from the screen: whatever is there now would be typed into.
+        run.missedReads += 1;
+        if (run.missedReads >= PLAYER_GONE_READS) void this.endFastForward("the SID player left the screen");
+        return;
+      }
+      run.missedReads = 0;
       run.onPosition(run.model.advance(clock, true));
     } catch (error) {
       addLog("warn", "Remote fast forward could not read the SID player's clock", errorDetails(error));
@@ -558,9 +609,11 @@ export class RemoteSidSeekController {
    * again. Sent as press and release pairs: two taps in one batch lost the second key on the device.
    */
   private async restartTune(session: RemoteSeekDeviceSession, generation: number) {
-    // A clock that already shows 0:01 has to drop to 0:00 before the restart counts as done.
+    // No key without the player on screen: at BASIC, minus and plus would be typed.
     const before = await this.readClock(true);
-    const restartedBelow = before !== null && before <= 1 ? Math.max(before, 1) : 2;
+    if (before === null) throw new Error("The SID player's clock is not on screen; no restart keys sent");
+    // A clock that already shows 0:01 has to drop to 0:00 before the restart counts as done.
+    const restartedBelow = before <= 1 ? Math.max(before, 1) : 2;
     if (this.profile.restart === "replay") {
       this.assertCurrent(generation);
       await (this.replayTune as () => Promise<void>)();

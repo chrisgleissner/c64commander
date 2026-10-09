@@ -51,6 +51,7 @@ const PROBE_DELAY_MS = 800;
 /** A drag lands this long after the finger stops, the same settle the on-device engine uses. */
 const DRAG_SETTLE_MS = 220;
 const REWIND_STEP_INTERVAL_MS = 1000;
+const CLOCK_FOLLOW_INTERVAL_MS = 30_000;
 
 /** One hold of Previous or Next. It lives until release, so the card's repeat ticks never start a second one. */
 type Hold = { direction: "forward" | "rewind"; fromSeconds: number; rewindSteps: number; ended: boolean };
@@ -135,6 +136,22 @@ export const useRemoteSidSeek = ({
     setTargetMs(null);
   }, []);
 
+  const clampMs = (ms: number) => Math.max(0, Math.min(live.current.durationMs ?? Number.MAX_SAFE_INTEGER, ms));
+
+  /**
+   * Put the page's elapsed time on the C64's own second: where its clock just ticked, at the moment
+   * it ticked. Skipped while a gesture or a jump owns the position.
+   */
+  const syncToClock = useCallback(async (owned: RemoteSidSeekController) => {
+    const tick = await owned.clockTick().catch((error) => {
+      addLog("warn", "Remote seek could not read the SID player's clock to follow it", remoteSeekErrorDetails(error));
+      return null;
+    });
+    if (!tick || controllerRef.current !== owned || holdRef.current || jumpingRef.current || owned.isBusy) return;
+    latestLandingRef.current = { seconds: tick.clockSeconds, atMs: tick.tickAtMs, completed: true };
+    live.current.rebasePlaybackPosition(clampMs(tick.clockSeconds * 1000 + Date.now() - tick.tickAtMs));
+  }, []);
+
   const itemId = item?.id ?? null;
   const songNr = item?.request.songNr ?? null;
   const deviceId = deviceInfo?.unique_id ?? null;
@@ -178,6 +195,7 @@ export const useRemoteSidSeek = ({
               ...remoteSeekErrorDetails(error),
             }),
           );
+          void syncToClock(created);
         } catch (error) {
           addLog("warn", "Remote seek probe failed", { item: item.label, ...remoteSeekErrorDetails(error) });
         }
@@ -196,7 +214,15 @@ export const useRemoteSidSeek = ({
       }
     };
     // `item` is read through its id: a new object for the same tune must not restart the probe.
-  }, [active, itemId, songNr, trackInstanceId, deviceId, resetGestures]);
+  }, [active, itemId, songNr, trackInstanceId, deviceId, resetGestures, syncToClock]);
+
+  // The phone's timer and the C64's drift apart, and a resumed or rebased timeline can land between
+  // two of the C64's seconds; following its clock now and then keeps them on the same second.
+  useEffect(() => {
+    if (!controller) return;
+    const timer = window.setInterval(() => void syncToClock(controller), CLOCK_FOLLOW_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [controller, syncToClock]);
 
   // While a gesture or a jump is under way the auto-advance deadline still counts the old position;
   // the Play page holds it off until the landing rebases it.
@@ -217,15 +243,19 @@ export const useRemoteSidSeek = ({
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [controller, resetGestures]);
 
-  const clampMs = (ms: number) => Math.max(0, Math.min(live.current.durationMs ?? Number.MAX_SAFE_INTEGER, ms));
-
-  const land = useCallback((landing: RemoteSeekLanding | null) => {
-    if (landing) {
-      latestLandingRef.current = landing;
-      live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
-    }
-    setTargetMs(null);
-  }, []);
+  const land = useCallback(
+    (landing: RemoteSeekLanding | null) => {
+      if (landing) {
+        latestLandingRef.current = landing;
+        live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
+        // A landing is good to the half second the clock rounds to; the clock's next tick is exact.
+        const owned = controllerRef.current;
+        if (owned) void syncToClock(owned);
+      }
+      setTargetMs(null);
+    },
+    [syncToClock],
+  );
 
   /** Where the tune is now: the last landing until the page's elapsed time has caught up with it. */
   const currentSeconds = useCallback((): number => {

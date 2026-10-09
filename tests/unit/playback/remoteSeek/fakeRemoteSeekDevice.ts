@@ -8,6 +8,7 @@
 
 import { SidPlayerSimulation, type SidPlayerSimulationOptions } from "../../../mocks/sidPlayerSimulation";
 import type { RemoteSeekApi } from "@/lib/playback/remoteSeek/remoteSidSeekController";
+import { withSeekKeyPermits } from "@/lib/playback/remoteSeek/seekKeyPermit";
 
 export const C64U_CPU_SPEEDS = [
   " 1",
@@ -108,25 +109,29 @@ export const createFakeRemoteSeekDevice = (
       applySpeed();
       return {} as never;
     },
-    sendMachineInputBatch: async ({ events }) => {
-      await roundTrip();
-      if (options.cartridge) throw new Error("HTTP 501 Not Implemented");
-      for (const event of events) {
-        if (event.kind !== "keyboard") continue;
-        if (failures.keyEvents > 0) {
-          failures.keyEvents -= 1;
-          if (failures.keyEventStallMs) await new Promise((resolve) => setTimeout(resolve, failures.keyEventStallMs));
-          log.push(`FAILED key ${event.transition} ${event.inputs.join("+")}`);
-          throw new Error("HTTP 503");
+    // Through the same permit check the app's REST wiring uses (seekKeyPermit.ts).
+    sendMachineInputBatch: withSeekKeyPermits(
+      async ({ events }) => {
+        await roundTrip();
+        if (options.cartridge) throw new Error("HTTP 501 Not Implemented");
+        for (const event of events) {
+          if (event.kind !== "keyboard") continue;
+          if (failures.keyEvents > 0) {
+            failures.keyEvents -= 1;
+            if (failures.keyEventStallMs) await new Promise((resolve) => setTimeout(resolve, failures.keyEventStallMs));
+            log.push(`FAILED key ${event.transition} ${event.inputs.join("+")}`);
+            throw new Error("HTTP 503");
+          }
+          log.push(`key ${event.transition} ${event.inputs.join("+")}`);
+          for (const key of event.inputs) {
+            if (event.transition === "press") player.pressKey(key);
+            else player.releaseKey(key);
+          }
         }
-        log.push(`key ${event.transition} ${event.inputs.join("+")}`);
-        for (const key of event.inputs) {
-          if (event.transition === "press") player.pressKey(key);
-          else player.releaseKey(key);
-        }
-      }
-      return {};
-    },
+        return {};
+      },
+      () => connectedKey,
+    ),
     getMachineInputState: async () => {
       if (options.cartridge) throw new Error("HTTP 501 Not Implemented");
       return { keyboard: { inputs: player.heldKeys } };

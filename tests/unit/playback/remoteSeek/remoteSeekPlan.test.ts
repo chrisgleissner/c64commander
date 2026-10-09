@@ -107,9 +107,13 @@ describe("remote seek plan", () => {
   });
 
   it("times PAL and 50 Hz modes at the PAL clock and the 60 Hz modes at the NTSC clock", () => {
-    expect(machineTimingFor("PAL")).toEqual({ frameHz: 50, ciaClockHz: 985248 });
-    expect(machineTimingFor("NTSC-50")).toEqual({ frameHz: 50, ciaClockHz: 985248 });
-    expect(machineTimingFor("PAL-60")).toEqual({ frameHz: 60, ciaClockHz: 1022727 });
+    // As u64/color_timings.cc sets them: the 60 Hz modes run 65-cycle lines on the NTSC clock.
+    for (const mode of ["PAL", "NTSC-50", "NTSC-50/L"]) {
+      expect(machineTimingFor(mode)).toEqual({ frameHz: 50, ciaClockHz: 985248 });
+    }
+    for (const mode of ["NTSC", "PAL-60", "PAL-60/L", " pal-60/l "]) {
+      expect(machineTimingFor(mode)).toEqual({ frameHz: 60, ciaClockHz: 1022727 });
+    }
     expect(machineTimingFor(undefined).frameHz).toBe(50);
   });
 
@@ -162,8 +166,8 @@ describe("SID player screen", () => {
     screen.set(ascii("12"), 38);
     screen.set(ascii(":34"), 40);
     expect(findTimeFields(screen, 0x0800)).toEqual([
-      { rowAddress: 0x0800 + 21 * 40, column: 7, length: 5, wrapSeconds: 6000, seconds: 180 },
-      { rowAddress: 0x0800 + 23 * 40, column: 0, length: 5, wrapSeconds: 6000, seconds: 65 },
+      { screenAddress: 0x0800, rowAddress: 0x0800 + 21 * 40, column: 7, length: 5, wrapSeconds: 6000, seconds: 180 },
+      { screenAddress: 0x0800, rowAddress: 0x0800 + 23 * 40, column: 0, length: 5, wrapSeconds: 6000, seconds: 65 },
     ]);
   });
 
@@ -172,6 +176,7 @@ describe("SID player screen", () => {
     const before = row("03:00  9:59  1:00:00  00:10");
     const after = row("03:00  10:00  0:59:59  00:10");
     expect(tickingClockField(before, after, 1.2)).toEqual({
+      screenAddress: 0x0800,
       rowAddress: 0x0800,
       column: 7,
       length: 5,
@@ -182,7 +187,7 @@ describe("SID player screen", () => {
   });
 
   it("reads a clock back from its row as it grows and shrinks", () => {
-    const clock = { rowAddress: 0x0b98, column: 0, length: 4, wrapSeconds: 6000 };
+    const clock = { screenAddress: 0x0800, rowAddress: 0x0b98, column: 0, length: 4, wrapSeconds: 6000 };
     expect(readClockFromRow(ascii("9:59"), clock)).toBe(599);
     expect(readClockFromRow(ascii("10:00  03:00"), clock)).toBe(600);
     expect(readClockFromRow(ascii("      03:00"), clock)).toBeNull();

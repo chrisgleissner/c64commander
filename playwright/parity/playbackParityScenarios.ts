@@ -61,6 +61,28 @@ const check = (condition: boolean, message: string) => {
 const LANDING_TOLERANCE_SECONDS = 4;
 const LANDING_TIMEOUT_MS = 30_000;
 
+/**
+ * After a gesture: wait for the seek to show (a target instead of a position) or for the position to
+ * move away from `from`, then for the landing. Reading at once can still see the old position.
+ */
+export const settledAfterSeek = async (driver: ParityDriver, from: number): Promise<number> => {
+  for (let waited = 0; waited < 8000; waited += 200) {
+    const shown = await driver.shownSeconds();
+    if (shown === null || Math.abs(shown - from) > 3) break;
+    await driver.wait(200);
+  }
+  return landedSeconds(driver);
+};
+
+/** Poll the transport for `state`, which a C64 reaches only after its mute and pause requests. */
+const waitForTransport = async (driver: ParityDriver, state: "playing" | "paused" | "stopped") => {
+  for (let waited = 0; waited < 8000; waited += 250) {
+    if ((await driver.transportState()) === state) return;
+    await driver.wait(250);
+  }
+  throw new ParityFailure(`the transport does not show ${state}`);
+};
+
 /** Wait until the page shows a position again rather than a seek target, and return it. */
 export const landedSeconds = async (driver: ParityDriver): Promise<number> => {
   for (let waited = 0; waited < LANDING_TIMEOUT_MS; waited += 250) {
@@ -97,9 +119,9 @@ export const presence = (trace: SoundTrace, fromMs: number, toMs: number): numbe
 
 const jumpTo = async (driver: ParityDriver, route: ParityRoute, fraction: number, what: string) => {
   const target = fraction * (await driver.durationSeconds());
+  const from = await landedSeconds(driver);
   await driver.tapBar(fraction);
-  await driver.wait(400);
-  const landed = await landedSeconds(driver);
+  const landed = await settledAfterSeek(driver, from);
   check(
     Math.abs(landed - target) <= LANDING_TOLERANCE_SECONDS,
     `${what}: landed at ${landed} s, aimed at ${target.toFixed(1)} s`,
@@ -124,15 +146,15 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     name: "pauses, holds its place, and resumes from there",
     async run(driver, route) {
       await driver.tap("playlist-pause");
-      await driver.wait(1000);
-      check((await driver.transportState()) === "paused", "the transport does not show paused");
+      await waitForTransport(driver, "paused");
+      await driver.wait(500);
       const pausedAt = await landedSeconds(driver);
       await driver.wait(2500);
       const stillAt = await landedSeconds(driver);
       check(Math.abs(stillAt - pausedAt) <= 1, `paused at ${pausedAt} s but moved to ${stillAt} s`);
       await driver.tap("playlist-pause");
+      await waitForTransport(driver, "playing");
       await driver.wait(3000);
-      check((await driver.transportState()) === "playing", "the transport does not show playing after resume");
       const resumedAt = await landedSeconds(driver);
       check(resumedAt >= stillAt + 1 && resumedAt <= stillAt + 6, `resumed from ${stillAt} s to ${resumedAt} s`);
       await expectShownMatchesTruth(driver, route, "after resume");
@@ -144,8 +166,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       const before = await landedSeconds(driver);
       // Short enough to stay inside a short tune: winding past its end ends it, on both routes.
       await driver.hold("playlist-next", 1500);
-      await driver.wait(500);
-      const landed = await landedSeconds(driver);
+      const landed = await settledAfterSeek(driver, before);
       check(landed >= before + 4, `held Next for 1.5 s and went from ${before} s to ${landed} s`);
       check((await driver.transportState()) === "playing", "a held Next stopped playback or changed the tune");
       await expectShownMatchesTruth(driver, route, "after the hold");
@@ -165,8 +186,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       await jumpTo(driver, route, 0.5, "to 50% first");
       const before = await landedSeconds(driver);
       await driver.hold("playlist-prev", 1200);
-      await driver.wait(400);
-      const landed = await landedSeconds(driver);
+      const landed = await settledAfterSeek(driver, before);
       check(landed <= before - 3 && landed >= before - 35, `held Previous at ${before} s and landed at ${landed} s`);
       check((await driver.transportState()) === "playing", "a held Previous stopped playback or changed the tune");
       await expectShownMatchesTruth(driver, route, "after the rewind");
@@ -183,8 +203,9 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       const trace = await driver.listen!(async () => {
         await driver.wait(1500);
         tappedAt = Date.now();
+        const from = await landedSeconds(driver);
         await driver.tapBar(0.1);
-        await landedSeconds(driver);
+        await settledAfterSeek(driver, from);
         landedAt = Date.now();
         await driver.wait(3000);
       });
@@ -200,8 +221,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     name: "stops, and leaves the machine as it was",
     async run(driver, route) {
       await driver.tap("playlist-play");
-      await driver.wait(1500);
-      check((await driver.transportState()) === "stopped", "the transport does not show stopped");
+      await waitForTransport(driver, "stopped");
       await expectMachineAsItWas(driver, route, "after stop");
     },
   },

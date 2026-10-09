@@ -37,7 +37,14 @@ export const screenCodesToText = (codes: Uint8Array): string =>
  * may grow or shrink as it counts ("9:59" to "10:00"), so it is read back as the time field on that
  * row overlapping these cells.
  */
-export type SidPlayerClockField = { rowAddress: number; column: number; length: number; wrapSeconds: number };
+export type SidPlayerClockField = {
+  /** The screen the VIC showed when the clock was found; a different one means the player has gone. */
+  screenAddress: number;
+  rowAddress: number;
+  column: number;
+  length: number;
+  wrapSeconds: number;
+};
 
 type TimeField = SidPlayerClockField & { seconds: number };
 
@@ -64,6 +71,7 @@ export const findTimeFields = (screen: Uint8Array, screenAddress: number): TimeF
       const seconds = parseClockText(match[0]);
       if (seconds === null) continue;
       fields.push({
+        screenAddress,
         rowAddress: screenAddress + row * SCREEN_COLUMNS,
         column: match.index ?? 0,
         length: match[0].length,
@@ -101,7 +109,7 @@ export const tickingClockField = (
     return gained >= 1 && gained <= Math.ceil(elapsedSeconds) + 1;
   });
   const chosen = ticking.at(-1);
-  return chosen
-    ? { rowAddress: chosen.rowAddress, column: chosen.column, length: chosen.length, wrapSeconds: chosen.wrapSeconds }
-    : null;
+  if (!chosen) return null;
+  const { seconds: _seconds, ...field } = chosen;
+  return field;
 };

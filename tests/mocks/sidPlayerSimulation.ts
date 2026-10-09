@@ -37,6 +37,8 @@ export const MEASURED_FAST_FORWARD_RATE_BY_MHZ: Record<number, number> = {
 export type SidPlayerSimulationOptions = {
   playCallHz?: number;
   machineFrameHz?: number;
+  /** CIA 1's clock: 985248 Hz in the 50 Hz System Modes, 1022727 Hz in the 60 Hz ones. */
+  ciaClockHz?: number;
   fastForwardRateByMhz?: Record<number, number>;
   /**
    * The first CPU Speed change after a tune starts took up to a second longer to apply on the C64
@@ -131,12 +133,14 @@ export class SidPlayerSimulation {
   private paused = false;
   private playCallHz: number;
   private machineFrameHz: number;
+  private readonly ciaClockHz: number;
   private readonly rates: Record<number, number>;
   private readonly now: () => number;
 
   constructor(options: SidPlayerSimulationOptions = {}) {
     this.playCallHz = options.playCallHz ?? 50;
     this.machineFrameHz = options.machineFrameHz ?? 50;
+    this.ciaClockHz = options.ciaClockHz ?? PAL_CIA_CLOCK_HZ;
     this.rates = options.fastForwardRateByMhz ?? MEASURED_FAST_FORWARD_RATE_BY_MHZ;
     this.now = options.now ?? (() => Date.now());
     this.firstSpeedChangeDelayMs = options.firstSpeedChangeDelayMs ?? 0;
@@ -253,9 +257,9 @@ export class SidPlayerSimulation {
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;
     if (address === 0xdc04 || address === 0xdc05) {
-      const latch = Math.round(PAL_CIA_CLOCK_HZ / this.playCallHz) - 1;
+      const latch = Math.round(this.ciaClockHz / this.playCallHz) - 1;
       if (address === 0xdc04) this.timerSample = (this.timerSample + 7) % 40;
-      const counted = Math.floor(((this.now() - this.timerOrigin) * PAL_CIA_CLOCK_HZ) / 1000);
+      const counted = Math.floor(((this.now() - this.timerOrigin) * this.ciaClockHz) / 1000);
       if (address === 0xdc04) this.scriptedTimer = this.timerFractions[this.timerReads++];
       const scripted = this.scriptedTimer;
       const value =
@@ -318,6 +322,7 @@ export class SidPlayerSimulation {
 export const simulatedClockField = (layout: Partial<SidPlayerLayout> = {}) => {
   const { clockRow, clockColumn, clockFormat } = { ...CURRENT_PLAYER_LAYOUT, ...layout };
   return {
+    screenAddress: SIMULATED_SCREEN_ADDRESS,
     rowAddress: SIMULATED_SCREEN_ADDRESS + clockRow * 40,
     column: clockColumn,
     length: formatClock(0, clockFormat).length,

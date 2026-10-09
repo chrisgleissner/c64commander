@@ -18,6 +18,7 @@
 
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import type { RemoteSeekApi } from "@/lib/playback/remoteSeek/remoteSidSeekController";
+import { withSeekKeyPermits } from "@/lib/playback/remoteSeek/seekKeyPermit";
 import { createMockC64Server, type MockC64Server } from "../../../tests/mocks/mockC64Server";
 
 export const COUNTER_ADDRESS = 0x10f0;
@@ -200,9 +201,13 @@ export const seekTestApi = (device: SeekTestDevice, deviceKey: () => string | nu
     await device.write(category, item, String(value));
     return {} as never;
   },
-  sendMachineInputBatch: async (batch) =>
-    (await device.request("POST", "/v1/machine:input", { body: JSON.stringify(batch), type: "application/json" }))
-      .bytes,
+  // Through the same permit check as the app's REST wiring, so a seek key needs the player confirmed.
+  sendMachineInputBatch: withSeekKeyPermits(
+    async (batch) =>
+      (await device.request("POST", "/v1/machine:input", { body: JSON.stringify(batch), type: "application/json" }))
+        .bytes,
+    deviceKey,
+  ),
   getMachineInputState: async () => (await device.json("GET", "/v1/machine:input")) as never,
   readMemory: (address, length) => device.readmem(parseInt(address, 16), length),
   writeMemory: (address, data) => device.writemem(parseInt(address, 16), data),
