@@ -80,6 +80,15 @@ const KEY_GAP_MS = 50;
 /** A target this close is reached by playing on, unless the fast forward rate is already known. */
 const NORMAL_PLAY_GAP_SECONDS = 4;
 const NORMAL_PLAY_READ_INTERVAL_MS = 250;
+/**
+ * The fastest the player can possibly fast forward, in clock seconds a second per MHz: its loop
+ * spends at least about 100 cycles on each play call, so 1 MHz runs at most 10000 calls a second.
+ */
+const FASTEST_FAST_FORWARD_PER_MHZ = 200;
+const PULSE_MARGIN_SECONDS = 0.05;
+/** A pulse aims at this share of what is left, so a rate slightly underestimated still stops short. */
+const PULSE_SHARE = 0.8;
+const MIN_PULSE_MS = 20;
 const RESTART_TIMEOUT_MS = 3000;
 /**
  * The largest of these many timer samples must come from the top 15% of the count, or a 100 Hz
@@ -260,6 +269,8 @@ export class RemoteSidSeekController {
         let rateWindow: { atMs: number; clock: number } | null = null;
         let readPeriodSeconds = INITIAL_READ_PERIOD_SECONDS;
         let lastReadAt = 0;
+        /** The rate the last key pulse showed, while none is measured at this speed. */
+        let pulseRate: number | null = null;
         const progress = new JumpProgressWatch(model.seconds);
         while (model.seconds < target) {
           this.assertCurrent(generation);
@@ -295,6 +306,28 @@ export class RemoteSidSeekController {
             continue;
           }
           const remainingClock = (target - position) * ratio;
+          // Until the machine's own speed is measured the planner stays at it and has no bound to plan with.
+          const fastest = planner.calibrated ? null : FASTEST_FAST_FORWARD_PER_MHZ * (cpuSpeedMhz(speed) ?? 1);
+          if (fastest !== null && remainingClock < fastest * (2 * readPeriodSeconds + PULSE_MARGIN_SECONDS)) {
+            // Too close to hold the key without knowing the rate: a read period could pass the target.
+            if (held) {
+              await session.releaseKey();
+              held = false;
+              await this.settle(model, true);
+              fastSinceLastRead = false;
+              continue;
+            }
+            const rate = pulseRate ?? fastest;
+            const pulseMs = Math.max(MIN_PULSE_MS, (remainingClock / rate) * PULSE_SHARE * 1000);
+            const clockBefore = model.clock;
+            await session.pressKey();
+            await sleep(pulseMs);
+            await session.releaseKey();
+            await this.settle(model, true);
+            const gained = model.clock - clockBefore;
+            if (gained > 0) pulseRate = gained / (pulseMs / 1000);
+            continue;
+          }
           const baseRate = speed === planner.finalOption ? planner.measuredRate(speed) : null;
           if (held && baseRate !== null && remainingClock < baseRate * readPeriodSeconds * FINAL_APPROACH_READS) {
             // The next read would land past the target, so release on a timer instead: half a read

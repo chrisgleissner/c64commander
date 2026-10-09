@@ -54,6 +54,11 @@ export class PositionModel {
     return this.position;
   }
 
+  /** The clock as last read. */
+  get clock() {
+    return this.lastClock;
+  }
+
   stepsBack(clock: number) {
     return clock < this.lastClock;
   }

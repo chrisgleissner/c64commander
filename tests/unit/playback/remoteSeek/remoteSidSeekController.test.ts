@@ -470,11 +470,19 @@ describe("remote SID seek controller", () => {
   it.each([
     { name: "back to just after the start", from: 30, target: 2.5 },
     { name: "a few seconds forward", from: 30, target: 33 },
+    { name: "back half way, before any rate is known", from: 54, target: 27 },
+    { name: "twenty seconds forward, before any rate is known", from: 30, target: 50 },
   ])("lands a light tune $name by playing into the target rather than overshooting it", async ({ from, target }) => {
+    // The counter tune with an empty play routine: 65 times real time at 1 MHz on the C64 Ultimate.
     const light = Object.fromEntries(
-      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate * 6]),
+      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate * 6.5]),
     );
-    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: light, latencyMs: 25 });
+    const device = createFakeRemoteSeekDevice({
+      fastForwardRateByMhz: light,
+      latencyMs: 20,
+      latencyJitterMs: 40,
+      keyReleaseDelayMs: 40,
+    });
     const controller = new RemoteSidSeekController(device.api, profile());
     await vi.advanceTimersByTimeAsync(from * 1000);
     const landed = await settle(controller.jumpTo(() => device.player.tunePositionSeconds, target));
