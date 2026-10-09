@@ -285,6 +285,7 @@ export class RemoteSeekDeviceSession {
   private restored = false;
   private closed = false;
   private muteAttempted = false;
+  private muteOnFirstKey = true;
   private readonly inFlight = new Set<Promise<void>>();
 
   private constructor(
@@ -438,8 +439,13 @@ export class RemoteSeekDeviceSession {
    * the journal first, so every restore puts it back. A machine without `Vol Master`, such as the
    * Ultimate-II+(L), stays as it is.
    */
+  /** Whether this seek's first key turns the sound off; the user's setting decides per kind of seek. */
+  muteWhenKeysPressed(enabled: boolean) {
+    this.muteOnFirstKey = enabled;
+  }
+
   private async muteOnce() {
-    if (this.muteAttempted) return;
+    if (this.muteAttempted || !this.muteOnFirstKey) return;
     this.muteAttempted = true;
     const master = await readConfigItem(this.api, AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM).catch(
       (error) => {

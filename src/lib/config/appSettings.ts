@@ -17,6 +17,7 @@ const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
 const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
+const C64_SEEK_MUTE_KEY = "c64u_c64_seek_mute";
 const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
 const MIRROR_C64_VIDEO_KEY = "c64u_mirror_c64_video";
 const DEFAULT_SONG_DURATION_MS_KEY = "c64u_default_song_duration_ms";
@@ -72,6 +73,10 @@ export const DEFAULT_AUTO_DEMO_MODE_ENABLED = DEFAULT_DEMO_MODE_ENABLED;
 export const DEFAULT_STARTUP_DISCOVERY_WINDOW_MS = 3000;
 export const DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS = 5000;
 export const DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS = 2500;
+/** When a seek on the C64 turns its sound off: every fast forward and rewind, rewinds only, or never. */
+export type C64SeekMute = "always" | "rewind" | "never";
+export const DEFAULT_C64_SEEK_MUTE: C64SeekMute = "rewind";
+
 export type DiskAutostartMode = "kernal" | "dma";
 export const DEFAULT_DISK_AUTOSTART_MODE: DiskAutostartMode = "kernal";
 export const DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS = 200;
@@ -268,6 +273,13 @@ export const loadDiskAutostartMode = () =>
 
 export const saveDiskAutostartMode = (mode: DiskAutostartMode) =>
   writeString(DISK_AUTOSTART_MODE_KEY, normalizeDiskAutostartMode(mode));
+
+const normalizeC64SeekMute = (value: unknown): C64SeekMute =>
+  value === "always" || value === "never" ? value : DEFAULT_C64_SEEK_MUTE;
+
+export const loadC64SeekMute = () => normalizeC64SeekMute(readRawString(C64_SEEK_MUTE_KEY));
+
+export const saveC64SeekMute = (mode: C64SeekMute) => writeString(C64_SEEK_MUTE_KEY, normalizeC64SeekMute(mode));
 
 export const loadVolumeSliderPreviewIntervalMs = () =>
   clampVolumeSliderPreviewIntervalMsInternal(
@@ -889,6 +901,7 @@ export const APP_SETTINGS_KEYS = {
   BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
   DISCOVERY_PROBE_TIMEOUT_MS_KEY,
   DISK_AUTOSTART_MODE_KEY,
+  C64_SEEK_MUTE_KEY,
   VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY,
   NOTIFICATION_VISIBILITY_KEY,
   NOTIFICATION_DURATION_MS_KEY,

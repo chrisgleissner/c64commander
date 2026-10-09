@@ -529,7 +529,7 @@ describe("remote SID seek controller", () => {
 
   it("mutes a held fast forward from its first key press until it is given back, before CPU Speed", async () => {
     const device = createFakeRemoteSeekDevice();
-    const controller = new RemoteSidSeekController(device.api, profile());
+    const controller = new RemoteSidSeekController(device.api, profile(), null, () => "always");
     await settle(
       controller.beginFastForward(
         () => 0,
@@ -543,6 +543,33 @@ describe("remote SID seek controller", () => {
     expect(at("Vol Master=0 dB (restore)")).toBeGreaterThan(device.log.lastIndexOf("key release arrow_left"));
     expect(at("Vol Master=0 dB (restore)")).toBeLessThan(at("CPU Speed=1 (restore)"));
     expect(device.settings["Vol Master"]).toBe(" 0 dB");
+  });
+
+  it.each([
+    { setting: "always" as const, hold: true, forward: true, rewind: true },
+    { setting: "rewind" as const, hold: false, forward: false, rewind: true },
+    { setting: "never" as const, hold: false, forward: false, rewind: false },
+  ])("mutes as Settings say for $setting", async ({ setting, hold, forward, rewind }) => {
+    const muted = async (seek: (controller: RemoteSidSeekController) => Promise<unknown>) => {
+      localStorage.clear();
+      const device = createFakeRemoteSeekDevice();
+      const controller = new RemoteSidSeekController(device.api, profile(), null, () => setting);
+      await vi.advanceTimersByTimeAsync(60_000);
+      await settle(seek(controller));
+      return device.log.includes("Vol Master=OFF (transient)");
+    };
+    expect(
+      await muted(async (controller) => {
+        await controller.beginFastForward(
+          () => 60,
+          () => undefined,
+        );
+        await vi.advanceTimersByTimeAsync(1500);
+        await controller.endFastForward();
+      }),
+    ).toBe(hold);
+    expect(await muted((controller) => controller.jumpTo(() => 60, 200))).toBe(forward);
+    expect(await muted((controller) => controller.jumpTo(() => 60, 20))).toBe(rewind);
   });
 
   it("leaves the sound on for a short jump that only plays into its target", async () => {

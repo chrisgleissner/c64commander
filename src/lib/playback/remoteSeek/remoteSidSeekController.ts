@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { loadC64SeekMute, type C64SeekMute } from "@/lib/config/appSettings";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { RemoteSeekDeviceSession, type RemoteSeekDeviceApi } from "./remoteSeekDeviceGuard";
 import {
@@ -129,6 +130,8 @@ export class RemoteSidSeekController {
     private readonly api: RemoteSeekApi,
     readonly profile: RemoteTuneSeekProfile,
     private readonly replayTune: (() => Promise<void>) | null = null,
+    /** Read when each seek starts, so a change in Settings applies to the next one. */
+    private readonly seekMute: () => C64SeekMute = loadC64SeekMute,
   ) {
     this.clockPerTuneSecond =
       profile.headerPlayCallHz === null
@@ -153,6 +156,7 @@ export class RemoteSidSeekController {
       const ratio = await this.resolveClockPerTuneSecond();
       this.assertCurrent(generation);
       const session = await this.openSession();
+      session.muteWhenKeysPressed(this.seekMute() === "always");
       try {
         this.assertCurrent(generation);
         const clock = await this.readClock(false);
@@ -257,6 +261,8 @@ export class RemoteSidSeekController {
         session = await this.openSession();
         this.assertCurrent(generation);
         const restart = target < origin();
+        const mute = this.seekMute();
+        session.muteWhenKeysPressed(mute === "always" || (mute === "rewind" && restart));
         if (restart) {
           model = new PositionModel(0, 0, ratio, this.profile.clock.wrapSeconds);
           await this.restartTune(session, generation);

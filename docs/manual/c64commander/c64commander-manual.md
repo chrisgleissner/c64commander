@@ -523,11 +523,12 @@ Playing on your phone or tablet:
 
 Playing on your C64:
 
-- **Press and hold next** to fast forward. You hear the tune race ahead, and it gets faster every second you hold: the app raises your C64's CPU speed one step at a time. Let go and the tune plays on at normal speed from there.
+- **Press and hold next** to fast forward. The tune races ahead, faster every second you hold: the app raises your C64's CPU speed one step at a time. Let go and the tune plays on at normal speed from there.
 - **Press and hold previous** to wind back 10 seconds, then 20, 40 and 80 more for each further second you hold. The timer shows where you will land; let go to jump there.
-- A tune cannot run backwards, so jumping back starts it again and fast forwards to the spot at full speed. That takes a second or two, and you hear a short chirp while it happens.
-- Your C64's CPU speed is always put back the way you had it, also when the app closes or loses the connection in the middle: it is restored the next time the app reaches that C64. Nothing is saved to the C64's flash memory.
-- This needs a tune with its own play routine, which is most of them, and a machine that accepts key presses from the app (firmware 1.2.0 on a Commodore 64 Ultimate, 3.15 on an Ultimate 64). Otherwise next and previous only step between tunes.
+- A tune cannot run backwards, so jumping back starts it again and fast forwards to the spot. That takes a second or two.
+- **Settings → Play and Disk → Mute C64 seeking** chooses what you hear meanwhile. **Rewind only**, the default, silences your C64 while it winds back and lets you hear a fast forward race ahead. **Always** silences both, and **Never** neither. Playing on your phone or tablet, seeking is silent whatever this is set to.
+- Your C64's CPU speed and volume are always put back the way you had them, also when the app closes or loses the connection in the middle: they are restored the next time the app reaches that C64. Nothing is saved to the C64's flash memory.
+- This needs a tune with its own play routine, which is most of them. On a Commodore 64 Ultimate (firmware 1.2.0 or later) or an Ultimate 64 (3.15 or later) the app presses the C64's own keys. On an Ultimate-II+(L), which cannot press keys, it works through the SID player itself, at the C64's normal CPU speed, so long jumps take longer. Otherwise next and previous only step between tunes.
 
 #### The sound itself
 
