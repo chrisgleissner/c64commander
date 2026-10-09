@@ -238,6 +238,34 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeLessThan(61.5);
   });
 
+  it("samples a CIA-timed tune's timer often enough that forty reads short of the top do not matter", async () => {
+    // Forty reads that kept meeting the timer below 85% of its latch, as on the Ultimate 64.
+    const short = Array.from({ length: 40 }, (_, index) => 0.05 + (0.79 * ((index * 13) % 40)) / 40);
+    const device = createFakeRemoteSeekDevice({ playCallHz: 100, timerFractions: short });
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: null }));
+    await settle(controller.jumpTo(() => 0, 300));
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(298);
+    expect(device.player.tunePositionSeconds).toBeLessThan(302);
+  });
+
+  it("measures a CIA-timed tune's rate once when a jump arrives while it is being measured", async () => {
+    const device = createFakeRemoteSeekDevice({ playCallHz: 200 });
+    const read = device.api.readMemory;
+    let timerReads = 0;
+    device.api.readMemory = async (address, length, options) => {
+      if (address === "DC04") timerReads += 1;
+      return read(address, length, options);
+    };
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: null }));
+    const prepared = controller.prepare();
+    await vi.advanceTimersByTimeAsync(100);
+    await settle(controller.jumpTo(() => 0, 100));
+    await settle(prepared);
+    expect(timerReads).toBe(100);
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(98);
+    expect(device.player.tunePositionSeconds).toBeLessThan(102);
+  });
+
   it("measures a CIA-timed tune's rate when the timer reads would repeat at the timer's own period", async () => {
     // 200 calls a second is a 5 ms timer period, and each read takes 5 ms: evenly spaced reads all
     // see about the same count, whose largest value is then far below the latch.

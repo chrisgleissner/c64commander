@@ -154,6 +154,12 @@ export const useRemoteSidSeek = ({
           setActiveRemoteSidSeek(created);
           setController(created);
           addLog("debug", "Remote seek available", { item: item.label, profile });
+          void created.prepare().catch((error) =>
+            addLog("warn", "Remote seek could not measure the tune's play-call rate", {
+              item: item.label,
+              ...remoteSeekErrorDetails(error),
+            }),
+          );
         } catch (error) {
           addLog("warn", "Remote seek probe failed", { item: item.label, ...remoteSeekErrorDetails(error) });
         }

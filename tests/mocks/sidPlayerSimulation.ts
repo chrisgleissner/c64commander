@@ -53,6 +53,8 @@ export type SidPlayerSimulationOptions = {
    * same count. By default the samples cycle through the range regardless of when they are read.
    */
   timerFollowsClock?: boolean;
+  /** What the first reads of CIA 1 timer A return, as fractions of the latch; later reads as configured. */
+  timerFractions?: number[];
   /**
    * The clock reads (counted from 1) that catch the player mid-update. It writes the digits ones
    * first, so such a read shows the new seconds with the minutes still a minute behind.
@@ -79,6 +81,9 @@ export class SidPlayerSimulation {
   private readonly keyReleaseDelayMs: number;
   private readonly timerFollowsClock: boolean;
   private readonly tornClockReads: ReadonlySet<number>;
+  private readonly timerFractions: readonly number[];
+  private timerReads = 0;
+  private scriptedTimer: number | undefined;
   private clockReads = 0;
   private readonly timerOrigin: number;
   private pendingReleases = new Map<string, number>();
@@ -98,6 +103,7 @@ export class SidPlayerSimulation {
     this.keyReleaseDelayMs = options.keyReleaseDelayMs ?? 0;
     this.timerFollowsClock = options.timerFollowsClock ?? false;
     this.tornClockReads = new Set(options.tornClockReads ?? []);
+    this.timerFractions = options.timerFractions ?? [];
     this.timerOrigin = this.now();
     this.lastUpdate = this.now();
   }
@@ -172,9 +178,14 @@ export class SidPlayerSimulation {
       const latch = Math.round(PAL_CIA_CLOCK_HZ / this.playCallHz) - 1;
       if (address === 0xdc04) this.timerSample = (this.timerSample + 7) % 40;
       const counted = Math.floor(((this.now() - this.timerOrigin) * PAL_CIA_CLOCK_HZ) / 1000);
-      const value = this.timerFollowsClock
-        ? latch - (counted % (latch + 1))
-        : Math.round((latch * (40 - this.timerSample)) / 40);
+      if (address === 0xdc04) this.scriptedTimer = this.timerFractions[this.timerReads++];
+      const scripted = this.scriptedTimer;
+      const value =
+        scripted !== undefined
+          ? Math.round(latch * scripted)
+          : this.timerFollowsClock
+            ? latch - (counted % (latch + 1))
+            : Math.round((latch * (40 - this.timerSample)) / 40);
       return address === 0xdc04 ? value & 0xff : value >> 8;
     }
     const offset = address - SIMULATED_SCREEN_ADDRESS;

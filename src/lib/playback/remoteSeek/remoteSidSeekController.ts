@@ -111,7 +111,11 @@ const KEY_GAP_MS = 50;
 const RESTART_TIMEOUT_MS = 3000;
 const SCREEN_PROBE_ATTEMPTS = 8;
 const SCREEN_PROBE_INTERVAL_MS = 400;
-const TIMER_SAMPLE_COUNT = 40;
+/**
+ * The largest of these many timer samples must come from the top 15% of the count, or a 100 Hz
+ * tune measures as 120 Hz. Forty samples missed it once in a 30-minute soak on the Ultimate 64.
+ */
+const TIMER_SAMPLE_COUNT = 100;
 
 const hex = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -195,7 +199,7 @@ type FastForwardRun = {
 };
 
 export class RemoteSidSeekController {
-  private clockPerTuneSecond: number | null;
+  private clockPerTuneSecond: Promise<number> | null;
   private fastForward: FastForwardRun | null = null;
   private busy: Promise<unknown> = Promise.resolve();
   private cancelGeneration = 0;
@@ -207,7 +211,14 @@ export class RemoteSidSeekController {
     readonly profile: RemoteTuneSeekProfile,
   ) {
     this.clockPerTuneSecond =
-      profile.headerPlayCallHz === null ? null : clockSecondsPerTuneSecond(profile.headerPlayCallHz, profile.timing);
+      profile.headerPlayCallHz === null
+        ? null
+        : Promise.resolve(clockSecondsPerTuneSecond(profile.headerPlayCallHz, profile.timing));
+  }
+
+  /** Measure what a seek needs before the first gesture, so the gesture does not wait for it. */
+  async prepare(): Promise<void> {
+    await this.resolveClockPerTuneSecond();
   }
 
   get canRewind() {
@@ -536,23 +547,27 @@ export class RemoteSidSeekController {
   }
 
   /** Clock seconds per tune second while fast forwarding; measured from CIA 1 timer A for CIA-timed tunes. */
-  private async resolveClockPerTuneSecond(): Promise<number> {
-    if (this.clockPerTuneSecond !== null) return this.clockPerTuneSecond;
+  private resolveClockPerTuneSecond(): Promise<number> {
+    this.clockPerTuneSecond ??= this.measureClockPerTuneSecond().catch((error: unknown) => {
+      // Measured again by the next caller rather than failing every seek of this tune.
+      this.clockPerTuneSecond = null;
+      throw error;
+    });
+    return this.clockPerTuneSecond;
+  }
+
+  private async measureClockPerTuneSecond(): Promise<number> {
     const samples: number[] = [];
     for (let index = 0; index < TIMER_SAMPLE_COUNT; index += 1) {
-      // Uneven gaps: reads that happen to repeat at the timer's own period all land at the same
-      // count, and their largest value then falls well short of the latch (12% in the soak test).
-      if (index > 0) await sleep((index * 7) % 13);
+      // Uneven gaps across a whole frame: reads that repeat at the timer's period meet the same count.
+      if (index > 0) await sleep((index * 7) % 20);
       const raw = await this.api.readMemory("DC04", 2, { __c64uIntent: "user", __c64uBypassCooldown: true });
       samples.push(raw[0] | (raw[1] << 8));
     }
     const callHz = playCallRateFromTimerSamples(samples, this.profile.timing.ciaClockHz) ?? this.profile.timing.frameHz;
-    this.clockPerTuneSecond = clockSecondsPerTuneSecond(callHz, this.profile.timing);
-    addLog("debug", "Remote seek measured the tune's play-call rate", {
-      callHz,
-      clockPerTuneSecond: this.clockPerTuneSecond,
-    });
-    return this.clockPerTuneSecond;
+    const clockPerTuneSecond = clockSecondsPerTuneSecond(callHz, this.profile.timing);
+    addLog("debug", "Remote seek measured the tune's play-call rate", { callHz, clockPerTuneSecond });
+    return clockPerTuneSecond;
   }
 
   /**

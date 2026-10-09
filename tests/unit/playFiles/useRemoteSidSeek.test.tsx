@@ -59,6 +59,13 @@ const item = (bytes: Uint8Array = SEEKABLE, overrides: Partial<PlaylistItem> = {
     ...overrides,
   }) as PlaylistItem;
 
+/** The same tune with its sub tune timed by CIA 1 timer A, whose rate has to be measured on the C64. */
+const ciaTimed = () => {
+  const bytes = Uint8Array.from(SEEKABLE);
+  bytes.set([0, 0, 0, 1], 0x12);
+  return bytes;
+};
+
 const rsid = () => {
   const bytes = Uint8Array.from(SEEKABLE);
   bytes.set([0x52, 0x53, 0x49, 0x44], 0);
@@ -111,6 +118,42 @@ describe("useRemoteSidSeek", () => {
     await advance(1500);
     expect(result.current.handlers?.onScrubStep).toBeTypeOf("function");
     expect(result.current.handlers?.onSeekToFraction).toBeTypeOf("function");
+  });
+
+  it("measures a CIA-timed tune's play-call rate in the background before any gesture", async () => {
+    const read = device.current!.api.readMemory;
+    let timerReads = 0;
+    device.current!.api.readMemory = async (address, length, options) => {
+      if (address === "DC04") timerReads += 1;
+      return read(address, length, options);
+    };
+    const { result } = render({ item: item(ciaTimed()) });
+    await advance(5000);
+    expect(result.current.handlers).not.toBeNull();
+    expect(timerReads).toBe(100);
+  });
+
+  it("logs a play-call rate it could not measure, and measures it again for the first gesture", async () => {
+    const { addLog } = await import("@/lib/logging");
+    const read = device.current!.api.readMemory;
+    let failing = true;
+    device.current!.api.readMemory = async (address, length, options) => {
+      if (failing && address === "DC04") throw new Error("HTTP 503");
+      return read(address, length, options);
+    };
+    const { result, rebasePlaybackPosition } = render({ item: item(ciaTimed()) });
+    await advance(1500);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Remote seek could not measure the tune's play-call rate",
+      expect.objectContaining({ error: "HTTP 503" }),
+    );
+    failing = false;
+    act(() => {
+      result.current.handlers?.onSeekToFraction?.(0.5);
+    });
+    await advance(8000);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan(89);
   });
 
   it("leaves Previous and Next as track controls for an RSID tune", async () => {
