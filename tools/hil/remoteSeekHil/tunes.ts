@@ -7,12 +7,12 @@
  */
 
 /**
- * Silent generated SID tunes whose play routine counts its own calls at $10F0 (the tune
+ * Silent generated SID tunes whose play routine counts its own calls (see `counterAddressOf`; the tune
  * tools/hil/remote_sid_seek_poc.py generates), so the count divided by the play-call rate is the
  * exact position in the tune, wherever the tune itself sits and whatever its header says.
  */
 
-import { COUNTER_ADDRESS } from "./device";
+import { counterAddressFor } from "../../../tests/mocks/sidPlayerSimulation";
 
 /**
  * Exact play-call rates on a PAL machine, so a count converts to real seconds: a PAL frame is 19656
@@ -20,6 +20,69 @@ import { COUNTER_ADDRESS } from "./device";
  * on the C64 Ultimate). Nominal rates put the reference 0.25% ahead, 15 s at an hour into a tune.
  */
 export const PAL_CPU_HZ = 985248;
+
+/**
+ * The CPU clock in each System Mode, from the PLL constant of its entry in the firmware's
+ * software/u64/color_timings.cc, which is proportional to the clock (PAL 81247, NTSC 84338).
+ */
+export const SYSTEM_MODE_CPU_HZ: Record<string, number> = Object.fromEntries(
+  (
+    [
+      ["PAL", 81247],
+      ["NTSC", 84338],
+      ["PAL-60", 84372],
+      ["NTSC-50", 81300],
+      ["PAL-60/L", 84422],
+      ["NTSC-50/L", 81385],
+    ] as const
+  ).map(([mode, pll]) => [mode, Math.round((PAL_CPU_HZ * pll) / 81247)]),
+);
+
+/**
+ * Every period, in CPU cycles, the SID player can call a tune at (player.asm): a PAL frame (312 x 63)
+ * or an NTSC one (263 x 65) for the raster interrupt, each of its CIA latches plus one, and the
+ * NTSC-on-PAL period measured on the C64 Ultimate.
+ */
+const PLAYER_CALL_PERIODS = [19656, 17095, 0x42c6, 0x5021, 0x417f, 0x4e98, 0x3ffb, 0x4cc7, 0x4203, 0x4f37].map(
+  (value, index) => (index < 2 ? value : value + 1),
+);
+const SNAP_TOLERANCE = 0.003;
+
+/**
+ * The exact play-call rate a measured one stands for: the candidate nearest to it in `systemMode`.
+ * Throws when none is within 0.3%, rather than grade landings against a guess.
+ */
+export const snapCallHz = (measuredHz: number, systemMode: string, tune: CounterTune): number => {
+  const cpuHz = SYSTEM_MODE_CPU_HZ[systemMode];
+  if (!cpuHz) throw new Error(`no CPU clock is known for System Mode ${systemMode}`);
+  const periods = [...PLAYER_CALL_PERIODS, NTSC_ON_PAL_CYCLES, ...(tune.ciaTimer !== null ? [tune.ciaTimer + 1] : [])];
+  const nearest = periods
+    .map((period) => cpuHz / period)
+    .reduce((best, hz) => (Math.abs(hz - measuredHz) < Math.abs(best - measuredHz) ? hz : best));
+  if (Math.abs(nearest - measuredHz) / nearest > SNAP_TOLERANCE)
+    throw new Error(
+      `${tune.name} plays ${measuredHz.toFixed(3)} times a second in ${systemMode}; no known rate is near it`,
+    );
+  return nearest;
+};
+
+/** Count the play calls over `ms` at normal speed and snap the rate. */
+export const measureCallHz = async (
+  counter: () => Promise<number>,
+  systemMode: string,
+  tune: CounterTune,
+  ms = 12000,
+): Promise<number> => {
+  const read = async () => {
+    const sentAt = Date.now();
+    const value = await counter();
+    return { value, atMs: (sentAt + Date.now()) / 2 };
+  };
+  const first = await read();
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  const last = await read();
+  return snapCallHz(((last.value - first.value) * 1000) / (last.atMs - first.atMs), systemMode, tune);
+};
 export const callHzOf = (cyclesPerCall: number) => PAL_CPU_HZ / cyclesPerCall;
 export const PAL_FRAME_CYCLES = 19656;
 export const NTSC_ON_PAL_CYCLES = 16388;
@@ -31,7 +94,7 @@ export type CounterTune = {
   busyLoops: number;
   /** CIA 1 timer A latch for a CIA-timed tune; null for once a frame. */
   ciaTimer: number | null;
-  /** Where the code loads; the counter stays at $10F0 wherever that is. */
+  /** Where the code loads; the counter is at $10F0, or $F0 into the code when it loads elsewhere. */
   loadAddress?: number;
   songs?: number;
   startSong?: number;
@@ -50,9 +113,13 @@ export const callHzOfTune = (tune: CounterTune) =>
     ? callHzOf(tune.ciaTimer + 1)
     : callHzOf(tune.video === "NTSC" ? NTSC_ON_PAL_CYCLES : PAL_FRAME_CYCLES);
 
+/** Where `tune` counts its play calls. */
+export const counterAddressOf = (tune: CounterTune) => counterAddressFor(tune.loadAddress ?? 0x1000);
+
 export const counterPsid = (tune: CounterTune): Uint8Array => {
-  const lo = COUNTER_ADDRESS & 0xff;
-  const hi = COUNTER_ADDRESS >> 8;
+  const counter = counterAddressOf(tune);
+  const lo = counter & 0xff;
+  const hi = counter >> 8;
   const loadAddress = tune.loadAddress ?? 0x1000;
   const init = [0xa9, 0x00, 0x8d, lo, hi, 0x8d, lo + 1, hi, 0x8d, lo + 2, hi];
   if (tune.ciaTimer !== null) {

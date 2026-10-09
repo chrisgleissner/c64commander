@@ -271,6 +271,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         await seek(() => driver.tapBar(0.6));
         await seek(() => driver.tapBar(0.15));
       });
+      await expectMachineAsItWas(driver, route, "after the clock checks");
       const names = ["playing", "after fast forward", "after a jump", "after a rewind"];
       windows.forEach((window, index) => {
         const pageLag = clockPhaseErrors(recording.device, recording.page, [window]);

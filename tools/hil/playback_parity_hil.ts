@@ -206,6 +206,12 @@ const openPlay = async () => {
   await waitFor('[data-testid="playlist-play"]');
 };
 
+const machineSettings = async (host: string): Promise<Record<string, string | null>> => ({
+  cpu: await configValue(host, "U64 Specific Settings", "CPU Speed"),
+  turbo: await configValue(host, "U64 Specific Settings", "Turbo Control"),
+  master: await configValue(host, "Audio Mixer", "Vol Master"),
+});
+
 const uniqueIdOf = async (host: string) =>
   ((await (await rest(host, "/v1/info")).json()) as { unique_id?: string }).unique_id ?? null;
 
@@ -462,7 +468,12 @@ const play=row?.querySelector('button[aria-label^="Play "]');if(!play)return fal
       const ready = await js<boolean>(
         `/hold to fast forward/.test(document.querySelector('[data-testid="playlist-next"]')?.title ?? "")`,
       );
-      if (ready) return;
+      if (ready) {
+        // The machine as the tune left it, not as it was before: an Ultimate 64's SID player switches
+        // Turbo Control to "U64 Turbo Registers" when it starts a tune, and a seek gives back that.
+        Object.assign(baseline, await machineSettings(host));
+        return;
+      }
       await sleep(500);
     }
     throw new ParityFailure(`seeking was not offered for ${title} on the ${route} route`);
@@ -546,11 +557,7 @@ try {
       await switchTo(host);
       await openPlay();
       await ensureInPlaylist(host);
-      const baseline = {
-        cpu: await configValue(host, "U64 Specific Settings", "CPU Speed"),
-        turbo: await configValue(host, "U64 Specific Settings", "Turbo Control"),
-        master: await configValue(host, "Audio Mixer", "Vol Master"),
-      };
+      const baseline = await machineSettings(host);
       for (const route of ROUTES) {
         // A cartridge streams no audio, so on the C64 route nothing it plays reaches the phone's speaker.
         const scenarios = PARITY_SCENARIOS.filter(

@@ -183,9 +183,9 @@ export class SeekTestDevice {
     });
   };
 
-  /** The counter tune's play calls so far. */
-  counter = async () => {
-    const raw = await this.readmem(COUNTER_ADDRESS, 3);
+  /** The counter tune's play calls so far, counted at `address`. */
+  counter = async (address = COUNTER_ADDRESS) => {
+    const raw = await this.readmem(address, 3);
     return raw[0] | (raw[1] << 8) | (raw[2] << 16);
   };
 

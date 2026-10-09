@@ -29,7 +29,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { deviceKeyOf, openDeviceTarget, SeekTestDevice, seekTestApi, type RequestTotals } from "./remoteSeekHil/device";
-import { callHzOfTune, counterPsid, type CounterTune } from "./remoteSeekHil/tunes";
+import { openMachineJournal, restoreFromMachineJournal } from "./remoteSeekHil/machineJournal";
+import { counterAddressOf, counterPsid, measureCallHz, type CounterTune } from "./remoteSeekHil/tunes";
+import { playCallRateOnPal } from "../../tests/mocks/sidPlayerSimulation";
 
 const logs = vi.hoisted(() => ({ errors: [] as Array<[string, unknown]> }));
 vi.mock("@/lib/logging", () => ({
@@ -40,8 +42,14 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 const HOST = process.env.SOAK_HOST ?? "c64u";
-const OUT = process.env.SOAK_OUT ?? `artifacts/remote-seek-corpus-${HOST}.json`;
+const OUT =
+  process.env.SOAK_OUT ??
+  `artifacts/remote-seek-corpus-${HOST}${process.env.SOAK_SYSTEM_MODE ? `-${process.env.SOAK_SYSTEM_MODE.replace("/", "")}` : ""}.json`;
 const HVSC = process.env.CORPUS_HVSC ?? path.resolve(process.cwd(), "../C64Music");
+/** Run under this System Mode, put back afterwards; the machine's own mode when unset. */
+const SYSTEM_MODE = process.env.SOAK_SYSTEM_MODE ?? null;
+/** Only the tunes whose name contains this, for iterating on one kind. */
+const ONLY = process.env.CORPUS_ONLY ?? "";
 const U64 = "U64 Specific Settings";
 const AUDIO_MIXER = "Audio Mixer";
 const JOURNAL_KEY = "c64u_remote_seek_device_journal_v1";
@@ -130,6 +138,8 @@ const HVSC_PICKS: Array<{ file: string; songNr: number; refused?: boolean; farJu
 type Result = {
   name: string;
   outcome: "refused" | "seeked" | "unavailable";
+  /** Play calls a second, measured on the machine and snapped to an exact rate. */
+  callHz?: number;
   checks: Array<{ op: string; errorSeconds?: number; ms: number }>;
   violations: string[];
 };
@@ -148,16 +158,28 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
     const { RemoteSidSeekController } = await import("@/lib/playback/remoteSeek/remoteSidSeekController");
     const { readSidPlayerClock } = await import("@/lib/playback/remoteSeek/sidPlayerClock");
 
-    const entries: Entry[] = [...GENERATED];
+    const entries: Entry[] = [...GENERATED].filter((entry) => !ONLY || entry.name.includes(ONLY));
     if (!target.simulated && existsSync(HVSC)) {
       for (const pick of HVSC_PICKS) {
         const file = path.join(HVSC, pick.file);
-        if (existsSync(file)) entries.push({ name: pick.file, load: () => readFileSync(file), ...pick });
+        if (existsSync(file) && (!ONLY || pick.file.includes(ONLY)))
+          entries.push({ name: pick.file, load: () => readFileSync(file), ...pick });
       }
     }
 
-    const originalVolume = (await device.optionalItem(AUDIO_MIXER, "Vol Master"))?.current ?? null;
-    if (originalVolume !== null && !target.simulated) await device.write(AUDIO_MIXER, "Vol Master", QUIET_VOLUME);
+    const originalMode = (await device.optionalItem(U64, "System Mode"))?.current ?? null;
+    const systemMode = SYSTEM_MODE ?? originalMode ?? "PAL";
+    if (!target.simulated) {
+      await openMachineJournal(HOST, [
+        [U64, "CPU Speed"],
+        [U64, "Turbo Control"],
+        [AUDIO_MIXER, "Vol Master"],
+        [U64, "System Mode"],
+      ]);
+      if (originalMode !== null && systemMode !== originalMode) await device.write(U64, "System Mode", systemMode);
+      await device.write(AUDIO_MIXER, "Vol Master", QUIET_VOLUME);
+    }
+    let leftChanged: string[] = [];
     const settings = async () => ({
       cpu: (await device.optionalItem(U64, "CPU Speed"))?.current ?? null,
       turbo: (await device.optionalItem(U64, "Turbo Control"))?.current ?? null,
@@ -191,7 +213,16 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
         await controller.prepare();
         const expected = await settings();
         const clockNow = () => readSidPlayerClock(api.readMemory, profile.clock, false);
-        const truth = async () => (entry.counted ? (await device.counter()) / callHzOfTune(entry.counted) : null);
+        // The mock plays at the rate its own model gives; a real machine's is measured in the mode it runs.
+        const counted = entry.counted;
+        const callHz = !counted
+          ? null
+          : target.simulated
+            ? playCallRateOnPal(bytes, entry.songNr)
+            : await measureCallHz(() => device.counter(counterAddressOf(counted)), systemMode, counted);
+        if (callHz) result.callHz = callHz;
+        const truth = async () =>
+          callHz && counted ? (await device.counter(counterAddressOf(counted))) / callHz : null;
         // Without a reference the clock is the position only for a tune called once a frame.
         const clockIsPosition = profile.headerPlayCallHz === profile.timing.frameHz;
 
@@ -251,13 +282,14 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
       }
     } finally {
       await device.reset();
-      if (originalVolume !== null) await device.write(AUDIO_MIXER, "Vol Master", originalVolume);
+      if (!target.simulated) leftChanged = await restoreFromMachineJournal(HOST);
       mkdirSync(path.dirname(OUT), { recursive: true });
-      writeFileSync(OUT, JSON.stringify({ host: HOST, keyInput, totals, results }, null, 2));
+      writeFileSync(OUT, JSON.stringify({ host: HOST, systemMode, keyInput, totals, results, leftChanged }, null, 2));
       await target.close();
     }
+    expect(leftChanged).toEqual([]);
     const failed = results.filter((result) => result.violations.length);
     expect(failed.map((result) => `${result.name}: ${result.violations.join("; ")}`)).toEqual([]);
-    expect(results.filter((result) => result.outcome === "refused").length).toBeGreaterThanOrEqual(3);
+    if (!ONLY) expect(results.filter((result) => result.outcome === "refused").length).toBeGreaterThanOrEqual(3);
   });
 });
