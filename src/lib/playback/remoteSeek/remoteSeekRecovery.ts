@@ -14,6 +14,7 @@ import {
 import { addErrorLog } from "@/lib/logging";
 import { createRemoteSeekApi } from "./activeRemoteSidSeek";
 import { hasRemoteSeekJournal, recoverRemoteSeekJournal } from "./remoteSeekDeviceGuard";
+import { remoteSeekErrorDetails } from "./remoteSeekErrors";
 
 /** Reconnecting re-routes the API a moment after the state changes, which aborts a request sent at once. */
 const RECOVERY_SETTLE_MS = 1500;
@@ -28,10 +29,7 @@ const recoverWhenConnected = async () => {
     if (getConnectionSnapshot().state !== "REAL_CONNECTED" || isSimulatedDeviceTarget()) return;
     await recoverRemoteSeekJournal(createRemoteSeekApi());
   } catch (error) {
-    addErrorLog("Remote seek recovery failed", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    addErrorLog("Remote seek recovery failed", remoteSeekErrorDetails(error));
   } finally {
     recovering = false;
   }

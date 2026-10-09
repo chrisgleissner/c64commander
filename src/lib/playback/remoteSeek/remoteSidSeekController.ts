@@ -13,7 +13,6 @@ import {
   CPU_SPEED_ITEM,
   readU64ConfigItem,
   RemoteSeekDeviceSession,
-  RemoteSeekSessionClosedError,
   SYSTEM_MODE_ITEM,
   type RemoteSeekDeviceApi,
 } from "./remoteSeekDeviceGuard";
@@ -33,6 +32,11 @@ import {
   SID_PLAYER_CLOCK_OFFSET,
   sidPlayerScreenAddress,
 } from "./sidPlayerScreen";
+import {
+  isRemoteSeekSuperseded,
+  RemoteSeekCancelled,
+  remoteSeekErrorDetails as errorDetails,
+} from "./remoteSeekErrors";
 
 /**
  * Fast forward, rewind and jumps for a tune the C64 plays itself.
@@ -67,7 +71,18 @@ export type RemoteSeekPositionListener = (positionSeconds: number) => void;
  * Where a seek landed and when. The device is given back after landing, which takes a few config
  * writes; the tune plays on meanwhile, so the caller adds the time since `atMs`.
  */
-export type RemoteSeekLanding = { seconds: number; atMs: number };
+export type RemoteSeekLanding = {
+  seconds: number;
+  atMs: number;
+  /** False when the operation was cancelled or failed part way; the position is still where it got to. */
+  completed: boolean;
+};
+
+/**
+ * Where the tune is now, asked for when an operation actually starts rather than when it was
+ * requested: an operation queued behind another must start from where that one left the tune.
+ */
+export type RemoteSeekOrigin = () => number;
 
 /** Ramp step while Next is held, and how often the clock is read for the elapsed time display. */
 export const FAST_FORWARD_RAMP_INTERVAL_MS = 1000;
@@ -94,18 +109,6 @@ const TIMER_SAMPLE_COUNT = 40;
 
 const hex = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const errorDetails = (error: unknown) => ({
-  error: error instanceof Error ? error.message : String(error),
-  stack: error instanceof Error ? error.stack : undefined,
-});
-
-class RemoteSeekCancelled extends Error {
-  constructor(reason: string) {
-    super(`Remote seek cancelled: ${reason}`);
-    this.name = "RemoteSeekCancelled";
-  }
-}
 
 /** Why a tune cannot be seeked on the C64, or null when it can be as far as its header tells. */
 export const remoteSeekHeaderBlocker = (header: SidHeaderMetadata | null): string | null => {
@@ -203,6 +206,7 @@ class PositionModel {
 
 type FastForwardRun = {
   session: RemoteSeekDeviceSession;
+  polling: boolean;
   model: PositionModel;
   rampTimer: ReturnType<typeof setInterval> | null;
   pollTimer: ReturnType<typeof setInterval> | null;
@@ -232,7 +236,7 @@ export class RemoteSidSeekController {
   }
 
   /** Hold Next: press the key, then raise CPU Speed one step a second. Positions arrive on `onPosition`. */
-  beginFastForward(fromSeconds: number, onPosition: RemoteSeekPositionListener): Promise<void> {
+  beginFastForward(origin: RemoteSeekOrigin, onPosition: RemoteSeekPositionListener): Promise<void> {
     return this.serialize(async (generation) => {
       if (this.fastForward) return;
       this.assertCurrent(generation);
@@ -243,8 +247,10 @@ export class RemoteSidSeekController {
         this.assertCurrent(generation);
         const clock = await this.readClock(false);
         if (clock === null) throw new Error("The SID player's clock is not on screen");
+        const fromSeconds = origin();
         const run: FastForwardRun = {
           session,
+          polling: false,
           model: new PositionModel(fromSeconds, clock, ratio),
           rampTimer: null,
           pollTimer: null,
@@ -294,7 +300,7 @@ export class RemoteSidSeekController {
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
-      const landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now() };
+      const landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
       await run.speedWrites;
       await this.giveBack(run.session, reason);
       addLog("debug", "Remote fast forward ended", { reason, positionSeconds: landing.seconds });
@@ -308,12 +314,13 @@ export class RemoteSidSeekController {
    * on, or null when the jump was cancelled or failed (the device is given back either way).
    */
   jumpTo(
-    fromSeconds: number,
+    origin: RemoteSeekOrigin,
     targetSeconds: number,
     onPosition?: RemoteSeekPositionListener,
   ): Promise<RemoteSeekLanding | null> {
     return this.serialize(async (generation) => {
       const target = Math.max(0, targetSeconds);
+      const fromSeconds = origin();
       if (target < fromSeconds && !this.canRewind) {
         addLog("debug", "Remote seek: jumping back needs CPU Speed; ignored", { fromSeconds, targetSeconds });
         return null;
@@ -328,15 +335,15 @@ export class RemoteSidSeekController {
         this.assertCurrent(generation);
         session = await this.openSession();
         this.assertCurrent(generation);
-        let from = fromSeconds;
-        if (target < from) {
-          await this.restartTune(generation);
-          from = 0;
+        const restart = target < origin();
+        if (restart) {
           model = new PositionModel(0, 0, ratio);
+          await this.restartTune(session, generation);
         }
         const startClock = await this.readClock(true);
         if (startClock === null) throw new Error("The SID player's clock is not on screen");
-        model = new PositionModel(from, startClock, ratio);
+        // Asked again now: the tune played on while the rate was measured and the session opened.
+        model = new PositionModel(restart ? 0 : origin(), startClock, ratio);
         const planner = new JumpSpeedPlanner(this.profile.cpuSpeedOptions, session.originalCpuSpeed);
         let speed = session.originalCpuSpeed;
         let held = false;
@@ -412,14 +419,14 @@ export class RemoteSidSeekController {
           landedSeconds: model.seconds,
           tookMs: Date.now() - startedAt,
         });
-        return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now() };
+        return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
       } catch (error) {
-        if (error instanceof RemoteSeekCancelled || error instanceof RemoteSeekSessionClosedError) {
+        if (isRemoteSeekSuperseded(error)) {
           addLog("debug", error.message, { fromSeconds, targetSeconds });
         } else {
           addErrorLog("Remote seek failed", { fromSeconds, targetSeconds, ...errorDetails(error) });
         }
-        return model ? { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now() } : null;
+        return model ? { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false } : null;
       } finally {
         if (session) await this.giveBack(session, "jump finished");
       }
@@ -496,12 +503,17 @@ export class RemoteSidSeekController {
   }
 
   private async pollFastForward(run: FastForwardRun) {
+    // Reads that overlap can return out of order, which would count clock seconds twice.
+    if (run.polling) return;
+    run.polling = true;
     try {
       const clock = await this.readClock(false);
       if (clock === null || this.fastForward !== run) return;
       run.onPosition(run.model.advance(clock, true));
     } catch (error) {
       addLog("warn", "Remote fast forward could not read the SID player's clock", errorDetails(error));
+    } finally {
+      run.polling = false;
     }
   }
 
@@ -530,11 +542,10 @@ export class RemoteSidSeekController {
    * Restart the sub tune the way the player's own keys do: minus then plus selects the same sub tune
    * again. Sent as press and release pairs: two taps in one batch lost the second key on the device.
    */
-  private async restartTune(generation: number) {
+  private async restartTune(session: RemoteSeekDeviceSession, generation: number) {
     for (const key of ["minus", "plus"] as const) {
-      await this.api.sendMachineInputBatch({ events: [{ kind: "keyboard", inputs: [key], transition: "press" }] });
-      await sleep(KEY_HOLD_MS);
-      await this.api.sendMachineInputBatch({ events: [{ kind: "keyboard", inputs: [key], transition: "release" }] });
+      this.assertCurrent(generation);
+      await session.tapKey(key, KEY_HOLD_MS);
       await sleep(KEY_GAP_MS);
     }
     const deadline = Date.now() + RESTART_TIMEOUT_MS;

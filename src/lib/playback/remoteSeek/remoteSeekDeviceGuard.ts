@@ -10,6 +10,9 @@ import type { ConfigResponse, MachineInputBatch } from "@/lib/c64api";
 import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
+
+export { RemoteSeekSessionClosedError };
 
 /**
  * The device state a remote seek borrows, and the guarantee that it is given back.
@@ -50,17 +53,6 @@ export type RemoteSeekDeviceApi = {
   getMachineInputState: () => Promise<{ keyboard?: { inputs?: string[] } }>;
 };
 
-/**
- * Thrown by a session that has started giving the device back, or whose device is no longer the one
- * the API talks to; the operation using it is over.
- */
-export class RemoteSeekSessionClosedError extends Error {
-  constructor(message = "This remote seek has already given the device back") {
-    super(message);
-    this.name = "RemoteSeekSessionClosedError";
-  }
-}
-
 export type RemoteSeekJournal = {
   /** Which session wrote it: a restore clears the journal only if it is still its own. */
   sessionId: string;
@@ -74,11 +66,6 @@ export type RemoteSeekJournal = {
 };
 
 export type ConfigItemSnapshot = { value: string; options: string[] };
-
-const errorDetails = (error: unknown) => ({
-  error: error instanceof Error ? error.message : String(error),
-  stack: error instanceof Error ? error.stack : undefined,
-});
 
 type JournalStore = Record<string, RemoteSeekJournal>;
 
@@ -132,8 +119,12 @@ export const readU64ConfigItem = async (api: RemoteSeekDeviceApi, item: string):
   return { value: String(normalized.value), options: normalized.options ?? [] };
 };
 
-const sendKey = (api: RemoteSeekDeviceApi, transition: "press" | "release") =>
-  api.sendMachineInputBatch({ events: [{ kind: "keyboard", inputs: [FAST_FORWARD_KEY], transition }] });
+/** Every key a seek presses: the fast-forward key, and minus and plus to restart the sub tune. */
+const SEEK_KEYS = [FAST_FORWARD_KEY, "minus", "plus"] as const;
+type SeekKey = (typeof SEEK_KEYS)[number];
+
+const sendKey = (api: RemoteSeekDeviceApi, transition: "press" | "release", key: SeekKey = FAST_FORWARD_KEY) =>
+  api.sendMachineInputBatch({ events: [{ kind: "keyboard", inputs: [key], transition }] });
 
 const sameOption = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -167,9 +158,12 @@ export const restoreFromJournal = async (
       return false;
     }
     try {
-      await sendKey(api, "release");
+      await api.sendMachineInputBatch({
+        events: [{ kind: "keyboard", inputs: [...SEEK_KEYS], transition: "release" }],
+      });
       const stillHeld = (await api.getMachineInputState()).keyboard?.inputs ?? [];
-      if (stillHeld.includes(FAST_FORWARD_KEY)) throw new Error("The fast-forward key is still held after release");
+      const held = SEEK_KEYS.filter((key) => stillHeld.includes(key));
+      if (held.length > 0) throw new Error(`Keys still held after release: ${held.join(", ")}`);
       if (journal.cpuSpeedChanged) {
         await api.setConfigValue(U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, journal.originalCpuSpeed, {
           __c64uTransientConfigRestore: true,
@@ -313,6 +307,18 @@ export class RemoteSeekDeviceSession {
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
       await sendKey(this.api, "press");
+    });
+  }
+
+  /** Press and release a key, the way the player's own keys restart the sub tune. */
+  tapKey(key: "minus" | "plus", holdMs: number): Promise<void> {
+    return this.mutate(async () => {
+      this.journal = { ...this.journal, keyHeld: true };
+      writeJournal(this.journal.deviceKey, this.journal);
+      await sendKey(this.api, "press", key);
+      await new Promise((resolve) => setTimeout(resolve, holdMs));
+      // A device switch during the hold leaves the release to the restore, which releases every seek key.
+      if (this.api.currentDeviceKey() === this.journal.deviceKey) await sendKey(this.api, "release", key);
     });
   }
 

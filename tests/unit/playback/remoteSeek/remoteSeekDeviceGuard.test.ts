@@ -49,7 +49,7 @@ describe("remote seek device guard", () => {
     expect(device.log).toEqual([
       "key press arrow_left",
       "CPU Speed=64 (transient)",
-      "key release arrow_left",
+      "key release arrow_left+minus+plus",
       "CPU Speed=1 (restore)",
     ]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
@@ -65,7 +65,7 @@ describe("remote seek device guard", () => {
     expect(device.log).toEqual([
       "Turbo Control=Manual (transient)",
       "CPU Speed=64 (transient)",
-      "key release arrow_left",
+      "key release arrow_left+minus+plus",
       "CPU Speed=1 (restore)",
       "Turbo Control=Off (restore)",
     ]);
@@ -158,7 +158,7 @@ describe("remote seek device guard", () => {
     releasePress();
     await press;
     await restore;
-    expect(device.log).toEqual(["key press arrow_left", "key release arrow_left"]);
+    expect(device.log).toEqual(["key press arrow_left", "key release arrow_left+minus+plus"]);
     expect(device.player.heldKeys).toEqual([]);
   });
 

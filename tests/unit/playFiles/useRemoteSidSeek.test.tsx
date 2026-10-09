@@ -38,6 +38,7 @@ vi.mock("@/lib/playback/remoteSeek/activeRemoteSidSeek", async (importOriginal) 
 });
 
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
+import { cancelRemoteSidSeek } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 
 const SEEKABLE = Uint8Array.from(readFileSync(path.resolve("playwright/fixtures/remote-seek/seekable.sid")));
 const DEVICE_INFO = { product: "C64 Ultimate", core_version: "1.50", firmware_version: "1.2.1" } as never;
@@ -157,14 +158,17 @@ describe("useRemoteSidSeek", () => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(-5);
     });
-    expect(result.current.targetMs).toBeCloseTo((from - 10) * 1000, -2);
+    // From the landing, which the page's elapsed time has not caught up with: the tune played on since.
+    const firstTarget = result.current.targetMs ?? 0;
+    expect(firstTarget / 1000).toBeGreaterThan(from - 10);
+    expect(firstTarget / 1000).toBeLessThan(from - 5);
     await advance(1000);
-    expect(result.current.targetMs).toBeCloseTo((from - 30) * 1000, -2);
+    expect(result.current.targetMs).toBeCloseTo(firstTarget - 20_000, -2);
     act(() => result.current.handlers?.onScrubEnd?.());
     await advance(5000);
     expect(device.current!.player.restarts).toBe(2);
-    expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan(from - 31);
-    expect(rebasedSeconds(rebasePlaybackPosition)).toBeLessThan(from - 25);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan((firstTarget - 20_000) / 1000 - 1);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBeLessThan((firstTarget - 20_000) / 1000 + 2);
   });
 
   it("gives the device back when the app is hidden mid fast forward", async () => {
@@ -228,10 +232,63 @@ describe("useRemoteSidSeek", () => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(-5);
     });
+    // Lifting the second finger leaves the first hold running.
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(500);
+    expect(device.current!.player.heldKeys).toEqual(["arrow_left"]);
     act(() => result.current.handlers?.onScrubEnd?.());
     await advance(2000);
     expect(device.current!.player.heldKeys).toEqual([]);
     expect(device.current!.settings["CPU Speed"]).toBe(" 1");
     expect(device.current!.player.restarts).toBe(0);
+  });
+
+  it("does not run a queued jump once the jump before it was cancelled", async () => {
+    const { result } = render();
+    await advance(1500);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.5));
+    await advance(400);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.2));
+    await advance(300);
+    act(() => {
+      void cancelRemoteSidSeek("stop");
+    });
+    await advance(1000);
+    const keysAfterCancel = device.current!.log.length;
+    await advance(5000);
+    expect(device.current!.log.slice(keysAfterCancel).filter((entry) => entry.startsWith("key press"))).toEqual([]);
+    expect(device.current!.player.restarts).toBe(0);
+  });
+
+  it("drops a drag that has not settled when the app is hidden", async () => {
+    const { result } = render();
+    await advance(1500);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.5));
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    await advance(3000);
+    expect(device.current!.log.filter((entry) => entry.startsWith("key press"))).toEqual([]);
+    expect(result.current.targetMs).toBeNull();
+  });
+
+  it("ignores the progress bar while Next is held", async () => {
+    const { result } = render();
+    await advance(1500);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(800);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.1));
+    await advance(1000);
+    // A jump would have taken the device over from the hold, releasing its key.
+    expect(device.current!.log.filter((entry) => entry.startsWith("key release"))).toEqual([]);
+    expect(device.current!.player.heldKeys).toEqual(["arrow_left"]);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(1500);
+    expect(device.current!.player.heldKeys).toEqual([]);
   });
 });

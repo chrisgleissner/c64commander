@@ -1541,7 +1541,7 @@ export default function PlayFilesPage() {
     const registerBackgroundAutoSkipListener = async () => {
       try {
         const nextHandle = await onBackgroundAutoSkipDue((event) => {
-          if (cancelled) return;
+          if (cancelled || isRemoteSidSeekBusy()) return;
           syncPlaybackTimelineRef.current({ allowAutoAdvance: false });
           const guard = autoAdvanceGuardRef.current;
           const playbackState = playbackStateRef.current;

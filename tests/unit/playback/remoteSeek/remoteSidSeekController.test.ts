@@ -85,7 +85,12 @@ describe("remote SID seek controller", () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
     const positions: number[] = [];
-    await settle(controller.beginFastForward(0, (position) => positions.push(position)));
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        (position) => positions.push(position),
+      ),
+    );
     await vi.advanceTimersByTimeAsync(6500);
     const landed = await settle(controller.endFastForward());
     expect(cpuSpeedWrites(device.log)).toEqual([
@@ -108,7 +113,12 @@ describe("remote SID seek controller", () => {
   it("ends a fast forward held past the hold limit by itself", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.beginFastForward(0, () => undefined));
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
     await vi.advanceTimersByTimeAsync(FAST_FORWARD_MAX_HOLD_MS + 5000);
     expect(controller.isFastForwarding).toBe(false);
     expect(device.player.heldKeys).toEqual([]);
@@ -118,7 +128,7 @@ describe("remote SID seek controller", () => {
   it("jumps forward to within a second of the target and leaves the device as it was", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    const landed = await settle(controller.jumpTo(0, 200));
+    const landed = await settle(controller.jumpTo(() => 0, 200));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(199.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(201.5);
     expect(landed?.seconds).toBeGreaterThanOrEqual(200);
@@ -134,10 +144,10 @@ describe("remote SID seek controller", () => {
     );
     const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: light, latencyMs: 20 });
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.jumpTo(0, 150));
+    await settle(controller.jumpTo(() => 0, 150));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(149.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(152);
-    await settle(controller.jumpTo(150, 60));
+    await settle(controller.jumpTo(() => 150, 60));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(59.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(62);
   });
@@ -145,7 +155,7 @@ describe("remote SID seek controller", () => {
   it("counts the fast forward that ran until a released key reached the device, for a multi-speed tune", async () => {
     const device = createFakeRemoteSeekDevice({ playCallHz: 200, latencyMs: 25 });
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
-    await settle(controller.jumpTo(0, 200));
+    await settle(controller.jumpTo(() => 0, 200));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(199.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(202);
   });
@@ -161,7 +171,7 @@ describe("remote SID seek controller", () => {
       latencyMs: 15,
     });
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
-    await settle(controller.jumpTo(0, 45));
+    await settle(controller.jumpTo(() => 0, 45));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(44.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(46.5);
   });
@@ -169,7 +179,7 @@ describe("remote SID seek controller", () => {
   it("lands on slow round trips, which leave more time between clock reads", async () => {
     const device = createFakeRemoteSeekDevice({ latencyMs: 60 });
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.jumpTo(0, 240));
+    await settle(controller.jumpTo(() => 0, 240));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(239.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(242);
   });
@@ -177,14 +187,14 @@ describe("remote SID seek controller", () => {
   it("releases the key before every CPU Speed change, so a late write cannot overshoot", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.jumpTo(0, 200));
+    await settle(controller.jumpTo(() => 0, 200));
     device.log.forEach((entry, index) => {
       if (entry.startsWith("CPU Speed=") && index > 0) {
         const lastKey = device.log
           .slice(0, index)
           .reverse()
           .find((earlier) => earlier.startsWith("key "));
-        expect(lastKey ?? "key release arrow_left").toBe("key release arrow_left");
+        expect(lastKey ?? "key release").toMatch(/^key release /);
       }
     });
   });
@@ -192,8 +202,8 @@ describe("remote SID seek controller", () => {
   it("rewinds by restarting the sub tune and fast forwarding to the target", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.jumpTo(0, 150));
-    const landed = await settle(controller.jumpTo(150, 40));
+    await settle(controller.jumpTo(() => 0, 150));
+    const landed = await settle(controller.jumpTo(() => 150, 40));
     expect(device.player.restarts).toBe(2);
     expect(device.log).toEqual(expect.arrayContaining(["key press minus", "key release minus", "key press plus"]));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(39.5);
@@ -205,7 +215,7 @@ describe("remote SID seek controller", () => {
   it("lands an NTSC tune on a PAL machine on the music's position, not the faster clock", async () => {
     const device = createFakeRemoteSeekDevice({ playCallHz: 60 });
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 60 }));
-    await settle(controller.jumpTo(0, 120));
+    await settle(controller.jumpTo(() => 0, 120));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(119.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(121.5);
   });
@@ -213,7 +223,7 @@ describe("remote SID seek controller", () => {
   it("measures a CIA-timed tune's play-call rate from the timer before it jumps", async () => {
     const device = createFakeRemoteSeekDevice({ playCallHz: 200 });
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: null }));
-    await settle(controller.jumpTo(0, 60));
+    await settle(controller.jumpTo(() => 0, 60));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(59.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(61.5);
   });
@@ -221,7 +231,7 @@ describe("remote SID seek controller", () => {
   it("gives the device back when a jump is cancelled half way", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    const jump = controller.jumpTo(0, 1000);
+    const jump = controller.jumpTo(() => 0, 1000);
     await vi.advanceTimersByTimeAsync(300);
     await settle(controller.cancel("stop"));
     // It reports where it got to, so the display does not go back to where the jump started.
@@ -235,7 +245,12 @@ describe("remote SID seek controller", () => {
   it("gives the device back when the fast forward is cancelled while Next is held", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.beginFastForward(0, () => undefined));
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
     await vi.advanceTimersByTimeAsync(3000);
     await settle(controller.cancel("pause"));
     await vi.advanceTimersByTimeAsync(3000);
@@ -259,7 +274,10 @@ describe("remote SID seek controller", () => {
       return read(address, length, options);
     };
     const controller = new RemoteSidSeekController(device.api, profile());
-    const begin = controller.beginFastForward(0, () => undefined);
+    const begin = controller.beginFastForward(
+      () => 0,
+      () => undefined,
+    );
     for (let waited = 0; !pressSent && waited < 2000; waited += 1) await vi.advanceTimersByTimeAsync(1);
     await settle(controller.cancel("pause"));
     await settle(begin.catch(() => undefined));
@@ -273,21 +291,81 @@ describe("remote SID seek controller", () => {
   it("sends no restart keys for a rewind cancelled before it began", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    await settle(controller.jumpTo(0, 120));
+    await settle(controller.jumpTo(() => 0, 120));
     device.log.length = 0;
-    const first = controller.jumpTo(120, 150);
-    const rewind = controller.jumpTo(150, 30);
+    const first = controller.jumpTo(() => 120, 150);
+    const rewind = controller.jumpTo(() => 150, 30);
     await settle(controller.cancel("pause"));
     await settle(Promise.all([first, rewind]));
     expect(device.log.filter((entry) => entry.includes("minus") || entry.includes("plus"))).toEqual([]);
     expect(device.player.restarts).toBe(0);
   });
 
+  it("sends nothing more to a device the app switched away from in the middle of a restart", async () => {
+    const device = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(() => 0, 100));
+    let pressedMinus = false;
+    const send = device.api.sendMachineInputBatch;
+    device.api.sendMachineInputBatch = (batch) => {
+      if (batch.events.some((event) => event.kind === "keyboard" && event.inputs.includes("minus")))
+        pressedMinus = true;
+      return send(batch);
+    };
+    const rewind = controller.jumpTo(() => 100, 20);
+    for (let waited = 0; !pressedMinus && waited < 5000; waited += 1) await vi.advanceTimersByTimeAsync(1);
+    device.connectTo(JSON.stringify(["f13e69", "u2"]));
+    const logged = device.log.length;
+    await settle(rewind);
+    // Only the press already on its way can arrive; neither its release nor plus follows on the new device.
+    expect(device.log.slice(logged).filter((entry) => entry !== "key press minus")).toEqual([]);
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toMatchObject({ keyHeld: true });
+  });
+
+  it("counts the clock once per second when reads overlap and return out of order", async () => {
+    const device = createFakeRemoteSeekDevice();
+    // Every other read is slow, so a read started later can return before one started earlier.
+    let reads = 0;
+    const read = device.api.readMemory;
+    device.api.readMemory = async (address, length, options) => {
+      const value = await read(address, length, options);
+      await new Promise((resolve) => setTimeout(resolve, reads++ % 2 === 0 ? 600 : 50));
+      return value;
+    };
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(3000);
+    const landed = await settle(controller.endFastForward());
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(2.5);
+  });
+
+  it("starts an operation queued behind a jump from where that jump left the tune", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    let position = 0;
+    const jump = controller
+      .jumpTo(() => position, 120)
+      .then((landing) => {
+        position = landing?.seconds ?? position;
+        return landing;
+      });
+    const second = controller.jumpTo(() => position, 60);
+    await settle(Promise.all([jump, second]));
+    expect(device.player.restarts).toBe(2);
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(59.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(62);
+  });
+
   it("does not jump back on a machine without CPU Speed", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile({ cpuSpeedOptions: [] }));
     expect(controller.canRewind).toBe(false);
-    expect(await settle(controller.jumpTo(100, 10))).toBeNull();
+    expect(await settle(controller.jumpTo(() => 100, 10))).toBeNull();
     expect(device.log).toEqual([]);
   });
 
@@ -295,7 +373,7 @@ describe("remote SID seek controller", () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
     device.failures.keyEvents = 1;
-    const landed = await settle(controller.jumpTo(0, 200));
+    const landed = await settle(controller.jumpTo(() => 0, 200));
     expect(Math.abs((landed?.seconds ?? -10) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
