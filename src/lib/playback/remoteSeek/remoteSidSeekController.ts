@@ -100,7 +100,13 @@ const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
 const FINAL_APPROACH_READS = 1.5;
 /** The clock shows whole seconds, so the tune is on average half a second past what it shows. */
 const CLOCK_ROUNDING_SECONDS = 0.5;
+const CLOCK_WRAP_SECONDS = 100 * 60;
 const KEY_HOLD_MS = 60;
+/**
+ * A released key takes a frame or two to stop the fast forward. A light tune passes several clock
+ * seconds in that time at 64 MHz, so the clock is read again only once it has.
+ */
+const KEY_SETTLE_MS = 80;
 const KEY_GAP_MS = 50;
 const RESTART_TIMEOUT_MS = 3000;
 const SCREEN_PROBE_ATTEMPTS = 8;
@@ -193,7 +199,8 @@ class PositionModel {
   }
 
   advance(clock: number, keyHeld: boolean): number {
-    const delta = Math.max(0, clock - this.lastClock);
+    // The clock wraps after 99:59, which a light tune passes in a couple of seconds at 64 MHz.
+    const delta = clock >= this.lastClock ? clock - this.lastClock : clock + CLOCK_WRAP_SECONDS - this.lastClock;
     this.lastClock = clock;
     this.position += keyHeld ? delta / this.clockPerTuneSecond : delta;
     return this.position;
@@ -295,8 +302,7 @@ export class RemoteSidSeekController {
       this.stopTimers(run);
       try {
         await run.session.releaseKey();
-        const clock = await this.readClock(false);
-        if (clock !== null) run.model.advance(clock, true);
+        await this.settle(run.model, false);
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
@@ -385,8 +391,7 @@ export class RemoteSidSeekController {
             await sleep(Math.max(0, (remainingClock / baseRate - readPeriodSeconds / 2) * 1000));
             await session.releaseKey();
             held = false;
-            const settled = await this.readClock(true);
-            if (settled !== null) model.advance(settled, true);
+            await this.settle(model, true);
             break;
           }
           const wanted = planner.choose(remainingClock, readPeriodSeconds);
@@ -397,8 +402,7 @@ export class RemoteSidSeekController {
               await session.releaseKey();
               held = false;
               // Settle what ran fast before the write, which may wait with the tune at normal speed.
-              const settled = await this.readClock(true);
-              if (settled !== null) model.advance(settled, true);
+              await this.settle(model, true);
               fastSinceLastRead = false;
             }
             await session.setCpuSpeed(wanted);
@@ -412,7 +416,10 @@ export class RemoteSidSeekController {
             held = true;
           }
         }
-        await session.releaseKey();
+        if (held) {
+          await session.releaseKey();
+          await this.settle(model, true);
+        }
         addLog("debug", "Remote seek landed", {
           fromSeconds,
           targetSeconds: target,
@@ -426,7 +433,16 @@ export class RemoteSidSeekController {
         } else {
           addErrorLog("Remote seek failed", { fromSeconds, targetSeconds, ...errorDetails(error) });
         }
-        return model ? { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false } : null;
+        if (session) await this.giveBack(session, "jump stopped");
+        if (!model) return null;
+        if (session && this.api.currentDeviceKey() !== session.deviceKey) {
+          return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false };
+        }
+        // The restore has released the key, so one read now says where the tune really got to.
+        await this.settle(model, true).catch((settleError) =>
+          addLog("warn", "Remote seek could not read where a stopped jump left the tune", errorDetails(settleError)),
+        );
+        return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false };
       } finally {
         if (session) await this.giveBack(session, "jump finished");
       }
@@ -517,6 +533,13 @@ export class RemoteSidSeekController {
     }
   }
 
+  /** Read the clock once the key is surely up, crediting what ran since the last read to the fast forward. */
+  private async settle(model: PositionModel, fast: boolean) {
+    await sleep(KEY_SETTLE_MS);
+    const clock = await this.readClock(fast);
+    if (clock !== null) model.advance(clock, true);
+  }
+
   private readClock(fast: boolean) {
     return readClockAt(this.api, this.profile.screenAddress, fast);
   }
@@ -526,6 +549,9 @@ export class RemoteSidSeekController {
     if (this.clockPerTuneSecond !== null) return this.clockPerTuneSecond;
     const samples: number[] = [];
     for (let index = 0; index < TIMER_SAMPLE_COUNT; index += 1) {
+      // Uneven gaps: reads that happen to repeat at the timer's own period all land at the same
+      // count, and their largest value then falls well short of the latch (12% in the soak test).
+      if (index > 0) await sleep((index * 7) % 13);
       const raw = await this.api.readMemory("DC04", 2, { __c64uIntent: "user", __c64uBypassCooldown: true });
       samples.push(raw[0] | (raw[1] << 8));
     }

@@ -266,6 +266,10 @@ export class RemoteSeekDeviceSession {
     return session;
   }
 
+  get deviceKey(): string {
+    return this.journal.deviceKey;
+  }
+
   get originalCpuSpeed(): string {
     return this.journal.originalCpuSpeed;
   }

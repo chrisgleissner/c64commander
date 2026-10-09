@@ -43,6 +43,16 @@ export type SidPlayerSimulationOptions = {
    * Ultimate than later ones; this delays the first one by that much.
    */
   firstSpeedChangeDelayMs?: number;
+  /**
+   * The player scans the keyboard once a frame, so a released key keeps the fast forward running
+   * for up to a frame or two after the release arrives.
+   */
+  keyReleaseDelayMs?: number;
+  /**
+   * Let CIA 1 timer A count down in step with time, so reads that repeat at its period all see the
+   * same count. By default the samples cycle through the range regardless of when they are read.
+   */
+  timerFollowsClock?: boolean;
   now?: () => number;
 };
 
@@ -61,6 +71,10 @@ export class SidPlayerSimulation {
   private pendingSpeed: { mhz: number; atMs: number } | null = null;
   private speedChanged = false;
   private readonly firstSpeedChangeDelayMs: number;
+  private readonly keyReleaseDelayMs: number;
+  private readonly timerFollowsClock: boolean;
+  private readonly timerOrigin: number;
+  private pendingReleases = new Map<string, number>();
   private timerSample = 0;
   restarts = 0;
   private readonly playCallHz: number;
@@ -74,6 +88,9 @@ export class SidPlayerSimulation {
     this.rates = options.fastForwardRateByMhz ?? MEASURED_FAST_FORWARD_RATE_BY_MHZ;
     this.now = options.now ?? (() => Date.now());
     this.firstSpeedChangeDelayMs = options.firstSpeedChangeDelayMs ?? 0;
+    this.keyReleaseDelayMs = options.keyReleaseDelayMs ?? 0;
+    this.timerFollowsClock = options.timerFollowsClock ?? false;
+    this.timerOrigin = this.now();
     this.lastUpdate = this.now();
   }
 
@@ -88,6 +105,7 @@ export class SidPlayerSimulation {
   }
 
   get heldKeys() {
+    this.advance();
     return [...this.keysDown];
   }
 
@@ -105,11 +123,16 @@ export class SidPlayerSimulation {
   pressKey(key: string) {
     this.advance();
     if ((key === "minus" || key === "plus") && !this.keysDown.has(key)) this.restart();
+    this.pendingReleases.delete(key);
     this.keysDown.add(key);
   }
 
   releaseKey(key: string) {
     this.advance();
+    if (this.keyReleaseDelayMs > 0 && this.keysDown.has(key)) {
+      this.pendingReleases.set(key, this.now() + this.keyReleaseDelayMs);
+      return;
+    }
     this.keysDown.delete(key);
   }
 
@@ -139,7 +162,10 @@ export class SidPlayerSimulation {
     if (address === 0xdc04 || address === 0xdc05) {
       const latch = Math.round(PAL_CIA_CLOCK_HZ / this.playCallHz) - 1;
       if (address === 0xdc04) this.timerSample = (this.timerSample + 7) % 40;
-      const value = Math.round((latch * (40 - this.timerSample)) / 40);
+      const counted = Math.floor(((this.now() - this.timerOrigin) * PAL_CIA_CLOCK_HZ) / 1000);
+      const value = this.timerFollowsClock
+        ? latch - (counted % (latch + 1))
+        : Math.round((latch * (40 - this.timerSample)) / 40);
       return address === 0xdc04 ? value & 0xff : value >> 8;
     }
     const offset = address - SIMULATED_SCREEN_ADDRESS;
@@ -155,6 +181,12 @@ export class SidPlayerSimulation {
 
   private advance() {
     const now = this.now();
+    for (const [key, atMs] of [...this.pendingReleases].sort((a, b) => a[1] - b[1])) {
+      if (atMs > now) continue;
+      this.advanceTo(atMs);
+      this.keysDown.delete(key);
+      this.pendingReleases.delete(key);
+    }
     if (this.pendingSpeed && now >= this.pendingSpeed.atMs) {
       this.advanceTo(this.pendingSpeed.atMs);
       this.cpuMhz = this.pendingSpeed.mhz;

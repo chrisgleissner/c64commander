@@ -228,6 +228,37 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeLessThan(61.5);
   });
 
+  it("measures a CIA-timed tune's rate when the timer reads would repeat at the timer's own period", async () => {
+    // 200 calls a second is a 5 ms timer period, and each read takes 5 ms: evenly spaced reads all
+    // see about the same count, whose largest value is then far below the latch.
+    const device = createFakeRemoteSeekDevice({ playCallHz: 200, timerFollowsClock: true, latencyMs: 5 });
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: null }));
+    // Start the reads in the middle of a timer period rather than at its top.
+    await vi.advanceTimersByTimeAsync(2);
+    await settle(controller.jumpTo(() => 0, 120));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(119.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(122);
+  });
+
+  it("reads where a fast forward stopped once the released key took effect, through the clock wrapping at 99:59", async () => {
+    // A light tune at 64 MHz passes a clock second every millisecond or so, and the player only
+    // notices a released key at its next keyboard scan.
+    const light = Object.fromEntries(
+      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate * 10]),
+    );
+    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: light, keyReleaseDelayMs: 40 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(6500);
+    const landed = await settle(controller.endFastForward());
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(2);
+  });
+
   it("gives the device back when a jump is cancelled half way", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
