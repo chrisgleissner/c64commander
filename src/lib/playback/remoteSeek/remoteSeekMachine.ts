@@ -31,6 +31,8 @@ const RESTART_POLL_MS = 30;
  * tune measures as 120 Hz. Forty samples missed it once in a 30-minute soak on the Ultimate 64.
  */
 const TIMER_SAMPLE_COUNT = 100;
+/** A clock read takes tens of ms; one still out after this, with the key held, gets the key released. */
+const HELD_READ_DEADLINE_MS = 250;
 /** A clock read slower than this may carry a value read seconds before it arrived. */
 const STALE_READ_MS = 1000;
 
@@ -167,5 +169,25 @@ export class SeekMachine {
       await sleep(RESTART_POLL_MS);
     }
     throw new Error("The tune did not restart");
+  }
+
+  /**
+   * Read the clock during a jump. With the key held, a read the device has not answered within
+   * HELD_READ_DEADLINE_MS releases the key first: the firmware sometimes answers 8 s late, and the
+   * tune would race on past its target meanwhile. Other requests are answered during such a stall.
+   */
+  async readClockHeld(model: PositionModel, heldBy: RemoteSeekDeviceSession | null) {
+    let release: Promise<void> | null = null;
+    const timer = heldBy
+      ? setTimeout(() => {
+          release = heldBy.releaseKey();
+        }, HELD_READ_DEADLINE_MS)
+      : null;
+    try {
+      return { clock: await this.readClockFor(model, true), released: release !== null };
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+      if (release) await release;
+    }
   }
 }

@@ -88,6 +88,20 @@ const lowerRatio = (mhz: number): number => {
   return RATE_RATIO_LOWER[RATE_RATIO_LOWER.length - 1][1];
 };
 
+/**
+ * The fastest the player can possibly fast forward, in clock seconds a second per MHz: its loop
+ * spends at least about 100 cycles on each play call, so 1 MHz runs at most 10000 calls a second.
+ */
+export const FASTEST_FAST_FORWARD_PER_MHZ = 200;
+export const PULSE_MARGIN_SECONDS = 0.05;
+/** A pulse aims at this share of what is left, so a rate slightly underestimated still stops short. */
+export const PULSE_SHARE = 0.8;
+export const MIN_PULSE_MS = 20;
+/** Long enough to cover distance at the slowest speed, short enough to stay quick to cancel. */
+export const MAX_PULSE_MS = 2000;
+/** The clock shows whole seconds, so a pulse shorter than this many of them cannot be measured. */
+export const MIN_PULSE_CLOCK_SECONDS = 1.5;
+
 /** Rate measurements need this much fast forward behind them before they are trusted. */
 export const RATE_WINDOW_SECONDS = 0.15;
 /** Added to twice the clock read period: the key release and its arrival at the device. */

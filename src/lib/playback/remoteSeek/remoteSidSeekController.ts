@@ -10,6 +10,12 @@ import { loadC64SeekMute, type C64SeekMute } from "@/lib/config/appSettings";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { RemoteSeekDeviceSession, type RemoteSeekDeviceApi } from "./remoteSeekDeviceGuard";
 import {
+  FASTEST_FAST_FORWARD_PER_MHZ,
+  MAX_PULSE_MS,
+  MIN_PULSE_CLOCK_SECONDS,
+  MIN_PULSE_MS,
+  PULSE_MARGIN_SECONDS,
+  PULSE_SHARE,
   clockSecondsPerTuneSecond,
   cpuSpeedMhz,
   fastForwardRampOptions,
@@ -64,8 +70,6 @@ export const FAST_FORWARD_POLL_INTERVAL_MS = 250;
 export const FAST_FORWARD_MAX_HOLD_MS = 120_000;
 /** The fastest the clock is read during a jump; each read is a short REST round trip. */
 const JUMP_POLL_MIN_INTERVAL_MS = 30;
-/** A clock read takes tens of ms; one still out after this, with the key held, gets the key released. */
-const HELD_READ_DEADLINE_MS = 250;
 const INITIAL_READ_PERIOD_SECONDS = 0.06;
 /** The clock shows whole seconds, so a rate is only trusted over a few of them. */
 const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
@@ -76,19 +80,6 @@ const NORMAL_PLAY_GAP_SECONDS = 4;
 const NORMAL_PLAY_READ_INTERVAL_MS = 250;
 /** A held fast forward ends after this many clock reads in a row that find no clock. */
 const PLAYER_GONE_READS = 2;
-/**
- * The fastest the player can possibly fast forward, in clock seconds a second per MHz: its loop
- * spends at least about 100 cycles on each play call, so 1 MHz runs at most 10000 calls a second.
- */
-const FASTEST_FAST_FORWARD_PER_MHZ = 200;
-const PULSE_MARGIN_SECONDS = 0.05;
-/** A pulse aims at this share of what is left, so a rate slightly underestimated still stops short. */
-const PULSE_SHARE = 0.8;
-const MIN_PULSE_MS = 20;
-/** Long enough to cover distance at the slowest speed, short enough to stay quick to cancel. */
-const MAX_PULSE_MS = 2000;
-/** The clock shows whole seconds, so a pulse shorter than this many of them cannot be measured. */
-const MIN_PULSE_CLOCK_SECONDS = 1.5;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -166,26 +157,6 @@ export class RemoteSidSeekController {
         () => generation === this.cancelGeneration && !this.gestureArrived,
       ),
     );
-  }
-
-  /**
-   * Read the clock during a jump. With the key held, a read the device has not answered within
-   * HELD_READ_DEADLINE_MS releases the key first: the firmware sometimes answers 8 s late, and the
-   * tune would race on past its target meanwhile. Other requests are answered during such a stall.
-   */
-  private async readClockHeld(model: PositionModel, heldBy: RemoteSeekDeviceSession | null) {
-    let release: Promise<void> | null = null;
-    const timer = heldBy
-      ? setTimeout(() => {
-          release = heldBy.releaseKey();
-        }, HELD_READ_DEADLINE_MS)
-      : null;
-    try {
-      return { clock: await this.machine.readClockFor(model, true), released: release !== null };
-    } finally {
-      if (timer !== null) clearTimeout(timer);
-      if (release) await release;
-    }
   }
 
   /** Make a running clock re-sync give way to a gesture. */
@@ -354,7 +325,7 @@ export class RemoteSidSeekController {
           if (wait > 0) await sleep(wait);
           const readStartedAt = Date.now();
           const heldDuringRead = held;
-          const read = await this.readClockHeld(model, held ? session : null);
+          const read = await this.machine.readClockHeld(model, held ? session : null);
           const clock = read.clock;
           if (read.released) {
             held = false;
