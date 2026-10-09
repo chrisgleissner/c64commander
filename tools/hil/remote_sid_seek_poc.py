@@ -415,95 +415,133 @@ def restart_tune(device: Device) -> float:
     return time.monotonic() - started
 
 
-def seek(device: Device, plan: "SeekPlan", from_tune_s: float, target_tune_s: float, base: str,
-         write_interval_s: float = 0.0) -> dict:
-    """The app's jump: restart when going back, then fast forward in speed tiers.
+RATE_RATIO_UPPER = [(1, 1.0), (2, 1.6), (4, 4.8), (8, 9.0), (16, 16.0), (32, 25.0), (64, 38.0)]
+RATE_RATIO_LOWER = [(1, 1.0), (2, 0.85), (4, 3.0), (8, 5.8), (16, 9.2), (32, 16.0), (64, 21.0)]
+RATE_WINDOW_S = 0.15
+RATE_WINDOW_MIN_CLOCK_S = 4
+RELEASE_MARGIN_S = 0.05
+RATE_SAFETY_FACTOR = 1.3
+FINAL_APPROACH_READS = 1.5
+POLL_MIN_INTERVAL_S = 0.03
 
-    The clock counts play calls during fast forward, at the machine's frame rate, so the clock value
-    to stop at is the distance in tune seconds times `clock_per_tune_s`. Between tiers the key is
-    released before CPU Speed changes: the app's config writes queue behind a device-safety interval,
-    so a speed change can arrive late, and with the key up the tune just plays on at normal speed
-    instead of racing past the target. `write_interval_s` reproduces that queue.
-    """
+
+def interpolate_ratio(table: list[tuple[int, float]], mhz: float) -> float:
+    if mhz <= table[0][0]:
+        return table[0][1]
+    for (low_mhz, low), (high_mhz, high) in zip(table, table[1:]):
+        if mhz <= high_mhz:
+            return low + (high - low) * (mhz - low_mhz) / (high_mhz - low_mhz)
+    return table[-1][1]
+
+
+class JumpSpeedPlanner:
+    """The app's planner (src/lib/playback/remoteSeek/remoteSeekPlan.ts), kept identical so this
+    tool measures the algorithm the app runs: start at the base speed, measure the tune's rate,
+    predict faster speeds with the upper ratio, and leave a speed while it can still be braked."""
+
+    def __init__(self, options: list[str], base: str) -> None:
+        speeds = sorted({m for m in (cpu_speed_mhz(o) for o in options) if m is not None})
+        base_mhz = cpu_speed_mhz(base) or 1
+        faster = [option_for_mhz(options, mhz) for mhz in (speeds[-1], 4) if mhz > base_mhz]
+        self.tiers = list(dict.fromkeys(o for o in faster if o)) + [base]
+        self.base = base
+        self.measured: dict[str, float] = {}
+        self.slowest_chosen = 0
+
+    def predicted_rate(self, option: str) -> float | None:
+        if option in self.measured:
+            return self.measured[option]
+        mhz = cpu_speed_mhz(option) or 1
+        rates = [rate * interpolate_ratio(RATE_RATIO_UPPER, mhz) / interpolate_ratio(RATE_RATIO_LOWER, cpu_speed_mhz(o) or 1)
+                 for o, rate in self.measured.items()]
+        return max(rates) if rates else None
+
+    def choose(self, remaining_clock_s: float, read_period_s: float) -> str:
+        if not self.measured:
+            return self.base
+        lead = 2 * read_period_s + RELEASE_MARGIN_S
+        for index in range(self.slowest_chosen, len(self.tiers)):
+            rate = self.predicted_rate(self.tiers[index])
+            if rate is not None and remaining_clock_s >= rate * RATE_SAFETY_FACTOR * lead:
+                self.slowest_chosen = index
+                return self.tiers[index]
+        self.slowest_chosen = len(self.tiers) - 1
+        return self.base
+
+
+def seek(device: Device, options: list[str], clock_per_tune_s: float, from_tune_s: float, target_tune_s: float,
+         base: str, write_interval_s: float = 0.0) -> dict:
+    """The app's jump (RemoteSidSeekController.jumpTo): restart when going back, then the planner's
+    speeds, with the key released before every CPU Speed change. `write_interval_s` reproduces the
+    app's config write queue, which can hold a speed change back."""
     started = time.monotonic()
     restart_s = 0.0
     if target_tune_s < from_tune_s:
         restart_s = restart_tune(device)
         from_tune_s = 0.0
-    start_clock = device.clock() or 0
-    stop_clock = start_clock + round((target_tune_s - from_tune_s) * plan.clock_per_tune_s)
+    planner = JumpSpeedPlanner(options, base)
+    last_clock = device.clock() or 0
+    position = from_tune_s
+    speed, held, window, fast_since_last_read = base, False, None, False
+    read_period, last_read = 0.06, 0.0
     speeds_used = []
     deadline = time.monotonic() + 30
-    current = None
-    held = False
     try:
-        while True:
+        while position < target_tune_s:
             if time.monotonic() > deadline:
-                raise RuntimeError(f"jump to {target_tune_s}s did not land within 30 s (clock {device.clock()})")
-            value = device.clock()
-            if value is None:
+                raise RuntimeError(f"jump to {target_tune_s}s did not land within 30 s")
+            wait = POLL_MIN_INTERVAL_S - (time.monotonic() - last_read)
+            if wait > 0:
+                time.sleep(wait)
+            read_started = time.monotonic()
+            clock = device.clock()
+            now = time.monotonic()
+            read_period = 0.7 * read_period + 0.3 * (POLL_MIN_INTERVAL_S + now - read_started)
+            last_read = now
+            if clock is None:
                 continue
-            if value >= stop_clock:
+            delta = max(0, clock - last_clock)
+            last_clock = clock
+            position += delta / clock_per_tune_s if held or fast_since_last_read else delta
+            fast_since_last_read = held
+            if position >= target_tune_s:
                 break
-            wanted = plan.speed_for(stop_clock - value)
-            if wanted != current:
+            if held and window is None:
+                window = (now, clock)
+            elif held and now - window[0] >= RATE_WINDOW_S and clock - window[1] >= RATE_WINDOW_MIN_CLOCK_S:
+                planner.measured[speed] = (clock - window[1]) / (now - window[0])
+            remaining = (target_tune_s - position) * clock_per_tune_s
+            base_rate = planner.measured.get(speed) if speed == base else None
+            if held and base_rate and remaining < base_rate * read_period * FINAL_APPROACH_READS:
+                time.sleep(max(0.0, remaining / base_rate - read_period / 2))
+                device.key("release", FAST_FORWARD_KEY)
+                held = False
+                settled = device.clock()
+                if settled is not None:
+                    position += max(0, settled - last_clock) / clock_per_tune_s
+                break
+            wanted = planner.choose(remaining, read_period)
+            if wanted != speed:
                 if held:
                     device.key("release", FAST_FORWARD_KEY)
                     held = False
+                    fast_since_last_read = True
                 time.sleep(write_interval_s)
                 device.set_config(CPU_SPEED, wanted)
                 speeds_used.append(cpu_speed_mhz(wanted))
-                current = wanted
+                speed, window = wanted, None
                 continue
             if not held:
                 device.key("press", FAST_FORWARD_KEY)
                 held = True
     finally:
         device.key("release", FAST_FORWARD_KEY)
-        if current != base:
+        if speed != base:
             device.set_config(CPU_SPEED, base)
-    landed_wall = time.monotonic() - started
-    shown = device.clock()
-    return {"from_s": from_tune_s, "target_s": target_tune_s, "stop_clock": stop_clock, "clock_after": shown,
-            "restart_s": round(restart_s, 2), "wall_s": round(landed_wall, 2), "speeds_mhz": speeds_used}
-
-
-@dataclass
-class SeekPlan:
-    """Speed tiers for a jump: the fastest tier whose distance threshold the remaining clock distance exceeds.
-
-    Thresholds are in clock seconds. A tier is left when the remaining distance drops below what the
-    tier covers in SLOW_DOWN_LEAD_S, so the next tier starts before the target can be overshot.
-    """
-
-    tiers: list[tuple[str, float]]
-    clock_per_tune_s: float = 1.0
-
-    def speed_for(self, remaining_clock_s: float) -> str:
-        for option, min_remaining in self.tiers:
-            if remaining_clock_s >= min_remaining:
-                return option
-        return self.tiers[-1][0]
-
-
-SLOW_DOWN_LEAD_S = 0.1
-# Clock seconds per wall second while fast forwarding, measured on c64u fw 1.2.1RC2 (rates stage).
-EXPECTED_CLOCK_RATE = {1: 16, 4: 57, 16: 190, 64: 430}
-
-
-def seek_tiers(options: list[str], base: str) -> list[tuple[str, float]]:
-    """The maximum and 4 MHz while far from the target, the base speed for the last few seconds."""
-    numeric = sorted({m for m in (cpu_speed_mhz(o) for o in options) if m is not None})
-    base_mhz = cpu_speed_mhz(base) or 1
-    tiers = []
-    for mhz in [numeric[-1], 4]:
-        option = option_for_mhz(options, mhz)
-        if option is None or mhz <= base_mhz or any(t[0] == option for t in tiers):
-            continue
-        rate = EXPECTED_CLOCK_RATE.get(mhz, EXPECTED_CLOCK_RATE[64])
-        tiers.append((option, rate * SLOW_DOWN_LEAD_S))
-    tiers.append((base, 0.0))
-    return tiers
+    return {"from_s": from_tune_s, "target_s": target_tune_s, "model_s": round(position, 2),
+            "restart_s": round(restart_s, 2), "wall_s": round(time.monotonic() - started, 2),
+            "speeds_mhz": speeds_used, "measured": {k.strip(): round(v) for k, v in planner.measured.items()},
+            "clock_after": device.clock()}
 
 
 def snap_call_rate(raw_hz: float) -> float:
@@ -532,38 +570,33 @@ def measure_call_rate(device: Device, cia_clock_hz: float, samples: int = 60) ->
 def stage_seek(ctx: Context, write_interval_s: float = 0.0) -> dict:
     device = ctx.device
     base = ctx.base_option()
-    tiers = seek_tiers(ctx.speed_options, base)
     frame_hz, cia_hz = 50.0, 985248.0
-    out = {"tiers": tiers, "write_interval_s": write_interval_s, "counter": [], "tunes": {}}
+    out = {"write_interval_s": write_interval_s, "counter": [], "tunes": {}}
     variants = [("PAL VBI", "PAL", None), ("NTSC VBI", "NTSC", None), ("PAL CIA 4x", "PAL", 0x1331)]
     for label, video, timer in variants:
         device.sidplay(build_counter_psid(video, busy_loops=200, cia_timer=timer), "counter.sid")
         raw_hz, call_hz = measure_call_rate(device, cia_hz)
-        plan = SeekPlan(tiers, clock_per_tune_s=call_hz / frame_hz)
-        position = 0.0
         for target in (45.0, 200.0, 30.0, 120.0):
             truth_before = device.counter() / call_hz
-            position = truth_before
-            row = seek(device, plan, position, target, base, write_interval_s)
+            row = seek(device, ctx.speed_options, call_hz / frame_hz, truth_before, target, base, write_interval_s)
             truth = device.counter() / call_hz
             row.update({"variant": label, "call_hz_raw": round(raw_hz, 1), "call_hz": call_hz,
                         "truth_after_s": round(truth, 2), "error_s": round(truth - target, 2)})
             out["counter"].append(row)
             log(f"seek {label:10s} ({raw_hz:5.1f}->{call_hz:.0f} Hz) {truth_before:6.1f} -> {target:5.0f}s: "
                 f"wall {row['wall_s']:4.2f}s restart {row['restart_s']:.2f}s speeds {row['speeds_mhz']} "
-                f"truth {truth:6.1f} error {row['error_s']:+.2f}s")
+                f"measured {row['measured']} truth {truth:6.1f} error {row['error_s']:+.2f}s")
     for tune in ctx.tunes:
         device.sidplay(tune.read_bytes(), tune.name)
         raw_hz, call_hz = measure_call_rate(device, cia_hz)
-        plan = SeekPlan(tiers, clock_per_tune_s=call_hz / frame_hz)
         rows = []
         position = float(device.clock() or 0)
         for target in (60.0, 20.0, 150.0, 90.0):
-            row = seek(device, plan, position, target, base, write_interval_s)
-            position = target
+            row = seek(device, ctx.speed_options, call_hz / frame_hz, position, target, base, write_interval_s)
+            position = row["model_s"]
             rows.append(row)
             log(f"seek {tune.name} ({call_hz:.0f} Hz) -> {target:5.0f}s: wall {row['wall_s']:4.2f}s "
-                f"speeds {row['speeds_mhz']} clock stop {row['stop_clock']} after {row['clock_after']}")
+                f"speeds {row['speeds_mhz']} measured {row['measured']} clock after {row['clock_after']}")
         out["tunes"][tune.name] = rows
     return out
 

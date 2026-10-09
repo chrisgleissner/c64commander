@@ -15,8 +15,7 @@ import {
   optionForMhz,
   playCallRateFromTimerSamples,
   rewindOffsetSeconds,
-  seekSpeedFor,
-  seekSpeedTiers,
+  JumpSpeedPlanner,
   snapPlayCallRate,
 } from "@/lib/playback/remoteSeek/remoteSeekPlan";
 import {
@@ -52,16 +51,50 @@ describe("remote seek plan", () => {
     expect([0, 1, 2, 3, 4, 5, 6].map(rewindOffsetSeconds)).toEqual([0, 10, 30, 70, 150, 230, 310]);
   });
 
-  it("jumps at the maximum, then 4 MHz, then the machine's own speed for the last seconds", () => {
-    const tiers = seekSpeedTiers(C64U_CPU_SPEEDS, " 1");
-    expect(tiers.map((tier) => tier.option)).toEqual(["64", " 4", " 1"]);
-    expect(seekSpeedFor(tiers, 300)).toBe("64");
-    expect(seekSpeedFor(tiers, 20)).toBe(" 4");
-    expect(seekSpeedFor(tiers, 2)).toBe(" 1");
+  it("jumps through the maximum, 4 MHz and the machine's own speed, and nothing slower than that", () => {
+    expect(new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1").tiers).toEqual(["64", " 4", " 1"]);
+    expect(new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 8").tiers).toEqual(["64", " 8"]);
   });
 
-  it("leaves out jump tiers that are not faster than the user's own CPU Speed", () => {
-    expect(seekSpeedTiers(C64U_CPU_SPEEDS, " 8").map((tier) => tier.option)).toEqual(["64", " 8"]);
+  it("stays at the machine's own speed until it has measured how fast this tune fast forwards", () => {
+    const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    expect(planner.choose(1000, 0.05)).toBe(" 1");
+    planner.record(" 1", 10);
+    expect(planner.choose(1000, 0.05)).toBe("64");
+  });
+
+  it("predicts faster speeds from a measured one with the upper ratio, so it slows down early", () => {
+    const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    planner.record(" 1", 10);
+    expect(planner.predictedRate("64")).toBe(380);
+    expect(planner.predictedRate(" 4")).toBe(48);
+    // 380 x 1.3 x (2 x 0.05 + 0.05) = 74 clock seconds is the least the maximum is used for.
+    expect(planner.choose(80, 0.05)).toBe("64");
+    expect(planner.choose(70, 0.05)).toBe(" 4");
+    expect(planner.choose(5, 0.05)).toBe(" 1");
+  });
+
+  it("scales the lead with the measured read period, and a light tune's higher rate with it", () => {
+    const slowReads = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    slowReads.record(" 1", 65);
+    expect(slowReads.choose(300, 0.05)).toBe(" 4");
+    const fastReads = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    fastReads.record(" 1", 65);
+    expect(fastReads.choose(300, 0.02)).toBe("64");
+  });
+
+  it("never climbs back to a faster speed once it has slowed down", () => {
+    const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    planner.record(" 1", 10);
+    expect(planner.choose(5, 0.05)).toBe(" 1");
+    expect(planner.choose(1000, 0.05)).toBe(" 1");
+  });
+
+  it("uses a measured rate in place of its prediction", () => {
+    const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    planner.record(" 1", 10);
+    planner.record("64", 290);
+    expect(planner.predictedRate("64")).toBe(290);
   });
 
   it("times PAL and 50 Hz modes at the PAL clock and the 60 Hz modes at the NTSC clock", () => {

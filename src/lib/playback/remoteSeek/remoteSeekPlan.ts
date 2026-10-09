@@ -53,39 +53,122 @@ export const rewindOffsetSeconds = (stepsHeld: number): number => {
   return total;
 };
 
-export type SeekSpeedTier = { option: string; minRemainingClockSeconds: number };
-
 /**
- * How long a clock read and releasing the key take, in wall seconds. A jump leaves a speed once the
- * remaining distance is what that speed covers in this time, so releasing the key cannot overshoot.
- * Both took 12-20 ms from a desktop; a phone on Wi-Fi is slower, hence the margin.
+ * Fast forward rate at each CPU Speed relative to 1 MHz, as the fastest and the slowest of six tunes
+ * measured it (C_mon, Commando, Cybernoid, Last Ninja, Wizball and a tone test tune). The ratios
+ * hold across tunes far better than the rates do: a tune with a light play routine ran 6x faster
+ * than real music at every speed, so absolute rates cannot be tabulated, while 64 MHz stayed 21-36x
+ * the 1 MHz rate for every tune.
  */
-const SLOW_DOWN_LEAD_SECONDS = 0.15;
-/** Clock seconds per wall second while fast forwarding, the fastest of the measured tunes. */
-const FAST_FORWARD_CLOCK_RATE_BY_MHZ: Record<number, number> = { 4: 57, 64: 430 };
-const FASTEST_MEASURED_RATE = FAST_FORWARD_CLOCK_RATE_BY_MHZ[64];
+const RATE_RATIO_UPPER: ReadonlyArray<[number, number]> = [
+  [1, 1],
+  [2, 1.6],
+  [4, 4.8],
+  [8, 9],
+  [16, 16],
+  [32, 25],
+  [64, 38],
+];
+const RATE_RATIO_LOWER: ReadonlyArray<[number, number]> = [
+  [1, 1],
+  [2, 0.85],
+  [4, 3],
+  [8, 5.8],
+  [16, 9.2],
+  [32, 16],
+  [64, 21],
+];
 
-/**
- * Speeds for a jump: the maximum, then 4 MHz, then the machine's own speed for the last few
- * seconds, so the landing is accurate to about half a second. Every tier costs one CPU Speed write,
- * which waits out the config write interval, so the tiers are kept few.
- */
-export const seekSpeedTiers = (options: readonly string[], baseOption: string): SeekSpeedTier[] => {
-  const speeds = numericSpeeds(options);
-  const baseMhz = cpuSpeedMhz(baseOption) ?? 1;
-  const tiers: SeekSpeedTier[] = [];
-  for (const mhz of [speeds[speeds.length - 1], 4]) {
-    const option = mhz === undefined ? null : optionForMhz(options, mhz);
-    if (option === null || mhz <= baseMhz || tiers.some((tier) => tier.option === option)) continue;
-    const rate = FAST_FORWARD_CLOCK_RATE_BY_MHZ[mhz] ?? FASTEST_MEASURED_RATE;
-    tiers.push({ option, minRemainingClockSeconds: rate * SLOW_DOWN_LEAD_SECONDS });
+const interpolateRatio = (table: ReadonlyArray<[number, number]>, mhz: number): number => {
+  if (mhz <= table[0][0]) return table[0][1];
+  for (let index = 1; index < table.length; index += 1) {
+    const [highMhz, highRatio] = table[index];
+    if (mhz <= highMhz) {
+      const [lowMhz, lowRatio] = table[index - 1];
+      return lowRatio + ((highRatio - lowRatio) * (mhz - lowMhz)) / (highMhz - lowMhz);
+    }
   }
-  tiers.push({ option: baseOption, minRemainingClockSeconds: 0 });
-  return tiers;
+  return table[table.length - 1][1];
 };
 
-export const seekSpeedFor = (tiers: readonly SeekSpeedTier[], remainingClockSeconds: number): string =>
-  (tiers.find((tier) => remainingClockSeconds >= tier.minRemainingClockSeconds) ?? tiers[tiers.length - 1]).option;
+/** Rate measurements need this much fast forward behind them before they are trusted. */
+export const RATE_WINDOW_SECONDS = 0.15;
+/** Added to twice the clock read period: the key release and its arrival at the device. */
+const RELEASE_MARGIN_SECONDS = 0.05;
+/** A rate read off a whole-second clock over a few seconds can be a quarter low. */
+const RATE_SAFETY_FACTOR = 1.3;
+
+/**
+ * Chooses the CPU Speed for each step of a jump.
+ *
+ * A jump starts at the machine's own speed and measures how fast this tune fast forwards there.
+ * Every faster speed is then predicted from that measurement with the upper ratio, so a prediction
+ * can only be too high, which makes the jump slow down early rather than overshoot. A speed is used
+ * while the remaining distance exceeds what it covers in the lead time; measured rates replace the
+ * predictions as the jump goes. The tiers are the maximum, 4 MHz and the machine's own speed: each
+ * change costs a CPU Speed write that may wait out the config write interval, so they are few.
+ */
+export class JumpSpeedPlanner {
+  readonly tiers: string[];
+  private readonly measured = new Map<string, number>();
+  /** Tiers are only ever left downwards: each change costs a write, and climbing back invited oscillation. */
+  private slowestChosen = 0;
+
+  constructor(
+    options: readonly string[],
+    readonly baseOption: string,
+  ) {
+    const speeds = numericSpeeds(options);
+    const baseMhz = cpuSpeedMhz(baseOption) ?? 1;
+    const faster = [speeds[speeds.length - 1], 4]
+      .filter((mhz): mhz is number => mhz !== undefined && mhz > baseMhz)
+      .map((mhz) => optionForMhz(options, mhz))
+      .filter((option): option is string => option !== null);
+    this.tiers = [...new Set(faster), baseOption];
+  }
+
+  get calibrated(): boolean {
+    return this.measured.size > 0;
+  }
+
+  record(option: string, clockSecondsPerSecond: number) {
+    if (clockSecondsPerSecond > 0) this.measured.set(option, clockSecondsPerSecond);
+  }
+
+  measuredRate(option: string): number | null {
+    return this.measured.get(option) ?? null;
+  }
+
+  /** The highest rate this option can plausibly have, given what has been measured. */
+  predictedRate(option: string): number | null {
+    const own = this.measured.get(option);
+    if (own !== undefined) return own;
+    const mhz = cpuSpeedMhz(option) ?? 1;
+    let highest: number | null = null;
+    for (const [measuredOption, rate] of this.measured) {
+      const measuredMhz = cpuSpeedMhz(measuredOption) ?? 1;
+      const scaled = (rate * interpolateRatio(RATE_RATIO_UPPER, mhz)) / interpolateRatio(RATE_RATIO_LOWER, measuredMhz);
+      highest = highest === null ? scaled : Math.max(highest, scaled);
+    }
+    return highest;
+  }
+
+  /** The fastest tier that cannot overshoot `remainingClockSeconds` within the lead time. */
+  choose(remainingClockSeconds: number, readPeriodSeconds: number): string {
+    if (!this.calibrated) return this.baseOption;
+    const leadSeconds = 2 * readPeriodSeconds + RELEASE_MARGIN_SECONDS;
+    for (let index = this.slowestChosen; index < this.tiers.length; index += 1) {
+      const option = this.tiers[index];
+      const rate = this.predictedRate(option);
+      if (rate !== null && remainingClockSeconds >= rate * RATE_SAFETY_FACTOR * leadSeconds) {
+        this.slowestChosen = index;
+        return option;
+      }
+    }
+    this.slowestChosen = this.tiers.length - 1;
+    return this.baseOption;
+  }
+}
 
 export type MachineTiming = { frameHz: number; ciaClockHz: number };
 

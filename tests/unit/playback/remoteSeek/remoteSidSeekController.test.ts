@@ -25,7 +25,7 @@ import {
   type RemoteTuneSeekProfile,
 } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 import type { SidHeaderMetadata } from "@/lib/sid/sidUtils";
-import { SIMULATED_SCREEN_ADDRESS } from "../../../mocks/sidPlayerSimulation";
+import { MEASURED_FAST_FORWARD_RATE_BY_MHZ, SIMULATED_SCREEN_ADDRESS } from "../../../mocks/sidPlayerSimulation";
 import { C64U_CPU_SPEEDS, createFakeRemoteSeekDevice, DEVICE_KEY } from "./fakeRemoteSeekDevice";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
@@ -126,6 +126,36 @@ describe("remote SID seek controller", () => {
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
     expect(cpuSpeedWrites(device.log)).toEqual(["64 (transient)", "4 (transient)", "1 (transient)", "1 (restore)"]);
+  });
+
+  it("lands a tune with a light play routine, which fast forwards six times faster, without overshooting", async () => {
+    const light = Object.fromEntries(
+      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate * 6.5]),
+    );
+    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: light, latencyMs: 20 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(0, 150));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(149.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(152);
+    await settle(controller.jumpTo(150, 60));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(59.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(62);
+  });
+
+  it("counts the fast forward that ran until a released key reached the device, for a multi-speed tune", async () => {
+    const device = createFakeRemoteSeekDevice({ playCallHz: 200, latencyMs: 25 });
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
+    await settle(controller.jumpTo(0, 200));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(199.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(202);
+  });
+
+  it("lands on slow round trips, which leave more time between clock reads", async () => {
+    const device = createFakeRemoteSeekDevice({ latencyMs: 60 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(0, 240));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(239.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(242);
   });
 
   it("releases the key before every CPU Speed change, so a late write cannot overshoot", async () => {

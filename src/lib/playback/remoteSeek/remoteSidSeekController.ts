@@ -23,8 +23,8 @@ import {
   fastForwardRampOptions,
   machineTimingFor,
   playCallRateFromTimerSamples,
-  seekSpeedFor,
-  seekSpeedTiers,
+  JumpSpeedPlanner,
+  RATE_WINDOW_SECONDS,
   type MachineTiming,
 } from "./remoteSeekPlan";
 import {
@@ -72,6 +72,11 @@ export const FAST_FORWARD_MAX_HOLD_MS = 120_000;
 export const JUMP_TIMEOUT_MS = 30_000;
 /** The fastest the clock is read during a jump; each read is a short REST round trip. */
 const JUMP_POLL_MIN_INTERVAL_MS = 30;
+const INITIAL_READ_PERIOD_SECONDS = 0.06;
+/** The clock shows whole seconds, so a rate is only trusted over a few of them. */
+const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
+/** Within this many reads of the target at the last speed, the key is released on a timer. */
+const FINAL_APPROACH_READS = 1.5;
 const KEY_HOLD_MS = 60;
 const KEY_GAP_MS = 50;
 const RESTART_TIMEOUT_MS = 3000;
@@ -308,9 +313,13 @@ export class RemoteSidSeekController {
         const startClock = await this.readClock(true);
         if (startClock === null) throw new Error("The SID player's clock is not on screen");
         const model = new PositionModel(from, startClock, ratio);
-        const tiers = seekSpeedTiers(this.profile.cpuSpeedOptions, session.originalCpuSpeed);
+        const planner = new JumpSpeedPlanner(this.profile.cpuSpeedOptions, session.originalCpuSpeed);
         let speed = session.originalCpuSpeed;
         let held = false;
+        // The read after a release still covers fast forward up to the moment the key came up.
+        let fastSinceLastRead = false;
+        let rateWindow: { atMs: number; clock: number } | null = null;
+        let readPeriodSeconds = INITIAL_READ_PERIOD_SECONDS;
         let lastReadAt = 0;
         while (model.seconds < target) {
           this.assertCurrent(generation);
@@ -318,27 +327,53 @@ export class RemoteSidSeekController {
             throw new Error(`Jump did not land within ${JUMP_TIMEOUT_MS} ms`);
           const wait = JUMP_POLL_MIN_INTERVAL_MS - (Date.now() - lastReadAt);
           if (wait > 0) await sleep(wait);
-          lastReadAt = Date.now();
+          const readStartedAt = Date.now();
           const clock = await this.readClock(true);
+          const readAt = Date.now();
+          // The poll cadence plus this read's round trip; waits for a CPU Speed write are not part of it.
+          const period = (JUMP_POLL_MIN_INTERVAL_MS + readAt - readStartedAt) / 1000;
+          readPeriodSeconds = 0.7 * readPeriodSeconds + 0.3 * period;
+          lastReadAt = readAt;
           if (clock === null) continue;
-          const position = model.advance(clock, held);
+          const position = model.advance(clock, held || fastSinceLastRead);
+          fastSinceLastRead = held;
           onPosition?.(Math.min(position, target));
           if (position >= target) break;
-          const wanted = this.profile.cpuSpeedOptions.length
-            ? seekSpeedFor(tiers, (target - position) * ratio)
-            : session.originalCpuSpeed;
+          if (held && !rateWindow) rateWindow = { atMs: readAt, clock };
+          else if (held && rateWindow) {
+            const seconds = (readAt - rateWindow.atMs) / 1000;
+            if (seconds >= RATE_WINDOW_SECONDS && clock - rateWindow.clock >= RATE_WINDOW_MIN_CLOCK_SECONDS) {
+              planner.record(speed, (clock - rateWindow.clock) / seconds);
+            }
+          }
+          const remainingClock = (target - position) * ratio;
+          const baseRate = speed === planner.baseOption ? planner.measuredRate(speed) : null;
+          if (held && baseRate !== null && remainingClock < baseRate * readPeriodSeconds * FINAL_APPROACH_READS) {
+            // The next read would land past the target, so release on a timer instead: half a read
+            // period early, which is about when the release request reaches the device.
+            await sleep(Math.max(0, (remainingClock / baseRate - readPeriodSeconds / 2) * 1000));
+            await session.releaseKey();
+            held = false;
+            const settled = await this.readClock(true);
+            if (settled !== null) model.advance(settled, true);
+            break;
+          }
+          const wanted = planner.choose(remainingClock, readPeriodSeconds);
           if (wanted !== speed) {
             // Key up before the speed changes: the write may wait out the config write interval,
             // and with the key up the tune plays on at normal speed instead of racing past the target.
             if (held) {
               await session.releaseKey();
               held = false;
+              fastSinceLastRead = true;
             }
             await session.setCpuSpeed(wanted);
             speed = wanted;
+            rateWindow = null;
             continue;
           }
           if (!held) {
+            // The rate window opens at the next read, the first that is sure to see the key held.
             await session.pressKey();
             held = true;
           }

@@ -38,7 +38,7 @@ type Settings = { "CPU Speed": string; "Turbo Control": string; "System Mode": s
  * in order, so tests can assert what reached the device and when.
  */
 export const createFakeRemoteSeekDevice = (
-  options: SidPlayerSimulationOptions & { settings?: Partial<Settings>; deviceKey?: string } = {},
+  options: SidPlayerSimulationOptions & { settings?: Partial<Settings>; deviceKey?: string; latencyMs?: number } = {},
 ) => {
   const player = new SidPlayerSimulation(options);
   const settings: Settings = {
@@ -50,6 +50,9 @@ export const createFakeRemoteSeekDevice = (
   const log: string[] = [];
   const failures = { configWrites: 0, keyEvents: 0 };
   let connectedKey: string | null = options.deviceKey ?? DEVICE_KEY;
+  const latencyMs = options.latencyMs ?? 0;
+  const roundTrip = () =>
+    latencyMs > 0 ? new Promise((resolve) => setTimeout(resolve, latencyMs)) : Promise.resolve();
   const applySpeed = () =>
     player.setCpuSpeedMhz(settings["Turbo Control"] === "Off" ? 1 : Number(settings["CPU Speed"].trim()));
   applySpeed();
@@ -79,6 +82,7 @@ export const createFakeRemoteSeekDevice = (
       return {} as never;
     },
     sendMachineInputBatch: async ({ events }) => {
+      await roundTrip();
       for (const event of events) {
         if (event.kind !== "keyboard") continue;
         if (failures.keyEvents > 0) {
@@ -95,7 +99,10 @@ export const createFakeRemoteSeekDevice = (
       return {};
     },
     getMachineInputState: async () => ({ keyboard: { inputs: player.heldKeys } }),
-    readMemory: async (address, length) => player.readMemory(parseInt(address, 16), length),
+    readMemory: async (address, length) => {
+      await roundTrip();
+      return player.readMemory(parseInt(address, 16), length);
+    },
   };
 
   return {
