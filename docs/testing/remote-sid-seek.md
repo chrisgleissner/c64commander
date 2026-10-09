@@ -115,8 +115,8 @@ This is the app's config write interval in the Balanced device-safety mode:
 
 | Tune | Error after landing | Time per jump |
 | --- | --- | --- |
-| PAL, once per frame | -0.04 to +0.90 s | 2.6 to 5.1 s |
-| NTSC on a PAL machine | +0.15 to +0.77 s | 2.7 to 3.9 s |
+| PAL, once per frame | +0.16 to +0.60 s | 2.6 to 5.1 s |
+| NTSC on a PAL machine | +0.15 to +0.48 s | 2.7 to 4.8 s |
 | PAL, CIA timer at 4x | +1.1 to +1.7 s | 4.2 to 6.6 s |
 
 For real tunes, the clock after landing showed the target second in every jump, or one second
