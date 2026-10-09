@@ -16,7 +16,7 @@ import {
   resolveMockTimingDelayMs,
   type MockTimingMode,
 } from "./mockTimingProfile";
-import { SidPlayerSimulation } from "./sidPlayerSimulation";
+import { playCallRateOnPal, SidPlayerSimulation, type SidPlayerSimulationOptions } from "./sidPlayerSimulation";
 
 // Set the full YAML loader for tests
 setMockConfigLoader(loadConfigYaml);
@@ -73,7 +73,12 @@ export type MockC64ServerOptions = {
    * Model the Ultimate's SID player behind readmem, machine:input and CPU Speed (see
    * sidPlayerSimulation.ts), so remote fast forward and seeking can run against this server.
    */
-  sidPlayer?: boolean;
+  sidPlayer?: boolean | SidPlayerSimulationOptions;
+  /**
+   * False for a machine that takes no key input, as the Ultimate-II+(L): machine:input answers 501.
+   * Its SID player is then driven through writemem, which this server applies to the simulation.
+   */
+  keyInput?: boolean;
 };
 
 export type MockRequestRecord = {
@@ -169,7 +174,10 @@ export async function createMockC64Server(
   let reachable = true;
   let faultMode: FaultMode = "none";
   const machineInputEvents: Array<{ inputs: string[]; transition: string }> = [];
-  const sidPlayer = options.sidPlayer ? new SidPlayerSimulation() : null;
+  const sidPlayer = options.sidPlayer
+    ? new SidPlayerSimulation(options.sidPlayer === true ? {} : options.sidPlayer)
+    : null;
+  const keyInput = options.keyInput ?? true;
   let latencyMs: number | null = null;
   let timingMode: MockTimingMode = options.timingMode ?? "fast";
   let responseQueue = Promise.resolve();
@@ -453,6 +461,9 @@ export async function createMockC64Server(
     // machine:input REST relay (keyboard/joystick). A 200 here makes the app
     // resolve the "full" capability tier so the Remote Input joystick relay and
     // the full on-screen keyboard are enabled.
+    if (parsed.pathname === "/v1/machine:input" && !keyInput) {
+      return sendJson(501, { errors: ["Not implemented on this architecture"] });
+    }
     if (parsed.pathname === "/v1/machine:input" && (method === "POST" || method === "PUT")) {
       let body = "";
       req.on("data", (chunk: Buffer) => {
@@ -593,8 +604,18 @@ export async function createMockC64Server(
           headers: req.headers as Record<string, string | string[] | undefined>,
           body: Buffer.concat(chunks),
         });
-        sidPlayer?.releaseAll();
-        sidPlayer?.restart();
+        const body = Buffer.concat(chunks);
+        const start = Math.max(body.indexOf("PSID"), body.indexOf("RSID"));
+        const songNr = Number(parsed.searchParams.get("songnr") ?? "") || 0;
+        if (sidPlayer && start >= 0) {
+          const psid = new Uint8Array(body.subarray(start));
+          sidPlayer.loadTune(
+            playCallRateOnPal(psid, songNr || new DataView(psid.buffer, psid.byteOffset).getUint16(0x10)),
+          );
+        } else {
+          sidPlayer?.releaseAll();
+          sidPlayer?.restart();
+        }
         sendJson(200, { errors: [] });
       });
       return;
@@ -610,7 +631,22 @@ export async function createMockC64Server(
     }
 
     if (parsed.pathname === "/v1/machine:writemem" && (method === "POST" || method === "PUT")) {
-      return sendJson(200, { errors: [] });
+      const address = parseInt(parsed.searchParams.get("address") ?? "0", 16);
+      const hex = parsed.searchParams.get("data");
+      if (hex !== null) {
+        sidPlayer?.writeMemory(
+          address,
+          Uint8Array.from(hex.match(/../g) ?? [], (pair) => parseInt(pair, 16)),
+        );
+        return sendJson(200, { errors: [] });
+      }
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+      req.on("end", () => {
+        sidPlayer?.writeMemory(address, new Uint8Array(Buffer.concat(chunks)));
+        sendJson(200, { errors: [] });
+      });
+      return;
     }
 
     if (parsed.pathname === "/v1/machine:readmem" && method === "GET") {

@@ -283,7 +283,7 @@ export class RemoteSidSeekController {
         let pulseRate: number | null = null;
         let pulsing = false;
         let smallestPulseGain = Number.POSITIVE_INFINITY;
-        const progress = new JumpProgressWatch(model.seconds);
+        const progress = new JumpProgressWatch(model.seconds, ratio);
         while (model.seconds < target) {
           this.assertCurrent(generation);
           const stalled = progress.stopReason();

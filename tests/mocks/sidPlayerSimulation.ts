@@ -20,6 +20,7 @@
  */
 
 export const SIMULATED_SCREEN_ADDRESS = 0x0800;
+const COUNTER_ADDRESS = 0x10f0;
 const DD00_BANK_0 = 0x97;
 const D018_SCREEN_0800 = 0x25;
 const PAL_CIA_CLOCK_HZ = 985248;
@@ -127,8 +128,8 @@ export class SidPlayerSimulation {
   private pendingReleases = new Map<string, number>();
   private timerSample = 0;
   restarts = 0;
-  private readonly playCallHz: number;
-  private readonly machineFrameHz: number;
+  private playCallHz: number;
+  private machineFrameHz: number;
   private readonly rates: Record<number, number>;
   private readonly now: () => number;
 
@@ -199,6 +200,16 @@ export class SidPlayerSimulation {
     this.keysDown.clear();
   }
 
+  /** Start another tune, as runners:sidplay does, at its play-call rate on this machine. */
+  loadTune({ playCallHz, machineFrameHz }: { playCallHz: number; machineFrameHz: number }) {
+    this.advance();
+    this.keysDown.clear();
+    this.pendingReleases.clear();
+    this.playCallHz = playCallHz;
+    this.machineFrameHz = machineFrameHz;
+    this.restart();
+  }
+
   restart() {
     this.clockSeconds = 0;
     this.tuneSeconds = 0;
@@ -226,6 +237,11 @@ export class SidPlayerSimulation {
 
   private byteAt(address: number, torn: boolean, rows: Map<number, string>): number {
     if (this.code.covers(address)) return this.ram[address];
+    // The counter tune (tools/hil/remote_sid_seek_poc.py) counts its play calls at $10F0-$10F2.
+    if (address >= COUNTER_ADDRESS && address < COUNTER_ADDRESS + 3) {
+      const calls = Math.floor(this.tuneSeconds * this.playCallHz);
+      return (calls >> (8 * (address - COUNTER_ADDRESS))) & 0xff;
+    }
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;
     if (address === 0xdc04 || address === 0xdc05) {
@@ -333,4 +349,44 @@ export const placeSidPlayerCode = (
     storeAddress,
     covers: (address: number) => regions.some(([start, length]) => address >= start && address < start + length),
   };
+};
+
+const PAL_FRAME_HZ = PAL_CIA_CLOCK_HZ / 19656;
+/** The player times an NTSC tune on a PAL machine at 16388 cycles, measured on the C64 Ultimate. */
+const NTSC_ON_PAL_HZ = PAL_CIA_CLOCK_HZ / 16388;
+/** The latch of `lda #lo / sta $dc04 / lda #hi / sta $dc05`, how a tune sets CIA 1 timer A, if `code` has one. */
+const timerLatchIn = (code: Uint8Array): number | null => {
+  for (let index = 0; index + 10 <= code.length; index += 1) {
+    const [lda1, lo, sta1, a1, b1, lda2, hi, sta2, a2, b2] = code.subarray(index, index + 10);
+    if (
+      lda1 === 0xa9 &&
+      sta1 === 0x8d &&
+      a1 === 0x04 &&
+      b1 === 0xdc &&
+      lda2 === 0xa9 &&
+      sta2 === 0x8d &&
+      a2 === 0x05 &&
+      b2 === 0xdc
+    )
+      return lo | (hi << 8);
+  }
+  return null;
+};
+
+/**
+ * How often the player calls the play routine of `songNr` in a PSID on a PAL machine: once a frame
+ * for a PAL tune, at the NTSC rate for an NTSC tune, and at the tune's own CIA 1 timer A latch for
+ * a CIA-timed sub tune (found in its code; the player's 60 Hz default when it sets none).
+ */
+export const playCallRateOnPal = (psid: Uint8Array, songNr: number) => {
+  const view = new DataView(psid.buffer, psid.byteOffset, psid.byteLength);
+  const speed = view.getUint32(0x12);
+  const speedBit = Math.min(Math.max(songNr, 1), 32) - 1;
+  const clock = view.getUint16(4) >= 2 ? (view.getUint16(0x76) >> 2) & 0x03 : 1;
+  if (((speed >>> speedBit) & 1) === 0) {
+    return { playCallHz: clock === 2 ? NTSC_ON_PAL_HZ : PAL_FRAME_HZ, machineFrameHz: PAL_FRAME_HZ };
+  }
+  const latch = timerLatchIn(psid.subarray(view.getUint16(6)));
+  const cycles = latch === null ? PAL_CIA_CLOCK_HZ / 60 : latch + 1;
+  return { playCallHz: PAL_CIA_CLOCK_HZ / cycles, machineFrameHz: PAL_FRAME_HZ };
 };

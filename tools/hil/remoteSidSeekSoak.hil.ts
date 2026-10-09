@@ -19,14 +19,24 @@
  *
  *   SOAK_HOST=c64u SOAK_MINUTES=30 npx vitest run --config tools/hil/vitest.hil.config.ts
  *
- * Environment: SOAK_HOST (c64u), SOAK_MINUTES (20), SOAK_SEED (time), SOAK_WRITE_DELAY_MS (500, the
- * app's config write interval in Balanced mode), SOAK_OUT (artifacts/remote-seek-soak-<host>.json).
- * On a machine without key injection (the Ultimate-II+(L)) it runs the fail-safe checks instead.
+ * Environment: SOAK_HOST (c64u; `mock` and `mock-u2` run it against the mock server, as CI does),
+ * SOAK_MINUTES (20), SOAK_SEED (time), SOAK_WRITE_DELAY_MS (500, the app's config write interval in
+ * Balanced mode), SOAK_OUT (artifacts/remote-seek-soak-<host>.json). On a machine without key input
+ * (the Ultimate-II+(L)) the seeks go through the SID player's own keyboard routine instead.
  */
 
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import {
+  deviceKeyOf,
+  openDeviceTarget,
+  SeekTestDevice,
+  seekTestApi,
+  type DeviceTarget,
+  type RequestTotals,
+} from "./remoteSeekHil/device";
+import { callHzOfTune, counterPsid, SOAK_TUNES, type CounterTune } from "./remoteSeekHil/tunes";
 
 const logs = vi.hoisted(() => ({ errors: [] as Array<[string, unknown]>, warns: [] as Array<[string, unknown]> }));
 vi.mock("@/lib/logging", () => ({
@@ -40,17 +50,17 @@ vi.mock("@/lib/logging", () => ({
 
 type GuardModule = typeof import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard");
 type ControllerModule = typeof import("@/lib/playback/remoteSeek/remoteSidSeekController");
-type RemoteSeekApi = import("@/lib/playback/remoteSeek/remoteSidSeekController").RemoteSeekApi;
+type ProbeModule = typeof import("@/lib/playback/remoteSeek/remoteTuneSeekProbe");
+type SeekProfile = import("@/lib/playback/remoteSeek/remoteTuneSeekProbe").RemoteTuneSeekProfile;
 
 const HOST = process.env.SOAK_HOST ?? "c64u";
 const MINUTES = Number(process.env.SOAK_MINUTES ?? 20);
 const WRITE_DELAY_MS = Number(process.env.SOAK_WRITE_DELAY_MS ?? 500);
 const SEED = Number(process.env.SOAK_SEED ?? Date.now() % 1_000_000);
 const OUT = process.env.SOAK_OUT ?? `artifacts/remote-seek-soak-${HOST}.json`;
-const BASE = `http://${HOST}`;
-const CATEGORY = "U64 Specific Settings";
+const U64 = "U64 Specific Settings";
+const AUDIO_MIXER = "Audio Mixer";
 const JOURNAL_KEY = "c64u_remote_seek_device_journal_v1";
-const COUNTER_ADDRESS = 0x10f0;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -68,164 +78,13 @@ const random = (() => {
 const between = (low: number, high: number) => low + random() * (high - low);
 const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)];
 
-// ------------------------------------------------------------------------------------------------
-// A silent PSID whose play routine counts its own calls (the same tune tools/hil/remote_sid_seek_poc.py
-// generates): the count divided by the play-call rate is the exact position in the tune.
-// ------------------------------------------------------------------------------------------------
-
-type Variant = { name: string; video: "PAL" | "NTSC"; busyLoops: number; ciaTimer: number | null; callHz: number };
-
-/**
- * Exact play-call rates on a PAL machine, so a count converts to real seconds: a PAL frame is 19656
- * cycles (50.1245 Hz, not 50), and the player times an NTSC tune at 16388 cycles (60.12 Hz, measured
- * on the C64 Ultimate). Nominal rates put the reference 0.25% ahead, 15 s at an hour into a tune.
- */
-const PAL_CPU_HZ = 985248;
-const callHzOf = (cyclesPerCall: number) => PAL_CPU_HZ / cyclesPerCall;
-
-const VARIANTS: Variant[] = [
-  { name: "PAL, once a frame, light", video: "PAL", busyLoops: 0, ciaTimer: null, callHz: callHzOf(19656) },
-  { name: "PAL, once a frame, heavy", video: "PAL", busyLoops: 255, ciaTimer: null, callHz: callHzOf(19656) },
-  { name: "NTSC on the machine's frame", video: "NTSC", busyLoops: 200, ciaTimer: null, callHz: callHzOf(16388) },
-  { name: "PAL, CIA timer at 4x", video: "PAL", busyLoops: 200, ciaTimer: 0x1331, callHz: callHzOf(0x1331 + 1) },
-  { name: "PAL, CIA timer at 2x", video: "PAL", busyLoops: 120, ciaTimer: 0x2663, callHz: callHzOf(0x2663 + 1) },
-];
-
-const counterPsid = (variant: Variant): Uint8Array => {
-  const lo = COUNTER_ADDRESS & 0xff;
-  const hi = COUNTER_ADDRESS >> 8;
-  const init = [0xa9, 0x00, 0x8d, lo, hi, 0x8d, lo + 1, hi, 0x8d, lo + 2, hi];
-  if (variant.ciaTimer !== null) {
-    init.push(0xa9, variant.ciaTimer & 0xff, 0x8d, 0x04, 0xdc, 0xa9, variant.ciaTimer >> 8, 0x8d, 0x05, 0xdc);
-  }
-  init.push(0x60);
-  const play = [0xee, lo, hi, 0xd0, 0x08, 0xee, lo + 1, hi, 0xd0, 0x03, 0xee, lo + 2, hi];
-  if (variant.busyLoops > 0) play.push(0xa2, variant.busyLoops, 0xca, 0xd0, 0xfd);
-  play.push(0x60);
-  const code = [...init, 0, 0, 0, 0, ...play];
-  const header = new Uint8Array(0x7c);
-  const view = new DataView(header.buffer);
-  header.set([0x50, 0x53, 0x49, 0x44]);
-  view.setUint16(4, 2);
-  view.setUint16(6, 0x7c);
-  view.setUint16(10, 0x1000);
-  view.setUint16(12, 0x1000 + init.length + 4);
-  view.setUint16(14, 1);
-  view.setUint16(16, 1);
-  view.setUint32(18, variant.ciaTimer === null ? 0 : 1);
-  header.set(new TextEncoder().encode(`soak ${variant.name}`.slice(0, 31)), 0x16);
-  view.setUint16(0x76, variant.video === "PAL" ? 0x04 : 0x08);
-  return Uint8Array.from([...header, 0x00, 0x10, ...code]);
-};
-
-// ------------------------------------------------------------------------------------------------
-// The device over REST, the way the app reaches it: config writes spaced by the write interval,
-// reads that can bypass nothing here because nothing in this process throttles them.
-// ------------------------------------------------------------------------------------------------
-
-const SLOW_REQUEST_MS = 1500;
-
 /** An operation the soak expects to fail, such as one it cancels or kills; noted, not hidden. */
 const noteFailure = (what: string) => (error: unknown) => {
   progress(`[soak ${HOST}] ${what} ended with: ${error instanceof Error ? error.message : String(error)}`);
 };
 
 /** Across every simulated app process, so a report covers the whole soak. */
-const totals = { requests: 0, failures: 0, slowest: 0 };
-
-class Device {
-  dead = false;
-  private writeQueue: Promise<unknown> = Promise.resolve();
-  private lastWriteAt = 0;
-
-  async request(method: string, route: string, init: { body?: Uint8Array | string; type?: string } = {}) {
-    if (this.dead) throw new Error("The app is no longer running");
-    totals.requests += 1;
-    const started = Date.now();
-    try {
-      const response = await fetch(BASE + route, {
-        method,
-        body: init.body,
-        headers: init.type ? { "Content-Type": init.type } : undefined,
-        signal: AbortSignal.timeout(8000),
-      });
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (!response.ok)
-        throw new Error(`${method} ${route}: HTTP ${response.status} ${new TextDecoder().decode(bytes)}`);
-      return bytes;
-    } catch (error) {
-      totals.failures += 1;
-      progress(`[soak ${HOST} request] ${method} ${route} failed after ${Date.now() - started} ms: ${error}`);
-      throw error;
-    } finally {
-      const ms = Date.now() - started;
-      totals.slowest = Math.max(totals.slowest, ms);
-      if (ms > SLOW_REQUEST_MS) progress(`[soak ${HOST} request] ${method} ${route} took ${ms} ms`);
-    }
-  }
-
-  json = async (method: string, route: string) =>
-    JSON.parse(new TextDecoder().decode(await this.request(method, route))) as Record<string, unknown>;
-
-  readmem = (address: number, length: number) =>
-    this.request(
-      "GET",
-      `/v1/machine:readmem?address=${address.toString(16).toUpperCase().padStart(4, "0")}&length=${length}`,
-    );
-
-  item = async (name: string): Promise<{ current: string; values: string[] }> => {
-    const body = await this.json("GET", `/v1/configs/${encodeURIComponent(CATEGORY)}/${encodeURIComponent(name)}`);
-    return (body[CATEGORY] as Record<string, { current: string; values: string[] }>)[name];
-  };
-
-  /** A config write behind the same interval the app's write queue enforces. */
-  write = (name: string, value: string) => {
-    const next = this.writeQueue.then(async () => {
-      const wait = WRITE_DELAY_MS - (Date.now() - this.lastWriteAt);
-      if (wait > 0) await sleep(wait);
-      this.lastWriteAt = Date.now();
-      const route = `/v1/configs/${encodeURIComponent(CATEGORY)}/${encodeURIComponent(name)}?value=${encodeURIComponent(value)}`;
-      const body = await this.json("PUT", route);
-      const errors = (body.errors as string[] | undefined) ?? [];
-      if (errors.length) throw new Error(`PUT ${name}=${value}: ${errors.join("; ")}`);
-    });
-    this.writeQueue = next.catch(() => undefined);
-    return next;
-  };
-
-  heldKeys = async () => ((await this.json("GET", "/v1/machine:input")).keyboard as { inputs: string[] }).inputs;
-
-  sidplay = async (sid: Uint8Array) => {
-    const boundary = "----remote-seek-soak";
-    const head = new TextEncoder().encode(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="soak.sid"\r\nContent-Type: application/octet-stream\r\n\r\n`,
-    );
-    const tail = new TextEncoder().encode(`\r\n--${boundary}--\r\n`);
-    await this.request("POST", "/v1/runners:sidplay", {
-      body: Uint8Array.from([...head, ...sid, ...tail]),
-      type: `multipart/form-data; boundary=${boundary}`,
-    });
-  };
-
-  counter = async () => {
-    const raw = await this.readmem(COUNTER_ADDRESS, 3);
-    return raw[0] | (raw[1] << 8) | (raw[2] << 16);
-  };
-}
-
-const remoteSeekApi = (device: Device, deviceKey: () => string | null): RemoteSeekApi => ({
-  currentDeviceKey: deviceKey,
-  getConfigItem: async (category, item) =>
-    (await device.json("GET", `/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`)) as never,
-  setConfigValue: async (_category, item, value) => {
-    await device.write(item, String(value));
-    return {} as never;
-  },
-  sendMachineInputBatch: async (batch) =>
-    device.request("POST", "/v1/machine:input", { body: JSON.stringify(batch), type: "application/json" }),
-  getMachineInputState: async () => (await device.json("GET", "/v1/machine:input")) as never,
-  readMemory: (address, length) => device.readmem(parseInt(address, 16), length),
-});
+const totals: RequestTotals = { requests: 0, failures: 0, slowest: 0 };
 
 // ------------------------------------------------------------------------------------------------
 
@@ -267,45 +126,43 @@ const writeReport = (report: unknown) => {
 
 describe(`remote SID seek soak on ${HOST}`, () => {
   it("leaves the device as it found it through every operation, and lands every jump", async () => {
+    const target: DeviceTarget = await openDeviceTarget(HOST);
+    const newDevice = () => new SeekTestDevice(target, totals, progress, WRITE_DELAY_MS);
     // `let`: a simulated app death leaves the old process's connection dead for good.
-    let device = new Device();
+    let device = newDevice();
     const info = await device.json("GET", "/v1/info");
-    const realKey = JSON.stringify([
-      String(info.unique_id).trim().toLowerCase(),
-      String(info.hostname).trim().toLowerCase(),
-    ]);
+    const realKey = deviceKeyOf(info);
     let connectedKey: string | null = realKey;
-    const inputProbe = await fetch(`${BASE}/v1/machine:input`, { signal: AbortSignal.timeout(5000) });
-    if (inputProbe.status !== 200) {
-      console.log(`[soak] ${HOST} has no key injection (HTTP ${inputProbe.status}); running the fail-safe checks`);
-      await runFailSafeChecks(device, () => connectedKey, info);
-      return;
-    }
+    // A machine without key input, the Ultimate-II+(L), fast forwards through the player's own code.
+    const keyInput = (await fetch(`${target.base}/v1/machine:input`, { signal: AbortSignal.timeout(5000) })).ok;
 
-    const baseline = {
-      cpu: (await device.item("CPU Speed")).current,
-      turbo: (await device.item("Turbo Control")).current,
-    };
-    const systemMode = (await device.item("System Mode")).current.trim();
+    const read = async (category: string, name: string) => (await device.optionalItem(category, name))?.current ?? null;
+    const readSettings = async () => ({
+      cpu: await read(U64, "CPU Speed"),
+      turbo: await read(U64, "Turbo Control"),
+      master: await read(AUDIO_MIXER, "Vol Master"),
+    });
+    const baseline = await readSettings();
+    const systemMode = (await read(U64, "System Mode"))?.trim() ?? "PAL";
     if (systemMode !== "PAL")
       throw new Error(`The soak's play-call rates are for a PAL machine; ${HOST} runs ${systemMode}`);
-    const settingsOf = () => ({ ...baseline });
-    let expected = settingsOf();
-    console.log(
-      `[soak] ${HOST} ${info.product} fw ${info.firmware_version}; baseline ${JSON.stringify(baseline)}; seed ${SEED}`,
+    let expected = { ...baseline };
+    progress(
+      `[soak] ${HOST} ${info.product} fw ${info.firmware_version}; key input ${keyInput}; ` +
+        `baseline ${JSON.stringify(baseline)}; seed ${SEED}`,
     );
 
-    let modules: { guard: GuardModule; controller: ControllerModule } = await loadModules();
-    let api = remoteSeekApi(device, () => connectedKey);
-    let variant = VARIANTS[0];
-    let profile: Awaited<ReturnType<ControllerModule["probeRemoteTuneSeek"]>> = null;
+    let modules = await loadModules();
+    let api = seekTestApi(device, () => connectedKey);
+    let variant: CounterTune = SOAK_TUNES[0];
+    let profile: SeekProfile | null = null;
     let controller: InstanceType<ControllerModule["RemoteSidSeekController"]> | null = null;
     let position = 0;
     let positionAt = Date.now();
     const records: OpRecord[] = [];
     const deadline = Date.now() + MINUTES * 60_000;
 
-    const truth = async () => (await device.counter()) / variant.callHz;
+    const truth = async () => (await device.counter()) / callHzOfTune(variant);
     const origin = () => position + (Date.now() - positionAt) / 1000;
     const setPosition = (seconds: number) => {
       position = seconds;
@@ -313,59 +170,68 @@ describe(`remote SID seek soak on ${HOST}`, () => {
     };
     const syncPosition = async () => setPosition(await truth());
 
-    const startTune = async (next: Variant) => {
+    const startTune = async (next: CounterTune) => {
       variant = next;
       await device.sidplay(counterPsid(variant));
       await sleep(1500);
       const { parseSidHeaderMetadata } = await import("@/lib/sid/sidUtils");
       const header = parseSidHeaderMetadata(counterPsid(variant));
-      profile = await modules.controller.probeRemoteTuneSeek(api, header, 1);
-      if (!profile) throw new Error(`The SID player screen was not found for ${variant.name}`);
-      controller = new modules.controller.RemoteSidSeekController(api, profile);
+      profile = await modules.probe.probeRemoteTuneSeek(api, header, 1, () => true, { keyInput });
+      if (!profile) throw new Error(`No SID player clock or fast forward found for ${variant.name}`);
+      // Without key input a rewind starts the tune afresh, as the Play page does.
+      const replay = keyInput ? null : () => device.sidplay(counterPsid(variant));
+      controller = new modules.controller.RemoteSidSeekController(api, profile, replay, () => seekMute);
       await syncPosition();
       // Some firmware sets its own Turbo Control and CPU Speed while the SID player runs (the
       // Ultimate 64 Elite on 3.15 here switches to U64 Turbo Registers and puts them back on reset),
       // so what a seek must give back is what the machine shows once the tune has started.
-      expected = { cpu: (await device.item("CPU Speed")).current, turbo: (await device.item("Turbo Control")).current };
+      expected = await readSettings();
     };
 
     const invariants = async (allowJournal = false): Promise<string[]> => {
       const violations: string[] = [];
       const started = Date.now();
-      const [cpu, turbo, keys] = [
-        await device.item("CPU Speed"),
-        await device.item("Turbo Control"),
-        await device.heldKeys(),
-      ];
-      if (cpu.current !== expected.cpu)
-        violations.push(`CPU Speed ${JSON.stringify(cpu.current)} != ${JSON.stringify(expected.cpu)}`);
-      if (turbo.current !== expected.turbo) violations.push(`Turbo Control ${turbo.current} != ${expected.turbo}`);
+      const now = await readSettings();
+      for (const key of ["cpu", "turbo", "master"] as const) {
+        if (now[key] !== expected[key])
+          violations.push(`${key} ${JSON.stringify(now[key])} != ${JSON.stringify(expected[key])}`);
+      }
+      const keys = await device.heldKeys();
       if (keys.length) violations.push(`keys held: ${keys.join(",")}`);
+      if (profile?.fastForward.kind === "patch") {
+        const site = await device.readmem(profile.fastForward.ldyOperandAddress - 1, 2);
+        if (site[0] !== 0xa0 || site[1] !== 0x00) violations.push(`fast forward patch left: ${site.join(",")}`);
+      }
       if (!allowJournal && localStorage.getItem(JOURNAL_KEY))
         violations.push(`journal left: ${localStorage.getItem(JOURNAL_KEY)}`);
-      const [dd00] = await device.readmem(0xdd00, 1);
-      const [d018] = await device.readmem(0xd018, 1);
-      const screen = (3 - (dd00 & 3)) * 0x4000 + ((d018 >> 4) & 15) * 0x400;
-      const title = Array.from(await device.readmem(screen, 40), (c) =>
-        String.fromCharCode((c & 0x7f) < 27 ? (c & 0x7f) + 64 : c & 0x7f),
-      ).join("");
-      if (!title.includes("SID PLAYER")) violations.push(`player screen gone: ${title.trim()}`);
+      if (profile) {
+        const { readSidPlayerClock } = await import("@/lib/playback/remoteSeek/sidPlayerClock");
+        if ((await readSidPlayerClock(api.readMemory, profile.clock, false)) === null)
+          violations.push("the SID player's clock is gone");
+      }
       if (Date.now() - started > 3000) violations.push(`REST slow: invariant reads took ${Date.now() - started} ms`);
       return violations;
     };
 
-    /** The machine's own settings for this stretch: sometimes a user CPU Speed, sometimes Turbo Off. */
+    /** The user's settings for this stretch: a CPU Speed, Turbo Off, and when seeking is muted. */
+    let seekMute: "always" | "rewind" | "never" = "rewind";
     const chooseUserSettings = async () => {
+      seekMute = pick(["always", "rewind", "never"] as const);
+      if (baseline.cpu === null || baseline.turbo === null) return;
       const roll = random();
-      const target =
+      const next =
         roll < 0.6
-          ? settingsOf()
+          ? { ...expected, cpu: baseline.cpu, turbo: baseline.turbo }
           : roll < 0.8
-            ? { cpu: baseline.cpu, turbo: "Off" }
-            : { cpu: profile?.cpuSpeedOptions.find((o) => o.trim() === "4") ?? baseline.cpu, turbo: "Manual" };
-      if (target.turbo !== expected.turbo) await device.write("Turbo Control", target.turbo);
-      if (target.cpu !== expected.cpu) await device.write("CPU Speed", target.cpu);
-      expected = target;
+            ? { ...expected, cpu: baseline.cpu, turbo: "Off" }
+            : {
+                ...expected,
+                cpu: profile?.cpuSpeedOptions.find((o) => o.trim() === "4") ?? baseline.cpu,
+                turbo: "Manual",
+              };
+      if (next.turbo !== expected.turbo) await device.write(U64, "Turbo Control", next.turbo as string);
+      if (next.cpu !== expected.cpu) await device.write(U64, "CPU Speed", next.cpu as string);
+      expected = next;
     };
 
     const landingRecord = async (
@@ -494,8 +360,8 @@ describe(`remote SID seek soak on ${HOST}`, () => {
           // A new process starts, reaches the device and replays the journal.
           vi.resetModules();
           modules = await loadModules();
-          device = new Device();
-          api = remoteSeekApi(device, () => connectedKey);
+          device = newDevice();
+          api = seekTestApi(device, () => connectedKey);
           const leftover = await invariants(true);
           const recovered = await modules.guard.recoverRemoteSeekJournal(api);
           await startTune(variant);
@@ -546,7 +412,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
           // What the Play page does: cancel first, then start the next tune.
           await controller!.cancel("soak: another tune");
           await operation;
-          await startTune(pick(VARIANTS));
+          await startTune(pick(SOAK_TUNES));
           return {
             op: "another tune started mid operation",
             variant: variant.name,
@@ -591,7 +457,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       return ops[0];
     };
 
-    await startTune(VARIANTS[0]);
+    await startTune(SOAK_TUNES[0]);
     let iteration = 0;
     /**
      * Put the device back to the baseline the next operations assume. A device that stopped answering
@@ -601,12 +467,17 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       localStorage.removeItem(JOURNAL_KEY);
       for (let attempt = 1; ; attempt += 1) {
         try {
-          await device.request("POST", "/v1/machine:input", {
-            body: JSON.stringify({ events: [{ kind: "release_all" }] }),
-            type: "application/json",
-          });
-          await device.write("CPU Speed", expected.cpu);
-          await device.write("Turbo Control", expected.turbo);
+          if (keyInput) {
+            await device.request("POST", "/v1/machine:input", {
+              body: JSON.stringify({ events: [{ kind: "release_all" }] }),
+              type: "application/json",
+            });
+          } else if (profile?.fastForward.kind === "patch") {
+            await device.writemem(profile.fastForward.ldyOperandAddress, Uint8Array.of(0));
+          }
+          if (expected.cpu !== null) await device.write(U64, "CPU Speed", expected.cpu);
+          if (expected.turbo !== null) await device.write(U64, "Turbo Control", expected.turbo);
+          if (expected.master !== null) await device.write(AUDIO_MIXER, "Vol Master", expected.master);
           if (restartTune) await startTune(variant);
           return;
         } catch (error) {
@@ -620,7 +491,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
     try {
       while (Date.now() < deadline) {
         iteration += 1;
-        if (iteration % 12 === 1 && iteration > 1) await startTune(pick(VARIANTS));
+        if (iteration % 12 === 1 && iteration > 1) await startTune(pick(SOAK_TUNES));
         if (iteration % 7 === 0) await chooseUserSettings();
         const op = chooseOp();
         const errorsBefore = logs.errors.length;
@@ -659,11 +530,15 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       const final = await invariants();
       // Leave the machine as the soak found it: a reset ends the player's own session, and anything
       // the soak's user-setting stretches changed is written back.
-      await device.request("PUT", "/v1/machine:reset");
+      await device.reset();
       await sleep(2000);
-      if ((await device.item("CPU Speed")).current !== baseline.cpu) await device.write("CPU Speed", baseline.cpu);
-      if ((await device.item("Turbo Control")).current !== baseline.turbo)
-        await device.write("Turbo Control", baseline.turbo);
+      const end = await readSettings();
+      if (baseline.cpu !== null && end.cpu !== baseline.cpu) await device.write(U64, "CPU Speed", baseline.cpu);
+      if (baseline.turbo !== null && end.turbo !== baseline.turbo)
+        await device.write(U64, "Turbo Control", baseline.turbo);
+      if (baseline.master !== null && end.master !== baseline.master)
+        await device.write(AUDIO_MIXER, "Vol Master", baseline.master);
+      await target.close();
       const landed = records.filter((record) => record.errorSeconds !== undefined && record.completed !== false);
       const byOp: Record<string, unknown> = {};
       for (const op of ops) {
@@ -690,7 +565,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       }
       const report = {
         host: HOST,
-        device: { product: info.product, firmware: info.firmware_version },
+        device: { product: info.product, firmware: info.firmware_version, keyInput },
         seed: SEED,
         minutes: MINUTES,
         writeDelayMs: WRITE_DELAY_MS,
@@ -716,61 +591,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
 });
 
 const loadModules = async () => ({
-  guard: await import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard"),
-  controller: await import("@/lib/playback/remoteSeek/remoteSidSeekController"),
+  guard: (await import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard")) as GuardModule,
+  controller: (await import("@/lib/playback/remoteSeek/remoteSidSeekController")) as ControllerModule,
+  probe: (await import("@/lib/playback/remoteSeek/remoteTuneSeekProbe")) as ProbeModule,
 });
-
-/**
- * A machine without key injection: the Play page never offers the gestures there, and if anything
- * tried a seek anyway it must fail before changing the machine.
- */
-const runFailSafeChecks = async (device: Device, deviceKey: () => string | null, info: Record<string, unknown>) => {
-  const { probeMachineInputCapability } = await import("@/lib/deviceCapabilities");
-  const modules = await loadModules();
-  const api = remoteSeekApi(device, deviceKey);
-  const capability = await probeMachineInputCapability({
-    api: { getMachineInputState: () => api.getMachineInputState() } as never,
-    deviceId: "soak",
-    firmwareVersion: String(info.firmware_version ?? ""),
-    coreVersion: (info.core_version as string | undefined) ?? null,
-  });
-  expect(capability.status).not.toBe("available");
-  await device.sidplay(counterPsid(VARIANTS[0]));
-  await sleep(1500);
-  const before = await device.readmem(0x0400, 1000);
-  const deadline = Date.now() + Math.min(MINUTES, 5) * 60_000;
-  let attempts = 0;
-  while (Date.now() < deadline) {
-    attempts += 1;
-    await expect(modules.guard.RemoteSeekDeviceSession.open(api)).rejects.toThrow();
-    const profile = {
-      clock: { rowAddress: 0x0400 + 23 * 40, column: 0, length: 5, wrapSeconds: 6000 },
-      timing: { frameHz: 50, ciaClockHz: 985248 },
-      headerPlayCallHz: 50,
-      cpuSpeedOptions: [" 1", " 64"],
-    };
-    const controller = new modules.controller.RemoteSidSeekController(api, profile);
-    await expect(
-      controller.beginFastForward(
-        () => 0,
-        () => undefined,
-      ),
-    ).rejects.toThrow();
-    expect(await controller.jumpTo(() => 0, 30)).toBeNull();
-    expect(localStorage.getItem(JOURNAL_KEY)).toBeNull();
-    await sleep(500);
-  }
-  const after = await device.readmem(0x0400, 1000);
-  console.log(
-    `[soak] ${String(info.product)}: ${attempts} refused seek attempts, ${totals.requests} requests, ${totals.failures} refused`,
-  );
-  // Nothing a refused seek did reached the C64: its screen still changes only through the tune itself.
-  expect(after.length).toBe(before.length);
-  writeReport({
-    host: HOST,
-    device: info,
-    failSafeAttempts: attempts,
-    requests: totals.requests,
-    refused: totals.failures,
-  });
-};

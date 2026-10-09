@@ -99,9 +99,13 @@ export class PositionModel {
 export const JUMP_STALL_MS = 10_000;
 /** No jump runs longer, however slowly it fast forwards. */
 export const JUMP_MAX_MS = 10 * 60_000;
-/** Held for this long, a fast forward must have gained at least `MIN_FAST_FORWARD_GAIN` tune seconds a second. */
+/**
+ * Held for this long, a fast forward must have moved the player's clock at least this many seconds
+ * a second. The clock, not the music: an 8x multi-speed tune fast forwarded at 1 MHz moves its music
+ * only 1.25 times real time while its clock, which counts play calls, runs ten times real time.
+ */
 const FAST_FORWARD_PROOF_MS = 5000;
-const MIN_FAST_FORWARD_GAIN = 1.5;
+const MIN_FAST_FORWARD_CLOCK_RATE = 1.5;
 
 /**
  * Why a jump should stop short of its target, or null while it is getting there. A jump is not
@@ -118,6 +122,8 @@ export class JumpProgressWatch {
 
   constructor(
     position: number,
+    /** Clock seconds per tune second while the key is down, as the position model counts them. */
+    private readonly clockPerTuneSecond: number,
     private readonly startedAt = Date.now(),
   ) {
     this.best = this.lastPosition = position;
@@ -141,7 +147,8 @@ export class JumpProgressWatch {
   stopReason(now = Date.now()): string | null {
     if (now - this.startedAt > JUMP_MAX_MS) return `Jump did not land within ${JUMP_MAX_MS} ms`;
     if (now - this.lastProgressAt > JUMP_STALL_MS) return `Jump made no progress for ${JUMP_STALL_MS} ms`;
-    if (this.heldMs >= FAST_FORWARD_PROOF_MS && this.gainedWhileHeld < (this.heldMs / 1000) * MIN_FAST_FORWARD_GAIN)
+    const clockGained = this.gainedWhileHeld * this.clockPerTuneSecond;
+    if (this.heldMs >= FAST_FORWARD_PROOF_MS && clockGained < (this.heldMs / 1000) * MIN_FAST_FORWARD_CLOCK_RATE)
       return "The SID player does not fast forward this tune";
     return null;
   }

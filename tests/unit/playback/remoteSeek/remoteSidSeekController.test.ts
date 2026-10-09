@@ -859,6 +859,18 @@ describe("remote SID seek controller when the device misbehaves", () => {
     expect(device.player.tunePositionSeconds).toBeLessThan(3603);
   });
 
+  it("keeps jumping an 8x multi-speed tune on a machine without CPU Speed, whose music moves slowly but whose clock does not", async () => {
+    // 10 clock seconds a second at 1 MHz: an 8x tune's music moves only 1.25 seconds a second.
+    const device = createFakeRemoteSeekDevice({ playCallHz: 400, fastForwardRateByMhz: { 1: 10 } });
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 400, cpuSpeedOptions: [] }));
+    const landed = await settle(
+      controller.jumpTo(() => 0, 60),
+      200_000,
+    );
+    expect(landed?.completed).toBe(true);
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(58);
+  });
+
   it("stops a jump when the key does not fast forward the tune, and reports where it got to", async () => {
     const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: { 1: 1, 4: 1, 64: 1 } });
     const controller = new RemoteSidSeekController(device.api, profile());

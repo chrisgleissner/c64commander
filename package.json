@@ -57,6 +57,7 @@
     "test:web-platform": "npm run test:web-server",
     "test:watch": "vitest",
     "test:coverage": "node scripts/run-unit-coverage.mjs",
+    "test:remote-seek:mock": "SOAK_HOST=mock SOAK_MINUTES=1 vitest run --config tools/hil/vitest.hil.config.ts && SOAK_HOST=mock-u2 SOAK_MINUTES=1 vitest run --config tools/hil/vitest.hil.config.ts",
     "coverage:gate": "npm run test:coverage:all && COVERAGE_MIN=93 COVERAGE_MIN_BRANCH=85 COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs",
     "test:agents": "bash -c 'if [ -f .venv/bin/python3 ]; then PYTHON=$(pwd)/.venv/bin/python3; else PYTHON=python3; fi; cd agents && $PYTHON -m pytest --cov=openhands --cov-branch --cov-report=term-missing --cov-report=xml:coverage-agents.xml tests/'",
     "test:coverage:all": "./scripts/collect-coverage.sh",
