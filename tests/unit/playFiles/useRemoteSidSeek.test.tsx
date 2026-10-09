@@ -200,4 +200,38 @@ describe("useRemoteSidSeek", () => {
     expect(device.current!.player.heldKeys).toEqual([]);
     expect(device.current!.settings["CPU Speed"]).toBe(" 1");
   });
+
+  it("starts a jump asked for during another from where that one landed", async () => {
+    const { result, rebasePlaybackPosition } = render({ elapsedMs: 0 });
+    await advance(1500);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.5));
+    await advance(400);
+    // The first jump is under way; the elapsed time the page still reports is near 0.
+    act(() => result.current.handlers?.onSeekToFraction?.(0.3));
+    await advance(10000);
+    // Going back from 90 s to 54 s restarts the tune; a jump started from the stale 0 s would not have.
+    expect(device.current!.player.restarts).toBe(2);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan(53.5);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBeLessThan(56);
+  });
+
+  it("keeps a hold when the other button is pressed too, and gives the device back on release", async () => {
+    const { result, rerender } = render();
+    await advance(1500);
+    rerender({ active: true, elapsedMs: 60_000 });
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(1500);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(-5);
+    });
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(2000);
+    expect(device.current!.player.heldKeys).toEqual([]);
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    expect(device.current!.player.restarts).toBe(0);
+  });
 });

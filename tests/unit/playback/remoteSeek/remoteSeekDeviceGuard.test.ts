@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   readRemoteSeekJournal,
   recoverRemoteSeekJournal,
+  restoreFromJournal,
   RemoteSeekDeviceSession,
   RemoteSeekSessionClosedError,
 } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
@@ -177,5 +178,35 @@ describe("remote seek device guard", () => {
     await session.restore("test");
     const writes = device.log.filter((entry) => entry.includes("="));
     expect(writes.every((entry) => entry.endsWith("(transient)") || entry.endsWith("(restore)"))).toBe(true);
+  });
+
+  it("refuses to change anything once the app talks to a different device", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    device.connectTo(JSON.stringify(["f13e69", "u2"]));
+    expect(() => session.setCpuSpeed("64")).toThrow(RemoteSeekSessionClosedError);
+    expect(() => session.pressKey()).toThrow(RemoteSeekSessionClosedError);
+    await session.releaseKey();
+    expect(device.log).toEqual([]);
+    device.connectTo(DEVICE_KEY);
+    expect(await session.restore("back on the device")).toBe(true);
+  });
+
+  it("does not clear a newer session's journal when an older restore completes", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const stale = {
+      sessionId: "earlier-process",
+      deviceKey: DEVICE_KEY,
+      originalCpuSpeed: " 1",
+      cpuSpeedChanged: false,
+      originalTurboControl: null,
+      keyHeld: true,
+      startedAtMs: 0,
+    };
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.setCpuSpeed("64");
+    expect(await restoreFromJournal(device.api, stale, "late", NO_RETRY_WAIT)).toBe(true);
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toMatchObject({ cpuSpeedChanged: true, originalCpuSpeed: " 1" });
+    await session.restore("released");
   });
 });

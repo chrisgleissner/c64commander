@@ -150,6 +150,7 @@ import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOver
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
+import { isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
@@ -1468,7 +1469,7 @@ export default function PlayFilesPage() {
 
   const syncPlaybackTimeline = useCallback(
     (options?: { allowAutoAdvance?: boolean }) => {
-      const allowAutoAdvance = options?.allowAutoAdvance ?? true;
+      const allowAutoAdvance = (options?.allowAutoAdvance ?? true) && !isRemoteSidSeekBusy();
       if (!isPlaying || isPaused || currentIndex < 0) return;
       const now = Date.now();
       // On-device playback knows exactly where it is, so it — and not wall time — is the clock. See

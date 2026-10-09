@@ -163,7 +163,7 @@ describe("remote SID seek controller", () => {
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
     await settle(controller.jumpTo(0, 45));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(44.5);
-    expect(device.player.tunePositionSeconds).toBeLessThan(47.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(46.5);
   });
 
   it("lands on slow round trips, which leave more time between clock reads", async () => {
@@ -224,7 +224,9 @@ describe("remote SID seek controller", () => {
     const jump = controller.jumpTo(0, 1000);
     await vi.advanceTimersByTimeAsync(300);
     await settle(controller.cancel("stop"));
-    expect(await settle(jump)).toBeNull();
+    // It reports where it got to, so the display does not go back to where the jump started.
+    const landed = await settle(jump);
+    expect(Math.abs((landed?.seconds ?? -10) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
     expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
@@ -242,6 +244,45 @@ describe("remote SID seek controller", () => {
     expect(controller.isFastForwarding).toBe(false);
   });
 
+  it("starts no timers for a fast forward cancelled while its key press was on the wire", async () => {
+    const device = createFakeRemoteSeekDevice({ latencyMs: 40 });
+    let pressSent = false;
+    const send = device.api.sendMachineInputBatch;
+    device.api.sendMachineInputBatch = (batch) => {
+      if (batch.events.some((event) => event.kind === "keyboard" && event.transition === "press")) pressSent = true;
+      return send(batch);
+    };
+    const reads: string[] = [];
+    const read = device.api.readMemory;
+    device.api.readMemory = async (address, length, options) => {
+      reads.push(address);
+      return read(address, length, options);
+    };
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const begin = controller.beginFastForward(0, () => undefined);
+    for (let waited = 0; !pressSent && waited < 2000; waited += 1) await vi.advanceTimersByTimeAsync(1);
+    await settle(controller.cancel("pause"));
+    await settle(begin.catch(() => undefined));
+    reads.length = 0;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(reads).toEqual([]);
+    expect(device.player.heldKeys).toEqual([]);
+    expect(controller.isBusy).toBe(false);
+  });
+
+  it("sends no restart keys for a rewind cancelled before it began", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(0, 120));
+    device.log.length = 0;
+    const first = controller.jumpTo(120, 150);
+    const rewind = controller.jumpTo(150, 30);
+    await settle(controller.cancel("pause"));
+    await settle(Promise.all([first, rewind]));
+    expect(device.log.filter((entry) => entry.includes("minus") || entry.includes("plus"))).toEqual([]);
+    expect(device.player.restarts).toBe(0);
+  });
+
   it("does not jump back on a machine without CPU Speed", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile({ cpuSpeedOptions: [] }));
@@ -250,11 +291,12 @@ describe("remote SID seek controller", () => {
     expect(device.log).toEqual([]);
   });
 
-  it("restores the device when a jump fails part way, and reports no position", async () => {
+  it("restores the device when a jump fails part way, and reports where the tune got to", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
     device.failures.keyEvents = 1;
-    expect(await settle(controller.jumpTo(0, 200))).toBeNull();
+    const landed = await settle(controller.jumpTo(0, 200));
+    expect(Math.abs((landed?.seconds ?? -10) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
   });

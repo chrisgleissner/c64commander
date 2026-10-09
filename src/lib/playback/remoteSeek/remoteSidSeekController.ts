@@ -235,7 +235,9 @@ export class RemoteSidSeekController {
   beginFastForward(fromSeconds: number, onPosition: RemoteSeekPositionListener): Promise<void> {
     return this.serialize(async (generation) => {
       if (this.fastForward) return;
+      this.assertCurrent(generation);
       const ratio = await this.resolveClockPerTuneSecond();
+      this.assertCurrent(generation);
       const session = await this.openSession();
       try {
         this.assertCurrent(generation);
@@ -252,6 +254,8 @@ export class RemoteSidSeekController {
         };
         this.fastForward = run;
         await session.pressKey();
+        // A cancel while the press was on the wire has already given the device back; no timers then.
+        this.assertCurrent(generation);
         const ramp = this.profile.cpuSpeedOptions.length
           ? fastForwardRampOptions(this.profile.cpuSpeedOptions, cpuSpeedMhz(session.originalCpuSpeed) ?? 1)
           : [];
@@ -269,7 +273,7 @@ export class RemoteSidSeekController {
         }, FAST_FORWARD_MAX_HOLD_MS);
         addLog("debug", "Remote fast forward started", { fromSeconds, clock, ratio, ramp });
       } catch (error) {
-        this.fastForward = null;
+        if (this.fastForward?.session === session) this.fastForward = null;
         await this.giveBack(session, "fast forward failed to start");
         throw error;
       }
@@ -316,17 +320,23 @@ export class RemoteSidSeekController {
       }
       const startedAt = Date.now();
       let session: RemoteSeekDeviceSession | null = null;
+      // Where the tune is known to be once anything has moved it, so a failed jump still lands the display.
+      let model: PositionModel | null = null;
       try {
+        this.assertCurrent(generation);
         const ratio = await this.resolveClockPerTuneSecond();
+        this.assertCurrent(generation);
         session = await this.openSession();
+        this.assertCurrent(generation);
         let from = fromSeconds;
         if (target < from) {
           await this.restartTune(generation);
           from = 0;
+          model = new PositionModel(0, 0, ratio);
         }
         const startClock = await this.readClock(true);
         if (startClock === null) throw new Error("The SID player's clock is not on screen");
-        const model = new PositionModel(from, startClock, ratio);
+        model = new PositionModel(from, startClock, ratio);
         const planner = new JumpSpeedPlanner(this.profile.cpuSpeedOptions, session.originalCpuSpeed);
         let speed = session.originalCpuSpeed;
         let held = false;
@@ -379,7 +389,10 @@ export class RemoteSidSeekController {
             if (held) {
               await session.releaseKey();
               held = false;
-              fastSinceLastRead = true;
+              // Settle what ran fast before the write, which may wait with the tune at normal speed.
+              const settled = await this.readClock(true);
+              if (settled !== null) model.advance(settled, true);
+              fastSinceLastRead = false;
             }
             await session.setCpuSpeed(wanted);
             speed = wanted;
@@ -406,7 +419,7 @@ export class RemoteSidSeekController {
         } else {
           addErrorLog("Remote seek failed", { fromSeconds, targetSeconds, ...errorDetails(error) });
         }
-        return null;
+        return model ? { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now() } : null;
       } finally {
         if (session) await this.giveBack(session, "jump finished");
       }
@@ -426,7 +439,12 @@ export class RemoteSidSeekController {
     }
     const session = this.activeSession;
     if (session) await this.giveBack(session, reason);
-    await this.busy.catch(() => undefined);
+    await this.busy.catch((error) =>
+      addLog("warn", "Remote seek operation ended with an error while being cancelled", {
+        reason,
+        ...errorDetails(error),
+      }),
+    );
   }
 
   get isFastForwarding() {
@@ -441,8 +459,12 @@ export class RemoteSidSeekController {
   private serialize<T>(work: (generation: number) => Promise<T>): Promise<T> {
     const generation = this.cancelGeneration;
     this.pendingOperations += 1;
+    // The previous operation's caller already received and logged its failure; this one only waits for it.
     const next = this.busy
-      .catch(() => undefined)
+      .then(
+        () => undefined,
+        (error) => addLog("debug", "Remote seek: queued after an operation that failed", errorDetails(error)),
+      )
       .then(() => work(generation))
       .finally(() => {
         this.pendingOperations -= 1;

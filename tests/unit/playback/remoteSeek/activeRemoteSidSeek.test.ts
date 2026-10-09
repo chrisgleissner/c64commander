@@ -27,6 +27,7 @@ import {
   createRemoteSeekApi,
   isRemoteSidSeekBusy,
   setActiveRemoteSidSeek,
+  setRemoteSidSeekGesture,
 } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import type { RemoteSidSeekController } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 
@@ -68,5 +69,16 @@ describe("active remote SID seek", () => {
   it("reports nothing busy without an active seek", async () => {
     expect(isRemoteSidSeekBusy()).toBe(false);
     await expect(cancelRemoteSidSeek("stop")).resolves.toBeUndefined();
+  });
+
+  it("counts a gesture that has not reached the device yet as busy, so auto-advance waits for it", async () => {
+    const cancel = vi.fn(async () => undefined);
+    setActiveRemoteSidSeek({ isBusy: false, cancel } as unknown as RemoteSidSeekController);
+    setRemoteSidSeekGesture(true);
+    expect(isRemoteSidSeekBusy()).toBe(true);
+    await cancelRemoteSidSeek("stop");
+    expect(cancel).toHaveBeenCalledWith("stop");
+    setRemoteSidSeekGesture(false);
+    expect(isRemoteSidSeekBusy()).toBe(false);
   });
 });

@@ -38,10 +38,20 @@ export const setActiveRemoteSidSeek = (controller: RemoteSidSeekController | nul
  */
 export const cancelRemoteSidSeek = async (reason: string): Promise<void> => {
   const controller = active;
-  if (!controller?.isBusy) return;
+  if (!controller || !isRemoteSidSeekBusy()) return;
   addLog("debug", "Remote seek cancelled", { reason });
   await controller.cancel(reason);
 };
 
-/** Whether a remote seek holds or is about to hold the device; callers skip the await when not. */
-export const isRemoteSidSeekBusy = (): boolean => active?.isBusy ?? false;
+let gestureActive = false;
+
+/** A hold or a drag is under way on the Play page, even before it has sent anything to the device. */
+export const setRemoteSidSeekGesture = (on: boolean) => {
+  gestureActive = on;
+};
+
+/**
+ * Whether a remote seek is under way: a gesture, or an operation that holds or is about to hold the
+ * device. Stop, pause and another tune cancel it first; auto-advance waits for it to land.
+ */
+export const isRemoteSidSeekBusy = (): boolean => gestureActive || (active?.isBusy ?? false);

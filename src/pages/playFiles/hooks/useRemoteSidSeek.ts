@@ -15,6 +15,7 @@ import {
   cancelRemoteSidSeek,
   createRemoteSeekApi,
   setActiveRemoteSidSeek,
+  setRemoteSidSeekGesture,
 } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { rewindOffsetSeconds } from "@/lib/playback/remoteSeek/remoteSeekPlan";
 import {
@@ -106,12 +107,16 @@ export const useRemoteSidSeek = ({
   const holdRef = useRef<Hold | null>(null);
   const rewindTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpingRef = useRef(false);
+  /** The latest target asked for while a jump ran; it starts from where that jump landed. */
+  const queuedTargetRef = useRef<number | null>(null);
   const live = useRef({ elapsedMs, durationMs, rebasePlaybackPosition });
   live.current = { elapsedMs, durationMs, rebasePlaybackPosition };
 
   const itemId = item?.id ?? null;
   const songNr = item?.request.songNr ?? null;
   const coreVersion = deviceInfo?.core_version ?? null;
+  const deviceId = deviceInfo?.unique_id ?? null;
 
   useEffect(() => {
     if (!active || !item || item.category !== "sid" || !deviceInfo || !coreVersion) return;
@@ -160,7 +165,14 @@ export const useRemoteSidSeek = ({
       }
     };
     // `item` is read through its id: a new object for the same tune must not restart the probe.
-  }, [active, itemId, songNr, trackInstanceId, coreVersion]);
+  }, [active, itemId, songNr, trackInstanceId, coreVersion, deviceId]);
+
+  // While a gesture or a jump is under way the auto-advance deadline still counts the old position;
+  // the Play page holds it off until the landing rebases it.
+  useEffect(() => {
+    setRemoteSidSeekGesture(targetMs !== null);
+  }, [targetMs]);
+  useEffect(() => () => setRemoteSidSeekGesture(false), []);
 
   // A hidden page stops running timers within a minute; a seek must not be left holding the key.
   useEffect(() => {
@@ -187,19 +199,41 @@ export const useRemoteSidSeek = ({
       const owned = controllerRef.current;
       if (!owned) return;
       setTargetMs(clampMs(toSeconds * 1000));
-      land(await owned.jumpTo(fromSeconds, toSeconds));
+      if (jumpingRef.current) {
+        queuedTargetRef.current = toSeconds;
+        return;
+      }
+      jumpingRef.current = true;
+      try {
+        let from = fromSeconds;
+        let to = toSeconds;
+        for (;;) {
+          const landing = await owned.jumpTo(from, to);
+          if (controllerRef.current !== owned) return;
+          const next = queuedTargetRef.current;
+          queuedTargetRef.current = null;
+          if (next === null || !landing) {
+            land(landing);
+            return;
+          }
+          // The app's own elapsed time has not caught up with this landing yet, so start from it.
+          from = landing.seconds + (Date.now() - landing.atMs) / 1000;
+          to = next;
+        }
+      } finally {
+        jumpingRef.current = false;
+      }
     },
     [land],
   );
 
-  const onScrubStart = useCallback(() => {
-    holdRef.current = null;
-  }, []);
+  // A second finger on the other button must not drop the hold the first one started.
+  const onScrubStart = useCallback(() => undefined, []);
 
   const onScrubStep = useCallback(
     (deltaSeconds: number) => {
       const owned = controllerRef.current;
-      if (!owned || holdRef.current) return;
+      if (!owned || holdRef.current || jumpingRef.current) return;
       const fromSeconds = live.current.elapsedMs / 1000;
       if (deltaSeconds > 0) {
         const hold: Hold = { direction: "forward", fromSeconds, rewindSteps: 0, ended: false };

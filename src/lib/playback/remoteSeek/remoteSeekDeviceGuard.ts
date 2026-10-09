@@ -50,15 +50,20 @@ export type RemoteSeekDeviceApi = {
   getMachineInputState: () => Promise<{ keyboard?: { inputs?: string[] } }>;
 };
 
-/** Thrown by a session that has started giving the device back; the operation using it is over. */
+/**
+ * Thrown by a session that has started giving the device back, or whose device is no longer the one
+ * the API talks to; the operation using it is over.
+ */
 export class RemoteSeekSessionClosedError extends Error {
-  constructor() {
-    super("This remote seek has already given the device back");
+  constructor(message = "This remote seek has already given the device back") {
+    super(message);
     this.name = "RemoteSeekSessionClosedError";
   }
 }
 
 export type RemoteSeekJournal = {
+  /** Which session wrote it: a restore clears the journal only if it is still its own. */
+  sessionId: string;
   deviceKey: string;
   originalCpuSpeed: string;
   cpuSpeedChanged: boolean;
@@ -105,6 +110,14 @@ const writeJournal = (deviceKey: string, journal: RemoteSeekJournal | null) => {
     addErrorLog("Remote seek journal could not be written", { ...errorDetails(error), journal });
   }
 };
+
+const clearJournalIfOwn = (journal: RemoteSeekJournal) => {
+  if (readRemoteSeekJournal(journal.deviceKey)?.sessionId === journal.sessionId) writeJournal(journal.deviceKey, null);
+};
+
+/** Sessions open in this process, by device. Their journals are theirs to restore, not recovery's. */
+const liveSessions = new Map<string, RemoteSeekDeviceSession>();
+let sessionCounter = 0;
 
 /** The current value and options of one U64 Specific Settings item, read from the device itself. */
 export const readU64ConfigItem = async (api: RemoteSeekDeviceApi, item: string): Promise<ConfigItemSnapshot> => {
@@ -173,7 +186,7 @@ export const restoreFromJournal = async (
         (cpuSpeed === null || sameOption(cpuSpeed.value, journal.originalCpuSpeed)) &&
         (turbo === null || sameOption(turbo.value, journal.originalTurboControl as string));
       if (restored) {
-        writeJournal(journal.deviceKey, null);
+        clearJournalIfOwn(journal);
         addLog("info", "Remote seek restored the device", { reason, attempt, journal });
         return true;
       }
@@ -204,6 +217,7 @@ export const recoverRemoteSeekJournal = async (
   const deviceKey = api.currentDeviceKey();
   const journal = deviceKey === null ? null : readRemoteSeekJournal(deviceKey);
   if (!journal) return true;
+  if (liveSessions.has(journal.deviceKey)) return true;
   addLog("warn", "Remote seek found an unfinished seek on this device and is undoing it", { journal });
   return restoreFromJournal(api, journal, "recovery", delaysMs);
 };
@@ -232,13 +246,20 @@ export class RemoteSeekDeviceSession {
   static async open(api: RemoteSeekDeviceApi): Promise<RemoteSeekDeviceSession> {
     const deviceKey = api.currentDeviceKey();
     if (deviceKey === null) throw new Error("The connected device has not identified itself");
+    // An earlier session still giving this device back (a cancel nobody awaited) finishes first.
+    const live = liveSessions.get(deviceKey);
+    if (live && !(await live.restore("superseded by a new seek"))) {
+      throw new Error("The previous remote seek could not be undone");
+    }
     const pending = readRemoteSeekJournal(deviceKey);
     if (pending) {
       const recovered = await restoreFromJournal(api, pending, "before a new seek");
       if (!recovered) throw new Error("The previous remote seek could not be undone");
     }
     const cpuSpeed = await readU64ConfigItem(api, CPU_SPEED_ITEM);
+    sessionCounter += 1;
     const journal: RemoteSeekJournal = {
+      sessionId: `${Date.now()}-${sessionCounter}`,
       deviceKey,
       originalCpuSpeed: cpuSpeed.value,
       cpuSpeedChanged: false,
@@ -247,7 +268,9 @@ export class RemoteSeekDeviceSession {
       startedAtMs: Date.now(),
     };
     writeJournal(deviceKey, journal);
-    return new RemoteSeekDeviceSession(api, journal, cpuSpeed.options);
+    const session = new RemoteSeekDeviceSession(api, journal, cpuSpeed.options);
+    liveSessions.set(deviceKey, session);
+    return session;
   }
 
   get originalCpuSpeed(): string {
@@ -293,7 +316,9 @@ export class RemoteSeekDeviceSession {
     });
   }
 
+  /** Release the key on this session's device; on another device there is nothing of ours to release. */
   async releaseKey(): Promise<void> {
+    if (this.api.currentDeviceKey() !== this.journal.deviceKey) return;
     await sendKey(this.api, "release");
   }
 
@@ -310,6 +335,8 @@ export class RemoteSeekDeviceSession {
       .then((restored) => {
         this.restored = restored;
         this.restoring = null;
+        // A journal left behind is recovery's from now on.
+        if (liveSessions.get(this.journal.deviceKey) === this) liveSessions.delete(this.journal.deviceKey);
         return restored;
       });
     return this.restoring;
@@ -326,5 +353,9 @@ export class RemoteSeekDeviceSession {
 
   private assertOpen() {
     if (this.closed) throw new RemoteSeekSessionClosedError();
+    // The API follows the selected device; a change meant for this one must not land on another.
+    if (this.api.currentDeviceKey() !== this.journal.deviceKey) {
+      throw new RemoteSeekSessionClosedError("The app now talks to a different device than this remote seek");
+    }
   }
 }

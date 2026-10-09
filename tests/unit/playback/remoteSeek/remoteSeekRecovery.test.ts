@@ -35,11 +35,25 @@ const connect = (state: string) => {
   connection.listeners.forEach((listener) => listener());
 };
 
-/** A seek cut off with the key down at 64 MHz, as a killed app leaves it. */
+/**
+ * A seek cut off with the key down at 64 MHz, as a killed app leaves it: the device in that state
+ * and the journal the earlier process wrote, with no session of this process owning it.
+ */
 const leaveUnfinishedSeek = async () => {
-  const session = await RemoteSeekDeviceSession.open(device.current!.api);
-  await session.pressKey();
-  await session.setCpuSpeed("64");
+  await device.current!.api.sendMachineInputBatch({
+    events: [{ kind: "keyboard", inputs: ["arrow_left"], transition: "press" }],
+  });
+  await device.current!.api.setConfigValue("U64 Specific Settings", "CPU Speed", "64");
+  const journal = {
+    sessionId: "earlier-process",
+    deviceKey: DEVICE_KEY,
+    originalCpuSpeed: " 1",
+    cpuSpeedChanged: true,
+    originalTurboControl: null,
+    keyHeld: true,
+    startedAtMs: 0,
+  };
+  localStorage.setItem("c64u_remote_seek_device_journal_v1", JSON.stringify({ [DEVICE_KEY]: journal }));
 };
 
 describe("remote seek recovery", () => {
@@ -96,5 +110,19 @@ describe("remote seek recovery", () => {
     connect("REAL_CONNECTED");
     await vi.runAllTimersAsync();
     expect(device.current!.settings["CPU Speed"]).toBe("64");
+  });
+
+  it("leaves the journal of a seek this app is still running to that seek", async () => {
+    const session = await RemoteSeekDeviceSession.open(device.current!.api);
+    await session.pressKey();
+    await session.setCpuSpeed("64");
+    const uninstall = installRemoteSeekRecovery();
+    connect("REAL_CONNECTED");
+    await vi.runAllTimersAsync();
+    expect(device.current!.settings["CPU Speed"]).toBe("64");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).not.toBeNull();
+    await session.restore("released");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    uninstall();
   });
 });
