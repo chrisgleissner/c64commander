@@ -467,6 +467,22 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeLessThan(12);
   });
 
+  it.each([
+    { name: "back to just after the start", from: 30, target: 2.5 },
+    { name: "a few seconds forward", from: 30, target: 33 },
+  ])("lands a light tune $name by playing into the target rather than overshooting it", async ({ from, target }) => {
+    const light = Object.fromEntries(
+      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate * 6]),
+    );
+    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: light, latencyMs: 25 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await vi.advanceTimersByTimeAsync(from * 1000);
+    const landed = await settle(controller.jumpTo(() => device.player.tunePositionSeconds, target));
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(target - 0.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(target + 1.5);
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1);
+  });
+
   it("does not jump back when the tune can be restarted neither by key nor by playing it again", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile({ restart: "replay" }));

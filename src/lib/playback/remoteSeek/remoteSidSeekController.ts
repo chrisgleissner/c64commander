@@ -77,6 +77,9 @@ const KEY_HOLD_MS = 60;
  */
 const KEY_SETTLE_MS = 80;
 const KEY_GAP_MS = 50;
+/** A target this close is reached by playing on, unless the fast forward rate is already known. */
+const NORMAL_PLAY_GAP_SECONDS = 4;
+const NORMAL_PLAY_READ_INTERVAL_MS = 250;
 const RESTART_TIMEOUT_MS = 3000;
 /**
  * The largest of these many timer samples must come from the top 15% of the count, or a 100 Hz
@@ -284,6 +287,12 @@ export class RemoteSidSeekController {
             if (seconds >= RATE_WINDOW_SECONDS && clock - rateWindow.clock >= RATE_WINDOW_MIN_CLOCK_SECONDS) {
               planner.record(speed, (clock - rateWindow.clock) / seconds);
             }
+          }
+          if (!held && planner.measuredRate(speed) === null && target - position <= NORMAL_PLAY_GAP_SECONDS) {
+            // Without a measured rate, one read period of fast forward can pass a near target by
+            // several seconds; the tune plays into it at its own speed instead.
+            await sleep(Math.min((target - position) * 1000, NORMAL_PLAY_READ_INTERVAL_MS));
+            continue;
           }
           const remainingClock = (target - position) * ratio;
           const baseRate = speed === planner.finalOption ? planner.measuredRate(speed) : null;
