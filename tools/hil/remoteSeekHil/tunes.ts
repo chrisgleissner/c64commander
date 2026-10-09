@@ -46,11 +46,12 @@ export const SYSTEM_MODE_CPU_HZ: Record<string, number> = Object.fromEntries(
 const PLAYER_CALL_PERIODS = [19656, 17095, 0x42c6, 0x5021, 0x417f, 0x4e98, 0x3ffb, 0x4cc7, 0x4203, 0x4f37].map(
   (value, index) => (index < 2 ? value : value + 1),
 );
-const SNAP_TOLERANCE = 0.003;
+/** The measurement is good to a few tenths of a percent; candidates that close (16380 and 16388 cycles) differ by 0.05%. */
+const SNAP_TOLERANCE = 0.01;
 
 /**
  * The exact play-call rate a measured one stands for: the candidate nearest to it in `systemMode`.
- * Throws when none is within 0.3%, rather than grade landings against a guess.
+ * Throws when none is within 1%, rather than grade landings against a guess.
  */
 export const snapCallHz = (measuredHz: number, systemMode: string, tune: CounterTune, frameLines = 0): number => {
   const modeHz = SYSTEM_MODE_CPU_HZ[systemMode];
@@ -77,10 +78,16 @@ export const measureCallHz = async (
   frameLines = 0,
   ms = 12000,
 ): Promise<number> => {
+  // The quickest of three reads: a slow one could have read the counter anywhere in its round trip.
   const read = async () => {
-    const sentAt = Date.now();
-    const value = await counter();
-    return { value, atMs: (sentAt + Date.now()) / 2 };
+    let best = { value: 0, atMs: 0, rttMs: Number.POSITIVE_INFINITY };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const sentAt = Date.now();
+      const value = await counter();
+      const rttMs = Date.now() - sentAt;
+      if (rttMs < best.rttMs) best = { value, atMs: sentAt + rttMs / 2, rttMs };
+    }
+    return best;
   };
   const first = await read();
   await new Promise((resolve) => setTimeout(resolve, ms));
