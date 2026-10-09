@@ -1916,7 +1916,8 @@ export default function PlayFilesPage() {
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
   const remoteSeek = useRemoteSidSeek({
     item: currentItem,
-    active: !localEngineActive && (isPlaying || activePlayback.any) && !isPaused,
+    active: !localEngineActive && (isPlaying || activePlayback.any),
+    paused: isPaused,
     trackInstanceId,
     deviceInfo: status.deviceInfo,
     elapsedMs,

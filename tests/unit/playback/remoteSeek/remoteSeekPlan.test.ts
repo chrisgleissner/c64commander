@@ -109,15 +109,27 @@ describe("remote seek plan", () => {
     expect(planner.rateBound("64")).toBeCloseTo(832);
   });
 
-  it("times PAL and 50 Hz modes at the PAL clock and the 60 Hz modes at the NTSC clock, at their exact frame rates", () => {
-    // As u64/color_timings.cc sets them: the 60 Hz modes run 65-cycle lines on the NTSC clock.
-    for (const mode of ["PAL", "NTSC-50", "NTSC-50/L"]) {
-      expect(machineTimingFor(mode)).toEqual({ frameHz: 985248 / 19656, ciaClockHz: 985248, frameCycles: 19656 });
+  it("times each System Mode at its own clock and frame, PAL at 50.1245 Hz rather than 50", () => {
+    // The clocks follow the PLL constants of u64/color_timings.cc; the 60 Hz modes run 263 lines of 65 cycles.
+    const clocks: Record<string, [number, number]> = {
+      PAL: [985248, 19656],
+      "NTSC-50": [985891, 19656],
+      "NTSC-50/L": [986921, 19656],
+      NTSC: [1022727, 17095],
+      "PAL-60": [1023144, 17095],
+      "PAL-60/L": [1023750, 17095],
+    };
+    for (const [mode, [ciaClockHz, frameCycles]] of Object.entries(clocks)) {
+      expect(machineTimingFor(mode)).toEqual({ frameHz: ciaClockHz / frameCycles, ciaClockHz, frameCycles });
     }
-    for (const mode of ["NTSC", "PAL-60", "PAL-60/L", " pal-60/l "]) {
-      expect(machineTimingFor(mode)).toEqual({ frameHz: 1022727 / 17095, ciaClockHz: 1022727, frameCycles: 17095 });
-    }
+    expect(machineTimingFor(" pal-60/l ").ciaClockHz).toBe(1023750);
     expect(machineTimingFor(undefined).frameHz).toBeCloseTo(50.1245, 4);
+  });
+
+  it("times a machine its player switched to the other standard at that standard's clock", () => {
+    expect(machineTimingFor("NTSC-50/L", 263)).toEqual(machineTimingFor("NTSC"));
+    expect(machineTimingFor("PAL-60", 312)).toEqual(machineTimingFor("PAL"));
+    expect(machineTimingFor("PAL-60/L", 263).ciaClockHz).toBe(1023750);
   });
 
   it("snaps the largest CIA timer sample up to the latch a composer writes, and times it at the machine's clock", () => {

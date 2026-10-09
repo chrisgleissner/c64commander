@@ -37,8 +37,10 @@ export type PlaybackSeekHandlers = {
 
 type Options = {
   item: PlaylistItem | undefined;
-  /** The C64 is playing this SID itself, unpaused. */
+  /** The C64 is playing this SID itself, paused or not. */
   active: boolean;
+  /** Paused: the gestures are off, and a seek under way is stopped, but the tune stays probed. */
+  paused?: boolean;
   trackInstanceId: number;
   deviceInfo: DeviceInfo | null | undefined;
   elapsedMs: number;
@@ -100,6 +102,7 @@ const machineInputAvailable = async (deviceInfo: DeviceInfo) => {
 export const useRemoteSidSeek = ({
   item,
   active,
+  paused = false,
   trackInstanceId,
   deviceInfo,
   elapsedMs,
@@ -121,12 +124,15 @@ export const useRemoteSidSeek = ({
   const holdsDownRef = useRef(0);
   /** The last landing, until the elapsed time the page reports has caught up with it. */
   const latestLandingRef = useRef<RemoteSeekLanding | null>(null);
+  /** Moves on with every gesture and landing, so a clock tick measured before one is not applied after it. */
+  const seekEpochRef = useRef(0);
   /** A jump has been asked for: running, queued, or a tap on the bar still settling. */
   const jumpAwaited = useCallback(() => jumpingRef.current || dragTimerRef.current !== null, []);
   const live = useRef({ elapsedMs, durationMs, rebasePlaybackPosition });
   live.current = { elapsedMs, durationMs, rebasePlaybackPosition };
 
   const resetGestures = useCallback(() => {
+    seekEpochRef.current += 1;
     holdRef.current = null;
     holdsDownRef.current = 0;
     queuedTargetRef.current = null;
@@ -145,11 +151,14 @@ export const useRemoteSidSeek = ({
    * it ticked. Skipped while a gesture or a jump owns the position.
    */
   const syncToClock = useCallback(async (owned: RemoteSidSeekController) => {
+    const epoch = seekEpochRef.current;
     const tick = await owned.clockTick().catch((error) => {
       addLog("warn", "Remote seek could not read the SID player's clock to follow it", remoteSeekErrorDetails(error));
       return null;
     });
-    if (!tick || controllerRef.current !== owned || holdRef.current || jumpingRef.current || owned.isBusy) return;
+    // A tick from before a seek says where the tune was, not where it is.
+    if (!tick || seekEpochRef.current !== epoch) return;
+    if (controllerRef.current !== owned || holdRef.current || jumpingRef.current || owned.isBusy) return;
     latestLandingRef.current = { seconds: tick.clockSeconds, atMs: tick.tickAtMs, completed: true };
     live.current.rebasePlaybackPosition(clampMs(tick.clockSeconds * 1000 + Date.now() - tick.tickAtMs));
   }, []);
@@ -190,6 +199,9 @@ export const useRemoteSidSeek = ({
           // Show where a seek landed while its settings are still being given back, unless a jump
           // asked for since then still has to get there.
           created.landingListener = (landing, kind) => {
+            // A controller let go of (another tune, another route) has nothing to say about this one.
+            if (controllerRef.current !== created) return;
+            seekEpochRef.current += 1;
             latestLandingRef.current = landing;
             if (kind === "fast forward" ? jumpAwaited() : queuedTargetRef.current !== null) return;
             live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
@@ -234,6 +246,19 @@ export const useRemoteSidSeek = ({
     return () => window.clearInterval(timer);
   }, [controller, syncToClock]);
 
+  // A pause stops whatever seek is under way and gives the device back; the probe stays, so the
+  // gestures are back the moment the tune resumes, and the clock is followed again from there.
+  useEffect(() => {
+    const owned = controllerRef.current;
+    if (!owned) return;
+    if (paused) {
+      resetGestures();
+      void owned.cancel("paused");
+    } else {
+      void syncToClock(owned);
+    }
+  }, [paused, controller, resetGestures, syncToClock]);
+
   // While a gesture or a jump is under way the auto-advance deadline still counts the old position;
   // the Play page holds it off until the landing rebases it.
   useEffect(() => {
@@ -245,16 +270,21 @@ export const useRemoteSidSeek = ({
   useEffect(() => {
     if (!controller) return;
     const onVisibility = () => {
-      if (document.visibilityState !== "hidden") return;
+      // Back in view, the tune may be elsewhere: a hold cancelled on hiding moved it while it lasted.
+      if (document.visibilityState !== "hidden") {
+        void syncToClock(controller);
+        return;
+      }
       resetGestures();
       void cancelRemoteSidSeek("app hidden");
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [controller, resetGestures]);
+  }, [controller, resetGestures, syncToClock]);
 
   const land = useCallback(
     (landing: RemoteSeekLanding | null) => {
+      seekEpochRef.current += 1;
       if (landing) {
         latestLandingRef.current = landing;
         live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
@@ -285,6 +315,7 @@ export const useRemoteSidSeek = ({
     async (toSeconds: number) => {
       const owned = controllerRef.current;
       if (!owned) return;
+      seekEpochRef.current += 1;
       setTargetMs(clampMs(toSeconds * 1000));
       headingToRef.current = toSeconds;
       if (jumpingRef.current) {
@@ -322,10 +353,12 @@ export const useRemoteSidSeek = ({
   const onScrubStep = useCallback(
     (deltaSeconds: number) => {
       const owned = controllerRef.current;
-      // A second button held at the same time joins the first gesture rather than starting another.
-      if (!owned || holdRef.current) return;
+      // A second button held at the same time joins the first gesture rather than starting another,
+      // and a step with no press behind it is the card repeating after the hold was ended for it.
+      if (!owned || holdRef.current || holdsDownRef.current === 0) return;
       // During a jump, a rewind counts back from where that jump is heading, and queues behind it.
       const fromSeconds = headingToRef.current ?? currentSeconds();
+      seekEpochRef.current += 1;
       if (deltaSeconds > 0) {
         const hold: Hold = { direction: "forward", fromSeconds, rewindSteps: 0, ended: false };
         holdRef.current = hold;
@@ -361,7 +394,7 @@ export const useRemoteSidSeek = ({
         showTarget();
       }, REWIND_STEP_INTERVAL_MS);
     },
-    [currentSeconds, land],
+    [currentSeconds, landFastForward],
   );
 
   const onScrubEnd = useCallback(() => {
@@ -399,7 +432,7 @@ export const useRemoteSidSeek = ({
   );
 
   const handlers =
-    controller && active
+    controller && active && !paused
       ? {
           // The card only offers a hold when `onSeek` is set; the gesture itself runs through the scrub handlers.
           onSeek: () => undefined,

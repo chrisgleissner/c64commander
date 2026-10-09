@@ -651,6 +651,43 @@ describe("remote SID seek controller", () => {
     expect(device.log.some((entry) => entry.includes("restore"))).toBe(true);
   });
 
+  describe("when the page has fallen behind the C64, as after a hold cancelled by hiding the app", () => {
+    const behind = async () => {
+      const device = createFakeRemoteSeekDevice();
+      await vi.advanceTimersByTimeAsync(60_000);
+      return { device, controller: new RemoteSidSeekController(device.api, profile()), stale: () => 10 };
+    };
+
+    it("fast forwards from where the C64's clock says the tune is", async () => {
+      const { device, controller, stale } = await behind();
+      await settle(controller.beginFastForward(stale, () => undefined));
+      await vi.advanceTimersByTimeAsync(2000);
+      const landed = await settle(controller.endFastForward());
+      expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+    });
+
+    it("rewinds to a target behind where the C64 really is, rather than fast forwarding to it", async () => {
+      const { device, controller, stale } = await behind();
+      await settle(controller.jumpTo(stale, 40));
+      expect(Math.abs(device.player.tunePositionSeconds - 40)).toBeLessThan(2);
+    });
+  });
+
+  it("reports where a cancelled fast forward left the tune, once the device is given back", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const landings: Array<{ seconds: number; restored: boolean }> = [];
+    controller.landingListener = (landing) =>
+      landings.push({ seconds: landing.seconds, restored: device.settings["CPU Speed"] === " 1" });
+    const at = () => device.player.tunePositionSeconds;
+    await settle(controller.beginFastForward(at, () => undefined));
+    await vi.advanceTimersByTimeAsync(2500);
+    await settle(controller.cancel("paused"));
+    expect(landings).toHaveLength(1);
+    expect(landings[0].restored).toBe(true);
+    expect(Math.abs(landings[0].seconds - at())).toBeLessThan(1.5);
+  });
+
   it("gives up a running clock re-sync as soon as a jump is asked for", async () => {
     const device = createFakeRemoteSeekDevice({ latencyMs: 10 });
     const controller = new RemoteSidSeekController(device.api, profile());
@@ -1171,7 +1208,7 @@ describe("remote SID seek controller when the device misbehaves", () => {
     device.api.readMemory = async (address, length, options) =>
       address === "0B98" ? new TextEncoder().encode("READY.") : read(address, length, options);
     const landed = await settle(controller.jumpTo(() => 100, 20));
-    expect(landed?.completed).toBe(false);
+    expect(landed?.completed ?? false).toBe(false);
     expect(device.log.filter((entry) => entry.startsWith("key press"))).toEqual([]);
   });
 

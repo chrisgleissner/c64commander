@@ -91,10 +91,11 @@ const rsid = () => {
 const render = (options: { item?: PlaylistItem; active?: boolean; elapsedMs?: number; durationMs?: number } = {}) => {
   const rebasePlaybackPosition = vi.fn();
   const hook = renderHook(
-    (props: { active: boolean; elapsedMs: number }) =>
+    (props: { active: boolean; elapsedMs: number; paused?: boolean }) =>
       useRemoteSidSeek({
         item: options.item === null ? undefined : (options.item ?? item()),
         active: props.active,
+        paused: props.paused ?? false,
         trackInstanceId: 1,
         deviceInfo: ("deviceInfo" in options ? options.deviceInfo : DEVICE_INFO) as never,
         elapsedMs: props.elapsedMs,
@@ -476,6 +477,34 @@ describe("useRemoteSidSeek", () => {
     expect(Math.abs(device.current!.player.tunePositionSeconds - target! / 1000)).toBeLessThan(3);
   });
 
+  it("keeps seeking offered across a pause, so Previous held right after resuming rewinds", async () => {
+    const { result, rerender } = render();
+    await advance(PROBED_MS);
+    expect(result.current.handlers).not.toBeNull();
+    rerender({ active: true, elapsedMs: 30_000, paused: true });
+    await advance(10);
+    expect(result.current.handlers).toBeNull();
+    rerender({ active: true, elapsedMs: 30_000, paused: false });
+    await advance(10);
+    expect(result.current.handlers).not.toBeNull();
+  });
+
+  it("gives the device back when the tune is paused during a hold", async () => {
+    const { result, rerender } = render();
+    await advance(PROBED_MS);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(1500);
+    expect(device.current!.player.heldKeys).toEqual(["arrow_left"]);
+    rerender({ active: true, elapsedMs: 30_000, paused: true });
+    await advance(2000);
+    expect(device.current!.player.heldKeys).toEqual([]);
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    expect(result.current.targetMs).toBeNull();
+  });
+
   it("ignores the progress bar while Next is held", async () => {
     const { result } = render();
     await advance(PROBED_MS);
@@ -599,6 +628,53 @@ describe("useRemoteSidSeek", () => {
     await advance(5000);
     expect(device.current!.log.filter((entry) => entry === "key press arrow_left").length).toBeGreaterThan(0);
     expect(device.current!.player.tunePositionSeconds).toBeGreaterThan(72);
+  });
+
+  it("puts the page back on the C64's clock when it comes back after a hold was cancelled by hiding it", async () => {
+    const { result, rebasePlaybackPosition } = render();
+    await advance(PROBED_MS);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(2500);
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await advance(2000);
+    rebasePlaybackPosition.mockClear();
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    for (let waited = 0; rebasePlaybackPosition.mock.calls.length === 0 && waited < 3000; waited += 10)
+      await advance(10);
+    expect(Math.abs(rebasedSeconds(rebasePlaybackPosition) - device.current!.player.tunePositionSeconds)).toBeLessThan(
+      1.5,
+    );
+  });
+
+  it("does not start another fast forward from a held button after hiding the app ended the first", async () => {
+    const { result } = render();
+    await advance(PROBED_MS);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(1500);
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await advance(2000);
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    const pressesBefore = device.current!.log.filter((entry) => entry === "key press arrow_left").length;
+    // The card keeps repeating its step while the finger stays down.
+    act(() => result.current.handlers?.onScrubStep?.(5));
+    await advance(1000);
+    expect(device.current!.log.filter((entry) => entry === "key press arrow_left")).toHaveLength(pressesBefore);
+    expect(device.current!.player.heldKeys).toEqual([]);
   });
 
   it("ignores the page becoming visible again", async () => {

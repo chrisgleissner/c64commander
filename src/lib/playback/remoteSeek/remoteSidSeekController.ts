@@ -13,12 +13,10 @@ import {
   clockSecondsPerTuneSecond,
   cpuSpeedMhz,
   fastForwardRampOptions,
-  playCallRateFromTimerSamples,
   JumpSpeedPlanner,
   RATE_WINDOW_SECONDS,
 } from "./remoteSeekPlan";
-import { measureClockTick, readSidPlayerClock, type ClockTick } from "./sidPlayerClock";
-import { sidPlayerScreenAddress } from "./sidPlayerScreen";
+import { measureClockTick, type ClockTick } from "./sidPlayerClock";
 import type { RemoteTuneSeekProfile } from "./remoteTuneSeekProbe";
 import {
   isRemoteSeekSuperseded,
@@ -26,6 +24,7 @@ import {
   remoteSeekErrorDetails as errorDetails,
 } from "./remoteSeekErrors";
 import { JumpProgressWatch, PositionModel } from "./remoteSeekPositionModel";
+import { CLOCK_ROUNDING_SECONDS, SeekMachine } from "./remoteSeekMachine";
 
 /**
  * Fast forward, rewind and jumps for a tune the C64 plays itself.
@@ -70,15 +69,6 @@ const INITIAL_READ_PERIOD_SECONDS = 0.06;
 const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
 /** Within this many reads of the target at the last speed, the key is released on a timer. */
 const FINAL_APPROACH_READS = 1.5;
-/** The clock shows whole seconds, so the tune is on average half a second past what it shows. */
-const CLOCK_ROUNDING_SECONDS = 0.5;
-const KEY_HOLD_MS = 60;
-/**
- * A released key takes a frame or two to stop the fast forward. A light tune passes several clock
- * seconds in that time at 64 MHz, so the clock is read again only once it has.
- */
-const KEY_SETTLE_MS = 80;
-const KEY_GAP_MS = 50;
 /** A target this close is reached by playing on, unless the fast forward rate is already known. */
 const NORMAL_PLAY_GAP_SECONDS = 4;
 const NORMAL_PLAY_READ_INTERVAL_MS = 250;
@@ -97,12 +87,6 @@ const MIN_PULSE_MS = 20;
 const MAX_PULSE_MS = 2000;
 /** The clock shows whole seconds, so a pulse shorter than this many of them cannot be measured. */
 const MIN_PULSE_CLOCK_SECONDS = 1.5;
-const RESTART_TIMEOUT_MS = 3000;
-/**
- * The largest of these many timer samples must come from the top 15% of the count, or a 100 Hz
- * tune measures as 120 Hz. Forty samples missed it once in a 30-minute soak on the Ultimate 64.
- */
-const TIMER_SAMPLE_COUNT = 100;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -127,6 +111,7 @@ export class RemoteSidSeekController {
   private activeSession: RemoteSeekDeviceSession | null = null;
   private pendingOperations = 0;
   private gestureArrived = false;
+  private readonly machine: SeekMachine;
   /**
    * Told where a seek landed as soon as that is known, before the device's settings are given back:
    * the restore is a few config writes, and the page need not show the target while they run.
@@ -144,6 +129,7 @@ export class RemoteSidSeekController {
     /** Read when each seek starts, so a change in Settings applies to the next one. */
     private readonly seekMute: () => C64SeekMute = loadC64SeekMute,
   ) {
+    this.machine = new SeekMachine(api, profile);
     this.clockPerTuneSecond =
       profile.headerPlayCallHz === null
         ? null
@@ -160,7 +146,7 @@ export class RemoteSidSeekController {
    * machine. A multi-speed tune's clock runs ahead of its music while fast forwarding.
    */
   get clockIsPosition() {
-    return this.profile.headerPlayCallHz !== null && this.profile.headerPlayCallHz === this.profile.timing.frameHz;
+    return this.machine.clockIsPosition;
   }
 
   /**
@@ -170,11 +156,11 @@ export class RemoteSidSeekController {
   clockTick(): Promise<ClockTick | null> {
     // Never ahead of a gesture: a tick measured during a hold never sees a single step and holds the
     // release up for its whole limit, and one running when a jump arrives stops at its next read.
-    if (!this.clockIsPosition || this.isBusy) return Promise.resolve(null);
+    if (!this.clockIsPosition || this.fastForward !== null) return Promise.resolve(null);
     this.gestureArrived = false;
     return this.serialize((generation) =>
       measureClockTick(
-        () => this.readClock(true),
+        () => this.machine.readClock(true),
         () => generation === this.cancelGeneration && !this.gestureArrived,
       ),
     );
@@ -201,9 +187,9 @@ export class RemoteSidSeekController {
       session.muteWhenKeysPressed(this.seekMute() === "always");
       try {
         this.assertCurrent(generation);
-        const clock = await this.readClock(false);
+        const clock = await this.machine.readClock(false);
         if (clock === null) throw new Error("The SID player's clock is not on screen");
-        const fromSeconds = origin();
+        const fromSeconds = this.machine.positionAt(origin, clock);
         const run: FastForwardRun = {
           session,
           polling: false,
@@ -253,7 +239,7 @@ export class RemoteSidSeekController {
       let landed = false;
       try {
         await run.session.releaseKey();
-        await this.settle(run.model, false);
+        await this.machine.settle(run.model, false);
         landed = true;
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
@@ -264,9 +250,11 @@ export class RemoteSidSeekController {
       await this.giveBack(run.session, reason);
       if (!landed) {
         // The key may have stayed down until the restore released it; only a read after that says where.
-        await this.settle(run.model, true).catch((error) =>
-          addLog("warn", "Remote fast forward could not read where the restore left it", errorDetails(error)),
-        );
+        await this.machine
+          .settle(run.model, true)
+          .catch((error) =>
+            addLog("warn", "Remote fast forward could not read where the restore left it", errorDetails(error)),
+          );
         landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
       }
       addLog("debug", "Remote fast forward ended", { reason, positionSeconds: landing.seconds });
@@ -304,17 +292,24 @@ export class RemoteSidSeekController {
         this.assertCurrent(generation);
         session = await this.openSession();
         this.assertCurrent(generation);
-        const restart = target < origin();
+        let startClock = await this.machine.readClockTwice();
+        if (startClock === null) throw new Error("The SID player's clock is not on screen");
+        const restart = target < this.machine.positionAt(origin, startClock);
         const mute = this.seekMute();
         session.muteWhenKeysPressed(mute === "always" || (mute === "rewind" && restart));
         if (restart) {
           model = new PositionModel(0, 0, ratio, this.profile.clock.wrapSeconds);
-          await this.restartTune(session, generation);
+          await this.machine.restartTune(session, this.replayTune, () => this.assertCurrent(generation));
+          startClock = await this.machine.readClock(true);
+          if (startClock === null) throw new Error("The SID player's clock is not on screen");
         }
-        const startClock = await this.readClock(true);
-        if (startClock === null) throw new Error("The SID player's clock is not on screen");
         // Asked again now: the tune played on while the rate was measured and the session opened.
-        model = new PositionModel(restart ? 0 : origin(), startClock, ratio, this.profile.clock.wrapSeconds);
+        model = new PositionModel(
+          restart ? 0 : this.machine.positionAt(origin, startClock),
+          startClock,
+          ratio,
+          this.profile.clock.wrapSeconds,
+        );
         const planner = new JumpSpeedPlanner(this.profile.cpuSpeedOptions, session.originalCpuSpeed);
         let speed = session.originalCpuSpeed;
         let held = false;
@@ -335,7 +330,7 @@ export class RemoteSidSeekController {
           const wait = JUMP_POLL_MIN_INTERVAL_MS - (Date.now() - lastReadAt);
           if (wait > 0) await sleep(wait);
           const readStartedAt = Date.now();
-          const clock = await this.readClockFor(model, true);
+          const clock = await this.machine.readClockFor(model, true);
           const readAt = Date.now();
           // The poll cadence plus this read's round trip; waits for a CPU Speed write are not part of it.
           const period = (JUMP_POLL_MIN_INTERVAL_MS + readAt - readStartedAt) / 1000;
@@ -373,7 +368,7 @@ export class RemoteSidSeekController {
             if (held) {
               await session.releaseKey();
               held = false;
-              await this.settle(model, true);
+              await this.machine.settle(model, true);
               fastSinceLastRead = false;
               continue;
             }
@@ -400,7 +395,7 @@ export class RemoteSidSeekController {
             await session.pressKey();
             await sleep(pulseMs);
             await session.releaseKey();
-            await this.settle(model, true);
+            await this.machine.settle(model, true);
             const gained = model.clock - clockBefore;
             // Never lowered: a short pulse can under-read the rate, and the next pulse would then overshoot.
             if (gained > 0) pulseRate = Math.max(pulseRate ?? 0, gained / (pulseMs / 1000));
@@ -414,7 +409,7 @@ export class RemoteSidSeekController {
             await sleep(Math.max(0, (remainingClock / baseRate - readPeriodSeconds / 2) * 1000));
             await session.releaseKey();
             held = false;
-            await this.settle(model, true);
+            await this.machine.settle(model, true);
             break;
           }
           const wanted = planner.choose(remainingClock, readPeriodSeconds);
@@ -425,7 +420,7 @@ export class RemoteSidSeekController {
               await session.releaseKey();
               held = false;
               // Settle what ran fast before the write, which may wait with the tune at normal speed.
-              await this.settle(model, true);
+              await this.machine.settle(model, true);
               fastSinceLastRead = false;
             }
             await session.setCpuSpeed(wanted);
@@ -441,7 +436,7 @@ export class RemoteSidSeekController {
         }
         if (held) {
           await session.releaseKey();
-          await this.settle(model, true);
+          await this.machine.settle(model, true);
         }
         addLog("debug", "Remote seek landed", {
           fromSeconds,
@@ -464,9 +459,11 @@ export class RemoteSidSeekController {
           return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false };
         }
         // The restore has released the key, so one read now says where the tune really got to.
-        await this.settle(model, true).catch((settleError) =>
-          addLog("warn", "Remote seek could not read where a stopped jump left the tune", errorDetails(settleError)),
-        );
+        await this.machine
+          .settle(model, true)
+          .catch((settleError) =>
+            addLog("warn", "Remote seek could not read where a stopped jump left the tune", errorDetails(settleError)),
+          );
         return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false };
       } finally {
         if (session) await this.giveBack(session, "jump finished");
@@ -487,6 +484,22 @@ export class RemoteSidSeekController {
     }
     const session = this.activeSession;
     if (session) await this.giveBack(session, reason);
+    // The tune moved while the key was down; the page has to learn where to, or it shows the old place.
+    if (run) {
+      await this.machine.settle(run.model, true).then(
+        () =>
+          this.landingListener?.(
+            { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false },
+            "fast forward",
+          ),
+        (error) =>
+          addLog(
+            "warn",
+            "Remote seek could not read where a cancelled fast forward left the tune",
+            errorDetails(error),
+          ),
+      );
+    }
     await this.busy.catch((error) =>
       addLog("warn", "Remote seek operation ended with an error while being cancelled", {
         reason,
@@ -527,7 +540,7 @@ export class RemoteSidSeekController {
 
   private async openSession() {
     const session = await RemoteSeekDeviceSession.open(this.api, {
-      playerOnScreen: () => this.playerOnScreen(),
+      playerOnScreen: () => this.machine.playerOnScreen(),
       fastForward: this.profile.fastForward,
       withCpuSpeed: this.profile.cpuSpeedOptions.length > 0,
     });
@@ -536,13 +549,6 @@ export class RemoteSidSeekController {
   }
 
   /** The VIC still shows the screen the player's clock was found on, and the clock reads as a time there. */
-  private async playerOnScreen(): Promise<boolean> {
-    const [dd00] = await this.api.readMemory("DD00", 1, { __c64uIntent: "user", __c64uBypassCooldown: true });
-    const [d018] = await this.api.readMemory("D018", 1, { __c64uIntent: "user", __c64uBypassCooldown: true });
-    if (sidPlayerScreenAddress(dd00, d018) !== this.profile.clock.screenAddress) return false;
-    return (await this.readClock(true)) !== null;
-  }
-
   private async giveBack(session: RemoteSeekDeviceSession, reason: string) {
     if (this.activeSession === session) this.activeSession = null;
     await session.restore(reason);
@@ -560,7 +566,7 @@ export class RemoteSidSeekController {
     if (run.polling) return;
     run.polling = true;
     try {
-      const clock = await this.readClockFor(run.model, false);
+      const clock = await this.machine.readClockFor(run.model, false);
       if (this.fastForward !== run) return;
       if (clock === null) {
         // The player has gone from the screen: whatever is there now would be typed into.
@@ -577,81 +583,13 @@ export class RemoteSidSeekController {
     }
   }
 
-  /** Read the clock once the key is surely up, crediting what ran since the last read to the fast forward. */
-  private async settle(model: PositionModel, fast: boolean) {
-    await sleep(KEY_SETTLE_MS);
-    const clock = await this.readClockFor(model, fast);
-    if (clock !== null) model.advance(clock, true);
-  }
-
-  /**
-   * The player rewrites its clock digits ones first, so a read in the middle of that shows the
-   * minutes a minute behind. A read that steps back is therefore read again: only a second one that
-   * agrees is the clock wrapping at 99:59.
-   */
-  private async readClockFor(model: PositionModel, fast: boolean) {
-    const clock = await this.readClock(fast);
-    return clock !== null && model.stepsBack(clock) ? this.readClock(fast) : clock;
-  }
-
-  private readClock(fast: boolean) {
-    return readSidPlayerClock(this.api.readMemory, this.profile.clock, fast);
-  }
-
   /** Clock seconds per tune second while fast forwarding; measured from CIA 1 timer A for CIA-timed tunes. */
   private resolveClockPerTuneSecond(): Promise<number> {
-    this.clockPerTuneSecond ??= this.measureClockPerTuneSecond().catch((error: unknown) => {
+    this.clockPerTuneSecond ??= this.machine.measureClockPerTuneSecond().catch((error: unknown) => {
       // Measured again by the next caller rather than failing every seek of this tune.
       this.clockPerTuneSecond = null;
       throw error;
     });
     return this.clockPerTuneSecond;
-  }
-
-  private async measureClockPerTuneSecond(): Promise<number> {
-    const samples: number[] = [];
-    for (let index = 0; index < TIMER_SAMPLE_COUNT; index += 1) {
-      // Uneven gaps across a whole frame: reads that repeat at the timer's period meet the same count.
-      if (index > 0) await sleep((index * 7) % 20);
-      const raw = await this.api.readMemory("DC04", 2, { __c64uIntent: "user", __c64uBypassCooldown: true });
-      samples.push(raw[0] | (raw[1] << 8));
-    }
-    const callHz = playCallRateFromTimerSamples(samples, this.profile.timing) ?? this.profile.timing.frameHz;
-    const clockPerTuneSecond = clockSecondsPerTuneSecond(callHz, this.profile.timing);
-    addLog("debug", "Remote seek measured the tune's play-call rate", { callHz, clockPerTuneSecond });
-    return clockPerTuneSecond;
-  }
-
-  /**
-   * Restart the sub tune the way the player's own keys do: minus then plus selects the same sub tune
-   * again. Sent as press and release pairs: two taps in one batch lost the second key on the device.
-   */
-  private async restartTune(session: RemoteSeekDeviceSession, generation: number) {
-    // No key without the player on screen: at BASIC, minus and plus would be typed.
-    const before = await this.readClock(true);
-    if (before === null) throw new Error("The SID player's clock is not on screen; no restart keys sent");
-    // A clock that already shows 0:01 has to drop to 0:00 before the restart counts as done.
-    const restartedBelow = before <= 1 ? Math.max(before, 1) : 2;
-    if (this.profile.restart === "replay") {
-      this.assertCurrent(generation);
-      await (this.replayTune as () => Promise<void>)();
-    } else {
-      for (const key of ["minus", "plus"] as const) {
-        this.assertCurrent(generation);
-        await session.tapKey(key, KEY_HOLD_MS);
-        await sleep(KEY_GAP_MS);
-      }
-    }
-    const deadline = Date.now() + RESTART_TIMEOUT_MS;
-    // Twice in a row: a single read can catch the clock mid-update with its minutes a minute behind.
-    let restartedReads = 0;
-    while (Date.now() < deadline) {
-      this.assertCurrent(generation);
-      const clock = await this.readClock(true);
-      restartedReads = clock !== null && clock < restartedBelow ? restartedReads + 1 : 0;
-      if (restartedReads === 2) return;
-      await sleep(JUMP_POLL_MIN_INTERVAL_MS);
-    }
-    throw new Error("The tune did not restart");
   }
 }

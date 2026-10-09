@@ -181,6 +181,24 @@ const PAL_FRAME_CYCLES = 312 * 63;
 const NTSC_FRAME_CYCLES = 263 * 65;
 const SIXTY_HZ_SYSTEM_MODES = new Set(["NTSC", "PAL-60", "PAL-60/L"]);
 
+/**
+ * The CPU clock of each System Mode, from its PLL constant in the firmware's software/u64/color_timings.cc,
+ * which is proportional to the clock (PAL 81247 for 985248 Hz). The /L modes run up to 0.17% faster than
+ * their standard, 11 seconds an hour.
+ */
+const SYSTEM_MODE_CLOCK_HZ: Record<string, number> = Object.fromEntries(
+  (
+    [
+      ["PAL", 81247],
+      ["NTSC", 84338],
+      ["PAL-60", 84372],
+      ["NTSC-50", 81300],
+      ["PAL-60/L", 84422],
+      ["NTSC-50/L", 81385],
+    ] as const
+  ).map(([mode, pll]) => [mode, mode === "NTSC" ? 1022727 : Math.round((985248 * pll) / 81247)]),
+);
+
 const timing = (ciaClockHz: number, frameCycles: number): MachineTiming => ({
   frameHz: ciaClockHz / frameCycles,
   ciaClockHz,
@@ -198,14 +216,14 @@ export const NTSC_FRAME_LINES = 263;
 export const machineTimingFor = (
   systemMode: string | null | undefined,
   frameLines: number | null = null,
-): MachineTiming =>
-  (
-    frameLines !== null
-      ? frameLines === NTSC_FRAME_LINES
-      : SIXTY_HZ_SYSTEM_MODES.has((systemMode ?? "").trim().toUpperCase())
-  )
-    ? timing(1022727, NTSC_FRAME_CYCLES)
-    : timing(985248, PAL_FRAME_CYCLES);
+): MachineTiming => {
+  const mode = (systemMode ?? "").trim().toUpperCase();
+  const modeSixtyHz = SIXTY_HZ_SYSTEM_MODES.has(mode);
+  const sixtyHz = frameLines !== null ? frameLines === NTSC_FRAME_LINES : modeSixtyHz;
+  // The mode's own clock while the machine runs its standard; the standard's while the player switched it.
+  const modeClock = sixtyHz === modeSixtyHz ? SYSTEM_MODE_CLOCK_HZ[mode] : undefined;
+  return sixtyHz ? timing(modeClock ?? 1022727, NTSC_FRAME_CYCLES) : timing(modeClock ?? 985248, PAL_FRAME_CYCLES);
+};
 
 export const isSixtyHzMachine = (machine: MachineTiming) => machine.frameCycles === NTSC_FRAME_CYCLES;
 
