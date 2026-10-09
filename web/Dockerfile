@@ -1,6 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# The base image, also from a mirror of Docker Hub with the same digest (mirror.gcr.io/library/...).
+ARG NODE_IMAGE=node:24-trixie-slim
 
-FROM node:24-trixie-slim AS build
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 ARG VITE_APP_VERSION
 ARG VITE_GIT_SHA
@@ -30,7 +31,7 @@ ENV VITE_BUILD_TIME=$VITE_BUILD_TIME
 ENV VITE_WEB_PLATFORM=1
 RUN npm run build && npm run build:web-server
 
-FROM node:24-trixie-slim AS runtime
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

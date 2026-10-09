@@ -89,15 +89,27 @@ jobs:
       - name: Build Docker image (${{ matrix.platform }})
         run: |
           set -euo pipefail
-          docker buildx build \
-            --platform "${{ matrix.platform }}" \
-            --load \
-            --build-arg VITE_APP_VERSION="${VITE_APP_VERSION}" \
-            --build-arg VITE_GIT_SHA="${VITE_GIT_SHA}" \
-            --build-arg VITE_BUILD_TIME="${VITE_BUILD_TIME}" \
-            -f web/Dockerfile \
-            -t c64commander:ci \
-            .
+          # Docker Hub's token service has answered GitHub's runners with 504 for minutes at a time.
+          # Two more tries, the last from Google's mirror of Docker Hub, which serves the same digest.
+          for attempt in 1 2 3; do
+            node_image=node:24-trixie-slim
+            if [[ "$attempt" == "3" ]]; then node_image=mirror.gcr.io/library/node:24-trixie-slim; fi
+            if docker buildx build \
+              --platform "${{ matrix.platform }}" \
+              --load \
+              --build-arg NODE_IMAGE="${node_image}" \
+              --build-arg VITE_APP_VERSION="${VITE_APP_VERSION}" \
+              --build-arg VITE_GIT_SHA="${VITE_GIT_SHA}" \
+              --build-arg VITE_BUILD_TIME="${VITE_BUILD_TIME}" \
+              -f web/Dockerfile \
+              -t c64commander:ci \
+              .; then
+              exit 0
+            fi
+            echo "::warning::Docker image build attempt ${attempt} from ${node_image} failed"
+            if [[ "$attempt" != "3" ]]; then sleep $((attempt * 30)); fi
+          done
+          exit 1
 
       - name: Start Docker telemetry monitor
         run: |
