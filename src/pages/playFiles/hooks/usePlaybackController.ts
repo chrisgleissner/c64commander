@@ -2325,10 +2325,7 @@ export function usePlaybackController({
     [autoAdvanceGuardRef, durationMsRef, setAutoAdvanceDueAtMs],
   );
 
-  /**
-   * Two wall clocks drive the progress display and neither knows about the engine, so every seek
-   * rebases both; otherwise the audio jumps and the time carries on as if the seek did nothing.
-   */
+  // Neither wall clock behind the progress display knows the engine; a seek that skips this looks like it did nothing.
   const rebasePlaybackPosition = useCallback(
     (positionMs: number) => {
       const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };

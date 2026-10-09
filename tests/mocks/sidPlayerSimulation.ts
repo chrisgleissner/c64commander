@@ -38,6 +38,11 @@ export type SidPlayerSimulationOptions = {
   playCallHz?: number;
   machineFrameHz?: number;
   fastForwardRateByMhz?: Record<number, number>;
+  /**
+   * The first CPU Speed change after a tune starts took up to a second longer to apply on the C64
+   * Ultimate than later ones; this delays the first one by that much.
+   */
+  firstSpeedChangeDelayMs?: number;
   now?: () => number;
 };
 
@@ -53,6 +58,9 @@ export class SidPlayerSimulation {
   private lastUpdate: number;
   private keysDown = new Set<string>();
   private cpuMhz = 1;
+  private pendingSpeed: { mhz: number; atMs: number } | null = null;
+  private speedChanged = false;
+  private readonly firstSpeedChangeDelayMs: number;
   private timerSample = 0;
   restarts = 0;
   private readonly playCallHz: number;
@@ -65,6 +73,7 @@ export class SidPlayerSimulation {
     this.machineFrameHz = options.machineFrameHz ?? 50;
     this.rates = options.fastForwardRateByMhz ?? MEASURED_FAST_FORWARD_RATE_BY_MHZ;
     this.now = options.now ?? (() => Date.now());
+    this.firstSpeedChangeDelayMs = options.firstSpeedChangeDelayMs ?? 0;
     this.lastUpdate = this.now();
   }
 
@@ -84,7 +93,13 @@ export class SidPlayerSimulation {
 
   setCpuSpeedMhz(mhz: number) {
     this.advance();
-    this.cpuMhz = mhz;
+    if (!this.speedChanged && this.firstSpeedChangeDelayMs > 0) {
+      this.pendingSpeed = { mhz, atMs: this.now() + this.firstSpeedChangeDelayMs };
+    } else {
+      this.pendingSpeed = null;
+      this.cpuMhz = mhz;
+    }
+    this.speedChanged = true;
   }
 
   pressKey(key: string) {
@@ -140,6 +155,15 @@ export class SidPlayerSimulation {
 
   private advance() {
     const now = this.now();
+    if (this.pendingSpeed && now >= this.pendingSpeed.atMs) {
+      this.advanceTo(this.pendingSpeed.atMs);
+      this.cpuMhz = this.pendingSpeed.mhz;
+      this.pendingSpeed = null;
+    }
+    this.advanceTo(now);
+  }
+
+  private advanceTo(now: number) {
     const elapsed = Math.max(0, (now - this.lastUpdate) / 1000);
     this.lastUpdate = now;
     if (this.fastForwarding) {

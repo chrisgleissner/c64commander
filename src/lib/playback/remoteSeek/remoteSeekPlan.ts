@@ -54,41 +54,31 @@ export const rewindOffsetSeconds = (stepsHeld: number): number => {
 };
 
 /**
- * Fast forward rate at each CPU Speed relative to 1 MHz, as the fastest and the slowest of six tunes
- * measured it (C_mon, Commando, Cybernoid, Last Ninja, Wizball and a tone test tune). The ratios
- * hold across tunes far better than the rates do: a tune with a light play routine ran 6x faster
- * than real music at every speed, so absolute rates cannot be tabulated, while 64 MHz stayed 21-36x
- * the 1 MHz rate for every tune.
+ * The least a CPU Speed multiplies the 1 MHz fast forward rate, from eight tunes measured on a C64
+ * Ultimate (six from HVSC, a tone test tune and a play-call counter). The most it can multiply it
+ * by is the clock ratio itself: the loop cannot outrun the CPU. Absolute rates cannot be tabulated,
+ * because a light play routine fast forwards up to six times faster than real music at every speed.
  */
-const RATE_RATIO_UPPER: ReadonlyArray<[number, number]> = [
-  [1, 1],
-  [2, 1.6],
-  [4, 4.8],
-  [8, 9],
-  [16, 16],
-  [32, 25],
-  [64, 38],
-];
 const RATE_RATIO_LOWER: ReadonlyArray<[number, number]> = [
   [1, 1],
-  [2, 0.85],
+  [2, 0.75],
   [4, 3],
-  [8, 5.8],
-  [16, 9.2],
-  [32, 16],
+  [8, 5.7],
+  [16, 9],
+  [32, 15.8],
   [64, 21],
 ];
 
-const interpolateRatio = (table: ReadonlyArray<[number, number]>, mhz: number): number => {
-  if (mhz <= table[0][0]) return table[0][1];
-  for (let index = 1; index < table.length; index += 1) {
-    const [highMhz, highRatio] = table[index];
+const lowerRatio = (mhz: number): number => {
+  if (mhz <= RATE_RATIO_LOWER[0][0]) return RATE_RATIO_LOWER[0][1];
+  for (let index = 1; index < RATE_RATIO_LOWER.length; index += 1) {
+    const [highMhz, highRatio] = RATE_RATIO_LOWER[index];
     if (mhz <= highMhz) {
-      const [lowMhz, lowRatio] = table[index - 1];
+      const [lowMhz, lowRatio] = RATE_RATIO_LOWER[index - 1];
       return lowRatio + ((highRatio - lowRatio) * (mhz - lowMhz)) / (highMhz - lowMhz);
     }
   }
-  return table[table.length - 1][1];
+  return RATE_RATIO_LOWER[RATE_RATIO_LOWER.length - 1][1];
 };
 
 /** Rate measurements need this much fast forward behind them before they are trusted. */
@@ -102,11 +92,13 @@ const RATE_SAFETY_FACTOR = 1.3;
  * Chooses the CPU Speed for each step of a jump.
  *
  * A jump starts at the machine's own speed and measures how fast this tune fast forwards there.
- * Every faster speed is then predicted from that measurement with the upper ratio, so a prediction
- * can only be too high, which makes the jump slow down early rather than overshoot. A speed is used
- * while the remaining distance exceeds what it covers in the lead time; measured rates replace the
- * predictions as the jump goes. The tiers are the maximum, 4 MHz and the machine's own speed: each
- * change costs a CPU Speed write that may wait out the config write interval, so they are few.
+ * Every other speed's rate is then bounded from above: by the clock ratio from a slower measurement,
+ * and by the least measured ratio from a faster one. A speed is used while the remaining distance
+ * exceeds what it covers, at that bound, in the lead time, so a jump slows down early rather than
+ * overshoots. A measurement never lowers the bound: the first CPU Speed change after a tune starts
+ * can take a second to apply, and a rate measured meanwhile is far too low. The tiers are the
+ * maximum, 4 MHz and the machine's own speed: each change costs a CPU Speed write that may wait out
+ * the config write interval, so they are few.
  */
 export class JumpSpeedPlanner {
   readonly tiers: string[];
@@ -139,18 +131,18 @@ export class JumpSpeedPlanner {
     return this.measured.get(option) ?? null;
   }
 
-  /** The highest rate this option can plausibly have, given what has been measured. */
-  predictedRate(option: string): number | null {
-    const own = this.measured.get(option);
-    if (own !== undefined) return own;
+  /** The highest rate this option can have, given everything measured so far. */
+  rateBound(option: string): number | null {
     const mhz = cpuSpeedMhz(option) ?? 1;
-    let highest: number | null = null;
+    let bound: number | null = null;
     for (const [measuredOption, rate] of this.measured) {
       const measuredMhz = cpuSpeedMhz(measuredOption) ?? 1;
-      const scaled = (rate * interpolateRatio(RATE_RATIO_UPPER, mhz)) / interpolateRatio(RATE_RATIO_LOWER, measuredMhz);
-      highest = highest === null ? scaled : Math.max(highest, scaled);
+      // rate(o) = rate(s) * R(o) / R(s) with R between the lower ratio and the clock ratio.
+      const scale = measuredOption === option ? 1 : mhz / lowerRatio(measuredMhz);
+      const scaled = rate * RATE_SAFETY_FACTOR * scale;
+      bound = bound === null ? scaled : Math.max(bound, scaled);
     }
-    return highest;
+    return bound;
   }
 
   /** The fastest tier that cannot overshoot `remainingClockSeconds` within the lead time. */
@@ -159,8 +151,8 @@ export class JumpSpeedPlanner {
     const leadSeconds = 2 * readPeriodSeconds + RELEASE_MARGIN_SECONDS;
     for (let index = this.slowestChosen; index < this.tiers.length; index += 1) {
       const option = this.tiers[index];
-      const rate = this.predictedRate(option);
-      if (rate !== null && remainingClockSeconds >= rate * RATE_SAFETY_FACTOR * leadSeconds) {
+      const rate = this.rateBound(option);
+      if (rate !== null && remainingClockSeconds >= rate * leadSeconds) {
         this.slowestChosen = index;
         return option;
       }

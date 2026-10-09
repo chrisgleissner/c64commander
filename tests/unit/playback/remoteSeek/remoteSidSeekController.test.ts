@@ -150,6 +150,22 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeLessThan(202);
   });
 
+  it("lands a multi-speed tune while its first speed change is delayed and config writes are queued", async () => {
+    // The play-call counter tune as measured: its rate grows 56-fold from 1 to 64 MHz, more than any HVSC tune did.
+    const counterTuneRates = { 1: 15, 2: 17, 4: 57, 8: 110, 16: 220, 32: 440, 64: 840 };
+    const device = createFakeRemoteSeekDevice({
+      fastForwardRateByMhz: counterTuneRates,
+      firstSpeedChangeDelayMs: 1000,
+      configWriteDelayMs: 500,
+      playCallHz: 200,
+      latencyMs: 15,
+    });
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
+    await settle(controller.jumpTo(0, 45));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(44.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(47.5);
+  });
+
   it("lands on slow round trips, which leave more time between clock reads", async () => {
     const device = createFakeRemoteSeekDevice({ latencyMs: 60 });
     const controller = new RemoteSidSeekController(device.api, profile());

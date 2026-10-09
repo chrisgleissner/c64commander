@@ -12,6 +12,7 @@ import { getConnectionSnapshot, subscribeConnection } from "@/lib/connection/con
 import { addLog } from "@/lib/logging";
 import { isRemotePlaybackActive, markRemotePlaybackStopped } from "./activePlaybackSession";
 import { getSharedLocalSidPlaybackController, LocalSidPlaybackController } from "./localSidPlaybackController";
+import { installRemoteSeekRecovery } from "./remoteSeek/remoteSeekRecovery";
 import { isTuneStillPlayingOnC64 } from "./tuneStillPlayingOnC64";
 
 /**
@@ -188,7 +189,12 @@ const silenceTuneLeftOnDevice = async () => {
   }
 };
 
+/**
+ * Also undoes a fast forward or rewind on the C64 that was cut off before it gave the key and CPU
+ * Speed back: both are state this phone left on the machine while it was away.
+ */
 export const installRemoteTuneHandover = () => {
+  const uninstallSeekRecovery = installRemoteSeekRecovery();
   let previous = getConnectionSnapshot().state;
   const unsubscribe = subscribeConnection(() => {
     const { state } = getConnectionSnapshot();
@@ -203,5 +209,6 @@ export const installRemoteTuneHandover = () => {
   });
   return () => {
     unsubscribe();
+    uninstallSeekRecovery();
   };
 };

@@ -38,7 +38,13 @@ type Settings = { "CPU Speed": string; "Turbo Control": string; "System Mode": s
  * in order, so tests can assert what reached the device and when.
  */
 export const createFakeRemoteSeekDevice = (
-  options: SidPlayerSimulationOptions & { settings?: Partial<Settings>; deviceKey?: string; latencyMs?: number } = {},
+  options: SidPlayerSimulationOptions & {
+    settings?: Partial<Settings>;
+    deviceKey?: string;
+    latencyMs?: number;
+    /** How long a config write waits, as the app's config write interval makes it wait. */
+    configWriteDelayMs?: number;
+  } = {},
 ) => {
   const player = new SidPlayerSimulation(options);
   const settings: Settings = {
@@ -69,6 +75,7 @@ export const createFakeRemoteSeekDevice = (
       return { [category]: { [item]: { current: settings[item as keyof Settings], values } } } as never;
     },
     setConfigValue: async (_category, item, value, flags) => {
+      if (options.configWriteDelayMs) await new Promise((resolve) => setTimeout(resolve, options.configWriteDelayMs));
       if (failures.configWrites > 0) {
         failures.configWrites -= 1;
         log.push(`FAILED ${item}=${String(value).trim()}`);

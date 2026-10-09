@@ -63,24 +63,30 @@ describe("remote seek plan", () => {
     expect(planner.choose(1000, 0.05)).toBe("64");
   });
 
-  it("predicts faster speeds from a measured one with the upper ratio, so it slows down early", () => {
+  it("bounds a faster speed by the clock ratio from a measured one, so it slows down early", () => {
     const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
     planner.record(" 1", 10);
-    expect(planner.predictedRate("64")).toBe(380);
-    expect(planner.predictedRate(" 4")).toBe(48);
-    // 380 x 1.3 x (2 x 0.05 + 0.05) = 74 clock seconds is the least the maximum is used for.
-    expect(planner.choose(80, 0.05)).toBe("64");
-    expect(planner.choose(70, 0.05)).toBe(" 4");
+    expect(planner.rateBound("64")).toBeCloseTo(832);
+    expect(planner.rateBound(" 4")).toBeCloseTo(52);
+    // 832 x (2 x 0.05 + 0.05) = 125 clock seconds is the least the maximum is used for.
+    expect(planner.choose(200, 0.05)).toBe("64");
+    expect(planner.choose(100, 0.05)).toBe(" 4");
     expect(planner.choose(5, 0.05)).toBe(" 1");
   });
 
-  it("scales the lead with the measured read period, and a light tune's higher rate with it", () => {
+  it("bounds a slower speed from a faster measurement by the least measured ratio", () => {
+    const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    planner.record("64", 300);
+    expect(planner.rateBound(" 4")).toBeCloseTo((300 * 1.3 * 4) / 21);
+  });
+
+  it("scales the lead with the read period, and a light tune's higher rate with it", () => {
     const slowReads = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
     slowReads.record(" 1", 65);
-    expect(slowReads.choose(300, 0.05)).toBe(" 4");
+    expect(slowReads.choose(600, 0.05)).toBe(" 4");
     const fastReads = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
     fastReads.record(" 1", 65);
-    expect(fastReads.choose(300, 0.02)).toBe("64");
+    expect(fastReads.choose(600, 0.02)).toBe("64");
   });
 
   it("never climbs back to a faster speed once it has slowed down", () => {
@@ -90,11 +96,11 @@ describe("remote seek plan", () => {
     expect(planner.choose(1000, 0.05)).toBe(" 1");
   });
 
-  it("uses a measured rate in place of its prediction", () => {
+  it("never lowers a bound with a measurement, which a CPU Speed change still being applied makes too low", () => {
     const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
     planner.record(" 1", 10);
-    planner.record("64", 290);
-    expect(planner.predictedRate("64")).toBe(290);
+    planner.record("64", 89);
+    expect(planner.rateBound("64")).toBeCloseTo(832);
   });
 
   it("times PAL and 50 Hz modes at the PAL clock and the 60 Hz modes at the NTSC clock", () => {

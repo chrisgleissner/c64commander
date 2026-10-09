@@ -75,12 +75,24 @@ def test_snap_call_rate_corrects_the_upward_bias_of_the_sampled_latch():
     assert poc.snap_call_rate(75.0) == 75.0
 
 
-def test_planner_waits_for_a_measurement_then_predicts_with_the_upper_ratio():
+def test_planner_waits_for_a_measurement_then_bounds_faster_speeds_by_the_clock_ratio():
     planner = poc.JumpSpeedPlanner(SPEEDS_C64U, " 1")
     assert planner.tiers == ["64", " 4", " 1"]
     assert planner.choose(1000, 0.05) == " 1"
     planner.measured[" 1"] = 10
-    assert planner.predicted_rate("64") == 380
-    assert planner.choose(80, 0.05) == "64"
-    assert planner.choose(70, 0.05) == " 4"
+    assert round(planner.rate_bound("64")) == 832
+    assert planner.choose(200, 0.05) == "64"
+    assert planner.choose(100, 0.05) == " 4"
     assert planner.choose(5, 0.05) == " 1"
+
+
+def test_planner_never_lowers_a_bound_with_a_measurement():
+    planner = poc.JumpSpeedPlanner(SPEEDS_C64U, " 1")
+    planner.measured[" 1"] = 10
+    planner.measured["64"] = 89
+    assert round(planner.rate_bound("64")) == 832
+
+
+def test_rate_between_counts_through_the_clock_wrapping_after_99_59():
+    assert poc.rate_between((0.0, 10.0), (2.0, 30.0)) == 10.0
+    assert poc.rate_between((0.0, 5990.0), (1.0, 10.0)) == 20.0

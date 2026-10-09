@@ -167,10 +167,17 @@ def counter_value(raw: bytes) -> int:
     return raw[0] | (raw[1] << 8) | (raw[2] << 16)
 
 
+CLOCK_WRAP_S = 100 * 60
+
+
 def rate_between(a: tuple[float, float], b: tuple[float, float]) -> float:
-    """Tune seconds per wall second between two (wall, tune) samples."""
+    """Tune seconds per wall second between two (wall, tune) samples. The player's clock wraps
+    after 99:59, which a light tune passes within a second at 32 MHz, so a negative step is a wrap."""
     wall = b[0] - a[0]
-    return (b[1] - a[1]) / wall if wall > 0 else 0.0
+    step = b[1] - a[1]
+    if step < 0:
+        step += CLOCK_WRAP_S
+    return step / wall if wall > 0 else 0.0
 
 
 # ---------------------------------------------------------------------------------------------
@@ -415,8 +422,7 @@ def restart_tune(device: Device) -> float:
     return time.monotonic() - started
 
 
-RATE_RATIO_UPPER = [(1, 1.0), (2, 1.6), (4, 4.8), (8, 9.0), (16, 16.0), (32, 25.0), (64, 38.0)]
-RATE_RATIO_LOWER = [(1, 1.0), (2, 0.85), (4, 3.0), (8, 5.8), (16, 9.2), (32, 16.0), (64, 21.0)]
+RATE_RATIO_LOWER = [(1, 1.0), (2, 0.75), (4, 3.0), (8, 5.7), (16, 9.0), (32, 15.8), (64, 21.0)]
 RATE_WINDOW_S = 0.15
 RATE_WINDOW_MIN_CLOCK_S = 4
 RELEASE_MARGIN_S = 0.05
@@ -425,7 +431,8 @@ FINAL_APPROACH_READS = 1.5
 POLL_MIN_INTERVAL_S = 0.03
 
 
-def interpolate_ratio(table: list[tuple[int, float]], mhz: float) -> float:
+def lower_ratio(mhz: float) -> float:
+    table = RATE_RATIO_LOWER
     if mhz <= table[0][0]:
         return table[0][1]
     for (low_mhz, low), (high_mhz, high) in zip(table, table[1:]):
@@ -436,8 +443,10 @@ def interpolate_ratio(table: list[tuple[int, float]], mhz: float) -> float:
 
 class JumpSpeedPlanner:
     """The app's planner (src/lib/playback/remoteSeek/remoteSeekPlan.ts), kept identical so this
-    tool measures the algorithm the app runs: start at the base speed, measure the tune's rate,
-    predict faster speeds with the upper ratio, and leave a speed while it can still be braked."""
+    tool measures the algorithm the app runs: start at the base speed, measure the tune's rate, and
+    bound every other speed's rate from above (the clock ratio upwards, the least measured ratio
+    downwards). A measurement never lowers a bound, because the first CPU Speed change after a tune
+    starts can take a second to apply and a rate measured meanwhile is far too low."""
 
     def __init__(self, options: list[str], base: str) -> None:
         speeds = sorted({m for m in (cpu_speed_mhz(o) for o in options) if m is not None})
@@ -448,21 +457,19 @@ class JumpSpeedPlanner:
         self.measured: dict[str, float] = {}
         self.slowest_chosen = 0
 
-    def predicted_rate(self, option: str) -> float | None:
-        if option in self.measured:
-            return self.measured[option]
+    def rate_bound(self, option: str) -> float | None:
         mhz = cpu_speed_mhz(option) or 1
-        rates = [rate * interpolate_ratio(RATE_RATIO_UPPER, mhz) / interpolate_ratio(RATE_RATIO_LOWER, cpu_speed_mhz(o) or 1)
-                 for o, rate in self.measured.items()]
-        return max(rates) if rates else None
+        bounds = [rate * RATE_SAFETY_FACTOR * (1 if o == option else mhz / lower_ratio(cpu_speed_mhz(o) or 1))
+                  for o, rate in self.measured.items()]
+        return max(bounds) if bounds else None
 
     def choose(self, remaining_clock_s: float, read_period_s: float) -> str:
         if not self.measured:
             return self.base
         lead = 2 * read_period_s + RELEASE_MARGIN_S
         for index in range(self.slowest_chosen, len(self.tiers)):
-            rate = self.predicted_rate(self.tiers[index])
-            if rate is not None and remaining_clock_s >= rate * RATE_SAFETY_FACTOR * lead:
+            rate = self.rate_bound(self.tiers[index])
+            if rate is not None and remaining_clock_s >= rate * lead:
                 self.slowest_chosen = index
                 return self.tiers[index]
         self.slowest_chosen = len(self.tiers) - 1

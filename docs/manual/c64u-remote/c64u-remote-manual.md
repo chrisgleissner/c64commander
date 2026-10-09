@@ -510,11 +510,22 @@ The copies stay on your phone. They are never uploaded, never shared, and never 
 
 #### Moving around inside a tune
 
-These work for tunes playing on your phone. On the C64, the buttons only step from one tune to the next.
+The same gestures work wherever the tune plays. A short tap on next or previous still skips to the next or previous tune.
 
-- **Press and hold next or previous** to wind forward or back, about five seconds at a time, for as long as you hold. A short tap still skips.
 - **Tap the progress bar** to jump to that spot, or hold and slide along it. The music picks up wherever you let go.
+
+Playing on your phone:
+
+- **Press and hold next or previous** to wind forward or back, about five seconds at a time, for as long as you hold.
 - Jumping *forward* past the part already prepared takes a moment, because the app has to work the music out up to that point. The timer waits at the last note you heard while the bar shows progress. Jumping back is instant.
+
+Playing on your C64:
+
+- **Press and hold next** to fast forward. You hear the tune race ahead, and it gets faster every second you hold: the app raises your C64's CPU speed one step at a time. Let go and the tune plays on at normal speed from there.
+- **Press and hold previous** to wind back 10 seconds, then 20, 40 and 80 more for each further second you hold. The timer shows where you will land; let go to jump there.
+- A tune cannot run backwards, so jumping back starts it again and fast forwards to the spot at full speed. That takes a second or two, and you hear a short chirp while it happens.
+- Your C64's CPU speed is always put back the way you had it, also when the app closes or loses the connection in the middle: it is restored the next time the app reaches that C64. Nothing is saved to the C64's flash memory.
+- This needs a tune with its own play routine, which is most of them, and a Commodore 64 Ultimate. Otherwise next and previous only step between tunes.
 
 #### The sound itself
 
