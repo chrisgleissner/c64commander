@@ -83,6 +83,8 @@ const INITIAL_READ_PERIOD_SECONDS = 0.06;
 const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
 /** Within this many reads of the target at the last speed, the key is released on a timer. */
 const FINAL_APPROACH_READS = 1.5;
+/** The clock shows whole seconds, so the tune is on average half a second past what it shows. */
+const CLOCK_ROUNDING_SECONDS = 0.5;
 const KEY_HOLD_MS = 60;
 const KEY_GAP_MS = 50;
 const RESTART_TIMEOUT_MS = 3000;
@@ -288,7 +290,7 @@ export class RemoteSidSeekController {
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
-      const landing = { seconds: run.model.seconds, atMs: Date.now() };
+      const landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now() };
       await run.speedWrites;
       await this.giveBack(run.session, reason);
       addLog("debug", "Remote fast forward ended", { reason, positionSeconds: landing.seconds });
@@ -397,7 +399,7 @@ export class RemoteSidSeekController {
           landedSeconds: model.seconds,
           tookMs: Date.now() - startedAt,
         });
-        return { seconds: model.seconds, atMs: Date.now() };
+        return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now() };
       } catch (error) {
         if (error instanceof RemoteSeekCancelled || error instanceof RemoteSeekSessionClosedError) {
           addLog("debug", error.message, { fromSeconds, targetSeconds });

@@ -10,6 +10,10 @@ physical rig), while the host-deterministic budget checks run in CI.
 - **`av_sync_hil.py`** — Live View A/V sync + input latency. See **A/V sync** below.
 - **`seek_latency_hil.py`** — what a backward seek costs the listener, measured at the speaker.
   See **Seek latency** below.
+- **`remote_sid_seek_poc.py`** — REST only, no app: fast forward, rewind and jumps on the
+  Ultimate's own SID player, with CPU Speed. Measures rates, clock accuracy against a play-call
+  counter, jump accuracy, and REST availability after speed writes. See
+  `docs/testing/remote-sid-seek.md`.
 - **`joystick_rotation_hil.mjs`** — physical keys → joystick, asserted on the C64's own screen at
   three handset orientations. See **Physical keys and rotation** below. This one is the exception to
   "no raw ADB product input": the thing under test IS Android's key pipeline, so the keys have to
