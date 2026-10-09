@@ -30,12 +30,12 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { runChaos, type ChaosDriver, type ChaosRecord } from "../../playwright/parity/chaosScenario";
 import {
   PARITY_SCENARIOS,
   ParityFailure,
   type ClockRecording,
   type ClockTransition,
-  type ParityDriver,
   type ParityRoute,
   type SoundTrace,
 } from "../../playwright/parity/playbackParityScenarios";
@@ -60,6 +60,9 @@ const OUT = arg("json", "artifacts/playback-parity.json");
 const VOLUME = Math.min(10, Number(arg("volume", "7")));
 const MIC_DEVICE = arg("mic", "plughw:CARD=SF558,DEV=0");
 const ONLY = arg("only", "");
+/** Minutes of seeded chaos per host instead of the parity scenarios; 0 runs the scenarios. */
+const CHAOS_MINUTES = Number(arg("chaos", "0"));
+const CHAOS_SEED = Number(arg("seed", String(Date.now() % 1_000_000)));
 const PACKAGE = "uk.gleissner.c64commander";
 const CDP_PORT = 9333;
 const COUNTER_TUNE: CounterTune = { name: "Seek_Counter", video: "PAL", busyLoops: 60, ciaTimer: null };
@@ -435,7 +438,47 @@ const parseClock = (text: string) => {
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 };
 
-const benchDriver = (host: string, tune: () => string, baseline: Record<string, string | null>): ParityDriver => ({
+/** A finger held down with motionevent, released with UP at the same place. */
+let fingerDownAt: { x: number; y: number } | null = null;
+
+const pressDown = async (testId: string, fraction = 0.5) => {
+  const box = await boxOf(testId);
+  if (!box) throw new Error(`${testId} is not on the page`);
+  const x = Math.round((box.x + box.w * fraction) * box.dpr);
+  const y = Math.round((box.y + box.h / 2) * box.dpr);
+  await droid.shell(["input", "motionevent", "DOWN", String(x), String(y)]);
+  fingerDownAt = { x, y };
+};
+
+const liftFinger = async () => {
+  if (!fingerDownAt) return;
+  const { x, y } = fingerDownAt;
+  fingerDownAt = null;
+  await droid.shell(["input", "motionevent", "UP", String(x), String(y)]);
+};
+
+/** The app's log since `sinceMs` (host time), newest last; the phone's clock is not the host's. */
+const appLogSince = async (sinceMs: number, levels: string[] | null) => {
+  const offsetMs = await phoneClockOffsetMs();
+  const entries = await js<Array<{ level?: string; message?: string; timestamp?: string; details?: unknown }>>(
+    `JSON.parse(localStorage.getItem("c64u_app_logs") ?? "[]")`,
+  );
+  return entries
+    .filter((entry) => Date.parse(entry.timestamp ?? "") >= sinceMs + offsetMs)
+    .filter((entry) =>
+      levels ? levels.includes(entry.level ?? "") : !/^(C64 API request|Device request)/.test(entry.message ?? ""),
+    )
+    .reverse();
+};
+
+const relaunch = async () => {
+  await droid.call("droid_app.start_app", { targetId: droid.targetId, package: PACKAGE, waitForResume: true });
+  await sleep(4000);
+  await attach();
+  await openPlay();
+};
+
+const benchDriver = (host: string, tune: () => string, baseline: Record<string, string | null>): ChaosDriver => ({
   label: `the phone against ${host}`,
   async startTune(route) {
     await openPlay();
@@ -478,7 +521,11 @@ const play=row?.querySelector('button[aria-label^="Play "]');if(!play)return fal
     }
     throw new ParityFailure(`seeking was not offered for ${title} on the ${route} route`);
   },
-  tap: (testId) => touch(testId),
+  // A second finger while one holds: a JS click, as another touch would end the held one's gesture.
+  tap: (testId) =>
+    fingerDownAt
+      ? js(`document.querySelector('[data-testid="${testId}"]')?.click()`).then(() => undefined)
+      : touch(testId),
   hold: (testId, ms) => touch(testId, 0.5, ms),
   tapBar: (fraction) => touch("playback-progress-seek", fraction),
   async shownSeconds() {
@@ -527,6 +574,27 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
     return changed;
   },
   listen,
+  pointerDown: pressDown,
+  pointerUp: liftFinger,
+  seekingOffered: () =>
+    js<boolean>(`/hold to fast forward/.test(document.querySelector('[data-testid="playlist-next"]')?.title ?? "")`),
+  errorsSince: async (sinceMs) => (await appLogSince(sinceMs, ["error"])).map((entry) => entry.message ?? ""),
+  diagnose: async (sinceMs) =>
+    (await appLogSince(sinceMs, null)).map(
+      (entry) =>
+        `${entry.timestamp?.slice(14, 23)} ${entry.level} ${entry.message} ${JSON.stringify(entry.details ?? "").slice(0, 200)}`,
+    ),
+  async disrupt(kind, ms) {
+    if (kind === "kill") {
+      await droid.call("droid_app.stop_app", { targetId: droid.targetId, package: PACKAGE });
+      fingerDownAt = null;
+      await sleep(ms);
+    } else {
+      await droid.pressKey(3);
+      await sleep(ms);
+    }
+    await relaunch();
+  },
   recordClocks: (during) => recordClocks(host, during),
   report: (line) => {
     log(`${host}: ${line}`);
@@ -540,6 +608,7 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
 type Outcome = { host: string; route: ParityRoute; scenario: string; ok: boolean; detail?: string; ms: number };
 const outcomes: Outcome[] = [];
 const notes: string[] = [];
+const chaos: Array<{ host: string; seed: number; records: ChaosRecord[] }> = [];
 const initialVolume = await readVolume();
 await droid.call("droid_app.start_app", { targetId: droid.targetId, package: PACKAGE, waitForResume: true });
 await sleep(4000);
@@ -558,6 +627,26 @@ try {
       await openPlay();
       await ensureInPlaylist(host);
       const baseline = await machineSettings(host);
+      if (CHAOS_MINUTES > 0) {
+        const driver = benchDriver(host, () => "Seek_Counter", baseline);
+        log(`${host}: chaos for ${CHAOS_MINUTES} min, seed ${CHAOS_SEED}`);
+        const records: ChaosRecord[] = await runChaos(
+          { ...driver, report: (line) => log(`${host}: ${line}`) },
+          { seed: CHAOS_SEED, minutes: CHAOS_MINUTES, routes: ROUTES },
+        );
+        chaos.push({ host, seed: CHAOS_SEED, records });
+        for (const record of records) {
+          outcomes.push({
+            host,
+            route: record.route,
+            scenario: `chaos ${record.step}: ${record.action}`,
+            ok: record.violations.length === 0,
+            detail: record.violations.join("; ") || undefined,
+            ms: record.ms,
+          });
+        }
+        continue;
+      }
       for (const route of ROUTES) {
         // A cartridge streams no audio, so on the C64 route nothing it plays reaches the phone's speaker.
         const scenarios = PARITY_SCENARIOS.filter(
@@ -596,7 +685,7 @@ try {
     log(`could not put the media volume back to ${initialVolume.index}: ${error}`),
   );
   mkdirSync(path.dirname(OUT), { recursive: true });
-  writeFileSync(OUT, JSON.stringify({ hosts: HOSTS, routes: ROUTES, volume: VOLUME, outcomes, notes }, null, 2));
+  writeFileSync(OUT, JSON.stringify({ hosts: HOSTS, routes: ROUTES, volume: VOLUME, outcomes, notes, chaos }, null, 2));
   page?.close();
 }
 const failed = outcomes.filter((outcome) => !outcome.ok);

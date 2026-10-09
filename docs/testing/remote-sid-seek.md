@@ -106,12 +106,81 @@ another tune starts. The app protects all of them as follows:
 - Every write is marked transient, so **Keep device settings after a restart** never saves a
   seek's CPU speed or volume to flash.
 
+### Keys only ever reach the SID player
+
+Outside the SID player, the left-arrow, `-` and `+` keys type into whatever runs, BASIC included,
+and a key held through REST repeats. Five independent checks stand between a seek and a key press:
+
+1. Before every press, and before every write of the cartridge's patched byte, the seek reads
+   `$DD00` and `$D018` and the clock's row. The VIC must still show the screen the clock was found
+   on, and the row must still read as a time. One blank read is retried once; two in a row stop
+   the seek.
+2. `withSeekKeyPermits` (`src/lib/playback/remoteSeek/seekKeyPermit.ts`) wraps the REST call that
+   sends keys. A press of a seek key needs a permit for that key on that device, which only the
+   check in (1) grants, and which expires after 500 ms. Releases always pass.
+3. A held fast forward ends after two clock reads in a row that find no clock. A jump releases the
+   key at the first such read.
+4. A restart is refused when the clock cannot be read just before the `-` and `+` keys.
+5. On the cartridge, the patch site is verified before every write.
+
+### The phone shows the C64's own second
+
+On the C64 route the elapsed time follows the player's clock. After the probe, after every landing,
+when the page comes back into view, on resume and every 30 s, the app reads the clock back to back
+until it turns, and places that turn between the two reads that saw it. The Play page's timer then
+turns each second at that moment.
+
+A render of the Play page takes about 60 ms on a Pixel 4. `useSecondAlignedTicks` renders each tick
+synchronously, measures how long that takes, and starts the next tick that much before its second
+turns. Measured with the parity scenario "shows the C64's own second", each second turned on the
+phone this long after it turned on the C64:
+
+| Machine | Playing | After fast forward | After a jump | After a rewind |
+| --- | --- | --- | --- | --- |
+| c64u | 45 to 89 ms | -16 to 27 ms | 9 to 42 ms | 8 to 55 ms |
+| u64 | -24 to 0 ms | 7 to 43 ms | -25 to 18 ms | 59 to 127 ms |
+| u2 | 77 to 108 ms | 58 to 117 ms | -8 to 65 ms | 62 to 127 ms |
+
+Before the render was compensated, the phone was 95 to 200 ms behind on the c64u. The clock reads
+themselves are not biased: reading through the WebView's HTTP plugin placed the turn within
+-47 to +46 ms of the host's own reads.
+
+A seek starts from the clock, not from the page: for a tune whose clock is its position, the
+reading nearest to the page's figure. A page that fell behind, for example after the app was hidden
+during a hold, therefore cannot make a seek count from the wrong place.
+
+### Timing in every System Mode
+
+The rate a tune is called at, and so how far a clock second of fast forward moves the tune, depends
+on the machine's timing:
+
+- Each System Mode runs its own CPU clock. The clocks follow the PLL constants in the firmware's
+  `software/u64/color_timings.cc`: PAL 985248 Hz, NTSC 1022727 Hz, NTSC-50 985891 Hz,
+  NTSC-50/L 986921 Hz, PAL-60 1023144 Hz and PAL-60/L 1023750 Hz.
+- An Ultimate 64 (firmware 3.15) switches the machine to the tune's video standard while its SID
+  player runs: a PAL tune in NTSC mode ran 312-line frames, an NTSC tune in PAL mode 263-line
+  frames. The C64 Ultimate (firmware 1.2.1) keeps its System Mode. The probe therefore reads the
+  raster line ($D011 bit 7 and $D012) up to 60 times at uneven intervals, and uses the standard it
+  finds, with the mode's own clock when the standard matches the mode.
+- A CIA-timed tune is called at the machine's CIA clock divided by its latch plus one. The latch is
+  estimated from the highest of 100 timer samples and snapped to a PAL or NTSC frame divided by 1
+  to 8. The same PAL tune's twice-a-frame latch plays 104.06 times a second on an NTSC machine,
+  not 100.
+- The player's own clock counts 50 or 60 frames a second, corrected for the standard PAL or NTSC
+  rate. In NTSC-50, PAL-60 and the /L modes the frames run slightly faster, so the displayed time
+  itself gains up to 0.1% on real time. The app follows the displayed time.
+
 ### What it does not support
 
 - **RSID tunes**, and PSID tunes with play address `$0000`, install their own interrupt. The
   player cannot speed them up, so Previous and Next stay track controls.
 - **A player whose clock does not tick on the VIC's screen**, or a cartridge whose player has no
-  keyboard routine of the shape above, gets plain track controls too.
+  keyboard routine of the shape above, gets plain track controls too. Two cases were found:
+  - A player screen under the BASIC or KERNAL ROM. `readmem` follows the CPU's banking and returns
+    the ROM there. The SID player put its screen at `$BC00` for Games Winter Edition (sub tune 47)
+    and Super Mario Bros 64 2SID (sub tune 5).
+  - A tune that moves the screen itself. Maritime Loader rewrites `$D018`, and the player's clock
+    never shows.
 
 ## Measurements
 
@@ -233,14 +302,38 @@ The same suites run in CI against the mock server and on the bench against real 
 | Unit tests (`tests/unit/playback/remoteSeek/`, `useRemoteSidSeek`) | `npm run test` | — |
 | Playback parity, phone and C64 route (`playwright/parity/`) | `playwright/playbackParity.spec.ts` | `npx tsx tools/hil/playback_parity_hil.ts --hosts c64u,u64,u2` |
 | Device soak (`tools/hil/remoteSidSeekSoak.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u SOAK_MINUTES=30 npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekSoak.hil.ts` |
-| Tune corpus (`tools/hil/remoteSidSeekCorpus.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekCorpus.hil.ts` |
+| Tune corpus (`tools/hil/remoteSidSeekCorpus.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u SOAK_SYSTEM_MODE=NTSC npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekCorpus.hil.ts` |
+| Playback chaos, both routes (`playwright/parity/chaosScenario.ts`) | `playwright/playbackChaos.spec.ts` | `npx tsx tools/hil/playback_parity_hil.ts --hosts c64u --chaos 20 --seed 4561` |
 
 `SOAK_HOST` is a host name, or `mock` (an Ultimate 64-family machine) or `mock-u2` (a cartridge
 without key input) for the mock server. The soak and the corpus play generated tunes whose play
-routine counts its calls at `$10F0`, so every landing is checked against where the tune really is.
-On a real machine the corpus also plays HVSC tunes picked for the extremes (from `../C64Music`, or
+routine counts its calls at `$10F0`, or `$F0` into its own code when it loads elsewhere, or at
+`$02F0` when it loads under a ROM. On a real machine the corpus measures each such tune's play rate
+for 12 s and snaps it to an exact rate for the machine's timing, so every landing is checked against
+where the tune really is. A tune whose clock is its position is checked against the clock instead,
+which is what the page has to agree with. `SOAK_SYSTEM_MODE` runs the corpus in that System Mode
+and puts the original back. `CORPUS_ONLY` runs only the tunes whose name contains it. On a real
+machine the corpus also plays HVSC tunes picked for the extremes (from `../C64Music`, or
 `CORPUS_HVSC`) at -42 dB. The parity run plays a steady 550 Hz tone at media volume 7 of 25 and
 listens for it with the microphone at the phone's grille.
+
+The chaos run plays a seeded random sequence of gestures for the given minutes: holds, jumps, a
+second jump before the first lands, Pause or Stop during a hold or a jump, the app hidden or killed
+during a hold or a jump, and switches between the routes. After every action, once the app is idle,
+it checks that the machine has its settings back, no key is held, no seek journal is left, the
+page shows where the tune is, the transport shows a state the action can lead to, and the app logged
+no error. `CHAOS_MINUTES` sets the length in CI; `CHAOS_TRACE=1` logs every tap.
+
+A HIL run that writes a machine's settings first records the original values in
+`artifacts/hil-journal/<host>.json` and removes it once it has read every value back. After a run
+that was killed, `npx tsx tools/hil/remoteSeekHil/machineJournal.ts <host>` releases the seek keys
+and puts the recorded values back.
+
+`tools/hil/remote_seek_rest_load.py --host c64u` measures REST latency under the request mix of a
+seek: clock reads at 20 to 40 a second, fast forward key presses at 4 a second and `CPU Speed`
+writes at 2 a second, alone and together. It presses keys only while it has seen the SID player's
+clock within the last 300 ms. Measured in October 2026, with 60 s per phase on the Ultimate 64
+and 120 s per phase on the C64 Ultimate, every request was answered, the slowest in 68 and 78 ms.
 
 The proof of concept measures the device directly, without the app:
 
