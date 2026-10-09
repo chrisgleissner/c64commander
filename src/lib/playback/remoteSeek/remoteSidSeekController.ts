@@ -575,6 +575,9 @@ export class RemoteSidSeekController {
    * again. Sent as press and release pairs: two taps in one batch lost the second key on the device.
    */
   private async restartTune(session: RemoteSeekDeviceSession, generation: number) {
+    // A clock that already shows 0:01 has to drop to 0:00 before the restart counts as done.
+    const before = await this.readClock(true);
+    const restartedBelow = before !== null && before <= 1 ? Math.max(before, 1) : 2;
     for (const key of ["minus", "plus"] as const) {
       this.assertCurrent(generation);
       await session.tapKey(key, KEY_HOLD_MS);
@@ -586,7 +589,7 @@ export class RemoteSidSeekController {
     while (Date.now() < deadline) {
       this.assertCurrent(generation);
       const clock = await this.readClock(true);
-      restartedReads = clock !== null && clock <= 1 ? restartedReads + 1 : 0;
+      restartedReads = clock !== null && clock < restartedBelow ? restartedReads + 1 : 0;
       if (restartedReads === 2) return;
       await sleep(JUMP_POLL_MIN_INTERVAL_MS);
     }

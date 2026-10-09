@@ -706,6 +706,20 @@ describe("remote SID seek controller when the device misbehaves", () => {
     expect(device.player.heldKeys).toEqual([]);
   });
 
+  it("does not take a clock that already showed 0:01 for a restart", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await vi.advanceTimersByTimeAsync(1300);
+    const send = device.api.sendMachineInputBatch;
+    device.api.sendMachineInputBatch = async (batch) =>
+      batch.events.some((event) => event.kind === "keyboard" && /minus|plus/.test(event.inputs.join()))
+        ? {}
+        : send(batch);
+    const landed = await settle(controller.jumpTo(() => 1.3, 0.1));
+    expect(landed?.completed).toBe(false);
+    expect(device.player.heldKeys).toEqual([]);
+  });
+
   it("falls back to the frame rate when a CIA-timed tune's timer cannot be sampled", async () => {
     const device = createFakeRemoteSeekDevice();
     const read = device.api.readMemory;
