@@ -96,7 +96,6 @@ describe("remote SID seek controller", () => {
     await vi.advanceTimersByTimeAsync(6500);
     const landed = await settle(controller.endFastForward());
     expect(cpuSpeedWrites(device.log)).toEqual([
-      "2 (transient)",
       "4 (transient)",
       "8 (transient)",
       "16 (transient)",

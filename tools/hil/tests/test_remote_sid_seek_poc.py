@@ -38,8 +38,8 @@ def test_option_for_mhz_returns_the_devices_padded_spelling():
 
 
 def test_ramp_steps_double_then_end_at_the_machines_maximum():
-    assert poc.ramp_options(SPEEDS_C64U, 1) == [" 2", " 4", " 8", "16", "32", "64"]
-    assert poc.ramp_options(SPEEDS_U64, 1) == [" 2", " 4", " 8", "16", "32", "48"]
+    assert poc.ramp_options(SPEEDS_C64U, 1) == [" 4", " 8", "16", "32", "64"]
+    assert poc.ramp_options(SPEEDS_U64, 1) == [" 4", " 8", "16", "32", "48"]
 
 
 def test_ramp_starts_above_a_speed_the_user_already_runs_at():

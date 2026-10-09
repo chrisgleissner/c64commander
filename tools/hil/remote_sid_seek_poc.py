@@ -69,7 +69,9 @@ PAL_CPU_HZ = 985248.0
 PLAY_RATE_HZ = {"PAL": PAL_CPU_HZ / 19656, "NTSC": PAL_CPU_HZ / 16388}
 
 # The app's ramp: the machine's own speed first, then these CPU Speeds, one per second held.
-RAMP_MHZ = [2, 4, 8, 16, 32]
+RAMP_MHZ = [4, 8, 16, 32]
+# Every speed the rates stage measures, including those the ramp leaves out for being no faster.
+MEASURED_MHZ = [1, 2, 4, 8, 16, 32, 48, 64]
 REWIND_STEPS_S = [10, 20, 40, 80]
 
 
@@ -366,7 +368,8 @@ def stage_rates(ctx: Context) -> dict:
         rows = []
         device.key("press", FAST_FORWARD_KEY)
         try:
-            for option in [ctx.base_option()] + ramp_options(ctx.speed_options, cpu_speed_mhz(ctx.base_option()) or 1):
+            measured = [option_for_mhz(ctx.speed_options, mhz) for mhz in MEASURED_MHZ]
+            for option in [o for o in measured if o is not None]:
                 put_ms = device.set_config(CPU_SPEED, option)
                 readback = device.config_item(CPU_SPEED)["current"]
                 latency = [round(device.timed(lambda: device.readmem(0x0400, 1))) for _ in range(5)]

@@ -30,8 +30,9 @@ read that agrees is taken as the clock rolling over at 99:59.
 The gestures are the ones the on-device engine already uses, so the page shows no new control:
 
 - **Hold Next.** The key is held at the machine's own CPU speed. Each further second held raises
-  the speed one step: 2, 4, 8, 16 and 32 MHz, then the machine's maximum (64 MHz on a C64
-  Ultimate, 48 MHz on an Ultimate 64).
+  the speed one step: 4, 8, 16 and 32 MHz, then always the machine's maximum (64 MHz on a C64
+  Ultimate, 48 MHz on an Ultimate 64). 2 MHz is skipped because it fast forwards no faster than
+  1 MHz; see the rate tables below.
 - **Hold Previous.** While Previous is held, the target moves back 10, 20, 40 and then 80 seconds
   per second held. On release, the app restarts the sub tune with the player's own `-` and `+` keys
   and fast forwards to the target.
@@ -137,9 +138,21 @@ times the 1 MHz rate across these tunes, and 56 times for the generated play-cal
 jump therefore measures the rate at the machine's own speed and bounds every faster speed by the
 CPU clock ratio.
 
-The 2 MHz step adds little over 1 MHz, and for Last Ninja and Wizball it was slower. It stays in
-the ramp because it is the requested first step and costs nothing measurable. From 4 MHz on, each
-step roughly doubles the rate.
+The 2 MHz step adds nothing over 1 MHz: 0.76 to 1.33 times its rate, and slower for Last Ninja
+and Wizball. The ramp therefore skips it and goes from the machine's own speed to 4 MHz. From
+4 MHz on, each step roughly doubles the rate.
+
+The same measurement on an Ultimate 64 Elite (firmware 3.15), with `tools/hil/remote_sid_seek_poc.py
+--only rates`:
+
+| Tune | 1 MHz | 2 MHz | 4 MHz | 8 MHz | 16 MHz | 32 MHz | 48 MHz |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Commando | 14.8 | 16.4 | 86.8 | 179.6 | 329.4 | 582.2 | 611.1 |
+| Last Ninja | 10.6 | 9.0 | 54.2 | 114.2 | 210.2 | 373.5 | 391.3 |
+| Wizball | 18.7 | 19.4 | 96.6 | 199.5 | 351.8 | 610.3 | 637.7 |
+
+On that machine 48 MHz is only 1.04 to 1.05 times the 32 MHz rate, against 1.34 to 1.49 times for
+64 MHz on a C64 Ultimate. The ramp still ends at the machine's maximum.
 
 ### The clock while fast forwarding
 

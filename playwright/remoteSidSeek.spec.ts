@@ -156,9 +156,9 @@ test.describe("Remote SID seek", () => {
     await expectDeviceGivenBack();
     expect(keyEvents("arrow_left")[0]).toBe("press");
     expect(keyEvents("arrow_left").at(-1)).toBe("release");
-    // A second into the hold the CPU goes to 2 MHz; Turbo Control was Off, so it is switched to Manual
+    // A second into the hold the CPU goes to 4 MHz; Turbo Control was Off, so it is switched to Manual
     // for that and back to Off afterwards (checked by expectDeviceGivenBack).
-    expect(cpuSpeedWrites()[0]).toBe("2");
+    expect(cpuSpeedWrites()[0]).toBe("4");
     const gained = (server.sidPlayer?.tunePositionSeconds ?? 0) - startedAt;
     expect(gained).toBeGreaterThan(10);
     const shown = await page.getByTestId("playback-elapsed").innerText();

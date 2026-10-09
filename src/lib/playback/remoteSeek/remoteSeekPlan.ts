@@ -12,10 +12,16 @@
  *
  * The Ultimate's SID player fast forwards while the left-arrow key is held, by calling the tune's
  * play routine back to back. That loop is bound by the CPU, so CPU Speed sets how fast it goes:
- * about 10-16x at 1 MHz, 40-57x at 4 MHz, 125-190x at 16 MHz and 295-430x at 64 MHz.
+ * about 10-16x at 1 MHz, 40-57x at 4 MHz, 125-190x at 16 MHz and 295-430x at 64 MHz on a C64
+ * Ultimate, and 10-19x, 54-97x, 210-352x and 391-638x at 1, 4, 16 and 48 MHz on an Ultimate 64 Elite.
  */
 
-export const CPU_SPEED_RAMP_MHZ = [2, 4, 8, 16, 32] as const;
+/**
+ * One step per second held, each measured to fast forward clearly faster than the one before: 4 MHz
+ * is 3-6x the 1 MHz rate, and each doubling after it 1.7-2.1x. 2 MHz is left out: it ran 0.76-1.33x
+ * the 1 MHz rate on both machines.
+ */
+export const CPU_SPEED_RAMP_MHZ = [4, 8, 16, 32] as const;
 export const REWIND_STEPS_SECONDS = [10, 20, 40, 80] as const;
 
 /** The CPU Speed of an option string such as " 4" or "16", or null for anything else. */
@@ -33,7 +39,8 @@ const numericSpeeds = (options: readonly string[]): number[] =>
 
 /**
  * CPU Speeds for each further second Next is held: the ramp entries faster than the speed the
- * machine already runs at, then the machine's maximum (64 MHz on a C64 Ultimate, 48 on an Ultimate 64).
+ * machine already runs at, then always the machine's maximum (64 MHz on a C64 Ultimate, 48 on an
+ * Ultimate 64), even where it adds little: 48 MHz on an Ultimate 64 Elite ran 1.04-1.05x the 32 MHz rate.
  */
 export const fastForwardRampOptions = (options: readonly string[], startMhz: number): string[] => {
   const speeds = numericSpeeds(options);

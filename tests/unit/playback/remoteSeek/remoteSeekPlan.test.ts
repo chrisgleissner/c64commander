@@ -39,9 +39,13 @@ describe("remote seek plan", () => {
     expect(optionForMhz(C64U_CPU_SPEEDS, 5)).toBeNull();
   });
 
-  it("ramps a held fast forward through 2, 4, 8, 16 and 32 MHz to the machine's maximum", () => {
-    expect(fastForwardRampOptions(C64U_CPU_SPEEDS, 1)).toEqual([" 2", " 4", " 8", "16", "32", "64"]);
-    expect(fastForwardRampOptions(U64_CPU_SPEEDS, 1)).toEqual([" 2", " 4", " 8", "16", "32", "48"]);
+  it("ramps a held fast forward through 4, 8, 16 and 32 MHz, skipping 2 MHz, which is no faster than 1", () => {
+    expect(fastForwardRampOptions(C64U_CPU_SPEEDS, 1)).toEqual([" 4", " 8", "16", "32", "64"]);
+  });
+
+  it("always ends at the machine's maximum, however little it adds", () => {
+    expect(fastForwardRampOptions(U64_CPU_SPEEDS, 1)).toEqual([" 4", " 8", "16", "32", "48"]);
+    expect(fastForwardRampOptions(U64_CPU_SPEEDS, 40)).toEqual(["48"]);
   });
 
   it("starts the ramp above a CPU Speed the user already runs at, and never slows the machine down", () => {
