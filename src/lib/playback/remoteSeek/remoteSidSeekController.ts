@@ -598,7 +598,7 @@ export class RemoteSidSeekController {
       const raw = await this.api.readMemory("DC04", 2, { __c64uIntent: "user", __c64uBypassCooldown: true });
       samples.push(raw[0] | (raw[1] << 8));
     }
-    const callHz = playCallRateFromTimerSamples(samples, this.profile.timing.ciaClockHz) ?? this.profile.timing.frameHz;
+    const callHz = playCallRateFromTimerSamples(samples, this.profile.timing) ?? this.profile.timing.frameHz;
     const clockPerTuneSecond = clockSecondsPerTuneSecond(callHz, this.profile.timing);
     addLog("debug", "Remote seek measured the tune's play-call rate", { callHz, clockPerTuneSecond });
     return clockPerTuneSecond;

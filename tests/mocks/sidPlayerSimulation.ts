@@ -20,7 +20,18 @@
  */
 
 export const SIMULATED_SCREEN_ADDRESS = 0x0800;
-const COUNTER_ADDRESS = 0x10f0;
+/**
+ * Where the counter tune (tools/hil/remoteSeekHil/tunes.ts) counts its play calls: $10F0, or $F0 into
+ * its own code when it loads elsewhere, because the player then puts itself and its data at $1000.
+ */
+export const counterAddressFor = (loadAddress: number) => (loadAddress === 0x1000 ? 0x10f0 : loadAddress + 0xf0);
+
+/** The load address a PSID's header names, or the one its data starts with when the header has none. */
+export const psidLoadAddress = (psid: Uint8Array) => {
+  const view = new DataView(psid.buffer, psid.byteOffset, psid.byteLength);
+  const named = view.getUint16(0x08);
+  return named !== 0 ? named : view.getUint16(view.getUint16(0x06), true);
+};
 const DD00_BANK_0 = 0x97;
 const D018_SCREEN_0800 = 0x25;
 const PAL_CIA_CLOCK_HZ = 985248;
@@ -108,6 +119,7 @@ const toScreenCode = (char: string) => {
 
 export class SidPlayerSimulation {
   private clockSeconds = 0;
+  private counterAddress = counterAddressFor(0x1000);
   private tuneSeconds = 0;
   private lastUpdate: number;
   private keysDown = new Set<string>();
@@ -138,8 +150,8 @@ export class SidPlayerSimulation {
   private readonly now: () => number;
 
   constructor(options: SidPlayerSimulationOptions = {}) {
-    this.playCallHz = options.playCallHz ?? 50;
-    this.machineFrameHz = options.machineFrameHz ?? 50;
+    this.playCallHz = options.playCallHz ?? PAL_CIA_CLOCK_HZ / 19656;
+    this.machineFrameHz = options.machineFrameHz ?? PAL_CIA_CLOCK_HZ / 19656;
     this.ciaClockHz = options.ciaClockHz ?? PAL_CIA_CLOCK_HZ;
     this.rates = options.fastForwardRateByMhz ?? MEASURED_FAST_FORWARD_RATE_BY_MHZ;
     this.now = options.now ?? (() => Date.now());
@@ -212,7 +224,11 @@ export class SidPlayerSimulation {
   }
 
   /** Start another tune, as runners:sidplay does, at its play-call rate on this machine. */
-  loadTune({ playCallHz, machineFrameHz }: { playCallHz: number; machineFrameHz: number }) {
+  loadTune(
+    { playCallHz, machineFrameHz }: { playCallHz: number; machineFrameHz: number },
+    counterAddress = counterAddressFor(0x1000),
+  ) {
+    this.counterAddress = counterAddress;
     this.advance();
     this.keysDown.clear();
     this.pendingReleases.clear();
@@ -255,10 +271,9 @@ export class SidPlayerSimulation {
 
   private byteAt(address: number, torn: boolean, rows: Map<number, string>): number {
     if (this.code.covers(address)) return this.ram[address];
-    // The counter tune (tools/hil/remote_sid_seek_poc.py) counts its play calls at $10F0-$10F2.
-    if (address >= COUNTER_ADDRESS && address < COUNTER_ADDRESS + 3) {
+    if (address >= this.counterAddress && address < this.counterAddress + 3) {
       const calls = Math.floor(this.tuneSeconds * this.playCallHz);
-      return (calls >> (8 * (address - COUNTER_ADDRESS))) & 0xff;
+      return (calls >> (8 * (address - this.counterAddress))) & 0xff;
     }
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;

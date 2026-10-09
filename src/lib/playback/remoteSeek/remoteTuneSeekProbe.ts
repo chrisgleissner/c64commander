@@ -16,7 +16,7 @@ import {
   type RemoteSeekDeviceApi,
 } from "./remoteSeekDeviceGuard";
 import { remoteSeekErrorDetails as errorDetails } from "./remoteSeekErrors";
-import { cpuSpeedMhz, machineTimingFor, type MachineTiming } from "./remoteSeekPlan";
+import { cpuSpeedMhz, isSixtyHzMachine, machineTimingFor, type MachineTiming } from "./remoteSeekPlan";
 import { locateSidPlayerClock } from "./sidPlayerClock";
 import { scanForFastForwardPatch } from "./sidPlayerFastForwardPatch";
 import type { SidPlayerClockField } from "./sidPlayerScreen";
@@ -48,12 +48,20 @@ export const remoteSeekHeaderBlocker = (header: SidHeaderMetadata | null): strin
   return null;
 };
 
+/**
+ * Cycles between the player's calls of a once-a-frame tune made for the other standard: an NTSC tune on
+ * a PAL machine, measured on the C64 Ultimate, and a PAL tune on an NTSC one, the latch in player.asm.
+ */
+const NTSC_TUNE_ON_PAL_CYCLES = 16388;
+const PAL_TUNE_ON_NTSC_CYCLES = 20514;
+
 /** Play calls per second from the header, or null when the tune's own CIA timer decides it. */
 export const headerPlayCallHz = (header: SidHeaderMetadata, songNr: number, timing: MachineTiming): number | null => {
   const speedBit = Math.min(Math.max(songNr, 1), 32) - 1;
   if (((header.speedBits >>> speedBit) & 1) === 1) return null;
-  if (header.clock === "pal") return 50;
-  if (header.clock === "ntsc") return 60;
+  const sixtyHz = isSixtyHzMachine(timing);
+  if (header.clock === "ntsc" && !sixtyHz) return timing.ciaClockHz / NTSC_TUNE_ON_PAL_CYCLES;
+  if (header.clock === "pal" && sixtyHz) return timing.ciaClockHz / PAL_TUNE_ON_NTSC_CYCLES;
   return timing.frameHz;
 };
 

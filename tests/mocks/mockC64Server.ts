@@ -16,7 +16,13 @@ import {
   resolveMockTimingDelayMs,
   type MockTimingMode,
 } from "./mockTimingProfile";
-import { playCallRateOnPal, SidPlayerSimulation, type SidPlayerSimulationOptions } from "./sidPlayerSimulation";
+import {
+  counterAddressFor,
+  playCallRateOnPal,
+  psidLoadAddress,
+  SidPlayerSimulation,
+  type SidPlayerSimulationOptions,
+} from "./sidPlayerSimulation";
 
 // Set the full YAML loader for tests
 setMockConfigLoader(loadConfigYaml);
@@ -614,6 +620,7 @@ export async function createMockC64Server(
           const psid = new Uint8Array(body.subarray(start));
           sidPlayer.loadTune(
             playCallRateOnPal(psid, songNr || new DataView(psid.buffer, psid.byteOffset).getUint16(0x10)),
+            counterAddressFor(psidLoadAddress(psid)),
           );
         } else {
           sidPlayer?.releaseAll();

@@ -174,34 +174,43 @@ export class JumpSpeedPlanner {
   }
 }
 
-export type MachineTiming = { frameHz: number; ciaClockHz: number };
+/** The clock the CIA timers count, the cycles in a frame, and the exact frame rate they make. */
+export type MachineTiming = { frameHz: number; ciaClockHz: number; frameCycles: number };
 
+const PAL_FRAME_CYCLES = 312 * 63;
+const NTSC_FRAME_CYCLES = 263 * 65;
 const SIXTY_HZ_SYSTEM_MODES = new Set(["NTSC", "PAL-60", "PAL-60/L"]);
 
-/** Frame rate and CIA clock of a System Mode; anything unknown is treated as PAL. */
+const timing = (ciaClockHz: number, frameCycles: number): MachineTiming => ({
+  frameHz: ciaClockHz / frameCycles,
+  ciaClockHz,
+  frameCycles,
+});
+
+/** Timing of a System Mode, with PAL's 50.1245 Hz rather than 50; anything unknown is treated as PAL. */
 export const machineTimingFor = (systemMode: string | null | undefined): MachineTiming =>
   SIXTY_HZ_SYSTEM_MODES.has((systemMode ?? "").trim().toUpperCase())
-    ? { frameHz: 60, ciaClockHz: 1022727 }
-    : { frameHz: 50, ciaClockHz: 985248 };
+    ? timing(1022727, NTSC_FRAME_CYCLES)
+    : timing(985248, PAL_FRAME_CYCLES);
+
+export const isSixtyHzMachine = (machine: MachineTiming) => machine.frameCycles === NTSC_FRAME_CYCLES;
 
 /**
- * Play calls per second, snapped down to a multiple of 50 or 60 Hz within 10%.
+ * The tune's play-call rate from CIA 1 timer A samples (little-endian pairs read at $DC04).
  *
- * The rate is measured from the largest sampled value of CIA 1 timer A, which can only fall short of
- * the latch, so the raw rate can only be high; the answer is the largest multiple at or below it.
+ * A sample can only fall short of the latch, so the highest one is snapped up, within 10% (and down
+ * by at most 0.5%, for a latch rounded the other way), to the nearest period a composer writes: a PAL or NTSC frame divided by one to eight. The rate is the
+ * machine's CIA clock over that period. It is not a multiple of 50 or 60 on the other standard's
+ * clock: a PAL tune's twice-a-frame latch plays 104 times a second on an NTSC machine.
  */
-export const snapPlayCallRate = (rawHz: number): number => {
-  const candidates = [50, 60].flatMap((base) => [1, 2, 3, 4, 5, 6, 7, 8].map((k) => base * k));
-  const below = candidates.filter((candidate) => candidate <= rawHz * 1.02);
-  if (below.length === 0) return rawHz;
-  const best = Math.max(...below);
-  return rawHz / best <= 1.1 ? best : rawHz;
-};
-
-/** The tune's play-call rate from CIA 1 timer A samples (little-endian pairs read at $DC04). */
-export const playCallRateFromTimerSamples = (samples: readonly number[], ciaClockHz: number): number | null => {
+export const playCallRateFromTimerSamples = (samples: readonly number[], machine: MachineTiming): number | null => {
   const highest = Math.max(0, ...samples);
-  return highest > 0 ? snapPlayCallRate(ciaClockHz / (highest + 1)) : null;
+  if (highest <= 0) return null;
+  const sampled = highest + 1;
+  const composed = [PAL_FRAME_CYCLES, NTSC_FRAME_CYCLES]
+    .flatMap((frame) => [1, 2, 3, 4, 5, 6, 7, 8].map((perFrame) => Math.round(frame / perFrame)))
+    .filter((period) => period >= sampled * 0.995 && period <= sampled * 1.1);
+  return machine.ciaClockHz / (composed.length ? Math.min(...composed) : sampled);
 };
 
 /**

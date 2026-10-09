@@ -16,7 +16,6 @@ import {
   playCallRateFromTimerSamples,
   rewindOffsetSeconds,
   JumpSpeedPlanner,
-  snapPlayCallRate,
 } from "@/lib/playback/remoteSeek/remoteSeekPlan";
 import {
   findTimeFields,
@@ -110,32 +109,36 @@ describe("remote seek plan", () => {
     expect(planner.rateBound("64")).toBeCloseTo(832);
   });
 
-  it("times PAL and 50 Hz modes at the PAL clock and the 60 Hz modes at the NTSC clock", () => {
+  it("times PAL and 50 Hz modes at the PAL clock and the 60 Hz modes at the NTSC clock, at their exact frame rates", () => {
     // As u64/color_timings.cc sets them: the 60 Hz modes run 65-cycle lines on the NTSC clock.
     for (const mode of ["PAL", "NTSC-50", "NTSC-50/L"]) {
-      expect(machineTimingFor(mode)).toEqual({ frameHz: 50, ciaClockHz: 985248 });
+      expect(machineTimingFor(mode)).toEqual({ frameHz: 985248 / 19656, ciaClockHz: 985248, frameCycles: 19656 });
     }
     for (const mode of ["NTSC", "PAL-60", "PAL-60/L", " pal-60/l "]) {
-      expect(machineTimingFor(mode)).toEqual({ frameHz: 60, ciaClockHz: 1022727 });
+      expect(machineTimingFor(mode)).toEqual({ frameHz: 1022727 / 17095, ciaClockHz: 1022727, frameCycles: 17095 });
     }
-    expect(machineTimingFor(undefined).frameHz).toBe(50);
+    expect(machineTimingFor(undefined).frameHz).toBeCloseTo(50.1245, 4);
   });
 
-  it("snaps the sampled play-call rate down to the multiple of 50 or 60 Hz it overshoots", () => {
-    expect(snapPlayCallRate(52.7)).toBe(50);
-    expect(snapPlayCallRate(61.1)).toBe(60);
-    expect(snapPlayCallRate(202.4)).toBe(200);
-    expect(snapPlayCallRate(75)).toBe(75);
+  it("snaps the largest CIA timer sample up to the latch a composer writes, and times it at the machine's clock", () => {
+    const pal = machineTimingFor("PAL");
+    const ntsc = machineTimingFor("NTSC");
+    expect(playCallRateFromTimerSamples([100, 19000, 4000], pal)).toBeCloseTo(pal.frameHz, 9);
+    expect(playCallRateFromTimerSamples([9700], pal)).toBeCloseTo(985248 / 9828, 9);
+    // The same PAL latch on an NTSC machine plays 104 times a second, not 100.
+    expect(playCallRateFromTimerSamples([9700], ntsc)).toBeCloseTo(1022727 / 9828, 9);
+    expect(playCallRateFromTimerSamples([4200], ntsc)).toBeCloseTo(1022727 / 4274, 9);
+    expect(playCallRateFromTimerSamples([], pal)).toBeNull();
   });
 
-  it("derives the play-call rate from the largest CIA timer sample", () => {
-    expect(playCallRateFromTimerSamples([100, 19000, 4000], 985248)).toBe(50);
-    expect(playCallRateFromTimerSamples([], 985248)).toBeNull();
+  it("leaves a latch no frame divides as sampled", () => {
+    expect(playCallRateFromTimerSamples([32767], machineTimingFor("PAL"))).toBeCloseTo(985248 / 32768, 9);
   });
 
   it("counts 1.2 clock seconds per tune second for an NTSC tune on a PAL machine, as measured", () => {
-    expect(clockSecondsPerTuneSecond(60, machineTimingFor("PAL"))).toBeCloseTo(1.2);
-    expect(clockSecondsPerTuneSecond(200, machineTimingFor("PAL"))).toBe(4);
+    const pal = machineTimingFor("PAL");
+    expect(clockSecondsPerTuneSecond(985248 / 16388, pal)).toBeCloseTo(1.1994, 4);
+    expect(clockSecondsPerTuneSecond(pal.frameHz * 4, pal)).toBeCloseTo(4, 9);
   });
 });
 
@@ -216,10 +219,6 @@ describe("remote seek plan edges", () => {
     planner.record(" 1", 0);
     expect(planner.calibrated).toBe(false);
     expect(planner.rateBound("64")).toBeNull();
-  });
-
-  it("leaves a rate below 50 Hz as measured", () => {
-    expect(snapPlayCallRate(30)).toBe(30);
   });
 });
 
