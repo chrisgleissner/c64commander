@@ -16,16 +16,17 @@ describe("msUntilNextSecond", () => {
   });
 
   it("lands just after the next second of the track's elapsed time", () => {
-    expect(msUntilNextSecond(10_000, 12_300)).toBe(715);
-    expect(msUntilNextSecond(10_000, 12_000)).toBe(1015);
+    expect(msUntilNextSecond(10_000, 12_300)).toBe(705);
+    expect(msUntilNextSecond(10_000, 12_000)).toBe(5);
   });
 
-  it("never waits less than a frame or two, even right before a second turns", () => {
-    expect(msUntilNextSecond(10_000, 12_990)).toBe(50);
+  it("aims at the second about to turn, and past one that has just been shown", () => {
+    expect(msUntilNextSecond(10_000, 12_990)).toBe(15);
+    expect(msUntilNextSecond(10_000, 12_005)).toBe(1000);
   });
 
   it("follows a start in the future, which a rebase onto a later position produces", () => {
-    expect(msUntilNextSecond(13_250, 12_000)).toBe(265);
+    expect(msUntilNextSecond(13_250, 12_000)).toBe(255);
   });
 });
 
@@ -38,31 +39,47 @@ describe("useSecondAlignedTicks", () => {
     vi.useRealTimers();
   });
 
-  /** The elapsed seconds of a track started at `startedAt.current`, at each tick. */
-  const ticksOf = (startedAt: { current: number | null }) => {
-    const seen: number[] = [];
-    const tick = vi.fn(() => {
-      seen.push((Date.now() - (startedAt.current ?? 0)) % 1000);
+  /** Where in its second each tick's shown moment falls, and when each tick actually ran. */
+  const ticksOf = (startedAt: { current: number | null }, renderMs = 0) => {
+    const shown: number[] = [];
+    const ran: number[] = [];
+    const tick = vi.fn((shownAtMs: number) => {
+      shown.push((shownAtMs - (startedAt.current ?? 0)) % 1000);
+      ran.push((((Date.now() - (startedAt.current ?? 0)) % 1000) + 1000) % 1000);
+      vi.setSystemTime(Date.now() + renderMs);
     });
-    return { seen, tick };
+    return { shown, ran, tick };
   };
 
-  it("ticks at once, then just after each second of elapsed time rather than once a second at any phase", () => {
+  it("ticks at once, then as each second of elapsed time turns rather than once a second at any phase", () => {
     const startedAt = { current: 100_000 - 2_300 };
-    const { seen, tick } = ticksOf(startedAt);
+    const { shown, tick } = ticksOf(startedAt);
     renderHook(() => useSecondAlignedTicks(tick, true, startedAt));
     vi.advanceTimersByTime(3_100);
-    expect(seen).toEqual([300, 15, 15, 15]);
+    expect(shown).toEqual([300, 5, 5, 5]);
+  });
+
+  it("starts a slow render early enough that the new second appears as it turns", () => {
+    const startedAt = { current: 100_000 - 2_300 };
+    const { shown, ran, tick } = ticksOf(startedAt, 60);
+    renderHook(() => useSecondAlignedTicks(tick, true, startedAt));
+    vi.advanceTimersByTime(12_000);
+    expect(shown.slice(1).every((phase) => phase === 5)).toBe(true);
+    // The measured render time converges on 60 ms, so the tick runs about that long before the second.
+    expect(ran.at(-1)).toBeGreaterThanOrEqual(940);
+    expect(ran.at(-1)).toBeLessThanOrEqual(950);
+    const seconds = tick.mock.calls.map(([shownAtMs]) => Math.floor((shownAtMs - startedAt.current) / 1000));
+    expect(seconds).toEqual(seconds.map((_, index) => seconds[0] + index));
   });
 
   it("follows a rebase of the track's start, so the ticks stay on the new seconds", () => {
     const startedAt = { current: 100_000 };
-    const { seen, tick } = ticksOf(startedAt);
+    const { shown, tick } = ticksOf(startedAt);
     renderHook(() => useSecondAlignedTicks(tick, true, startedAt));
     vi.advanceTimersByTime(1_100);
     startedAt.current = Date.now() - 400;
     vi.advanceTimersByTime(2_000);
-    expect(seen.slice(-2)).toEqual([15, 15]);
+    expect(shown.slice(-2)).toEqual([5, 5]);
   });
 
   it("does nothing while disabled, and stops when unmounted", () => {

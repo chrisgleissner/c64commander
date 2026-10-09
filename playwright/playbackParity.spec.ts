@@ -20,7 +20,12 @@ import { createMockC64Server, type MockC64Server } from "../tests/mocks/mockC64S
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { clickSourceSelectionButton } from "./sourceSelection";
-import { PARITY_SCENARIOS, type ParityDriver, type ParityRoute } from "./parity/playbackParityScenarios";
+import {
+  PARITY_SCENARIOS,
+  type ClockTransition,
+  type ParityDriver,
+  type ParityRoute,
+} from "./parity/playbackParityScenarios";
 
 const SEEKABLE_TUNE_FOLDER = path.resolve("playwright/fixtures/remote-seek");
 const DEVICE_CPU_SPEEDS = ["1", "2", "4", "8", "16", "32", "48", "64"].map((mhz) => mhz.padStart(2, " "));
@@ -37,6 +42,16 @@ const deviceConfigState = () => {
 const parseClock = (text: string) => {
   const match = /(\d+):(\d\d)/.exec(text);
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+};
+
+/** The seconds the elapsed label turned to, leaving out the moments it showed a seek's target instead. */
+const shownTransitions = (log: Array<{ atMs: number; text: string }>): ClockTransition[] => {
+  const transitions: ClockTransition[] = [];
+  for (const { atMs, text } of log) {
+    const seconds = /[⏵⏸]/.test(text) ? null : parseClock(text);
+    if (seconds !== null && transitions.at(-1)?.seconds !== seconds) transitions.push({ atMs, seconds });
+  }
+  return transitions;
 };
 
 const webDriver = (page: Page, server: MockC64Server): ParityDriver => {
@@ -108,6 +123,32 @@ const webDriver = (page: Page, server: MockC64Server): ParityDriver => {
       if (volume !== " 0 dB") changed.push(`Vol Master ${JSON.stringify(volume)}`);
       if (server.sidPlayer?.heldKeys.length) changed.push(`keys held: ${server.sidPlayer.heldKeys.join(",")}`);
       return changed;
+    },
+    async recordClocks(during) {
+      await page.evaluate(() => {
+        const log: Array<{ atMs: number; text: string }> = [];
+        (window as unknown as { __clockLog: typeof log }).__clockLog = log;
+        const elapsed = document.querySelector('[data-testid="playback-elapsed"]')!;
+        new MutationObserver(() => log.push({ atMs: Date.now(), text: elapsed.textContent ?? "" })).observe(elapsed, {
+          subtree: true,
+          childList: true,
+          characterData: true,
+        });
+      });
+      const device: ClockTransition[] = [];
+      const sample = setInterval(() => {
+        const seconds = server.sidPlayer?.shownClockSeconds;
+        if (seconds !== undefined && device.at(-1)?.seconds !== seconds) device.push({ atMs: Date.now(), seconds });
+      }, 5);
+      try {
+        await during();
+      } finally {
+        clearInterval(sample);
+      }
+      const log = await page.evaluate(
+        () => (window as unknown as { __clockLog: Array<{ atMs: number; text: string }> }).__clockLog,
+      );
+      return { page: shownTransitions(log), device };
     },
     wait: (ms) => page.waitForTimeout(ms),
   };

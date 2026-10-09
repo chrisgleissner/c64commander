@@ -1470,7 +1470,7 @@ export default function PlayFilesPage() {
   }, []);
 
   const syncPlaybackTimeline = useCallback(
-    (options?: { allowAutoAdvance?: boolean }) => {
+    (options?: { allowAutoAdvance?: boolean; shownAtMs?: number }) => {
       const allowAutoAdvance = (options?.allowAutoAdvance ?? true) && !isRemoteSidSeekBusy();
       if (!isPlaying || isPaused || currentIndex < 0) return;
       const now = Date.now();
@@ -1492,7 +1492,7 @@ export default function PlayFilesPage() {
       if (anchor) {
         trackStartedAtRef.current = anchor.trackStartedAtMs;
         anchoredElapsedRef.current = anchor.elapsedMs;
-        setElapsedMs(anchor.elapsedMs);
+        setElapsedMs(anchor.elapsedMs + Math.max(0, (options?.shownAtMs ?? now) - now));
         // Only when it actually moved, and never while the playhead is stuck. The first is because
         // this deadline is mirrored to the native background watchdog and rewriting it every second
         // would be constant bridge traffic for nothing. The second is the important one: the
@@ -1527,7 +1527,8 @@ export default function PlayFilesPage() {
     syncPlaybackTimelineRef.current = syncPlaybackTimeline;
   }, [syncPlaybackTimeline]);
 
-  useSecondAlignedTicks(syncPlaybackTimeline, isPlaying && !isPaused && currentIndex >= 0, trackStartedAtRef);
+  const tickTimeline = useCallback((shownAtMs: number) => syncPlaybackTimeline({ shownAtMs }), [syncPlaybackTimeline]);
+  useSecondAlignedTicks(tickTimeline, isPlaying && !isPaused && currentIndex >= 0, trackStartedAtRef);
 
   usePlaybackResumeTriggers(syncPlaybackTimeline);
 

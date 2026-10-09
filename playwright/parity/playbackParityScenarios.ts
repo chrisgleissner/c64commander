@@ -22,6 +22,11 @@ export type ParityRoute = "phone" | "c64";
 /** Whether a steady tone was heard, window by window, while a step ran. */
 export type SoundTrace = { windowMs: number; present: boolean[]; startedAt: number };
 
+/** The moment a clock started showing `seconds`, in host milliseconds. */
+export type ClockTransition = { atMs: number; seconds: number };
+/** Every change of the second shown on the page and on the C64's own clock, on one time base. */
+export type ClockRecording = { page: ClockTransition[]; device: ClockTransition[] };
+
 export type ParityDriver = {
   readonly label: string;
   /** Start the parity tune on `route` from the Play page, and wait until seeking is offered. */
@@ -41,6 +46,10 @@ export type ParityDriver = {
   machineLeftChanged(route: ParityRoute): Promise<string[]>;
   /** Record what the speaker plays while `during` runs; absent where there is no microphone. */
   listen?: (during: () => Promise<void>) => Promise<SoundTrace>;
+  /** Where a scenario's measurements are worth keeping, e.g. a bench log. */
+  report?: (line: string) => void;
+  /** Record both clocks while `during` runs; absent where the C64's clock cannot be read. */
+  recordClocks?: (during: () => Promise<void>) => Promise<ClockRecording>;
   wait(ms: number): Promise<void>;
 };
 
@@ -116,6 +125,29 @@ export const presence = (trace: SoundTrace, fromMs: number, toMs: number): numbe
   if (last <= first) return 0;
   return trace.present.slice(first, last).filter(Boolean).length / (last - first);
 };
+
+/**
+ * For each change of `from` inside one of `windows`, how many milliseconds later `to` turned to the
+ * same second (negative: earlier), or NaN when `to` did not show that second within 1.5 s of it.
+ */
+export const clockPhaseErrors = (
+  from: ClockTransition[],
+  to: ClockTransition[],
+  windows: Array<[number, number]>,
+): number[] =>
+  from
+    .filter(({ atMs }) => windows.some(([start, end]) => atMs >= start && atMs <= end))
+    .map(({ atMs, seconds }) => {
+      const offsets = to.filter((t) => t.seconds === seconds).map((t) => t.atMs - atMs);
+      const nearest = offsets.reduce((best, offset) => (Math.abs(offset) < Math.abs(best) ? offset : best), Infinity);
+      return Math.abs(nearest) <= 1500 ? nearest : Number.NaN;
+    });
+
+/** The page turns each second within this long of the C64's clock turning it. */
+export const CLOCK_PHASE_LIMIT_MS = 150;
+/** After a landing the page re-reads the C64's clock and its phase; compared only once that is done. */
+const CLOCK_SETTLE_MS = 3000;
+const CLOCK_STEADY_MS = 6000;
 
 const jumpTo = async (driver: ParityDriver, route: ParityRoute, fraction: number, what: string) => {
   const target = fraction * (await driver.durationSeconds());
@@ -215,6 +247,44 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       check(before >= 0.8, `the tone was heard in only ${(before * 100).toFixed(0)}% of the time before the rewind`);
       check(during <= 0.1, `the tone was heard in ${(during * 100).toFixed(0)}% of the rewind`);
       check(after >= 0.8, `the tone was heard in only ${(after * 100).toFixed(0)}% of the time after landing`);
+    },
+  },
+  {
+    name: "shows the C64's own second, also after fast forward, a jump and a rewind",
+    async run(driver, route) {
+      if (route !== "c64" || !driver.recordClocks) return;
+      const windows: Array<[number, number]> = [];
+      const steady = async () => {
+        const from = Date.now() + CLOCK_SETTLE_MS;
+        await driver.wait(CLOCK_SETTLE_MS + CLOCK_STEADY_MS);
+        windows.push([from, Date.now()]);
+      };
+      const seek = async (gesture: () => Promise<void>) => {
+        const before = await landedSeconds(driver);
+        await gesture();
+        await settledAfterSeek(driver, before);
+        await steady();
+      };
+      const recording = await driver.recordClocks(async () => {
+        await steady();
+        await seek(() => driver.hold("playlist-next", 1500));
+        await seek(() => driver.tapBar(0.6));
+        await seek(() => driver.tapBar(0.15));
+      });
+      const names = ["playing", "after fast forward", "after a jump", "after a rewind"];
+      windows.forEach((window, index) => {
+        const pageLag = clockPhaseErrors(recording.device, recording.page, [window]);
+        const errors = [...pageLag, ...clockPhaseErrors(recording.page, recording.device, [window])];
+        const what = names[index];
+        check(errors.length >= 8, `${what}: only ${errors.length} second changes were seen`);
+        check(!errors.some(Number.isNaN), `${what}: a second showed on one clock and not on the other`);
+        const worst = Math.max(...errors.map(Math.abs));
+        const lags = pageLag.map(Math.round).sort((x, y) => x - y);
+        driver.report?.(
+          `${what}: the page turned each second ${lags.join(", ")} ms after the C64; at most ${worst} ms apart`,
+        );
+        check(worst <= CLOCK_PHASE_LIMIT_MS, `${what}: the page and the C64 turned a second ${worst} ms apart`);
+      });
     },
   },
   {

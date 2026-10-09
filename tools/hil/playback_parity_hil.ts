@@ -33,10 +33,14 @@ import path from "node:path";
 import {
   PARITY_SCENARIOS,
   ParityFailure,
+  type ClockRecording,
+  type ClockTransition,
   type ParityDriver,
   type ParityRoute,
   type SoundTrace,
 } from "../../playwright/parity/playbackParityScenarios";
+import { locateSidPlayerClock } from "@/lib/playback/remoteSeek/sidPlayerClock";
+import { readClockFromRow, SCREEN_COLUMNS } from "@/lib/playback/remoteSeek/sidPlayerScreen";
 import { connectPage } from "./cdp_page.mjs";
 import { createDroidDevice } from "./droidctl_device.mjs";
 import { callHzOfTune, counterPsid, type CounterTune } from "./remoteSeekHil/tunes";
@@ -202,25 +206,37 @@ const openPlay = async () => {
   await waitFor('[data-testid="playlist-play"]');
 };
 
+const uniqueIdOf = async (host: string) =>
+  ((await (await rest(host, "/v1/info")).json()) as { unique_id?: string }).unique_id ?? null;
+
 /** Point the app at `host` through the switch-device picker the health badge opens. */
 const switchTo = async (host: string) => {
   const current = await js<string | null>(
     `document.querySelector('[data-testid="unified-health-badge"]')?.getAttribute("data-connected-device") ?? null`,
   );
-  if (current?.toLowerCase().includes(host)) return;
+  if (
+    current &&
+    (current.toLowerCase().includes(host) || (await uniqueIdOf(current).catch(() => null)) === (await uniqueIdOf(host)))
+  )
+    return;
   await js(
     `document.querySelector('[data-testid="unified-health-badge"]')?.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true}))`,
   );
   await waitFor('[data-testid="switch-device-sheet"]');
-  const switched =
-    await js<boolean>(`(()=>{const rows=[...document.querySelectorAll('[data-testid^="switch-device-row-"]')];
-const row=rows.find(r=>(r.innerText||"").toLowerCase().includes(${JSON.stringify(host)}));if(!row)return false;row.click();return true;})()`);
-  if (!switched) throw new Error(`the app has no saved device for ${host}`);
+  // A saved device is labelled by the name or address it was added with, and a machine on both Ethernet
+  // and Wi-Fi answers on either, so rows are matched by the machine's own id rather than by text.
+  const wanted = await uniqueIdOf(host);
+  const labels = await js<string[]>(
+    `[...document.querySelectorAll('[data-testid^="switch-device-row-"]')].map(r=>(r.innerText||"").trim().split(/\\s/)[0])`,
+  );
+  const index = (await Promise.all(labels.map((label) => uniqueIdOf(label).catch(() => null)))).indexOf(wanted);
+  if (index < 0) throw new Error(`the app has no saved device for ${host}`);
+  await js(`document.querySelectorAll('[data-testid^="switch-device-row-"]')[${index}].click()`);
   for (let waited = 0; waited < 30000; waited += 500) {
     const state = await js<string | null>(
       `document.querySelector('[data-testid="unified-health-badge"]')?.getAttribute("data-connected-device") ?? null`,
     );
-    if (state?.toLowerCase().includes(host)) return;
+    if (state?.toLowerCase().includes(labels[index].toLowerCase())) return;
     await sleep(500);
   }
   throw new Error(`the app did not connect to ${host}`);
@@ -342,6 +358,70 @@ const listen = async (during: () => Promise<void>): Promise<SoundTrace> => {
   return toneTrace(readFileSync(wav), startedAt);
 };
 
+// ---- the clocks -------------------------------------------------------------------------------------
+
+/** Read the C64's memory over REST; reads only, so nothing on the machine changes. */
+const readMemory = (host: string) => async (address: string, length: number) =>
+  new Uint8Array(await (await rest(host, `/v1/machine:readmem?address=${address}&length=${length}`)).arrayBuffer());
+
+/** Phone time minus host time, from the CDP round trip that took the least time. */
+const phoneClockOffsetMs = async () => {
+  let best = { rtt: Infinity, offset: 0 };
+  for (let probe = 0; probe < 12; probe += 1) {
+    const sentAt = Date.now();
+    const phoneNow = await js<number>("Date.now()");
+    const rtt = Date.now() - sentAt;
+    if (rtt < best.rtt) best = { rtt, offset: phoneNow - (sentAt + rtt / 2) };
+  }
+  return best.offset;
+};
+
+const DEVICE_CLOCK_POLL_MS = 50;
+
+/**
+ * Every change of the second on the phone's elapsed label (timed on the phone, moved to the host's
+ * clock) and on the SID player's own clock (read over REST every 50 ms, each change placed halfway
+ * between the read that last saw the old second and the one that first saw the new one).
+ */
+const recordClocks = async (host: string, during: () => Promise<void>): Promise<ClockRecording> => {
+  const clock = await locateSidPlayerClock(readMemory(host));
+  if (!clock) throw new ParityFailure(`the SID player's clock is not on ${host}'s screen`);
+  const offsetMs = await phoneClockOffsetMs();
+  await js(`(()=>{const log=[];window.__clockLog=log;const e=document.querySelector('[data-testid="playback-elapsed"]');
+new MutationObserver(()=>log.push({atMs:Date.now(),text:e.textContent||""})).observe(e,{subtree:true,childList:true,characterData:true});})()`);
+  const device: ClockTransition[] = [];
+  let polling = true;
+  const poll = (async () => {
+    let lastReadAt = 0;
+    while (polling) {
+      const sentAt = Date.now();
+      const seconds = readClockFromRow(
+        await readMemory(host)(clock.rowAddress.toString(16).toUpperCase().padStart(4, "0"), SCREEN_COLUMNS),
+        clock,
+      );
+      const readAt = (sentAt + Date.now()) / 2;
+      if (seconds !== null && device.at(-1)?.seconds !== seconds) {
+        device.push({ atMs: lastReadAt ? (lastReadAt + readAt) / 2 : readAt, seconds });
+      }
+      lastReadAt = readAt;
+      await sleep(Math.max(0, DEVICE_CLOCK_POLL_MS - (Date.now() - sentAt)));
+    }
+  })();
+  try {
+    await during();
+  } finally {
+    polling = false;
+    await poll;
+  }
+  const log = await js<Array<{ atMs: number; text: string }>>("window.__clockLog");
+  const page: ClockTransition[] = [];
+  for (const { atMs, text } of log) {
+    const seconds = /[⏵⏸]/.test(text) ? null : parseClock(text);
+    if (seconds !== null && page.at(-1)?.seconds !== seconds) page.push({ atMs: atMs - offsetMs, seconds });
+  }
+  return { page, device };
+};
+
 // ---- the driver -------------------------------------------------------------------------------------
 
 const parseClock = (text: string) => {
@@ -436,6 +516,11 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
     return changed;
   },
   listen,
+  recordClocks: (during) => recordClocks(host, during),
+  report: (line) => {
+    log(`${host}: ${line}`);
+    notes.push(`${host}: ${line}`);
+  },
   wait: sleep,
 });
 
@@ -443,6 +528,7 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
 
 type Outcome = { host: string; route: ParityRoute; scenario: string; ok: boolean; detail?: string; ms: number };
 const outcomes: Outcome[] = [];
+const notes: string[] = [];
 const initialVolume = await readVolume();
 await droid.call("droid_app.start_app", { targetId: droid.targetId, package: PACKAGE, waitForResume: true });
 await sleep(4000);
@@ -503,7 +589,7 @@ try {
     log(`could not put the media volume back to ${initialVolume.index}: ${error}`),
   );
   mkdirSync(path.dirname(OUT), { recursive: true });
-  writeFileSync(OUT, JSON.stringify({ hosts: HOSTS, routes: ROUTES, volume: VOLUME, outcomes }, null, 2));
+  writeFileSync(OUT, JSON.stringify({ hosts: HOSTS, routes: ROUTES, volume: VOLUME, outcomes, notes }, null, 2));
   page?.close();
 }
 const failed = outcomes.filter((outcome) => !outcome.ok);

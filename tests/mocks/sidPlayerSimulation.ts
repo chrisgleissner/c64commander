@@ -163,6 +163,12 @@ export class SidPlayerSimulation {
     return this.tuneSeconds;
   }
 
+  /** The seconds the player's clock shows on the screen right now. */
+  get shownClockSeconds() {
+    this.advance();
+    return Math.floor(this.clockSeconds);
+  }
+
   /** Fast forward runs while the key is down, or while the keyboard routine's `ldy #0` reads `ldy #1`. */
   get fastForwarding() {
     return this.keysDown.has("arrow_left") || this.ram[this.code.ldyOperandAddress] === 1;
