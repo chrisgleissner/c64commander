@@ -31,6 +31,8 @@ const RESTART_POLL_MS = 30;
  * tune measures as 120 Hz. Forty samples missed it once in a 30-minute soak on the Ultimate 64.
  */
 const TIMER_SAMPLE_COUNT = 100;
+/** A clock read slower than this may carry a value read seconds before it arrived. */
+const STALE_READ_MS = 1000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -98,7 +100,14 @@ export class SeekMachine {
     return clock !== null && model.stepsBack(clock) ? this.readClock(fast) : clock;
   }
 
-  readClock(fast: boolean) {
+  /**
+   * The clock as it is now. The firmware sometimes answers a request 8 s late with what it read when
+   * the request arrived; a reading that slow is stale, so the clock is read again.
+   */
+  async readClock(fast: boolean) {
+    const startedAt = Date.now();
+    const clock = await readSidPlayerClock(this.api.readMemory, this.profile.clock, fast);
+    if (Date.now() - startedAt <= STALE_READ_MS) return clock;
     return readSidPlayerClock(this.api.readMemory, this.profile.clock, fast);
   }
 
@@ -140,13 +149,20 @@ export class SeekMachine {
         await sleep(KEY_GAP_MS);
       }
     }
-    const deadline = Date.now() + RESTART_TIMEOUT_MS;
+    const keysSentAt = Date.now();
+    let deadline = keysSentAt + RESTART_TIMEOUT_MS;
     // Twice in a row: a single read can catch the clock mid-update with its minutes a minute behind.
+    // A restarted clock shows about the time since the keys, which a stalled read has let grow.
     let restartedReads = 0;
     while (Date.now() < deadline) {
       assertCurrent();
+      const readStartedAt = Date.now();
       const clock = await this.readClock(true);
-      restartedReads = clock !== null && clock < restartedBelow ? restartedReads + 1 : 0;
+      const readMs = Date.now() - readStartedAt;
+      if (readMs > STALE_READ_MS) deadline += readMs;
+      const sinceKeys = Math.ceil((Date.now() - keysSentAt) / 1000) + 2;
+      const restarted = clock !== null && clock < before && clock < Math.max(restartedBelow, sinceKeys);
+      restartedReads = restarted ? restartedReads + 1 : 0;
       if (restartedReads === 2) return;
       await sleep(RESTART_POLL_MS);
     }

@@ -130,6 +130,11 @@ export class JumpProgressWatch {
     this.lastProgressAt = this.lastAt = startedAt;
   }
 
+  /** The key went down now: what passed before it, such as a press request the device was slow to answer, ran at normal speed. */
+  keyDown(now = Date.now()) {
+    this.lastAt = now;
+  }
+
   observe(position: number, keyHeld: boolean, now = Date.now()): string | null {
     if (keyHeld) {
       this.heldMs += now - this.lastAt;

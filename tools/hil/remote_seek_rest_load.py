@@ -149,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--host", default="u64")
     parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--cpu-rate", type=float, default=2, help="CPU Speed writes a second in the write phases")
     parser.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
 
@@ -160,8 +161,13 @@ def main(argv: list[str] | None = None) -> int:
     phases = {
         "clock reads 20/s": [("read", 20)],
         "reads 30/s + fast forward key 4/s": [("read", 30), ("key", 4)],
-        "reads 30/s + CPU Speed 2/s": [("read", 30), ("cpu", 2)],
-        "reads 30/s + 10/s + key 4/s + CPU Speed 2/s": [("read", 30), ("read", 10), ("key", 4), ("cpu", 2)],
+        f"reads 30/s + CPU Speed {args.cpu_rate:g}/s": [("read", 30), ("cpu", args.cpu_rate)],
+        f"reads 30/s + 10/s + key 4/s + CPU Speed {args.cpu_rate:g}/s": [
+            ("read", 30),
+            ("read", 10),
+            ("key", 4),
+            ("cpu", args.cpu_rate),
+        ],
     }
     results: dict = {"host": args.host, "seconds_per_phase": args.seconds, "phases": {}}
     guard: PlayerGuard | None = None

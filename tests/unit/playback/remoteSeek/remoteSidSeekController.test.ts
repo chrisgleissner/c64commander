@@ -688,6 +688,35 @@ describe("remote SID seek controller", () => {
     expect(Math.abs(landings[0].seconds - at())).toBeLessThan(1.5);
   });
 
+  it.each(
+    [20, 300].flatMap((target) => Array.from({ length: 40 }, (_, index) => ({ target, stalledRead: index + 1 }))),
+  )(
+    "lands a jump to $target s where it says when the device answers clock read $stalledRead 8 s late",
+    async ({ target, stalledRead }) => {
+      const device = createFakeRemoteSeekDevice();
+      const controller = new RemoteSidSeekController(device.api, profile());
+      await vi.advanceTimersByTimeAsync(60_000);
+      // The firmware sometimes answers a request 8 s late, with what it read when the request arrived.
+      const read = device.api.readMemory;
+      let clockReads = 0;
+      device.api.readMemory = async (address, length, options) => {
+        const value = await read(address, length, options);
+        if (address === "0B98" && ++clockReads === stalledRead) await new Promise((r) => setTimeout(r, 8000));
+        return value;
+      };
+      const at = () => device.player.tunePositionSeconds;
+      const landed = await settle(controller.jumpTo(at, target));
+      expect(Math.abs((landed?.seconds ?? 0) - at())).toBeLessThan(2);
+      if (at() - target < -2) {
+        const { addErrorLog } = await import("@/lib/logging");
+        console.log("SHORT", target, stalledRead, landed, JSON.stringify(vi.mocked(addErrorLog).mock.calls.slice(-2)).slice(0, 400));
+      }
+      // A stall with the key up lets the tune play on at normal speed; it must not run any further.
+      expect(at() - target).toBeLessThan(8 + 3);
+      expect(at() - target).toBeGreaterThan(-2);
+    },
+  );
+
   it("gives up a running clock re-sync as soon as a jump is asked for", async () => {
     const device = createFakeRemoteSeekDevice({ latencyMs: 10 });
     const controller = new RemoteSidSeekController(device.api, profile());
