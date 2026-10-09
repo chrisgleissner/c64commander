@@ -16,6 +16,7 @@ import {
   resolveMockTimingDelayMs,
   type MockTimingMode,
 } from "./mockTimingProfile";
+import { SidPlayerSimulation } from "./sidPlayerSimulation";
 
 // Set the full YAML loader for tests
 setMockConfigLoader(loadConfigYaml);
@@ -39,6 +40,10 @@ export interface MockC64Server {
   isReachable: () => boolean;
   getFaultMode: () => FaultMode;
   getTimingMode: () => MockTimingMode;
+  /** Keyboard events posted to `/v1/machine:input`, in order. */
+  machineInputEvents: Array<{ inputs: string[]; transition: string }>;
+  /** The simulated SID player, when the server was created with `sidPlayer: true`. */
+  sidPlayer: SidPlayerSimulation | null;
 }
 
 export type MockC64ServerOptions = {
@@ -64,6 +69,11 @@ export type MockC64ServerOptions = {
    * category still reported a device that streams.
    */
   omitConfigCategories?: readonly string[];
+  /**
+   * Model the Ultimate's SID player behind readmem, machine:input and CPU Speed (see
+   * sidPlayerSimulation.ts), so remote fast forward and seeking can run against this server.
+   */
+  sidPlayer?: boolean;
 };
 
 export type MockRequestRecord = {
@@ -158,6 +168,8 @@ export async function createMockC64Server(
   }> = [];
   let reachable = true;
   let faultMode: FaultMode = "none";
+  const machineInputEvents: Array<{ inputs: string[]; transition: string }> = [];
+  const sidPlayer = options.sidPlayer ? new SidPlayerSimulation() : null;
   let latencyMs: number | null = null;
   let timingMode: MockTimingMode = options.timingMode ?? "fast";
   let responseQueue = Promise.resolve();
@@ -441,9 +453,44 @@ export async function createMockC64Server(
     // machine:input REST relay (keyboard/joystick). A 200 here makes the app
     // resolve the "full" capability tier so the Remote Input joystick relay and
     // the full on-screen keyboard are enabled.
-    if (parsed.pathname === "/v1/machine:input" && (method === "GET" || method === "POST" || method === "PUT")) {
+    if (parsed.pathname === "/v1/machine:input" && (method === "POST" || method === "PUT")) {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        let payload: { events?: Array<Record<string, unknown>> } = {};
+        try {
+          payload = body ? JSON.parse(body) : {};
+        } catch (error) {
+          sendJson(400, { errors: [`Invalid machine:input body: ${(error as Error).message}`] });
+          return;
+        }
+        for (const event of payload.events ?? []) {
+          if (event.kind === "release_all") sidPlayer?.releaseAll();
+          if (event.kind !== "keyboard") continue;
+          const inputs = (event.inputs as string[]) ?? [];
+          const transition = String(event.transition);
+          machineInputEvents.push({ inputs, transition });
+          for (const key of inputs) {
+            if (transition === "press") sidPlayer?.pressKey(key);
+            if (transition === "release") sidPlayer?.releaseKey(key);
+          }
+        }
+        sendJson(200, {
+          keyboard: { inputs: sidPlayer?.heldKeys ?? [] },
+          joysticks: [
+            { port: 1, inputs: [] },
+            { port: 2, inputs: [] },
+          ],
+          errors: [],
+        });
+      });
+      return;
+    }
+    if (parsed.pathname === "/v1/machine:input" && method === "GET") {
       return sendJson(200, {
-        keyboard: { inputs: [] },
+        keyboard: { inputs: sidPlayer?.heldKeys ?? [] },
         joysticks: [
           { port: 1, inputs: [] },
           { port: 2, inputs: [] },
@@ -546,6 +593,8 @@ export async function createMockC64Server(
           headers: req.headers as Record<string, string | string[] | undefined>,
           body: Buffer.concat(chunks),
         });
+        sidPlayer?.releaseAll();
+        sidPlayer?.restart();
         sendJson(200, { errors: [] });
       });
       return;
@@ -567,7 +616,9 @@ export async function createMockC64Server(
     if (parsed.pathname === "/v1/machine:readmem" && method === "GET") {
       const length = Number(parsed.searchParams.get("length") || "1");
       const address = (parsed.searchParams.get("address") || "").toUpperCase();
-      const data = new Array(Math.max(1, length)).fill(0);
+      const data = sidPlayer
+        ? Array.from(sidPlayer.readMemory(parseInt(address, 16), Math.max(1, length)))
+        : new Array(Math.max(1, length)).fill(0);
       if (address === "00C6") {
         data[0] = 0;
       }
@@ -658,6 +709,9 @@ export async function createMockC64Server(
         const current = state[category][item] ?? { value };
         state[category][item] = { ...current, value };
         syncDriveStateFromConfig(category, item, value);
+        if (sidPlayer && category === "U64 Specific Settings" && item === "CPU Speed") {
+          sidPlayer.setCpuSpeedMhz(Number(value.trim()) || 1);
+        }
         return sendJson(200, { errors: [] });
       }
 
@@ -750,6 +804,8 @@ export async function createMockC64Server(
         isReachable: () => reachable,
         getFaultMode: () => faultMode,
         getTimingMode: () => timingMode,
+        machineInputEvents,
+        sidPlayer,
         close: () =>
           new Promise<void>((resClose) => {
             if (!server.listening) {

@@ -75,7 +75,7 @@ import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
-import { cancelRemoteSidSeek } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
+import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
@@ -776,7 +776,7 @@ export function usePlaybackController({
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
           return;
         }
-        await cancelRemoteSidSeek("another tune");
+        if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
         // post-launch state writes below, and the launch is corrected with a follow-up reset.
         const myPlayGeneration = (playGenerationRef.current += 1);
@@ -1612,7 +1612,7 @@ export function usePlaybackController({
       const shouldReboot = stopRequiresReboot(currentItem?.category);
       // Silence an on-device tune through the shared controller; a local track involves no C64 to stop.
       getLocalSidPlayback().stop();
-      await cancelRemoteSidSeek("stop");
+      if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("stop");
       // A .cfg apply walks the device menu over Telnet; it backs out and closes before the reset goes out.
       await cancelActiveConfigApply();
       if (currentPlaybackIsLocalRef.current) {
@@ -1806,7 +1806,7 @@ export function usePlaybackController({
       // nothing at all — on a button the UI had (correctly) enabled, which is
       // worse than a disabled one.
       if (!isPlaying && !isAnyPlaybackActive()) return;
-      await cancelRemoteSidSeek("pause or resume");
+      if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("pause or resume");
       const restartedItemId = isPaused && !isAnyPlaybackActive() ? takeRestartedPhoneTune() : null;
       const item = playlistRef.current[currentIndexRef.current];
       if (restartedItemId && item?.id === restartedItemId) {

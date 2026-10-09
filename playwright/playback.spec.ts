@@ -1884,7 +1884,9 @@ test.describe("Playback file browser", () => {
    * the SID itself and cannot be scrubbed, so on that route Previous/Next stay
    * plain track controls and the progress bar is not seekable.
    */
-  test("no seek affordance while the C64 is playing the tune", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("no seek affordance while the C64 plays a tune it cannot fast forward", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -1898,7 +1900,8 @@ test.describe("Playback file browser", () => {
     await page.getByTestId("playlist-play").click();
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
-    // The bar renders, but not as a control: there is nothing here to seek.
+    // The bar renders, but not as a control: the app cannot read this tune's header here and the mock
+    // shows no SID player, so it cannot tell whether the C64 could fast forward it.
     await expect(page.getByTestId("playback-progress")).toBeVisible();
     await expect(page.getByTestId("playback-progress-seek")).toHaveCount(0);
     await snap(page, testInfo, "no-seek-on-c64-route");

@@ -21,6 +21,7 @@ import {
   probeRemoteTuneSeek,
   remoteSeekHeaderBlocker,
   RemoteSidSeekController,
+  type RemoteSeekLanding,
 } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { parseSidHeaderMetadata, type SidHeaderMetadata } from "@/lib/sid/sidUtils";
@@ -176,8 +177,8 @@ export const useRemoteSidSeek = ({
 
   const clampMs = (ms: number) => Math.max(0, Math.min(live.current.durationMs ?? Number.MAX_SAFE_INTEGER, ms));
 
-  const land = useCallback((positionSeconds: number | null) => {
-    if (positionSeconds !== null) live.current.rebasePlaybackPosition(clampMs(positionSeconds * 1000));
+  const land = useCallback((landing: RemoteSeekLanding | null) => {
+    if (landing) live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
     setTargetMs(null);
   }, []);
 

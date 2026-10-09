@@ -63,6 +63,12 @@ export type RemoteTuneSeekProfile = {
 
 export type RemoteSeekPositionListener = (positionSeconds: number) => void;
 
+/**
+ * Where a seek landed and when. The device is given back after landing, which takes a few config
+ * writes; the tune plays on meanwhile, so the caller adds the time since `atMs`.
+ */
+export type RemoteSeekLanding = { seconds: number; atMs: number };
+
 /** Ramp step while Next is held, and how often the clock is read for the elapsed time display. */
 export const FAST_FORWARD_RAMP_INTERVAL_MS = 1000;
 export const FAST_FORWARD_POLL_INTERVAL_MS = 250;
@@ -209,6 +215,7 @@ export class RemoteSidSeekController {
   private busy: Promise<unknown> = Promise.resolve();
   private cancelGeneration = 0;
   private activeSession: RemoteSeekDeviceSession | null = null;
+  private pendingOperations = 0;
 
   constructor(
     private readonly api: RemoteSeekApi,
@@ -267,8 +274,8 @@ export class RemoteSidSeekController {
     });
   }
 
-  /** Release Next: stop, give the device back, and return the position reached (null if unknown). */
-  endFastForward(reason = "released"): Promise<number | null> {
+  /** Release Next: stop, give the device back, and return where it landed (null if unknown). */
+  endFastForward(reason = "released"): Promise<RemoteSeekLanding | null> {
     return this.serialize(async () => {
       const run = this.fastForward;
       if (!run) return null;
@@ -281,10 +288,11 @@ export class RemoteSidSeekController {
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
+      const landing = { seconds: run.model.seconds, atMs: Date.now() };
       await run.speedWrites;
       await this.giveBack(run.session, reason);
-      addLog("debug", "Remote fast forward ended", { reason, positionSeconds: run.model.seconds });
-      return run.model.seconds;
+      addLog("debug", "Remote fast forward ended", { reason, positionSeconds: landing.seconds });
+      return landing;
     });
   }
 
@@ -293,7 +301,11 @@ export class RemoteSidSeekController {
    * speed tiers and release the key when the clock reaches the target. Returns the position landed
    * on, or null when the jump was cancelled or failed (the device is given back either way).
    */
-  jumpTo(fromSeconds: number, targetSeconds: number, onPosition?: RemoteSeekPositionListener): Promise<number | null> {
+  jumpTo(
+    fromSeconds: number,
+    targetSeconds: number,
+    onPosition?: RemoteSeekPositionListener,
+  ): Promise<RemoteSeekLanding | null> {
     return this.serialize(async (generation) => {
       const target = Math.max(0, targetSeconds);
       if (target < fromSeconds && !this.canRewind) {
@@ -385,7 +397,7 @@ export class RemoteSidSeekController {
           landedSeconds: model.seconds,
           tookMs: Date.now() - startedAt,
         });
-        return model.seconds;
+        return { seconds: model.seconds, atMs: Date.now() };
       } catch (error) {
         if (error instanceof RemoteSeekCancelled || error instanceof RemoteSeekSessionClosedError) {
           addLog("debug", error.message, { fromSeconds, targetSeconds });
@@ -419,9 +431,20 @@ export class RemoteSidSeekController {
     return this.fastForward !== null;
   }
 
+  /** True while anything is queued, running or holding the device. */
+  get isBusy() {
+    return this.pendingOperations > 0 || this.fastForward !== null || this.activeSession !== null;
+  }
+
   private serialize<T>(work: (generation: number) => Promise<T>): Promise<T> {
     const generation = this.cancelGeneration;
-    const next = this.busy.catch(() => undefined).then(() => work(generation));
+    this.pendingOperations += 1;
+    const next = this.busy
+      .catch(() => undefined)
+      .then(() => work(generation))
+      .finally(() => {
+        this.pendingOperations -= 1;
+      });
     this.busy = next;
     return next;
   }

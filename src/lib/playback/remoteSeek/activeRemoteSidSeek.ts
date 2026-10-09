@@ -38,7 +38,10 @@ export const setActiveRemoteSidSeek = (controller: RemoteSidSeekController | nul
  */
 export const cancelRemoteSidSeek = async (reason: string): Promise<void> => {
   const controller = active;
-  if (!controller) return;
+  if (!controller?.isBusy) return;
   addLog("debug", "Remote seek cancelled", { reason });
   await controller.cancel(reason);
 };
+
+/** Whether a remote seek holds or is about to hold the device; callers skip the await when not. */
+export const isRemoteSidSeekBusy = (): boolean => active?.isBusy ?? false;

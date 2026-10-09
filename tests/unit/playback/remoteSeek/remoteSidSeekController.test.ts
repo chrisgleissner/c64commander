@@ -100,7 +100,7 @@ describe("remote SID seek controller", () => {
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
     expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
-    expect(Math.abs((landed ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
     expect(positions.length).toBeGreaterThan(10);
     expect(positions[positions.length - 1]).toBeGreaterThan(300);
   });
@@ -121,7 +121,7 @@ describe("remote SID seek controller", () => {
     const landed = await settle(controller.jumpTo(0, 200));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(199.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(201.5);
-    expect(landed).toBeGreaterThanOrEqual(200);
+    expect(landed?.seconds).toBeGreaterThanOrEqual(200);
     expect(device.player.restarts).toBe(0);
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
@@ -182,7 +182,7 @@ describe("remote SID seek controller", () => {
     expect(device.log).toEqual(expect.arrayContaining(["key press minus", "key release minus", "key press plus"]));
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(39.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(41.5);
-    expect(landed).toBeGreaterThanOrEqual(40);
+    expect(landed?.seconds).toBeGreaterThanOrEqual(40);
     expect(device.settings["CPU Speed"]).toBe(" 1");
   });
 
