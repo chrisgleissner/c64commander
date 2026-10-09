@@ -390,13 +390,16 @@ describe("remote SID seek controller", () => {
       return read(address, length, options);
     };
     const controller = new RemoteSidSeekController(device.api, profile());
-    const begin = controller.beginFastForward(
-      () => 0,
-      () => undefined,
-    );
+    // Superseded by the cancel below: handled from the start, since it rejects while the cancel runs.
+    const begin = controller
+      .beginFastForward(
+        () => 0,
+        () => undefined,
+      )
+      .catch(() => undefined);
     for (let waited = 0; !pressSent && waited < 2000; waited += 1) await vi.advanceTimersByTimeAsync(1);
     await settle(controller.cancel("pause"));
-    await settle(begin.catch(() => undefined));
+    await settle(begin);
     reads.length = 0;
     await vi.advanceTimersByTimeAsync(3000);
     expect(reads).toEqual([]);
@@ -709,7 +712,13 @@ describe("remote SID seek controller", () => {
       expect(Math.abs((landed?.seconds ?? 0) - at())).toBeLessThan(2);
       if (at() - target < -2) {
         const { addErrorLog } = await import("@/lib/logging");
-        console.log("SHORT", target, stalledRead, landed, JSON.stringify(vi.mocked(addErrorLog).mock.calls.slice(-2)).slice(0, 400));
+        console.log(
+          "SHORT",
+          target,
+          stalledRead,
+          landed,
+          JSON.stringify(vi.mocked(addErrorLog).mock.calls.slice(-2)).slice(0, 400),
+        );
       }
       // A stall with the key up lets the tune play on at normal speed; it must not run any further.
       expect(at() - target).toBeLessThan(8 + 3);

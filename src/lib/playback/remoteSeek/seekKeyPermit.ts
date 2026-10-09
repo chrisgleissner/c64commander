@@ -21,19 +21,27 @@ import type { MachineInputBatch } from "@/lib/c64api";
 export const SEEK_KEYS: readonly string[] = ["arrow_left", "minus", "plus"];
 const PERMIT_MS = 500;
 
-let permit: { deviceKey: string; key: string; until: number } | null = null;
+/** One entry per confirmed press: two sessions may each confirm before either sends. */
+let permits: Array<{ deviceKey: string; key: string; until: number }> = [];
 
 export class SeekKeyRefusedError extends Error {}
 
 /** Allow one press of `key` on `deviceKey`, now that the SID player has been seen on its screen. */
 export const grantSeekKeyPress = (deviceKey: string, key: string) => {
-  permit = { deviceKey, key, until: Date.now() + PERMIT_MS };
+  permits.push({ deviceKey, key, until: Date.now() + PERMIT_MS });
 };
 
+/** Use up the permit for this press; a press without one also voids every other permit for the device. */
 const takePermit = (deviceKey: string | null, key: string) => {
-  const granted = permit;
-  permit = null;
-  return granted !== null && granted.deviceKey === deviceKey && granted.key === key && Date.now() <= granted.until;
+  const now = Date.now();
+  permits = permits.filter((permit) => permit.until >= now);
+  const index = permits.findIndex((permit) => permit.deviceKey === deviceKey && permit.key === key);
+  if (index < 0) {
+    permits = permits.filter((permit) => permit.deviceKey !== deviceKey);
+    return false;
+  }
+  permits.splice(index, 1);
+  return true;
 };
 
 /**

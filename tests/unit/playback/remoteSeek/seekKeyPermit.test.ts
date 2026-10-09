@@ -58,6 +58,15 @@ describe("seek key permits", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("keeps a permit when another session is granted one before it sends", async () => {
+    grantSeekKeyPress(DEVICE, "minus");
+    grantSeekKeyPress(DEVICE, "arrow_left");
+    await guarded(press("minus"));
+    await guarded(press("arrow_left"));
+    expect(send).toHaveBeenCalledTimes(2);
+    await expect(guarded(press("minus"))).rejects.toThrow(SeekKeyRefusedError);
+  });
+
   it("always lets a release through, since letting a key go never does harm", async () => {
     await guarded({ events: [{ kind: "keyboard", inputs: ["arrow_left", "minus", "plus"], transition: "release" }] });
     expect(send).toHaveBeenCalledTimes(1);
