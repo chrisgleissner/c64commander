@@ -183,16 +183,19 @@ test.describe("Remote SID seek", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     await startSeekableTune(page);
     const duration = await durationSeconds(page);
-    await tapProgressAt(page, 0.8);
+    // Far enough from the end that the tune does not finish while the test holds Previous.
+    await tapProgressAt(page, 0.6);
     await expect
       .poll(() => server.sidPlayer?.tunePositionSeconds ?? 0, { timeout: 15000 })
-      .toBeGreaterThan(duration * 0.8 - 0.5);
+      .toBeGreaterThan(duration * 0.6 - 0.5);
     await expectDeviceGivenBack();
     const before = server.sidPlayer?.tunePositionSeconds ?? 0;
 
     // Held for one step, which goes back 10 seconds.
     await hold(page, page.getByTestId("playlist-prev"), 1000);
     await expect.poll(() => keyEvents("plus").length, { timeout: 15000 }).toBe(2);
+    // Landed once the timer shows a position again rather than the target it was heading for.
+    await expect(page.getByTestId("playback-elapsed")).not.toContainText("⏵", { timeout: 15000 });
     await expectDeviceGivenBack();
     const landed = server.sidPlayer?.tunePositionSeconds ?? 0;
     expect(landed).toBeGreaterThan(before - 11);
