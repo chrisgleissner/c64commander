@@ -58,6 +58,8 @@ const cpuSpeedWrites = () =>
 
 const keyEvents = (key: string) =>
   server.machineInputEvents.filter((event) => event.inputs.includes(key)).map((event) => event.transition);
+/** Presses only: every restore also releases minus and plus, whether or not they were pressed. */
+const keyPresses = (key: string) => keyEvents(key).filter((transition) => transition === "press").length;
 
 const startSeekableTune = async (page: Page) => {
   await page.goto("/play");
@@ -174,7 +176,8 @@ test.describe("Remote SID seek", () => {
     const landed = server.sidPlayer?.tunePositionSeconds ?? 0;
     expect(landed).toBeGreaterThan(duration * 0.25 - 0.5);
     expect(landed).toBeLessThan(duration * 0.25 + 4);
-    expect(keyEvents("minus")).toEqual(["press", "release"]);
+    // One backward jump, one restart.
+    expect(keyPresses("minus")).toBe(1);
     await attachStepScreenshot(page, testInfo, "after-jumps");
   });
 
@@ -193,7 +196,7 @@ test.describe("Remote SID seek", () => {
 
     // Held for one step, which goes back 10 seconds.
     await hold(page, page.getByTestId("playlist-prev"), 1000);
-    await expect.poll(() => keyEvents("plus").length, { timeout: 15000 }).toBe(2);
+    await expect.poll(() => keyPresses("plus"), { timeout: 15000 }).toBe(1);
     // Landed once the timer shows a position again rather than the target it was heading for.
     await expect(page.getByTestId("playback-elapsed")).not.toContainText("⏵", { timeout: 15000 });
     await expectDeviceGivenBack();
