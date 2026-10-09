@@ -331,6 +331,21 @@ describe("useRemoteSidSeek", () => {
     expect(rebasedSeconds(rebasePlaybackPosition)).toBeLessThan(56);
   });
 
+  it("rewinds from where a running jump is heading when Previous is held during it", async () => {
+    const { result, rebasePlaybackPosition } = render();
+    await advance(PROBED_MS);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.5));
+    await advance(400);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(-5);
+    });
+    expect((result.current.targetMs ?? 0) / 1000).toBeCloseTo(90 - 10, 0);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(20_000);
+    expect(Math.abs(rebasedSeconds(rebasePlaybackPosition) - 80)).toBeLessThan(2);
+  });
+
   it("keeps a hold when the other button is pressed too, and gives the device back on release", async () => {
     const { result, rerender } = render();
     await advance(PROBED_MS);

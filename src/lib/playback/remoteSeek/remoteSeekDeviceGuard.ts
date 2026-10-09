@@ -8,7 +8,9 @@
 
 import type { ConfigResponse, MachineInputBatch } from "@/lib/c64api";
 import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { AUDIO_MIXER_MASTER_VOLUME_ITEM } from "@/lib/config/configItems";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
+import { isSidVolumeOffValue } from "@/lib/config/sidVolumeControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
 import { FAST_FORWARD_HELD, FAST_FORWARD_RELEASED, isFastForwardPatchSite } from "./sidPlayerFastForwardPatch";
@@ -27,6 +29,7 @@ export { RemoteSeekSessionClosedError };
  */
 
 export const U64_SETTINGS_CATEGORY = "U64 Specific Settings";
+export const AUDIO_MIXER_CATEGORY = "Audio Mixer";
 export const CPU_SPEED_ITEM = "CPU Speed";
 export const TURBO_CONTROL_ITEM = "Turbo Control";
 export const SYSTEM_MODE_ITEM = "System Mode";
@@ -75,6 +78,8 @@ export type RemoteSeekJournal = {
   /** Recorded only when the seek switched Turbo Control, so a restore never writes it needlessly. */
   originalTurboControl: string | null;
   keyHeld: boolean;
+  /** `Vol Master` before a rewind turned it off; absent when nothing was muted, and in older journals. */
+  originalMasterVolume?: string | null;
   /** Set when fast forward is held through the player's code instead of the key; absent in older journals. */
   fastForwardPatch?: { ldyOperandAddress: number } | null;
   startedAtMs: number;
@@ -120,18 +125,22 @@ const clearJournalIfOwn = (journal: RemoteSeekJournal) => {
 const liveSessions = new Map<string, RemoteSeekDeviceSession>();
 let sessionCounter = 0;
 
-/** The current value and options of one U64 Specific Settings item, read from the device itself. */
-export const readU64ConfigItem = async (api: RemoteSeekDeviceApi, item: string): Promise<ConfigItemSnapshot> => {
-  const response = await api.getConfigItem(U64_SETTINGS_CATEGORY, item, {
-    __c64uIntent: "user",
-    __c64uBypassCache: true,
-  });
-  const category = response[U64_SETTINGS_CATEGORY] as Record<string, unknown> | undefined;
+/** The current value and options of one config item, read from the device itself. */
+const readConfigItem = async (
+  api: RemoteSeekDeviceApi,
+  categoryName: string,
+  item: string,
+): Promise<ConfigItemSnapshot> => {
+  const response = await api.getConfigItem(categoryName, item, { __c64uIntent: "user", __c64uBypassCache: true });
+  const category = response[categoryName] as Record<string, unknown> | undefined;
   const raw = category?.[item] ?? (category?.items as Record<string, unknown> | undefined)?.[item];
-  if (raw === undefined) throw new Error(`${U64_SETTINGS_CATEGORY} / ${item} is not reported by the device`);
+  if (raw === undefined) throw new Error(`${categoryName} / ${item} is not reported by the device`);
   const normalized = normalizeConfigItem(raw);
   return { value: String(normalized.value), options: normalized.options ?? [] };
 };
+
+export const readU64ConfigItem = (api: RemoteSeekDeviceApi, item: string) =>
+  readConfigItem(api, U64_SETTINGS_CATEGORY, item);
 
 /** Every key a seek presses: the fast-forward key, and minus and plus to restart the sub tune. */
 const SEEK_KEYS = [FAST_FORWARD_KEY, "minus", "plus"] as const;
@@ -202,6 +211,13 @@ export const restoreFromJournal = async (
       const patch = journal.fastForwardPatch ?? null;
       if (patch) await releaseFastForwardPatch(api, patch.ldyOperandAddress);
       else await releaseSeekKeys(api);
+      // Sound comes back as soon as the tune plays at its own speed again, before the slower config writes.
+      const masterVolume = journal.originalMasterVolume ?? null;
+      if (masterVolume !== null) {
+        await api.setConfigValue(AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM, masterVolume, {
+          __c64uTransientConfigRestore: true,
+        });
+      }
       if (journal.cpuSpeedChanged) {
         await api.setConfigValue(U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, journal.originalCpuSpeed, {
           __c64uTransientConfigRestore: true,
@@ -214,9 +230,12 @@ export const restoreFromJournal = async (
       }
       const cpuSpeed = journal.cpuSpeedChanged ? await readU64ConfigItem(api, CPU_SPEED_ITEM) : null;
       const turbo = journal.originalTurboControl === null ? null : await readU64ConfigItem(api, TURBO_CONTROL_ITEM);
+      const master =
+        masterVolume === null ? null : await readConfigItem(api, AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM);
       const restored =
         (cpuSpeed === null || sameOption(cpuSpeed.value, journal.originalCpuSpeed)) &&
-        (turbo === null || sameOption(turbo.value, journal.originalTurboControl as string));
+        (turbo === null || sameOption(turbo.value, journal.originalTurboControl as string)) &&
+        (master === null || sameOption(master.value, masterVolume as string));
       if (restored) {
         clearJournalIfOwn(journal);
         addLog("info", "Remote seek restored the device", { reason, attempt, journal });
@@ -226,7 +245,8 @@ export const restoreFromJournal = async (
         `Read-back after restore shows CPU Speed ${cpuSpeed?.value}` +
           (turbo ? `, Turbo Control ${turbo.value}` : "") +
           `; expected ${journal.originalCpuSpeed}` +
-          (journal.originalTurboControl ? `, ${journal.originalTurboControl}` : ""),
+          (journal.originalTurboControl ? `, ${journal.originalTurboControl}` : "") +
+          (master ? `; Vol Master ${master.value}, expected ${masterVolume}` : ""),
       );
     } catch (error) {
       lastError = error;
@@ -264,6 +284,7 @@ export class RemoteSeekDeviceSession {
   private restoring: Promise<boolean> | null = null;
   private restored = false;
   private closed = false;
+  private muteAttempted = false;
   private readonly inFlight = new Set<Promise<void>>();
 
   private constructor(
@@ -355,6 +376,8 @@ export class RemoteSeekDeviceSession {
 
   pressKey(): Promise<void> {
     return this.mutate(async () => {
+      await this.muteOnce();
+      this.assertOpen();
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
       if (this.fastForward.kind === "key") {
@@ -371,6 +394,8 @@ export class RemoteSeekDeviceSession {
   tapKey(key: "minus" | "plus", holdMs: number): Promise<void> {
     return this.mutate(async () => {
       if (this.fastForward.kind !== "key") throw new Error("This machine takes no key input");
+      await this.muteOnce();
+      this.assertOpen();
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
       await sendKey(this.api, "press", key);
@@ -405,6 +430,31 @@ export class RemoteSeekDeviceSession {
         return restored;
       });
     return this.restoring;
+  }
+
+  /**
+   * Turn `Vol Master` off before the first key of the seek: a restart and a fast forward at any speed
+   * would otherwise be heard, also through the audio stream the phone mirrors. The original goes into
+   * the journal first, so every restore puts it back. A machine without `Vol Master`, such as the
+   * Ultimate-II+(L), stays as it is.
+   */
+  private async muteOnce() {
+    if (this.muteAttempted) return;
+    this.muteAttempted = true;
+    const master = await readConfigItem(this.api, AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM).catch(
+      (error) => {
+        addLog("debug", "Remote seek: no Vol Master to mute", errorDetails(error));
+        return null;
+      },
+    );
+    const off = master?.options.find((option) => isSidVolumeOffValue(option));
+    if (!master || !off || isSidVolumeOffValue(master.value)) return;
+    this.assertOpen();
+    this.journal = { ...this.journal, originalMasterVolume: master.value };
+    writeJournal(this.journal.deviceKey, this.journal);
+    await this.api.setConfigValue(AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM, off, {
+      __c64uTransientConfigWrite: true,
+    });
   }
 
   private mutate(change: () => Promise<void>): Promise<void> {

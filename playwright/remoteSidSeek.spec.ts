@@ -42,12 +42,21 @@ const DEVICE_CPU_SPEEDS = [
   "64",
 ].map((mhz) => mhz.padStart(2, " "));
 
-/** The shared fixture, with CPU Speed spelled as the firmware spells it: " 1" to " 8" are space-padded. */
+/**
+ * The shared fixture, with CPU Speed spelled as the firmware spells it (" 1" to " 8" are space-padded)
+ * and the Audio Mixer's Vol Master, which a seek turns off while it fast forwards.
+ */
 const deviceConfigState = () => {
   const state = structuredClone(uiFixtures.configState);
   state["U64 Specific Settings"]["CPU Speed"] = { value: " 1", options: DEVICE_CPU_SPEEDS };
+  state["Audio Mixer"]["Vol Master"] = { value: " 0 dB", options: ["OFF", "-42 dB", "-6 dB", " 0 dB", "+6 dB"] };
   return state;
 };
+
+const masterVolumeWrites = () =>
+  server.requests
+    .filter((request) => request.method === "PUT" && request.url.includes("/Vol%20Master?value="))
+    .map((request) => decodeURIComponent(request.url.split("value=")[1]).trim());
 
 let server: MockC64Server;
 
@@ -111,6 +120,13 @@ const expectDeviceGivenBack = async () => {
   await expect.poll(() => server.sidPlayer?.heldKeys ?? ["no player"]).toEqual([]);
   await expect.poll(() => String(server.getState()["U64 Specific Settings"]?.["CPU Speed"]?.value)).toBe(" 1");
   await expect.poll(() => server.getState()["U64 Specific Settings"]?.["Turbo Control"]?.value).toBe("Off");
+  await expect.poll(() => server.getState()["Audio Mixer"]?.["Vol Master"]?.value).toBe(" 0 dB");
+};
+
+/** A jump has landed once the timer shows a position again rather than the target it was heading for. */
+const expectLanded = async (page: Page) => {
+  await expect(page.getByTestId("playback-elapsed")).not.toContainText("⏵", { timeout: 20000 });
+  await expectDeviceGivenBack();
 };
 
 test.describe("Remote SID seek", () => {
@@ -172,7 +188,7 @@ test.describe("Remote SID seek", () => {
 
     await tapProgressAt(page, 0.25);
     await expect.poll(() => server.sidPlayer?.restarts, { timeout: 15000 }).toBe(3);
-    await expectDeviceGivenBack();
+    await expectLanded(page);
     const landed = server.sidPlayer?.tunePositionSeconds ?? 0;
     expect(landed).toBeGreaterThan(duration * 0.25 - 0.5);
     expect(landed).toBeLessThan(duration * 0.25 + 4);
@@ -197,9 +213,9 @@ test.describe("Remote SID seek", () => {
     // Held for one step, which goes back 10 seconds.
     await hold(page, page.getByTestId("playlist-prev"), 1000);
     await expect.poll(() => keyPresses("plus"), { timeout: 15000 }).toBe(1);
-    // Landed once the timer shows a position again rather than the target it was heading for.
-    await expect(page.getByTestId("playback-elapsed")).not.toContainText("⏵", { timeout: 15000 });
-    await expectDeviceGivenBack();
+    await expectLanded(page);
+    // The rewind was not heard: Vol Master went off before the restart and came back once it landed.
+    expect(masterVolumeWrites().slice(-2)).toEqual(["OFF", "0 dB"]);
     const landed = server.sidPlayer?.tunePositionSeconds ?? 0;
     expect(landed).toBeGreaterThan(before - 11);
     expect(landed).toBeLessThan(before);

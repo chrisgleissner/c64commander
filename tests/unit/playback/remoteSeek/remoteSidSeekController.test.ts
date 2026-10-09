@@ -173,9 +173,12 @@ describe("remote SID seek controller", () => {
       latencyMs: 15,
     });
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
-    await settle(controller.jumpTo(() => 0, 45));
-    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(44.5);
-    expect(device.player.tunePositionSeconds).toBeLessThan(46.5);
+    const landed = await settle(controller.jumpTo(() => 0, 45));
+    // The tune plays on while the queued config writes give the device back, so check where it landed.
+    const sinceLanding = (Date.now() - (landed?.atMs ?? 0)) / 1000;
+    expect(device.player.tunePositionSeconds - sinceLanding).toBeGreaterThanOrEqual(44.5);
+    expect(device.player.tunePositionSeconds - sinceLanding).toBeLessThan(46.5);
+    expect(Math.abs((landed?.seconds ?? 0) + sinceLanding - device.player.tunePositionSeconds)).toBeLessThan(1.5);
   });
 
   it("lands on slow round trips, which leave more time between clock reads", async () => {
@@ -222,6 +225,26 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(149.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(151.5);
     expect(device.settings["CPU Speed"]).toBe(" 8");
+  });
+
+  it("pulses towards a near target at the slowest speed when the user runs the machine at 8 MHz", async () => {
+    const light = Object.fromEntries(
+      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate * 6.5]),
+    );
+    const device = createFakeRemoteSeekDevice({
+      settings: { "CPU Speed": " 8" },
+      fastForwardRateByMhz: light,
+      latencyMs: 20,
+      latencyJitterMs: 40,
+      keyReleaseDelayMs: 40,
+    });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await vi.advanceTimersByTimeAsync(60_000);
+    const landed = await settle(controller.jumpTo(() => device.player.tunePositionSeconds, 30));
+    const sinceLanding = (Date.now() - (landed?.atMs ?? 0)) / 1000;
+    expect(device.player.tunePositionSeconds - sinceLanding).toBeGreaterThan(29.5);
+    expect(device.player.tunePositionSeconds - sinceLanding).toBeLessThan(31.5);
+    expect(cpuSpeedWrites(device.log)).toEqual(["1 (transient)", "8 (restore)"]);
   });
 
   it("lands an NTSC tune on a PAL machine on the music's position, not the faster clock", async () => {
@@ -489,6 +512,63 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeGreaterThan(target - 0.5);
     expect(device.player.tunePositionSeconds).toBeLessThan(target + 1.5);
     expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1);
+  });
+
+  it("turns Vol Master off before a rewind restarts the tune, and on again as soon as the key is up", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await vi.advanceTimersByTimeAsync(60_000);
+    await settle(controller.jumpTo(() => 60, 20));
+    const at = (entry: string) => device.log.indexOf(entry);
+    expect(at("Vol Master=OFF (transient)")).toBeGreaterThanOrEqual(0);
+    expect(at("Vol Master=OFF (transient)")).toBeLessThan(at("key press minus"));
+    expect(at("Vol Master=0 dB (restore)")).toBeGreaterThan(device.log.lastIndexOf("key release arrow_left"));
+    expect(device.log.filter((entry) => entry.startsWith("Vol Master"))).toHaveLength(2);
+    expect(device.settings["Vol Master"]).toBe(" 0 dB");
+  });
+
+  it("mutes a held fast forward from its first key press until it is given back, before CPU Speed", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(2500);
+    await settle(controller.endFastForward());
+    const at = (entry: string) => device.log.indexOf(entry);
+    expect(at("Vol Master=OFF (transient)")).toBeLessThan(at("key press arrow_left"));
+    expect(at("Vol Master=0 dB (restore)")).toBeGreaterThan(device.log.lastIndexOf("key release arrow_left"));
+    expect(at("Vol Master=0 dB (restore)")).toBeLessThan(at("CPU Speed=1 (restore)"));
+    expect(device.settings["Vol Master"]).toBe(" 0 dB");
+  });
+
+  it("leaves the sound on for a short jump that only plays into its target", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await vi.advanceTimersByTimeAsync(30_000);
+    await settle(controller.jumpTo(() => device.player.tunePositionSeconds, 32));
+    expect(device.log.filter((entry) => entry.startsWith("Vol Master"))).toEqual([]);
+  });
+
+  it("rewinds without muting a machine that has no Vol Master, or whose Vol Master is already off", async () => {
+    for (const settings of [{ "Vol Master": "OFF" }, {}]) {
+      const device = createFakeRemoteSeekDevice({ settings });
+      if (!("Vol Master" in settings)) {
+        const read = device.api.getConfigItem;
+        device.api.getConfigItem = async (category, item, options) => {
+          if (item === "Vol Master") throw new Error("HTTP 404");
+          return read(category, item, options);
+        };
+      }
+      const controller = new RemoteSidSeekController(device.api, profile());
+      await vi.advanceTimersByTimeAsync(60_000);
+      await settle(controller.jumpTo(() => 60, 20));
+      expect(device.log.filter((entry) => entry.startsWith("Vol Master"))).toEqual([]);
+      expect(device.player.restarts).toBe(2);
+    }
   });
 
   it("does not jump back when the tune can be restarted neither by key nor by playing it again", async () => {

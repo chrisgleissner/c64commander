@@ -30,7 +30,8 @@ export const C64U_CPU_SPEEDS = [
 export const TURBO_CONTROL_VALUES = ["Off", "Manual", "U64 Turbo Registers", "TurboEnable Bit"];
 export const DEVICE_KEY = JSON.stringify(["5d0464", "c64u"]);
 
-type Settings = { "CPU Speed": string; "Turbo Control": string; "System Mode": string };
+type Settings = { "CPU Speed": string; "Turbo Control": string; "System Mode": string; "Vol Master": string };
+export const MASTER_VOLUME_VALUES = ["OFF", "-42 dB", "-6 dB", " 0 dB", "+6 dB"];
 
 /**
  * A C64 Ultimate as remote seeking talks to it: the SID player simulation behind readmem and
@@ -58,6 +59,7 @@ export const createFakeRemoteSeekDevice = (
     "CPU Speed": " 1",
     "Turbo Control": "Manual",
     "System Mode": "PAL",
+    "Vol Master": " 0 dB",
     ...options.settings,
   };
   const log: string[] = [];
@@ -87,7 +89,9 @@ export const createFakeRemoteSeekDevice = (
           ? C64U_CPU_SPEEDS
           : item === "Turbo Control"
             ? TURBO_CONTROL_VALUES
-            : ["PAL", "NTSC", "PAL-60", "NTSC-50"];
+            : item === "Vol Master"
+              ? MASTER_VOLUME_VALUES
+              : ["PAL", "NTSC", "PAL-60", "NTSC-50"];
       return { [category]: { [item]: { current: settings[item as keyof Settings], values } } } as never;
     },
     setConfigValue: async (_category, item, value, flags) => {

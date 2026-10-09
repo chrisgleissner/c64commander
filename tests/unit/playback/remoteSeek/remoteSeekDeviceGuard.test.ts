@@ -48,9 +48,11 @@ describe("remote seek device guard", () => {
     await session.setCpuSpeed("64");
     expect(await session.restore("test")).toBe(true);
     expect(device.log).toEqual([
+      "Vol Master=OFF (transient)",
       "key press arrow_left",
       "CPU Speed=64 (transient)",
       "key release arrow_left+minus+plus",
+      "Vol Master=0 dB (restore)",
       "CPU Speed=1 (restore)",
     ]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
@@ -144,9 +146,14 @@ describe("remote seek device guard", () => {
   it("waits for a key press already on the wire before it releases the key", async () => {
     const device = createFakeRemoteSeekDevice();
     let releasePress: () => void = () => undefined;
+    let pressOnWire: () => void = () => undefined;
+    const onWire = new Promise<void>((resolve) => {
+      pressOnWire = resolve;
+    });
     const send = device.api.sendMachineInputBatch;
     device.api.sendMachineInputBatch = async (batch) => {
       if (batch.events[0]?.kind === "keyboard" && batch.events[0].transition === "press") {
+        pressOnWire();
         await new Promise<void>((resolve) => {
           releasePress = resolve;
         });
@@ -155,11 +162,17 @@ describe("remote seek device guard", () => {
     };
     const session = await RemoteSeekDeviceSession.open(device.api);
     const press = session.pressKey();
+    await onWire;
     const restore = session.restore("cancelled mid-press");
     releasePress();
     await press;
     await restore;
-    expect(device.log).toEqual(["key press arrow_left", "key release arrow_left+minus+plus"]);
+    expect(device.log).toEqual([
+      "Vol Master=OFF (transient)",
+      "key press arrow_left",
+      "key release arrow_left+minus+plus",
+      "Vol Master=0 dB (restore)",
+    ]);
     expect(device.player.heldKeys).toEqual([]);
   });
 
@@ -358,6 +371,31 @@ describe("remote seek device guard", () => {
     );
     device.api.setConfigValue = write;
     expect(await recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
+  });
+
+  it("puts Vol Master back after an app killed mid seek, on the next connection", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.pressKey();
+    expect(device.settings["Vol Master"]).toBe("OFF");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toMatchObject({ originalMasterVolume: " 0 dB" });
+    vi.resetModules();
+    const fresh = await import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard");
+    expect(await fresh.recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
+    expect(device.settings["Vol Master"]).toBe(" 0 dB");
+    expect(device.player.heldKeys).toEqual([]);
+    expect(fresh.readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+  });
+
+  it("keeps the journal while Vol Master does not read back as it was", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.pressKey();
+    const write = device.api.setConfigValue;
+    device.api.setConfigValue = async (category, item, value, options) =>
+      item === "Vol Master" ? ({} as never) : write(category, item, value, options);
+    expect(await session.restore("released")).toBe(false);
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toMatchObject({ originalMasterVolume: " 0 dB" });
   });
 
   describe("on a machine that takes no key input", () => {

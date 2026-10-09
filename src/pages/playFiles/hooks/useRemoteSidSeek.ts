@@ -112,6 +112,8 @@ export const useRemoteSidSeek = ({
   const rewindTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jumpingRef = useRef(false);
+  /** Where the running jump, or the one queued behind it, is heading. */
+  const headingToRef = useRef<number | null>(null);
   /** The latest target asked for while a jump ran; it starts from where that jump landed. */
   const queuedTargetRef = useRef<number | null>(null);
   /** Holds engaged on Previous and Next together; the gesture ends when the last one is released. */
@@ -125,6 +127,7 @@ export const useRemoteSidSeek = ({
     holdRef.current = null;
     holdsDownRef.current = 0;
     queuedTargetRef.current = null;
+    headingToRef.current = null;
     latestLandingRef.current = null;
     if (rewindTimerRef.current !== null) clearInterval(rewindTimerRef.current);
     if (dragTimerRef.current !== null) clearTimeout(dragTimerRef.current);
@@ -235,6 +238,7 @@ export const useRemoteSidSeek = ({
       const owned = controllerRef.current;
       if (!owned) return;
       setTargetMs(clampMs(toSeconds * 1000));
+      headingToRef.current = toSeconds;
       if (jumpingRef.current) {
         queuedTargetRef.current = toSeconds;
         return;
@@ -257,6 +261,7 @@ export const useRemoteSidSeek = ({
         }
       } finally {
         jumpingRef.current = false;
+        headingToRef.current = null;
       }
     },
     [currentSeconds, land],
@@ -270,8 +275,9 @@ export const useRemoteSidSeek = ({
     (deltaSeconds: number) => {
       const owned = controllerRef.current;
       // A second button held at the same time joins the first gesture rather than starting another.
-      if (!owned || holdRef.current || jumpingRef.current) return;
-      const fromSeconds = currentSeconds();
+      if (!owned || holdRef.current) return;
+      // During a jump, a rewind counts back from where that jump is heading, and queues behind it.
+      const fromSeconds = headingToRef.current ?? currentSeconds();
       if (deltaSeconds > 0) {
         const hold: Hold = { direction: "forward", fromSeconds, rewindSteps: 0, ended: false };
         holdRef.current = hold;
