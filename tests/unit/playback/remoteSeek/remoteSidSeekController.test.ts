@@ -269,6 +269,29 @@ describe("remote SID seek controller", () => {
     expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(2);
   });
 
+  it("does not take a clock read caught mid-update for the clock wrapping at 99:59 during a jump", async () => {
+    const device = createFakeRemoteSeekDevice({ tornClockReads: [30, 60, 90, 120] });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const landed = await settle(controller.jumpTo(() => 0, 400));
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(398);
+    expect(device.player.tunePositionSeconds).toBeLessThan(402);
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+  });
+
+  it("does not take a clock read caught mid-update for the clock wrapping at 99:59 while Next is held", async () => {
+    const device = createFakeRemoteSeekDevice({ tornClockReads: [5, 8, 11] });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(4000);
+    const landed = await settle(controller.endFastForward());
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+  });
+
   it("gives the device back when a jump is cancelled half way", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
@@ -630,6 +653,28 @@ describe("remote SID seek controller when the device misbehaves", () => {
     };
     const landed = await settle(controller.jumpTo(() => 100, 20));
     expect(landed?.completed).toBe(false);
+    expect(device.player.heldKeys).toEqual([]);
+  });
+
+  it("does not take one read of a clock caught mid-update for a restart", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(() => 0, 100));
+    // The restart keys never reach the player, and the first clock read shows 01:00 as 00:00.
+    const send = device.api.sendMachineInputBatch;
+    device.api.sendMachineInputBatch = async (batch) =>
+      batch.events.some((event) => event.kind === "keyboard" && /minus|plus/.test(event.inputs.join()))
+        ? {}
+        : send(batch);
+    const read = device.api.readMemory;
+    let clockReads = 0;
+    device.api.readMemory = async (address, length, options) => {
+      const value = await read(address, length, options);
+      return address === "0B98" && ++clockReads === 1 ? new TextEncoder().encode("00:00") : value;
+    };
+    const landed = await settle(controller.jumpTo(() => 100, 20));
+    expect(landed?.completed).toBe(false);
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(100);
     expect(device.player.heldKeys).toEqual([]);
   });
 

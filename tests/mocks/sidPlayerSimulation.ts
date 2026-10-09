@@ -53,6 +53,11 @@ export type SidPlayerSimulationOptions = {
    * same count. By default the samples cycle through the range regardless of when they are read.
    */
   timerFollowsClock?: boolean;
+  /**
+   * The clock reads (counted from 1) that catch the player mid-update. It writes the digits ones
+   * first, so such a read shows the new seconds with the minutes still a minute behind.
+   */
+  tornClockReads?: number[];
   now?: () => number;
 };
 
@@ -73,6 +78,8 @@ export class SidPlayerSimulation {
   private readonly firstSpeedChangeDelayMs: number;
   private readonly keyReleaseDelayMs: number;
   private readonly timerFollowsClock: boolean;
+  private readonly tornClockReads: ReadonlySet<number>;
+  private clockReads = 0;
   private readonly timerOrigin: number;
   private pendingReleases = new Map<string, number>();
   private timerSample = 0;
@@ -90,6 +97,7 @@ export class SidPlayerSimulation {
     this.firstSpeedChangeDelayMs = options.firstSpeedChangeDelayMs ?? 0;
     this.keyReleaseDelayMs = options.keyReleaseDelayMs ?? 0;
     this.timerFollowsClock = options.timerFollowsClock ?? false;
+    this.tornClockReads = new Set(options.tornClockReads ?? []);
     this.timerOrigin = this.now();
     this.lastUpdate = this.now();
   }
@@ -151,12 +159,13 @@ export class SidPlayerSimulation {
   /** Memory as `GET /v1/machine:readmem` returns it, for the addresses the player and seeking use. */
   readMemory(address: number, length: number): Uint8Array {
     this.advance();
+    const torn = address === SIMULATED_SCREEN_ADDRESS + 920 && this.tornClockReads.has(++this.clockReads);
     const out = new Uint8Array(length);
-    for (let index = 0; index < length; index += 1) out[index] = this.byteAt(address + index);
+    for (let index = 0; index < length; index += 1) out[index] = this.byteAt(address + index, torn);
     return out;
   }
 
-  private byteAt(address: number): number {
+  private byteAt(address: number, torn = false): number {
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;
     if (address === 0xdc04 || address === 0xdc05) {
@@ -171,7 +180,7 @@ export class SidPlayerSimulation {
     const offset = address - SIMULATED_SCREEN_ADDRESS;
     if (offset >= 0 && offset < TITLE.length) return toScreenCode(TITLE[offset]);
     if (offset >= 920 && offset < 925) {
-      const shown = Math.floor(this.clockSeconds);
+      const shown = Math.max(0, Math.floor(this.clockSeconds) - (torn ? 60 : 0));
       const text = `${String(Math.floor(shown / 60) % 100).padStart(2, "0")}:${String(shown % 60).padStart(2, "0")}`;
       return text.charCodeAt(offset - 920);
     }

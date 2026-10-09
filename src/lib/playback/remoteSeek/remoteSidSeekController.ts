@@ -346,7 +346,7 @@ export class RemoteSidSeekController {
           const wait = JUMP_POLL_MIN_INTERVAL_MS - (Date.now() - lastReadAt);
           if (wait > 0) await sleep(wait);
           const readStartedAt = Date.now();
-          const clock = await this.readClock(true);
+          const clock = await this.readClockFor(model, true);
           const readAt = Date.now();
           // The poll cadence plus this read's round trip; waits for a CPU Speed write are not part of it.
           const period = (JUMP_POLL_MIN_INTERVAL_MS + readAt - readStartedAt) / 1000;
@@ -504,7 +504,7 @@ export class RemoteSidSeekController {
     if (run.polling) return;
     run.polling = true;
     try {
-      const clock = await this.readClock(false);
+      const clock = await this.readClockFor(run.model, false);
       if (clock === null || this.fastForward !== run) return;
       run.onPosition(run.model.advance(clock, true));
     } catch (error) {
@@ -517,8 +517,18 @@ export class RemoteSidSeekController {
   /** Read the clock once the key is surely up, crediting what ran since the last read to the fast forward. */
   private async settle(model: PositionModel, fast: boolean) {
     await sleep(KEY_SETTLE_MS);
-    const clock = await this.readClock(fast);
+    const clock = await this.readClockFor(model, fast);
     if (clock !== null) model.advance(clock, true);
+  }
+
+  /**
+   * The player rewrites its clock digits ones first, so a read in the middle of that shows the
+   * minutes a minute behind. A read that steps back is therefore read again: only a second one that
+   * agrees is the clock wrapping at 99:59.
+   */
+  private async readClockFor(model: PositionModel, fast: boolean) {
+    const clock = await this.readClock(fast);
+    return clock !== null && model.stepsBack(clock) ? this.readClock(fast) : clock;
   }
 
   private readClock(fast: boolean) {
@@ -556,10 +566,13 @@ export class RemoteSidSeekController {
       await sleep(KEY_GAP_MS);
     }
     const deadline = Date.now() + RESTART_TIMEOUT_MS;
+    // Twice in a row: a single read can catch the clock mid-update with its minutes a minute behind.
+    let restartedReads = 0;
     while (Date.now() < deadline) {
       this.assertCurrent(generation);
       const clock = await this.readClock(true);
-      if (clock !== null && clock <= 1) return;
+      restartedReads = clock !== null && clock <= 1 ? restartedReads + 1 : 0;
+      if (restartedReads === 2) return;
       await sleep(JUMP_POLL_MIN_INTERVAL_MS);
     }
     throw new Error("The tune did not restart");

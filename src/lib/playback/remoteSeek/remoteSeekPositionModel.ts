@@ -54,6 +54,10 @@ export class PositionModel {
     return this.position;
   }
 
+  stepsBack(clock: number) {
+    return clock < this.lastClock;
+  }
+
   get seconds() {
     return this.position;
   }
