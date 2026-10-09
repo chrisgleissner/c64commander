@@ -204,8 +204,16 @@ export class SeekTestDevice {
   reset = () => this.request("PUT", "/v1/machine:reset");
 }
 
-/** The REST API as remote seeking uses it, bound to the identity this test says it is connected to. */
-export const seekTestApi = (device: SeekTestDevice, deviceKey: () => string | null): RemoteSeekApi => ({
+/**
+ * The REST API as remote seeking uses it, bound to the identity this test says it is connected to.
+ * A test that reloads the app's modules passes the reloaded `withPermits`: the controller grants permits
+ * in its own module instance, and only that instance's check sees them.
+ */
+export const seekTestApi = (
+  device: SeekTestDevice,
+  deviceKey: () => string | null,
+  withPermits: typeof withSeekKeyPermits = withSeekKeyPermits,
+): RemoteSeekApi => ({
   currentDeviceKey: deviceKey,
   getConfigItem: async (category, item) =>
     (await device.json("GET", `/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`)) as never,
@@ -214,7 +222,7 @@ export const seekTestApi = (device: SeekTestDevice, deviceKey: () => string | nu
     return {} as never;
   },
   // Through the same permit check as the app's REST wiring, so a seek key needs the player confirmed.
-  sendMachineInputBatch: withSeekKeyPermits(
+  sendMachineInputBatch: withPermits(
     async (batch) =>
       (await device.request("POST", "/v1/machine:input", { body: JSON.stringify(batch), type: "application/json" }))
         .bytes,

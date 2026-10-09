@@ -51,6 +51,7 @@ vi.mock("@/lib/logging", () => ({
 type GuardModule = typeof import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard");
 type ControllerModule = typeof import("@/lib/playback/remoteSeek/remoteSidSeekController");
 type ProbeModule = typeof import("@/lib/playback/remoteSeek/remoteTuneSeekProbe");
+type PermitModule = typeof import("@/lib/playback/remoteSeek/seekKeyPermit");
 type SeekProfile = import("@/lib/playback/remoteSeek/remoteTuneSeekProbe").RemoteTuneSeekProfile;
 
 const HOST = process.env.SOAK_HOST ?? "c64u";
@@ -153,7 +154,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
     );
 
     let modules = await loadModules();
-    let api = seekTestApi(device, () => connectedKey);
+    let api = seekTestApi(device, () => connectedKey, modules.permits.withSeekKeyPermits);
     let variant: CounterTune = SOAK_TUNES[0];
     let profile: SeekProfile | null = null;
     let controller: InstanceType<ControllerModule["RemoteSidSeekController"]> | null = null;
@@ -361,7 +362,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
           vi.resetModules();
           modules = await loadModules();
           device = newDevice();
-          api = seekTestApi(device, () => connectedKey);
+          api = seekTestApi(device, () => connectedKey, modules.permits.withSeekKeyPermits);
           const leftover = await invariants(true);
           const recovered = await modules.guard.recoverRemoteSeekJournal(api);
           await startTune(variant);
@@ -594,4 +595,5 @@ const loadModules = async () => ({
   guard: (await import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard")) as GuardModule,
   controller: (await import("@/lib/playback/remoteSeek/remoteSidSeekController")) as ControllerModule,
   probe: (await import("@/lib/playback/remoteSeek/remoteTuneSeekProbe")) as ProbeModule,
+  permits: (await import("@/lib/playback/remoteSeek/seekKeyPermit")) as PermitModule,
 });
