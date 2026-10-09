@@ -75,12 +75,20 @@ const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.lengt
 
 type Variant = { name: string; video: "PAL" | "NTSC"; busyLoops: number; ciaTimer: number | null; callHz: number };
 
+/**
+ * Exact play-call rates on a PAL machine, so a count converts to real seconds: a PAL frame is 19656
+ * cycles (50.1245 Hz, not 50), and the player times an NTSC tune at 16388 cycles (60.12 Hz, measured
+ * on the C64 Ultimate). Nominal rates put the reference 0.25% ahead, 15 s at an hour into a tune.
+ */
+const PAL_CPU_HZ = 985248;
+const callHzOf = (cyclesPerCall: number) => PAL_CPU_HZ / cyclesPerCall;
+
 const VARIANTS: Variant[] = [
-  { name: "PAL, once a frame, light", video: "PAL", busyLoops: 0, ciaTimer: null, callHz: 50 },
-  { name: "PAL, once a frame, heavy", video: "PAL", busyLoops: 255, ciaTimer: null, callHz: 50 },
-  { name: "NTSC on the machine's frame", video: "NTSC", busyLoops: 200, ciaTimer: null, callHz: 60 },
-  { name: "PAL, CIA timer at 4x", video: "PAL", busyLoops: 200, ciaTimer: 0x1331, callHz: 200 },
-  { name: "PAL, CIA timer at 2x", video: "PAL", busyLoops: 120, ciaTimer: 0x2663, callHz: 100 },
+  { name: "PAL, once a frame, light", video: "PAL", busyLoops: 0, ciaTimer: null, callHz: callHzOf(19656) },
+  { name: "PAL, once a frame, heavy", video: "PAL", busyLoops: 255, ciaTimer: null, callHz: callHzOf(19656) },
+  { name: "NTSC on the machine's frame", video: "NTSC", busyLoops: 200, ciaTimer: null, callHz: callHzOf(16388) },
+  { name: "PAL, CIA timer at 4x", video: "PAL", busyLoops: 200, ciaTimer: 0x1331, callHz: callHzOf(0x1331 + 1) },
+  { name: "PAL, CIA timer at 2x", video: "PAL", busyLoops: 120, ciaTimer: 0x2663, callHz: callHzOf(0x2663 + 1) },
 ];
 
 const counterPsid = (variant: Variant): Uint8Array => {
@@ -115,6 +123,13 @@ const counterPsid = (variant: Variant): Uint8Array => {
 // reads that can bypass nothing here because nothing in this process throttles them.
 // ------------------------------------------------------------------------------------------------
 
+const SLOW_REQUEST_MS = 1500;
+
+/** An operation the soak expects to fail, such as one it cancels or kills; noted, not hidden. */
+const noteFailure = (what: string) => (error: unknown) => {
+  progress(`[soak ${HOST}] ${what} ended with: ${error instanceof Error ? error.message : String(error)}`);
+};
+
 /** Across every simulated app process, so a report covers the whole soak. */
 const totals = { requests: 0, failures: 0, slowest: 0 };
 
@@ -140,9 +155,12 @@ class Device {
       return bytes;
     } catch (error) {
       totals.failures += 1;
+      progress(`[soak ${HOST} request] ${method} ${route} failed after ${Date.now() - started} ms: ${error}`);
       throw error;
     } finally {
-      totals.slowest = Math.max(totals.slowest, Date.now() - started);
+      const ms = Date.now() - started;
+      totals.slowest = Math.max(totals.slowest, ms);
+      if (ms > SLOW_REQUEST_MS) progress(`[soak ${HOST} request] ${method} ${route} took ${ms} ms`);
     }
   }
 
@@ -268,6 +286,9 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       cpu: (await device.item("CPU Speed")).current,
       turbo: (await device.item("Turbo Control")).current,
     };
+    const systemMode = (await device.item("System Mode")).current.trim();
+    if (systemMode !== "PAL")
+      throw new Error(`The soak's play-call rates are for a PAL machine; ${HOST} runs ${systemMode}`);
     const settingsOf = () => ({ ...baseline });
     let expected = settingsOf();
     console.log(
@@ -445,7 +466,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
         weight: 3,
         run: async () => {
           const started = Date.now();
-          const begin = controller!.beginFastForward(origin, () => undefined).catch(() => undefined);
+          const begin = controller!.beginFastForward(origin, () => undefined).catch(noteFailure("cancelled hold"));
           await sleep(between(10, 3000));
           await controller!.cancel("soak: pause");
           await begin;
@@ -462,7 +483,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
             random() < 0.5
               ? controller!.beginFastForward(origin, () => undefined)
               : controller!.jumpTo(origin, between(0, 500));
-          void operation.catch(() => undefined);
+          void operation.catch(noteFailure("killed operation"));
           await sleep(between(50, 3000));
           // The process is gone: nothing it had queued or in flight may reach the device any more.
           device.dead = true;
@@ -494,7 +515,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
           const started = Date.now();
           const operation =
             random() < 0.5
-              ? controller!.beginFastForward(origin, () => undefined).catch(() => undefined)
+              ? controller!.beginFastForward(origin, () => undefined).catch(noteFailure("interrupted hold"))
               : controller!.jumpTo(origin, between(0, 500));
           await sleep(between(50, 2500));
           connectedKey = JSON.stringify(["ffffff", "another-ultimate"]);
@@ -519,7 +540,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
           const started = Date.now();
           const operation =
             random() < 0.5
-              ? controller!.beginFastForward(origin, () => undefined).catch(() => undefined)
+              ? controller!.beginFastForward(origin, () => undefined).catch(noteFailure("interrupted hold"))
               : controller!.jumpTo(origin, between(0, 500));
           await sleep(between(50, 2000));
           // What the Play page does: cancel first, then start the next tune.
@@ -542,7 +563,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
           let loading = true;
           const load = (async () => {
             while (loading) {
-              await device.readmem(0x0400, 64).catch(() => undefined);
+              await device.readmem(0x0400, 64).catch(noteFailure("background read"));
               await sleep(40);
             }
           })();
@@ -572,6 +593,30 @@ describe(`remote SID seek soak on ${HOST}`, () => {
 
     await startTune(VARIANTS[0]);
     let iteration = 0;
+    /**
+     * Put the device back to the baseline the next operations assume. A device that stopped answering
+     * gets a few more chances, each failure logged, before the soak gives up on it.
+     */
+    const resetAfterViolation = async (restartTune: boolean) => {
+      localStorage.removeItem(JOURNAL_KEY);
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await device.request("POST", "/v1/machine:input", {
+            body: JSON.stringify({ events: [{ kind: "release_all" }] }),
+            type: "application/json",
+          });
+          await device.write("CPU Speed", expected.cpu);
+          await device.write("Turbo Control", expected.turbo);
+          if (restartTune) await startTune(variant);
+          return;
+        } catch (error) {
+          progress(`[soak ${HOST}] reset after a violation, attempt ${attempt}, failed: ${error}`);
+          if (attempt === 5) throw error;
+          await sleep(5000);
+        }
+      }
+    };
+
     try {
       while (Date.now() < deadline) {
         iteration += 1;
@@ -587,7 +632,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
         }
         // A landing the app would show more than a few seconds away from the tune is a defect.
         // A light play routine fast forwards about 65x even at 1 MHz, so 60 ms of timing is 4 s of tune.
-        const tolerance = variant.busyLoops === 0 ? 6 : variant.callHz > 60 ? 4 : 2.5;
+        const tolerance = variant.busyLoops === 0 ? 6 : variant.ciaTimer !== null ? 4 : 2.5;
         if (record.errorSeconds !== undefined && Math.abs(record.errorSeconds) > tolerance) {
           record.violations.push(`landing off by ${record.errorSeconds.toFixed(2)} s`);
         }
@@ -607,16 +652,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
             `${record.ms} ms${record.errorSeconds !== undefined ? ` model ${record.errorSeconds.toFixed(2)} s` : ""}` +
             `${record.targetErrorSeconds !== undefined ? ` target ${record.targetErrorSeconds.toFixed(2)} s` : ""} ${status}`,
         );
-        if (record.violations.length) {
-          // Put the device back to the baseline the next operations assume, then carry on.
-          localStorage.removeItem(JOURNAL_KEY);
-          await device.request("POST", "/v1/machine:input", {
-            body: JSON.stringify({ events: [{ kind: "release_all" }] }),
-            type: "application/json",
-          });
-          await device.write("CPU Speed", expected.cpu);
-          await device.write("Turbo Control", expected.turbo);
-        }
+        if (record.violations.length) await resetAfterViolation(record.violations.some((v) => v.startsWith("threw")));
       }
     } finally {
       await controller?.cancel("soak finished");

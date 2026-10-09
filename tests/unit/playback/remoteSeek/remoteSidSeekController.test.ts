@@ -410,6 +410,34 @@ describe("remote SID seek controller", () => {
     expect(device.log).toEqual([]);
   });
 
+  it("reads where a hold stopped only after the restore released a key whose release timed out", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(2500);
+    device.failures.keyEvents = 1;
+    device.failures.keyEventStallMs = 8000;
+    const landed = await settle(controller.endFastForward());
+    expect(device.player.heldKeys).toEqual([]);
+    expect(Math.abs((landed?.seconds ?? -1000) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+  });
+
+  it("counts the wait for a key press that timed out as normal play, for a multi-speed tune", async () => {
+    const device = createFakeRemoteSeekDevice({ playCallHz: 200 });
+    const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 200 }));
+    device.failures.keyEvents = 1;
+    device.failures.keyEventStallMs = 8000;
+    const landed = await settle(controller.jumpTo(() => 0, 300));
+    expect(landed?.completed).toBe(false);
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(7);
+    expect(Math.abs((landed?.seconds ?? -1000) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+  });
+
   it("restores the device when a jump fails part way, and reports where the tune got to", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());

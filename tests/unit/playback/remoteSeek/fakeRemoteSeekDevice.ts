@@ -56,7 +56,8 @@ export const createFakeRemoteSeekDevice = (
     ...options.settings,
   };
   const log: string[] = [];
-  const failures = { configWrites: 0, keyEvents: 0 };
+  /** A failing key event leaves the key as it was; `keyEventStallMs` makes it fail as a timeout would, that late. */
+  const failures = { configWrites: 0, keyEvents: 0, keyEventStallMs: 0 };
   let connectedKey: string | null = options.deviceKey ?? DEVICE_KEY;
   const latencyMs = options.latencyMs ?? 0;
   let jitterStep = 0;
@@ -103,6 +104,7 @@ export const createFakeRemoteSeekDevice = (
         if (event.kind !== "keyboard") continue;
         if (failures.keyEvents > 0) {
           failures.keyEvents -= 1;
+          if (failures.keyEventStallMs) await new Promise((resolve) => setTimeout(resolve, failures.keyEventStallMs));
           log.push(`FAILED key ${event.transition} ${event.inputs.join("+")}`);
           throw new Error("HTTP 503");
         }

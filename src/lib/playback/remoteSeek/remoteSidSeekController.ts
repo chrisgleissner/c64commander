@@ -37,6 +37,7 @@ import {
   RemoteSeekCancelled,
   remoteSeekErrorDetails as errorDetails,
 } from "./remoteSeekErrors";
+import { PositionModel } from "./remoteSeekPositionModel";
 
 /**
  * Fast forward, rewind and jumps for a tune the C64 plays itself.
@@ -100,7 +101,6 @@ const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
 const FINAL_APPROACH_READS = 1.5;
 /** The clock shows whole seconds, so the tune is on average half a second past what it shows. */
 const CLOCK_ROUNDING_SECONDS = 0.5;
-const CLOCK_WRAP_SECONDS = 100 * 60;
 const KEY_HOLD_MS = 60;
 /**
  * A released key takes a frame or two to stop the fast forward. A light tune passes several clock
@@ -182,34 +182,6 @@ export const probeRemoteTuneSeek = async (
 };
 
 export const canRewindRemotely = (profile: RemoteTuneSeekProfile) => profile.cpuSpeedOptions.length > 1;
-
-/**
- * Tune position while fast forwarding. The clock counts play calls as frames then, so a clock
- * second is 1 / clockPerTuneSecond tune seconds with the key down, and one tune second with it up.
- */
-class PositionModel {
-  private lastClock: number;
-
-  constructor(
-    private position: number,
-    clock: number,
-    private readonly clockPerTuneSecond: number,
-  ) {
-    this.lastClock = clock;
-  }
-
-  advance(clock: number, keyHeld: boolean): number {
-    // The clock wraps after 99:59, which a light tune passes in a couple of seconds at 64 MHz.
-    const delta = clock >= this.lastClock ? clock - this.lastClock : clock + CLOCK_WRAP_SECONDS - this.lastClock;
-    this.lastClock = clock;
-    this.position += keyHeld ? delta / this.clockPerTuneSecond : delta;
-    return this.position;
-  }
-
-  get seconds() {
-    return this.position;
-  }
-}
 
 type FastForwardRun = {
   session: RemoteSeekDeviceSession;
@@ -300,15 +272,24 @@ export class RemoteSidSeekController {
       if (!run) return null;
       this.fastForward = null;
       this.stopTimers(run);
+      let landed = false;
       try {
         await run.session.releaseKey();
         await this.settle(run.model, false);
+        landed = true;
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
-      const landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+      let landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
       await run.speedWrites;
       await this.giveBack(run.session, reason);
+      if (!landed) {
+        // The key may have stayed down until the restore released it; only a read after that says where.
+        await this.settle(run.model, true).catch((error) =>
+          addLog("warn", "Remote fast forward could not read where the restore left it", errorDetails(error)),
+        );
+        landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+      }
       addLog("debug", "Remote fast forward ended", { reason, positionSeconds: landing.seconds });
       return landing;
     });

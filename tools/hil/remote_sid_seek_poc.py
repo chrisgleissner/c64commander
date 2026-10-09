@@ -63,7 +63,10 @@ COUNTER_ADDR = 0x10F0
 TUNE_LOAD = 0x1000
 PAL_FLAGS = 0x04
 NTSC_FLAGS = 0x08
-PLAY_RATE_HZ = {"PAL": 50.0, "NTSC": 60.0}
+PAL_CPU_HZ = 985248.0
+# Exact play-call rates on a PAL machine: a PAL frame is 19656 cycles, and the player times an NTSC
+# tune at 16388 cycles (measured). Nominal 50/60 Hz would put the reference 0.25% ahead.
+PLAY_RATE_HZ = {"PAL": PAL_CPU_HZ / 19656, "NTSC": PAL_CPU_HZ / 16388}
 
 # The app's ramp: the machine's own speed first, then these CPU Speeds, one per second held.
 RAMP_MHZ = [2, 4, 8, 16, 32]
@@ -583,10 +586,11 @@ def stage_seek(ctx: Context, write_interval_s: float = 0.0) -> dict:
     for label, video, timer in variants:
         device.sidplay(build_counter_psid(video, busy_loops=200, cia_timer=timer), "counter.sid")
         raw_hz, call_hz = measure_call_rate(device, cia_hz)
+        exact_hz = PLAY_RATE_HZ[video] if timer is None else cia_hz / (timer + 1)
         for target in (45.0, 200.0, 30.0, 120.0):
-            truth_before = device.counter() / call_hz
+            truth_before = device.counter() / exact_hz
             row = seek(device, ctx.speed_options, call_hz / frame_hz, truth_before, target, base, write_interval_s)
-            truth = device.counter() / call_hz
+            truth = device.counter() / exact_hz
             row.update({"variant": label, "call_hz_raw": round(raw_hz, 1), "call_hz": call_hz,
                         "truth_after_s": round(truth, 2), "error_s": round(truth - target, 2)})
             out["counter"].append(row)
