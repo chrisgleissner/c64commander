@@ -26,18 +26,14 @@ import {
   RATE_WINDOW_SECONDS,
   type MachineTiming,
 } from "./remoteSeekPlan";
-import {
-  isSidPlayerTitle,
-  parseSidPlayerClock,
-  SID_PLAYER_CLOCK_OFFSET,
-  sidPlayerScreenAddress,
-} from "./sidPlayerScreen";
+import { locateSidPlayerClock, readSidPlayerClock } from "./sidPlayerClock";
+import type { SidPlayerClockField } from "./sidPlayerScreen";
 import {
   isRemoteSeekSuperseded,
   RemoteSeekCancelled,
   remoteSeekErrorDetails as errorDetails,
 } from "./remoteSeekErrors";
-import { PositionModel } from "./remoteSeekPositionModel";
+import { JumpProgressWatch, PositionModel } from "./remoteSeekPositionModel";
 
 /**
  * Fast forward, rewind and jumps for a tune the C64 plays itself.
@@ -58,7 +54,8 @@ export type RemoteSeekApi = RemoteSeekDeviceApi & {
 };
 
 export type RemoteTuneSeekProfile = {
-  screenAddress: number;
+  /** Where the player draws its clock, found on the screen rather than assumed. */
+  clock: SidPlayerClockField;
   timing: MachineTiming;
   /** Play calls per second when the header settles it; null for a CIA-timed tune, which is measured. */
   headerPlayCallHz: number | null;
@@ -90,8 +87,6 @@ export const FAST_FORWARD_RAMP_INTERVAL_MS = 1000;
 export const FAST_FORWARD_POLL_INTERVAL_MS = 250;
 /** A hold longer than this ends by itself: no tune needs it, and a stuck gesture must not run on. */
 export const FAST_FORWARD_MAX_HOLD_MS = 120_000;
-/** A jump that has not landed by now is abandoned and the device given back. */
-export const JUMP_TIMEOUT_MS = 30_000;
 /** The fastest the clock is read during a jump; each read is a short REST round trip. */
 const JUMP_POLL_MIN_INTERVAL_MS = 30;
 const INITIAL_READ_PERIOD_SECONDS = 0.06;
@@ -109,15 +104,12 @@ const KEY_HOLD_MS = 60;
 const KEY_SETTLE_MS = 80;
 const KEY_GAP_MS = 50;
 const RESTART_TIMEOUT_MS = 3000;
-const SCREEN_PROBE_ATTEMPTS = 8;
-const SCREEN_PROBE_INTERVAL_MS = 400;
 /**
  * The largest of these many timer samples must come from the top 15% of the count, or a 100 Hz
  * tune measures as 120 Hz. Forty samples missed it once in a 30-minute soak on the Ultimate 64.
  */
 const TIMER_SAMPLE_COUNT = 100;
 
-const hex = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Why a tune cannot be seeked on the C64, or null when it can be as far as its header tells. */
@@ -137,17 +129,9 @@ export const headerPlayCallHz = (header: SidHeaderMetadata, songNr: number, timi
   return timing.frameHz;
 };
 
-const readClockAt = async (api: RemoteSeekApi, screenAddress: number, fast: boolean): Promise<number | null> =>
-  parseSidPlayerClock(
-    await api.readMemory(hex(screenAddress + SID_PLAYER_CLOCK_OFFSET), 5, {
-      __c64uIntent: "user",
-      __c64uBypassCooldown: fast,
-    }),
-  );
-
 /**
- * Find the player's screen after a tune starts, and the settings a seek depends on.
- * Returns null when the C64 is not showing the Ultimate SID player, e.g. on a simulated device.
+ * Find the player's clock after a tune starts, and the settings a seek depends on.
+ * Returns null when the C64 shows no ticking clock, e.g. on a simulated device.
  */
 export const probeRemoteTuneSeek = async (
   api: RemoteSeekApi,
@@ -155,18 +139,8 @@ export const probeRemoteTuneSeek = async (
   songNr: number,
   isCurrent: () => boolean = () => true,
 ): Promise<RemoteTuneSeekProfile | null> => {
-  let screenAddress: number | null = null;
-  for (let attempt = 0; attempt < SCREEN_PROBE_ATTEMPTS && isCurrent(); attempt += 1) {
-    if (attempt > 0) await sleep(SCREEN_PROBE_INTERVAL_MS);
-    const [dd00] = await api.readMemory("DD00", 1);
-    const [d018] = await api.readMemory("D018", 1);
-    const candidate = sidPlayerScreenAddress(dd00, d018);
-    if (!isSidPlayerTitle(await api.readMemory(hex(candidate), 40))) continue;
-    if ((await readClockAt(api, candidate, false)) === null) continue;
-    screenAddress = candidate;
-    break;
-  }
-  if (screenAddress === null) return null;
+  const clock = await locateSidPlayerClock(api.readMemory, isCurrent);
+  if (clock === null) return null;
   const systemMode = await readU64ConfigItem(api, SYSTEM_MODE_ITEM).catch((error) => {
     addLog("warn", "Remote seek: System Mode unreadable; assuming PAL timing", errorDetails(error));
     return null;
@@ -178,7 +152,7 @@ export const probeRemoteTuneSeek = async (
   const timing = machineTimingFor(systemMode?.value);
   const cpuSpeedOptions = (cpuSpeed?.options ?? []).filter((option) => cpuSpeedMhz(option) !== null);
   return {
-    screenAddress,
+    clock,
     timing,
     headerPlayCallHz: headerPlayCallHz(header, songNr, timing),
     cpuSpeedOptions: cpuSpeedOptions.length > 1 ? cpuSpeedOptions : [],
@@ -241,7 +215,7 @@ export class RemoteSidSeekController {
         const run: FastForwardRun = {
           session,
           polling: false,
-          model: new PositionModel(fromSeconds, clock, ratio),
+          model: new PositionModel(fromSeconds, clock, ratio, this.profile.clock.wrapSeconds),
           rampTimer: null,
           pollTimer: null,
           watchdog: null,
@@ -335,13 +309,13 @@ export class RemoteSidSeekController {
         this.assertCurrent(generation);
         const restart = target < origin();
         if (restart) {
-          model = new PositionModel(0, 0, ratio);
+          model = new PositionModel(0, 0, ratio, this.profile.clock.wrapSeconds);
           await this.restartTune(session, generation);
         }
         const startClock = await this.readClock(true);
         if (startClock === null) throw new Error("The SID player's clock is not on screen");
         // Asked again now: the tune played on while the rate was measured and the session opened.
-        model = new PositionModel(restart ? 0 : origin(), startClock, ratio);
+        model = new PositionModel(restart ? 0 : origin(), startClock, ratio, this.profile.clock.wrapSeconds);
         const planner = new JumpSpeedPlanner(this.profile.cpuSpeedOptions, session.originalCpuSpeed);
         let speed = session.originalCpuSpeed;
         let held = false;
@@ -350,10 +324,11 @@ export class RemoteSidSeekController {
         let rateWindow: { atMs: number; clock: number } | null = null;
         let readPeriodSeconds = INITIAL_READ_PERIOD_SECONDS;
         let lastReadAt = 0;
+        const progress = new JumpProgressWatch(model.seconds);
         while (model.seconds < target) {
           this.assertCurrent(generation);
-          if (Date.now() - startedAt > JUMP_TIMEOUT_MS)
-            throw new Error(`Jump did not land within ${JUMP_TIMEOUT_MS} ms`);
+          const stalled = progress.stopReason();
+          if (stalled) throw new Error(stalled);
           const wait = JUMP_POLL_MIN_INTERVAL_MS - (Date.now() - lastReadAt);
           if (wait > 0) await sleep(wait);
           const readStartedAt = Date.now();
@@ -365,6 +340,8 @@ export class RemoteSidSeekController {
           lastReadAt = readAt;
           if (clock === null) continue;
           const position = model.advance(clock, held || fastSinceLastRead);
+          const stopReason = progress.observe(position, held || fastSinceLastRead, readAt);
+          if (stopReason) throw new Error(stopReason);
           fastSinceLastRead = held;
           onPosition?.(Math.min(position, target));
           if (position >= target) break;
@@ -543,7 +520,7 @@ export class RemoteSidSeekController {
   }
 
   private readClock(fast: boolean) {
-    return readClockAt(this.api, this.profile.screenAddress, fast);
+    return readSidPlayerClock(this.api.readMemory, this.profile.clock, fast);
   }
 
   /** Clock seconds per tune second while fast forwarding; measured from CIA 1 timer A for CIA-timed tunes. */

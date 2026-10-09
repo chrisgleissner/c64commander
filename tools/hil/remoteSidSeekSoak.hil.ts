@@ -744,7 +744,7 @@ const runFailSafeChecks = async (device: Device, deviceKey: () => string | null,
     attempts += 1;
     await expect(modules.guard.RemoteSeekDeviceSession.open(api)).rejects.toThrow();
     const profile = {
-      screenAddress: 0x0400,
+      clock: { rowAddress: 0x0400 + 23 * 40, column: 0, length: 5, wrapSeconds: 6000 },
       timing: { frameHz: 50, ciaClockHz: 985248 },
       headerPlayCallHz: 50,
       cpuSpeedOptions: [" 1", " 64"],

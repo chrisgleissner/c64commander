@@ -24,8 +24,9 @@ import {
   RemoteSidSeekController,
   type RemoteTuneSeekProfile,
 } from "@/lib/playback/remoteSeek/remoteSidSeekController";
+import { locateSidPlayerClock } from "@/lib/playback/remoteSeek/sidPlayerClock";
 import type { SidHeaderMetadata } from "@/lib/sid/sidUtils";
-import { MEASURED_FAST_FORWARD_RATE_BY_MHZ, SIMULATED_SCREEN_ADDRESS } from "../../../mocks/sidPlayerSimulation";
+import { MEASURED_FAST_FORWARD_RATE_BY_MHZ, simulatedClockField } from "../../../mocks/sidPlayerSimulation";
 import { C64U_CPU_SPEEDS, createFakeRemoteSeekDevice, DEVICE_KEY } from "./fakeRemoteSeekDevice";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
@@ -41,7 +42,7 @@ const header = (overrides: Partial<SidHeaderMetadata> = {}) =>
   }) as SidHeaderMetadata;
 
 const profile = (overrides: Partial<RemoteTuneSeekProfile> = {}): RemoteTuneSeekProfile => ({
-  screenAddress: SIMULATED_SCREEN_ADDRESS,
+  clock: simulatedClockField(),
   timing: machineTimingFor("PAL"),
   headerPlayCallHz: 50,
   cpuSpeedOptions: C64U_CPU_SPEEDS,
@@ -521,15 +522,52 @@ describe("remote seek support", () => {
     expect(headerPlayCallHz(header({ speedBits: 0x8000_0000 }), 40, pal)).toBeNull();
   });
 
-  it("finds the player's screen and reads the machine's settings", async () => {
+  it("finds the player's clock, not the song length beside it, and reads the machine's settings", async () => {
+    vi.useFakeTimers();
     const device = createFakeRemoteSeekDevice();
-    const found = await probeRemoteTuneSeek(device.api, header(), 1);
+    const found = await settle(probeRemoteTuneSeek(device.api, header(), 1));
+    vi.useRealTimers();
     expect(found).toEqual({
-      screenAddress: SIMULATED_SCREEN_ADDRESS,
+      clock: simulatedClockField(),
       timing: machineTimingFor("PAL"),
       headerPlayCallHz: 50,
       cpuSpeedOptions: C64U_CPU_SPEEDS,
     });
+  });
+
+  it.each([
+    {
+      name: "elsewhere on the screen, unpadded",
+      layout: { clockRow: 5, clockColumn: 30, clockFormat: "m:ss" as const },
+    },
+    {
+      name: "with hours and no title or song length",
+      layout: { clockRow: 0, clockColumn: 20, clockFormat: "h:mm:ss" as const, title: "", songLengthRow: null },
+    },
+  ])("finds and follows the clock of a redesigned player that draws it $name", async ({ layout }) => {
+    vi.useFakeTimers();
+    const device = createFakeRemoteSeekDevice({ layout });
+    const found = await settle(probeRemoteTuneSeek(device.api, header(), 1));
+    expect(found?.clock).toEqual(simulatedClockField(layout));
+    const controller = new RemoteSidSeekController(device.api, found!);
+    // Across 9:59 to 10:00, where an unpadded clock grows by a cell.
+    const landed = await settle(controller.jumpTo(() => device.player.tunePositionSeconds, 700));
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(698.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(701.5);
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+    vi.useRealTimers();
+  });
+
+  it("does not read a screen that lies under the I/O area, where reads would reach the CIAs", async () => {
+    const reads: string[] = [];
+    const found = await locateSidPlayerClock(async (address, length) => {
+      reads.push(address);
+      if (address === "DD00") return Uint8Array.of(0x94);
+      if (address === "D018") return Uint8Array.of(0x45);
+      return new Uint8Array(length);
+    });
+    expect(found).toBeNull();
+    expect(reads).toEqual(["DD00", "D018"]);
   });
 
   it("reports no support when the SID player is not on screen", async () => {
@@ -553,8 +591,13 @@ describe("remote SID seek controller when the device misbehaves", () => {
   const blankClock = (device: ReturnType<typeof createFakeRemoteSeekDevice>, after = 0) => {
     const read = device.api.readMemory;
     let reads = 0;
-    device.api.readMemory = async (address, length, options) =>
-      address === "0B98" && reads++ >= after ? new Uint8Array(length) : read(address, length, options);
+    const clock = 0x0b98;
+    device.api.readMemory = async (address, length, options) => {
+      const data = await read(address, length, options);
+      const start = parseInt(address, 16);
+      if (clock >= start && clock < start + length && reads++ >= after) data.fill(0, clock - start, clock - start + 5);
+      return data;
+    };
   };
 
   it("probes on with PAL timing and fast forward only when System Mode and CPU Speed cannot be read", async () => {
@@ -566,7 +609,7 @@ describe("remote SID seek controller when the device misbehaves", () => {
     expect(found).toMatchObject({ timing: machineTimingFor("PAL"), cpuSpeedOptions: [] });
   });
 
-  it("keeps probing while the title is on screen but the clock is not yet", async () => {
+  it("reports no support while the player's clock does not tick", async () => {
     const device = createFakeRemoteSeekDevice();
     blankClock(device);
     expect(await settle(probeRemoteTuneSeek(device.api, header(), 1))).toBeNull();
@@ -658,15 +701,43 @@ describe("remote SID seek controller when the device misbehaves", () => {
     expect(device.player.tunePositionSeconds).toBeGreaterThan(89);
   });
 
-  it("abandons a jump that does not land in time and reports where it got to", async () => {
-    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: { 1: 2, 4: 2, 64: 2 } });
+  it("keeps jumping deep into an hour-long tune on a machine without CPU Speed while it moves", async () => {
+    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: { 1: 20 } });
+    const controller = new RemoteSidSeekController(device.api, profile({ cpuSpeedOptions: [] }));
+    const landed = await settle(
+      controller.jumpTo(() => 0, 3600),
+      400_000,
+    );
+    expect(landed?.completed).toBe(true);
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(3598);
+    expect(device.player.tunePositionSeconds).toBeLessThan(3603);
+  });
+
+  it("stops a jump when the key does not fast forward the tune, and reports where it got to", async () => {
+    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: { 1: 1, 4: 1, 64: 1 } });
     const controller = new RemoteSidSeekController(device.api, profile());
     const landed = await settle(
       controller.jumpTo(() => 0, 600),
       120_000,
     );
     expect(landed?.completed).toBe(false);
-    expect(landed?.seconds).toBeGreaterThan(30);
+    expect(Math.abs((landed?.seconds ?? 0) - device.player.tunePositionSeconds)).toBeLessThan(1.5);
+    expect(device.player.heldKeys).toEqual([]);
+    expect(device.settings["CPU Speed"]).toBe(" 1");
+  });
+
+  it("stops a jump once the clock has been unreadable for a while", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const read = device.api.readMemory;
+    let clockReads = 0;
+    device.api.readMemory = async (address, length, options) =>
+      address === "0B98" && ++clockReads > 1 ? new Uint8Array(length) : read(address, length, options);
+    const landed = await settle(
+      controller.jumpTo(() => 5, 600),
+      120_000,
+    );
+    expect(landed?.completed).toBe(false);
     expect(device.player.heldKeys).toEqual([]);
   });
 

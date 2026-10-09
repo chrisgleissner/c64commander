@@ -98,6 +98,9 @@ const advance = async (ms: number) => {
   }
 };
 
+/** The probe starts 800 ms into a tune and watches the player's clock tick for 1.2 s. */
+const PROBED_MS = 2500;
+
 const rebasedSeconds = (mock: ReturnType<typeof vi.fn>) => (mock.mock.calls.at(-1)?.[0] ?? NaN) / 1000;
 
 describe("useRemoteSidSeek", () => {
@@ -115,7 +118,7 @@ describe("useRemoteSidSeek", () => {
   it("offers the gestures once it has found the SID player on the C64's screen", async () => {
     const { result } = render();
     expect(result.current.handlers).toBeNull();
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers?.onScrubStep).toBeTypeOf("function");
     expect(result.current.handlers?.onSeekToFraction).toBeTypeOf("function");
   });
@@ -142,7 +145,7 @@ describe("useRemoteSidSeek", () => {
       return read(address, length, options);
     };
     const { result, rebasePlaybackPosition } = render({ item: item(ciaTimed()) });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(addLog).toHaveBeenCalledWith(
       "warn",
       "Remote seek could not measure the tune's play-call rate",
@@ -158,20 +161,21 @@ describe("useRemoteSidSeek", () => {
 
   it("leaves Previous and Next as track controls for an RSID tune", async () => {
     const { result } = render({ item: item(rsid()) });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers).toBeNull();
   });
 
   it("leaves them as track controls on a machine that takes no key input", async () => {
     machineInput.status = "unsupported-family";
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers).toBeNull();
   });
 
   it("fast forwards while Next is held and lands the progress display where the C64 is", async () => {
-    const { result, rebasePlaybackPosition } = render();
-    await advance(1500);
+    const { result, rebasePlaybackPosition, rerender } = render();
+    await advance(PROBED_MS);
+    rerender({ active: true, elapsedMs: device.current!.player.tunePositionSeconds * 1000 });
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
@@ -191,7 +195,7 @@ describe("useRemoteSidSeek", () => {
 
   it("moves the rewind target back 10 then 20 seconds while Previous is held, and jumps there on release", async () => {
     const { result, rebasePlaybackPosition, rerender } = render({ elapsedMs: 0 });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onSeekToFraction?.(0.5);
     });
@@ -219,12 +223,12 @@ describe("useRemoteSidSeek", () => {
 
   it("gives the device back when the app is hidden mid fast forward", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
     });
-    await advance(1500);
+    await advance(PROBED_MS);
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));
@@ -238,12 +242,12 @@ describe("useRemoteSidSeek", () => {
 
   it("gives the device back when playback stops being remote mid fast forward", async () => {
     const { result, rerender } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
     });
-    await advance(1500);
+    await advance(PROBED_MS);
     rerender({ active: false, elapsedMs: 0 });
     await advance(2000);
     expect(result.current.handlers).toBeNull();
@@ -253,7 +257,7 @@ describe("useRemoteSidSeek", () => {
 
   it("starts a jump asked for during another from where that one landed", async () => {
     const { result, rebasePlaybackPosition } = render({ elapsedMs: 0 });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onSeekToFraction?.(0.5));
     await advance(400);
     // The first jump is under way; the elapsed time the page still reports is near 0.
@@ -267,13 +271,13 @@ describe("useRemoteSidSeek", () => {
 
   it("keeps a hold when the other button is pressed too, and gives the device back on release", async () => {
     const { result, rerender } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     rerender({ active: true, elapsedMs: 60_000 });
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
     });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(-5);
@@ -291,7 +295,7 @@ describe("useRemoteSidSeek", () => {
 
   it("does not run a queued jump once the jump before it was cancelled", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onSeekToFraction?.(0.5));
     await advance(400);
     act(() => result.current.handlers?.onSeekToFraction?.(0.2));
@@ -308,7 +312,7 @@ describe("useRemoteSidSeek", () => {
 
   it("drops a drag that has not settled when the app is hidden", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onSeekToFraction?.(0.5));
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     act(() => {
@@ -322,7 +326,7 @@ describe("useRemoteSidSeek", () => {
 
   it("ignores the progress bar while Next is held", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
@@ -334,7 +338,7 @@ describe("useRemoteSidSeek", () => {
     expect(device.current!.log.filter((entry) => entry.startsWith("key release"))).toEqual([]);
     expect(device.current!.player.heldKeys).toEqual(["arrow_left"]);
     act(() => result.current.handlers?.onScrubEnd?.());
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(device.current!.player.heldKeys).toEqual([]);
   });
 
@@ -344,13 +348,13 @@ describe("useRemoteSidSeek", () => {
   it("reads the header of a tune on the Ultimate over FTP", async () => {
     ultimateBlob.bytes = SEEKABLE;
     const { result } = render({ item: ultimateItem() });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers).not.toBeNull();
   });
 
   it("offers nothing when the header of a tune on the Ultimate cannot be fetched", async () => {
     const { result } = render({ item: ultimateItem() });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers).toBeNull();
   });
 
@@ -366,13 +370,13 @@ describe("useRemoteSidSeek", () => {
       throw new Error("HTTP 503");
     };
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers).toBeNull();
   });
 
   it("keeps the bar a plain indicator when the tune's length is unknown", async () => {
     const { result } = render({ durationMs: undefined });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers?.onScrubStep).toBeTypeOf("function");
     expect(result.current.handlers?.onSeekToFraction).toBeUndefined();
     // `onSeek` only tells the card a hold is on offer; the gesture runs through the scrub handlers.
@@ -381,7 +385,7 @@ describe("useRemoteSidSeek", () => {
 
   it("ends a fast forward by itself at the end of the tune", async () => {
     const { result, rebasePlaybackPosition } = render({ durationMs: 30_000 });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
@@ -396,13 +400,13 @@ describe("useRemoteSidSeek", () => {
 
   it("clears the gesture when a fast forward cannot start", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     device.current!.failures.keyEvents = 1;
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
     });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.targetMs).toBeNull();
     act(() => result.current.handlers?.onScrubEnd?.());
     await advance(500);
@@ -415,7 +419,7 @@ describe("useRemoteSidSeek", () => {
       return { [category]: { [item]: { current: "PAL", values: ["PAL"] } } } as never;
     };
     const { result } = render({ elapsedMs: 60_000 });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onScrubEnd?.());
     act(() => {
       result.current.handlers?.onScrubStart?.();
@@ -429,7 +433,7 @@ describe("useRemoteSidSeek", () => {
 
   it("jumps once, to where a drag comes to rest", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onSeekToFraction?.(0.2));
     await advance(100);
     act(() => result.current.handlers?.onSeekToFraction?.(0.4));
@@ -440,7 +444,7 @@ describe("useRemoteSidSeek", () => {
 
   it("ignores the page becoming visible again", async () => {
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onSeekToFraction?.(0.2));
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));
@@ -451,14 +455,14 @@ describe("useRemoteSidSeek", () => {
   it("offers nothing without a tune or a connected machine", async () => {
     const { result } = render({ item: null });
     const { result: unconnected } = render({ deviceInfo: null });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(result.current.handlers).toBeNull();
     expect(unconnected.current.handlers).toBeNull();
   });
 
   it("stops the rewind target when the app is hidden during a Previous hold", async () => {
     const { result } = render({ elapsedMs: 120_000 });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(-5);
@@ -477,7 +481,7 @@ describe("useRemoteSidSeek", () => {
 
   it("drops a jump chain when playback leaves the C64 route mid jump", async () => {
     const { result, rerender, rebasePlaybackPosition } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => result.current.handlers?.onSeekToFraction?.(0.5));
     await advance(500);
     rerender({ active: false, elapsedMs: 0 });
@@ -488,28 +492,28 @@ describe("useRemoteSidSeek", () => {
 
   it("fast forwards a tune of unknown length until released", async () => {
     const { result, rebasePlaybackPosition } = render({ durationMs: undefined });
-    await advance(1500);
+    await advance(PROBED_MS);
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
     });
     await advance(2000);
     act(() => result.current.handlers?.onScrubEnd?.());
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan(15);
   });
 
   it("treats a fast forward stopped while it was starting as superseded, not as a failure", async () => {
     const { addErrorLog } = await import("@/lib/logging");
     const { result } = render();
-    await advance(1500);
+    await advance(PROBED_MS);
     vi.mocked(addErrorLog).mockClear();
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(5);
       void cancelRemoteSidSeek("stop");
     });
-    await advance(1500);
+    await advance(PROBED_MS);
     expect(addErrorLog).not.toHaveBeenCalled();
     expect(device.current!.player.heldKeys).toEqual([]);
   });

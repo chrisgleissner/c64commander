@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export const CLOCK_WRAP_SECONDS = 100 * 60;
 /**
  * Reads with the key believed down that are further apart than this span a stalled request, during
  * which the key may have been up: the press had not arrived yet, or the release had already.
@@ -33,6 +32,8 @@ export class PositionModel {
     private position: number,
     clock: number,
     private readonly clockPerTuneSecond: number,
+    /** When the clock rolls over to zero: 6000 s for the current player's "mm:ss". */
+    private readonly wrapSeconds: number,
   ) {
     this.lastClock = clock;
   }
@@ -41,8 +42,7 @@ export class PositionModel {
     const now = Date.now();
     const elapsed = Math.max(0, (now - this.lastAtMs) / 1000);
     this.lastAtMs = now;
-    // The clock wraps after 99:59, which a light tune passes in a couple of seconds at 64 MHz.
-    const delta = clock >= this.lastClock ? clock - this.lastClock : clock + CLOCK_WRAP_SECONDS - this.lastClock;
+    const delta = this.clockDelta(clock, keyHeld, elapsed);
     this.lastClock = clock;
     if (!keyHeld) {
       this.position += delta;
@@ -62,6 +62,19 @@ export class PositionModel {
     return this.position;
   }
 
+  /**
+   * Clock seconds since the last read. A clock that went back rolled over at its wrap, which a light
+   * tune passes in a couple of seconds at 64 MHz, or was restarted by something else, e.g. a key on
+   * the C64 itself. At normal speed it can only have rolled over if it was about to.
+   */
+  private clockDelta(clock: number, keyHeld: boolean, elapsed: number) {
+    if (clock >= this.lastClock) return clock - this.lastClock;
+    const couldRollOver = keyHeld || this.lastClock + elapsed + 2 >= this.wrapSeconds;
+    if (couldRollOver) return clock + this.wrapSeconds - this.lastClock;
+    this.position = 0;
+    return clock;
+  }
+
   private normalPlayWithin(delta: number, elapsed: number) {
     const rate = this.fastClockRate;
     const normal = rate === null || rate <= 1 ? elapsed : (elapsed * rate - delta) / (rate - 1);
@@ -74,5 +87,57 @@ export class PositionModel {
     if (this.window.seconds < FAST_RATE_WINDOW_SECONDS) return;
     this.fastClockRate = this.window.clock / this.window.seconds;
     this.window = { clock: 0, seconds: 0 };
+  }
+}
+
+/** A jump that has not moved the tune on for this long has stalled; the clock or the device stopped answering. */
+export const JUMP_STALL_MS = 10_000;
+/** No jump runs longer, however slowly it fast forwards. */
+export const JUMP_MAX_MS = 10 * 60_000;
+/** Held for this long, a fast forward must have gained at least `MIN_FAST_FORWARD_GAIN` tune seconds a second. */
+const FAST_FORWARD_PROOF_MS = 5000;
+const MIN_FAST_FORWARD_GAIN = 1.5;
+
+/**
+ * Why a jump should stop short of its target, or null while it is getting there. A jump is not
+ * bounded by a fixed time: one deep into an hour-long tune on a machine without CPU Speed takes
+ * minutes, and is fine as long as it keeps moving and the key really does fast forward.
+ */
+export class JumpProgressWatch {
+  private best: number;
+  private lastProgressAt: number;
+  private lastPosition: number;
+  private lastAt: number;
+  private heldMs = 0;
+  private gainedWhileHeld = 0;
+
+  constructor(
+    position: number,
+    private readonly startedAt = Date.now(),
+  ) {
+    this.best = this.lastPosition = position;
+    this.lastProgressAt = this.lastAt = startedAt;
+  }
+
+  observe(position: number, keyHeld: boolean, now = Date.now()): string | null {
+    if (keyHeld) {
+      this.heldMs += now - this.lastAt;
+      this.gainedWhileHeld += position - this.lastPosition;
+    }
+    this.lastAt = now;
+    this.lastPosition = position;
+    if (position >= this.best + 1) {
+      this.best = position;
+      this.lastProgressAt = now;
+    }
+    return this.stopReason(now);
+  }
+
+  stopReason(now = Date.now()): string | null {
+    if (now - this.startedAt > JUMP_MAX_MS) return `Jump did not land within ${JUMP_MAX_MS} ms`;
+    if (now - this.lastProgressAt > JUMP_STALL_MS) return `Jump made no progress for ${JUMP_STALL_MS} ms`;
+    if (this.heldMs >= FAST_FORWARD_PROOF_MS && this.gainedWhileHeld < (this.heldMs / 1000) * MIN_FAST_FORWARD_GAIN)
+      return "The SID player does not fast forward this tune";
+    return null;
   }
 }

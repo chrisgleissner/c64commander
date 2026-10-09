@@ -19,10 +19,12 @@ import {
   snapPlayCallRate,
 } from "@/lib/playback/remoteSeek/remoteSeekPlan";
 import {
-  isSidPlayerTitle,
-  parseSidPlayerClock,
+  findTimeFields,
+  parseClockText,
+  readClockFromRow,
   screenCodesToText,
   sidPlayerScreenAddress,
+  tickingClockField,
 } from "@/lib/playback/remoteSeek/sidPlayerScreen";
 import { C64U_CPU_SPEEDS } from "./fakeRemoteSeekDevice";
 
@@ -135,19 +137,55 @@ describe("SID player screen", () => {
     expect(sidPlayerScreenAddress(0x95, 0x35)).toBe(0x8c00);
   });
 
-  it("reads the clock the player draws", () => {
-    expect(parseSidPlayerClock(ascii("01:05"))).toBe(65);
-    expect(parseSidPlayerClock(new Uint8Array(5))).toBeNull();
-    expect(parseSidPlayerClock(ascii("01:75"))).toBeNull();
+  it("reads time fields with and without hours, and nothing else", () => {
+    expect(parseClockText("01:05")).toBe(65);
+    expect(parseClockText("1:05")).toBe(65);
+    expect(parseClockText("99:59")).toBe(5999);
+    expect(parseClockText("1:02:05")).toBe(3725);
+    expect(parseClockText("1:75:05")).toBeNull();
+    expect(parseClockText("01:75")).toBeNull();
+    expect(parseClockText("     ")).toBeNull();
   });
 
-  it("recognises the player's title in screen codes", () => {
-    const title = Uint8Array.from("*** THE C-64 ULTIMATE SID PLAYER ***", (char) =>
+  it("reads screen codes as text, reverse video included", () => {
+    const title = Uint8Array.from("SID PLAYER 1:05", (char) =>
       /[A-Z]/.test(char) ? char.charCodeAt(0) - 64 : char.charCodeAt(0),
     );
-    expect(screenCodesToText(title)).toBe("*** THE C-64 ULTIMATE SID PLAYER ***");
-    expect(isSidPlayerTitle(title)).toBe(true);
-    expect(isSidPlayerTitle(ascii("READY."))).toBe(false);
+    expect(screenCodesToText(title)).toBe("SID PLAYER 1:05");
+    expect(screenCodesToText(title.map((code) => code | 0x80))).toBe("SID PLAYER 1:05");
+  });
+
+  it("finds every time field on a screen, row by row, without running one into the next row", () => {
+    const screen = new Uint8Array(1000).fill(0x20);
+    screen.set(ascii("LENGTH 03:00"), 21 * 40);
+    screen.set(ascii("01:05"), 23 * 40);
+    screen.set(ascii("12"), 38);
+    screen.set(ascii(":34"), 40);
+    expect(findTimeFields(screen, 0x0800)).toEqual([
+      { rowAddress: 0x0800 + 21 * 40, column: 7, length: 5, wrapSeconds: 6000, seconds: 180 },
+      { rowAddress: 0x0800 + 23 * 40, column: 0, length: 5, wrapSeconds: 6000, seconds: 65 },
+    ]);
+  });
+
+  it("takes the field that moved forward as the clock, not one that stood still or ran backwards", () => {
+    const row = (text: string) => findTimeFields(ascii(text.padEnd(40, " ")), 0x0800);
+    const before = row("03:00  9:59  1:00:00  00:10");
+    const after = row("03:00  10:00  0:59:59  00:10");
+    expect(tickingClockField(before, after, 1.2)).toEqual({
+      rowAddress: 0x0800,
+      column: 7,
+      length: 5,
+      wrapSeconds: 6000,
+    });
+    expect(tickingClockField(row("00:10"), row("00:40"), 1.2)).toBeNull();
+    expect(tickingClockField(row("03:00"), row("03:00"), 1.2)).toBeNull();
+  });
+
+  it("reads a clock back from its row as it grows and shrinks", () => {
+    const clock = { rowAddress: 0x0b98, column: 0, length: 4, wrapSeconds: 6000 };
+    expect(readClockFromRow(ascii("9:59"), clock)).toBe(599);
+    expect(readClockFromRow(ascii("10:00  03:00"), clock)).toBe(600);
+    expect(readClockFromRow(ascii("      03:00"), clock)).toBeNull();
   });
 });
 

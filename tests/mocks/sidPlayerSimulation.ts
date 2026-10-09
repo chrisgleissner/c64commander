@@ -23,7 +23,6 @@ export const SIMULATED_SCREEN_ADDRESS = 0x0800;
 const DD00_BANK_0 = 0x97;
 const D018_SCREEN_0800 = 0x25;
 const PAL_CIA_CLOCK_HZ = 985248;
-const TITLE = "*** THE C-64 ULTIMATE SID PLAYER ***";
 export const MEASURED_FAST_FORWARD_RATE_BY_MHZ: Record<number, number> = {
   1: 10,
   2: 12,
@@ -60,7 +59,40 @@ export type SidPlayerSimulationOptions = {
    * first, so such a read shows the new seconds with the minutes still a minute behind.
    */
   tornClockReads?: number[];
+  /** Where and how the player draws its screen; by default as the current player does. */
+  layout?: Partial<SidPlayerLayout>;
   now?: () => number;
+};
+
+/**
+ * The player's screen. The current player draws its title on row 0, the song length on row 21 and
+ * the running clock as "mm:ss" at the start of row 23; a redesigned one may put them elsewhere and
+ * format the clock differently.
+ */
+export type SidPlayerLayout = {
+  title: string;
+  clockRow: number;
+  clockColumn: number;
+  clockFormat: "mm:ss" | "m:ss" | "h:mm:ss";
+  songLengthRow: number | null;
+};
+
+const CURRENT_PLAYER_LAYOUT: SidPlayerLayout = {
+  title: "*** THE C-64 ULTIMATE SID PLAYER ***",
+  clockRow: 23,
+  clockColumn: 0,
+  clockFormat: "mm:ss",
+  songLengthRow: 21,
+};
+
+const twoDigits = (value: number) => String(value).padStart(2, "0");
+
+const formatClock = (seconds: number, format: SidPlayerLayout["clockFormat"]) => {
+  const minutes = Math.floor(seconds / 60);
+  if (format === "h:mm:ss")
+    return `${Math.floor(minutes / 60) % 100}:${twoDigits(minutes % 60)}:${twoDigits(seconds % 60)}`;
+  if (format === "m:ss") return `${minutes % 100}:${twoDigits(seconds % 60)}`;
+  return `${twoDigits(minutes % 100)}:${twoDigits(seconds % 60)}`;
 };
 
 const toScreenCode = (char: string) => {
@@ -80,6 +112,7 @@ export class SidPlayerSimulation {
   private readonly firstSpeedChangeDelayMs: number;
   private readonly keyReleaseDelayMs: number;
   private readonly timerFollowsClock: boolean;
+  readonly layout: SidPlayerLayout;
   private readonly tornClockReads: ReadonlySet<number>;
   private readonly timerFractions: readonly number[];
   private timerReads = 0;
@@ -102,6 +135,7 @@ export class SidPlayerSimulation {
     this.firstSpeedChangeDelayMs = options.firstSpeedChangeDelayMs ?? 0;
     this.keyReleaseDelayMs = options.keyReleaseDelayMs ?? 0;
     this.timerFollowsClock = options.timerFollowsClock ?? false;
+    this.layout = { ...CURRENT_PLAYER_LAYOUT, ...options.layout };
     this.tornClockReads = new Set(options.tornClockReads ?? []);
     this.timerFractions = options.timerFractions ?? [];
     this.timerOrigin = this.now();
@@ -165,13 +199,16 @@ export class SidPlayerSimulation {
   /** Memory as `GET /v1/machine:readmem` returns it, for the addresses the player and seeking use. */
   readMemory(address: number, length: number): Uint8Array {
     this.advance();
-    const torn = address === SIMULATED_SCREEN_ADDRESS + 920 && this.tornClockReads.has(++this.clockReads);
+    const clockAddress = SIMULATED_SCREEN_ADDRESS + this.layout.clockRow * 40 + this.layout.clockColumn;
+    const coversClock = address <= clockAddress && clockAddress < address + length;
+    const torn = coversClock && this.tornClockReads.has(++this.clockReads);
+    const rows = new Map<number, string>();
     const out = new Uint8Array(length);
-    for (let index = 0; index < length; index += 1) out[index] = this.byteAt(address + index, torn);
+    for (let index = 0; index < length; index += 1) out[index] = this.byteAt(address + index, torn, rows);
     return out;
   }
 
-  private byteAt(address: number, torn = false): number {
+  private byteAt(address: number, torn: boolean, rows: Map<number, string>): number {
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;
     if (address === 0xdc04 || address === 0xdc05) {
@@ -189,14 +226,20 @@ export class SidPlayerSimulation {
       return address === 0xdc04 ? value & 0xff : value >> 8;
     }
     const offset = address - SIMULATED_SCREEN_ADDRESS;
-    if (offset >= 0 && offset < TITLE.length) return toScreenCode(TITLE[offset]);
-    if (offset >= 920 && offset < 925) {
-      const shown = Math.max(0, Math.floor(this.clockSeconds) - (torn ? 60 : 0));
-      const text = `${String(Math.floor(shown / 60) % 100).padStart(2, "0")}:${String(shown % 60).padStart(2, "0")}`;
-      return text.charCodeAt(offset - 920);
-    }
-    if (offset >= 0 && offset < 1000) return 0x20;
-    return 0;
+    if (offset < 0 || offset >= 1000) return 0;
+    const row = Math.floor(offset / 40);
+    if (!rows.has(row)) rows.set(row, this.screenRow(row, torn));
+    return toScreenCode(rows.get(row)!.charAt(offset % 40));
+  }
+
+  private screenRow(row: number, torn: boolean): string {
+    const { title, clockRow, clockColumn, clockFormat, songLengthRow } = this.layout;
+    const shown = Math.max(0, Math.floor(this.clockSeconds) - (torn ? 60 : 0));
+    let text = "";
+    if (row === 0) text = title;
+    if (row === songLengthRow) text = "SONG LENGTH 03:00";
+    if (row === clockRow) text = `${" ".repeat(clockColumn)}${formatClock(shown, clockFormat)}`;
+    return text.padEnd(40, " ").slice(0, 40);
   }
 
   private advance() {
@@ -228,3 +271,14 @@ export class SidPlayerSimulation {
     }
   }
 }
+
+/** The clock field the app should find on a simulated player with `layout`. */
+export const simulatedClockField = (layout: Partial<SidPlayerLayout> = {}) => {
+  const { clockRow, clockColumn, clockFormat } = { ...CURRENT_PLAYER_LAYOUT, ...layout };
+  return {
+    rowAddress: SIMULATED_SCREEN_ADDRESS + clockRow * 40,
+    column: clockColumn,
+    length: formatClock(0, clockFormat).length,
+    wrapSeconds: clockFormat === "h:mm:ss" ? 100 * 3600 : 100 * 60,
+  };
+};
