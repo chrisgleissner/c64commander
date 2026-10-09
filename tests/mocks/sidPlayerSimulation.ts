@@ -50,6 +50,8 @@ export const MEASURED_FAST_FORWARD_RATE_BY_MHZ: Record<number, number> = {
 export type SidPlayerSimulationOptions = {
   playCallHz?: number;
   machineFrameHz?: number;
+  /** Frames a clock second the player's clock counts: the standard PAL or NTSC rate, whatever the machine runs. */
+  clockFrameHz?: number;
   /** CIA 1's clock: 985248 Hz in the 50 Hz System Modes, 1022727 Hz in the 60 Hz ones. */
   ciaClockHz?: number;
   fastForwardRateByMhz?: Record<number, number>;
@@ -63,6 +65,8 @@ export type SidPlayerSimulationOptions = {
    * for up to a frame or two after the release arrives.
    */
   keyReleaseDelayMs?: number;
+  /** How long a pressed fast forward key takes to be noticed: the player scans the keyboard once a frame. */
+  keyPressDelayMs?: number;
   /**
    * Let CIA 1 timer A count down in step with time, so reads that repeat at its period all see the
    * same count. By default the samples cycle through the range regardless of when they are read.
@@ -130,6 +134,9 @@ export class SidPlayerSimulation {
   private speedChanged = false;
   private readonly firstSpeedChangeDelayMs: number;
   private readonly keyReleaseDelayMs: number;
+  private readonly keyPressDelayMs: number;
+  /** Keys held through REST that the player has not noticed yet, with when it will. */
+  private unnoticedPresses = new Map<string, number>();
   private readonly timerFollowsClock: boolean;
   readonly layout: SidPlayerLayout;
   /** RAM as far as the player's code goes; everything else is computed in `byteAt`. */
@@ -147,6 +154,7 @@ export class SidPlayerSimulation {
   private paused = false;
   private playCallHz: number;
   private machineFrameHz: number;
+  private readonly clockFrameHz: number | null;
   private readonly ciaClockHz: number;
   private readonly rates: Record<number, number>;
   private readonly now: () => number;
@@ -154,11 +162,13 @@ export class SidPlayerSimulation {
   constructor(options: SidPlayerSimulationOptions = {}) {
     this.playCallHz = options.playCallHz ?? PAL_CIA_CLOCK_HZ / 19656;
     this.machineFrameHz = options.machineFrameHz ?? PAL_CIA_CLOCK_HZ / 19656;
+    this.clockFrameHz = options.clockFrameHz ?? null;
     this.ciaClockHz = options.ciaClockHz ?? PAL_CIA_CLOCK_HZ;
     this.rates = options.fastForwardRateByMhz ?? MEASURED_FAST_FORWARD_RATE_BY_MHZ;
     this.now = options.now ?? (() => Date.now());
     this.firstSpeedChangeDelayMs = options.firstSpeedChangeDelayMs ?? 0;
     this.keyReleaseDelayMs = options.keyReleaseDelayMs ?? 0;
+    this.keyPressDelayMs = options.keyPressDelayMs ?? 0;
     this.timerFollowsClock = options.timerFollowsClock ?? false;
     this.layout = { ...CURRENT_PLAYER_LAYOUT, ...options.layout };
     this.code =
@@ -185,7 +195,10 @@ export class SidPlayerSimulation {
 
   /** Fast forward runs while the key is down, or while the keyboard routine's `ldy #0` reads `ldy #1`. */
   get fastForwarding() {
-    return this.keysDown.has("arrow_left") || this.ram[this.code.ldyOperandAddress] === 1;
+    return (
+      (this.keysDown.has("arrow_left") && !this.unnoticedPresses.has("arrow_left")) ||
+      this.ram[this.code.ldyOperandAddress] === 1
+    );
   }
 
   get heldKeys() {
@@ -208,11 +221,14 @@ export class SidPlayerSimulation {
     this.advance();
     if ((key === "minus" || key === "plus") && !this.keysDown.has(key)) this.restart();
     this.pendingReleases.delete(key);
+    if (this.keyPressDelayMs > 0 && !this.keysDown.has(key))
+      this.unnoticedPresses.set(key, this.now() + this.keyPressDelayMs);
     this.keysDown.add(key);
   }
 
   releaseKey(key: string) {
     this.advance();
+    this.unnoticedPresses.delete(key);
     if (this.keyReleaseDelayMs > 0 && this.keysDown.has(key)) {
       this.pendingReleases.set(key, this.now() + this.keyReleaseDelayMs);
       return;
@@ -319,6 +335,11 @@ export class SidPlayerSimulation {
 
   private advance() {
     const now = this.now();
+    for (const [key, atMs] of this.unnoticedPresses) {
+      if (atMs > now) continue;
+      this.advanceTo(atMs);
+      this.unnoticedPresses.delete(key);
+    }
     for (const [key, atMs] of [...this.pendingReleases].sort((a, b) => a[1] - b[1])) {
       if (atMs > now) continue;
       this.advanceTo(atMs);
@@ -340,7 +361,7 @@ export class SidPlayerSimulation {
     if (this.fastForwarding) {
       const clockGain = elapsed * (this.rates[this.cpuMhz] ?? this.rates[1]);
       this.clockSeconds += clockGain;
-      this.tuneSeconds += clockGain * (this.machineFrameHz / this.playCallHz);
+      this.tuneSeconds += clockGain * ((this.clockFrameHz ?? this.machineFrameHz) / this.playCallHz);
     } else {
       this.clockSeconds += elapsed;
       this.tuneSeconds += elapsed;

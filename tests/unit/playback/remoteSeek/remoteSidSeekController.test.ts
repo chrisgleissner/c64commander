@@ -726,6 +726,35 @@ describe("remote SID seek controller", () => {
     },
   );
 
+  it.each([47, 84, 121, 158, 195, 232, 269, 306])(
+    "does not fast forward again past a target of %i s that the timed release reached",
+    async (target) => {
+      const device = createFakeRemoteSeekDevice({ latencyMs: 15, latencyJitterMs: 20 });
+      const controller = new RemoteSidSeekController(device.api, profile());
+      await vi.advanceTimersByTimeAsync(10_000);
+      const at = () => device.player.tunePositionSeconds;
+      await settle(controller.jumpTo(at, target));
+      expect(at()).toBeGreaterThan(target - 1.5);
+      expect(at()).toBeLessThan(target + 2);
+    },
+  );
+
+  it.each([20, 40, 60, 80])(
+    "does not overshoot a near target behind it when the player notices a key press %i ms late",
+    async (latencyMs) => {
+      // Ta-Boo on a C64 Ultimate fast forwards about 62 clock seconds a second at 1 MHz; a 40 ms pulse
+      // showed one clock second, and a second pulse sized from that ran 18 seconds on.
+      const fast = { ...MEASURED_FAST_FORWARD_RATE_BY_MHZ, 1: 62 };
+      const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: fast, keyPressDelayMs: latencyMs });
+      const controller = new RemoteSidSeekController(device.api, profile());
+      await vi.advanceTimersByTimeAsync(290_000);
+      const at = () => device.player.tunePositionSeconds;
+      await settle(controller.jumpTo(at, 10));
+      expect(at()).toBeLessThan(10 + 3);
+      expect(at()).toBeGreaterThan(10 - 1.5);
+    },
+  );
+
   it("gives up a running clock re-sync as soon as a jump is asked for", async () => {
     const device = createFakeRemoteSeekDevice({ latencyMs: 10 });
     const controller = new RemoteSidSeekController(device.api, profile());
@@ -794,6 +823,10 @@ describe("remote SID seek controller", () => {
   });
 });
 
+/** The player's clock counts frames at the standard rate, corrected for PAL's or NTSC's exact clock only. */
+const standardClockFrameHz = (timing: { frameCycles: number }) =>
+  timing.frameCycles === 17095 ? 1022727 / 17095 : 985248 / 19656;
+
 /** Every System Mode the Ultimate offers, with a PAL and an NTSC tune on each. */
 describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
   "remote seek on a machine in %s",
@@ -823,6 +856,7 @@ describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
         settings: { "System Mode": mode },
         playCallHz,
         machineFrameHz: timing.frameHz,
+        clockFrameHz: standardClockFrameHz(timing),
         ciaClockHz: timing.ciaClockHz,
       });
       const found = await settle(probeRemoteTuneSeek(device.api, header({ clock: tuneClock }), 1));
@@ -842,6 +876,25 @@ describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
       expect(device.player.heldKeys).toEqual([]);
     });
 
+    it("lands a PAL tune an hour in, though the player's clock counts frames at the standard rate", async () => {
+      const timing = machineTimingFor(mode);
+      const sixtyHz = timing.frameCycles === 17095;
+      const playCallHz = sixtyHz ? timing.ciaClockHz / 20514 : timing.frameHz;
+      const device = createFakeRemoteSeekDevice({
+        settings: { "System Mode": mode },
+        playCallHz,
+        machineFrameHz: timing.frameHz,
+        clockFrameHz: standardClockFrameHz(timing),
+        ciaClockHz: timing.ciaClockHz,
+      });
+      const found = await settle(probeRemoteTuneSeek(device.api, header({ clock: "pal" }), 1));
+      const controller = new RemoteSidSeekController(device.api, found!);
+      const at = () => device.player.tunePositionSeconds;
+      const landed = await settle(controller.jumpTo(at, 3600), 600_000);
+      // The clock shows whole seconds and a landing adds half of one; 0.1% of an hour would be 3.6 s.
+      expect(Math.abs((landed?.seconds ?? 0) - at())).toBeLessThan(1.5);
+    });
+
     it("lands a CIA-timed tune by the rate its latch gives at this mode's clock, not a multiple of 50 or 60", async () => {
       const timing = machineTimingFor(mode);
       // The latch a PAL composer writes for twice a frame; on a 65-cycle machine it plays 104 times a second.
@@ -850,6 +903,7 @@ describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
         settings: { "System Mode": mode },
         playCallHz: timing.ciaClockHz / (latch + 1),
         machineFrameHz: timing.ciaClockHz / timing.frameCycles,
+        clockFrameHz: standardClockFrameHz(timing),
         ciaClockHz: timing.ciaClockHz,
       });
       const found = await settle(probeRemoteTuneSeek(device.api, header({ speedBits: 1 }), 1));

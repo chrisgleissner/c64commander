@@ -120,7 +120,13 @@ describe("remote seek plan", () => {
       "PAL-60/L": [1023750, 17095],
     };
     for (const [mode, [ciaClockHz, frameCycles]] of Object.entries(clocks)) {
-      expect(machineTimingFor(mode)).toEqual({ frameHz: ciaClockHz / frameCycles, ciaClockHz, frameCycles });
+      expect(machineTimingFor(mode)).toEqual({
+        frameHz: ciaClockHz / frameCycles,
+        ciaClockHz,
+        frameCycles,
+        // The player's clock counts at the standard rate, whatever the mode's own clock.
+        clockFrameHz: frameCycles === 17095 ? 1022727 / 17095 : 985248 / 19656,
+      });
     }
     expect(machineTimingFor(" pal-60/l ").ciaClockHz).toBe(1023750);
     expect(machineTimingFor(undefined).frameHz).toBeCloseTo(50.1245, 4);

@@ -33,11 +33,14 @@ import { openMachineJournal, restoreFromMachineJournal } from "./remoteSeekHil/m
 import { counterAddressOf, counterPsid, measureCallHz, type CounterTune } from "./remoteSeekHil/tunes";
 import { playCallRateOnPal } from "../../tests/mocks/sidPlayerSimulation";
 
-const logs = vi.hoisted(() => ({ errors: [] as Array<[string, unknown]> }));
+const logs = vi.hoisted(() => ({ errors: [] as Array<[string, unknown]>, all: [] as string[] }));
 vi.mock("@/lib/logging", () => ({
-  addLog: () => undefined,
+  addLog: (level: string, message: string, details?: unknown) => {
+    logs.all.push(`${new Date().toISOString().slice(14, 23)} ${level} ${message} ${JSON.stringify(details ?? "")}`);
+  },
   addErrorLog: (message: string, details?: unknown) => {
     logs.errors.push([message, details]);
+    logs.all.push(`${new Date().toISOString().slice(14, 23)} error ${message} ${JSON.stringify(details ?? "")}`);
   },
 }));
 
@@ -150,7 +153,7 @@ type Result = {
   /** Play calls a second, measured on the machine and snapped to an exact rate. */
   callHz?: number;
   note?: string;
-  checks: Array<{ op: string; errorSeconds?: number; ms: number }>;
+  checks: Array<{ op: string; errorSeconds?: number; ms: number; log?: string[] }>;
   violations: string[];
 };
 
@@ -265,6 +268,7 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
           target?: number,
         ) => {
           const started = Date.now();
+          const logFrom = logs.all.length;
           const landing = await run();
           const errorsBefore = logs.errors.length;
           const since = landing ? (Date.now() - landing.atMs) / 1000 : 0;
@@ -272,6 +276,7 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
           // are not exactly PAL or NTSC, the player's clock itself runs up to 0.1% off real time.
           const reference = clockIsPosition ? await shownPosition((await truth()) ?? origin()) : await truth();
           const record: Result["checks"][number] = { op, ms: Date.now() - started };
+          const violationsBefore = result.violations.length;
           if (landing && reference !== null) {
             record.errorSeconds = landing.seconds + since - reference;
             const tolerance = entry.counted?.ciaTimer ? 4 : 3;
@@ -281,6 +286,7 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
           if (landing && target !== undefined && reference !== null && Math.abs(reference - since - target) > 5)
             result.violations.push(`${op}: ${(reference - since - target).toFixed(2)} s from its target`);
           if (!landing) result.violations.push(`${op}: no landing`);
+          if (result.violations.length > violationsBefore) record.log = logs.all.slice(logFrom);
           position = landing ? landing.seconds + since : (reference ?? origin());
           positionAt = Date.now();
           result.checks.push(record);

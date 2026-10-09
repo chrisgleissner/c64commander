@@ -105,16 +105,10 @@ export class RemoteSidSeekController {
   private pendingOperations = 0;
   private gestureArrived = false;
   private readonly machine: SeekMachine;
-  /**
-   * Told where a seek landed as soon as that is known, before the device's settings are given back:
-   * the restore is a few config writes, and the page need not show the target while they run.
-   */
+  /** Told where a seek landed as soon as that is known, before the restore's config writes. */
   landingListener: ((landing: RemoteSeekLanding, kind: "jump" | "fast forward") => void) | null = null;
 
-  /**
-   * `replayTune` starts the tune afresh the way the Play page started it; a profile that restarts
-   * by replaying cannot rewind without it.
-   */
+  /** `replayTune` starts the tune afresh as the Play page did; a "replay" profile cannot rewind without it. */
   constructor(
     private readonly api: RemoteSeekApi,
     readonly profile: RemoteTuneSeekProfile,
@@ -295,6 +289,7 @@ export class RemoteSidSeekController {
           await this.machine.restartTune(session, this.replayTune, () => this.assertCurrent(generation));
           startClock = await this.machine.readClock(true);
           if (startClock === null) throw new Error("The SID player's clock is not on screen");
+          addLog("debug", "Remote seek restarted the tune", { clockSeconds: startClock });
         }
         // Asked again now: the tune played on while the rate was measured and the session opened. Since a
         // restart it has only played at normal speed, so the clock is the position however late it was read.
@@ -316,6 +311,7 @@ export class RemoteSidSeekController {
         let pulseRate: number | null = null;
         let pulsing = false;
         let smallestPulseGain = Number.POSITIVE_INFINITY;
+        let lastPulseMs = Number.POSITIVE_INFINITY;
         const progress = new JumpProgressWatch(model.seconds, ratio);
         while (model.seconds < target) {
           this.assertCurrent(generation);
@@ -360,10 +356,8 @@ export class RemoteSidSeekController {
             }
           }
           const remainingClock = (target - position) * ratio;
-          // Until the machine's own speed is measured the planner has no bound to plan with, and one
-          // read period of fast forward can pass a near target by several seconds. Such a target is
-          // approached at the slowest speed in timed key pulses, each sized from the rate the last one
-          // showed, and the last clock second or so, which a pulse cannot resolve, is played into.
+          // Unmeasured, one read period can pass a near target by seconds: approach it at the slowest speed in
+          // timed key pulses sized from the last one's rate, and play into the last second or so.
           const fastest = FASTEST_FAST_FORWARD_PER_MHZ * (cpuSpeedMhz(speed) ?? 1);
           pulsing ||= !planner.calibrated && remainingClock < fastest * (2 * readPeriodSeconds + PULSE_MARGIN_SECONDS);
           if (pulsing) {
@@ -389,10 +383,13 @@ export class RemoteSidSeekController {
               await sleep(Math.min((target - position) * 1000, NORMAL_PLAY_READ_INTERVAL_MS));
               continue;
             }
+            // At most twice the last pulse: a short one's gain is too coarse (Ta-Boo's 40 ms read a third of its rate).
             const pulseMs = Math.min(
               MAX_PULSE_MS,
+              lastPulseMs * 2,
               Math.max(MIN_PULSE_MS, (remainingClock / (pulseRate ?? fastest)) * PULSE_SHARE * 1000),
             );
+            lastPulseMs = pulseMs;
             const clockBefore = model.clock;
             await session.pressKey();
             await sleep(pulseMs);
@@ -402,6 +399,7 @@ export class RemoteSidSeekController {
             // Never lowered: a short pulse can under-read the rate, and the next pulse would then overshoot.
             if (gained > 0) pulseRate = Math.max(pulseRate ?? 0, gained / (pulseMs / 1000));
             smallestPulseGain = Math.min(smallestPulseGain, gained);
+            addLog("debug", "Remote seek key pulse", { pulseMs, gainedClockSeconds: gained, position: model.seconds });
             continue;
           }
           const baseRate = speed === planner.finalOption ? planner.measuredRate(speed) : null;
@@ -412,7 +410,8 @@ export class RemoteSidSeekController {
             await session.releaseKey();
             held = false;
             await this.machine.settle(model, true);
-            // Usually at the target now; a read the device was slow to answer can leave it short.
+            // At the target to the clock's second, unless a read the device answered late left it short.
+            if (model.seconds >= target - 1) break;
             fastSinceLastRead = false;
             continue;
           }

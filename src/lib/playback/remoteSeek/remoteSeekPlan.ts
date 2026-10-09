@@ -189,7 +189,11 @@ export class JumpSpeedPlanner {
 }
 
 /** The clock the CIA timers count, the cycles in a frame, and the exact frame rate they make. */
-export type MachineTiming = { frameHz: number; ciaClockHz: number; frameCycles: number };
+/**
+ * `frameHz` is the frame rate the machine runs; `clockFrameHz` the one the SID player's clock counts at, which
+ * is corrected only for the standard PAL or NTSC clock and so differs slightly in the other modes.
+ */
+export type MachineTiming = { frameHz: number; ciaClockHz: number; frameCycles: number; clockFrameHz: number };
 
 const PAL_FRAME_CYCLES = 312 * 63;
 const NTSC_FRAME_CYCLES = 263 * 65;
@@ -217,6 +221,7 @@ const timing = (ciaClockHz: number, frameCycles: number): MachineTiming => ({
   frameHz: ciaClockHz / frameCycles,
   ciaClockHz,
   frameCycles,
+  clockFrameHz: frameCycles === NTSC_FRAME_CYCLES ? 1022727 / NTSC_FRAME_CYCLES : 985248 / PAL_FRAME_CYCLES,
 });
 
 export const PAL_FRAME_LINES = 312;
@@ -267,4 +272,4 @@ export const playCallRateFromTimerSamples = (samples: readonly number[], machine
  * tune second, and a 4x multi-speed tune 4. Measured against a play-call counter on the C64 Ultimate.
  */
 export const clockSecondsPerTuneSecond = (playCallHz: number, timing: MachineTiming): number =>
-  playCallHz / timing.frameHz;
+  playCallHz / timing.clockFrameHz;
