@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   readRemoteSeekJournal,
   recoverRemoteSeekJournal,
+  readU64ConfigItem,
   restoreFromJournal,
   RemoteSeekDeviceSession,
   RemoteSeekSessionClosedError,
@@ -208,5 +209,154 @@ describe("remote seek device guard", () => {
     expect(await restoreFromJournal(device.api, stale, "late", NO_RETRY_WAIT)).toBe(true);
     expect(readRemoteSeekJournal(DEVICE_KEY)).toMatchObject({ cpuSpeedChanged: true, originalCpuSpeed: " 1" });
     await session.restore("released");
+  });
+
+  it("treats an unreadable journal as empty and logs it", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    localStorage.setItem("c64u_remote_seek_device_journal_v1", "{not json");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    expect(addErrorLog).toHaveBeenCalledWith("Remote seek journal could not be read", expect.anything());
+  });
+
+  it("logs a journal it cannot write", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    const device = createFakeRemoteSeekDevice();
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    try {
+      await RemoteSeekDeviceSession.open(device.api);
+    } finally {
+      setItem.mockRestore();
+    }
+    expect(addErrorLog).toHaveBeenCalledWith("Remote seek journal could not be written", expect.anything());
+  });
+
+  it("reads config items in the app's own items shape, and names an item the device does not report", async () => {
+    const device = createFakeRemoteSeekDevice();
+    device.api.getConfigItem = async (category, item) =>
+      ({ [category]: { items: { [item]: { selected: " 2" } } } }) as never;
+    expect(await readU64ConfigItem(device.api, "CPU Speed")).toEqual({ value: " 2", options: [] });
+    device.api.getConfigItem = async (category) => ({ [category]: {} }) as never;
+    await expect(readU64ConfigItem(device.api, "CPU Speed")).rejects.toThrow(/CPU Speed is not reported/);
+  });
+
+  it("retries a restore while the device still reports the key held", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.pressKey();
+    let reports = 0;
+    const state = device.api.getMachineInputState;
+    device.api.getMachineInputState = async () =>
+      reports++ === 0 ? { keyboard: { inputs: ["arrow_left"] } } : state();
+    vi.useFakeTimers();
+    const restore = session.restore("released");
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    expect(await restore).toBe(true);
+    expect(reports).toBe(2);
+  });
+
+  it("retries a restore whose read-back still shows the raised speed and Turbo Control", async () => {
+    const device = createFakeRemoteSeekDevice({ settings: { "Turbo Control": "Off" } });
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.setCpuSpeed("64");
+    const write = device.api.setConfigValue;
+    let ignored = 0;
+    device.api.setConfigValue = async (category, item, value, flags) =>
+      flags?.__c64uTransientConfigRestore && ignored++ < 2 ? ({} as never) : write(category, item, value, flags);
+    vi.useFakeTimers();
+    const restore = session.restore("released");
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    expect(await restore).toBe(true);
+    expect(device.settings).toMatchObject({ "CPU Speed": " 1", "Turbo Control": "Off" });
+  });
+
+  it("refuses to open a seek on a device that has not identified itself", async () => {
+    const device = createFakeRemoteSeekDevice();
+    device.connectTo(null);
+    await expect(RemoteSeekDeviceSession.open(device.api)).rejects.toThrow(/not identified itself/);
+    expect(await recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
+  });
+
+  it("refuses to open a new seek while an earlier one on the device cannot be undone", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const earlier = await RemoteSeekDeviceSession.open(device.api);
+    await earlier.setCpuSpeed("64");
+    device.failures.keyEvents = 100;
+    vi.useFakeTimers();
+    const opening = RemoteSeekDeviceSession.open(device.api).catch((error: Error) => error);
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    expect(await opening).toBeInstanceOf(Error);
+    device.failures.keyEvents = 0;
+    vi.useFakeTimers();
+    const again = RemoteSeekDeviceSession.open(device.api);
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    await (await again).restore("done");
+    expect(device.settings["CPU Speed"]).toBe(" 1");
+  });
+
+  it("refuses to open a new seek while a journal left by an earlier process cannot be undone", async () => {
+    const device = createFakeRemoteSeekDevice();
+    localStorage.setItem(
+      "c64u_remote_seek_device_journal_v1",
+      JSON.stringify({
+        [DEVICE_KEY]: {
+          sessionId: "earlier-process",
+          deviceKey: DEVICE_KEY,
+          originalCpuSpeed: " 1",
+          cpuSpeedChanged: true,
+          originalTurboControl: null,
+          keyHeld: true,
+          startedAtMs: 0,
+        },
+      }),
+    );
+    device.failures.keyEvents = 100;
+    vi.useFakeTimers();
+    const opening = RemoteSeekDeviceSession.open(device.api).catch((error: Error) => error);
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    expect(String(await opening)).toMatch(/could not be undone/);
+  });
+
+  it("sends nothing for a CPU Speed the session already set", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.setCpuSpeed(" 1");
+    expect(device.log).toEqual([]);
+    await session.restore("done");
+  });
+
+  it("accepts an input state without a keyboard entry as nothing held", async () => {
+    const device = createFakeRemoteSeekDevice();
+    device.api.getMachineInputState = async () => ({});
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.pressKey();
+    expect(await session.restore("released")).toBe(true);
+  });
+
+  it("keeps the journal when CPU Speed never reads back as it was", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api);
+    await session.setCpuSpeed("64");
+    const write = device.api.setConfigValue;
+    device.api.setConfigValue = async (category, item, value, flags) =>
+      flags?.__c64uTransientConfigRestore ? ({} as never) : write(category, item, value, flags);
+    vi.useFakeTimers();
+    const restore = session.restore("released");
+    await vi.runAllTimersAsync();
+    vi.useRealTimers();
+    expect(await restore).toBe(false);
+    expect(addErrorLog).toHaveBeenCalledWith(
+      "Remote seek could not restore the device; it will retry on the next connection",
+      expect.objectContaining({ error: "Read-back after restore shows CPU Speed 64; expected  1" }),
+    );
+    device.api.setConfigValue = write;
+    expect(await recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
   });
 });

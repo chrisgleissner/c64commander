@@ -28,9 +28,11 @@ vi.mock("@/lib/deviceCapabilities", () => ({
   probeMachineInputCapability: async () => ({ status: machineInput.status }),
 }));
 vi.mock("@/lib/savedDevices/store", () => ({ getSelectedSavedDevice: () => ({ id: "c64u" }) }));
+const ultimateBlob = vi.hoisted(() => ({ bytes: null as Uint8Array | null }));
 vi.mock("@/lib/playback/playbackRouter", () => ({
   getRememberedUltimateSidBlob: () => null,
-  tryFetchUltimateSidBlob: async () => null,
+  tryFetchUltimateSidBlob: async () =>
+    ultimateBlob.bytes ? { arrayBuffer: async () => ultimateBlob.bytes!.slice().buffer } : null,
 }));
 vi.mock("@/lib/playback/remoteSeek/activeRemoteSidSeek", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/playback/remoteSeek/activeRemoteSidSeek")>();
@@ -63,17 +65,17 @@ const rsid = () => {
   return bytes;
 };
 
-const render = (options: { item?: PlaylistItem; active?: boolean; elapsedMs?: number } = {}) => {
+const render = (options: { item?: PlaylistItem; active?: boolean; elapsedMs?: number; durationMs?: number } = {}) => {
   const rebasePlaybackPosition = vi.fn();
   const hook = renderHook(
     (props: { active: boolean; elapsedMs: number }) =>
       useRemoteSidSeek({
-        item: options.item ?? item(),
+        item: options.item === null ? undefined : (options.item ?? item()),
         active: props.active,
         trackInstanceId: 1,
-        deviceInfo: DEVICE_INFO,
+        deviceInfo: ("deviceInfo" in options ? options.deviceInfo : DEVICE_INFO) as never,
         elapsedMs: props.elapsedMs,
-        durationMs: 180_000,
+        durationMs: "durationMs" in options ? options.durationMs : 180_000,
         rebasePlaybackPosition,
       }),
     { initialProps: { active: options.active ?? true, elapsedMs: options.elapsedMs ?? 0 } },
@@ -96,6 +98,7 @@ describe("useRemoteSidSeek", () => {
     vi.useFakeTimers();
     localStorage.clear();
     machineInput.status = "available";
+    ultimateBlob.bytes = null;
     device.current = createFakeRemoteSeekDevice();
   });
   afterEach(() => {
@@ -289,6 +292,182 @@ describe("useRemoteSidSeek", () => {
     expect(device.current!.player.heldKeys).toEqual(["arrow_left"]);
     act(() => result.current.handlers?.onScrubEnd?.());
     await advance(1500);
+    expect(device.current!.player.heldKeys).toEqual([]);
+  });
+
+  const ultimateItem = () =>
+    item(SEEKABLE, { request: { source: "ultimate", path: "/USB2/seekable.sid" } } as Partial<PlaylistItem>);
+
+  it("reads the header of a tune on the Ultimate over FTP", async () => {
+    ultimateBlob.bytes = SEEKABLE;
+    const { result } = render({ item: ultimateItem() });
+    await advance(1500);
+    expect(result.current.handlers).not.toBeNull();
+  });
+
+  it("offers nothing when the header of a tune on the Ultimate cannot be fetched", async () => {
+    const { result } = render({ item: ultimateItem() });
+    await advance(1500);
+    expect(result.current.handlers).toBeNull();
+  });
+
+  it("offers nothing when the C64 is not showing the SID player", async () => {
+    device.current!.api.readMemory = async (_address, length) => new Uint8Array(length);
+    const { result } = render();
+    await advance(5000);
+    expect(result.current.handlers).toBeNull();
+  });
+
+  it("offers nothing when the probe itself fails", async () => {
+    device.current!.api.readMemory = async () => {
+      throw new Error("HTTP 503");
+    };
+    const { result } = render();
+    await advance(1500);
+    expect(result.current.handlers).toBeNull();
+  });
+
+  it("keeps the bar a plain indicator when the tune's length is unknown", async () => {
+    const { result } = render({ durationMs: undefined });
+    await advance(1500);
+    expect(result.current.handlers?.onScrubStep).toBeTypeOf("function");
+    expect(result.current.handlers?.onSeekToFraction).toBeUndefined();
+    // `onSeek` only tells the card a hold is on offer; the gesture runs through the scrub handlers.
+    expect(result.current.handlers?.onSeek?.(5)).toBeUndefined();
+  });
+
+  it("ends a fast forward by itself at the end of the tune", async () => {
+    const { result, rebasePlaybackPosition } = render({ durationMs: 30_000 });
+    await advance(1500);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(5000);
+    expect(device.current!.player.heldKeys).toEqual([]);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBe(30);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(500);
+    expect(device.current!.player.restarts).toBe(0);
+  });
+
+  it("clears the gesture when a fast forward cannot start", async () => {
+    const { result } = render();
+    await advance(1500);
+    device.current!.failures.keyEvents = 1;
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(1500);
+    expect(result.current.targetMs).toBeNull();
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(500);
+    expect(device.current!.player.heldKeys).toEqual([]);
+  });
+
+  it("does not rewind on a machine without CPU Speed, and a lone release does nothing", async () => {
+    device.current!.api.getConfigItem = async (category, item) => {
+      if (item === "CPU Speed") throw new Error("HTTP 404");
+      return { [category]: { [item]: { current: "PAL", values: ["PAL"] } } } as never;
+    };
+    const { result } = render({ elapsedMs: 60_000 });
+    await advance(1500);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(-5);
+    });
+    expect(result.current.targetMs).toBeNull();
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(1000);
+    expect(device.current!.log).toEqual([]);
+  });
+
+  it("jumps once, to where a drag comes to rest", async () => {
+    const { result } = render();
+    await advance(1500);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.2));
+    await advance(100);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.4));
+    await advance(5000);
+    expect(device.current!.log.filter((entry) => entry === "key press arrow_left").length).toBeGreaterThan(0);
+    expect(device.current!.player.tunePositionSeconds).toBeGreaterThan(72);
+  });
+
+  it("ignores the page becoming visible again", async () => {
+    const { result } = render();
+    await advance(1500);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.2));
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(result.current.targetMs).toBe(36_000);
+  });
+
+  it("offers nothing without a tune or a connected machine", async () => {
+    const { result } = render({ item: null });
+    const { result: unconnected } = render({ deviceInfo: null });
+    await advance(1500);
+    expect(result.current.handlers).toBeNull();
+    expect(unconnected.current.handlers).toBeNull();
+  });
+
+  it("stops the rewind target when the app is hidden during a Previous hold", async () => {
+    const { result } = render({ elapsedMs: 120_000 });
+    await advance(1500);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(-5);
+    });
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    await advance(3000);
+    expect(result.current.targetMs).toBeNull();
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(1000);
+    expect(device.current!.player.restarts).toBe(0);
+  });
+
+  it("drops a jump chain when playback leaves the C64 route mid jump", async () => {
+    const { result, rerender, rebasePlaybackPosition } = render();
+    await advance(1500);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.5));
+    await advance(500);
+    rerender({ active: false, elapsedMs: 0 });
+    await advance(5000);
+    expect(rebasePlaybackPosition).not.toHaveBeenCalled();
+    expect(device.current!.player.heldKeys).toEqual([]);
+  });
+
+  it("fast forwards a tune of unknown length until released", async () => {
+    const { result, rebasePlaybackPosition } = render({ durationMs: undefined });
+    await advance(1500);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(2000);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(1500);
+    expect(rebasedSeconds(rebasePlaybackPosition)).toBeGreaterThan(15);
+  });
+
+  it("treats a fast forward stopped while it was starting as superseded, not as a failure", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    const { result } = render();
+    await advance(1500);
+    vi.mocked(addErrorLog).mockClear();
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+      void cancelRemoteSidSeek("stop");
+    });
+    await advance(1500);
+    expect(addErrorLog).not.toHaveBeenCalled();
     expect(device.current!.player.heldKeys).toEqual([]);
   });
 });

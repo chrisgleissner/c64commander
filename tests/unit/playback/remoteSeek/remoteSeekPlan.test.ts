@@ -149,3 +149,35 @@ describe("SID player screen", () => {
     expect(isSidPlayerTitle(ascii("READY."))).toBe(false);
   });
 });
+
+describe("remote seek plan edges", () => {
+  it("has no ramp and no jump tiers on a machine whose CPU Speed options are not speeds", () => {
+    expect(fastForwardRampOptions(["Off"], 1)).toEqual([]);
+    expect(new JumpSpeedPlanner(["Off"], "Off").tiers).toEqual(["Off"]);
+  });
+
+  it("bounds an 80 MHz speed by the clock ratio and the 64 MHz floor ratio", () => {
+    const planner = new JumpSpeedPlanner([" 1", "80"], " 1");
+    planner.record("80", 400);
+    expect(planner.rateBound(" 1")).toBeCloseTo((400 * 1.3 * 1) / 21);
+    expect(planner.tiers).toEqual(["80", " 1"]);
+  });
+
+  it("ignores a rate that is not positive", () => {
+    const planner = new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1");
+    planner.record(" 1", 0);
+    expect(planner.calibrated).toBe(false);
+    expect(planner.rateBound("64")).toBeNull();
+  });
+
+  it("leaves a rate below 50 Hz as measured", () => {
+    expect(snapPlayCallRate(30)).toBe(30);
+  });
+});
+
+describe("remote seek errors", () => {
+  it("describes errors that are not Error objects", async () => {
+    const { remoteSeekErrorDetails } = await import("@/lib/playback/remoteSeek/remoteSeekErrors");
+    expect(remoteSeekErrorDetails("timeout")).toEqual({ error: "timeout", stack: undefined });
+  });
+});

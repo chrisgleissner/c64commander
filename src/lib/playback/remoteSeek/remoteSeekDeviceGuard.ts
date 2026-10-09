@@ -71,7 +71,7 @@ type JournalStore = Record<string, RemoteSeekJournal>;
 
 const readJournalStore = (): JournalStore => {
   try {
-    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(JOURNAL_STORAGE_KEY);
+    const raw = localStorage.getItem(JOURNAL_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as JournalStore) : {};
   } catch (error) {
     addErrorLog("Remote seek journal could not be read", errorDetails(error));
@@ -87,7 +87,6 @@ export const hasRemoteSeekJournal = (): boolean => Object.keys(readJournalStore(
 
 const writeJournal = (deviceKey: string, journal: RemoteSeekJournal | null) => {
   try {
-    if (typeof localStorage === "undefined") return;
     const store = readJournalStore();
     if (journal === null) delete store[deviceKey];
     else store[deviceKey] = journal;
@@ -269,10 +268,6 @@ export class RemoteSeekDeviceSession {
 
   get originalCpuSpeed(): string {
     return this.journal.originalCpuSpeed;
-  }
-
-  get isRestored(): boolean {
-    return this.restored;
   }
 
   /** Set CPU Speed, switching Turbo Control to Manual first when it would otherwise ignore the speed. */

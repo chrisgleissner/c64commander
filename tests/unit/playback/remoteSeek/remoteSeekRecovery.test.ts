@@ -125,4 +125,20 @@ describe("remote seek recovery", () => {
     expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
     uninstall();
   });
+
+  it("runs one recovery at a time and logs a recovery that throws", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    await leaveUnfinishedSeek();
+    device.current!.api.currentDeviceKey = () => {
+      throw new Error("identity unavailable");
+    };
+    const uninstall = installRemoteSeekRecovery();
+    connect("REAL_CONNECTED");
+    connect("DISCOVERING");
+    connect("REAL_CONNECTED");
+    await vi.runAllTimersAsync();
+    expect(addErrorLog).toHaveBeenCalledTimes(1);
+    expect(addErrorLog).toHaveBeenCalledWith("Remote seek recovery failed", expect.anything());
+    uninstall();
+  });
 });
