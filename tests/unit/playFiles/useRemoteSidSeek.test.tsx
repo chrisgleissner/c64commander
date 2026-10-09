@@ -455,6 +455,27 @@ describe("useRemoteSidSeek", () => {
     expect(result.current.targetMs).toBeNull();
   });
 
+  it("keeps a jump's target on screen while the hold before it is still being given back", async () => {
+    const { result, rerender } = render();
+    await advance(PROBED_MS);
+    rerender({ active: true, elapsedMs: device.current!.player.tunePositionSeconds * 1000 });
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(2000);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    await advance(10);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.05));
+    const target = result.current.targetMs;
+    expect(target).not.toBeNull();
+    for (let waited = 0; result.current.targetMs !== null && waited < 30_000; waited += 10) {
+      expect(result.current.targetMs).toBe(target);
+      await advance(10);
+    }
+    expect(Math.abs(device.current!.player.tunePositionSeconds - target! / 1000)).toBeLessThan(3);
+  });
+
   it("ignores the progress bar while Next is held", async () => {
     const { result } = render();
     await advance(PROBED_MS);

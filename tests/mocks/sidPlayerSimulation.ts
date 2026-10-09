@@ -22,9 +22,11 @@
 export const SIMULATED_SCREEN_ADDRESS = 0x0800;
 /**
  * Where the counter tune (tools/hil/remoteSeekHil/tunes.ts) counts its play calls: $10F0, or $F0 into
- * its own code when it loads elsewhere, because the player then puts itself and its data at $1000.
+ * its own code when it loads elsewhere, because the player then puts itself and its data at $1000. A
+ * tune under the BASIC or KERNAL ROM counts at $02F0, which nothing uses: readmem would read the ROM.
  */
-export const counterAddressFor = (loadAddress: number) => (loadAddress === 0x1000 ? 0x10f0 : loadAddress + 0xf0);
+export const counterAddressFor = (loadAddress: number) =>
+  loadAddress === 0x1000 ? 0x10f0 : loadAddress >= 0xa000 ? 0x02f0 : loadAddress + 0xf0;
 
 /** The load address a PSID's header names, or the one its data starts with when the header has none. */
 export const psidLoadAddress = (psid: Uint8Array) => {
@@ -274,6 +276,13 @@ export class SidPlayerSimulation {
     if (address >= this.counterAddress && address < this.counterAddress + 3) {
       const calls = Math.floor(this.tuneSeconds * this.playCallHz);
       return (calls >> (8 * (address - this.counterAddress))) & 0xff;
+    }
+    if (address === 0xd011 || address === 0xd012) {
+      // A 312-line PAL frame or a 263-line NTSC one, at the rate the machine is really running.
+      const lines = this.machineFrameHz > 55 ? 263 : 312;
+      const intoFrame = ((this.now() * this.machineFrameHz) / 1000) % 1;
+      const line = Math.floor(intoFrame * lines);
+      return address === 0xd012 ? line & 0xff : 0x1b | ((line >> 1) & 0x80);
     }
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;

@@ -158,6 +158,33 @@ describe("deviceInteractionManager", () => {
     expect(recordDeviceGuard).toHaveBeenCalledWith(action, expect.objectContaining({ decision: "cache" }));
   });
 
+  it("never hands one memory read the answer to a read of another address", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    const read = (address: string) => ({
+      action: makeAction(`readmem-${address}`),
+      method: "GET",
+      path: `/v1/machine:readmem?address=${address}&length=1`,
+      normalizedUrl: `http://device/v1/machine:readmem?address=${address}&length=1`,
+      intent: "user" as const,
+      bypassCooldown: true,
+      baseUrl: "http://device",
+    });
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const first = withRestInteraction(read("0400"), async () => {
+      await firstBlocked;
+      return "screen";
+    });
+    const second = withRestInteraction(read("D012"), async () => "raster");
+    releaseFirst();
+    await expect(first).resolves.toBe("screen");
+    await expect(second).resolves.toBe("raster");
+  });
+
   it("coalesces a burst of identical GET requests behind one inflight handler", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

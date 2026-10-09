@@ -563,10 +563,13 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
     };
   }
   if (normalizedPath === "/v1/machine:readmem") {
+    // One cooldown per device, but never one answer: concurrent reads of different addresses shared it,
+    // and the shared value is a Response whose body only one caller can read.
     return {
       key: `${baseUrl}:rest-machine-readmem`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
+      unshared: true,
     };
   }
   if (normalizedPath === "/v1/machine:writemem") {
@@ -771,7 +774,11 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
   const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
   const usesSharedReadState =
-    isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache && !userHalfOpenProbe;
+    isReadOnlyRestMethod(meta.method) &&
+    Boolean(policy.key) &&
+    !("unshared" in policy) &&
+    !meta.bypassCache &&
+    !userHalfOpenProbe;
 
   if (usesSharedReadState && policy.key) {
     const cached = restCache.get(policy.key);

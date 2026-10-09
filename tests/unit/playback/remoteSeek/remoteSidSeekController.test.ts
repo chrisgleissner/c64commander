@@ -615,6 +615,55 @@ describe("remote SID seek controller", () => {
     expect(Math.abs((tick?.tickAtMs ?? 0) - 2_004_000)).toBeLessThanOrEqual(25);
   });
 
+  it("does not let a clock re-sync hold up the release of a fast forward", async () => {
+    const device = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    // At 8 MHz every read finds the clock several seconds on, so a re-sync never sees a single step.
+    await vi.advanceTimersByTimeAsync(2500);
+    const tick = controller.clockTick();
+    const release = controller.endFastForward();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(device.player.heldKeys).toEqual([]);
+    await settle(release);
+    expect(await settle(tick)).toBeNull();
+  });
+
+  it.each(["jump", "hold"] as const)("reports where a %s landed before it gives the settings back", async (kind) => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const restoredWhenTold: boolean[] = [];
+    controller.landingListener = () => restoredWhenTold.push(device.log.some((entry) => entry.includes("restore")));
+    const at = () => device.player.tunePositionSeconds;
+    if (kind === "jump") {
+      await settle(controller.jumpTo(at, 300));
+    } else {
+      await settle(controller.beginFastForward(at, () => undefined));
+      await vi.advanceTimersByTimeAsync(2500);
+      await settle(controller.endFastForward());
+    }
+    expect(restoredWhenTold).toEqual([false]);
+    expect(device.log.some((entry) => entry.includes("restore"))).toBe(true);
+  });
+
+  it("gives up a running clock re-sync as soon as a jump is asked for", async () => {
+    const device = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const tick = controller.clockTick();
+    await vi.advanceTimersByTimeAsync(100);
+    const at = () => device.player.tunePositionSeconds;
+    const jump = controller.jumpTo(at, 120);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(device.log).toContain("key press arrow_left");
+    expect(await settle(tick)).toBeNull();
+    await settle(jump);
+  });
+
   it("does not follow the clock of a multi-speed tune, which runs ahead of its music", async () => {
     const device = createFakeRemoteSeekDevice({ playCallHz: 200 });
     const read = vi.spyOn(device.api, "readMemory");
@@ -740,6 +789,37 @@ describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
     });
   },
 );
+
+describe("an Ultimate 64, whose SID player switches the machine to the tune's standard", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    { mode: "NTSC", clock: "pal" as const, timing: machineTimingFor("PAL") },
+    { mode: "PAL", clock: "ntsc" as const, timing: machineTimingFor("NTSC") },
+  ])("times a $clock tune in $mode mode by the frames the machine really runs", async ({ mode, clock, timing }) => {
+    const device = createFakeRemoteSeekDevice({
+      settings: { "System Mode": mode },
+      playCallHz: timing.frameHz,
+      machineFrameHz: timing.frameHz,
+      ciaClockHz: timing.ciaClockHz,
+    });
+    const found = await settle(probeRemoteTuneSeek(device.api, header({ clock }), 1));
+    expect(found?.timing).toEqual(timing);
+    const controller = new RemoteSidSeekController(device.api, found!);
+    expect(controller.clockIsPosition).toBe(true);
+    const at = () => device.player.tunePositionSeconds;
+    await settle(controller.beginFastForward(at, () => undefined));
+    await vi.advanceTimersByTimeAsync(4500);
+    const held = await settle(controller.endFastForward());
+    expect(Math.abs((held?.seconds ?? 0) - at()) / at()).toBeLessThan(0.005);
+  });
+});
 
 describe("remote seek support", () => {
   beforeEach(() => {

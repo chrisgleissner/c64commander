@@ -126,6 +126,12 @@ export class RemoteSidSeekController {
   private cancelGeneration = 0;
   private activeSession: RemoteSeekDeviceSession | null = null;
   private pendingOperations = 0;
+  private gestureArrived = false;
+  /**
+   * Told where a seek landed as soon as that is known, before the device's settings are given back:
+   * the restore is a few config writes, and the page need not show the target while they run.
+   */
+  landingListener: ((landing: RemoteSeekLanding, kind: "jump" | "fast forward") => void) | null = null;
 
   /**
    * `replayTune` starts the tune afresh the way the Play page started it; a profile that restarts
@@ -162,13 +168,22 @@ export class RemoteSidSeekController {
    * C64's own second at the C64's own moment. Null when the clock is not the position, or does not tick.
    */
   clockTick(): Promise<ClockTick | null> {
-    if (!this.clockIsPosition) return Promise.resolve(null);
+    // Never ahead of a gesture: a tick measured during a hold never sees a single step and holds the
+    // release up for its whole limit, and one running when a jump arrives stops at its next read.
+    if (!this.clockIsPosition || this.isBusy) return Promise.resolve(null);
+    this.gestureArrived = false;
     return this.serialize((generation) =>
       measureClockTick(
         () => this.readClock(true),
-        () => generation === this.cancelGeneration,
+        () => generation === this.cancelGeneration && !this.gestureArrived,
       ),
     );
+  }
+
+  /** Make a running clock re-sync give way to a gesture. */
+  private gesture<T>(work: (generation: number) => Promise<T>): Promise<T> {
+    this.gestureArrived = true;
+    return this.serialize(work);
   }
 
   get canRewind() {
@@ -177,7 +192,7 @@ export class RemoteSidSeekController {
 
   /** Hold Next: press the key, then raise CPU Speed one step a second. Positions arrive on `onPosition`. */
   beginFastForward(origin: RemoteSeekOrigin, onPosition: RemoteSeekPositionListener): Promise<void> {
-    return this.serialize(async (generation) => {
+    return this.gesture(async (generation) => {
       if (this.fastForward) return;
       this.assertCurrent(generation);
       const ratio = await this.resolveClockPerTuneSecond();
@@ -230,7 +245,7 @@ export class RemoteSidSeekController {
 
   /** Release Next: stop, give the device back, and return where it landed (null if unknown). */
   endFastForward(reason = "released"): Promise<RemoteSeekLanding | null> {
-    return this.serialize(async () => {
+    return this.gesture(async () => {
       const run = this.fastForward;
       if (!run) return null;
       this.fastForward = null;
@@ -244,6 +259,7 @@ export class RemoteSidSeekController {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
       let landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+      if (landed) this.landingListener?.(landing, "fast forward");
       await run.speedWrites;
       await this.giveBack(run.session, reason);
       if (!landed) {
@@ -268,7 +284,7 @@ export class RemoteSidSeekController {
     targetSeconds: number,
     onPosition?: RemoteSeekPositionListener,
   ): Promise<RemoteSeekLanding | null> {
-    return this.serialize(async (generation) => {
+    return this.gesture(async (generation) => {
       const target = Math.max(0, targetSeconds);
       const fromSeconds = origin();
       if (target < fromSeconds && !this.canRewind) {
@@ -433,7 +449,9 @@ export class RemoteSidSeekController {
           landedSeconds: model.seconds,
           tookMs: Date.now() - startedAt,
         });
-        return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+        const landing = { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+        this.landingListener?.(landing, "jump");
+        return landing;
       } catch (error) {
         if (isRemoteSeekSuperseded(error)) {
           addLog("debug", error.message, { fromSeconds, targetSeconds });

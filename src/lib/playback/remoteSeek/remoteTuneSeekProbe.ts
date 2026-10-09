@@ -16,7 +16,14 @@ import {
   type RemoteSeekDeviceApi,
 } from "./remoteSeekDeviceGuard";
 import { remoteSeekErrorDetails as errorDetails } from "./remoteSeekErrors";
-import { cpuSpeedMhz, isSixtyHzMachine, machineTimingFor, type MachineTiming } from "./remoteSeekPlan";
+import {
+  cpuSpeedMhz,
+  isSixtyHzMachine,
+  machineTimingFor,
+  NTSC_FRAME_LINES,
+  PAL_FRAME_LINES,
+  type MachineTiming,
+} from "./remoteSeekPlan";
 import { locateSidPlayerClock } from "./sidPlayerClock";
 import { scanForFastForwardPatch } from "./sidPlayerFastForwardPatch";
 import type { SidPlayerClockField } from "./sidPlayerScreen";
@@ -38,6 +45,30 @@ export type RemoteTuneSeekProfile = {
    * starting the tune afresh the way the Play page started it.
    */
   restart: "keys" | "replay";
+};
+
+const RASTER_SAMPLES = 60;
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Lines in the frames the machine runs now, from the raster line ($D011 bit 7 and $D012) read at
+ * uneven times: a line past the last of an NTSC frame means PAL. Sixty reads all miss PAL's last 49
+ * lines about once in 30,000 tries. Null when the raster cannot be read.
+ */
+export const measureFrameLines = async (api: RemoteSeekDeviceApi, isCurrent: () => boolean): Promise<number | null> => {
+  let highest = -1;
+  try {
+    for (let index = 0; index < RASTER_SAMPLES && isCurrent(); index += 1) {
+      if (index > 0) await sleep((index * 7) % 20);
+      const [d011, d012] = await api.readMemory("D011", 2, { __c64uIntent: "user", __c64uBypassCooldown: true });
+      highest = Math.max(highest, ((d011 & 0x80) << 1) | d012);
+      if (highest >= NTSC_FRAME_LINES) return PAL_FRAME_LINES;
+    }
+  } catch (error) {
+    addLog("warn", "Remote seek: raster unreadable; timing the tune by System Mode", errorDetails(error));
+    return null;
+  }
+  return highest < 0 ? null : NTSC_FRAME_LINES;
 };
 
 /** Why a tune cannot be seeked on the C64, or null when it can be as far as its header tells. */
@@ -94,7 +125,7 @@ export const probeRemoteTuneSeek = async (
     addLog("warn", "Remote seek: CPU Speed unreadable; fast forward only", errorDetails(error));
     return null;
   });
-  const timing = machineTimingFor(systemMode?.value);
+  const timing = machineTimingFor(systemMode?.value, await measureFrameLines(api, isCurrent));
   const cpuSpeedOptions = (cpuSpeed?.options ?? []).filter((option) => cpuSpeedMhz(option) !== null);
   return {
     clock,

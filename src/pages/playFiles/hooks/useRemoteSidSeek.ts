@@ -121,6 +121,8 @@ export const useRemoteSidSeek = ({
   const holdsDownRef = useRef(0);
   /** The last landing, until the elapsed time the page reports has caught up with it. */
   const latestLandingRef = useRef<RemoteSeekLanding | null>(null);
+  /** A jump has been asked for: running, queued, or a tap on the bar still settling. */
+  const jumpAwaited = useCallback(() => jumpingRef.current || dragTimerRef.current !== null, []);
   const live = useRef({ elapsedMs, durationMs, rebasePlaybackPosition });
   live.current = { elapsedMs, durationMs, rebasePlaybackPosition };
 
@@ -185,6 +187,14 @@ export const useRemoteSidSeek = ({
           }
           const replay = profile.restart === "replay" ? replayTune(tune.blob, songNr ?? undefined, item.path) : null;
           const created = new RemoteSidSeekController(api, profile, replay);
+          // Show where a seek landed while its settings are still being given back, unless a jump
+          // asked for since then still has to get there.
+          created.landingListener = (landing, kind) => {
+            latestLandingRef.current = landing;
+            if (kind === "fast forward" ? jumpAwaited() : queuedTargetRef.current !== null) return;
+            live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
+            setTargetMs(null);
+          };
           controllerRef.current = created;
           setActiveRemoteSidSeek(created);
           setController(created);
@@ -256,6 +266,14 @@ export const useRemoteSidSeek = ({
     },
     [syncToClock],
   );
+  /** A hold's landing must not clear the target of a jump asked for since. */
+  const landFastForward = useCallback(
+    (landing: RemoteSeekLanding | null) => {
+      if (!jumpAwaited()) land(landing);
+      else if (landing) latestLandingRef.current = landing;
+    },
+    [jumpAwaited, land],
+  );
 
   /** Where the tune is now: the last landing until the page's elapsed time has caught up with it. */
   const currentSeconds = useCallback((): number => {
@@ -319,7 +337,7 @@ export const useRemoteSidSeek = ({
             // Past the end there is nothing left to hear; land, and let auto-advance take the next tune.
             if (positionSeconds >= durationSeconds && !hold.ended) {
               hold.ended = true;
-              void owned.endFastForward("reached the end").then(land);
+              void owned.endFastForward("reached the end").then(landFastForward);
             }
           })
           .catch((error) => {
@@ -356,11 +374,11 @@ export const useRemoteSidSeek = ({
     rewindTimerRef.current = null;
     if (!owned || !hold || hold.ended) return;
     if (hold.direction === "forward") {
-      void owned.endFastForward().then(land);
+      void owned.endFastForward().then(landFastForward);
       return;
     }
     void jump(Math.max(0, hold.fromSeconds - rewindOffsetSeconds(hold.rewindSteps)));
-  }, [jump, land]);
+  }, [jump, landFastForward]);
 
   const onSeekToFraction = useCallback(
     (fraction: number) => {

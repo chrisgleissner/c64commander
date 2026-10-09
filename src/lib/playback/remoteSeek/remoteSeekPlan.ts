@@ -187,9 +187,23 @@ const timing = (ciaClockHz: number, frameCycles: number): MachineTiming => ({
   frameCycles,
 });
 
-/** Timing of a System Mode, with PAL's 50.1245 Hz rather than 50; anything unknown is treated as PAL. */
-export const machineTimingFor = (systemMode: string | null | undefined): MachineTiming =>
-  SIXTY_HZ_SYSTEM_MODES.has((systemMode ?? "").trim().toUpperCase())
+export const PAL_FRAME_LINES = 312;
+export const NTSC_FRAME_LINES = 263;
+
+/**
+ * Timing of the machine, with PAL's 50.1245 Hz rather than 50: from the lines in a frame it really
+ * runs when they are known, otherwise from its System Mode, anything unknown being PAL. An Ultimate
+ * 64's SID player switches the machine to the tune's standard, so its System Mode can be the other one.
+ */
+export const machineTimingFor = (
+  systemMode: string | null | undefined,
+  frameLines: number | null = null,
+): MachineTiming =>
+  (
+    frameLines !== null
+      ? frameLines === NTSC_FRAME_LINES
+      : SIXTY_HZ_SYSTEM_MODES.has((systemMode ?? "").trim().toUpperCase())
+  )
     ? timing(1022727, NTSC_FRAME_CYCLES)
     : timing(985248, PAL_FRAME_CYCLES);
 
