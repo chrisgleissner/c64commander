@@ -16,14 +16,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readRemoteSeekJournal } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
 import { machineTimingFor } from "@/lib/playback/remoteSeek/remoteSeekPlan";
+import { FAST_FORWARD_MAX_HOLD_MS, RemoteSidSeekController } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 import {
-  FAST_FORWARD_MAX_HOLD_MS,
   headerPlayCallHz,
   probeRemoteTuneSeek,
   remoteSeekHeaderBlocker,
-  RemoteSidSeekController,
   type RemoteTuneSeekProfile,
-} from "@/lib/playback/remoteSeek/remoteSidSeekController";
+} from "@/lib/playback/remoteSeek/remoteTuneSeekProbe";
 import { locateSidPlayerClock } from "@/lib/playback/remoteSeek/sidPlayerClock";
 import type { SidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { MEASURED_FAST_FORWARD_RATE_BY_MHZ, simulatedClockField } from "../../../mocks/sidPlayerSimulation";
@@ -46,6 +45,8 @@ const profile = (overrides: Partial<RemoteTuneSeekProfile> = {}): RemoteTuneSeek
   timing: machineTimingFor("PAL"),
   headerPlayCallHz: 50,
   cpuSpeedOptions: C64U_CPU_SPEEDS,
+  fastForward: { kind: "key" },
+  restart: "keys",
   ...overrides,
 });
 
@@ -454,9 +455,21 @@ describe("remote SID seek controller", () => {
     expect(device.player.tunePositionSeconds).toBeLessThan(62);
   });
 
-  it("does not jump back on a machine without CPU Speed", async () => {
-    const device = createFakeRemoteSeekDevice();
+  it("rewinds on a machine without CPU Speed at the machine's own speed", async () => {
+    const device = createFakeRemoteSeekDevice({ cartridge: false });
     const controller = new RemoteSidSeekController(device.api, profile({ cpuSpeedOptions: [] }));
+    await vi.advanceTimersByTimeAsync(100_000);
+    expect(controller.canRewind).toBe(true);
+    await settle(controller.jumpTo(() => 100, 10));
+    expect(device.player.restarts).toBe(2);
+    expect(cpuSpeedWrites(device.log)).toEqual([]);
+    expect(device.player.tunePositionSeconds).toBeGreaterThan(9.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(12);
+  });
+
+  it("does not jump back when the tune can be restarted neither by key nor by playing it again", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile({ restart: "replay" }));
     expect(controller.canRewind).toBe(false);
     expect(await settle(controller.jumpTo(() => 100, 10))).toBeNull();
     expect(device.log).toEqual([]);
@@ -532,6 +545,8 @@ describe("remote seek support", () => {
       timing: machineTimingFor("PAL"),
       headerPlayCallHz: 50,
       cpuSpeedOptions: C64U_CPU_SPEEDS,
+      fastForward: { kind: "key" },
+      restart: "keys",
     });
   });
 

@@ -59,6 +59,8 @@ export type SidPlayerSimulationOptions = {
    * first, so such a read shows the new seconds with the minutes still a minute behind.
    */
   tornClockReads?: number[];
+  /** Where the player's keyboard routine and fast forward flag sit (see `placeSidPlayerCode`); null for a player without them. */
+  playerCode?: { keyboardAddress: number; flagAddress: number } | null;
   /** Where and how the player draws its screen; by default as the current player does. */
   layout?: Partial<SidPlayerLayout>;
   now?: () => number;
@@ -113,6 +115,9 @@ export class SidPlayerSimulation {
   private readonly keyReleaseDelayMs: number;
   private readonly timerFollowsClock: boolean;
   readonly layout: SidPlayerLayout;
+  /** RAM as far as the player's code goes; everything else is computed in `byteAt`. */
+  private readonly ram = new Uint8Array(0x10000);
+  readonly code: ReturnType<typeof placeSidPlayerCode>;
   private readonly tornClockReads: ReadonlySet<number>;
   private readonly timerFractions: readonly number[];
   private timerReads = 0;
@@ -136,6 +141,10 @@ export class SidPlayerSimulation {
     this.keyReleaseDelayMs = options.keyReleaseDelayMs ?? 0;
     this.timerFollowsClock = options.timerFollowsClock ?? false;
     this.layout = { ...CURRENT_PLAYER_LAYOUT, ...options.layout };
+    this.code =
+      options.playerCode === null
+        ? { ldyOperandAddress: -1, storeAddress: -1, covers: () => false }
+        : placeSidPlayerCode(this.ram, options.playerCode ?? DEFAULT_PLAYER_CODE);
     this.tornClockReads = new Set(options.tornClockReads ?? []);
     this.timerFractions = options.timerFractions ?? [];
     this.timerOrigin = this.now();
@@ -148,8 +157,9 @@ export class SidPlayerSimulation {
     return this.tuneSeconds;
   }
 
+  /** Fast forward runs while the key is down, or while the keyboard routine's `ldy #0` reads `ldy #1`. */
   get fastForwarding() {
-    return this.keysDown.has("arrow_left");
+    return this.keysDown.has("arrow_left") || this.ram[this.code.ldyOperandAddress] === 1;
   }
 
   get heldKeys() {
@@ -208,7 +218,14 @@ export class SidPlayerSimulation {
     return out;
   }
 
+  /** `PUT /v1/machine:writemem`: only the player's code is RAM here. */
+  writeMemory(address: number, data: Uint8Array) {
+    this.advance();
+    this.ram.set(data, address);
+  }
+
   private byteAt(address: number, torn: boolean, rows: Map<number, string>): number {
+    if (this.code.covers(address)) return this.ram[address];
     if (address === 0xdd00) return DD00_BANK_0;
     if (address === 0xd018) return D018_SCREEN_0800;
     if (address === 0xdc04 || address === 0xdc05) {
@@ -280,5 +297,40 @@ export const simulatedClockField = (layout: Partial<SidPlayerLayout> = {}) => {
     column: clockColumn,
     length: formatClock(0, clockFormat).length,
     wrapSeconds: clockFormat === "h:mm:ss" ? 100 * 3600 : 100 * 60,
+  };
+};
+
+const DEFAULT_PLAYER_CODE = { keyboardAddress: 0xc340, flagAddress: 0xc1f0 };
+
+/**
+ * Lay out the player code that `findFastForwardPatch` looks for, with the bytes of the built player
+ * (1541ultimate software/6502/sidcrt/target/advancedplayer.bin and player.bin) at the addresses the
+ * loader would have relocated them to: the keyboard routine's row scan ending in `ldy #0 / jmp
+ * store`, the store `sty flag / rts`, and the interrupt handler's `lda #flag / beq / inc $d020`.
+ */
+export const placeSidPlayerCode = (
+  memory: Uint8Array,
+  { keyboardAddress, flagAddress }: { keyboardAddress: number; flagAddress: number },
+) => {
+  const storeAddress = keyboardAddress + 0x40;
+  const lo = (value: number) => value & 0xff;
+  const hi = (value: number) => value >> 8;
+  const keyboard = [0xa2, 0x07, 0xbc, 0x8a, 0x06, 0x8c, 0x00, 0xdc, 0xad, 0x01, 0xdc, 0xc9, 0xff, 0xd0, 0x0b];
+  keyboard.push(0x9d, 0x92, 0x06, 0xca, 0xd0, 0xed, 0xa0, 0x00, 0x4c, lo(storeAddress), hi(storeAddress));
+  const store = [0x8c, lo(flagAddress), hi(flagAddress), 0x60];
+  const handlerAddress = flagAddress - 4;
+  const handler = [0x68, 0x85, 0x01, 0xa9, 0x00, 0xf0, 0x09, 0xee, 0x20, 0xd0, 0x20];
+  memory.set(keyboard, keyboardAddress);
+  memory.set(store, storeAddress);
+  memory.set(handler, handlerAddress);
+  const regions = [
+    [keyboardAddress, keyboard.length],
+    [storeAddress, store.length],
+    [handlerAddress, handler.length],
+  ];
+  return {
+    ldyOperandAddress: keyboardAddress + keyboard.length - 4,
+    storeAddress,
+    covers: (address: number) => regions.some(([start, length]) => address >= start && address < start + length),
   };
 };

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getC64API, type DeviceInfo } from "@/lib/c64api";
 import { probeMachineInputCapability } from "@/lib/deviceCapabilities";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { withCartridgeParked } from "@/lib/playback/launchSafety";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import {
   cancelRemoteSidSeek,
@@ -19,12 +20,8 @@ import {
 } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { isRemoteSeekSuperseded, remoteSeekErrorDetails } from "@/lib/playback/remoteSeek/remoteSeekErrors";
 import { rewindOffsetSeconds } from "@/lib/playback/remoteSeek/remoteSeekPlan";
-import {
-  probeRemoteTuneSeek,
-  remoteSeekHeaderBlocker,
-  RemoteSidSeekController,
-  type RemoteSeekLanding,
-} from "@/lib/playback/remoteSeek/remoteSidSeekController";
+import { RemoteSidSeekController, type RemoteSeekLanding } from "@/lib/playback/remoteSeek/remoteSidSeekController";
+import { probeRemoteTuneSeek, remoteSeekHeaderBlocker } from "@/lib/playback/remoteSeek/remoteTuneSeekProbe";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { parseSidHeaderMetadata, type SidHeaderMetadata } from "@/lib/sid/sidUtils";
 import type { PlaylistItem } from "../types";
@@ -58,7 +55,8 @@ const REWIND_STEP_INTERVAL_MS = 1000;
 /** One hold of Previous or Next. It lives until release, so the card's repeat ticks never start a second one. */
 type Hold = { direction: "forward" | "rewind"; fromSeconds: number; rewindSteps: number; ended: boolean };
 
-const readHeader = async (item: PlaylistItem): Promise<SidHeaderMetadata | null> => {
+/** The tune's bytes, from the playlist item or the Ultimate's file system, and its header. */
+const readTune = async (item: PlaylistItem): Promise<{ blob: Blob; header: SidHeaderMetadata | null } | null> => {
   const blob =
     item.request.file ??
     (item.request.source === "ultimate"
@@ -66,7 +64,17 @@ const readHeader = async (item: PlaylistItem): Promise<SidHeaderMetadata | null>
         (await tryFetchUltimateSidBlob(item.request.path, item.request.origin)))
       : null);
   if (!blob) return null;
-  return parseSidHeaderMetadata(new Uint8Array(await blob.arrayBuffer()));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  return { blob: new Blob([bytes]), header: parseSidHeaderMetadata(bytes) };
+};
+
+/**
+ * Start the tune afresh, on a machine whose player cannot be restarted by key: the same bytes and
+ * sub tune, with the cartridge parked as the Play page parks it for every SID it starts.
+ */
+const replayTune = (blob: Blob, songNr: number | undefined, filename: string) => async () => {
+  const api = getC64API();
+  await withCartridgeParked(api, () => api.playSidUpload(blob, songNr, undefined, { filename }));
 };
 
 const machineInputAvailable = async (deviceInfo: DeviceInfo) => {
@@ -126,30 +134,37 @@ export const useRemoteSidSeek = ({
 
   const itemId = item?.id ?? null;
   const songNr = item?.request.songNr ?? null;
-  const coreVersion = deviceInfo?.core_version ?? null;
   const deviceId = deviceInfo?.unique_id ?? null;
 
   useEffect(() => {
-    if (!active || !item || item.category !== "sid" || !deviceInfo || !coreVersion) return;
+    if (!active || !item || item.category !== "sid" || !deviceInfo) return;
     let current = true;
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const header = await readHeader(item);
+          const tune = await readTune(item);
+          const header = tune?.header ?? null;
           const blocker = remoteSeekHeaderBlocker(header);
-          if (blocker || !header) {
+          if (blocker || !tune || !header) {
             addLog("debug", "Remote seek unavailable for this tune", { item: item.label, reason: blocker });
             return;
           }
-          if (!current || !(await machineInputAvailable(deviceInfo))) return;
+          if (!current) return;
+          const keyInput = await machineInputAvailable(deviceInfo);
           const api = createRemoteSeekApi();
-          const profile = await probeRemoteTuneSeek(api, header, songNr ?? header.startSong, () => current);
+          const profile = await probeRemoteTuneSeek(api, header, songNr ?? header.startSong, () => current, {
+            keyInput,
+          });
           if (!current) return;
           if (!profile) {
-            addLog("debug", "Remote seek unavailable: the SID player screen was not found", { item: item.label });
+            addLog("debug", "Remote seek unavailable: no SID player clock or fast forward found", {
+              item: item.label,
+              keyInput,
+            });
             return;
           }
-          const created = new RemoteSidSeekController(api, profile);
+          const replay = profile.restart === "replay" ? replayTune(tune.blob, songNr ?? undefined, item.path) : null;
+          const created = new RemoteSidSeekController(api, profile, replay);
           controllerRef.current = created;
           setActiveRemoteSidSeek(created);
           setController(created);
@@ -178,7 +193,7 @@ export const useRemoteSidSeek = ({
       }
     };
     // `item` is read through its id: a new object for the same tune must not restart the probe.
-  }, [active, itemId, songNr, trackInstanceId, coreVersion, deviceId, resetGestures]);
+  }, [active, itemId, songNr, trackInstanceId, deviceId, resetGestures]);
 
   // While a gesture or a jump is under way the auto-advance deadline still counts the old position;
   // the Play page holds it off until the landing rebases it.

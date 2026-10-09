@@ -11,6 +11,7 @@ import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractio
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
+import { FAST_FORWARD_HELD, FAST_FORWARD_RELEASED, isFastForwardPatchSite } from "./sidPlayerFastForwardPatch";
 
 export { RemoteSeekSessionClosedError };
 
@@ -51,7 +52,19 @@ export type RemoteSeekDeviceApi = {
   ) => Promise<ConfigResponse>;
   sendMachineInputBatch: (batch: MachineInputBatch) => Promise<unknown>;
   getMachineInputState: () => Promise<{ keyboard?: { inputs?: string[] } }>;
+  readMemory: (
+    address: string,
+    length: number,
+    options?: { __c64uBypassCooldown?: boolean; __c64uIntent?: InteractionIntent },
+  ) => Promise<Uint8Array>;
+  writeMemory: (address: string, data: Uint8Array) => Promise<unknown>;
 };
+
+/**
+ * How a seek holds fast forward: the left-arrow key through machine:input, or, on a machine that
+ * takes no key input, one byte of the player's keyboard routine (see sidPlayerFastForwardPatch.ts).
+ */
+export type FastForwardMethod = { kind: "key" } | { kind: "patch"; ldyOperandAddress: number };
 
 export type RemoteSeekJournal = {
   /** Which session wrote it: a restore clears the journal only if it is still its own. */
@@ -62,6 +75,8 @@ export type RemoteSeekJournal = {
   /** Recorded only when the seek switched Turbo Control, so a restore never writes it needlessly. */
   originalTurboControl: string | null;
   keyHeld: boolean;
+  /** Set when fast forward is held through the player's code instead of the key; absent in older journals. */
+  fastForwardPatch?: { ldyOperandAddress: number } | null;
   startedAtMs: number;
 };
 
@@ -127,6 +142,33 @@ const sendKey = (api: RemoteSeekDeviceApi, transition: "press" | "release", key:
 
 const sameOption = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+const hexAddress = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
+
+/**
+ * Write the patch byte, but only where the player's `ldy #0` or `ldy #1` still is: after another
+ * tune has started, those cells belong to something else. Returns false when the site is gone.
+ */
+const writeFastForwardPatch = async (api: RemoteSeekDeviceApi, ldyOperandAddress: number, value: number) => {
+  const site = await api.readMemory(hexAddress(ldyOperandAddress - 1), 2);
+  if (!isFastForwardPatchSite(site)) return false;
+  await api.writeMemory(hexAddress(ldyOperandAddress), Uint8Array.of(value));
+  return true;
+};
+
+/** Undo the patch and read it back. A site that is gone has nothing left to undo. */
+const releaseFastForwardPatch = async (api: RemoteSeekDeviceApi, ldyOperandAddress: number) => {
+  if (!(await writeFastForwardPatch(api, ldyOperandAddress, FAST_FORWARD_RELEASED))) return;
+  const [, operand] = await api.readMemory(hexAddress(ldyOperandAddress - 1), 2);
+  if (operand !== FAST_FORWARD_RELEASED) throw new Error(`Fast forward patch still reads ${operand} after release`);
+};
+
+const releaseSeekKeys = async (api: RemoteSeekDeviceApi) => {
+  await api.sendMachineInputBatch({ events: [{ kind: "keyboard", inputs: [...SEEK_KEYS], transition: "release" }] });
+  const stillHeld = (await api.getMachineInputState()).keyboard?.inputs ?? [];
+  const held = SEEK_KEYS.filter((key) => stillHeld.includes(key));
+  if (held.length > 0) throw new Error(`Keys still held after release: ${held.join(", ")}`);
+};
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -157,12 +199,9 @@ export const restoreFromJournal = async (
       return false;
     }
     try {
-      await api.sendMachineInputBatch({
-        events: [{ kind: "keyboard", inputs: [...SEEK_KEYS], transition: "release" }],
-      });
-      const stillHeld = (await api.getMachineInputState()).keyboard?.inputs ?? [];
-      const held = SEEK_KEYS.filter((key) => stillHeld.includes(key));
-      if (held.length > 0) throw new Error(`Keys still held after release: ${held.join(", ")}`);
+      const patch = journal.fastForwardPatch ?? null;
+      if (patch) await releaseFastForwardPatch(api, patch.ldyOperandAddress);
+      else await releaseSeekKeys(api);
       if (journal.cpuSpeedChanged) {
         await api.setConfigValue(U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, journal.originalCpuSpeed, {
           __c64uTransientConfigRestore: true,
@@ -231,12 +270,23 @@ export class RemoteSeekDeviceSession {
     private readonly api: RemoteSeekDeviceApi,
     journal: RemoteSeekJournal,
     readonly cpuSpeedOptions: string[],
+    private readonly fastForward: FastForwardMethod,
   ) {
     this.journal = journal;
     this.currentCpuSpeed = journal.originalCpuSpeed;
   }
 
-  static async open(api: RemoteSeekDeviceApi): Promise<RemoteSeekDeviceSession> {
+  /**
+   * `withCpuSpeed: false` for a machine without CPU Speed, such as the Ultimate-II+(L): nothing is
+   * read or written there, and the session only ever fast forwards at the machine's own speed.
+   */
+  static async open(
+    api: RemoteSeekDeviceApi,
+    {
+      fastForward = { kind: "key" },
+      withCpuSpeed = true,
+    }: { fastForward?: FastForwardMethod; withCpuSpeed?: boolean } = {},
+  ): Promise<RemoteSeekDeviceSession> {
     const deviceKey = api.currentDeviceKey();
     if (deviceKey === null) throw new Error("The connected device has not identified itself");
     // An earlier session still giving this device back (a cancel nobody awaited) finishes first.
@@ -249,7 +299,7 @@ export class RemoteSeekDeviceSession {
       const recovered = await restoreFromJournal(api, pending, "before a new seek");
       if (!recovered) throw new Error("The previous remote seek could not be undone");
     }
-    const cpuSpeed = await readU64ConfigItem(api, CPU_SPEED_ITEM);
+    const cpuSpeed = withCpuSpeed ? await readU64ConfigItem(api, CPU_SPEED_ITEM) : { value: "", options: [] };
     sessionCounter += 1;
     const journal: RemoteSeekJournal = {
       sessionId: `${Date.now()}-${sessionCounter}`,
@@ -258,10 +308,11 @@ export class RemoteSeekDeviceSession {
       cpuSpeedChanged: false,
       originalTurboControl: null,
       keyHeld: false,
+      fastForwardPatch: fastForward.kind === "patch" ? { ldyOperandAddress: fastForward.ldyOperandAddress } : null,
       startedAtMs: Date.now(),
     };
     writeJournal(deviceKey, journal);
-    const session = new RemoteSeekDeviceSession(api, journal, cpuSpeed.options);
+    const session = new RemoteSeekDeviceSession(api, journal, cpuSpeed.options, fastForward);
     liveSessions.set(deviceKey, session);
     return session;
   }
@@ -278,6 +329,7 @@ export class RemoteSeekDeviceSession {
   setCpuSpeed(option: string): Promise<void> {
     return this.mutate(async () => {
       if (sameOption(option, this.currentCpuSpeed)) return;
+      if (this.cpuSpeedOptions.length === 0) throw new Error("This machine has no CPU Speed to set");
       if (this.journal.originalTurboControl === null) {
         const turbo = await readU64ConfigItem(this.api, TURBO_CONTROL_ITEM);
         if (!sameOption(turbo.value, MANUAL_TURBO_CONTROL)) {
@@ -305,13 +357,20 @@ export class RemoteSeekDeviceSession {
     return this.mutate(async () => {
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
-      await sendKey(this.api, "press");
+      if (this.fastForward.kind === "key") {
+        await sendKey(this.api, "press");
+        return;
+      }
+      if (!(await writeFastForwardPatch(this.api, this.fastForward.ldyOperandAddress, FAST_FORWARD_HELD))) {
+        throw new Error("The SID player's keyboard routine is no longer where it was found");
+      }
     });
   }
 
   /** Press and release a key, the way the player's own keys restart the sub tune. */
   tapKey(key: "minus" | "plus", holdMs: number): Promise<void> {
     return this.mutate(async () => {
+      if (this.fastForward.kind !== "key") throw new Error("This machine takes no key input");
       this.journal = { ...this.journal, keyHeld: true };
       writeJournal(this.journal.deviceKey, this.journal);
       await sendKey(this.api, "press", key);
@@ -324,7 +383,8 @@ export class RemoteSeekDeviceSession {
   /** Release the key on this session's device; on another device there is nothing of ours to release. */
   async releaseKey(): Promise<void> {
     if (this.api.currentDeviceKey() !== this.journal.deviceKey) return;
-    await sendKey(this.api, "release");
+    if (this.fastForward.kind === "key") await sendKey(this.api, "release");
+    else await writeFastForwardPatch(this.api, this.fastForward.ldyOperandAddress, FAST_FORWARD_RELEASED);
   }
 
   /**

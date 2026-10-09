@@ -22,6 +22,7 @@ export const createRemoteSeekApi = (): RemoteSeekApi => {
     sendMachineInputBatch: (batch) => api.sendMachineInputBatch(batch),
     getMachineInputState: () => api.getMachineInputState({ __c64uIntent: "user" }),
     readMemory: (address, length, options) => api.readMemory(address, length, options),
+    writeMemory: (address, data) => api.writeMemory(address, data, { __c64uIntent: "user" }),
   };
 };
 

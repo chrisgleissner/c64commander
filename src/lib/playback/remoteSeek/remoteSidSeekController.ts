@@ -6,28 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { addErrorLog, addLog } from "@/lib/logging";
-import type { SidHeaderMetadata } from "@/lib/sid/sidUtils";
-import {
-  CPU_SPEED_ITEM,
-  readU64ConfigItem,
-  RemoteSeekDeviceSession,
-  SYSTEM_MODE_ITEM,
-  type RemoteSeekDeviceApi,
-} from "./remoteSeekDeviceGuard";
+import { RemoteSeekDeviceSession, type RemoteSeekDeviceApi } from "./remoteSeekDeviceGuard";
 import {
   clockSecondsPerTuneSecond,
   cpuSpeedMhz,
   fastForwardRampOptions,
-  machineTimingFor,
   playCallRateFromTimerSamples,
   JumpSpeedPlanner,
   RATE_WINDOW_SECONDS,
-  type MachineTiming,
 } from "./remoteSeekPlan";
-import { locateSidPlayerClock, readSidPlayerClock } from "./sidPlayerClock";
-import type { SidPlayerClockField } from "./sidPlayerScreen";
+import { readSidPlayerClock } from "./sidPlayerClock";
+import type { RemoteTuneSeekProfile } from "./remoteTuneSeekProbe";
 import {
   isRemoteSeekSuperseded,
   RemoteSeekCancelled,
@@ -45,23 +35,7 @@ import { JumpProgressWatch, PositionModel } from "./remoteSeekPositionModel";
  * operation ends.
  */
 
-export type RemoteSeekApi = RemoteSeekDeviceApi & {
-  readMemory: (
-    address: string,
-    length: number,
-    options?: { __c64uBypassCooldown?: boolean; __c64uIntent?: InteractionIntent },
-  ) => Promise<Uint8Array>;
-};
-
-export type RemoteTuneSeekProfile = {
-  /** Where the player draws its clock, found on the screen rather than assumed. */
-  clock: SidPlayerClockField;
-  timing: MachineTiming;
-  /** Play calls per second when the header settles it; null for a CIA-timed tune, which is measured. */
-  headerPlayCallHz: number | null;
-  /** Empty when the machine has no CPU Speed; rewinding and jumping back need it. */
-  cpuSpeedOptions: string[];
-};
+export type RemoteSeekApi = RemoteSeekDeviceApi;
 
 export type RemoteSeekPositionListener = (positionSeconds: number) => void;
 
@@ -112,55 +86,6 @@ const TIMER_SAMPLE_COUNT = 100;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Why a tune cannot be seeked on the C64, or null when it can be as far as its header tells. */
-export const remoteSeekHeaderBlocker = (header: SidHeaderMetadata | null): string | null => {
-  if (!header) return "the tune's header is not available";
-  if (header.magicId !== "PSID") return "RSID tunes run their own interrupt, which the player cannot speed up";
-  if (header.playAddress === 0) return "the tune installs its own interrupt, which the player cannot speed up";
-  return null;
-};
-
-/** Play calls per second from the header, or null when the tune's own CIA timer decides it. */
-export const headerPlayCallHz = (header: SidHeaderMetadata, songNr: number, timing: MachineTiming): number | null => {
-  const speedBit = Math.min(Math.max(songNr, 1), 32) - 1;
-  if (((header.speedBits >>> speedBit) & 1) === 1) return null;
-  if (header.clock === "pal") return 50;
-  if (header.clock === "ntsc") return 60;
-  return timing.frameHz;
-};
-
-/**
- * Find the player's clock after a tune starts, and the settings a seek depends on.
- * Returns null when the C64 shows no ticking clock, e.g. on a simulated device.
- */
-export const probeRemoteTuneSeek = async (
-  api: RemoteSeekApi,
-  header: SidHeaderMetadata,
-  songNr: number,
-  isCurrent: () => boolean = () => true,
-): Promise<RemoteTuneSeekProfile | null> => {
-  const clock = await locateSidPlayerClock(api.readMemory, isCurrent);
-  if (clock === null) return null;
-  const systemMode = await readU64ConfigItem(api, SYSTEM_MODE_ITEM).catch((error) => {
-    addLog("warn", "Remote seek: System Mode unreadable; assuming PAL timing", errorDetails(error));
-    return null;
-  });
-  const cpuSpeed = await readU64ConfigItem(api, CPU_SPEED_ITEM).catch((error) => {
-    addLog("warn", "Remote seek: CPU Speed unreadable; fast forward only", errorDetails(error));
-    return null;
-  });
-  const timing = machineTimingFor(systemMode?.value);
-  const cpuSpeedOptions = (cpuSpeed?.options ?? []).filter((option) => cpuSpeedMhz(option) !== null);
-  return {
-    clock,
-    timing,
-    headerPlayCallHz: headerPlayCallHz(header, songNr, timing),
-    cpuSpeedOptions: cpuSpeedOptions.length > 1 ? cpuSpeedOptions : [],
-  };
-};
-
-export const canRewindRemotely = (profile: RemoteTuneSeekProfile) => profile.cpuSpeedOptions.length > 1;
-
 type FastForwardRun = {
   session: RemoteSeekDeviceSession;
   polling: boolean;
@@ -180,9 +105,14 @@ export class RemoteSidSeekController {
   private activeSession: RemoteSeekDeviceSession | null = null;
   private pendingOperations = 0;
 
+  /**
+   * `replayTune` starts the tune afresh the way the Play page started it; a profile that restarts
+   * by replaying cannot rewind without it.
+   */
   constructor(
     private readonly api: RemoteSeekApi,
     readonly profile: RemoteTuneSeekProfile,
+    private readonly replayTune: (() => Promise<void>) | null = null,
   ) {
     this.clockPerTuneSecond =
       profile.headerPlayCallHz === null
@@ -196,7 +126,7 @@ export class RemoteSidSeekController {
   }
 
   get canRewind() {
-    return canRewindRemotely(this.profile);
+    return this.profile.restart === "keys" || this.replayTune !== null;
   }
 
   /** Hold Next: press the key, then raise CPU Speed one step a second. Positions arrive on `onPosition`. */
@@ -294,7 +224,10 @@ export class RemoteSidSeekController {
       const target = Math.max(0, targetSeconds);
       const fromSeconds = origin();
       if (target < fromSeconds && !this.canRewind) {
-        addLog("debug", "Remote seek: jumping back needs CPU Speed; ignored", { fromSeconds, targetSeconds });
+        addLog("debug", "Remote seek: no way to restart the tune here; jump back ignored", {
+          fromSeconds,
+          targetSeconds,
+        });
         return null;
       }
       const startedAt = Date.now();
@@ -470,7 +403,10 @@ export class RemoteSidSeekController {
   }
 
   private async openSession() {
-    const session = await RemoteSeekDeviceSession.open(this.api);
+    const session = await RemoteSeekDeviceSession.open(this.api, {
+      fastForward: this.profile.fastForward,
+      withCpuSpeed: this.profile.cpuSpeedOptions.length > 0,
+    });
     this.activeSession = session;
     return session;
   }
@@ -555,10 +491,15 @@ export class RemoteSidSeekController {
     // A clock that already shows 0:01 has to drop to 0:00 before the restart counts as done.
     const before = await this.readClock(true);
     const restartedBelow = before !== null && before <= 1 ? Math.max(before, 1) : 2;
-    for (const key of ["minus", "plus"] as const) {
+    if (this.profile.restart === "replay") {
       this.assertCurrent(generation);
-      await session.tapKey(key, KEY_HOLD_MS);
-      await sleep(KEY_GAP_MS);
+      await (this.replayTune as () => Promise<void>)();
+    } else {
+      for (const key of ["minus", "plus"] as const) {
+        this.assertCurrent(generation);
+        await session.tapKey(key, KEY_HOLD_MS);
+        await sleep(KEY_GAP_MS);
+      }
     }
     const deadline = Date.now() + RESTART_TIMEOUT_MS;
     // Twice in a row: a single read can catch the clock mid-update with its minutes a minute behind.

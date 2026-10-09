@@ -23,7 +23,23 @@ const machineInput = vi.hoisted(() => ({ status: "available" }));
 const device = vi.hoisted(() => ({ current: null as ReturnType<typeof createFakeRemoteSeekDevice> | null }));
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
-vi.mock("@/lib/c64api", () => ({ getC64API: () => ({}) }));
+const replays = vi.hoisted(() => ({ count: 0 }));
+vi.mock("@/lib/c64api", () => ({
+  getC64API: () => ({
+    playSidUpload: async () => {
+      replays.count += 1;
+      device.current?.player.restart();
+      return { errors: [] };
+    },
+  }),
+}));
+const parked = vi.hoisted(() => ({ count: 0 }));
+vi.mock("@/lib/playback/launchSafety", () => ({
+  withCartridgeParked: async <T,>(_api: unknown, run: () => Promise<T>) => {
+    parked.count += 1;
+    return run();
+  },
+}));
 vi.mock("@/lib/deviceCapabilities", () => ({
   probeMachineInputCapability: async () => ({ status: machineInput.status }),
 }));
@@ -109,6 +125,8 @@ describe("useRemoteSidSeek", () => {
     localStorage.clear();
     machineInput.status = "available";
     ultimateBlob.bytes = null;
+    replays.count = 0;
+    parked.count = 0;
     device.current = createFakeRemoteSeekDevice();
   });
   afterEach(() => {
@@ -165,11 +183,55 @@ describe("useRemoteSidSeek", () => {
     expect(result.current.handlers).toBeNull();
   });
 
-  it("leaves them as track controls on a machine that takes no key input", async () => {
+  it("fast forwards a cartridge, which takes no key input, through the player's own keyboard routine", async () => {
     machineInput.status = "unsupported-family";
-    const { result } = render();
+    device.current = createFakeRemoteSeekDevice({ cartridge: true });
+    const { result, rebasePlaybackPosition, rerender } = render();
     await advance(PROBED_MS);
+    rerender({ active: true, elapsedMs: device.current.player.tunePositionSeconds * 1000 });
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(3000);
+    expect(device.current.player.fastForwarding).toBe(true);
+    act(() => result.current.handlers?.onScrubEnd?.());
+    for (let waited = 0; rebasePlaybackPosition.mock.calls.length === 0 && waited < 3000; waited += 10)
+      await advance(10);
+    const { ldyOperandAddress } = device.current.player.code;
+    const site = ldyOperandAddress.toString(16).toUpperCase().padStart(4, "0");
+    // Held, released, and written back once more by the restore, which reads it back.
+    expect(device.current.log).toEqual([`writemem ${site} 01`, `writemem ${site} 00`, `writemem ${site} 00`]);
+    expect(device.current.player.fastForwarding).toBe(false);
+    expect(device.current.player.tunePositionSeconds).toBeGreaterThan(20);
+    expect(Math.abs(rebasedSeconds(rebasePlaybackPosition) - device.current.player.tunePositionSeconds)).toBeLessThan(
+      1.5,
+    );
+  });
+
+  it("rewinds a cartridge by starting the tune afresh, with the cartridge parked as for any SID", async () => {
+    machineInput.status = "unsupported-family";
+    device.current = createFakeRemoteSeekDevice({ cartridge: true });
+    const { result, rebasePlaybackPosition, rerender } = render();
+    await advance(PROBED_MS);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.3));
+    await advance(10_000);
+    rerender({ active: true, elapsedMs: rebasedSeconds(rebasePlaybackPosition) * 1000 });
+    act(() => result.current.handlers?.onSeekToFraction?.(0.1));
+    await advance(10_000);
+    expect(replays.count).toBe(1);
+    expect(parked.count).toBe(1);
+    expect(Math.abs(rebasedSeconds(rebasePlaybackPosition) - 18)).toBeLessThan(2);
+    expect(device.current.player.fastForwarding).toBe(false);
+  });
+
+  it("leaves Previous and Next as track controls when neither key input nor the player's routine is there", async () => {
+    machineInput.status = "unsupported-family";
+    device.current = createFakeRemoteSeekDevice({ cartridge: true, playerCode: null });
+    const { result } = render();
+    await advance(PROBED_MS + 2000);
     expect(result.current.handlers).toBeNull();
+    expect(device.current.log).toEqual([]);
   });
 
   it("fast forwards while Next is held and lands the progress display where the C64 is", async () => {
@@ -413,22 +475,29 @@ describe("useRemoteSidSeek", () => {
     expect(device.current!.player.heldKeys).toEqual([]);
   });
 
-  it("does not rewind on a machine without CPU Speed, and a lone release does nothing", async () => {
+  it("rewinds at the machine's own speed when it has no CPU Speed, and a lone release does nothing", async () => {
     device.current!.api.getConfigItem = async (category, item) => {
       if (item === "CPU Speed") throw new Error("HTTP 404");
       return { [category]: { [item]: { current: "PAL", values: ["PAL"] } } } as never;
     };
-    const { result } = render({ elapsedMs: 60_000 });
+    const { result, rebasePlaybackPosition, rerender } = render();
     await advance(PROBED_MS);
     act(() => result.current.handlers?.onScrubEnd?.());
+    expect(device.current!.log).toEqual([]);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.2));
+    await advance(8000);
+    rerender({ active: true, elapsedMs: rebasedSeconds(rebasePlaybackPosition) * 1000 });
     act(() => {
       result.current.handlers?.onScrubStart?.();
       result.current.handlers?.onScrubStep?.(-5);
     });
-    expect(result.current.targetMs).toBeNull();
+    const target = (result.current.targetMs ?? 0) / 1000;
     act(() => result.current.handlers?.onScrubEnd?.());
-    await advance(1000);
-    expect(device.current!.log).toEqual([]);
+    await advance(8000);
+    // Minus then plus: each selects a sub tune, so the simulation counts two restarts.
+    expect(device.current!.player.restarts).toBe(2);
+    expect(device.current!.log.filter((entry) => entry.startsWith("CPU Speed"))).toEqual([]);
+    expect(Math.abs(rebasedSeconds(rebasePlaybackPosition) - target)).toBeLessThan(2);
   });
 
   it("jumps once, to where a drag comes to rest", async () => {

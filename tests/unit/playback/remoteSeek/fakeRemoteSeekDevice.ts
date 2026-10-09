@@ -46,6 +46,11 @@ export const createFakeRemoteSeekDevice = (
     latencyJitterMs?: number;
     /** How long a config write waits, as the app's config write interval makes it wait. */
     configWriteDelayMs?: number;
+    /**
+     * The Ultimate-II+(L): no key input (machine:input answers 501) and no U64 Specific Settings,
+     * so no CPU Speed, Turbo Control or System Mode either.
+     */
+    cartridge?: boolean;
   } = {},
 ) => {
   const player = new SidPlayerSimulation(options);
@@ -76,6 +81,7 @@ export const createFakeRemoteSeekDevice = (
   const api: RemoteSeekApi = {
     currentDeviceKey: () => connectedKey,
     getConfigItem: async (category, item) => {
+      if (options.cartridge) throw new Error(`HTTP 404 ${category} / ${item}`);
       const values =
         item === "CPU Speed"
           ? C64U_CPU_SPEEDS
@@ -100,6 +106,7 @@ export const createFakeRemoteSeekDevice = (
     },
     sendMachineInputBatch: async ({ events }) => {
       await roundTrip();
+      if (options.cartridge) throw new Error("HTTP 501 Not Implemented");
       for (const event of events) {
         if (event.kind !== "keyboard") continue;
         if (failures.keyEvents > 0) {
@@ -116,7 +123,16 @@ export const createFakeRemoteSeekDevice = (
       }
       return {};
     },
-    getMachineInputState: async () => ({ keyboard: { inputs: player.heldKeys } }),
+    getMachineInputState: async () => {
+      if (options.cartridge) throw new Error("HTTP 501 Not Implemented");
+      return { keyboard: { inputs: player.heldKeys } };
+    },
+    writeMemory: async (address, data) => {
+      await roundTrip();
+      log.push(`writemem ${address} ${Array.from(data, (byte) => byte.toString(16).padStart(2, "0")).join("")}`);
+      player.writeMemory(parseInt(address, 16), data);
+      return {};
+    },
     readMemory: async (address, length) => {
       await roundTrip();
       return player.readMemory(parseInt(address, 16), length);

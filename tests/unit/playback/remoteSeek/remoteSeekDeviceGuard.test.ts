@@ -359,4 +359,74 @@ describe("remote seek device guard", () => {
     device.api.setConfigValue = write;
     expect(await recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
   });
+
+  describe("on a machine that takes no key input", () => {
+    const openPatchSession = async (device: ReturnType<typeof createFakeRemoteSeekDevice>) =>
+      RemoteSeekDeviceSession.open(device.api, {
+        fastForward: { kind: "patch", ldyOperandAddress: device.player.code.ldyOperandAddress },
+        withCpuSpeed: false,
+      });
+    const site = (device: ReturnType<typeof createFakeRemoteSeekDevice>) =>
+      device.player.code.ldyOperandAddress.toString(16).toUpperCase().padStart(4, "0");
+
+    it("holds fast forward through the player's routine, journals it, and gives it back without touching config", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      await session.pressKey();
+      expect(device.player.fastForwarding).toBe(true);
+      expect(readRemoteSeekJournal(DEVICE_KEY)).toMatchObject({
+        keyHeld: true,
+        fastForwardPatch: { ldyOperandAddress: device.player.code.ldyOperandAddress },
+      });
+      expect(await session.restore("released")).toBe(true);
+      expect(device.player.fastForwarding).toBe(false);
+      expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+      expect(device.log).toEqual([`writemem ${site(device)} 01`, `writemem ${site(device)} 00`]);
+    });
+
+    it("undoes the patch an app killed mid hold left behind, on the next connection", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      await session.pressKey();
+      // The process dies here: its session is gone, its journal is not.
+      vi.resetModules();
+      const fresh = await import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard");
+      expect(await fresh.recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
+      expect(device.player.fastForwarding).toBe(false);
+      expect(fresh.readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    });
+
+    it("leaves memory alone once the routine is no longer there, e.g. after another tune started", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      await session.pressKey();
+      device.player.writeMemory(device.player.code.ldyOperandAddress - 1, Uint8Array.of(0xea, 0xea));
+      device.log.length = 0;
+      expect(await session.restore("another tune")).toBe(true);
+      expect(device.log).toEqual([]);
+    });
+
+    it("refuses to hold fast forward when the routine has moved since it was found", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      device.player.writeMemory(device.player.code.ldyOperandAddress - 1, Uint8Array.of(0xea, 0xea));
+      await expect(session.pressKey()).rejects.toThrow("no longer where it was found");
+      expect(device.log).toEqual([]);
+    });
+
+    it("keeps the journal while the patch reads back as held", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      await session.pressKey();
+      device.api.writeMemory = async () => ({});
+      expect(await session.restore("released")).toBe(false);
+      expect(readRemoteSeekJournal(DEVICE_KEY)).not.toBeNull();
+    });
+
+    it("never sets CPU Speed on a machine without it", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      await expect(session.setCpuSpeed("64")).rejects.toThrow("no CPU Speed");
+    });
+  });
 });
