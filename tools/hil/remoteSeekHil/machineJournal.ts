@@ -59,7 +59,9 @@ export const restoreFromMachineJournal = async (host: string): Promise<string[]>
   await fetch(`http://${host}/v1/machine:input`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ events: [{ kind: "keyboard", inputs: ["arrow_left"], transition: "release" }] }),
+    body: JSON.stringify({
+      events: [{ kind: "keyboard", inputs: ["arrow_left", "minus", "plus"], transition: "release" }],
+    }),
     signal: AbortSignal.timeout(8000),
   }).catch((error: unknown) => console.warn(`could not release the keys on ${host}: ${String(error)}`));
   const differing: string[] = [];

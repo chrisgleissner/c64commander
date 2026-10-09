@@ -52,9 +52,12 @@ const SNAP_TOLERANCE = 0.003;
  * The exact play-call rate a measured one stands for: the candidate nearest to it in `systemMode`.
  * Throws when none is within 0.3%, rather than grade landings against a guess.
  */
-export const snapCallHz = (measuredHz: number, systemMode: string, tune: CounterTune): number => {
-  const cpuHz = SYSTEM_MODE_CPU_HZ[systemMode];
-  if (!cpuHz) throw new Error(`no CPU clock is known for System Mode ${systemMode}`);
+export const snapCallHz = (measuredHz: number, systemMode: string, tune: CounterTune, frameLines = 0): number => {
+  const modeHz = SYSTEM_MODE_CPU_HZ[systemMode];
+  if (!modeHz) throw new Error(`no CPU clock is known for System Mode ${systemMode}`);
+  // An Ultimate 64's player switches the machine to the tune's standard; its clock is then that standard's.
+  const modeLines = ["NTSC", "PAL-60", "PAL-60/L"].includes(systemMode) ? 263 : 312;
+  const cpuHz = !frameLines || frameLines === modeLines ? modeHz : frameLines === 312 ? 985248 : 1022727;
   const periods = [...PLAYER_CALL_PERIODS, NTSC_ON_PAL_CYCLES, ...(tune.ciaTimer !== null ? [tune.ciaTimer + 1] : [])];
   const nearest = periods
     .map((period) => cpuHz / period)
@@ -71,6 +74,7 @@ export const measureCallHz = async (
   counter: () => Promise<number>,
   systemMode: string,
   tune: CounterTune,
+  frameLines = 0,
   ms = 12000,
 ): Promise<number> => {
   const read = async () => {
@@ -81,7 +85,7 @@ export const measureCallHz = async (
   const first = await read();
   await new Promise((resolve) => setTimeout(resolve, ms));
   const last = await read();
-  return snapCallHz(((last.value - first.value) * 1000) / (last.atMs - first.atMs), systemMode, tune);
+  return snapCallHz(((last.value - first.value) * 1000) / (last.atMs - first.atMs), systemMode, tune, frameLines);
 };
 export const callHzOf = (cyclesPerCall: number) => PAL_CPU_HZ / cyclesPerCall;
 export const PAL_FRAME_CYCLES = 19656;

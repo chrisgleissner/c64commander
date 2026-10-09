@@ -27,7 +27,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 /** Requests slower than this are worth a line in the progress log. */
 const SLOW_REQUEST_MS = 1500;
 
-export type RequestTotals = { requests: number; failures: number; slowest: number };
+/** `stalls`: reads that timed out once and were asked again. */
+export type RequestTotals = { requests: number; failures: number; slowest: number; stalls?: number };
 
 export type DeviceTarget = {
   host: string;
@@ -78,7 +79,18 @@ export class SeekTestDevice {
     private readonly writeDelayMs: number,
   ) {}
 
+  /** A read the firmware stalled on is asked once more: the stall is the machine's, and a read is safe to repeat. */
   async request(method: string, route: string, init: { body?: Uint8Array | string; type?: string } = {}) {
+    try {
+      return await this.requestOnce(method, route, init);
+    } catch (error) {
+      if (method !== "GET" || (error as Error).name !== "TimeoutError" || this.dead) throw error;
+      this.totals.stalls = (this.totals.stalls ?? 0) + 1;
+      return this.requestOnce(method, route, init);
+    }
+  }
+
+  private async requestOnce(method: string, route: string, init: { body?: Uint8Array | string; type?: string }) {
     if (this.dead) throw new Error("The app is no longer running");
     this.totals.requests += 1;
     const started = Date.now();

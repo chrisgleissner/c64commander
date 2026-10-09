@@ -69,6 +69,8 @@ type Entry = {
   refused?: boolean;
   /** Jump this far into the tune, past where the clock rolls over at 99:59. */
   farJumpSeconds?: number;
+  /** Expected to be found unseekable on the machine, and why. */
+  unseekable?: string;
 };
 
 const generated = (tune: CounterTune, extra: Partial<Entry> = {}): Entry => ({
@@ -115,7 +117,13 @@ const GENERATED: Entry[] = [
 ];
 
 /** Real HVSC tunes picked for the extremes, played on a real machine when the collection is there. */
-const HVSC_PICKS: Array<{ file: string; songNr: number; refused?: boolean; farJumpSeconds?: number }> = [
+const HVSC_PICKS: Array<{
+  file: string;
+  songNr: number;
+  refused?: boolean;
+  farJumpSeconds?: number;
+  unseekable?: string;
+}> = [
   { file: "MUSICIANS/G/Grigg_Chris/Games_Winter_Edition.sid", songNr: 47 },
   { file: "MUSICIANS/C/Cadaver/Metal_Warrior_4.sid", songNr: 71 },
   { file: "MUSICIANS/C/Chiummo_Gaetano/Hope_3SID.sid", songNr: 1 },
@@ -125,7 +133,8 @@ const HVSC_PICKS: Array<{ file: string; songNr: number; refused?: boolean; farJu
   { file: "GAMES/A-F/Bullseye.sid", songNr: 2 },
   { file: "GAMES/A-F/Breakdown.sid", songNr: 3 },
   { file: "GAMES/A-F/Breaker.sid", songNr: 2 },
-  { file: "DEMOS/M-R/Maritime_Loader.sid", songNr: 1 },
+  // Rewrites the VIC's screen pointer itself, and the player's clock never shows: rightly left unseekable.
+  { file: "DEMOS/M-R/Maritime_Loader.sid", songNr: 1, unseekable: "the tune moves the screen; no clock shows" },
   { file: "MUSICIANS/N/Ninja/Ta-Boo.sid", songNr: 1 },
   { file: "GAMES/0-9/4x4_Off-Road_Racing.sid", songNr: 3 },
   { file: "MUSICIANS/F/Fate/World_Record_1.sid", songNr: 1, farJumpSeconds: 1800 },
@@ -140,6 +149,7 @@ type Result = {
   outcome: "refused" | "seeked" | "unavailable";
   /** Play calls a second, measured on the machine and snapped to an exact rate. */
   callHz?: number;
+  note?: string;
   checks: Array<{ op: string; errorSeconds?: number; ms: number }>;
   violations: string[];
 };
@@ -153,7 +163,7 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
     const api = seekTestApi(device, () => deviceKeyOf(info));
     const keyInput = (await fetch(`${target.base}/v1/machine:input`, { signal: AbortSignal.timeout(5000) })).ok;
     const { parseSidHeaderMetadata } = await import("@/lib/sid/sidUtils");
-    const { remoteSeekHeaderBlocker, probeRemoteTuneSeek } =
+    const { remoteSeekHeaderBlocker, probeRemoteTuneSeek, measureFrameLines } =
       await import("@/lib/playback/remoteSeek/remoteTuneSeekProbe");
     const { RemoteSidSeekController } = await import("@/lib/playback/remoteSeek/remoteSidSeekController");
     const { readSidPlayerClock } = await import("@/lib/playback/remoteSeek/sidPlayerClock");
@@ -204,7 +214,15 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
         await sleep(1500);
         const profile = await probeRemoteTuneSeek(api, header!, entry.songNr, () => true, { keyInput });
         if (!profile) {
-          result.violations.push("the probe found no SID player clock or fast forward");
+          // readmem follows the CPU's banking, so a player screen under the BASIC or KERNAL ROM reads as
+          // ROM: such a tune is rightly left without seeking. Anywhere else the clock should be found.
+          const [dd00] = await device.readmem(0xdd00, 1);
+          const [d018] = await device.readmem(0xd018, 1);
+          const screen = (3 - (dd00 & 3)) * 0x4000 + (d018 >> 4) * 0x400;
+          const underRom = (screen >= 0xa000 && screen < 0xc000) || screen >= 0xe000;
+          if (underRom) result.note = `the player's screen at $${screen.toString(16)} is under ROM`;
+          else if (entry.unseekable) result.note = entry.unseekable;
+          else result.violations.push("the probe found no SID player clock or fast forward");
           continue;
         }
         result.outcome = "seeked";
@@ -219,14 +237,26 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
           ? null
           : target.simulated
             ? playCallRateOnPal(bytes, entry.songNr)
-            : await measureCallHz(() => device.counter(counterAddressOf(counted)), systemMode, counted);
+            : await measureCallHz(
+                () => device.counter(counterAddressOf(counted)),
+                systemMode,
+                counted,
+                (await measureFrameLines(api, () => true)) ?? 0,
+              );
         if (callHz) result.callHz = callHz;
         const truth = async () =>
           callHz && counted ? (await device.counter(counterAddressOf(counted))) / callHz : null;
-        // Without a reference the clock is the position only for a tune called once a frame.
+        // The clock is the position only for a tune called once a frame by the machine it runs on.
         const clockIsPosition = profile.headerPlayCallHz === profile.timing.frameHz;
 
-        let position = (await truth()) ?? (await clockNow()) ?? 0;
+        /** The clock, past its wrap at 99:59 by as many turns as the counter or the origin say. */
+        const shownPosition = async (estimate: number) => {
+          const clock = await clockNow();
+          const wrap = profile.clock.wrapSeconds;
+          if (clock === null || !Number.isFinite(wrap)) return clock;
+          return clock + wrap * Math.round((estimate - clock) / wrap);
+        };
+        let position = (clockIsPosition ? await shownPosition((await truth()) ?? 0) : await truth()) ?? 0;
         let positionAt = Date.now();
         const origin = () => position + (Date.now() - positionAt) / 1000;
         const check = async (
@@ -238,7 +268,9 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
           const landing = await run();
           const errorsBefore = logs.errors.length;
           const since = landing ? (Date.now() - landing.atMs) / 1000 : 0;
-          const reference = (await truth()) ?? (clockIsPosition ? await clockNow() : null);
+          // Where the C64 shows the tune is what the page must agree with: in the 50 and 60 Hz modes that
+          // are not exactly PAL or NTSC, the player's clock itself runs up to 0.1% off real time.
+          const reference = clockIsPosition ? await shownPosition((await truth()) ?? origin()) : await truth();
           const record: Result["checks"][number] = { op, ms: Date.now() - started };
           if (landing && reference !== null) {
             record.errorSeconds = landing.seconds + since - reference;
