@@ -75,6 +75,7 @@ import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
+import { cancelRemoteSidSeek } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
@@ -775,6 +776,7 @@ export function usePlaybackController({
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
           return;
         }
+        await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
         // post-launch state writes below, and the launch is corrected with a follow-up reset.
         const myPlayGeneration = (playGenerationRef.current += 1);
@@ -1610,6 +1612,7 @@ export function usePlaybackController({
       const shouldReboot = stopRequiresReboot(currentItem?.category);
       // Silence an on-device tune through the shared controller; a local track involves no C64 to stop.
       getLocalSidPlayback().stop();
+      await cancelRemoteSidSeek("stop");
       // A .cfg apply walks the device menu over Telnet; it backs out and closes before the reset goes out.
       await cancelActiveConfigApply();
       if (currentPlaybackIsLocalRef.current) {
@@ -1803,6 +1806,7 @@ export function usePlaybackController({
       // nothing at all — on a button the UI had (correctly) enabled, which is
       // worse than a disabled one.
       if (!isPlaying && !isAnyPlaybackActive()) return;
+      await cancelRemoteSidSeek("pause or resume");
       const restartedItemId = isPaused && !isAnyPlaybackActive() ? takeRestartedPhoneTune() : null;
       const item = playlistRef.current[currentIndexRef.current];
       if (restartedItemId && item?.id === restartedItemId) {
@@ -2322,6 +2326,21 @@ export function usePlaybackController({
   );
 
   /**
+   * Two wall clocks drive the progress display and neither knows about the engine, so every seek
+   * rebases both; otherwise the audio jumps and the time carries on as if the seek did nothing.
+   */
+  const rebasePlaybackPosition = useCallback(
+    (positionMs: number) => {
+      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
+      setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
+      elapsedMsRef.current = positionMs;
+      setElapsedMs(positionMs);
+      rescheduleAutoAdvance(positionMs);
+    },
+    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
+  );
+
+  /**
    * Scrubbing (hold-to-seek) state.
    *
    * The engine is deliberately NOT driven once per repeat tick. Seeking
@@ -2392,12 +2411,7 @@ export function usePlaybackController({
     // Rebase the clocks to the TARGET before awaiting the seek: a read-back after seekTo is stale, and
     // clearing after the await showed the drifted position (1:25 after scrubbing to 0:33) for a rewind.
     const positionMs = Math.max(0, target);
-    const paused = isPausedRef.current;
-    const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };
-    setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
-    elapsedMsRef.current = positionMs;
-    setElapsedMs(positionMs);
-    rescheduleAutoAdvance(positionMs);
+    rebasePlaybackPosition(positionMs);
     try {
       // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
       // settles never returns from the await, so the `finally` would not run either and the scrub
@@ -2431,7 +2445,7 @@ export function usePlaybackController({
       scrubEndingRef.current = false;
     }
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
-  }, [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance]);
+  }, [rebasePlaybackPosition]);
 
   /**
    * Jump to a fraction of the tune (tapping/dragging the progress bar).
@@ -2473,21 +2487,11 @@ export function usePlaybackController({
       }
       const fromSeconds = controller.positionSeconds();
       await controller.seekBy(deltaSeconds);
-      // The progress bar runs off a wall clock that knows nothing about the
-      // engine, so a seek has to move it explicitly — otherwise the audio jumps
-      // and the displayed time carries on from where it was, which reads as the
-      // seek having done nothing.
       const positionMs = Math.max(0, controller.positionSeconds() * 1000);
-      // Two independent clocks drive the UI and neither knows about the engine, so both have to be
-      // rebased or the audio jumps while the display carries on from the old spot.
-      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
-      setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
-      elapsedMsRef.current = positionMs;
-      setElapsedMs(positionMs);
-      rescheduleAutoAdvance(positionMs);
+      rebasePlaybackPosition(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },
-    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
+    [rebasePlaybackPosition],
   );
   seekByRef.current = handleSeekBy;
 
@@ -2526,6 +2530,7 @@ export function usePlaybackController({
     handleNext,
     handlePrevious,
     handleSeekBy,
+    rebasePlaybackPosition,
     playlistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,

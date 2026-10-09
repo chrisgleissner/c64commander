@@ -100,6 +100,18 @@ export function ConnectionController() {
       uninstall?.();
     };
   }, []);
+  // Undoes a fast forward or rewind on the C64 that was cut off before it gave the key and CPU Speed back.
+  useEffect(() => {
+    let uninstall: (() => void) | null = null;
+    let unmounted = false;
+    void import("@/lib/playback/remoteSeek/remoteSeekRecovery").then(({ installRemoteSeekRecovery }) => {
+      if (!unmounted) uninstall = installRemoteSeekRecovery();
+    });
+    return () => {
+      unmounted = true;
+      uninstall?.();
+    };
+  }, []);
   useEffect(() => installSimulatedDeviceContentCleanup(), []);
 
   // A returning network starts a fresh schedule: failures counted while away say nothing about now.

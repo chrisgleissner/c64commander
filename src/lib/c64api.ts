@@ -2047,12 +2047,15 @@ export class C64API {
       // carrying callers (uploads / writeMemoryBlock) deliberately do NOT set this and
       // keep the battle-tested patched-fetch marshalling untouched.
       __c64uNativeArrayBufferResponse?: boolean;
+      __c64uBypassCooldown?: boolean;
     },
     timeoutMs?: number,
   ): Promise<Response> {
     const intent = options.__c64uIntent ?? "user";
+    const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     options.__c64uTraceSuppressed = true;
     delete (options as { __c64uIntent?: InteractionIntent }).__c64uIntent;
+    delete (options as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
     const nativeArrayBufferResponse = Boolean(
       (options as { __c64uNativeArrayBufferResponse?: boolean }).__c64uNativeArrayBufferResponse,
     );
@@ -2069,6 +2072,7 @@ export class C64API {
           path: normalizeUrlPath(url),
           normalizedUrl: normalizeUrlPath(url),
           intent,
+          bypassCooldown,
           baseUrl: (() => {
             try {
               return new URL(url).origin;
@@ -2691,6 +2695,7 @@ export class C64API {
         headers,
         signal: options.signal,
         __c64uIntent: options.__c64uIntent,
+        __c64uBypassCooldown: options.__c64uBypassCooldown,
         // Bodyless GET: route through CapacitorHttp.request on native so the binary read
         // gets a real native read timeout and a dead pooled connection is evicted after a
         // device reboot instead of hanging (BUG-066).
