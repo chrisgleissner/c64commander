@@ -10,6 +10,7 @@ import { addLog } from "@/lib/logging";
 import type { RemoteSeekDeviceApi, RemoteSeekDeviceSession } from "./remoteSeekDeviceGuard";
 import { clockSecondsPerTuneSecond, playCallRateFromTimerSamples } from "./remoteSeekPlan";
 import type { PositionModel } from "./remoteSeekPositionModel";
+import type { RemoteSeekOrigin } from "./remoteSidSeekController";
 import type { RemoteTuneSeekProfile } from "./remoteTuneSeekProbe";
 import { readSidPlayerClock } from "./sidPlayerClock";
 import { sidPlayerScreenAddress } from "./sidPlayerScreen";
