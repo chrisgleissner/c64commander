@@ -128,6 +128,7 @@ export class SidPlayerSimulation {
   private pendingReleases = new Map<string, number>();
   private timerSample = 0;
   restarts = 0;
+  private paused = false;
   private playCallHz: number;
   private machineFrameHz: number;
   private readonly rates: Record<number, number>;
@@ -207,7 +208,14 @@ export class SidPlayerSimulation {
     this.pendingReleases.clear();
     this.playCallHz = playCallHz;
     this.machineFrameHz = machineFrameHz;
+    this.paused = false;
     this.restart();
+  }
+
+  /** machine:pause stops the CPU, so the tune and its clock stand still until machine:resume. */
+  setPaused(paused: boolean) {
+    this.advance();
+    this.paused = paused;
   }
 
   restart() {
@@ -294,6 +302,7 @@ export class SidPlayerSimulation {
   private advanceTo(now: number) {
     const elapsed = Math.max(0, (now - this.lastUpdate) / 1000);
     this.lastUpdate = now;
+    if (this.paused) return;
     if (this.fastForwarding) {
       const clockGain = elapsed * (this.rates[this.cpuMhz] ?? this.rates[1]);
       this.clockSeconds += clockGain;

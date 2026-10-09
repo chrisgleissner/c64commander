@@ -13,9 +13,19 @@ on a machine with a `CPU Speed` setting a higher speed makes it faster. The app 
 through `POST /v1/machine:input` and changes `U64 Specific Settings / CPU Speed` with
 single-item `PUT` requests.
 
-The player draws an `mm:ss` clock at the start of screen row 23. The app reads it with
-`GET /v1/machine:readmem` to know where the tune is. The screen moves from tune to tune
-(`$0400`, `$0800` and `$8C00` were all seen), so the app finds it from `$DD00` and `$D018`.
+The player draws its running clock (`mm:ss` at the start of screen row 23 today) and the app reads
+it with `GET /v1/machine:readmem` to know where the tune is. Nothing about where or how the clock is
+drawn is assumed. After a tune starts, the app reads the screen the VIC shows (found from `$DD00`
+and `$D018`; `$0400`, `$0800` and `$8C00` were all seen) twice, 1.2 s apart, and takes the time
+field that moved forward as the clock. The song length the player also draws stays put and a
+countdown would run backwards, so neither is taken. `m:ss`, `mm:ss` and `h:mm:ss` are all read,
+and the clock is read back as the time field on its row that overlaps its cells, so a clock that
+grows from `9:59` to `10:00` keeps being read. A screen under `$D000`-`$DFFF` is never read,
+because `readmem` follows the CPU banking and would read the CIAs there.
+
+The player writes its digits ones first, so a read can catch it mid-update with the minutes a
+minute behind (`01:59`, `01:00`, `02:00`). A read that steps back is read again, and only a second
+read that agrees is taken as the clock rolling over at 99:59.
 
 The gestures are the ones the on-device engine already uses, so the page shows no new control:
 
@@ -29,36 +39,78 @@ The gestures are the ones the on-device engine already uses, so the page shows n
   forwards from the current position. A jump backward restarts the tune first.
 
 A jump measures the tune's fast forward rate at the machine's own speed, then uses the maximum
-speed, 4 MHz and the machine's own speed in that order. It leaves each speed while it can still
-stop in time. The key is released before every `CPU Speed` change. A config write can wait up to
-1.2 s behind the device-safety interval, and with the key up the tune plays at normal speed
-instead of passing the target. Within the last read period the key is released on a timer.
+speed, 4 MHz and the slowest speed in that order. It leaves each speed while it can still stop in
+time. The key is released before every `CPU Speed` change. A config write can wait up to 1.2 s
+behind the device-safety interval, and with the key up the tune plays at normal speed instead of
+passing the target. Within the last read period the key is released on a timer.
+
+Until the rate is measured, one read period of fast forward can pass a near target by several
+seconds: a light tune covers about 4 clock seconds per 60 ms read at 1 MHz. A target within 4 s is
+therefore played into at normal speed. A target that one read period could pass at the fastest
+rate the player can reach (200 clock seconds a second per MHz) is approached at the slowest speed
+in timed key pulses. Each pulse aims at 80% of what is left, at the rate the previous pulse showed.
+A pulse carries a fixed overhead of request latency and the keyboard scan that notices the release,
+so a remainder smaller than the smallest gain a pulse has shown is played into.
+
+A jump has no fixed time limit. It stops when the tune has not moved for 10 s, when the key has
+been held for 5 s without moving the player's clock 1.5 seconds a second, or after 10 minutes. A
+jump an hour into a tune on a machine without CPU Speed can take minutes and still lands.
+
+### On the Ultimate-II+(L)
+
+The cartridge answers `machine:input` with 501 and has no `CPU Speed`, but its SID player is the
+same. The player fast forwards while a flag in its interrupt handler is set. Its keyboard routine
+clears that flag on every frame without a key, by ending in `ldy #0 / jmp store`, where `store` is
+`sty flag / rts`. Without key input, the app finds that routine in memory by its code: the keyboard
+row scan (`sty $dc00 / lda $dc01 / cmp #$ff / bne`), the `ldy #0 / jmp` after it, a store of Y into
+an `lda #flag / beq` that is followed by the handler's `inc $d020`. It uses the routine only when
+exactly one such chain links up. Holding fast forward writes 1 into that `ldy #0`, and releasing
+writes 0 back; each write first checks that the two bytes still read `ldy #0` or `ldy #1`. Memory
+is read in 2 KB pieces, never under `$D000`-`$DFFF`. A rewind starts the same bytes and sub tune
+afresh with `runners:sidplay`, since there are no minus and plus keys to send. Fast forward runs at
+the machine's own speed.
+
+On the bench the U2+L sits in the c64u's expansion port. It starts the player only while the
+c64u's `C64 and Cartridge Settings / Cartridge Preference` is `External`; in `Auto` the c64u hands
+the bus to an external cartridge only if one is present when it configures the bus.
+
+### Sound while seeking
+
+The first key press of a seek turns the Audio Mixer's `Vol Master` off when Settings → Play and
+Disk → **Mute C64 seeking** asks for it: **Rewind only** (the default) for a rewind or a jump back,
+**Always** also for a held fast forward and a jump forward, **Never** for none. Measured on the C64
+Ultimate, `Vol Master` `OFF` silences the audio stream the phone mirrors (from -23.9 dBFS to
+digital silence) within 18 ms of the `PUT`. The original value is journaled with the rest and put
+back right after the key is released, before the slower `CPU Speed` writes. A machine without
+`Vol Master`, such as the Ultimate-II+(L), is left as it is. Playing on the phone, a seek is silent
+whatever the setting: a rewind flushes the queued audio and waits for the new position.
 
 ### Device state is always given back
 
-A seek changes two things that do not undo themselves. The firmware keeps a key held through REST
-until it is released. It keeps a `CPU Speed` until that setting is written again or the machine is
-power cycled. The app protects both as follows:
+A seek changes things that do not undo themselves. The firmware keeps a key held through REST
+until it is released, and keeps a `CPU Speed` and a `Vol Master` until they are written again or
+the machine is power cycled; on the cartridge, the patched byte stays until it is written back or
+another tune starts. The app protects all of them as follows:
 
 - Before the first change, the original `CPU Speed` (and `Turbo Control`, when the seek has to
-  switch it from `Off` to `Manual`) is written to a journal in `localStorage` under the device's
-  identity.
-- Every end of a seek releases the key, writes the original values back and reads them back. This
-  includes release, the end of the tune, stop, pause, another tune, the page hiding and a
-  120-second hold limit. Failed attempts are retried four times, and the journal is cleared only
-  after a successful read-back.
+  switch it from `Off` to `Manual`), `Vol Master` and the patched address are written to a journal
+  in `localStorage` under the device's identity.
+- Every end of a seek releases the key or the patch, writes the original values back and reads
+  them back. This includes release, the end of the tune, stop, pause, another tune, the page
+  hiding and a 120-second hold limit. Failed attempts are retried four times, and the journal is
+  cleared only after a successful read-back.
 - A journal that is left behind is replayed the next time the app reaches that device. This covers
   a killed app, a lost connection or a phone that went to sleep. A different device is never
   written to.
 - Every write is marked transient, so **Keep device settings after a restart** never saves a
-  seek's CPU speed to flash.
+  seek's CPU speed or volume to flash.
 
 ### What it does not support
 
 - **RSID tunes**, and PSID tunes with play address `$0000`, install their own interrupt. The
   player cannot speed them up, so Previous and Next stay track controls.
-- **The Ultimate-II+(L)** rejects `machine:input` with HTTP 501.
-- **Rewinding and backward jumps** need `CPU Speed`. Without it, only Next fast forwards.
+- **A player whose clock does not tick on the VIC's screen**, or a cartridge whose player has no
+  keyboard routine of the shape above, gets plain track controls too.
 
 ## Measurements
 
@@ -105,8 +157,15 @@ PSID:
 
 The app takes the play-call rate from the header for a tune timed by the vertical blank: 50 Hz for
 PAL, 60 Hz for NTSC, and the machine's frame rate when the header names both or neither. For a
-CIA-timed sub tune, the app samples CIA 1 timer A 40 times and snaps the result to a multiple of
-50 or 60 Hz. The largest sample approximates the latch.
+CIA-timed sub tune, the app samples CIA 1 timer A 100 times, in the background as soon as the tune
+is probed, and snaps the result to a multiple of 50 or 60 Hz. The largest sample approximates the
+latch. Forty samples all fell below 85% of a 2x tune's latch once on the Ultimate 64, which read it
+as 120 Hz instead of 100 Hz and overshot a jump by 20%.
+
+The clock counts 50.1245 play calls per clock second on a PAL machine, not 50: `clock.asm` delays a
+frame every eighth second to track the PAL frame rate of 985248 / 19656 Hz. The player times an
+NTSC tune on a PAL machine at 16388 cycles (60.12 Hz). References built on nominal 50 and 60 Hz
+drift 0.25% from the clock, 15 s an hour into a tune.
 
 ### Jump accuracy
 
@@ -134,6 +193,10 @@ less. Restarting a sub tune took 0.26 to 0.28 s.
 - Two `tap` events in one `machine:input` batch lost the second key. The restart uses separate
   press and release requests, 60 ms apart.
 - The clock wraps after 99:59.
+- `POST machine:input`, `readmem` and config writes occasionally hang for 8 s on the C64 Ultimate
+  and the Ultimate 64 while other requests answer in 10 ms. A seek survives a release that times
+  out: it restores first and only then reads where the tune is, and it counts a held stretch that
+  the fast forward rate seen just before cannot explain as normal play.
 
 ### In the app on a Pixel 4
 
@@ -148,7 +211,25 @@ The following was checked with the APK built from this branch against the same C
 - The app was force-stopped while it held the key, and in a second test with CPU speed raised. On
   the next launch the app released the key and restored `CPU Speed` within about 4 s.
 
-## Running the measurement
+## Running the tests
+
+The same suites run in CI against the mock server and on the bench against real machines.
+
+| Suite | CI | Bench |
+| --- | --- | --- |
+| Unit tests (`tests/unit/playback/remoteSeek/`, `useRemoteSidSeek`) | `npm run test` | — |
+| Playback parity, phone and C64 route (`playwright/parity/`) | `playwright/playbackParity.spec.ts` | `npx tsx tools/hil/playback_parity_hil.ts --hosts c64u,u64,u2` |
+| Device soak (`tools/hil/remoteSidSeekSoak.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u SOAK_MINUTES=30 npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekSoak.hil.ts` |
+| Tune corpus (`tools/hil/remoteSidSeekCorpus.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekCorpus.hil.ts` |
+
+`SOAK_HOST` is a host name, or `mock` (an Ultimate 64-family machine) or `mock-u2` (a cartridge
+without key input) for the mock server. The soak and the corpus play generated tunes whose play
+routine counts its calls at `$10F0`, so every landing is checked against where the tune really is.
+On a real machine the corpus also plays HVSC tunes picked for the extremes (from `../C64Music`, or
+`CORPUS_HVSC`) at -42 dB. The parity run plays a steady 550 Hz tone at media volume 5 of 25 and
+listens for it with the microphone at the phone's grille.
+
+The proof of concept measures the device directly, without the app:
 
 ```bash
 python3 tools/hil/remote_sid_seek_poc.py --host c64u --tune path/to/tune.sid --json out.json
@@ -156,7 +237,6 @@ python3 tools/hil/remote_sid_seek_poc.py --host c64u --only seek --write-interva
 python3 tools/hil/remote_sid_seek_poc.py --host c64u --turbo-off-check
 ```
 
-The tool uses only REST and does not need the app. Each run ends by releasing the keys, restoring
-`Turbo Control` and `CPU Speed`, reading them back and resetting the C64. The exit code is 1 if a
-stage failed or the restore did not match. The generated counter tune is silent. Tunes passed with
-`--tune` play aloud on the C64.
+It uses only REST. Each run ends by releasing the keys, restoring `Turbo Control` and `CPU Speed`,
+reading them back and resetting the C64. The exit code is 1 if a stage failed or the restore did
+not match. The generated counter tune is silent. Tunes passed with `--tune` play aloud on the C64.

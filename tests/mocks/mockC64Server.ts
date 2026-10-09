@@ -528,6 +528,9 @@ export async function createMockC64Server(
         state = clone(defaults);
         syncAllDriveStateFromConfig();
       }
+      if (parsed.pathname === "/v1/machine:pause") sidPlayer?.setPaused(true);
+      if (parsed.pathname === "/v1/machine:resume" || parsed.pathname === "/v1/machine:reset")
+        sidPlayer?.setPaused(false);
       return sendJson(200, { errors: [] });
     }
 
