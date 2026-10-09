@@ -9,7 +9,6 @@
 import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 import { TelnetSocket } from "@/lib/native/telnetSocket";
-import { TelnetMock } from "@/lib/telnet/telnetMock";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
@@ -68,9 +67,28 @@ export const shouldUseMockTelnetTransport = () => {
  * Capacitor-backed Telnet transport using native TCP sockets.
  * Bridges TelnetTransport interface to the TelnetSocket Capacitor plugin.
  */
+/**
+ * The simulated device's Telnet, loaded on first use: it serves Demo Mode and tests only, and kept
+ * in the startup bundle it pushed that bundle over its size budget.
+ */
+const createDeferredMockTransport = (): TelnetTransport => {
+  let mock: TelnetTransport | null = null;
+  const load = async () => {
+    mock ??= new (await import("@/lib/telnet/telnetMock")).TelnetMock();
+    return mock;
+  };
+  return {
+    connect: async (host, port) => (await load()).connect(host, port),
+    disconnect: async () => (await load()).disconnect(),
+    send: async (data) => (await load()).send(data),
+    read: async (timeoutMs) => (await load()).read(timeoutMs),
+    isConnected: () => mock?.isConnected() ?? false,
+  };
+};
+
 export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetTransport {
   if (shouldUseMockTelnetTransport()) {
-    return new TelnetMock();
+    return createDeferredMockTransport();
   }
 
   let connected = false;

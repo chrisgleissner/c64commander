@@ -195,12 +195,16 @@ describe("createTelnetClient", () => {
     it("uses the telnet mock transport for internal demo targets", async () => {
       getConnectionSnapshotMock.mockReturnValue({ state: "DEMO_ACTIVE" });
       const client = createTelnetClient();
+      // The mock loads on first use, so a client that has not connected reports itself disconnected.
+      expect(client.isConnected()).toBe(false);
 
       await client.connect("c64u", 23);
       await client.send(new Uint8Array([0x1b, 0x5b, 0x31, 0x35, 0x7e]));
 
       expect(mockConnect).not.toHaveBeenCalled();
       expect(client.isConnected()).toBe(true);
+      await client.disconnect();
+      expect(client.isConnected()).toBe(false);
     });
 
     it("still throws when sending before connecting", async () => {

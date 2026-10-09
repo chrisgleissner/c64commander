@@ -596,7 +596,9 @@ describe(`remote SID seek soak on ${HOST}`, () => {
         }
         record.violations.push(...(await invariants()));
         const injected = /killed|cancel|switched|another tune/.test(op.name);
-        const newErrors = logs.errors.slice(errorsBefore).map(([message]) => message);
+        const newErrors = logs.errors
+          .slice(errorsBefore)
+          .map(([message, details]) => `${message} ${JSON.stringify(details).slice(0, 300)}`);
         if (!injected && newErrors.length) record.violations.push(`error logs: ${newErrors.join(" | ")}`);
         records.push(record);
         const status = record.violations.length ? `VIOLATION ${record.violations.join("; ")}` : "ok";
