@@ -42,6 +42,8 @@ export const createFakeRemoteSeekDevice = (
     settings?: Partial<Settings>;
     deviceKey?: string;
     latencyMs?: number;
+    /** Extra latency of up to this much on each request, varying from request to request. */
+    latencyJitterMs?: number;
     /** How long a config write waits, as the app's config write interval makes it wait. */
     configWriteDelayMs?: number;
   } = {},
@@ -57,8 +59,15 @@ export const createFakeRemoteSeekDevice = (
   const failures = { configWrites: 0, keyEvents: 0 };
   let connectedKey: string | null = options.deviceKey ?? DEVICE_KEY;
   const latencyMs = options.latencyMs ?? 0;
-  const roundTrip = () =>
-    latencyMs > 0 ? new Promise((resolve) => setTimeout(resolve, latencyMs)) : Promise.resolve();
+  let jitterStep = 0;
+  const jitter = () => {
+    jitterStep = (jitterStep + 7) % 11;
+    return Math.round(((options.latencyJitterMs ?? 0) * jitterStep) / 10);
+  };
+  const roundTrip = () => {
+    const delay = latencyMs + jitter();
+    return delay > 0 ? new Promise((resolve) => setTimeout(resolve, delay)) : Promise.resolve();
+  };
   const applySpeed = () =>
     player.setCpuSpeedMhz(settings["Turbo Control"] === "Off" ? 1 : Number(settings["CPU Speed"].trim()));
   applySpeed();

@@ -384,7 +384,7 @@ export class RemoteSidSeekController {
             }
           }
           const remainingClock = (target - position) * ratio;
-          const baseRate = speed === planner.baseOption ? planner.measuredRate(speed) : null;
+          const baseRate = speed === planner.finalOption ? planner.measuredRate(speed) : null;
           if (held && baseRate !== null && remainingClock < baseRate * readPeriodSeconds * FINAL_APPROACH_READS) {
             // The next read would land past the target, so release on a timer instead: half a read
             // period early, which is about when the release request reaches the device.

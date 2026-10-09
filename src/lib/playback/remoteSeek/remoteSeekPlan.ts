@@ -97,8 +97,8 @@ const RATE_SAFETY_FACTOR = 1.3;
  * exceeds what it covers, at that bound, in the lead time, so a jump slows down early rather than
  * overshoots. A measurement never lowers the bound: the first CPU Speed change after a tune starts
  * can take a second to apply, and a rate measured meanwhile is far too low. The tiers are the
- * maximum, 4 MHz and the machine's own speed: each change costs a CPU Speed write that may wait out
- * the config write interval, so they are few.
+ * maximum, 4 MHz and the slowest speed: each change costs a CPU Speed write that may wait out the
+ * config write interval, so they are few.
  */
 export class JumpSpeedPlanner {
   readonly tiers: string[];
@@ -111,12 +111,17 @@ export class JumpSpeedPlanner {
     readonly baseOption: string,
   ) {
     const speeds = numericSpeeds(options);
-    const baseMhz = cpuSpeedMhz(baseOption) ?? 1;
-    const faster = [speeds[speeds.length - 1], 4]
-      .filter((mhz): mhz is number => mhz !== undefined && mhz > baseMhz)
-      .map((mhz) => optionForMhz(options, mhz))
+    // The slowest speed lands most precisely, so it is the last tier even when the user runs the
+    // machine faster: the user's own speed is written back when the jump gives the device back.
+    const tiers = [speeds[speeds.length - 1], 4, speeds[0]]
+      .map((mhz) => (mhz === undefined ? null : optionForMhz(options, mhz)))
       .filter((option): option is string => option !== null);
-    this.tiers = [...new Set(faster), baseOption];
+    this.tiers = tiers.length ? [...new Set(tiers)] : [baseOption];
+  }
+
+  /** The speed a jump finishes at, and the only one whose landing is timed rather than read. */
+  get finalOption(): string {
+    return this.tiers[this.tiers.length - 1];
   }
 
   get calibrated(): boolean {
@@ -158,7 +163,7 @@ export class JumpSpeedPlanner {
       }
     }
     this.slowestChosen = this.tiers.length - 1;
-    return this.baseOption;
+    return this.finalOption;
   }
 }
 

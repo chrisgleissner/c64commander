@@ -212,6 +212,16 @@ describe("remote SID seek controller", () => {
     expect(device.settings["CPU Speed"]).toBe(" 1");
   });
 
+  it("lands precisely on a machine the user runs at 8 MHz, finishing at the slowest speed", async () => {
+    // A phone's round trips vary, and at 8 MHz that variation is seconds of tune.
+    const device = createFakeRemoteSeekDevice({ settings: { "CPU Speed": " 8" }, latencyMs: 20, latencyJitterMs: 60 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(controller.jumpTo(() => 0, 150));
+    expect(device.player.tunePositionSeconds).toBeGreaterThanOrEqual(149.5);
+    expect(device.player.tunePositionSeconds).toBeLessThan(151.5);
+    expect(device.settings["CPU Speed"]).toBe(" 8");
+  });
+
   it("lands an NTSC tune on a PAL machine on the music's position, not the faster clock", async () => {
     const device = createFakeRemoteSeekDevice({ playCallHz: 60 });
     const controller = new RemoteSidSeekController(device.api, profile({ headerPlayCallHz: 60 }));

@@ -24,7 +24,7 @@
  * On a machine without key injection (the Ultimate-II+(L)) it runs the fail-safe checks instead.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
@@ -234,6 +234,14 @@ const percentile = (values: number[], p: number) => {
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
 };
 
+/** Vitest holds console output until the test ends; this file shows progress while it runs. */
+const PROGRESS = OUT.replace(/\.json$/, ".progress.log");
+const progress = (line: string) => {
+  console.log(line);
+  mkdirSync(path.dirname(PROGRESS), { recursive: true });
+  appendFileSync(PROGRESS, `${line}\n`);
+};
+
 const writeReport = (report: unknown) => {
   mkdirSync(path.dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(report, null, 2));
@@ -294,6 +302,10 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       if (!profile) throw new Error(`The SID player screen was not found for ${variant.name}`);
       controller = new modules.controller.RemoteSidSeekController(api, profile);
       await syncPosition();
+      // Some firmware sets its own Turbo Control and CPU Speed while the SID player runs (the
+      // Ultimate 64 Elite on 3.15 here switches to U64 Turbo Registers and puts them back on reset),
+      // so what a seek must give back is what the machine shows once the tune has started.
+      expected = { cpu: (await device.item("CPU Speed")).current, turbo: (await device.item("Turbo Control")).current };
     };
 
     const invariants = async (allowJournal = false): Promise<string[]> => {
@@ -588,7 +600,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
         if (!injected && newErrors.length) record.violations.push(`error logs: ${newErrors.join(" | ")}`);
         records.push(record);
         const status = record.violations.length ? `VIOLATION ${record.violations.join("; ")}` : "ok";
-        console.log(
+        progress(
           `[soak ${HOST} #${iteration} ${new Date().toISOString().slice(11, 19)}] ${op.name} (${variant.name}) ` +
             `${record.ms} ms${record.errorSeconds !== undefined ? ` model ${record.errorSeconds.toFixed(2)} s` : ""}` +
             `${record.targetErrorSeconds !== undefined ? ` target ${record.targetErrorSeconds.toFixed(2)} s` : ""} ${status}`,
@@ -606,11 +618,14 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       }
     } finally {
       await controller?.cancel("soak finished");
-      await device.write("CPU Speed", baseline.cpu);
-      await device.write("Turbo Control", baseline.turbo);
-      expected = settingsOf();
       const final = await invariants();
+      // Leave the machine as the soak found it: a reset ends the player's own session, and anything
+      // the soak's user-setting stretches changed is written back.
       await device.request("PUT", "/v1/machine:reset");
+      await sleep(2000);
+      if ((await device.item("CPU Speed")).current !== baseline.cpu) await device.write("CPU Speed", baseline.cpu);
+      if ((await device.item("Turbo Control")).current !== baseline.turbo)
+        await device.write("Turbo Control", baseline.turbo);
       const landed = records.filter((record) => record.errorSeconds !== undefined && record.completed !== false);
       const byOp: Record<string, unknown> = {};
       for (const op of ops) {

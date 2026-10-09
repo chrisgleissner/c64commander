@@ -51,9 +51,10 @@ describe("remote seek plan", () => {
     expect([0, 1, 2, 3, 4, 5, 6].map(rewindOffsetSeconds)).toEqual([0, 10, 30, 70, 150, 230, 310]);
   });
 
-  it("jumps through the maximum, 4 MHz and the machine's own speed, and nothing slower than that", () => {
+  it("jumps through the maximum, 4 MHz and the slowest speed, whatever speed the machine runs at", () => {
     expect(new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 1").tiers).toEqual(["64", " 4", " 1"]);
-    expect(new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 8").tiers).toEqual(["64", " 8"]);
+    expect(new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 8").tiers).toEqual(["64", " 4", " 1"]);
+    expect(new JumpSpeedPlanner(C64U_CPU_SPEEDS, " 8").finalOption).toBe(" 1");
   });
 
   it("stays at the machine's own speed until it has measured how fast this tune fast forwards", () => {
