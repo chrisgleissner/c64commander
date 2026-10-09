@@ -415,11 +415,15 @@ def restart_tune(device: Device) -> float:
     return time.monotonic() - started
 
 
-def seek(device: Device, plan: "SeekPlan", from_tune_s: float, target_tune_s: float, base: str) -> dict:
-    """The app's jump: restart when going back, then fast forward with the adaptive slow-down.
+def seek(device: Device, plan: "SeekPlan", from_tune_s: float, target_tune_s: float, base: str,
+         write_interval_s: float = 0.0) -> dict:
+    """The app's jump: restart when going back, then fast forward in speed tiers.
 
     The clock counts play calls during fast forward, at the machine's frame rate, so the clock value
-    to stop at is the distance in tune seconds times `clock_per_tune_s`.
+    to stop at is the distance in tune seconds times `clock_per_tune_s`. Between tiers the key is
+    released before CPU Speed changes: the app's config writes queue behind a device-safety interval,
+    so a speed change can arrive late, and with the key up the tune just plays on at normal speed
+    instead of racing past the target. `write_interval_s` reproduces that queue.
     """
     started = time.monotonic()
     restart_s = 0.0
@@ -431,7 +435,7 @@ def seek(device: Device, plan: "SeekPlan", from_tune_s: float, target_tune_s: fl
     speeds_used = []
     deadline = time.monotonic() + 30
     current = None
-    device.key("press", FAST_FORWARD_KEY)
+    held = False
     try:
         while True:
             if time.monotonic() > deadline:
@@ -443,12 +447,21 @@ def seek(device: Device, plan: "SeekPlan", from_tune_s: float, target_tune_s: fl
                 break
             wanted = plan.speed_for(stop_clock - value)
             if wanted != current:
+                if held:
+                    device.key("release", FAST_FORWARD_KEY)
+                    held = False
+                time.sleep(write_interval_s)
                 device.set_config(CPU_SPEED, wanted)
                 speeds_used.append(cpu_speed_mhz(wanted))
                 current = wanted
+                continue
+            if not held:
+                device.key("press", FAST_FORWARD_KEY)
+                held = True
     finally:
         device.key("release", FAST_FORWARD_KEY)
-        device.set_config(CPU_SPEED, base)
+        if current != base:
+            device.set_config(CPU_SPEED, base)
     landed_wall = time.monotonic() - started
     shown = device.clock()
     return {"from_s": from_tune_s, "target_s": target_tune_s, "stop_clock": stop_clock, "clock_after": shown,
@@ -479,12 +492,13 @@ EXPECTED_CLOCK_RATE = {1: 16, 4: 57, 16: 190, 64: 430}
 
 
 def seek_tiers(options: list[str], base: str) -> list[tuple[str, float]]:
-    """Max, 16 and 4 MHz while far from the target, the base speed for the last few seconds."""
+    """The maximum and 4 MHz while far from the target, the base speed for the last few seconds."""
     numeric = sorted({m for m in (cpu_speed_mhz(o) for o in options) if m is not None})
+    base_mhz = cpu_speed_mhz(base) or 1
     tiers = []
-    for mhz in [numeric[-1], 16, 4]:
+    for mhz in [numeric[-1], 4]:
         option = option_for_mhz(options, mhz)
-        if option is None or any(t[0] == option for t in tiers):
+        if option is None or mhz <= base_mhz or any(t[0] == option for t in tiers):
             continue
         rate = EXPECTED_CLOCK_RATE.get(mhz, EXPECTED_CLOCK_RATE[64])
         tiers.append((option, rate * SLOW_DOWN_LEAD_S))
@@ -515,12 +529,12 @@ def measure_call_rate(device: Device, cia_clock_hz: float, samples: int = 60) ->
     return raw_hz, snap_call_rate(raw_hz)
 
 
-def stage_seek(ctx: Context) -> dict:
+def stage_seek(ctx: Context, write_interval_s: float = 0.0) -> dict:
     device = ctx.device
     base = ctx.base_option()
     tiers = seek_tiers(ctx.speed_options, base)
     frame_hz, cia_hz = 50.0, 985248.0
-    out = {"tiers": tiers, "counter": [], "tunes": {}}
+    out = {"tiers": tiers, "write_interval_s": write_interval_s, "counter": [], "tunes": {}}
     variants = [("PAL VBI", "PAL", None), ("NTSC VBI", "NTSC", None), ("PAL CIA 4x", "PAL", 0x1331)]
     for label, video, timer in variants:
         device.sidplay(build_counter_psid(video, busy_loops=200, cia_timer=timer), "counter.sid")
@@ -530,7 +544,7 @@ def stage_seek(ctx: Context) -> dict:
         for target in (45.0, 200.0, 30.0, 120.0):
             truth_before = device.counter() / call_hz
             position = truth_before
-            row = seek(device, plan, position, target, base)
+            row = seek(device, plan, position, target, base, write_interval_s)
             truth = device.counter() / call_hz
             row.update({"variant": label, "call_hz_raw": round(raw_hz, 1), "call_hz": call_hz,
                         "truth_after_s": round(truth, 2), "error_s": round(truth - target, 2)})
@@ -545,7 +559,7 @@ def stage_seek(ctx: Context) -> dict:
         rows = []
         position = float(device.clock() or 0)
         for target in (60.0, 20.0, 150.0, 90.0):
-            row = seek(device, plan, position, target, base)
+            row = seek(device, plan, position, target, base, write_interval_s)
             position = target
             rows.append(row)
             log(f"seek {tune.name} ({call_hz:.0f} Hz) -> {target:5.0f}s: wall {row['wall_s']:4.2f}s "
@@ -631,6 +645,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tune", action="append", default=[], type=Path, help="a PSID to measure (repeatable)")
     parser.add_argument("--only", default="", help="comma-separated stages")
     parser.add_argument("--turbo-off-check", action="store_true")
+    parser.add_argument("--write-interval-ms", type=int, default=500,
+                        help="delay before each CPU Speed write in the seek stage, as the app's config write queue adds")
     parser.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
 
@@ -643,7 +659,10 @@ def main(argv: list[str] | None = None) -> int:
         ctx.results["preflight"] = stage_preflight(ctx)
         for name in selected:
             try:
-                ctx.results[name] = STAGES[name](ctx)
+                if name == "seek":
+                    ctx.results[name] = stage_seek(ctx, args.write_interval_ms / 1000)
+                else:
+                    ctx.results[name] = STAGES[name](ctx)
             except Exception as error:  # noqa: BLE001 - one stage failing must not skip the others
                 failed = True
                 ctx.results[name] = {"error": f"{type(error).__name__}: {error}"}

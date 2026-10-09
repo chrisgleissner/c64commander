@@ -75,9 +75,10 @@ def test_snap_call_rate_corrects_the_upward_bias_of_the_sampled_latch():
     assert poc.snap_call_rate(75.0) == 75.0
 
 
-def test_seek_tiers_slow_down_through_16_and_4_mhz_to_the_base_speed():
+def test_seek_tiers_slow_down_through_4_mhz_to_the_base_speed():
     tiers = poc.seek_tiers(SPEEDS_C64U, " 1")
-    assert [option for option, _ in tiers] == ["64", "16", " 4", " 1"]
+    assert [option for option, _ in tiers] == ["64", " 4", " 1"]
+    assert [option for option, _ in poc.seek_tiers(SPEEDS_C64U, " 8")] == ["64", " 8"]
     thresholds = [threshold for _, threshold in tiers]
     assert thresholds == sorted(thresholds, reverse=True) and thresholds[-1] == 0.0
     plan = poc.SeekPlan(tiers)
