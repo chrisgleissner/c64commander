@@ -178,8 +178,12 @@ test.describe("Remote SID seek", () => {
     await startSeekableTune(page);
 
     const duration = await durationSeconds(page);
+    const barBefore = await page.getByTestId("playback-progress").boundingBox();
 
     await tapProgressAt(page, 0.75);
+    await expect(page.getByTestId("playback-elapsed")).toContainText("⏵");
+    // The bar must not move sideways when the elapsed time starts showing a target.
+    expect(await page.getByTestId("playback-progress").boundingBox()).toEqual(barBefore);
     await expect
       .poll(() => server.sidPlayer?.tunePositionSeconds ?? 0, { timeout: 15000 })
       .toBeGreaterThan(duration * 0.75 - 0.5);

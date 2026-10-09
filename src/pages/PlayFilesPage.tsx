@@ -150,6 +150,7 @@ import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOver
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { useSecondAlignedTicks } from "@/pages/playFiles/hooks/useSecondAlignedTicks";
+import { useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
 import { isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
@@ -211,7 +212,7 @@ import {
   sliderToDurationSeconds,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
-import { describePendingSeek, type PendingSeekState } from "@/lib/playback/pendingSeekStatus";
+import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
 import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
@@ -1910,16 +1911,6 @@ export default function PlayFilesPage() {
     });
   }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
 
-  // How much of the tune the on-device engine has rendered, as a percentage of its length. Only the
-  // local engine has this: libsidplayfp cannot rewind, so a seek beyond what is rendered has to be
-  // rendered up to. Polled rather than pushed — it changes a few times a second at most.
-  const [renderedSeconds, setRenderedSeconds] = useState<number | null>(null);
-  /**
-   * The seek being waited for, if any: target, the render head when it was accepted, and the last
-   * position that was genuinely audible. Held as the engine's own record rather than flattened to a
-   * percentage, because each field answers a different question on screen.
-   */
-  const [pendingSeekState, setPendingSeekState] = useState<PendingSeekState | null>(null);
   const activePlayback = useActivePlayback();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
   const remoteSeek = useRemoteSidSeek({
@@ -1946,35 +1937,10 @@ export default function PlayFilesPage() {
     // A new track starts its playhead at zero, which is not the previous track's playhead having
     // stopped. Forgetting the last reading here is what keeps that from reading as a stall.
     anchoredElapsedRef.current = null;
-    if (!localEngineActive) {
-      setRenderedSeconds(null);
-      setPendingSeekState(null);
-      return;
-    }
-    // Debug seam for HIL: the engine's own state, which the sink counters cannot show.
-    (globalThis as Record<string, unknown>).__localEngineDebug = () =>
-      getSharedLocalSidPlaybackController().debugState();
-    const read = () => {
-      const controller = getSharedLocalSidPlaybackController();
-      setRenderedSeconds(controller.renderedSeconds());
-      const pending = controller.pendingSeek();
-      // Compared field by field rather than by identity: the engine hands out a copy each poll, so
-      // storing it unconditionally would re-render the whole page twice a second for nothing.
-      setPendingSeekState((previous) =>
-        previous === pending ||
-        (previous !== null &&
-          pending !== null &&
-          previous.targetSeconds === pending.targetSeconds &&
-          previous.generation === pending.generation &&
-          previous.trackInstanceId === pending.trackInstanceId)
-          ? previous
-          : pending,
-      );
-    };
-    read();
-    const timer = window.setInterval(read, 500);
-    return () => window.clearInterval(timer);
   }, [localEngineActive, currentItem?.id]);
+  const { renderedSeconds, pendingSeekState } = useLocalPendingSeek(localEngineActive, currentItem?.id, () =>
+    syncPlaybackTimelineRef.current(),
+  );
   const pendingSeek =
     localEngineActive && pendingSeekState
       ? (describePendingSeek({

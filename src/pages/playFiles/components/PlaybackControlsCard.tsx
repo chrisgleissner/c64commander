@@ -648,7 +648,7 @@ export const PlaybackControlsCard = ({
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span
-              className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "font-semibold text-foreground")}
+              className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "text-foreground")}
               data-testid="playback-elapsed"
               // Held, not merely lagging. While the renderer works towards a target the engine is
               // silent, and this clock stays at the last position that was genuinely audible. A
@@ -656,7 +656,9 @@ export const PlaybackControlsCard = ({
               // to prevent — it is indistinguishable from playback that has died.
               data-elapsed-held={pendingSeek ? "true" : undefined}
             >
-              {pendingSeek ? `⏸ ${elapsedLabel}` : isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
+              {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
+              <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
+              {elapsedLabel}
             </span>
             {onSeekToFraction ? (
               // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
@@ -779,7 +781,7 @@ export const PlaybackControlsCard = ({
                 data-scrubbing={isScrubbing ? "true" : undefined}
               />
             )}
-            <span className="shrink-0" data-testid="playback-remaining">
+            <span className="shrink-0 tabular-nums" data-testid="playback-remaining">
               {remainingLabel}
             </span>
           </div>

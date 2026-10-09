@@ -597,6 +597,11 @@ export class LocalSidEngine {
    */
   private pendingSeek: PendingSeekState | null = null;
   /**
+   * The position heard before the latest seek. A seek made before anything has played since the
+   * previous one keeps it: the scheduler was reset to that seek's target, which nobody has heard.
+   */
+  private heardBeforeSeekSeconds: number | null = null;
+  /**
    * Identity of the track instance currently open.
    *
    * Bumped by every open, so a pre-render completion that arrives after the listener has pressed
@@ -887,6 +892,7 @@ export class LocalSidEngine {
     // this one's work. A stall recovery re-opens the same tune and counts as a new instance too:
     // what the old instance was waiting for did not survive the worker being thrown away.
     this.trackInstanceId += 1;
+    this.heardBeforeSeekSeconds = null;
     // The listener has left whatever they were waiting for. `activePendingSeek` would discard it
     // on the next read anyway; clearing it here as well keeps `debugState()` and anything reading
     // the field directly honest from the first moment of the new tune.
@@ -1482,17 +1488,17 @@ export class LocalSidEngine {
 
     this.seekEpoch += 1;
     const epoch = this.seekEpoch;
-    // Read the playhead BEFORE the scheduler is reset, because that reset moves it to the target.
-    // If this seek ends up waiting, this is the last position the listener genuinely heard, and it
-    // is where the elapsed clock has to stay: a clock advancing from the target while the engine
-    // renders towards it is a silent wait dressed up as normal playback.
-    const audibleAtRequest = this.scheduler.positionSeconds();
+    // Read before the reset moves the playhead to the target: while this seek waits, the elapsed
+    // clock stays at the last position the listener heard. See `heardBeforeSeekSeconds`.
+    const playedSinceLastSeek = this.scheduler.chunksScheduledSinceReset() > 0;
+    const audibleAtRequest = playedSinceLastSeek
+      ? this.scheduler.positionSeconds()
+      : (this.heardBeforeSeekSeconds ?? this.scheduler.positionSeconds());
+    this.heardBeforeSeekSeconds = audibleAtRequest;
     // A newer seek replaces whatever an older one was waiting for.
     this.pendingSeek = null;
-    // And it decides afresh where playback reads from. Following the pre-render is a state the
-    // previous seek entered; this one either re-enters it, finds the cache can answer outright, or
-    // goes to the worker. Carrying it over would leave a later `prerender-chunk` extending a buffer
-    // nothing is playing from any more.
+    // And it decides afresh where playback reads from: carried over, a later `prerender-chunk` would
+    // extend a buffer nothing plays from any more.
     this.followingPrerender = false;
     this.inFlightRenders = 0;
     this.endReceived = false;
@@ -1505,11 +1511,8 @@ export class LocalSidEngine {
     this.audio?.flush?.();
     this.emitPosition();
 
-    // If this tune has been rendered in full, the seek is a buffer offset and
-    // needs no engine round-trip at all. That is the whole point of the
-    // pre-render: libsidplayfp cannot rewind, so asking the engine to go
-    // backwards costs ~150 ms of CPU per second of audio it has to replay —
-    // seconds of silence for a seek the listener expects to be instant.
+    // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
+    // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
     const rendered = this.currentKey ? this.renderCache.get(this.currentKey) : null;
     // A lead-in only covers the opening, so it can answer a seek that lands inside it and nothing
     // else. Serving one as though it were the whole tune is how fast-forward, rewind and the progress
@@ -1559,18 +1562,9 @@ export class LocalSidEngine {
     }
 
     await new Promise<void>((resolve) => {
-      // Hand the slot over rather than overwrite it. There is exactly one
-      // `seekPending`, and the `seeked` handler only resolves a reply whose id
-      // still matches it — so replacing an outstanding entry drops its resolver
-      // and that caller's await never settles. A scrub makes overlapping seeks
-      // the norm, not a corner case: hold-to-seek posts one every 350 ms and the
-      // release posts another.
-      //
-      // Worse than a stuck await: `seekPending` also gates "chunk" and "end", so
-      // while it is set every rendered chunk is discarded. A leaked entry
-      // therefore silences playback for good — on a Pixel 4 that read as the
-      // clock frozen mid-tune with no audio track left and the transport still
-      // claiming to play. The superseded seek is simply over; resolve it.
+      // Hand the slot over rather than overwrite it: the `seeked` handler only resolves the current
+      // id, so a dropped resolver never settles, and `seekPending` gates every chunk — a leaked entry
+      // silenced playback for good on a Pixel 4. Overlapping seeks are normal during a scrub.
       this.seekPending?.resolve();
       // Bounded, because leaving this set is not a lost seek but lost audio: while it is set every
       // chunk is discarded, so a reply that never comes would silence the tune indefinitely. Give

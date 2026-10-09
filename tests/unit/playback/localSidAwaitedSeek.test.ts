@@ -160,6 +160,19 @@ describe("a seek waiting for the pre-render to reach it", () => {
     expect(flushes).toBeGreaterThan(0);
   });
 
+  it("keeps the last heard position when a second seek replaces one still waiting", async () => {
+    const engine = makeEngine();
+    await openWithPrerenderRunning(engine);
+    await engine.seekTo(200);
+    const heard = engine.getPendingSeek()!.audibleAtRequestSeconds;
+
+    await engine.seekTo(250);
+
+    // The first target was never played, so the clock must not jump to it while the second waits.
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 250, audibleAtRequestSeconds: heard });
+    expect(heard).toBeLessThan(200);
+  });
+
   it("does not play the position the listener seeked away from while it waits", async () => {
     const engine = makeEngine();
     await openWithPrerenderRunning(engine);
