@@ -185,6 +185,23 @@ describe("appSettings", () => {
     });
   });
 
+  describe("c64SeekMute", () => {
+    it("mutes rewinds only by default", () => {
+      expect(appSettings.loadC64SeekMute()).toBe("rewind");
+      expect(appSettings.DEFAULT_C64_SEEK_MUTE).toBe("rewind");
+    });
+    it("normalizes invalid values to the default", () => {
+      localStorage.setItem(appSettings.APP_SETTINGS_KEYS.C64_SEEK_MUTE_KEY, "sometimes");
+      expect(appSettings.loadC64SeekMute()).toBe("rewind");
+    });
+    it("saves and loads every mode", () => {
+      for (const mode of ["always", "never", "rewind"] as const) {
+        appSettings.saveC64SeekMute(mode);
+        expect(appSettings.loadC64SeekMute()).toBe(mode);
+      }
+    });
+  });
+
   describe("volumeSliderPreviewIntervalMs", () => {
     it("defaults correctly", () => {
       expect(appSettings.loadVolumeSliderPreviewIntervalMs()).toBe(

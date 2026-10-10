@@ -149,13 +149,15 @@ describe("scrub feedback contract", () => {
   it("shows the scrub position rather than the audio clock while scrubbing", async () => {
     const { readFileSync } = await import("node:fs");
     const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
-    expect(page).toContain("const isScrubbing = scrubTargetMs !== null");
+    // Amended: the C64 route has its own scrub target, so the shown target is whichever is set.
+    expect(page).toContain("const shownScrubTargetMs = remoteSeek.targetMs ?? scrubTargetMs");
+    expect(page).toContain("const isScrubbing = shownScrubTargetMs !== null");
     // Amended: the expression now has a third source. A scrub still wins, which is what this test is
     // about, but a seek waiting for the renderer freezes the clock at the last audible position
     // instead of letting it run on through the silence. Insisting on the old two-way expression
     // would have required the clock to advance normally while nothing was sounding, which is the
     // defect the pending-seek state exists to remove.
-    expect(page).toContain("const displayElapsedMs = isScrubbing ? scrubTargetMs :");
+    expect(page).toContain("const displayElapsedMs = isScrubbing ? shownScrubTargetMs :");
     expect(page).toContain("pendingSeek?.audibleMs ?? elapsedMs");
     // Both the bar and the timer must use it, or they disagree mid-gesture.
     expect(page).toMatch(/progressPercent = currentDurationMs \? Math\.min\(100, \(displayElapsedMs/);
@@ -190,8 +192,11 @@ describe("auto-advance follows a seek", () => {
     const { readFileSync } = await import("node:fs");
     const hook = readFileSync("src/pages/playFiles/hooks/usePlaybackController.ts", "utf8");
     expect(hook).toContain("const rescheduleAutoAdvance = useCallback(");
-    // Relative seek (hold), scrub release, and the two that drive them.
-    const calls = hook.match(/rescheduleAutoAdvance\(positionMs\)/g) ?? [];
+    // Amended: every seek path rebases through one helper, and that helper reschedules. Relative
+    // seek (hold) and scrub release both go through it here; the C64 route's landing calls it from
+    // useRemoteSidSeek, which useRemoteSidSeek.test.tsx checks through its `rebasePlaybackPosition`.
+    expect(hook).toMatch(/const rebasePlaybackPosition = useCallback\([\s\S]*?rescheduleAutoAdvance\(positionMs\)/);
+    const calls = hook.match(/rebasePlaybackPosition\(positionMs\)/g) ?? [];
     expect(calls.length).toBeGreaterThanOrEqual(2);
     // Deadline is derived from the tune's duration and the NEW position.
     expect(hook).toContain("const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs)");

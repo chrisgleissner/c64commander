@@ -149,6 +149,10 @@ import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
 import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOverlayState";
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { useSecondAlignedTicks } from "@/pages/playFiles/hooks/useSecondAlignedTicks";
+import { useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
+import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
+import { isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
 import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
@@ -208,7 +212,7 @@ import {
   sliderToDurationSeconds,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
-import { describePendingSeek, type PendingSeekState } from "@/lib/playback/pendingSeekStatus";
+import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
 import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
@@ -570,6 +574,7 @@ export default function PlayFilesPage() {
     handleNext,
     handlePrevious,
     handleSeekBy,
+    rebasePlaybackPosition,
     beginScrub,
     scrubBy,
     endScrub,
@@ -1465,8 +1470,8 @@ export default function PlayFilesPage() {
   }, []);
 
   const syncPlaybackTimeline = useCallback(
-    (options?: { allowAutoAdvance?: boolean }) => {
-      const allowAutoAdvance = options?.allowAutoAdvance ?? true;
+    (options?: { allowAutoAdvance?: boolean; shownAtMs?: number }) => {
+      const allowAutoAdvance = (options?.allowAutoAdvance ?? true) && !isRemoteSidSeekBusy();
       if (!isPlaying || isPaused || currentIndex < 0) return;
       const now = Date.now();
       // On-device playback knows exactly where it is, so it — and not wall time — is the clock. See
@@ -1487,7 +1492,7 @@ export default function PlayFilesPage() {
       if (anchor) {
         trackStartedAtRef.current = anchor.trackStartedAtMs;
         anchoredElapsedRef.current = anchor.elapsedMs;
-        setElapsedMs(anchor.elapsedMs);
+        setElapsedMs(anchor.elapsedMs + Math.max(0, (options?.shownAtMs ?? now) - now));
         // Only when it actually moved, and never while the playhead is stuck. The first is because
         // this deadline is mirrored to the native background watchdog and rewriting it every second
         // would be constant bridge traffic for nothing. The second is the important one: the
@@ -1522,12 +1527,8 @@ export default function PlayFilesPage() {
     syncPlaybackTimelineRef.current = syncPlaybackTimeline;
   }, [syncPlaybackTimeline]);
 
-  useEffect(() => {
-    if (!isPlaying || isPaused || currentIndex < 0) return;
-    syncPlaybackTimeline();
-    const timer = window.setInterval(syncPlaybackTimeline, 1000);
-    return () => window.clearInterval(timer);
-  }, [currentIndex, isPaused, isPlaying, syncPlaybackTimeline]);
+  const tickTimeline = useCallback((shownAtMs: number) => syncPlaybackTimeline({ shownAtMs }), [syncPlaybackTimeline]);
+  useSecondAlignedTicks(tickTimeline, isPlaying && !isPaused && currentIndex >= 0, trackStartedAtRef);
 
   usePlaybackResumeTriggers(syncPlaybackTimeline);
 
@@ -1539,6 +1540,10 @@ export default function PlayFilesPage() {
       try {
         const nextHandle = await onBackgroundAutoSkipDue((event) => {
           if (cancelled) return;
+          if (isRemoteSidSeekBusy()) {
+            addLog("info", "Background auto-advance left to the seek under way", { dueAtMs: event.dueAtMs });
+            return;
+          }
           syncPlaybackTimelineRef.current({ allowAutoAdvance: false });
           const guard = autoAdvanceGuardRef.current;
           const playbackState = playbackStateRef.current;
@@ -1804,7 +1809,6 @@ export default function PlayFilesPage() {
   // than the audio clock. The engine is deliberately behind — it is catching up
   // to the target in the background — and showing its position would make the
   // control feel dead for as long as a rewind takes to re-render.
-  const isScrubbing = scrubTargetMs !== null;
   // Composer, year and SID chip count, read from the tune's own SID header. Every SID carries them,
   // so this works for every source rather than only the ones with a metadata database behind them; a
   // tune that leaves the fields blank simply shows nothing.
@@ -1912,18 +1916,20 @@ export default function PlayFilesPage() {
     });
   }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
 
-  // How much of the tune the on-device engine has rendered, as a percentage of its length. Only the
-  // local engine has this: libsidplayfp cannot rewind, so a seek beyond what is rendered has to be
-  // rendered up to. Polled rather than pushed — it changes a few times a second at most.
-  const [renderedSeconds, setRenderedSeconds] = useState<number | null>(null);
-  /**
-   * The seek being waited for, if any: target, the render head when it was accepted, and the last
-   * position that was genuinely audible. Held as the engine's own record rather than flattened to a
-   * percentage, because each field answers a different question on screen.
-   */
-  const [pendingSeekState, setPendingSeekState] = useState<PendingSeekState | null>(null);
   const activePlayback = useActivePlayback();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
+  const remoteSeek = useRemoteSidSeek({
+    item: currentItem,
+    active: !localEngineActive && (isPlaying || activePlayback.any),
+    paused: isPaused,
+    trackInstanceId,
+    deviceInfo: status.deviceInfo,
+    elapsedMs,
+    durationMs: currentDurationMs,
+    rebasePlaybackPosition,
+  });
+  const shownScrubTargetMs = remoteSeek.targetMs ?? scrubTargetMs;
+  const isScrubbing = shownScrubTargetMs !== null;
   currentDurationMsRef.current = currentDurationMs;
   /*
    * The auto-advance deadline used to be held still here, from the pending seek's target, on every
@@ -1937,35 +1943,10 @@ export default function PlayFilesPage() {
     // A new track starts its playhead at zero, which is not the previous track's playhead having
     // stopped. Forgetting the last reading here is what keeps that from reading as a stall.
     anchoredElapsedRef.current = null;
-    if (!localEngineActive) {
-      setRenderedSeconds(null);
-      setPendingSeekState(null);
-      return;
-    }
-    // Debug seam for HIL: the engine's own state, which the sink counters cannot show.
-    (globalThis as Record<string, unknown>).__localEngineDebug = () =>
-      getSharedLocalSidPlaybackController().debugState();
-    const read = () => {
-      const controller = getSharedLocalSidPlaybackController();
-      setRenderedSeconds(controller.renderedSeconds());
-      const pending = controller.pendingSeek();
-      // Compared field by field rather than by identity: the engine hands out a copy each poll, so
-      // storing it unconditionally would re-render the whole page twice a second for nothing.
-      setPendingSeekState((previous) =>
-        previous === pending ||
-        (previous !== null &&
-          pending !== null &&
-          previous.targetSeconds === pending.targetSeconds &&
-          previous.generation === pending.generation &&
-          previous.trackInstanceId === pending.trackInstanceId)
-          ? previous
-          : pending,
-      );
-    };
-    read();
-    const timer = window.setInterval(read, 500);
-    return () => window.clearInterval(timer);
   }, [localEngineActive, currentItem?.id]);
+  const { renderedSeconds, pendingSeekState } = useLocalPendingSeek(localEngineActive, currentItem?.id, () =>
+    syncPlaybackTimelineRef.current(),
+  );
   const pendingSeek =
     localEngineActive && pendingSeekState
       ? (describePendingSeek({
@@ -1984,7 +1965,7 @@ export default function PlayFilesPage() {
   // reset to the target when the seek was accepted, so every position source already reports the
   // target. A clock advancing normally through a silence is exactly what a listener reads as
   // playback having died, which is why the target is shown separately on the bar instead.
-  const displayElapsedMs = isScrubbing ? scrubTargetMs : (pendingSeek?.audibleMs ?? elapsedMs);
+  const displayElapsedMs = isScrubbing ? shownScrubTargetMs : (pendingSeek?.audibleMs ?? elapsedMs);
 
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
@@ -2607,26 +2588,22 @@ export default function PlayFilesPage() {
                 stopping={stopping}
                 onPauseResume={() => void handlePauseResume()}
                 onNext={() => void handleNext()}
-                // Only offered when the tune is actually rendering here: the C64
-                // plays the SID itself and cannot be scrubbed, so on that route
-                // Previous/Next stay plain track controls.
-                onSeek={
-                  localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
-                    ? (deltaSeconds) => void handleSeekBy(deltaSeconds)
-                    : undefined
-                }
-                onScrubStart={
-                  localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
-                    ? () => beginScrub(currentDurationMs)
-                    : undefined
-                }
-                onScrubStep={scrubBy}
-                onSeekToFraction={
-                  localEngineActive && currentItem?.category === "sid" && currentDurationMs
-                    ? (fraction) => seekToFraction(fraction, currentDurationMs)
-                    : undefined
-                }
-                onScrubEnd={() => void endScrub()}
+                {...(remoteSeek.handlers ?? {
+                  onSeek:
+                    localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
+                      ? (deltaSeconds: number) => void handleSeekBy(deltaSeconds)
+                      : undefined,
+                  onScrubStart:
+                    localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
+                      ? () => beginScrub(currentDurationMs)
+                      : undefined,
+                  onScrubStep: scrubBy,
+                  onSeekToFraction:
+                    localEngineActive && currentItem?.category === "sid" && currentDurationMs
+                      ? (fraction: number) => seekToFraction(fraction, currentDurationMs)
+                      : undefined,
+                  onScrubEnd: () => void endScrub(),
+                })}
                 isScrubbing={isScrubbing}
                 progressPercent={progressPercent}
                 renderedPercent={renderedPercent}

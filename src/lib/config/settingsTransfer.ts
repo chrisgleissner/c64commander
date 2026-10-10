@@ -21,6 +21,9 @@ import {
   loadDebugLoggingEnabled,
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
+  loadC64SeekMute,
+  saveC64SeekMute,
+  DEFAULT_C64_SEEK_MUTE,
   loadScreenOrientationMode,
   DEFAULT_REMOTE_FUNCTION_1_ACTION,
   DEFAULT_REMOTE_FUNCTION_3_ACTION,
@@ -43,6 +46,7 @@ import {
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
   type DiskAutostartMode,
+  type C64SeekMute,
   type ScreenOrientationMode,
   type RemoteFunctionAction,
 } from "@/lib/config/appSettings";
@@ -89,6 +93,7 @@ type SettingsAppSettingsPayload = {
   backgroundRediscoveryIntervalMs: number;
   discoveryProbeTimeoutMs: number;
   diskAutostartMode: DiskAutostartMode;
+  c64SeekMute: C64SeekMute;
   screenOrientationMode: ScreenOrientationMode;
   volumeSliderPreviewIntervalMs: number;
   archiveHostOverride: string;
@@ -145,6 +150,7 @@ const REQUIRED_APP_SETTINGS_KEYS = [
   "backgroundRediscoveryIntervalMs",
   "discoveryProbeTimeoutMs",
   "diskAutostartMode",
+  "c64SeekMute",
   "screenOrientationMode",
   "volumeSliderPreviewIntervalMs",
   "archiveHostOverride",
@@ -192,6 +198,9 @@ const hasRequiredKeysAllowOptional = (
 
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode => value === "kernal" || value === "dma";
 
+const isC64SeekMute = (value: unknown): value is C64SeekMute =>
+  value === "always" || value === "rewind" || value === "never";
+
 const isScreenOrientationMode = (value: unknown): value is ScreenOrientationMode =>
   value === "portrait" || value === "landscape" || value === "auto";
 
@@ -227,6 +236,7 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
       backgroundRediscoveryIntervalMs: loadBackgroundRediscoveryIntervalMs(),
       discoveryProbeTimeoutMs: loadDiscoveryProbeTimeoutMs(),
       diskAutostartMode: loadDiskAutostartMode(),
+      c64SeekMute: loadC64SeekMute(),
       screenOrientationMode: loadScreenOrientationMode(),
       volumeSliderPreviewIntervalMs: loadVolumeSliderPreviewIntervalMs(),
       archiveHostOverride: loadArchiveHostOverride(),
@@ -274,6 +284,8 @@ const validateAppSettings = (value: unknown, optionalKeys: readonly string[] = [
     return "backgroundRediscoveryIntervalMs must be a number.";
   if (!Number.isFinite(record.discoveryProbeTimeoutMs)) return "discoveryProbeTimeoutMs must be a number.";
   if (!isDiskAutostartMode(record.diskAutostartMode)) return "diskAutostartMode must be kernal or dma.";
+  if ("c64SeekMute" in record && !isC64SeekMute(record.c64SeekMute))
+    return "c64SeekMute must be always, rewind, or never.";
   if ("screenOrientationMode" in record && !isScreenOrientationMode(record.screenOrientationMode))
     return "screenOrientationMode must be portrait, landscape, or auto.";
   if (!Number.isFinite(record.volumeSliderPreviewIntervalMs)) return "volumeSliderPreviewIntervalMs must be a number.";
@@ -359,12 +371,13 @@ export const importSettingsJson = async (
   const deviceSafety = payload.deviceSafety as Record<string, unknown> | undefined;
   const version = payload.version;
 
-  // Function assignments were added in v3 and are optional in every version; see
-  // resolveImportedFunctionActions for what an absent one becomes.
+  // Function assignments (v3) and the C64 seek mute are optional in every version; an absent one
+  // becomes its default (see resolveImportedFunctionActions for the functions).
   const appError = validateAppSettings(appSettings, [
     ...(version < SETTINGS_EXPORT_VERSION ? LEGACY_OPTIONAL_APP_SETTINGS_KEYS : []),
     "remoteFunction1Action",
     "remoteFunction3Action",
+    "c64SeekMute",
   ]);
   if (appError) return { ok: false, error: appError };
   const safetyError = validateDeviceSafety(deviceSafety);
@@ -398,6 +411,7 @@ export const importSettingsJson = async (
   saveBackgroundRediscoveryIntervalMs(clampBackgroundRediscoveryIntervalMs(safeApp.backgroundRediscoveryIntervalMs));
   saveDiscoveryProbeTimeoutMs(clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs));
   saveDiskAutostartMode(safeApp.diskAutostartMode);
+  saveC64SeekMute(isC64SeekMute(safeApp.c64SeekMute) ? safeApp.c64SeekMute : DEFAULT_C64_SEEK_MUTE);
   saveScreenOrientationMode(
     isScreenOrientationMode(safeApp.screenOrientationMode) ? safeApp.screenOrientationMode : "portrait",
   );

@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
@@ -1509,6 +1509,101 @@ describe("usePlaybackController", () => {
     expect(machinePause).toHaveBeenCalled();
     expect(applyAudioMixerUpdates).not.toHaveBeenCalled();
     expect(dispatchVolume).not.toHaveBeenCalled();
+  });
+
+  it("takes a second tap during a slow pause as resume, not as a second pause", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    let finishPause!: () => void;
+    const machinePause = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPause = resolve;
+        }),
+    );
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machinePause, machineResume } as any);
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+    });
+
+    const first = result.current.handlePauseResume();
+    await vi.waitFor(() => expect(machinePause).toHaveBeenCalled());
+    const second = result.current.handlePauseResume();
+    finishPause();
+    await first;
+    await second;
+
+    expect(machineResume).toHaveBeenCalledTimes(1);
+  });
+
+  it("pauses the C64 once for three taps during a slow pause, and never resumes it", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    let finishPause!: () => void;
+    const machinePause = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPause = resolve;
+        }),
+    );
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machinePause, machineResume } as any);
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+    });
+
+    const taps = [result.current.handlePauseResume()];
+    await vi.waitFor(() => expect(machinePause).toHaveBeenCalled());
+    taps.push(result.current.handlePauseResume(), result.current.handlePauseResume());
+    finishPause();
+    await Promise.all(taps);
+
+    expect(machinePause).toHaveBeenCalledTimes(1);
+    expect(machineResume).not.toHaveBeenCalled();
+  });
+
+  it("pauses and then resumes a tune on the phone when the second tap comes while the pause is under way", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const calls: string[] = [];
+    let finishPause!: () => void;
+    const spies = [vi.spyOn(LocalSidPlaybackController.prototype, "isActive").mockReturnValue(true)];
+    spies.push(
+      vi.spyOn(LocalSidPlaybackController.prototype, "pause").mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            calls.push("pause");
+            finishPause = () => {
+              calls.push("paused");
+              resolve();
+            };
+          }),
+      ),
+    );
+    spies.push(
+      vi.spyOn(LocalSidPlaybackController.prototype, "resume").mockImplementation(async () => {
+        calls.push("resume");
+      }),
+    );
+    onTestFinished(() => spies.forEach((spy) => spy.mockRestore()));
+    const { result } = renderPlaybackController(playlist, { isPlaying: true, isPaused: false });
+
+    const first = result.current.handlePauseResume();
+    await vi.waitFor(() => expect(calls).toEqual(["pause"]));
+    const second = result.current.handlePauseResume();
+    finishPause();
+    await first;
+    await second;
+
+    expect(calls).toEqual(["pause", "paused", "resume"]);
   });
 
   it("pauses using cached SID mixer items without forcing fresh config reads", async () => {

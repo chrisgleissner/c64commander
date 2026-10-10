@@ -57,6 +57,47 @@ describe("configWriteThrottle", () => {
     expect(times).toEqual([1000, 1500]);
   });
 
+  it.each([
+    ["BALANCED", 200, [1000, 1250]],
+    ["BALANCED", 400, [1000, 1400]],
+    ["CONSERVATIVE", 100, [1000, 2200]],
+  ] as const)(
+    "spaces a seek's CPU Speed writes 250 ms apart in %s, never below the app's own interval (%i ms)",
+    async (mode, appIntervalMs, expected) => {
+      saveDeviceSafetyMode(mode);
+      saveConfigWriteIntervalMs(appIntervalMs);
+      resetConfigWriteThrottle();
+      const times: number[] = [];
+      const task = async () => {
+        times.push(Date.now());
+        return true;
+      };
+      const first = scheduleConfigWrite(task, { seekCpuSpeedWrite: true });
+      const second = scheduleConfigWrite(task, { seekCpuSpeedWrite: true });
+      await first;
+      await vi.advanceTimersByTimeAsync(2000);
+      await second;
+      expect(times).toEqual(expected);
+    },
+  );
+
+  it("keeps every other config write at the Balanced cooldown", async () => {
+    saveDeviceSafetyMode("BALANCED");
+    saveConfigWriteIntervalMs(200);
+    resetConfigWriteThrottle();
+    const times: number[] = [];
+    const task = async () => {
+      times.push(Date.now());
+      return true;
+    };
+    const first = scheduleConfigWrite(task);
+    const second = scheduleConfigWrite(task);
+    await first;
+    await vi.advanceTimersByTimeAsync(2000);
+    await second;
+    expect(times).toEqual([1000, 1500]);
+  });
+
   it("uses the Device Safety config cooldown when it is more conservative than the app write interval", async () => {
     saveConfigWriteIntervalMs(100);
     saveDeviceSafetyMode("CONSERVATIVE");

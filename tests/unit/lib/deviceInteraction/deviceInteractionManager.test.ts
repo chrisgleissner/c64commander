@@ -55,10 +55,12 @@ const recordDeviceGuard = vi.fn();
 const addLog = vi.fn();
 const addErrorLog = vi.fn();
 
-vi.mock("@/lib/config/deviceSafetySettings", () => ({
+vi.mock("@/lib/config/deviceSafetySettings", async (importOriginal) => ({
   loadDeviceSafetyConfig,
   subscribeDeviceSafetyUpdates,
   getActiveAutoResolutionContext,
+  seekCpuSpeedWriteIntervalMs: (await importOriginal<typeof import("@/lib/config/deviceSafetySettings")>())
+    .seekCpuSpeedWriteIntervalMs,
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
@@ -156,6 +158,33 @@ describe("deviceInteractionManager", () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(recordDeviceGuard).toHaveBeenCalledWith(action, expect.objectContaining({ decision: "coalesce" }));
     expect(recordDeviceGuard).toHaveBeenCalledWith(action, expect.objectContaining({ decision: "cache" }));
+  });
+
+  it("never hands one memory read the answer to a read of another address", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    const read = (address: string) => ({
+      action: makeAction(`readmem-${address}`),
+      method: "GET",
+      path: `/v1/machine:readmem?address=${address}&length=1`,
+      normalizedUrl: `http://device/v1/machine:readmem?address=${address}&length=1`,
+      intent: "user" as const,
+      bypassCooldown: true,
+      baseUrl: "http://device",
+    });
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const first = withRestInteraction(read("0400"), async () => {
+      await firstBlocked;
+      return "screen";
+    });
+    const second = withRestInteraction(read("D012"), async () => "raster");
+    releaseFirst();
+    await expect(first).resolves.toBe("screen");
+    await expect(second).resolves.toBe("raster");
   });
 
   it("coalesces a burst of identical GET requests behind one inflight handler", async () => {
@@ -364,6 +393,36 @@ describe("deviceInteractionManager", () => {
 
     expect(writeOrder).toEqual([20, 40, 60, 80]);
     expect(deviceValue).toBe(80);
+  });
+
+  it.each([
+    [true, 250],
+    [false, 500],
+  ])("lets the next config write follow a seek's CPU Speed write (%s) after %i ms in Balanced", async (seek, gapMs) => {
+    vi.useFakeTimers();
+    config = { ...createConfig(), configsCooldownMs: 500 };
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    const meta = {
+      action: makeAction("rest-config-write"),
+      method: "PUT",
+      path: "/v1/configs/U64%20Specific%20Settings/CPU%20Speed?value=4",
+      normalizedUrl: "http://device/v1/configs/U64%20Specific%20Settings/CPU%20Speed",
+      intent: "user" as const,
+      baseUrl: "http://device",
+      seekCpuSpeedWrite: seek,
+    };
+    const startedAt: number[] = [];
+    const handler = vi.fn(async () => {
+      startedAt.push(Date.now());
+      return { errors: [] };
+    });
+    const first = withRestInteraction(meta, handler);
+    const second = withRestInteraction(meta, handler);
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.all([first, second]);
+    expect(startedAt[1] - startedAt[0]).toBe(gapMs);
   });
 
   it("does not let a cooled-down read occupy the only REST slot before a ready write can run", async () => {

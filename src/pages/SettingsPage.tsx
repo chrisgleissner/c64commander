@@ -178,6 +178,7 @@ import {
 } from "@/lib/config/appSettings";
 import { loadShowSectionDescriptions, saveShowSectionDescriptions } from "@/lib/ui/collapsibleSectionStore";
 import { HelperText } from "@/components/ui/HelperText";
+import { C64SeekMuteRow } from "@/pages/settings/C64SeekMuteRow";
 import { applyFullScreenFromSettings } from "@/lib/native/fullScreen";
 import {
   getActiveAutoResolutionContext,
@@ -2281,6 +2282,8 @@ export default function SettingsPage() {
                     faster, but some loaders reject it.
                   </HelperText>
                 </div>
+
+                <C64SeekMuteRow />
 
                 {flags.in_image_search_enabled && (
                   <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">

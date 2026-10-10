@@ -16,6 +16,13 @@ import {
   resolveMockTimingDelayMs,
   type MockTimingMode,
 } from "./mockTimingProfile";
+import {
+  counterAddressFor,
+  playCallRateOnPal,
+  psidLoadAddress,
+  SidPlayerSimulation,
+  type SidPlayerSimulationOptions,
+} from "./sidPlayerSimulation";
 
 // Set the full YAML loader for tests
 setMockConfigLoader(loadConfigYaml);
@@ -39,6 +46,10 @@ export interface MockC64Server {
   isReachable: () => boolean;
   getFaultMode: () => FaultMode;
   getTimingMode: () => MockTimingMode;
+  /** Keyboard events posted to `/v1/machine:input`, in order. */
+  machineInputEvents: Array<{ inputs: string[]; transition: string }>;
+  /** The simulated SID player, when the server was created with `sidPlayer: true`. */
+  sidPlayer: SidPlayerSimulation | null;
 }
 
 export type MockC64ServerOptions = {
@@ -64,6 +75,16 @@ export type MockC64ServerOptions = {
    * category still reported a device that streams.
    */
   omitConfigCategories?: readonly string[];
+  /**
+   * Model the Ultimate's SID player behind readmem, machine:input and CPU Speed (see
+   * sidPlayerSimulation.ts), so remote fast forward and seeking can run against this server.
+   */
+  sidPlayer?: boolean | SidPlayerSimulationOptions;
+  /**
+   * False for a machine that takes no key input, as the Ultimate-II+(L): machine:input answers 501.
+   * Its SID player is then driven through writemem, which this server applies to the simulation.
+   */
+  keyInput?: boolean;
 };
 
 export type MockRequestRecord = {
@@ -158,6 +179,11 @@ export async function createMockC64Server(
   }> = [];
   let reachable = true;
   let faultMode: FaultMode = "none";
+  const machineInputEvents: Array<{ inputs: string[]; transition: string }> = [];
+  const sidPlayer = options.sidPlayer
+    ? new SidPlayerSimulation({ startsInPlayer: false, ...(options.sidPlayer === true ? {} : options.sidPlayer) })
+    : null;
+  const keyInput = options.keyInput ?? true;
   let latencyMs: number | null = null;
   let timingMode: MockTimingMode = options.timingMode ?? "fast";
   let responseQueue = Promise.resolve();
@@ -441,9 +467,47 @@ export async function createMockC64Server(
     // machine:input REST relay (keyboard/joystick). A 200 here makes the app
     // resolve the "full" capability tier so the Remote Input joystick relay and
     // the full on-screen keyboard are enabled.
-    if (parsed.pathname === "/v1/machine:input" && (method === "GET" || method === "POST" || method === "PUT")) {
+    if (parsed.pathname === "/v1/machine:input" && !keyInput) {
+      return sendJson(501, { errors: ["Not implemented on this architecture"] });
+    }
+    if (parsed.pathname === "/v1/machine:input" && (method === "POST" || method === "PUT")) {
+      let body = "";
+      req.on("data", (chunk: Buffer) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        let payload: { events?: Array<Record<string, unknown>> } = {};
+        try {
+          payload = body ? JSON.parse(body) : {};
+        } catch (error) {
+          sendJson(400, { errors: [`Invalid machine:input body: ${(error as Error).message}`] });
+          return;
+        }
+        for (const event of payload.events ?? []) {
+          if (event.kind === "release_all") sidPlayer?.releaseAll();
+          if (event.kind !== "keyboard") continue;
+          const inputs = (event.inputs as string[]) ?? [];
+          const transition = String(event.transition);
+          machineInputEvents.push({ inputs, transition });
+          for (const key of inputs) {
+            if (transition === "press") sidPlayer?.pressKey(key);
+            if (transition === "release") sidPlayer?.releaseKey(key);
+          }
+        }
+        sendJson(200, {
+          keyboard: { inputs: sidPlayer?.heldKeys ?? [] },
+          joysticks: [
+            { port: 1, inputs: [] },
+            { port: 2, inputs: [] },
+          ],
+          errors: [],
+        });
+      });
+      return;
+    }
+    if (parsed.pathname === "/v1/machine:input" && method === "GET") {
       return sendJson(200, {
-        keyboard: { inputs: [] },
+        keyboard: { inputs: sidPlayer?.heldKeys ?? [] },
         joysticks: [
           { port: 1, inputs: [] },
           { port: 2, inputs: [] },
@@ -470,6 +534,9 @@ export async function createMockC64Server(
         state = clone(defaults);
         syncAllDriveStateFromConfig();
       }
+      if (parsed.pathname === "/v1/machine:pause") sidPlayer?.setPaused(true);
+      if (parsed.pathname === "/v1/machine:resume") sidPlayer?.setPaused(false);
+      if (parsed.pathname === "/v1/machine:reset" || parsed.pathname === "/v1/machine:reboot") sidPlayer?.leavePlayer();
       return sendJson(200, { errors: [] });
     }
 
@@ -546,6 +613,19 @@ export async function createMockC64Server(
           headers: req.headers as Record<string, string | string[] | undefined>,
           body: Buffer.concat(chunks),
         });
+        const body = Buffer.concat(chunks);
+        const start = Math.max(body.indexOf("PSID"), body.indexOf("RSID"));
+        const songNr = Number(parsed.searchParams.get("songnr") ?? "") || 0;
+        if (sidPlayer && start >= 0) {
+          const psid = new Uint8Array(body.subarray(start));
+          sidPlayer.loadTune(
+            playCallRateOnPal(psid, songNr || new DataView(psid.buffer, psid.byteOffset).getUint16(0x10)),
+            counterAddressFor(psidLoadAddress(psid)),
+          );
+        } else {
+          sidPlayer?.releaseAll();
+          sidPlayer?.restart();
+        }
         sendJson(200, { errors: [] });
       });
       return;
@@ -557,17 +637,35 @@ export async function createMockC64Server(
       ) &&
       (method === "POST" || method === "PUT")
     ) {
+      sidPlayer?.leavePlayer();
       return sendJson(200, { errors: [] });
     }
 
     if (parsed.pathname === "/v1/machine:writemem" && (method === "POST" || method === "PUT")) {
-      return sendJson(200, { errors: [] });
+      const address = parseInt(parsed.searchParams.get("address") ?? "0", 16);
+      const hex = parsed.searchParams.get("data");
+      if (hex !== null) {
+        sidPlayer?.writeMemory(
+          address,
+          Uint8Array.from(hex.match(/../g) ?? [], (pair) => parseInt(pair, 16)),
+        );
+        return sendJson(200, { errors: [] });
+      }
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+      req.on("end", () => {
+        sidPlayer?.writeMemory(address, new Uint8Array(Buffer.concat(chunks)));
+        sendJson(200, { errors: [] });
+      });
+      return;
     }
 
     if (parsed.pathname === "/v1/machine:readmem" && method === "GET") {
       const length = Number(parsed.searchParams.get("length") || "1");
       const address = (parsed.searchParams.get("address") || "").toUpperCase();
-      const data = new Array(Math.max(1, length)).fill(0);
+      const data = sidPlayer
+        ? Array.from(sidPlayer.readMemory(parseInt(address, 16), Math.max(1, length)))
+        : new Array(Math.max(1, length)).fill(0);
       if (address === "00C6") {
         data[0] = 0;
       }
@@ -658,6 +756,12 @@ export async function createMockC64Server(
         const current = state[category][item] ?? { value };
         state[category][item] = { ...current, value };
         syncDriveStateFromConfig(category, item, value);
+        if (sidPlayer && category === "U64 Specific Settings" && (item === "CPU Speed" || item === "Turbo Control")) {
+          // As on the machine: with Turbo Control Off the CPU runs at 1 MHz whatever CPU Speed says.
+          const settings = state["U64 Specific Settings"];
+          const turboOff = String(settings?.["Turbo Control"]?.value ?? "").trim() === "Off";
+          sidPlayer.setCpuSpeedMhz(turboOff ? 1 : Number(String(settings?.["CPU Speed"]?.value ?? "1").trim()) || 1);
+        }
         return sendJson(200, { errors: [] });
       }
 
@@ -750,6 +854,8 @@ export async function createMockC64Server(
         isReachable: () => reachable,
         getFaultMode: () => faultMode,
         getTimingMode: () => timingMode,
+        machineInputEvents,
+        sidPlayer,
         close: () =>
           new Promise<void>((resClose) => {
             if (!server.listening) {

@@ -75,6 +75,7 @@ import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
+import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
@@ -351,6 +352,10 @@ export function usePlaybackController({
 }: UsePlaybackControllerProps) {
   const durationFallbackMs = durationSeconds * 1000;
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
+  /** What the latest pause tap asked for while its transition runs; null when none runs. */
+  const requestedPauseRef = useRef<boolean | null>(null);
+  const pauseRequestRef = useRef(0);
+  const localPauseChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
   const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
   const playlistRef = useRef(playlist);
@@ -423,13 +428,9 @@ export function usePlaybackController({
     pending.resolvers.forEach(({ resolve }) => resolve());
   }, []);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
-  // HARD18-009 (M5): monotonic play-generation counter, mirroring the
-  // machineTransitionCoordinator supersede pattern. Both handleStop and
-  // playItem bump it on entry to a fresh, uniquely-owned value; whichever
-  // holds the current value when an in-flight transition's async work
-  // resolves is authoritative. Stop always bumps immediately (never queued);
-  // playItem bumps its own too, so a rapid Play right after a Stop is never
-  // mistaken for the transition the Stop just superseded.
+  // HARD18-009 (M5): Stop and playItem each take a fresh generation on entry, and the transition
+  // holding the current one when its work resolves wins, so a Play right after a Stop is never
+  // mistaken for the transition the Stop superseded.
   const playGenerationRef = useRef(0);
   const stopCountRef = useRef(0);
 
@@ -775,6 +776,7 @@ export function usePlaybackController({
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
           return;
         }
+        if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
         // post-launch state writes below, and the launch is corrected with a follow-up reset.
         const myPlayGeneration = (playGenerationRef.current += 1);
@@ -1610,6 +1612,7 @@ export function usePlaybackController({
       const shouldReboot = stopRequiresReboot(currentItem?.category);
       // Silence an on-device tune through the shared controller; a local track involves no C64 to stop.
       getLocalSidPlayback().stop();
+      if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("stop");
       // A .cfg apply walks the device menu over Telnet; it backs out and closes before the reset goes out.
       await cancelActiveConfigApply();
       if (currentPlaybackIsLocalRef.current) {
@@ -1711,16 +1714,9 @@ export function usePlaybackController({
     ],
   );
 
-  // HARD18-022/023 (M3): a user-initiated whole-machine reset (Home
-  // reboot/reboot-clear-memory/power-cycle) or an out-of-playlist launch
-  // (CommoServe Run/Mount & run) resets or repurposes the C64 out from under
-  // an armed session. Stop in place - cancel auto-advance and mark the
-  // session stopped - WITHOUT issuing any further machine-control REST
-  // calls (the device was already reset by the takeover itself; adding more
-  // writes right after a reset/boot would only compound HARD18-012's
-  // boot-window churn). Keeps the playlist position; the existing
-  // isPlaying/autoAdvanceDueAtMs effects in PlayFilesPage already clear the
-  // native due-time and stop background execution reactively.
+  // HARD18-022/023 (M3): a whole-machine reset from Home or an out-of-playlist launch takes the C64
+  // from an armed session. Stop in place without further machine-control REST calls (more writes
+  // right after a reset compound HARD18-012's boot-window churn), keeping the playlist position.
   useEffect(() => {
     return subscribeMachineTakeover((event) => {
       if (!isPlayingRef.current && !isPausedRef.current) return;
@@ -1748,14 +1744,9 @@ export function usePlaybackController({
     cancelPendingUserSkip,
   ]);
 
-  // HARD19-009: Play writes the shared machine-execution store but never
-  // subscribed, so a pause applied from HOME (or any external source) left Play's
-  // timeline running and auto-advance armed — the next track would launch on the
-  // machine the user just paused. Subscribe and mirror EXTERNAL transitions:
-  // suspend the clock + clear the auto-advance due-time on pause, re-arm on
-  // resume. Play's own pause/resume writes are ignored via
-  // playInitiatedMachineTransitionRef; a value-equality bail (machinePaused ===
-  // isPausedRef) prevents any redundant setState (no effect re-render loop).
+  // HARD19-009: mirror pause and resume applied from elsewhere (Home), or auto-advance would launch
+  // the next track on a machine the user paused. Play's own writes are skipped through
+  // playInitiatedMachineTransitionRef, and a value-equality bail prevents a re-render loop.
   useEffect(() => {
     return subscribeMachineExecution(() => {
       if (playInitiatedMachineTransitionRef.current) return;
@@ -1798,11 +1789,10 @@ export function usePlaybackController({
   const seekByRef = useRef<(deltaSeconds: number) => Promise<void>>(async () => undefined);
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
-      // App-wide, not this page's own state. `isPlaying` starts false on a Play
-      // page mounted mid-tune, so this returned immediately and Pause did
-      // nothing at all — on a button the UI had (correctly) enabled, which is
-      // worse than a disabled one.
+      // App-wide, not this page's own state: `isPlaying` starts false on a Play page mounted mid-tune,
+      // and Pause did nothing at all on a button the UI had (correctly) enabled.
       if (!isPlaying && !isAnyPlaybackActive()) return;
+      if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("pause or resume");
       const restartedItemId = isPaused && !isAnyPlaybackActive() ? takeRestartedPhoneTune() : null;
       const item = playlistRef.current[currentIndexRef.current];
       if (restartedItemId && item?.id === restartedItemId) {
@@ -1823,17 +1813,13 @@ export function usePlaybackController({
         }
         return;
       }
-      // Track B (LE2): a tune playing on the device has no C64 to pause — the
-      // machine calls below would be pointless (and hang with no Ultimate
-      // connected) while the on-device audio kept playing. Suspend the engine's
-      // audio clock instead; it resumes exactly where it stopped.
-      // The ref belongs to this page instance and starts false, so a remounted
-      // page would take the C64 branch for a tune playing here — pausing a
-      // machine that is not playing while the local audio ran on.
-      if (currentPlaybackIsLocalRef.current || isLocalPlaybackActive()) {
+      // Track B (LE2): a tune playing on the device has no C64 to pause (the calls below would hang with
+      // no Ultimate connected); suspend the engine's audio clock instead. The ref is per page and starts
+      // false, so a remounted page would otherwise pause a machine that is not playing.
+      const toggleLocalPause = async (resume: boolean) => {
         const local = getLocalSidPlayback();
         const now = Date.now();
-        if (isPaused) {
+        if (resume) {
           await local.resume();
           setIsPaused(false);
           writeMachineExecutionFromPlay("running");
@@ -1855,11 +1841,27 @@ export function usePlaybackController({
           setAutoAdvanceDueAtMs(null);
           writeMachineExecutionFromPlay("paused");
         }
+      };
+      // From what was last asked for: a second tap read from a pause still under way repeated it.
+      const target = (requestedPauseRef.current ?? isPaused) ? "running" : "paused";
+      requestedPauseRef.current = target === "paused";
+      const request = ++pauseRequestRef.current;
+      const settled = () => {
+        if (pauseRequestRef.current === request) requestedPauseRef.current = null;
+      };
+      if (currentPlaybackIsLocalRef.current || isLocalPlaybackActive()) {
+        // In order: a resume finishing before the pause it follows would leave the tune paused.
+        const transition = localPauseChainRef.current.then(() => toggleLocalPause(target === "running"));
+        localPauseChainRef.current = transition.catch((error) =>
+          addLog("debug", "Local pause or resume failed; reported to the tap that asked for it", {
+            error: String(error),
+          }),
+        );
+        await transition.finally(settled);
         return;
       }
       const pollingPauseHandle = pollingPauseRegistry.acquirePause();
       try {
-        const target = isPaused ? "running" : "paused";
         if (target === "paused") cancelPendingUserSkip();
         await machineTransitionCoordinatorRef.current.request(target, async () => {
           const endTransition = beginMachineTransition();
@@ -1899,10 +1901,8 @@ export function usePlaybackController({
             setPlayedMs(playedClockRef.current.current(now));
             setIsPaused(true);
             setAutoAdvanceDueAtMs(null);
-            // HARD12-020: publish the paused state and whether a SID pause-mute
-            // snapshot was captured so Home can show the correct label and
-            // restore the mixer on a Home-initiated resume (Play may be an
-            // unmounted placeholder when the user resumes from Home).
+            // HARD12-020: publish the paused state and any SID pause-mute snapshot, so Home can label
+            // and restore it (Play may be an unmounted placeholder when Home resumes).
             writeMachineExecutionFromPlay("paused", { pauseMutePending: pauseMuteSnapshotRef.current !== null });
           } finally {
             endTransition();
@@ -1923,6 +1923,7 @@ export function usePlaybackController({
           },
         });
       } finally {
+        settled();
         pollingPauseHandle.release();
       }
     }),
@@ -2321,6 +2322,18 @@ export function usePlaybackController({
     [autoAdvanceGuardRef, durationMsRef, setAutoAdvanceDueAtMs],
   );
 
+  // Neither wall clock behind the progress display knows the engine; a seek that skips this looks like it did nothing.
+  const rebasePlaybackPosition = useCallback(
+    (positionMs: number) => {
+      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
+      setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
+      elapsedMsRef.current = positionMs;
+      setElapsedMs(positionMs);
+      rescheduleAutoAdvance(positionMs);
+    },
+    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
+  );
+
   /**
    * Scrubbing (hold-to-seek) state.
    *
@@ -2392,12 +2405,7 @@ export function usePlaybackController({
     // Rebase the clocks to the TARGET before awaiting the seek: a read-back after seekTo is stale, and
     // clearing after the await showed the drifted position (1:25 after scrubbing to 0:33) for a rewind.
     const positionMs = Math.max(0, target);
-    const paused = isPausedRef.current;
-    const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused, now: Date.now() };
-    setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
-    elapsedMsRef.current = positionMs;
-    setElapsedMs(positionMs);
-    rescheduleAutoAdvance(positionMs);
+    rebasePlaybackPosition(positionMs);
     try {
       // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
       // settles never returns from the await, so the `finally` would not run either and the scrub
@@ -2431,7 +2439,7 @@ export function usePlaybackController({
       scrubEndingRef.current = false;
     }
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
-  }, [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance]);
+  }, [rebasePlaybackPosition]);
 
   /**
    * Jump to a fraction of the tune (tapping/dragging the progress bar).
@@ -2473,21 +2481,11 @@ export function usePlaybackController({
       }
       const fromSeconds = controller.positionSeconds();
       await controller.seekBy(deltaSeconds);
-      // The progress bar runs off a wall clock that knows nothing about the
-      // engine, so a seek has to move it explicitly — otherwise the audio jumps
-      // and the displayed time carries on from where it was, which reads as the
-      // seek having done nothing.
       const positionMs = Math.max(0, controller.positionSeconds() * 1000);
-      // Two independent clocks drive the UI and neither knows about the engine, so both have to be
-      // rebased or the audio jumps while the display carries on from the old spot.
-      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
-      setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
-      elapsedMsRef.current = positionMs;
-      setElapsedMs(positionMs);
-      rescheduleAutoAdvance(positionMs);
+      rebasePlaybackPosition(positionMs);
       addLog("debug", "Local SID seek", { deltaSeconds, fromSeconds, toSeconds: positionMs / 1000 });
     },
-    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
+    [rebasePlaybackPosition],
   );
   seekByRef.current = handleSeekBy;
 
@@ -2526,6 +2524,7 @@ export function usePlaybackController({
     handleNext,
     handlePrevious,
     handleSeekBy,
+    rebasePlaybackPosition,
     playlistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,

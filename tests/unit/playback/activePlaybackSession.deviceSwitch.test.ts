@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 const device = vi.hoisted(() => ({
   activeReset: vi.fn(async () => ({ errors: [] as string[] })),
@@ -38,6 +38,8 @@ import {
   getSavedDevicesSnapshot,
   selectSavedDevice,
 } from "@/lib/savedDevices/store";
+import { setActiveRemoteSidSeek } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
+import type { RemoteSidSeekController } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 import {
   isRemotePlaybackActive,
   markRemotePlaybackStarted,
@@ -149,6 +151,38 @@ describe("stopping the tune on the device a switch leaves", () => {
       "warn",
       "Playback: could not stop the tune on the device left behind by the switch",
       expect.objectContaining({ deviceHost: "c64u" }),
+    );
+  });
+
+  it("gives a seek's settings back to the device it raised them on before resetting it", async () => {
+    const order: string[] = [];
+    device.activeReset.mockImplementation(async () => {
+      order.push("reset");
+      return { errors: [] };
+    });
+    const cancel = vi.fn(async (reason: string) => void order.push(`cancel ${reason}`));
+    setActiveRemoteSidSeek({ isBusy: true, cancel } as unknown as RemoteSidSeekController);
+    onTestFinished(() => setActiveRemoteSidSeek(null));
+
+    await stopActivePlaybackBeforeDeviceSwitch();
+
+    expect(order).toEqual(["cancel device switch", "reset"]);
+  });
+
+  it("goes ahead with the switch when a seek's give-back overruns, and says so", async () => {
+    const cancel = vi.fn(() => new Promise<void>(() => undefined));
+    setActiveRemoteSidSeek({ isBusy: true, cancel } as unknown as RemoteSidSeekController);
+    onTestFinished(() => setActiveRemoteSidSeek(null));
+
+    const stopped = stopActivePlaybackBeforeDeviceSwitch();
+    await vi.advanceTimersByTimeAsync(5000);
+    await stopped;
+
+    expect(device.activeReset).toHaveBeenCalledTimes(1);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Playback: a remote seek was not given back before the device switch; it is replayed later",
+      expect.anything(),
     );
   });
 

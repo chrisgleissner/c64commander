@@ -30,6 +30,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadBackgroundRediscoveryIntervalMs: vi.fn(),
   loadDiscoveryProbeTimeoutMs: vi.fn(),
   loadDiskAutostartMode: vi.fn(),
+  loadC64SeekMute: vi.fn(() => "always"),
+  DEFAULT_C64_SEEK_MUTE: "rewind",
   loadScreenOrientationMode: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(),
   loadArchiveHostOverride: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
+  saveC64SeekMute: vi.fn(),
   saveScreenOrientationMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
   saveArchiveHostOverride: vi.fn(),
@@ -123,12 +126,20 @@ describe("settingsTransfer", () => {
       expect(result.appSettings.debugLoggingEnabled).toBe(true);
       expect(result.appSettings.volumeSliderPreviewIntervalMs).toBe(250);
       expect(result.appSettings.screenOrientationMode).toBe("landscape");
+      expect(result.appSettings.c64SeekMute).toBe("always");
       expect(result.featureFlags).toEqual({ commoserve_enabled: true });
       expect(result.deviceSafety.mode).toBe("RELAXED");
     });
   });
 
   describe("importSettingsJson", () => {
+    it("imports the C64 seek mute setting", async () => {
+      const payload = JSON.parse(JSON.stringify(validPayload));
+      payload.appSettings.c64SeekMute = "never";
+      expect(await importSettingsJson(JSON.stringify(payload))).toEqual({ ok: true });
+      expect(appSettings.saveC64SeekMute).toHaveBeenCalledWith("never");
+    });
+
     const validPayload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -170,6 +181,8 @@ describe("settingsTransfer", () => {
 
       expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
       expect(appSettings.saveScreenOrientationMode).toHaveBeenCalledWith("portrait");
+      // Absent from files written before it existed, so it takes its default.
+      expect(appSettings.saveC64SeekMute).toHaveBeenCalledWith("rewind");
       expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
       expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({});
@@ -252,6 +265,7 @@ describe("settingsTransfer", () => {
         ["backgroundRediscoveryIntervalMs", "bad", "backgroundRediscoveryIntervalMs must be a number."],
         ["discoveryProbeTimeoutMs", "notanumber", "discoveryProbeTimeoutMs must be a number."],
         ["diskAutostartMode", "usb", "diskAutostartMode must be kernal or dma."],
+        ["c64SeekMute", "sometimes", "c64SeekMute must be always, rewind, or never."],
         ["screenOrientationMode", "sideways", "screenOrientationMode must be portrait, landscape, or auto."],
         ["volumeSliderPreviewIntervalMs", "slow", "volumeSliderPreviewIntervalMs must be a number."],
         ["archiveHostOverride", 1, "archiveHostOverride must be a string."],

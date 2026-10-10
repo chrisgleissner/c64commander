@@ -11,6 +11,7 @@ import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 import type { TraceActionContext } from "@/lib/tracing/types";
 import {
   loadDeviceSafetyConfig,
+  seekCpuSpeedWriteIntervalMs,
   subscribeDeviceSafetyUpdates,
   type DeviceSafetyConfig,
 } from "@/lib/config/deviceSafetySettings";
@@ -52,6 +53,8 @@ type RestRequestMeta = {
   allowDuringError?: boolean;
   bypassCache?: boolean;
   bypassCooldown?: boolean;
+  /** A remote seek's CPU Speed write, spaced by `seekCpuSpeedWriteIntervalMs` rather than the config cooldown. */
+  seekCpuSpeedWrite?: boolean;
   bypassBackoff?: boolean;
   bypassCircuit?: boolean;
   /**
@@ -563,10 +566,13 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
     };
   }
   if (normalizedPath === "/v1/machine:readmem") {
+    // One cooldown per device, but never one answer: concurrent reads of different addresses shared it,
+    // and the shared value is a Response whose body only one caller can read.
     return {
       key: `${baseUrl}:rest-machine-readmem`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
+      unshared: true,
     };
   }
   if (normalizedPath === "/v1/machine:writemem") {
@@ -769,9 +775,17 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
-  const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const resolvedPolicy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const policy =
+    meta.seekCpuSpeedWrite && resolvedPolicy.key?.endsWith(":rest-config-mutation")
+      ? { ...resolvedPolicy, cooldownMs: seekCpuSpeedWriteIntervalMs(config) }
+      : resolvedPolicy;
   const usesSharedReadState =
-    isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache && !userHalfOpenProbe;
+    isReadOnlyRestMethod(meta.method) &&
+    Boolean(policy.key) &&
+    !("unshared" in policy) &&
+    !meta.bypassCache &&
+    !userHalfOpenProbe;
 
   if (usesSharedReadState && policy.key) {
     const cached = restCache.get(policy.key);

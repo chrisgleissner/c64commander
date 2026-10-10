@@ -79,25 +79,42 @@ jobs:
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          # Google's mirror of Docker Hub serves the same digest; this step has no retry of its own.
+          image: mirror.gcr.io/tonistiigi/binfmt:latest
 
       - name: Clear stale Docker Hub credentials
         run: docker logout registry-1.docker.io || true
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=mirror.gcr.io/moby/buildkit:buildx-stable-1
 
       - name: Build Docker image (${{ matrix.platform }})
         run: |
           set -euo pipefail
-          docker buildx build \
-            --platform "${{ matrix.platform }}" \
-            --load \
-            --build-arg VITE_APP_VERSION="${VITE_APP_VERSION}" \
-            --build-arg VITE_GIT_SHA="${VITE_GIT_SHA}" \
-            --build-arg VITE_BUILD_TIME="${VITE_BUILD_TIME}" \
-            -f web/Dockerfile \
-            -t c64commander:ci \
-            .
+          # Docker Hub's token service has answered GitHub's runners with 504 for minutes at a time.
+          # Two more tries, the last from Google's mirror of Docker Hub, which serves the same digest.
+          for attempt in 1 2 3; do
+            node_image=node:24-trixie-slim
+            if [[ "$attempt" == "3" ]]; then node_image=mirror.gcr.io/library/node:24-trixie-slim; fi
+            if docker buildx build \
+              --platform "${{ matrix.platform }}" \
+              --load \
+              --build-arg NODE_IMAGE="${node_image}" \
+              --build-arg VITE_APP_VERSION="${VITE_APP_VERSION}" \
+              --build-arg VITE_GIT_SHA="${VITE_GIT_SHA}" \
+              --build-arg VITE_BUILD_TIME="${VITE_BUILD_TIME}" \
+              -f web/Dockerfile \
+              -t c64commander:ci \
+              .; then
+              exit 0
+            fi
+            echo "::warning::Docker image build attempt ${attempt} from ${node_image} failed"
+            if [[ "$attempt" != "3" ]]; then sleep $((attempt * 30)); fi
+          done
+          exit 1
 
       - name: Start Docker telemetry monitor
         run: |
@@ -363,12 +380,17 @@ jobs:
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          # Google's mirror of Docker Hub serves the same digest; this step has no retry of its own.
+          image: mirror.gcr.io/tonistiigi/binfmt:latest
 
       - name: Clear stale Docker Hub credentials
         run: docker logout registry-1.docker.io || true
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=mirror.gcr.io/moby/buildkit:buildx-stable-1
 
       - name: Login to GHCR
         uses: docker/login-action@v4.6.0
@@ -385,6 +407,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
+            NODE_IMAGE=mirror.gcr.io/library/node:24-trixie-slim
             VITE_APP_VERSION=${{ steps.resolve_version.outputs.app_version }}
             VITE_GIT_SHA=${{ steps.resolve_version.outputs.git_sha }}
             VITE_BUILD_TIME=${{ steps.resolve_version.outputs.build_time }}
