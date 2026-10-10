@@ -520,6 +520,7 @@ const play=row?.querySelector('button[aria-label^="Play "]');if(!play)return fal
       : touch(testId),
   hold: (testId, ms) => touch(testId, 0.5, ms),
   tapBar: (fraction) => touch("playback-progress-seek", fraction),
+  waitingForRender: () => js<boolean>(`!!document.querySelector('[data-testid="playback-pending-status"]')`),
   async shownSeconds() {
     const state = await js<{
       waiting: boolean;
@@ -562,7 +563,7 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
       if (held.length) changed.push(`keys held: ${held.join(",")}`);
     }
     const journal = await js<string | null>(`localStorage.getItem("c64u_remote_seek_device_journal_v1")`);
-    if (journal) changed.push(`journal left: ${journal}`);
+    if (journal) changed.push(`journal left: ${typeof journal === "string" ? journal : JSON.stringify(journal)}`);
     return changed;
   },
   listen,

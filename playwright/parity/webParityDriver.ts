@@ -100,6 +100,7 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
       const { box } = await center("playback-progress-seek");
       await page.mouse.click(box.x + box.width * fraction, box.y + box.height / 2);
     },
+    waitingForRender: async () => (await page.getByTestId("playback-pending-status").count()) > 0,
     async shownSeconds() {
       // A seek on the C64 shows its target with ⏵; one on the phone shows that it waits to continue.
       if (await page.locator('[aria-label^="Waiting to continue at"]').count()) return null;
@@ -120,7 +121,7 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
     async machineLeftChanged(route) {
       const changed: string[] = [];
       const journal = await page.evaluate((key) => localStorage.getItem(key), JOURNAL_KEY);
-      if (journal) changed.push(`journal left: ${journal}`);
+      if (journal) changed.push(`journal left: ${typeof journal === "string" ? journal : JSON.stringify(journal)}`);
       if (route === "phone") return changed;
       const state = server.getState();
       const cpu = String(state["U64 Specific Settings"]?.["CPU Speed"]?.value);

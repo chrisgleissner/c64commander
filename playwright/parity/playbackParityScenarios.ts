@@ -32,6 +32,8 @@ export type ParityDriver = {
   tapBar(fraction: number): Promise<void>;
   /** The elapsed time the page shows, or null while it shows where a seek is heading instead. */
   shownSeconds(): Promise<number | null>;
+  /** The phone is still rendering up to a seek's target, so nothing at the new position sounds yet. */
+  waitingForRender?: () => Promise<boolean>;
   durationSeconds(): Promise<number>;
   /** "playing", "paused" or "stopped", as the transport shows it. */
   transportState(): Promise<"playing" | "paused" | "stopped">;
@@ -110,8 +112,16 @@ const expectShownMatchesTruth = async (driver: ParityDriver, route: ParityRoute,
   );
 };
 
+/** A landing shows before the restore's config writes and read-back, so the machine is given until the app is idle. */
+const RESTORE_SETTLE_MS = 10_000;
+
 const expectMachineAsItWas = async (driver: ParityDriver, route: ParityRoute, what: string) => {
-  const changed = await driver.machineLeftChanged(route);
+  const deadline = Date.now() + RESTORE_SETTLE_MS;
+  let changed = await driver.machineLeftChanged(route);
+  while (changed.length > 0 && Date.now() < deadline) {
+    await driver.wait(500);
+    changed = await driver.machineLeftChanged(route);
+  }
   check(changed.length === 0, `${what}: ${changed.join("; ")}`);
 };
 
@@ -229,6 +239,13 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       await jumpTo(driver, route, 0.5, "to 50% first");
       let tappedAt = 0;
       let landedAt = 0;
+      // On the phone a jump far into a tune waits for the render to reach it, silently, as designed.
+      for (
+        let waited = 0;
+        driver.waitingForRender && (await driver.waitingForRender()) && waited < 60_000;
+        waited += 500
+      )
+        await driver.wait(500);
       const trace = await driver.listen!(async () => {
         await driver.wait(1500);
         tappedAt = Date.now();

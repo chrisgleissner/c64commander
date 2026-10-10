@@ -13,7 +13,6 @@ import { getSharedLocalSidPlaybackController } from "./localSidPlaybackControlle
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { areSavedEntriesSameDevice } from "@/lib/savedDevices/sameDevice";
 import { notifyPlaybackActivityChanged, subscribePlaybackActivity } from "./playbackActivitySignal";
-import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "./remoteSeek/activeRemoteSidSeek";
 
 /**
  * Subscribe to playback start/stop. Returns an unsubscribe.
@@ -184,6 +183,8 @@ const SEEK_GIVE_BACK_TIMEOUT_MS = 5000;
 
 /** A seek's CPU Speed, Turbo Control and Vol Master go back to the machine it raised them on, not the next one. */
 const giveBackRemoteSeekBeforeDeviceSwitch = async () => {
+  // Loaded here, not up front: this module is in the startup bundle and seeking is not.
+  const { cancelRemoteSidSeek, isRemoteSidSeekBusy } = await import("./remoteSeek/activeRemoteSidSeek");
   if (!isRemoteSidSeekBusy()) return;
   const givenBack = await Promise.race([
     cancelRemoteSidSeek("device switch").then(() => true),
