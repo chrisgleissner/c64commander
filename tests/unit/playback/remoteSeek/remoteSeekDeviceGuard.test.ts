@@ -480,6 +480,16 @@ describe("remote seek device guard", () => {
       expect(device.log.filter((entry) => entry.startsWith("writemem"))).toEqual([]);
     });
 
+    it("releases fast forward after a single read, since the release is timed and the cartridge reads slowly", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      await session.pressKey();
+      const read = vi.spyOn(device.api, "readMemory");
+      await session.releaseKey();
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(device.player.fastForwarding).toBe(false);
+    });
+
     it("holds fast forward through the player's routine, journals it, and gives it back without touching config", async () => {
       const device = createFakeRemoteSeekDevice({ cartridge: true });
       const session = await openPatchSession(device);
