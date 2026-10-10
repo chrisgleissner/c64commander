@@ -469,6 +469,27 @@ describe("remote SID seek controller", () => {
     expect(restoreAttempts).toBe(RESTORE_RETRY_DELAYS_MS.length);
   });
 
+  it("times a cartridge's final release for its read and write, so a light tune lands near the target", async () => {
+    // At 60 clock seconds a second, every 100 ms the release is late is 6 s past the target.
+    const errors: number[] = [];
+    for (const target of [80, 120, 160]) {
+      const device = createFakeRemoteSeekDevice({ cartridge: true, latencyMs: 100, fastForwardRateByMhz: { 1: 60 } });
+      const patch = findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)!;
+      const controller = new RemoteSidSeekController(
+        device.api,
+        profile({ fastForward: { kind: "patch", ...patch }, cpuSpeedOptions: [], restart: "replay" }),
+        async () => device.player.replayTune(),
+      );
+      await vi.advanceTimersByTimeAsync(3000);
+      await settle(
+        controller.jumpTo(() => device.player.tunePositionSeconds, target),
+        120_000,
+      );
+      errors.push(Math.abs(device.player.tunePositionSeconds - target));
+    }
+    expect(Math.max(...errors)).toBeLessThan(2.5);
+  });
+
   it("does not take a release owed to a device the app switched away from for a damaged player", async () => {
     const device = createFakeRemoteSeekDevice({ cartridge: true });
     const patch = findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)!;

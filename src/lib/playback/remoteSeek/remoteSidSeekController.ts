@@ -72,6 +72,8 @@ const INITIAL_READ_PERIOD_SECONDS = 0.06;
 const RATE_WINDOW_MIN_CLOCK_SECONDS = 4;
 /** Within this many reads of the target at the last speed, the key is released on a timer. */
 const FINAL_APPROACH_READS = 1.5;
+/** A release's last request reaches the device about this far into the release, measured from its start. */
+const RELEASE_LANDS_AT = 0.75;
 /** A target this close is reached by playing on, unless the fast forward rate is already known. */
 const NORMAL_PLAY_GAP_SECONDS = 4;
 const NORMAL_PLAY_READ_INTERVAL_MS = 250;
@@ -354,6 +356,13 @@ export class RemoteSidSeekController {
       let pulsing = false;
       let smallestPulseGain = Number.POSITIVE_INFINITY;
       let lastPulseMs = Number.POSITIVE_INFINITY;
+      // How long before it lands a release has to be sent: on a cartridge it is a read and a write.
+      let releaseLeadSeconds = 0;
+      const release = async () => {
+        const startedAt = Date.now();
+        await session!.releaseKey();
+        releaseLeadSeconds = ((Date.now() - startedAt) / 1000) * RELEASE_LANDS_AT;
+      };
       const progress = new JumpProgressWatch(model.seconds, ratio);
       while (model.seconds < target) {
         this.assertCurrent(generation);
@@ -377,7 +386,7 @@ export class RemoteSidSeekController {
         if (clock === null) {
           // Never hold a key while the player may not be there to take it.
           if (held) {
-            await session.releaseKey();
+            await release();
             held = false;
           }
           continue;
@@ -412,7 +421,7 @@ export class RemoteSidSeekController {
           // A fast machine speed could pass the target before its first read; the slowest cannot, so measure there.
           planner.calibrateAtFinalOption();
           if (held) {
-            await session.releaseKey();
+            await release();
             held = false;
             await this.machine.settle(model, true);
             fastSinceLastRead = false;
@@ -425,7 +434,7 @@ export class RemoteSidSeekController {
         pulsing ||= unsafeHere;
         if (pulsing) {
           if (held) {
-            await session.releaseKey();
+            await release();
             held = false;
             await this.machine.settle(model, true);
             fastSinceLastRead = false;
@@ -457,7 +466,7 @@ export class RemoteSidSeekController {
           await session.pressKey();
           progress.keyDown();
           await sleep(pulseMs);
-          await session.releaseKey();
+          await release();
           const releasedAt = Date.now();
           await this.machine.settle(model, true);
           // Held from the press to the release; a read the device answers late after that is not.
@@ -471,11 +480,19 @@ export class RemoteSidSeekController {
           continue;
         }
         const baseRate = speed === planner.finalOption ? planner.measuredRate(speed) : null;
-        if (held && baseRate !== null && remainingClock < baseRate * readPeriodSeconds * FINAL_APPROACH_READS) {
-          // The next read would land past the target, so release on a timer instead: half a read
-          // period early, which is about when the release request reaches the device.
-          await sleep(Math.max(0, (remainingClock / baseRate - readPeriodSeconds / 2) * 1000));
-          await session.releaseKey();
+        // When the release lands, counted from this read: the read is half a round trip old, and a release
+        // takes one request for a key and a read and a write for the cartridge's patch.
+        const roundTripSeconds = Math.max(0, readPeriodSeconds - JUMP_POLL_MIN_INTERVAL_MS / 1000);
+        const releaseRequests = this.profile.fastForward.kind === "patch" ? 2 : 1;
+        const leadSeconds = Math.max(readPeriodSeconds / 2, roundTripSeconds * releaseRequests, releaseLeadSeconds);
+        if (
+          held &&
+          baseRate !== null &&
+          remainingClock < baseRate * (readPeriodSeconds * FINAL_APPROACH_READS + leadSeconds)
+        ) {
+          // The next read would land past the target, so release on a timer instead.
+          await sleep(Math.max(0, (remainingClock / baseRate - leadSeconds) * 1000));
+          await release();
           held = false;
           await this.machine.settle(model, true);
           // At the target to the clock's second, unless a read the device answered late left it short.
@@ -488,7 +505,7 @@ export class RemoteSidSeekController {
           // Key up before the speed changes: the write may wait out the config write interval,
           // and with the key up the tune plays on at normal speed instead of racing past the target.
           if (held) {
-            await session.releaseKey();
+            await release();
             held = false;
             // Settle what ran fast before the write, which may wait with the tune at normal speed.
             await this.machine.settle(model, true);
@@ -507,7 +524,7 @@ export class RemoteSidSeekController {
         }
       }
       if (held) {
-        await session.releaseKey();
+        await release();
         await this.machine.settle(model, true);
       }
       addLog("debug", "Remote seek landed", {

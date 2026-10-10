@@ -50,7 +50,12 @@ time. The key is released before every `CPU Speed` change. A config write can wa
 device-safety interval, and with the key up the tune plays at normal speed instead of passing the
 target. A seek's `CPU Speed` writes are spaced 250 ms apart in the Balanced and Relaxed safety
 modes, half the 500 ms Balanced spacing of other config writes; Conservative and Troubleshooting
-keep their own. `Turbo Control` and `Vol Master` writes keep the normal spacing. Within the last read period the key is released on a timer.
+keep their own. `Turbo Control` and `Vol Master` writes keep the normal spacing.
+
+Within the last read period the key is released on a timer, early by when the release lands: the last
+read is half a round trip old, and a release is one request for a key but a read and a write for the
+cartridge's patch. Timed for one request, cartridge jumps from the Pixel 4 landed 5 s past their
+targets, and a simulated light tune at 100 ms latency 9 s past.
 
 Until the rate is measured, one read period of fast forward can pass a near target by several
 seconds: a light tune covers about 4 clock seconds per 60 ms read at 1 MHz. A target within 4 s is
