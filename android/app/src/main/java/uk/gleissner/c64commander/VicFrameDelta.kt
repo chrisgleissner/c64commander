@@ -12,12 +12,18 @@ package uk.gleissner.c64commander
  * The lines of a presented VIC frame that differ from the previously presented one.
  *
  * Every presented frame used to cross the bridge whole, as 70 KB of Base64, even when the C64 was showing a still
- * screen. Only the changed span is sent now, and JS patches it into its copy of the previous frame. A frame whose
- * height changed, and the first frame, are sent whole, so the two copies always start from the same bytes.
+ * screen. Only the changed span is sent now, and JS patches it into its copy of the previous frame. The first frame,
+ * a frame whose height changed, and one frame in every [KEYFRAME_INTERVAL_FRAMES] are sent whole, so the two copies
+ * start from the same bytes and a span JS missed is repaired within seconds.
  */
-internal class VicFrameDelta(private val bytesPerLine: Int, capacityBytes: Int) {
+internal class VicFrameDelta(
+  private val bytesPerLine: Int,
+  capacityBytes: Int,
+  private val keyframeInterval: Int = KEYFRAME_INTERVAL_FRAMES,
+) {
   private val presented = ByteArray(capacityBytes)
   private var presentedHeight = NO_FRAME
+  private var framesSinceWhole = 0
 
   /** First changed line and line count; [lineCount] is [WHOLE_FRAME] when the frame must be sent in full. */
   data class Span(val firstLine: Int, val lineCount: Int) {
@@ -29,9 +35,10 @@ internal class VicFrameDelta(private val bytesPerLine: Int, capacityBytes: Int) 
 
   fun next(frame: ByteArray, height: Int): Span {
     val bytes = height * bytesPerLine
-    if (height != presentedHeight) {
+    if (height != presentedHeight || ++framesSinceWhole >= keyframeInterval) {
       System.arraycopy(frame, 0, presented, 0, bytes)
       presentedHeight = height
+      framesSinceWhole = 0
       return Span(0, WHOLE_FRAME)
     }
     var first = -1
@@ -59,5 +66,8 @@ internal class VicFrameDelta(private val bytesPerLine: Int, capacityBytes: Int) 
   companion object {
     const val WHOLE_FRAME = -1
     private const val NO_FRAME = -1
+
+    /** About five seconds of PAL frames: a span JS could not apply is repaired by the next whole frame. */
+    const val KEYFRAME_INTERVAL_FRAMES = 250
   }
 }

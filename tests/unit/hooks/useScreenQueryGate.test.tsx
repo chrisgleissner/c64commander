@@ -54,16 +54,34 @@ describe("useScreenQueryGate", () => {
     expect(renders.wanted).toBe(wantedRenders + 1);
   });
 
-  it("lets a query run while the whole app is in the background, as the screen-activity gate always has", () => {
+  it("keeps the shown page's queries and no kept page's queries while the app is in the background", () => {
     const hidden = Object.getOwnPropertyDescriptor(Document.prototype, "hidden");
-    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    let documentHidden = false;
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => documentHidden });
     try {
       render(
-        <ScreenActivityProvider active={false}>
-          <Reader name="background" wanted={true} />
-        </ScreenActivityProvider>,
+        <>
+          <ScreenActivityProvider active={true}>
+            <Reader name="shown" wanted={true} />
+          </ScreenActivityProvider>
+          <ScreenActivityProvider active={false}>
+            <Reader name="kept" wanted={true} />
+          </ScreenActivityProvider>
+        </>,
       );
-      expect(answers.background).toBe(true);
+      expect([answers.shown, answers.kept]).toEqual([true, false]);
+
+      act(() => {
+        documentHidden = true;
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect([answers.shown, answers.kept]).toEqual([true, false]);
+
+      act(() => {
+        documentHidden = false;
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect([answers.shown, answers.kept]).toEqual([true, false]);
     } finally {
       if (hidden) Object.defineProperty(document, "hidden", hidden);
       delete (document as { hidden?: boolean }).hidden;

@@ -113,6 +113,19 @@ export const useAvMirrorCanvas = (
     });
   }, [canvasRef, pageActive, session]);
 
+  // Only changed lines are painted, so canvas content the browser discarded (a lost 2D context, or a WebView that
+  // dropped its backing store in the background) would stay blank over a still C64 screen. Paint the next frame whole.
+  useEffect(() => {
+    const repaintWhole = () => painterRef.current?.invalidate();
+    const canvas = canvasRef.current;
+    canvas?.addEventListener("contextrestored", repaintWhole);
+    document.addEventListener("visibilitychange", repaintWhole);
+    return () => {
+      canvas?.removeEventListener("contextrestored", repaintWhole);
+      document.removeEventListener("visibilitychange", repaintWhole);
+    };
+  }, [canvasRef]);
+
   // Picking a different palette swaps the cached table in. Separate from the frame subscription on
   // purpose: the frame handler must not check for a palette change, or the check would run 50 times
   // a second forever to catch something that happens when a user opens Settings.

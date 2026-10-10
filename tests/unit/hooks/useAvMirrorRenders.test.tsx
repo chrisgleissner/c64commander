@@ -87,10 +87,10 @@ describe("useAvMirrorCanvas painting", () => {
       width: w,
       height: h,
     }));
-    const canvas = {
+    const canvas = Object.assign(new EventTarget(), {
       height: 0,
       getContext: vi.fn(() => ({ createImageData, putImageData })),
-    } as unknown as HTMLCanvasElement;
+    }) as unknown as HTMLCanvasElement;
     return { canvas, putImageData };
   };
 
@@ -114,6 +114,21 @@ describe("useAvMirrorCanvas painting", () => {
     next.fill(0x11, 20 * 192, 22 * 192);
     act(() => fake.emitFrame(next, 272));
     expect(putImageData).toHaveBeenLastCalledWith(expect.anything(), 0, 0, 0, 20, 384, 2);
+  });
+
+  it.each([
+    ["its 2D context is restored", (canvas: HTMLCanvasElement) => canvas.dispatchEvent(new Event("contextrestored"))],
+    ["the app is shown again", () => document.dispatchEvent(new Event("visibilitychange"))],
+  ])("repaints the whole picture of a still screen once %s", (_, discardCanvas) => {
+    const fake = new FakeSession();
+    const { canvas, putImageData } = makeStubCanvas();
+    renderHook(() => useAvMirrorCanvas({ current: canvas }, asSession(fake)));
+    const frame = new Uint8Array(384 * 136);
+    act(() => fake.emitFrame(frame, 272));
+    act(() => discardCanvas(canvas));
+    act(() => fake.emitFrame(frame, 272));
+    expect(putImageData).toHaveBeenCalledTimes(2);
+    expect(putImageData).toHaveBeenLastCalledWith(expect.anything(), 0, 0, 0, 0, 384, 272);
   });
 
   it("repaints the whole picture onto a canvas it has not drawn on", () => {

@@ -6,8 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
-import { useAppVisibilityState, useScreenActivity } from "@/hooks/useScreenActivity";
+import { usePageActivityState } from "@/hooks/useScreenActivity";
 
 /**
  * Whether this page is the tab on screen, whether or not the app itself is in the background.
@@ -16,10 +15,4 @@ import { useAppVisibilityState, useScreenActivity } from "@/hooks/useScreenActiv
  * background never unmounted it. Work that lived exactly as long as the page follows this, not `useScreenActivity`,
  * which also turns false whenever the app is hidden. While the app is hidden the answer from before stands.
  */
-export const usePageActivity = (): boolean => {
-  const screenActive = useScreenActivity();
-  const appVisible = useAppVisibilityState();
-  const [lastSeen, setLastSeen] = useState(screenActive || !appVisible);
-  if (appVisible && lastSeen !== screenActive) setLastSeen(screenActive);
-  return appVisible ? screenActive : lastSeen;
-};
+export const usePageActivity = (): boolean => usePageActivityState();

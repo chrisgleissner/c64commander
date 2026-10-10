@@ -6,10 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { VIC_BYTES_PER_FRAME } from "@/lib/streams/vicDecode";
 import { VIC_BYTES_PER_LINE } from "@/lib/streams/vicStream";
 import { VideoFrameDeltaDecoder, WHOLE_FRAME, base64ToBytes } from "@/lib/streams/videoFrameDelta";
+
+const { addLog } = vi.hoisted(() => ({ addLog: vi.fn() }));
+vi.mock("@/lib/logging", () => ({ addLog }));
 
 const encode = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 const frameOf = (fill: number) => new Uint8Array(VIC_BYTES_PER_FRAME).fill(fill);
@@ -55,6 +58,17 @@ describe("VideoFrameDeltaDecoder", () => {
     expect(decoder.apply({ data: "", firstLine: 0, lineCount: 0 })).toBeNull();
     const line = encode(new Uint8Array(VIC_BYTES_PER_LINE));
     expect(decoder.apply({ data: line, firstLine: 3, lineCount: 1 })).toBeNull();
+  });
+
+  it("says once that it is waiting for a whole frame, and again when one arrives", () => {
+    addLog.mockClear();
+    const decoder = new VideoFrameDeltaDecoder();
+    decoder.apply({ data: "", firstLine: 0, lineCount: 0 });
+    decoder.apply({ data: "", firstLine: 0, lineCount: 0 });
+    expect(addLog.mock.calls.map(([level]) => level)).toEqual(["warn"]);
+    decoder.apply({ data: encode(frameOf(2)), lineCount: WHOLE_FRAME });
+    decoder.apply({ data: encode(frameOf(2)), lineCount: WHOLE_FRAME });
+    expect(addLog.mock.calls.map(([level]) => level)).toEqual(["warn", "info"]);
   });
 
   it("refuses a span that does not fit the frame, and keeps the frame it had", () => {

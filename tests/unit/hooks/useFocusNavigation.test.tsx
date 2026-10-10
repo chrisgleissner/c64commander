@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -152,6 +152,35 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     fireEvent.keyDown(document.body, { code: "Enter" });
     expect(onActivate).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("keeps a control's activation when another page's control with the same id goes away", async () => {
+    const onConfigActivate = vi.fn();
+    const onEditorActivate = vi.fn();
+    const Control = ({ onActivate, label }: { onActivate: () => void; label: string }) => {
+      const ref = useFocusItem<HTMLButtonElement>({ id: "config-select:Audio:Volume", order: 10, onActivate });
+      return <button ref={ref}>{label}</button>;
+    };
+    const Pages = ({ shown, editorOpen }: { shown: "config" | "play"; editorOpen: boolean }) => (
+      <FocusNavigationProvider>
+        <div data-slot-active={shown === "config" ? "true" : "false"} aria-hidden={shown !== "config"}>
+          <Control onActivate={onConfigActivate} label="Config row" />
+        </div>
+        <div data-slot-active={shown === "play" ? "true" : "false"} aria-hidden={shown !== "play"}>
+          {editorOpen ? <Control onActivate={onEditorActivate} label="Editor row" /> : null}
+        </div>
+      </FocusNavigationProvider>
+    );
+    const view = render(<Pages shown="play" editorOpen={true} />);
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(onEditorActivate).toHaveBeenCalledTimes(1);
+
+    view.rerender(<Pages shown="play" editorOpen={false} />);
+    view.rerender(<Pages shown="config" editorOpen={false} />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(onConfigActivate).toHaveBeenCalledTimes(1);
+    expect(onEditorActivate).toHaveBeenCalledTimes(1);
   });
 
   it("invokes onNavigateBack when the hardware back key is pressed with nothing to dismiss", () => {

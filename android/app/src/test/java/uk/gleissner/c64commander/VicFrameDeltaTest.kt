@@ -68,6 +68,16 @@ class VicFrameDeltaTest {
   }
 
   @Test
+  fun aStillScreenIsSentWholeAgainAtTheKeyframeInterval() {
+    val delta = VicFrameDelta(bytesPerLine, bytesPerLine * lines, keyframeInterval = 3)
+    assertEquals(VicFrameDelta.Span(0, VicFrameDelta.WHOLE_FRAME), delta.next(frame(), lines))
+    assertEquals(VicFrameDelta.Span(0, 0), delta.next(frame(), lines))
+    assertEquals(VicFrameDelta.Span(2, 1), delta.next(frame(2), lines))
+    assertEquals(VicFrameDelta.Span(0, VicFrameDelta.WHOLE_FRAME), delta.next(frame(2), lines))
+    assertEquals(VicFrameDelta.Span(0, 0), delta.next(frame(2), lines))
+  }
+
+  @Test
   fun linesBeyondTheFrameHeightAreIgnored() {
     val delta = VicFrameDelta(bytesPerLine, bytesPerLine * lines)
     delta.next(frame(), lines - 1)

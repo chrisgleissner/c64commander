@@ -10,8 +10,9 @@ import React, { createContext, useContext, useEffect, useLayoutEffect, useState,
 
 const ScreenActivityContext = createContext(true);
 const AppVisibilityContext = createContext(true);
+const PageActivityContext = createContext(true);
 
-type ActivityState = { active: boolean; appVisible: boolean };
+type ActivityState = { active: boolean; appVisible: boolean; pageActive: boolean };
 
 /** The same state as the two contexts, readable through a selector so a reader re-renders only when its answer changes. */
 class ActivityStore {
@@ -27,13 +28,14 @@ class ActivityStore {
   };
 
   set(next: ActivityState) {
-    if (next.active === this.state.active && next.appVisible === this.state.appVisible) return;
+    const { active, appVisible, pageActive } = this.state;
+    if (next.active === active && next.appVisible === appVisible && next.pageActive === pageActive) return;
     this.state = next;
     this.listeners.forEach((listener) => listener());
   }
 }
 
-const ActivityStoreContext = createContext(new ActivityStore({ active: true, appVisible: true }));
+const ActivityStoreContext = createContext(new ActivityStore({ active: true, appVisible: true, pageActive: true }));
 
 const isDocumentVisible = () => {
   if (typeof document === "undefined") return true;
@@ -66,13 +68,21 @@ export function ScreenActivityProvider({ active, children }: { active: boolean; 
     };
   }, []);
 
-  const [store] = useState(() => new ActivityStore({ active, appVisible }));
-  useLayoutEffect(() => store.set({ active, appVisible }), [store, active, appVisible]);
+  // The page's answer from before the app was hidden stands while it is hidden: backgrounding never unmounted a page,
+  // and a page kept out of sight must not wake up because the whole app went to the background.
+  const [activeWhileVisible, setActiveWhileVisible] = useState(active || !appVisible);
+  if (appVisible && activeWhileVisible !== active) setActiveWhileVisible(active);
+  const pageActive = appVisible ? active : activeWhileVisible;
+
+  const [store] = useState(() => new ActivityStore({ active, appVisible, pageActive }));
+  useLayoutEffect(() => store.set({ active, appVisible, pageActive }), [store, active, appVisible, pageActive]);
 
   return (
     <ActivityStoreContext.Provider value={store}>
       <AppVisibilityContext.Provider value={appVisible}>
-        <ScreenActivityContext.Provider value={active && appVisible}>{children}</ScreenActivityContext.Provider>
+        <PageActivityContext.Provider value={pageActive}>
+          <ScreenActivityContext.Provider value={active && appVisible}>{children}</ScreenActivityContext.Provider>
+        </PageActivityContext.Provider>
       </AppVisibilityContext.Provider>
     </ActivityStoreContext.Provider>
   );
@@ -82,14 +92,18 @@ export const useScreenActivity = () => useContext(ScreenActivityContext);
 export const useAppVisibilityState = () => useContext(AppVisibilityContext);
 
 /**
- * `wanted && (screen active || app hidden)`, the condition a device query runs under, without re-rendering when a page
- * is shown or hidden while `wanted` is false. A config row whose item is cached never fetches, and Config holds
- * hundreds of them: each re-rendered on every tab switch only to compute `false` again.
+ * Whether this page is the tab on screen, whatever the app itself is doing: while the app is in the background a page
+ * keeps the answer it had before, as it stayed mounted or unmounted before pages were kept.
+ */
+export const usePageActivityState = () => useContext(PageActivityContext);
+
+/**
+ * `wanted` while this page is the tab on screen, the condition a device query runs under. While the app is in the
+ * background the page on screen keeps its queries and a kept page keeps none. Read through a selector, so a reader
+ * whose answer does not change is not re-rendered when a page is shown or hidden: a config row whose item is cached
+ * never fetches, and Config holds hundreds of them.
  */
 export const useScreenQueryGate = (wanted: boolean): boolean => {
   const store = useContext(ActivityStoreContext);
-  return useSyncExternalStore(store.subscribe, () => {
-    const { active, appVisible } = store.read();
-    return wanted && ((active && appVisible) || !appVisible);
-  });
+  return useSyncExternalStore(store.subscribe, () => wanted && store.read().pageActive);
 };

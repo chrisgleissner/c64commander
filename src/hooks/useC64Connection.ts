@@ -390,10 +390,8 @@ export function useC64Connection() {
 export function useC64Categories(options: C64QueryOptions = {}) {
   const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
-  const screenActive = useScreenActivity();
-  const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
-  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
+  const queryActive = useScreenQueryGate(options.active ?? true);
   return useQuery({
     queryKey: ["c64-categories", routingEpoch],
     queryFn: async () => {
@@ -410,10 +408,8 @@ export function useC64Categories(options: C64QueryOptions = {}) {
 export function useC64Category(category: string, enabled = true, options: C64QueryOptions = {}) {
   const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
-  const screenActive = useScreenActivity();
-  const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
-  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
+  const queryActive = useScreenQueryGate(options.active ?? true);
   return useQuery({
     queryKey: ["c64-category", category, routingEpoch],
     queryFn: async () => {
@@ -461,10 +457,8 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
   const itemKey = items.join("|");
   const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
-  const screenActive = useScreenActivity();
-  const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
-  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
+  const queryActive = useScreenQueryGate(options.active ?? true);
   // Only read when the query has no data of its own: parsing the stored snapshot on every render cost Home
   // 9 ms a second while Live View re-rendered its stream rows.
   const snapshotPlaceholder = () => {
@@ -509,10 +503,8 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
 
 export function useC64AllConfig(options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
-  const screenActive = useScreenActivity();
-  const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
-  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
+  const queryActive = useScreenQueryGate(options.active ?? true);
   const { data: categories } = useC64Categories(options);
 
   return useQuery({

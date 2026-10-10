@@ -73,13 +73,21 @@ export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
 };
 
 /**
+ * The deep links as a leaf that renders nothing. The route is read here, so a route change re-renders this leaf rather
+ * than the whole Play page, which stays built while other tabs are shown.
+ */
+export const PlayDeepLinks = (handlers: PlayDeepLinkHandlers): null => {
+  usePlayDeepLinks(handlers);
+  return null;
+};
+
+/**
  * F1 and F3, delivered here (spec.md section 9.5).
  *
  * The latch is drained on mount as well as subscribed to, because the key is pressed on a page that
  * has no transport and the app then navigates: a plain window event would be dispatched and gone
  * before this page mounted.
- */
-/**
+ *
  * Delivers a latched transport command to the page that owns the transport.
  *
  * `ready` is what stops the command arriving before there is anything to run it on. Resume and the
@@ -92,15 +100,6 @@ export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
  * here first, or, on the compact handset, says to open Play (`publishTransport`). While the app is in the background a
  * hidden Play listens too, so a lock-screen button acts at once, as it did on the Play page it then navigates to.
  */
-/**
- * The deep links as a leaf that renders nothing. The route is read here, so a route change re-renders this leaf rather
- * than the whole Play page, which stays built while other tabs are shown.
- */
-export const PlayDeepLinks = (handlers: PlayDeepLinkHandlers): null => {
-  usePlayDeepLinks(handlers);
-  return null;
-};
-
 export const useTransportCommands = (run: (command: TransportCommand) => void, ready = true): void => {
   const runRef = useRef(run);
   runRef.current = run;

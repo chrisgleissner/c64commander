@@ -80,6 +80,7 @@ import {
   isWithinOpenOverlay,
   stepFocusWithinOverlay,
 } from "@/lib/input/ringDom";
+import { isOnActivePage } from "@/lib/navigation/activePage";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import { mountAllWaiting } from "@/lib/ui/progressiveMount";
@@ -89,12 +90,26 @@ const KEY_SELECTED_ATTR = "data-key-selected";
 /** DOM attribute outlining the enclosing group while the ring is descended inside it. */
 const KEY_SCOPE_ATTR = "data-key-scope";
 
+type DescriptorRegistration = { descriptor: FocusDescriptor; resolveElement: () => HTMLElement | null };
+
+/**
+ * One registration per id reaches the ring. Two can share an id where the same control is on two pages, such as a
+ * config row on Config and in Play's override editor; kept pages hold both at once. The one on the page on screen
+ * wins, else the latest, and ending one leaves the other in place.
+ */
+const pickRegistration = (registrations: readonly DescriptorRegistration[]): DescriptorRegistration => {
+  for (let index = registrations.length - 1; index >= 0; index -= 1) {
+    const element = registrations[index].resolveElement();
+    if (element !== null && isOnActivePage(element)) return registrations[index];
+  }
+  return registrations[registrations.length - 1];
+};
+
 export interface FocusNavigationContextValue {
   readonly controller: NavigationController;
   readonly engine: FocusDiscoveryEngine;
-  /** Registers an explicit refinement (id / order / group / activation / opt-out). */
-  readonly registerDescriptor: (descriptor: FocusDescriptor, resolveElement: () => HTMLElement | null) => void;
-  readonly unregisterDescriptor: (id: string) => void;
+  /** Registers an explicit refinement (id / order / group / activation / opt-out); returns its unregistration. */
+  readonly registerDescriptor: (descriptor: FocusDescriptor, resolveElement: () => HTMLElement | null) => () => void;
   /** Asks the engine to re-scan (e.g. after an element ref attaches). */
   readonly scheduleRefresh: () => void;
   /** Subscribe to ring/scope/modality changes (the guidance bar mirrors this imperatively). */
@@ -152,9 +167,7 @@ export const FocusNavigationProvider = ({
   enabled = true,
   shortcuts,
 }: FocusNavigationProviderProps) => {
-  const descriptorsRef = useRef(
-    new Map<string, { descriptor: FocusDescriptor; resolveElement: () => HTMLElement | null }>(),
-  );
+  const descriptorsRef = useRef(new Map<string, DescriptorRegistration[]>());
   const onNavigateBackRef = useRef(onNavigateBack);
   onNavigateBackRef.current = onNavigateBack;
   const shortcutsRef = useRef<KeypadShortcutHandlers>(shortcuts ?? {});
@@ -267,7 +280,7 @@ export const FocusNavigationProvider = ({
     () =>
       new FocusDiscoveryEngine({
         controller: controller.focus,
-        listExplicit: () => Array.from(descriptorsRef.current.values()),
+        listExplicit: () => Array.from(descriptorsRef.current.values(), pickRegistration),
         freezeDuringTransientLayer: () => controller.layerDepth > 0,
         onAfterAssemble: () => {
           adoptFocusAwaitingRingRef.current();
@@ -280,16 +293,19 @@ export const FocusNavigationProvider = ({
 
   const registerDescriptor = useCallback<FocusNavigationContextValue["registerDescriptor"]>(
     (descriptor, resolveElement) => {
-      descriptorsRef.current.set(descriptor.id, { descriptor, resolveElement });
+      const registration = { descriptor, resolveElement };
+      const registrations = descriptorsRef.current;
+      registrations.set(descriptor.id, [...(registrations.get(descriptor.id) ?? []), registration]);
       engineRef.current?.scheduleRefresh();
+      return () => {
+        const remaining = (registrations.get(descriptor.id) ?? []).filter((entry) => entry !== registration);
+        if (remaining.length > 0) registrations.set(descriptor.id, remaining);
+        else registrations.delete(descriptor.id);
+        engineRef.current?.scheduleRefresh();
+      };
     },
     [],
   );
-
-  const unregisterDescriptor = useCallback<FocusNavigationContextValue["unregisterDescriptor"]>((id) => {
-    descriptorsRef.current.delete(id);
-    engineRef.current?.scheduleRefresh();
-  }, []);
 
   const scheduleRefresh = useCallback(() => engineRef.current?.scheduleRefresh(), []);
 
@@ -771,22 +787,12 @@ export const FocusNavigationProvider = ({
       controller,
       engine,
       registerDescriptor,
-      unregisterDescriptor,
       scheduleRefresh,
       subscribeRingChange,
       enabled,
       keymap,
     }),
-    [
-      controller,
-      engine,
-      registerDescriptor,
-      unregisterDescriptor,
-      scheduleRefresh,
-      subscribeRingChange,
-      enabled,
-      keymap,
-    ],
+    [controller, engine, registerDescriptor, scheduleRefresh, subscribeRingChange, enabled, keymap],
   );
 
   return (
@@ -884,7 +890,7 @@ const useDescriptorRegistration = (
     if (!context || !id) return;
     const current = descriptorRef.current;
     if (!current) return;
-    context.registerDescriptor(
+    return context.registerDescriptor(
       {
         ...current,
         // Stable activate closure: always read the latest from the descriptor ref.
@@ -892,7 +898,6 @@ const useDescriptorRegistration = (
       },
       () => elementRef.current,
     );
-    return () => context.unregisterDescriptor(id);
   }, [context, id, order, group, label, parentId, disabled, skip, kind]);
 
   return useCallback(

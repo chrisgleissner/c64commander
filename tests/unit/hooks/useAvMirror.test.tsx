@@ -131,10 +131,10 @@ describe("useAvMirrorCanvas", () => {
       width: w,
       height: h,
     }));
-    const canvas = {
+    const canvas = Object.assign(new EventTarget(), {
       height: 0,
       getContext: vi.fn(() => ({ createImageData, putImageData })),
-    } as unknown as HTMLCanvasElement;
+    }) as unknown as HTMLCanvasElement;
     return { canvas, putImageData, createImageData };
   };
 
@@ -158,7 +158,10 @@ describe("useAvMirrorCanvas", () => {
 
   it("no-ops when the canvas has no 2d context (jsdom) and unsubscribes on unmount", () => {
     const fake = new FakeSession();
-    const canvas = { height: 0, getContext: vi.fn(() => null) } as unknown as HTMLCanvasElement;
+    const canvas = Object.assign(new EventTarget(), {
+      height: 0,
+      getContext: vi.fn(() => null),
+    }) as unknown as HTMLCanvasElement;
     const ref = { current: canvas };
     const { unmount } = renderHook(() => useAvMirrorCanvas(ref, asSession(fake)));
     expect(fake.frameSubscriberCount).toBe(1);

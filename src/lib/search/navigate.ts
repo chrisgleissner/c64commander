@@ -9,6 +9,7 @@
 import { confirmNavigation } from "@/lib/navigation/navigationGuards";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 import { requestConfigItemFocus } from "@/lib/search/configDeepLink";
+import { queryOnActivePage } from "@/lib/navigation/activePage";
 import type { SearchTarget } from "@/lib/search/types";
 
 /** How long the resolver waits for an anchor to appear before it gives up (spec.md section 5.12). */
@@ -37,11 +38,12 @@ export interface NavigateOptions {
 }
 
 /**
- * Wait for an element matching `selector`, bounded.
+ * Wait for an element matching `selector` on the page on screen, bounded.
  *
  * A MutationObserver rather than polling: navigating, mounting a lazy page and expanding a card are
  * all DOM writes, so the observer fires on the commit that actually produces the anchor instead of
- * on a timer that is either too eager or too slow.
+ * on a timer that is either too eager or too slow. A kept page already holds its anchors, so the
+ * observer also watches the slot marker that says which page is shown.
  */
 export const waitForElement = (
   selector: string,
@@ -49,7 +51,7 @@ export const waitForElement = (
   signal?: AbortSignal,
 ): Promise<HTMLElement | null> => {
   if (typeof document === "undefined" || signal?.aborted) return Promise.resolve(null);
-  const found = document.querySelector<HTMLElement>(selector);
+  const found = queryOnActivePage(selector);
   if (found) return Promise.resolve(found);
 
   return new Promise((resolve) => {
@@ -64,11 +66,16 @@ export const waitForElement = (
     };
     const onAbort = () => finish(null);
     const observer = new MutationObserver(() => {
-      const element = document.querySelector<HTMLElement>(selector);
+      const element = queryOnActivePage(selector);
       if (element) finish(element);
     });
-    observer.observe(document.body, { childList: true, subtree: true });
-    const timer = setTimeout(() => finish(document.querySelector<HTMLElement>(selector)), ceilingMs);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-slot-active"],
+    });
+    const timer = setTimeout(() => finish(queryOnActivePage(selector)), ceilingMs);
     signal?.addEventListener("abort", onAbort);
   });
 };

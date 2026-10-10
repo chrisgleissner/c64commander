@@ -50,11 +50,6 @@
       var(--app-tab-bar-safe-area-bottom)
   );
   --app-tab-bar-reserved-height: var(--app-tab-bar-frame-height);
-  /* Keep a keypad/D-pad-focused control clear of the fixed app chrome when it is
-     scrolled into view: the header at the top, and the guidance bar + tab bar at
-     the bottom. Consumed by the focus ring's scrollIntoView (see
-     useFocusNavigation `focusRingElement`). */
-  --keypad-scroll-margin-top: calc(var(--safe-area-inset-top) + var(--app-bar-height, 72px) + 0.5rem);
   /* Mirrors the `.keypad-guidance-bar` box (keep in sync with it and `.keypad-guidance-cap`):
      vertical padding + the key cap, its tallest child (font x 1.3 line-height + 2 x 0.05rem padding
      + 2px border) + 1px border-top. Counting the text line instead left sheets and the page's last
@@ -64,6 +59,7 @@
   --keypad-guidance-bar-height: calc(
     (2 * var(--keypad-guidance-padding-y)) + (var(--keypad-guidance-font-size) * 1.3) + 0.1rem + 3px
   );
+  /* Keeps a keypad-focused control clear of the guidance bar and tab bar (`.keypad-scroll-anchor`). */
   --keypad-scroll-margin-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-bar-height) + 0.5rem);
 }
 
@@ -622,7 +618,8 @@ button:focus-visible,
    view so the fixed header / guidance bar / tab bar never cover it. Applied via a
    class (not inline styles) so it leaves no per-element residue. */
 .keypad-scroll-anchor {
-  scroll-margin-top: var(--keypad-scroll-margin-top);
+  /* Resolved here, not on :root, so it reads the header height held by the control's own tab slot. */
+  scroll-margin-top: calc(var(--safe-area-inset-top) + var(--app-bar-height, 72px) + 0.5rem);
   scroll-margin-bottom: var(--keypad-scroll-margin-bottom);
 }
 

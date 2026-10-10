@@ -73,10 +73,6 @@ vi.mock("@/hooks/useSwipeGesture", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useScreenActivity", () => ({
-  ScreenActivityProvider: ({ children }: { active: boolean; children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock("@/lib/logging", () => ({
   addLog: mocks.addLog,
   addErrorLog: mocks.addErrorLog,
@@ -573,6 +569,15 @@ describe("SwipeNavigationLayer", () => {
   });
 
   describe("page positions", () => {
+    const cssSupports = CSS.supports;
+    beforeEach(() => {
+      CSS.supports = ((property: string, value?: string) =>
+        property === "content-visibility" && value === "hidden") as typeof CSS.supports;
+    });
+    afterEach(() => {
+      CSS.supports = cssSupports;
+    });
+
     const visit = (path: string) => {
       fireEvent.click(screen.getByRole("button", { name: `Go ${path}` }));
       const runway = screen.getByTestId("swipe-navigation-runway");
@@ -600,6 +605,22 @@ describe("SwipeNavigationLayer", () => {
       const shown = screen.getByTestId("swipe-slot-play");
       expect(shown).not.toHaveAttribute("data-slot-cached");
       expect(shown.style.contentVisibility).toBe("");
+      expect(mocks.unmountCounts.play).toBe(0);
+    });
+
+    it("hides and disables a kept page some other way where content-visibility is not supported", async () => {
+      CSS.supports = (() => false) as typeof CSS.supports;
+      renderLayer("/play", <PathNavigationProbe />);
+      await screen.findByTestId("play-scroller");
+      visit("/settings");
+      const hidden = screen.getByTestId("swipe-slot-play");
+      expect(hidden.style.contentVisibility).toBe("");
+      expect(hidden.style.visibility).toBe("hidden");
+      expect(hidden).toHaveAttribute("inert");
+      visit("/play");
+      const shown = screen.getByTestId("swipe-slot-play");
+      expect(shown.style.visibility).toBe("");
+      expect(shown).not.toHaveAttribute("inert");
       expect(mocks.unmountCounts.play).toBe(0);
     });
 
@@ -636,6 +657,31 @@ describe("SwipeNavigationLayer", () => {
       fireEvent.click(screen.getByRole("button", { name: "Go /settings" }));
       await screen.findByText("Settings Page");
       expect(mocks.settingsInstances.count).toBe(before + 1);
+    });
+
+    it("keeps a kept Settings page when playback writes a setting it does not show or follows itself", async () => {
+      renderLayer("/settings", <PathNavigationProbe />);
+      await screen.findByText("Settings Page");
+      const before = mocks.settingsInstances.count;
+      visit("/play");
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent("c64u-app-settings-updated", {
+            detail: { key: APP_SETTINGS_KEYS.LEARNED_DEVICE_SID_MODEL_KEY, value: "8580" },
+          }),
+        );
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Go /settings" }));
+      await screen.findByText("Settings Page");
+      expect(mocks.settingsInstances.count).toBe(before);
+    });
+
+    it("does not draw a kept Settings page's licenses overlay over another tab", async () => {
+      renderLayer("/settings/open-source-licenses", <PathNavigationProbe />);
+      expect(await screen.findByText("Open Source Licenses Page")).toBeInTheDocument();
+      visit("/play");
+      expect(screen.queryByText("Open Source Licenses Page")).not.toBeInTheDocument();
+      expect(mocks.unmountCounts.settings).toBe(0);
     });
 
     it("keeps a kept Settings page when nothing changed behind it", async () => {

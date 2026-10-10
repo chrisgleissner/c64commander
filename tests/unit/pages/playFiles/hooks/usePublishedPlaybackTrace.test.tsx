@@ -49,23 +49,20 @@ describe("usePublishedPlaybackTrace", () => {
     setPlaybackTraceSnapshot(null);
   });
 
-  it("publishes the Play page's playback state while Play is on screen", () => {
+  it("publishes the Play page's playback state", () => {
     renderInPlaySlot(playing, true);
     expect(getPlaybackTraceSnapshot()).toEqual(playing);
     expect(getDecisionStateSnapshot().playback.state).toBe("PLAYING");
   });
 
-  it("withdraws it when another tab replaces Play, as leaving used to unmount the page, and publishes it again on return", () => {
+  it("keeps it published while a kept Play page goes on playing behind another tab", () => {
     const play = renderInPlaySlot(playing, true);
     play.show(false);
-    expect(getPlaybackTraceSnapshot()).toBeNull();
-    expect(getDecisionStateSnapshot().playback.state).toBe("UNKNOWN");
+    expect(getPlaybackTraceSnapshot()).toEqual(playing);
+    expect(getDecisionStateSnapshot().playback.state).toBe("PLAYING");
 
     const advanced = { ...playing, currentIndex: 2, currentItemId: "tune-3" };
     play.publish(advanced);
-    expect(getPlaybackTraceSnapshot()).toBeNull();
-
-    play.show(true);
     expect(getPlaybackTraceSnapshot()).toEqual(advanced);
   });
 

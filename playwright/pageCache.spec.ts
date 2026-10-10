@@ -48,6 +48,23 @@ test.describe("page cache", () => {
     }
   });
 
+  test("keeps a keypad-focused control clear of the header height its own page holds", async ({ page }) => {
+    await page.goto("/settings");
+    await expect(page.locator("#page-settings")).toBeVisible();
+    const margin = await activeSlot(page).evaluate((slot) => {
+      (slot as HTMLElement).style.setProperty("--app-bar-height", "123px");
+      const control = document.createElement("button");
+      control.className = "keypad-scroll-anchor";
+      slot.appendChild(control);
+      const value = getComputedStyle(control).scrollMarginTop;
+      control.remove();
+      const inset = Number.parseFloat(getComputedStyle(slot).getPropertyValue("--safe-area-inset-top")) || 0;
+      const halfRem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) / 2;
+      return { value, expected: `${inset + 123 + halfRem}px` };
+    });
+    expect(margin.value).toBe(margin.expected);
+  });
+
   test("shows a page again at its scroll offset, with its cards and typed text as they were left", async ({ page }) => {
     await page.goto("/settings");
     await expect(page.locator("#page-settings")).toBeVisible();

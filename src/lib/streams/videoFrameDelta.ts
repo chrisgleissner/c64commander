@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog } from "@/lib/logging";
 import { VIC_BYTES_PER_FRAME } from "./vicDecode";
 import { VIC_BYTES_PER_LINE } from "./vicStream";
 
@@ -43,6 +44,7 @@ export type VideoFrameSpan = {
  */
 export class VideoFrameDeltaDecoder {
   private latest: Uint8Array | null = null;
+  private waitingForWholeFrame = false;
 
   constructor(private readonly decode: Base64Decoder = base64ToBytes) {}
 
@@ -50,10 +52,21 @@ export class VideoFrameDeltaDecoder {
   apply(span: VideoFrameSpan): Uint8Array | null {
     const lineCount = span.lineCount ?? WHOLE_FRAME;
     if (lineCount === WHOLE_FRAME) {
+      if (this.waitingForWholeFrame) addLog("info", "Live View received a whole video frame and shows changes again");
+      this.waitingForWholeFrame = false;
       this.latest = this.decode(span.data);
       return this.latest;
     }
-    if (!this.latest) return null;
+    if (!this.latest) {
+      if (!this.waitingForWholeFrame) {
+        addLog("warn", "Live View received changed video lines before a whole frame, and waits for the next one", {
+          firstLine: span.firstLine,
+          lineCount,
+        });
+      }
+      this.waitingForWholeFrame = true;
+      return null;
+    }
     if (lineCount === 0) return this.latest;
     const lines = this.decode(span.data);
     const offset = (span.firstLine ?? 0) * VIC_BYTES_PER_LINE;

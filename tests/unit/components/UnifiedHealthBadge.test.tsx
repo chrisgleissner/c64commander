@@ -334,6 +334,29 @@ describe("UnifiedHealthBadge", () => {
       expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
     });
 
+    it("says it once, under the badge of the page on screen, when kept pages hold badges of their own", () => {
+      vi.useFakeTimers();
+      mockState.currentProfile = "compact";
+      const pages = (shown: "first" | "second") => (
+        <>
+          <ScreenActivityProvider active={shown === "first"}>
+            <UnifiedHealthBadge />
+          </ScreenActivityProvider>
+          <ScreenActivityProvider active={shown === "second"}>
+            <UnifiedHealthBadge />
+          </ScreenActivityProvider>
+        </>
+      );
+      const view = render(pages("second"));
+
+      expect(screen.getAllByTestId("unified-health-badge-announcement")).toHaveLength(1);
+
+      view.rerender(pages("first"));
+      expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
+      view.rerender(pages("second"));
+      expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
+    });
+
     it("says so again after a switch to another device", () => {
       vi.useFakeTimers();
       mockState.currentProfile = "compact";
