@@ -33,13 +33,9 @@ import { JumpProgressWatch, PositionModel } from "./remoteSeekPositionModel";
 import { CLOCK_ROUNDING_SECONDS, SeekMachine } from "./remoteSeekMachine";
 
 /**
- * Fast forward, rewind and jumps for a tune the C64 plays itself.
- *
- * Holding the left-arrow key makes the Ultimate's SID player call the tune's play routine back to
- * back, and CPU Speed sets how fast that loop runs. A rewind restarts the sub tune with the player's
- * own keys and fast forwards to the target. Every operation borrows the key and CPU Speed through a
- * RemoteSeekDeviceSession, which records the original values first and gives them back however the
- * operation ends.
+ * Fast forward, rewind and jumps for a tune the C64 plays itself. Held left-arrow makes the SID player call the play
+ * routine back to back, at a rate CPU Speed sets; a rewind restarts the sub tune and fast forwards. A
+ * RemoteSeekDeviceSession records the original key and CPU Speed first and gives them back however the operation ends.
  */
 
 export type RemoteSeekApi = RemoteSeekDeviceApi;
@@ -80,6 +76,11 @@ const NORMAL_PLAY_GAP_SECONDS = 4;
 const NORMAL_PLAY_READ_INTERVAL_MS = 250;
 /** A held fast forward ends after this many clock reads in a row that find no clock. */
 const PLAYER_GONE_READS = 2;
+/** A held fast forward checks the VIC's screen address on every this many clock reads, once a second. */
+const SCREEN_CHECK_EVERY_POLLS = 4;
+/** Even at 1 MHz a fast forward moves the clock 10 s a second; one standing this long has stopped. */
+const CLOCK_STOPPED_READS = 10;
+const CLOCK_STOPPED_MS = 5000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -88,6 +89,9 @@ type FastForwardRun = {
   polling: boolean;
   /** Clock reads in a row that found no clock: the player may have left the screen. */
   missedReads: number;
+  polls: number;
+  /** The clock as last read, and how many reads in a row and since when it has shown it. */
+  lastClock: { seconds: number; reads: number; sinceMs: number } | null;
   model: PositionModel;
   rampTimer: ReturnType<typeof setInterval> | null;
   pollTimer: ReturnType<typeof setInterval> | null;
@@ -102,7 +106,8 @@ export class RemoteSidSeekController {
   private busy: Promise<unknown> = Promise.resolve();
   private cancelGeneration = 0;
   private activeSession: RemoteSeekDeviceSession | null = null;
-  private pendingOperations = 0;
+  /** Gestures queued or running; a clock re-sync only reads, so it does not make the seek busy. */
+  private pendingGestures = 0;
   private gestureArrived = false;
   private readonly machine: SeekMachine;
   /** Told where a seek landed as soon as that is known, before the restore's config writes. */
@@ -156,7 +161,10 @@ export class RemoteSidSeekController {
   /** Make a running clock re-sync give way to a gesture. */
   private gesture<T>(work: (generation: number) => Promise<T>): Promise<T> {
     this.gestureArrived = true;
-    return this.serialize(work);
+    this.pendingGestures += 1;
+    return this.serialize(work).finally(() => {
+      this.pendingGestures -= 1;
+    });
   }
 
   get canRewind() {
@@ -181,6 +189,8 @@ export class RemoteSidSeekController {
           session,
           polling: false,
           missedReads: 0,
+          polls: 0,
+          lastClock: null,
           model: new PositionModel(fromSeconds, clock, ratio, this.profile.clock.wrapSeconds),
           rampTimer: null,
           pollTimer: null,
@@ -273,6 +283,10 @@ export class RemoteSidSeekController {
       let session: RemoteSeekDeviceSession | null = null;
       // Where the tune is known to be once anything has moved it, so a failed jump still lands the display.
       let model: PositionModel | null = null;
+      // A model counted from a restart holds whole clock seconds, so the tune is half a second past it on
+      // average; one counted from the page's position holds that position's fraction already.
+      let rounding = 0;
+      const landedAt = (from: PositionModel) => from.seconds + rounding;
       try {
         this.assertCurrent(generation);
         const ratio = await this.resolveClockPerTuneSecond();
@@ -290,6 +304,7 @@ export class RemoteSidSeekController {
           startClock = await this.machine.readClock(true);
           if (startClock === null) throw new Error("The SID player's clock is not on screen");
           addLog("debug", "Remote seek restarted the tune", { clockSeconds: startClock });
+          rounding = CLOCK_ROUNDING_SECONDS;
         }
         // Asked again now: the tune played on while the rate was measured and the session opened. Since a
         // restart it has only played at normal speed, so the clock is the position however late it was read.
@@ -358,8 +373,29 @@ export class RemoteSidSeekController {
           const remainingClock = (target - position) * ratio;
           // Unmeasured, one read period can pass a near target by seconds: approach it at the slowest speed in
           // timed key pulses sized from the last one's rate, and play into the last second or so.
-          const fastest = FASTEST_FAST_FORWARD_PER_MHZ * (cpuSpeedMhz(speed) ?? 1);
-          pulsing ||= !planner.calibrated && remainingClock < fastest * (2 * readPeriodSeconds + PULSE_MARGIN_SECONDS);
+          const unmeasuredLead = 2 * readPeriodSeconds + PULSE_MARGIN_SECONDS;
+          const fastestAt = (option: string) => FASTEST_FAST_FORWARD_PER_MHZ * (cpuSpeedMhz(option) ?? 1);
+          const fastest = fastestAt(speed);
+          const unsafeHere = !planner.calibrated && remainingClock < fastest * unmeasuredLead;
+          if (
+            unsafeHere &&
+            speed !== planner.finalOption &&
+            remainingClock >= fastestAt(planner.finalOption) * unmeasuredLead
+          ) {
+            // A fast machine speed could pass the target before its first read; the slowest cannot, so measure there.
+            planner.calibrateAtFinalOption();
+            if (held) {
+              await session.releaseKey();
+              held = false;
+              await this.machine.settle(model, true);
+              fastSinceLastRead = false;
+            }
+            await session.setCpuSpeed(planner.finalOption);
+            speed = planner.finalOption;
+            rateWindow = null;
+            continue;
+          }
+          pulsing ||= unsafeHere;
           if (pulsing) {
             if (held) {
               await session.releaseKey();
@@ -392,9 +428,14 @@ export class RemoteSidSeekController {
             lastPulseMs = pulseMs;
             const clockBefore = model.clock;
             await session.pressKey();
+            progress.keyDown();
             await sleep(pulseMs);
             await session.releaseKey();
+            const releasedAt = Date.now();
             await this.machine.settle(model, true);
+            // Held from the press to the release; a read the device answers late after that is not.
+            const notFast = progress.observe(model.seconds, true, releasedAt);
+            if (notFast) throw new Error(notFast);
             const gained = model.clock - clockBefore;
             // Never lowered: a short pulse can under-read the rate, and the next pulse would then overshoot.
             if (gained > 0) pulseRate = Math.max(pulseRate ?? 0, gained / (pulseMs / 1000));
@@ -445,10 +486,10 @@ export class RemoteSidSeekController {
         addLog("debug", "Remote seek landed", {
           fromSeconds,
           targetSeconds: target,
-          landedSeconds: model.seconds,
+          landedSeconds: landedAt(model),
           tookMs: Date.now() - startedAt,
         });
-        const landing = { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+        const landing = { seconds: landedAt(model), atMs: Date.now(), completed: true };
         this.landingListener?.(landing, "jump");
         return landing;
       } catch (error) {
@@ -457,10 +498,13 @@ export class RemoteSidSeekController {
         } else {
           addErrorLog("Remote seek failed", { fromSeconds, targetSeconds, ...errorDetails(error) });
         }
-        if (session) await this.giveBack(session, "jump stopped");
+        // Once: a restore that failed has run its retries, and the recovery tries it again later.
+        const stopped = session;
+        session = null;
+        if (stopped) await this.giveBack(stopped, "jump stopped");
         if (!model) return null;
-        if (session && this.api.currentDeviceKey() !== session.deviceKey) {
-          return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false };
+        if (stopped && this.api.currentDeviceKey() !== stopped.deviceKey) {
+          return { seconds: landedAt(model), atMs: Date.now(), completed: false };
         }
         // The restore has released the key, so one read now says where the tune really got to.
         await this.machine
@@ -468,7 +512,7 @@ export class RemoteSidSeekController {
           .catch((settleError) =>
             addLog("warn", "Remote seek could not read where a stopped jump left the tune", errorDetails(settleError)),
           );
-        return { seconds: model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false };
+        return { seconds: landedAt(model), atMs: Date.now(), completed: false };
       } finally {
         if (session) await this.giveBack(session, "jump finished");
       }
@@ -518,22 +562,18 @@ export class RemoteSidSeekController {
 
   /** True while anything is queued, running or holding the device. */
   get isBusy() {
-    return this.pendingOperations > 0 || this.fastForward !== null || this.activeSession !== null;
+    return this.pendingGestures > 0 || this.fastForward !== null || this.activeSession !== null;
   }
 
   private serialize<T>(work: (generation: number) => Promise<T>): Promise<T> {
     const generation = this.cancelGeneration;
-    this.pendingOperations += 1;
     // The previous operation's caller already received and logged its failure; this one only waits for it.
     const next = this.busy
       .then(
         () => undefined,
         (error) => addLog("debug", "Remote seek: queued after an operation that failed", errorDetails(error)),
       )
-      .then(() => work(generation))
-      .finally(() => {
-        this.pendingOperations -= 1;
-      });
+      .then(() => work(generation));
     this.busy = next;
     return next;
   }
@@ -552,7 +592,6 @@ export class RemoteSidSeekController {
     return session;
   }
 
-  /** The VIC still shows the screen the player's clock was found on, and the clock reads as a time there. */
   private async giveBack(session: RemoteSeekDeviceSession, reason: string) {
     if (this.activeSession === session) this.activeSession = null;
     await session.restore(reason);
@@ -570,6 +609,12 @@ export class RemoteSidSeekController {
     if (run.polling) return;
     run.polling = true;
     try {
+      run.polls += 1;
+      // The old screen stays in RAM and still reads as a clock after the machine has left the player.
+      if (run.polls % SCREEN_CHECK_EVERY_POLLS === 0 && !(await this.machine.showsPlayerScreen())) {
+        if (this.fastForward === run) void this.endFastForward("the SID player left the screen");
+        return;
+      }
       const clock = await this.machine.readClockFor(run.model, false);
       if (this.fastForward !== run) return;
       if (clock === null) {
@@ -579,12 +624,23 @@ export class RemoteSidSeekController {
         return;
       }
       run.missedReads = 0;
+      if (this.clockStopped(run, clock)) {
+        void this.endFastForward("the SID player's clock stopped");
+        return;
+      }
       run.onPosition(run.model.advance(clock, true));
     } catch (error) {
       addLog("warn", "Remote fast forward could not read the SID player's clock", errorDetails(error));
     } finally {
       run.polling = false;
     }
+  }
+
+  private clockStopped(run: FastForwardRun, clock: number) {
+    const now = Date.now();
+    if (run.lastClock?.seconds !== clock) run.lastClock = { seconds: clock, reads: 0, sinceMs: now };
+    run.lastClock.reads += 1;
+    return run.lastClock.reads >= CLOCK_STOPPED_READS && now - run.lastClock.sinceMs >= CLOCK_STOPPED_MS;
   }
 
   /** Clock seconds per tune second while fast forwarding; measured from CIA 1 timer A for CIA-timed tunes. */

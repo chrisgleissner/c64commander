@@ -86,12 +86,9 @@ const TICK_TIMEOUT_MS = 4000;
 const TICK_READ_GAP_MS = 20;
 
 /**
- * Read the clock back to back until it moves on by one second, and place that tick between the two
- * reads that saw it: each read saw the clock somewhere within its own round trip, so the tick lies
- * between their midpoints, within half a round trip of where this puts it. A read that steps back
- * caught the player rewriting its digits and is skipped, and one that jumps on by more than a
- * second (a slow read) waits for the next tick. Null if the clock does not tick within a second of
- * a value, e.g. while the machine is paused.
+ * Read the clock until it moves on by one second; the tick lies between the midpoints of the two reads that saw it. A
+ * read that steps back caught the player rewriting its digits and is skipped; a slow read that jumps more than a second
+ * waits for the next tick. Null if the clock does not tick within a second, e.g. while paused.
  */
 export const measureClockTick = async (
   read: () => Promise<number | null>,

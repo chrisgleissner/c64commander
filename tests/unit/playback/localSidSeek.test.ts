@@ -193,7 +193,8 @@ describe("auto-advance follows a seek", () => {
     const hook = readFileSync("src/pages/playFiles/hooks/usePlaybackController.ts", "utf8");
     expect(hook).toContain("const rescheduleAutoAdvance = useCallback(");
     // Amended: every seek path rebases through one helper, and that helper reschedules. Relative
-    // seek (hold) and scrub release both go through it, and so does the C64 route's landing.
+    // seek (hold) and scrub release both go through it here; the C64 route's landing calls it from
+    // useRemoteSidSeek, which useRemoteSidSeek.test.tsx checks through its `rebasePlaybackPosition`.
     expect(hook).toMatch(/const rebasePlaybackPosition = useCallback\([\s\S]*?rescheduleAutoAdvance\(positionMs\)/);
     const calls = hook.match(/rebasePlaybackPosition\(positionMs\)/g) ?? [];
     expect(calls.length).toBeGreaterThanOrEqual(2);

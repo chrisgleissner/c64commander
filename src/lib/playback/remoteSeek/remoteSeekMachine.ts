@@ -77,10 +77,15 @@ export class SeekMachine {
     return first === null ? second : second === null ? first : Math.max(first, second);
   }
 
-  async playerOnScreen(): Promise<boolean> {
+  /** The VIC still shows the screen the player's clock was found on. */
+  async showsPlayerScreen(): Promise<boolean> {
     const [dd00] = await this.api.readMemory("DD00", 1, { __c64uIntent: "user", __c64uBypassCooldown: true });
     const [d018] = await this.api.readMemory("D018", 1, { __c64uIntent: "user", __c64uBypassCooldown: true });
-    if (sidPlayerScreenAddress(dd00, d018) !== this.profile.clock.screenAddress) return false;
+    return sidPlayerScreenAddress(dd00, d018) === this.profile.clock.screenAddress;
+  }
+
+  async playerOnScreen(): Promise<boolean> {
+    if (!(await this.showsPlayerScreen())) return false;
     // One blank read can be a passing frame; two in a row are a screen without the player's clock.
     return (await this.readClock(true)) !== null || (await this.readClock(true)) !== null;
   }
@@ -136,11 +141,14 @@ export class SeekMachine {
     replayTune: (() => Promise<void>) | null,
     assertCurrent: () => void,
   ) {
-    // No key without the player on screen: at BASIC, minus and plus would be typed.
-    const before = await this.readClock(true);
+    // No key without the player on screen: at BASIC, minus and plus would be typed. Twice, because a
+    // read that catches 1:00 being written shows 0:00.
+    const before = await this.readClockTwice();
     if (before === null) throw new Error("The SID player's clock is not on screen; no restart keys sent");
+    // Within its first second the tune is already at the start, and a restart could not be seen.
+    if (before === 0) return;
     // A clock that already shows 0:01 has to drop to 0:00 before the restart counts as done.
-    const restartedBelow = before <= 1 ? Math.max(before, 1) : 2;
+    const restartedBelow = before <= 1 ? 1 : 2;
     if (this.profile.restart === "replay") {
       assertCurrent();
       await (replayTune as () => Promise<void>)();

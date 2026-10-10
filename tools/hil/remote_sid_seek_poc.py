@@ -30,7 +30,6 @@ STAGES
                  against the target and the counter, and the wall time each jump takes
   turbo-off      Turbo Control Off -> Manual -> speed -> back, with REST availability after each write
                  (only with --turbo-off-check, because it changes Turbo Control)
-  stuck-key      whether a REST-held key survives a reset and a new tune
 
 Every run ends by releasing the keys, restoring Turbo Control and CPU Speed to the snapshot,
 reading them back, and resetting the C64.
@@ -643,33 +642,12 @@ def stage_turbo_off(ctx: Context) -> dict:
     return {"rows": rows}
 
 
-def stage_stuck_key(ctx: Context) -> dict:
-    device = ctx.device
-    device.sidplay(build_counter_psid("PAL", busy_loops=200), "counter-PAL.sid")
-    device.key("press", FAST_FORWARD_KEY)
-    try:
-        held_before = device.held_keys()
-        device.reset()
-        time.sleep(1.0)
-        held_after_reset = device.held_keys()
-        device.sidplay(build_counter_psid("PAL", busy_loops=200), "counter-PAL.sid")
-        rate = measure_clock_rate(device, 2.0, PLAY_RATE_HZ["PAL"])
-        held_after_sidplay = device.held_keys()
-    finally:
-        device.key("release", FAST_FORWARD_KEY)
-    out = {"held_before": held_before, "held_after_reset": held_after_reset,
-           "held_after_new_tune": held_after_sidplay, "new_tune_clock_rate": round(rate["clock_rate"], 1)}
-    log(f"stuck-key: {out}")
-    return out
-
-
 STAGES = {
     "clock": stage_clock,
     "rates": stage_rates,
     "ramp": stage_ramp,
     "seek": stage_seek,
     "turbo-off": stage_turbo_off,
-    "stuck-key": stage_stuck_key,
 }
 
 

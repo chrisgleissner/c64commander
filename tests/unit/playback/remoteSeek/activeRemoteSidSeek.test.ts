@@ -30,6 +30,7 @@ import {
   setRemoteSidSeekGesture,
 } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import type { RemoteSidSeekController } from "@/lib/playback/remoteSeek/remoteSidSeekController";
+import { grantSeekKeyPress, SeekKeyRefusedError } from "@/lib/playback/remoteSeek/seekKeyPermit";
 
 describe("active remote SID seek", () => {
   beforeEach(() => {
@@ -50,6 +51,20 @@ describe("active remote SID seek", () => {
     });
     expect(api.readMemory).toHaveBeenCalledWith("D018", 1, { __c64uBypassCooldown: true });
     expect(api.getMachineInputState).toHaveBeenCalledWith({ __c64uIntent: "user" });
+  });
+
+  it("sends a seek key only with a permit granted for the connected device", async () => {
+    const seekApi = createRemoteSeekApi();
+    const press = {
+      events: [{ kind: "keyboard" as const, inputs: ["arrow_left" as const], transition: "press" as const }],
+    };
+    await expect(seekApi.sendMachineInputBatch(press)).rejects.toBeInstanceOf(SeekKeyRefusedError);
+    grantSeekKeyPress(JSON.stringify(["u64", "u64"]), "arrow_left");
+    await expect(seekApi.sendMachineInputBatch(press)).rejects.toBeInstanceOf(SeekKeyRefusedError);
+    expect(api.sendMachineInputBatch).not.toHaveBeenCalled();
+    grantSeekKeyPress(seekApi.currentDeviceKey()!, "arrow_left");
+    await seekApi.sendMachineInputBatch(press);
+    expect(api.sendMachineInputBatch).toHaveBeenCalledWith(press);
   });
 
   it("cancels only a seek that is busy, so an idle one costs stop and pause nothing", async () => {

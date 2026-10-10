@@ -19,9 +19,13 @@ describe("seek key permits", () => {
   let send: ReturnType<typeof vi.fn>;
   let guarded: (batch: MachineInputBatch) => Promise<unknown>;
   let connected: string | null;
+  // Each test starts an hour after the last, so no permit granted in one is still valid in the next.
+  let clock = Date.now();
 
   beforeEach(() => {
     vi.useFakeTimers();
+    clock += 3_600_000;
+    vi.setSystemTime(clock);
     connected = DEVICE;
     send = vi.fn(async () => ({}));
     guarded = withSeekKeyPermits(send, () => connected);
@@ -65,6 +69,16 @@ describe("seek key permits", () => {
     await guarded(press("arrow_left"));
     expect(send).toHaveBeenCalledTimes(2);
     await expect(guarded(press("minus"))).rejects.toThrow(SeekKeyRefusedError);
+  });
+
+  it("voids every permit of a device once a press without one is refused there, but not another device's", async () => {
+    grantSeekKeyPress(DEVICE, "arrow_left");
+    grantSeekKeyPress("u64", "arrow_left");
+    await expect(guarded(press("minus"))).rejects.toBeInstanceOf(SeekKeyRefusedError);
+    await expect(guarded(press("arrow_left"))).rejects.toBeInstanceOf(SeekKeyRefusedError);
+    connected = "u64";
+    await guarded(press("arrow_left"));
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it("always lets a release through, since letting a key go never does harm", async () => {

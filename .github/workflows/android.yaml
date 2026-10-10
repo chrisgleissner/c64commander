@@ -208,6 +208,7 @@ jobs:
   remote-seek-mock:
     name: Web | Remote seek suites (mock devices)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout

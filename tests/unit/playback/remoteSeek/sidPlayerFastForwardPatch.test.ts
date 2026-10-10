@@ -7,7 +7,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { findFastForwardPatch, isFastForwardPatchSite } from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
+import {
+  findFastForwardPatch,
+  isFastForwardPatchStillThere,
+} from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
 import { placeSidPlayerCode } from "../../../mocks/sidPlayerSimulation";
 
 describe("SID player fast forward patch", () => {
@@ -62,10 +65,39 @@ describe("SID player fast forward patch", () => {
     expect(findFastForwardPatch(memory, 0)).toBeNull();
   });
 
-  it("recognises the patch site only while it still reads ldy #0 or ldy #1", () => {
-    expect(isFastForwardPatchSite(Uint8Array.of(0xa0, 0x00))).toBe(true);
-    expect(isFastForwardPatchSite(Uint8Array.of(0xa0, 0x01))).toBe(true);
-    expect(isFastForwardPatchSite(Uint8Array.of(0xa0, 0x02))).toBe(false);
-    expect(isFastForwardPatchSite(Uint8Array.of(0xa9, 0x00))).toBe(false);
+  const readerOf =
+    (memory: Uint8Array, reads: number[] = []) =>
+    async (address: string, length: number) => {
+      const start = parseInt(address, 16);
+      for (let at = start; at < start + length; at += 1) reads.push(at);
+      return memory.slice(start, start + length);
+    };
+
+  it("still finds the patch site while the whole routine is there, held or released", async () => {
+    const memory = new Uint8Array(0x10000);
+    const placed = placeSidPlayerCode(memory, { keyboardAddress: 0x0340, flagAddress: 0x1fe0 });
+    expect(await isFastForwardPatchStillThere(readerOf(memory), placed.ldyOperandAddress)).toBe(true);
+    memory[placed.ldyOperandAddress] = 0x01;
+    expect(await isFastForwardPatchStillThere(readerOf(memory), placed.ldyOperandAddress)).toBe(true);
+    memory[placed.ldyOperandAddress] = 0x02;
+    expect(await isFastForwardPatchStillThere(readerOf(memory), placed.ldyOperandAddress)).toBe(false);
+  });
+
+  it("does not take another program's ldy #1 at that address for the player's", async () => {
+    const memory = new Uint8Array(0x10000);
+    const placed = placeSidPlayerCode(memory, { keyboardAddress: 0x0340, flagAddress: 0x1fe0 });
+    memory.fill(0xea, 0x0340, 0x0380);
+    memory.set([0xa0, 0x01, 0x4c], placed.ldyOperandAddress - 1);
+    memory.set([placed.storeAddress & 0xff, placed.storeAddress >> 8], placed.ldyOperandAddress + 2);
+    memory.set([0x8d, 0x00, 0x04, 0x60], placed.storeAddress);
+    expect(await isFastForwardPatchStillThere(readerOf(memory), placed.ldyOperandAddress)).toBe(false);
+  });
+
+  it("never reads I/O when a jump there would be followed, since reading $DC0D acknowledges an interrupt", async () => {
+    const memory = new Uint8Array(0x10000);
+    memory.set([0xa0, 0x01, 0x4c, 0x0d, 0xdc], 0x0400);
+    const reads: number[] = [];
+    expect(await isFastForwardPatchStillThere(readerOf(memory, reads), 0x0401)).toBe(false);
+    expect(reads.filter((address) => address >= 0xd000 && address < 0xe000)).toEqual([]);
   });
 });

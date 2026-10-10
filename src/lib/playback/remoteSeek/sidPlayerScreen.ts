@@ -7,13 +7,9 @@
  */
 
 /**
- * Finding and reading the Ultimate SID player's own clock in screen memory.
- *
- * The clock is the only position the device offers, and it is exact to the second: the player
- * counts it from the frames it plays. Nothing about where it is drawn is assumed. The current player
- * draws "mm:ss" at the start of row 23 and its screen moves with the tune ($0800 and $8C00 were
- * seen), but it also draws the song length in the same format, and a different player could put
- * either anywhere. So the clock is found as the time field on the VIC's screen that ticks.
+ * Finds the SID player's clock, the device's only position, exact to the second. The current player draws "mm:ss" at
+ * the start of row 23 on a screen that moves with the tune ($0800 and $8C00 seen), plus the song length in the same
+ * format; another player could put either anywhere. So the clock is the time field on the VIC's screen that ticks.
  */
 
 export const SCREEN_COLUMNS = 40;
@@ -92,10 +88,9 @@ export const readClockFromRow = (row: Uint8Array, clock: SidPlayerClockField): n
   null;
 
 /**
- * The clock among the time fields of two screens read `elapsedSeconds` apart: the field in the same
- * place that moved forward by about that much. A song length, a title or a date stays put, and a
- * countdown runs backwards. With several candidates, the one nearest the end of the screen wins,
- * which is where the current player draws its clock.
+ * The clock among time fields of two screens read `elapsedSeconds` apart: the one in the same place that moved forward
+ * by about that much (a song length, title or date stays put; a countdown runs backwards). Among several, the one
+ * nearest the end of the screen wins, where the current player draws its clock.
  */
 export const tickingClockField = (
   before: TimeField[],

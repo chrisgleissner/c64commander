@@ -15,12 +15,9 @@ export const LONG_HELD_INTERVAL_SECONDS = 1.5;
 const FAST_RATE_WINDOW_SECONDS = 0.25;
 
 /**
- * Tune position while fast forwarding. The clock counts play calls as frames then, so a clock
- * second is 1 / clockPerTuneSecond tune seconds with the key down, and one tune second with it up.
- *
- * Normal play advances the clock one second per second. Between two reads far enough apart, the
- * clock seconds that the fast forward rate seen just before cannot explain are therefore counted as
- * normal play. Without a rate seen yet, the clock seconds up to the wall time between the reads are.
+ * Tune position while fast forwarding: a clock second is 1 / clockPerTuneSecond tune seconds with the
+ * key down, one with it up. Between reads far apart, the clock seconds the fast forward rate seen just
+ * before cannot explain count as normal play; without a rate yet, those up to the wall time between.
  */
 export class PositionModel {
   private lastClock: number;

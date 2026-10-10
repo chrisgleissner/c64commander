@@ -6,24 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-/**
- * Remote SID seeking across every kind of tune the SID player takes, using the app's own modules.
- *
- * Generated tunes cover each header shape with an exact reference: their play routine counts its
- * calls, wherever the code loads. They are single and many sub tunes, a late sub tune, two and three
- * SIDs, NTSC, CIA timers at 2x and 8x, code at $C000, under the KERNAL at $E000 and over the screen
- * at $0400, and a jump past 99:59 into an hour-long tune. RSID, BASIC and PSIDs without a play
- * routine must be refused before anything reaches the machine.
- *
- * On a real machine, CORPUS_HVSC (default ../C64Music) adds real HVSC tunes picked for the same
- * extremes: 82 sub tunes, the largest and smallest files, a zero-length sub tune, 30-minute tunes
- * and more. They have no reference, so a landing is checked against the player's own clock where
- * that equals the music's position, and every operation must leave the machine as it was.
- *
- *   SOAK_HOST=c64u npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekCorpus.hil.ts
- *
- * SOAK_HOST is a host name, or `mock` / `mock-u2` for the mock server, as CI runs it.
- */
+// Remote SID seeking across every tune shape the SID player takes, using the app's modules. Generated tunes count their
+// play calls, giving an exact reference; RSID, BASIC and PSIDs without a play routine must be refused before anything
+// reaches the machine. On a real machine CORPUS_HVSC (default ../C64Music) adds HVSC extremes with no reference,
+// checked against the player's clock where it equals the music's position; every operation must leave the machine as it
+// was. SOAK_HOST and commands: docs/testing/remote-sid-seek.md.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -189,10 +176,9 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
         [AUDIO_MIXER, "Vol Master"],
         [U64, "System Mode"],
       ]);
-      if (originalMode !== null && systemMode !== originalMode) await device.write(U64, "System Mode", systemMode);
-      await device.write(AUDIO_MIXER, "Vol Master", QUIET_VOLUME);
     }
     let leftChanged: string[] = [];
+    let keysOutsidePlayer: string[] = [];
     const settings = async () => ({
       cpu: (await device.optionalItem(U64, "CPU Speed"))?.current ?? null,
       turbo: (await device.optionalItem(U64, "Turbo Control"))?.current ?? null,
@@ -201,6 +187,10 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
 
     const results: Result[] = [];
     try {
+      if (!target.simulated) {
+        if (originalMode !== null && systemMode !== originalMode) await device.write(U64, "System Mode", systemMode);
+        await device.write(AUDIO_MIXER, "Vol Master", QUIET_VOLUME);
+      }
       for (const entry of entries) {
         const result: Result = { name: entry.name, outcome: "unavailable", checks: [], violations: [] };
         results.push(result);
@@ -319,6 +309,7 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
         console.log(`[corpus ${HOST}] ${entry.name}: ${result.violations.join("; ") || "ok"}`);
       }
     } finally {
+      keysOutsidePlayer = target.mock?.sidPlayer?.takeKeysOutsidePlayer() ?? [];
       await device.reset();
       if (!target.simulated) leftChanged = await restoreFromMachineJournal(HOST);
       mkdirSync(path.dirname(OUT), { recursive: true });
@@ -326,6 +317,7 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
       await target.close();
     }
     expect(leftChanged).toEqual([]);
+    expect(keysOutsidePlayer).toEqual([]);
     const failed = results.filter((result) => result.violations.length);
     expect(failed.map((result) => `${result.name}: ${result.violations.join("; ")}`)).toEqual([]);
     if (!ONLY) expect(results.filter((result) => result.outcome === "refused").length).toBeGreaterThanOrEqual(3);

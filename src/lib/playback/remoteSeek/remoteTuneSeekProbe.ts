@@ -21,7 +21,9 @@ import {
   isSixtyHzMachine,
   machineTimingFor,
   NTSC_FRAME_LINES,
+  NTSC_TUNE_ON_PAL_CYCLES,
   PAL_FRAME_LINES,
+  PAL_TUNE_ON_NTSC_CYCLES,
   type MachineTiming,
 } from "./remoteSeekPlan";
 import { locateSidPlayerClock } from "./sidPlayerClock";
@@ -78,13 +80,6 @@ export const remoteSeekHeaderBlocker = (header: SidHeaderMetadata | null): strin
   if (header.playAddress === 0) return "the tune installs its own interrupt, which the player cannot speed up";
   return null;
 };
-
-/**
- * Cycles between the player's calls of a once-a-frame tune made for the other standard: an NTSC tune on
- * a PAL machine, measured on the C64 Ultimate, and a PAL tune on an NTSC one, the latch in player.asm.
- */
-const NTSC_TUNE_ON_PAL_CYCLES = 16388;
-const PAL_TUNE_ON_NTSC_CYCLES = 20514;
 
 /** Play calls per second from the header, or null when the tune's own CIA timer decides it. */
 export const headerPlayCallHz = (header: SidHeaderMetadata, songNr: number, timing: MachineTiming): number | null => {

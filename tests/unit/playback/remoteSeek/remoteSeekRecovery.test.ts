@@ -7,7 +7,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readRemoteSeekJournal, RemoteSeekDeviceSession } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
+import {
+  readRemoteSeekJournal,
+  REMOTE_SEEK_JOURNAL_MAX_AGE_MS,
+  RemoteSeekDeviceSession,
+} from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
 import { createFakeRemoteSeekDevice, DEVICE_KEY } from "./fakeRemoteSeekDevice";
 
 const connection = vi.hoisted(() => ({
@@ -42,7 +46,7 @@ const connect = (state: string) => {
  * A seek cut off with the key down at 64 MHz, as a killed app leaves it: the device in that state
  * and the journal the earlier process wrote, with no session of this process owning it.
  */
-const leaveUnfinishedSeek = async () => {
+const leaveUnfinishedSeek = async (startedAtMs = Date.now()) => {
   device.current!.player.pressKey("arrow_left");
   await device.current!.api.setConfigValue("U64 Specific Settings", "CPU Speed", "64");
   const journal = {
@@ -52,7 +56,7 @@ const leaveUnfinishedSeek = async () => {
     cpuSpeedChanged: true,
     originalTurboControl: null,
     keyHeld: true,
-    startedAtMs: 0,
+    startedAtMs,
   };
   localStorage.setItem("c64u_remote_seek_device_journal_v1", JSON.stringify({ [DEVICE_KEY]: journal }));
 };
@@ -127,9 +131,11 @@ describe("remote seek recovery", () => {
     uninstall();
   });
 
-  it("runs one recovery at a time and logs a recovery that throws", async () => {
+  it("logs a recovery that throws, and runs again for a connection made while it ran", async () => {
     const { addErrorLog } = await import("@/lib/logging");
+    vi.mocked(addErrorLog).mockClear();
     await leaveUnfinishedSeek();
+    const identify = device.current!.api.currentDeviceKey;
     device.current!.api.currentDeviceKey = () => {
       throw new Error("identity unavailable");
     };
@@ -137,9 +143,93 @@ describe("remote seek recovery", () => {
     connect("REAL_CONNECTED");
     connect("DISCOVERING");
     connect("REAL_CONNECTED");
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(1600);
+    device.current!.api.currentDeviceKey = identify;
+    await vi.advanceTimersByTimeAsync(5000);
     expect(addErrorLog).toHaveBeenCalledTimes(1);
     expect(addErrorLog).toHaveBeenCalledWith("Remote seek recovery failed", expect.anything());
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    uninstall();
+  });
+
+  it("tries a failed restore again while the app stays connected, then leaves it to the next connection", async () => {
+    await leaveUnfinishedSeek();
+    const write = device.current!.api.setConfigValue;
+    let refusing = true;
+    device.current!.api.setConfigValue = async (...args) => {
+      if (refusing) throw new Error("Request timed out");
+      return write(...args);
+    };
+    const uninstall = installRemoteSeekRecovery();
+    connect("REAL_CONNECTED");
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(device.current!.settings["CPU Speed"]).toBe("64");
+    refusing = false;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    uninstall();
+  });
+
+  it("tries again a seek's own restore that failed while the app stays connected", async () => {
+    connection.state = "REAL_CONNECTED";
+    const uninstall = installRemoteSeekRecovery();
+    const session = await RemoteSeekDeviceSession.open(device.current!.api, { playerOnScreen: ON_SCREEN });
+    await session.setCpuSpeed("64");
+    const write = device.current!.api.setConfigValue;
+    let refusing = true;
+    device.current!.api.setConfigValue = async (...args) => {
+      if (refusing) throw new Error("Request timed out");
+      return write(...args);
+    };
+    const restore = session.restore("released");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await restore).toBe(false);
+    refusing = false;
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    uninstall();
+  });
+
+  it("tries again a recovery that threw while the app stays connected", async () => {
+    await leaveUnfinishedSeek();
+    const identify = device.current!.api.currentDeviceKey;
+    device.current!.api.currentDeviceKey = () => {
+      throw new Error("identity unavailable");
+    };
+    const uninstall = installRemoteSeekRecovery();
+    connect("REAL_CONNECTED");
+    await vi.advanceTimersByTimeAsync(5000);
+    device.current!.api.currentDeviceKey = identify;
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    uninstall();
+  });
+
+  it("stops trying a restore that keeps failing, so a dead device is not polled for ever", async () => {
+    await leaveUnfinishedSeek();
+    const setConfigValue = vi.fn(async () => {
+      throw new Error("Request timed out");
+    });
+    device.current!.api.setConfigValue = setConfigValue;
+    const uninstall = installRemoteSeekRecovery();
+    connect("REAL_CONNECTED");
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    const attempts = setConfigValue.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    expect(setConfigValue.mock.calls.length).toBe(attempts);
+    expect(attempts).toBeGreaterThan(0);
+    uninstall();
+  });
+
+  it("drops a journal too old to replay instead of overwriting settings chosen since", async () => {
+    await leaveUnfinishedSeek(Date.now() - REMOTE_SEEK_JOURNAL_MAX_AGE_MS - 1);
+    const uninstall = installRemoteSeekRecovery();
+    connect("REAL_CONNECTED");
+    await vi.runAllTimersAsync();
+    expect(device.current!.settings["CPU Speed"]).toBe("64");
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
     uninstall();
   });
 });

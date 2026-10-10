@@ -24,10 +24,8 @@ const samePendingSeek = (a: PendingSeekState | null, b: PendingSeekState | null)
     a.trackInstanceId === b.trackInstanceId);
 
 /**
- * How far the on-device engine has rendered the tune, and the seek it is waiting for, if any.
- *
- * `onLanded` runs as soon as a waited-for seek is over, so the elapsed time and the solid bar move to
- * the target at once instead of on the next second tick.
+ * How far the on-device engine has rendered the tune, and the seek it is waiting for, if any. `onLanded` runs as soon
+ * as a waited-for seek is over, so the elapsed time and the solid bar move to the target at once, not on the next tick.
  */
 export const useLocalPendingSeek = (localEngineActive: boolean, trackKey: unknown, onLanded: () => void) => {
   const [renderedSeconds, setRenderedSeconds] = useState<number | null>(null);

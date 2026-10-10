@@ -13,6 +13,7 @@ import { getSharedLocalSidPlaybackController } from "./localSidPlaybackControlle
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { areSavedEntriesSameDevice } from "@/lib/savedDevices/sameDevice";
 import { notifyPlaybackActivityChanged, subscribePlaybackActivity } from "./playbackActivitySignal";
+import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "./remoteSeek/activeRemoteSidSeek";
 
 /**
  * Subscribe to playback start/stop. Returns an unsubscribe.
@@ -151,6 +152,7 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
     remotePlaybackActive,
   });
   if (!remotePlaybackActive) return;
+  await giveBackRemoteSeekBeforeDeviceSwitch();
   const { deviceHost, password } = getC64APIConfigSnapshot();
   const leftBehindDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
   const reboot = remoteStopNeedsReboot;
@@ -175,6 +177,23 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
     });
     void resetDeviceLeftBehind(deviceHost, password, leftBehindDeviceId, reboot);
   }
+};
+
+/** Long enough for a seek's restore to retry; a journal left by one that overruns is replayed on the next connect. */
+const SEEK_GIVE_BACK_TIMEOUT_MS = 5000;
+
+/** A seek's CPU Speed, Turbo Control and Vol Master go back to the machine it raised them on, not the next one. */
+const giveBackRemoteSeekBeforeDeviceSwitch = async () => {
+  if (!isRemoteSidSeekBusy()) return;
+  const givenBack = await Promise.race([
+    cancelRemoteSidSeek("device switch").then(() => true),
+    new Promise<false>((resolve) => setTimeout(() => resolve(false), SEEK_GIVE_BACK_TIMEOUT_MS)),
+  ]);
+  if (!givenBack)
+    addLog("warn", "Playback: a remote seek was not given back before the device switch; it is replayed later", {
+      service: "playback",
+      timeoutMs: SEEK_GIVE_BACK_TIMEOUT_MS,
+    });
 };
 
 const RESET_RETRY_DELAYS_MS = [1000, 3000];

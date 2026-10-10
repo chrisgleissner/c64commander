@@ -489,6 +489,41 @@ describe("useRemoteSidSeek", () => {
     expect(result.current.handlers).not.toBeNull();
   });
 
+  it("drops a tap on the bar that has not settled when Pause cancels seeking", async () => {
+    const { result } = render();
+    await advance(PROBED_MS);
+    act(() => result.current.handlers?.onSeekToFraction?.(0.5));
+    await advance(10);
+    let cancelled = false;
+    act(() => void cancelRemoteSidSeek("pause or resume").then(() => (cancelled = true)));
+    await advance(3000);
+    expect(cancelled).toBe(true);
+    expect(device.current!.log.filter((entry) => entry.startsWith("key press"))).toEqual([]);
+    expect(result.current.targetMs).toBeNull();
+  });
+
+  it("probes again on resume when the tune was paused before its clock could be seen to tick", async () => {
+    const { result, rerender } = render();
+    device.current!.player.setPaused(true);
+    rerender({ active: true, elapsedMs: 0, paused: true });
+    await advance(PROBED_MS + 2000);
+    device.current!.player.setPaused(false);
+    rerender({ active: true, elapsedMs: 0, paused: false });
+    await advance(PROBED_MS);
+    expect(result.current.handlers).not.toBeNull();
+  });
+
+  it("does not read the C64's clock while the tune is paused", async () => {
+    const { rerender } = render();
+    await advance(PROBED_MS);
+    rerender({ active: true, elapsedMs: 30_000, paused: true });
+    // A clock measurement already under way ends by itself within 1.1 s.
+    await advance(2000);
+    const reads = vi.spyOn(device.current!.api, "readMemory");
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(reads).not.toHaveBeenCalled();
+  });
+
   it("gives the device back when the tune is paused during a hold", async () => {
     const { result, rerender } = render();
     await advance(PROBED_MS);

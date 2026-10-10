@@ -35,7 +35,7 @@ describe("createMachineTransitionCoordinator", () => {
     expect(runs).toBe(1);
   });
 
-  it("keeps only the latest queued target when pause and resume requests burst", async () => {
+  it("ends a pause, resume, pause burst with the one pause under way, not a second pause", async () => {
     const coordinator = createMachineTransitionCoordinator();
     let releasePause!: () => void;
     const pauseBlocked = new Promise<void>((resolve) => {
@@ -59,6 +59,31 @@ describe("createMachineTransitionCoordinator", () => {
     await expect(resume).rejects.toBeInstanceOf(SupersededMachineTransitionError);
     await Promise.all([pause, finalPause]);
 
-    expect(order).toEqual(["pause", "pause-final"]);
+    expect(order).toEqual(["pause"]);
+  });
+
+  it("keeps only the latest queued target when requests burst behind another target", async () => {
+    const coordinator = createMachineTransitionCoordinator();
+    let releaseResume!: () => void;
+    const resumeBlocked = new Promise<void>((resolve) => {
+      releaseResume = resolve;
+    });
+    const order: string[] = [];
+
+    const resume = coordinator.request("running", async () => {
+      order.push("resume");
+      await resumeBlocked;
+    });
+    const pause = coordinator.request("paused", async () => {
+      order.push("pause");
+    });
+    const secondPause = coordinator.request("paused", async () => {
+      order.push("pause-again");
+    });
+
+    releaseResume();
+    await Promise.all([resume, pause, secondPause]);
+
+    expect(order).toEqual(["resume", "pause"]);
   });
 });

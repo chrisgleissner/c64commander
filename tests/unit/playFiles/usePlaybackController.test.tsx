@@ -1540,6 +1540,35 @@ describe("usePlaybackController", () => {
     expect(machineResume).toHaveBeenCalledTimes(1);
   });
 
+  it("pauses the C64 once for three taps during a slow pause, and never resumes it", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    let finishPause!: () => void;
+    const machinePause = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPause = resolve;
+        }),
+    );
+    const machineResume = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machinePause, machineResume } as any);
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+    });
+
+    const taps = [result.current.handlePauseResume()];
+    await vi.waitFor(() => expect(machinePause).toHaveBeenCalled());
+    taps.push(result.current.handlePauseResume(), result.current.handlePauseResume());
+    finishPause();
+    await Promise.all(taps);
+
+    expect(machinePause).toHaveBeenCalledTimes(1);
+    expect(machineResume).not.toHaveBeenCalled();
+  });
+
   it("pauses and then resumes a tune on the phone when the second tap comes while the pause is under way", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),

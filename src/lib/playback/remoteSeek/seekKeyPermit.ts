@@ -7,13 +7,9 @@
  */
 
 /**
- * The last of the guards that keep a seek's keys from reaching anything but the SID player.
- *
- * Outside the player, the left-arrow, minus and plus keys type into whatever runs, BASIC included,
- * and a held key repeats. So a seek key press only leaves the app with a permit, which the seek
- * session grants for one key on one device right after it has seen the player's clock on the
- * player's screen, and which expires within half a second. A code path that presses a seek key
- * without that check is refused here, however it got there.
+ * Last guard keeping seek keys to the SID player: elsewhere left-arrow, minus and plus type into whatever runs, BASIC
+ * included, and a held key repeats. A press needs a permit for one key on one device, granted by the seek session right
+ * after it saw the player's clock on screen and expiring within half a second; any other press is refused here.
  */
 
 import type { MachineInputBatch } from "@/lib/c64api";

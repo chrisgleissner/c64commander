@@ -13,26 +13,61 @@ import {
 } from "@/lib/connection/connectionManager";
 import { addErrorLog } from "@/lib/logging";
 import { createRemoteSeekApi } from "./activeRemoteSidSeek";
-import { hasRemoteSeekJournal, recoverRemoteSeekJournal } from "./remoteSeekDeviceGuard";
+import { hasRemoteSeekJournal, onRemoteSeekRestoreFailed, recoverRemoteSeekJournal } from "./remoteSeekDeviceGuard";
 import { remoteSeekErrorDetails } from "./remoteSeekErrors";
 
 /** Reconnecting re-routes the API a moment after the state changes, which aborts a request sent at once. */
 const RECOVERY_SETTLE_MS = 1500;
 
+/** A restore that failed while the app stays connected is tried again after these delays, then left to the next connection. */
+export const RECOVERY_RETRY_DELAYS_MS = [30_000, 60_000, 120_000, 300_000] as const;
+
 let recovering = false;
+/** A connection made while a recovery ran, which may be to the device that owes the journal. */
+let connectedDuringRecovery = false;
+let retries = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 const recoverWhenConnected = async () => {
-  if (recovering || !hasRemoteSeekJournal()) return;
+  if (recovering) {
+    connectedDuringRecovery = true;
+    return;
+  }
+  if (!hasRemoteSeekJournal()) return;
   recovering = true;
+  let restored = true;
   try {
     await new Promise((resolve) => setTimeout(resolve, RECOVERY_SETTLE_MS));
     if (getConnectionSnapshot().state !== "REAL_CONNECTED" || isSimulatedDeviceTarget()) return;
-    await recoverRemoteSeekJournal(createRemoteSeekApi());
+    restored = await recoverRemoteSeekJournal(createRemoteSeekApi());
   } catch (error) {
+    restored = false;
     addErrorLog("Remote seek recovery failed", remoteSeekErrorDetails(error));
   } finally {
     recovering = false;
   }
+  if (connectedDuringRecovery) {
+    connectedDuringRecovery = false;
+    void recoverWhenConnected();
+  } else if (!restored) {
+    retryLater();
+  }
+};
+
+const retryLater = () => {
+  const delayMs = RECOVERY_RETRY_DELAYS_MS[retries];
+  if (retryTimer !== null || delayMs === undefined) return;
+  retries += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void recoverWhenConnected();
+  }, delayMs);
+};
+
+const forgetRetries = () => {
+  if (retryTimer !== null) clearTimeout(retryTimer);
+  retryTimer = null;
+  retries = 0;
 };
 
 /**
@@ -43,10 +78,19 @@ const recoverWhenConnected = async () => {
 export const installRemoteSeekRecovery = () => {
   let previous = getConnectionSnapshot().state;
   if (previous === "REAL_CONNECTED") void recoverWhenConnected();
-  return subscribeConnection(() => {
+  const stopRetryingFailedRestores = onRemoteSeekRestoreFailed(retryLater);
+  const unsubscribe = subscribeConnection(() => {
     const { state } = getConnectionSnapshot();
     const was = previous;
     previous = state;
-    if (state === "REAL_CONNECTED" && was !== state) void recoverWhenConnected();
+    if (state === "REAL_CONNECTED" && was !== state) {
+      forgetRetries();
+      void recoverWhenConnected();
+    }
   });
+  return () => {
+    unsubscribe();
+    stopRetryingFailedRestores();
+    forgetRetries();
+  };
 };

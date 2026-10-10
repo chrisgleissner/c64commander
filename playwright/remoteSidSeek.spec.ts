@@ -7,10 +7,9 @@
  */
 
 /**
- * Fast forward, rewind and jumps for a SID the C64 plays itself, through the same Previous, Next
- * and progress bar the on-device engine uses. The mock server models the Ultimate's SID player
- * (tests/mocks/sidPlayerSimulation.ts), so each test checks what reached the "device": the held
- * left-arrow key, the CPU Speed writes, and that both are given back.
+ * Fast forward, rewind and jumps for a SID the C64 plays itself, through the on-device engine's Previous, Next and bar.
+ * The mock server models the SID player (tests/mocks/sidPlayerSimulation.ts), so each test checks what reached the
+ * "device": the held left-arrow key, the CPU Speed writes, and that both are given back.
  */
 
 import { test, expect } from "@playwright/test";
@@ -151,16 +150,17 @@ test.describe("Remote SID seek", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     await startSeekableTune(page);
     const startedAt = server.sidPlayer?.tunePositionSeconds ?? 0;
-    await hold(page, page.getByTestId("playlist-next"), 2000);
+    await hold(page, page.getByTestId("playlist-next"), 3000);
 
     await expectDeviceGivenBack();
     expect(keyEvents("arrow_left")[0]).toBe("press");
     expect(keyEvents("arrow_left").at(-1)).toBe("release");
-    // A second into the hold the CPU goes to 4 MHz; Turbo Control was Off, so it is switched to Manual
-    // for that and back to Off afterwards (checked by expectDeviceGivenBack).
-    expect(cpuSpeedWrites()[0]).toBe("4");
+    // One step a second: 4 MHz, then 8. Turbo Control was Off, so it is switched to Manual for that and
+    // back to Off afterwards (checked by expectDeviceGivenBack).
+    expect(cpuSpeedWrites().slice(0, 2)).toEqual(["4", "8"]);
+    // Three seconds at 1 MHz alone would gain 30 s in this simulation.
     const gained = (server.sidPlayer?.tunePositionSeconds ?? 0) - startedAt;
-    expect(gained).toBeGreaterThan(10);
+    expect(gained).toBeGreaterThan(60);
     const shown = await page.getByTestId("playback-elapsed").innerText();
     const [minutes, seconds] = shown
       .replace(/[^0-9:]/g, "")
@@ -227,7 +227,7 @@ test.describe("Remote SID seek", () => {
     await attachStepScreenshot(page, testInfo, "after-rewind");
   });
 
-  test("stopping during a held fast forward releases the key and CPU Speed before the C64 is reset", async ({
+  test("stopping during a held fast forward gives CPU Speed back before the C64 is reset, and presses nothing into BASIC", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startSeekableTune(page);
@@ -248,6 +248,8 @@ test.describe("Remote SID seek", () => {
     const speedRestored = order.findLastIndex((entry) => entry.includes("CPU%20Speed?value=%201"));
     expect(speedRestored).toBeGreaterThan(-1);
     expect(speedRestored).toBeLessThan(reset);
+    expect(keyEvents("arrow_left").at(-1)).toBe("release");
+    expect(server.sidPlayer?.takeKeysOutsidePlayer()).toEqual([]);
     await attachStepScreenshot(page, testInfo, "stopped-during-fast-forward");
   });
 });

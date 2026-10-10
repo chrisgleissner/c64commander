@@ -17,7 +17,8 @@ The player draws its running clock (`mm:ss` at the start of screen row 23 today)
 it with `GET /v1/machine:readmem` to know where the tune is. Nothing about where or how the clock is
 drawn is assumed. After a tune starts, the app reads the screen the VIC shows (found from `$DD00`
 and `$D018`; `$0400`, `$0800` and `$8C00` were all seen) twice, 1.2 s apart, and takes the time
-field that moved forward as the clock. The song length the player also draws stays put and a
+field that moved forward as the clock. A paused tune's clock stands still, so a tune paused before
+or during this check is checked again when it resumes. The song length the player also draws stays put and a
 countdown would run backwards, so neither is taken. `m:ss`, `mm:ss` and `h:mm:ss` are all read,
 and the clock is read back as the time field on its row that overlaps its cells, so a clock that
 grows from `9:59` to `10:00` keeps being read. A screen under `$D000`-`$DFFF` is never read,
@@ -37,10 +38,14 @@ The gestures are the ones the on-device engine already uses, so the page shows n
   per second held. On release, the app restarts the sub tune with the player's own `-` and `+` keys
   and fast forwards to the target.
 - **Progress bar.** A tap or drag jumps when the finger comes to rest. A jump forward fast
-  forwards from the current position. A jump backward restarts the tune first.
+  forwards from the current position. A jump backward restarts the tune first, unless the clock
+  still shows 0:00: the tune is then already at the start, and a restart could not be seen.
 
 A jump measures the tune's fast forward rate at the machine's own speed, then uses the maximum
-speed, 4 MHz and the slowest speed in that order. It leaves each speed while it can still stop in
+speed, 4 MHz and the slowest speed in that order. When the machine's own speed could pass the target
+before its first read, the rate is measured at the slowest speed instead; before that change, a
+machine already at 64 MHz approached every jump under about 45 minutes in key pulses at 1 MHz, and a
+600 s jump took 77 s instead of 5 s. It leaves each speed while it can still stop in
 time. The key is released before every `CPU Speed` change. A config write can wait up to 1.2 s
 behind the device-safety interval, and with the key up the tune plays at normal speed instead of
 passing the target. Within the last read period the key is released on a timer.
@@ -54,7 +59,8 @@ A pulse carries a fixed overhead of request latency and the keyboard scan that n
 so a remainder smaller than the smallest gain a pulse has shown is played into.
 
 A jump has no fixed time limit. It stops when the tune has not moved for 10 s, when the key has
-been held for 5 s without moving the player's clock 1.5 seconds a second, or after 10 minutes. A
+been held for 5 s without moving the player's clock 1.5 seconds a second (key pulses count as held
+from press to release), or after 10 minutes. A
 jump an hour into a tune on a machine without CPU Speed can take minutes and still lands.
 
 ### On the Ultimate-II+(L)
@@ -95,16 +101,21 @@ another tune starts. The app protects all of them as follows:
 
 - Before the first change, the original `CPU Speed` (and `Turbo Control`, when the seek has to
   switch it from `Off` to `Manual`), `Vol Master` and the patched address are written to a journal
-  in `localStorage` under the device's identity.
+  in `localStorage` under the device's identity. When the journal cannot be stored, for example
+  with storage full, the seek stops before it changes anything.
 - Every end of a seek releases the key or the patch, writes the original values back and reads
   them back. This includes release, the end of the tune, stop, pause, another tune, the page
-  hiding and a 120-second hold limit. Failed attempts are retried four times, and the journal is
-  cleared only after a successful read-back.
+  hiding, a switch to another device and a 120-second hold limit. A device switch waits up to 5 s
+  for the restore before it resets the old machine. A restore is tried up to four times, and the
+  journal is cleared only after a successful read-back.
+- A restore that fails while the app stays connected is tried again after 30 s, 1, 2 and 5 minutes.
 - A journal that is left behind is replayed the next time the app reaches that device. This covers
   a killed app, a lost connection or a phone that went to sleep. A different device is never
-  written to.
+  written to. A journal older than 24 hours is dropped instead: settings written over REST do not
+  survive a power cycle, and replaying it could overwrite settings chosen since.
 - Every write is marked transient, so **Keep device settings after a restart** never saves a
-  seek's CPU speed or volume to flash.
+  seek's CPU speed or volume to flash. Only the last write of a restore lets a held flash save go,
+  because after an earlier one the others still hold the seek's values.
 
 ### Keys only ever reach the SID player
 
@@ -114,14 +125,20 @@ and a key held through REST repeats. Five independent checks stand between a see
 1. Before every press, and before every write of the cartridge's patched byte, the seek reads
    `$DD00` and `$D018` and the clock's row. The VIC must still show the screen the clock was found
    on, and the row must still read as a time. One blank read is retried once; two in a row stop
-   the seek.
+   the seek. Pause, Stop, another tune and a device switch also drop a tap on the bar that is still
+   settling, so no jump starts after them.
 2. `withSeekKeyPermits` (`src/lib/playback/remoteSeek/seekKeyPermit.ts`) wraps the REST call that
    sends keys. A press of a seek key needs a permit for that key on that device, which only the
    check in (1) grants, and which expires after 500 ms. Releases always pass.
-3. A held fast forward ends after two clock reads in a row that find no clock. A jump releases the
-   key at the first such read.
+3. A held fast forward ends after two clock reads in a row that find no clock, when the VIC shows
+   another screen (checked once a second, since the old screen stays in RAM and still reads as a
+   clock), or when the clock has not moved for 10 reads and 5 s. A jump releases the key at the
+   first read that finds no clock.
 4. A restart is refused when the clock cannot be read just before the `-` and `+` keys.
-5. On the cartridge, the patch site is verified before every write.
+5. On the cartridge, the whole routine is verified before every write, including the restore of a
+   recovered journal: the `ldy`, its `jmp` to `sty flag / rts`, and the handler's `lda #flag / beq /
+   inc $d020`. `ldy #1` alone is common code. A link into `$D000`-`$DFFF` is never followed, because
+   reading `$DC0D` acknowledges a running program's interrupts.
 
 ### The phone shows the C64's own second
 
@@ -163,8 +180,11 @@ on the machine's timing:
   raster line ($D011 bit 7 and $D012) up to 60 times at uneven intervals, and uses the standard it
   finds, with the mode's own clock when the standard matches the mode.
 - A CIA-timed tune is called at the machine's CIA clock divided by its latch plus one. The latch is
-  estimated from the highest of 100 timer samples and snapped to a PAL or NTSC frame divided by 1
-  to 8. The same PAL tune's twice-a-frame latch plays 104.06 times a second on an NTSC machine,
+  estimated from the highest of 100 timer samples and snapped to the latches tunes set: a PAL or
+  NTSC frame, 50 or 60 Hz on the machine's own CIA clock, or the player's own latch for a tune of
+  the other standard (16388 and 20514 cycles), each divided by 1 to 8. Without the 60 Hz latch, a
+  PAL machine timed a tune's own 60 Hz timer at an NTSC frame's 57.6 Hz, 4% slow. Latches 0.3%
+  apart, such as an NTSC frame over four and 60 Hz over four, cannot be told apart this way. The same PAL tune's twice-a-frame latch plays 104.06 times a second on an NTSC machine,
   not 100.
 - The player's own clock counts 50 or 60 frames a second, corrected for the standard PAL or NTSC
   rate. In NTSC-50, PAL-60 and the /L modes the frames run slightly faster, so the displayed time
@@ -240,8 +260,8 @@ PSID:
 The app takes the play-call rate from the header for a tune timed by the vertical blank: 50 Hz for
 PAL, 60 Hz for NTSC, and the machine's frame rate when the header names both or neither. For a
 CIA-timed sub tune, the app samples CIA 1 timer A 100 times, in the background as soon as the tune
-is probed, and snaps the result to a multiple of 50 or 60 Hz. The largest sample approximates the
-latch. Forty samples all fell below 85% of a 2x tune's latch once on the Ultimate 64, which read it
+is probed, and snaps the result to a latch as described under Timing in every System Mode. The
+largest sample approximates the latch. Forty samples all fell below 85% of a 2x tune's latch once on the Ultimate 64, which read it
 as 120 Hz instead of 100 Hz and overshot a jump by 20%.
 
 The clock counts 50.1245 play calls per clock second on a PAL machine, not 50: `clock.asm` delays a
@@ -262,6 +282,11 @@ This is the app's config write interval in the Balanced device-safety mode:
 
 For real tunes, the clock after landing showed the target second in every jump, or one second
 less. Restarting a sub tune took 0.26 to 0.28 s.
+
+These errors were measured while every landing added half a second for the clock's rounding. That
+half second belongs only to a position counted from a restart, which holds whole clock seconds. A
+forward jump counts from the page's position, which already holds its fraction, so it now reports
+its landing without it. A held fast forward keeps it.
 
 ### Other findings
 
@@ -300,13 +325,16 @@ The same suites run in CI against the mock server and on the bench against real 
 | Suite | CI | Bench |
 | --- | --- | --- |
 | Unit tests (`tests/unit/playback/remoteSeek/`, `useRemoteSidSeek`) | `npm run test` | — |
-| Playback parity, phone and C64 route (`playwright/parity/`) | `playwright/playbackParity.spec.ts` | `npx tsx tools/hil/playback_parity_hil.ts --hosts c64u,u64,u2` |
+| Playback parity, phone and C64 route (`playwright/parity/`) | `playwright/playbackParity.spec.ts` | `npx tsx tools/hil/playback_parity_hil.ts --hosts c64u,u2` (add `u64` when it is free) |
 | Device soak (`tools/hil/remoteSidSeekSoak.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u SOAK_MINUTES=30 npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekSoak.hil.ts` |
 | Tune corpus (`tools/hil/remoteSidSeekCorpus.hil.ts`) | `npm run test:remote-seek:mock` | `SOAK_HOST=c64u SOAK_SYSTEM_MODE=NTSC npx vitest run --config tools/hil/vitest.hil.config.ts tools/hil/remoteSidSeekCorpus.hil.ts` |
 | Playback chaos, both routes (`playwright/parity/chaosScenario.ts`) | `playwright/playbackChaos.spec.ts` | `npx tsx tools/hil/playback_parity_hil.ts --hosts c64u --chaos 20 --seed 4561` |
 
 `SOAK_HOST` is a host name, or `mock` (an Ultimate 64-family machine) or `mock-u2` (a cartridge
-without key input) for the mock server. The soak and the corpus play generated tunes whose play
+without key input) for the mock server. The mock shows BASIC after a reset or another program, as a
+real machine does, and records every seek key pressed while BASIC is on screen; the soak, the corpus
+and the chaos run fail on any. A CI soak picks its seed from the time and prints it; `SOAK_SEED`
+repeats a run. The soak and the corpus play generated tunes whose play
 routine counts its calls at `$10F0`, or `$F0` into its own code when it loads elsewhere, or at
 `$02F0` when it loads under a ROM. On a real machine the corpus measures each such tune's play rate
 for 12 s and snaps it to an exact rate for the machine's timing, so every landing is checked against

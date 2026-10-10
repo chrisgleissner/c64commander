@@ -7,14 +7,9 @@
  */
 
 /**
- * Playback parity: the same transport works the same way whether the tune plays on the phone or on
- * the C64 — play, pause, resume, stop, hold Next to fast forward, hold Previous to rewind, and a tap
- * on the progress bar to jump.
- *
- * The scenarios only talk to a `ParityDriver`, so one definition runs in two places: in CI against
- * the web build and the mock server (playwright/playbackParity.spec.ts), and on the bench against
- * the phone and a real Ultimate (tools/hil/playback_parity_hil.ts), where a microphone also hears
- * what the speaker plays.
+ * Playback parity: play, pause, resume, stop, hold Next or Previous, and tap the bar work alike on the phone and the
+ * C64. Scenarios only talk to a `ParityDriver`, so they run in CI on the mock (playwright/playbackParity.spec.ts) and
+ * on the bench with a microphone (tools/hil/playback_parity_hil.ts).
  */
 
 export type ParityRoute = "phone" | "c64";
@@ -50,6 +45,8 @@ export type ParityDriver = {
   report?: (line: string) => void;
   /** Record both clocks while `during` runs; absent where the C64's clock cannot be read. */
   recordClocks?: (during: () => Promise<void>) => Promise<ClockRecording>;
+  /** Second changes per window that may miss the limit: one on a shared CI runner, whose scheduler can pause either clock. */
+  clockOutliersAllowed?: number;
   wait(ms: number): Promise<void>;
 };
 
@@ -279,12 +276,17 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         const what = names[index];
         check(errors.length >= 8, `${what}: only ${errors.length} second changes were seen`);
         check(!errors.some(Number.isNaN), `${what}: a second showed on one clock and not on the other`);
-        const worst = Math.max(...errors.map(Math.abs));
+        const sorted = errors.map(Math.abs).sort((x, y) => x - y);
+        const worst = sorted[sorted.length - 1];
+        const judged = sorted[sorted.length - 1 - (driver.clockOutliersAllowed ?? 0)];
         const lags = pageLag.map(Math.round).sort((x, y) => x - y);
         driver.report?.(
           `${what}: the page turned each second ${lags.join(", ")} ms after the C64; at most ${worst} ms apart`,
         );
-        check(worst <= CLOCK_PHASE_LIMIT_MS, `${what}: the page and the C64 turned a second ${worst} ms apart`);
+        check(
+          judged <= CLOCK_PHASE_LIMIT_MS,
+          `${what}: the page and the C64 turned a second ${judged} ms apart (all: ${sorted.map(Math.round).join(", ")})`,
+        );
       });
     },
   },

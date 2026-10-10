@@ -7,12 +7,9 @@
  */
 
 /**
- * What a seek HIL run changes on a real machine, written down before it changes anything.
- *
- * A run that is killed never reaches its own `finally`, and a killed run in the middle of a jump has
- * left a key held, a raised CPU Speed, a muted Vol Master and another System Mode behind. The journal
- * survives the kill, and `npx tsx tools/hil/remoteSeekHil/machineJournal.ts <host>` puts the machine
- * back from it. A run that restores and reads back every setting removes the journal itself.
+ * Written before a seek HIL run changes a real machine: a killed run skips its `finally` and can leave a key held, a
+ * raised CPU Speed, a muted Vol Master and another System Mode. `npx tsx tools/hil/remoteSeekHil/machineJournal.ts
+ * <host>` restores from it; a run that restores and reads back every setting removes it.
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";

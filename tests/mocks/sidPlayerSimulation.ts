@@ -6,18 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-/**
- * A model of the Ultimate SID player as remote seeking sees it through REST, for unit tests and
- * the mock C64 server. The numbers are the ones `tools/hil/remote_sid_seek_poc.py` measured on a
- * C64 Ultimate:
- *
- * - the player draws "mm:ss" at screen+920 and the screen sits at $0800 here (DD00 bank 0, D018 $25);
- * - holding the left-arrow key fast forwards at a rate set by CPU Speed;
- * - while fast forwarding the clock counts play calls as frames, so a tune that is not called once a
- *   frame (an NTSC tune on a PAL machine, a multi-speed tune) moves its clock faster than its music;
- * - minus or plus restarts the sub tune and resets the clock;
- * - CIA 1 timer A ($DC04) counts down from the latch that sets the play-call rate.
- */
+// The Ultimate SID player as remote seeking sees it over REST, measured on a C64 Ultimate by
+// `tools/hil/remote_sid_seek_poc.py`: "mm:ss" at screen+920, screen at $0800 (DD00 bank 0, D018 $25); held left-arrow
+// fast forwards at a CPU Speed rate, the clock counting play calls as frames (so an NTSC tune on PAL or a multi-speed
+// tune clocks ahead of its music); minus or plus restarts the sub tune and clock; CIA 1 timer A ($DC04) counts down
+// from the play-rate latch; a reset or another program leaves for BASIC, where every seek key pressed is recorded.
 
 export const SIMULATED_SCREEN_ADDRESS = 0x0800;
 /**
@@ -36,6 +29,10 @@ export const psidLoadAddress = (psid: Uint8Array) => {
 };
 const DD00_BANK_0 = 0x97;
 const D018_SCREEN_0800 = 0x25;
+const BASIC_SCREEN_ADDRESS = 0x0400;
+const D018_SCREEN_0400 = 0x15;
+const BASIC_SCREEN_ROWS = ["", "", "    BASIC V2", "", "READY."];
+const SEEK_KEYS = ["arrow_left", "minus", "plus"];
 const PAL_CIA_CLOCK_HZ = 985248;
 export const MEASURED_FAST_FORWARD_RATE_BY_MHZ: Record<number, number> = {
   1: 10,
@@ -83,6 +80,8 @@ export type SidPlayerSimulationOptions = {
   playerCode?: { keyboardAddress: number; flagAddress: number } | null;
   /** Where and how the player draws its screen; by default as the current player does. */
   layout?: Partial<SidPlayerLayout>;
+  /** False for a machine that shows BASIC until a tune is loaded, as a real one does after power-on. */
+  startsInPlayer?: boolean;
   now?: () => number;
 };
 
@@ -152,6 +151,9 @@ export class SidPlayerSimulation {
   private timerSample = 0;
   restarts = 0;
   private paused = false;
+  private showingPlayer: boolean;
+  /** Seek keys pressed while BASIC was on screen, where a real machine would have typed them. */
+  private keysOutsidePlayer: string[] = [];
   private playCallHz: number;
   private machineFrameHz: number;
   private readonly clockFrameHz: number | null;
@@ -177,6 +179,7 @@ export class SidPlayerSimulation {
         : placeSidPlayerCode(this.ram, options.playerCode ?? DEFAULT_PLAYER_CODE);
     this.tornClockReads = new Set(options.tornClockReads ?? []);
     this.timerFractions = options.timerFractions ?? [];
+    this.showingPlayer = options.startsInPlayer ?? true;
     this.timerOrigin = this.now();
     this.lastUpdate = this.now();
   }
@@ -196,9 +199,27 @@ export class SidPlayerSimulation {
   /** Fast forward runs while the key is down, or while the keyboard routine's `ldy #0` reads `ldy #1`. */
   get fastForwarding() {
     return (
-      (this.keysDown.has("arrow_left") && !this.unnoticedPresses.has("arrow_left")) ||
-      this.ram[this.code.ldyOperandAddress] === 1
+      this.showingPlayer &&
+      ((this.keysDown.has("arrow_left") && !this.unnoticedPresses.has("arrow_left")) ||
+        this.ram[this.code.ldyOperandAddress] === 1)
     );
+  }
+
+  /** The seek keys pressed outside the player since the last call, which a real machine would have typed. */
+  takeKeysOutsidePlayer() {
+    const keys = this.keysOutsidePlayer;
+    this.keysOutsidePlayer = [];
+    return keys;
+  }
+
+  /** A reset or another program: the machine shows BASIC, and the tune and its clock stop. */
+  leavePlayer() {
+    this.advance();
+    this.showingPlayer = false;
+    this.keysDown.clear();
+    this.pendingReleases.clear();
+    this.unnoticedPresses.clear();
+    this.paused = false;
   }
 
   get heldKeys() {
@@ -219,6 +240,11 @@ export class SidPlayerSimulation {
 
   pressKey(key: string) {
     this.advance();
+    if (!this.showingPlayer) {
+      if (SEEK_KEYS.includes(key)) this.keysOutsidePlayer.push(key);
+      this.keysDown.add(key);
+      return;
+    }
     if ((key === "minus" || key === "plus") && !this.keysDown.has(key)) this.restart();
     this.pendingReleases.delete(key);
     if (this.keyPressDelayMs > 0 && !this.keysDown.has(key))
@@ -253,6 +279,7 @@ export class SidPlayerSimulation {
     this.playCallHz = playCallHz;
     this.machineFrameHz = machineFrameHz;
     this.paused = false;
+    this.showingPlayer = true;
     this.restart();
   }
 
@@ -301,7 +328,7 @@ export class SidPlayerSimulation {
       return address === 0xd012 ? line & 0xff : 0x1b | ((line >> 1) & 0x80);
     }
     if (address === 0xdd00) return DD00_BANK_0;
-    if (address === 0xd018) return D018_SCREEN_0800;
+    if (address === 0xd018) return this.showingPlayer ? D018_SCREEN_0800 : D018_SCREEN_0400;
     if (address === 0xdc04 || address === 0xdc05) {
       const latch = Math.round(this.ciaClockHz / this.playCallHz) - 1;
       if (address === 0xdc04) this.timerSample = (this.timerSample + 7) % 40;
@@ -316,10 +343,11 @@ export class SidPlayerSimulation {
             : Math.round((latch * (40 - this.timerSample)) / 40);
       return address === 0xdc04 ? value & 0xff : value >> 8;
     }
-    const offset = address - SIMULATED_SCREEN_ADDRESS;
+    const offset = address - (this.showingPlayer ? SIMULATED_SCREEN_ADDRESS : BASIC_SCREEN_ADDRESS);
     if (offset < 0 || offset >= 1000) return 0;
     const row = Math.floor(offset / 40);
-    if (!rows.has(row)) rows.set(row, this.screenRow(row, torn));
+    if (!rows.has(row))
+      rows.set(row, this.showingPlayer ? this.screenRow(row, torn) : (BASIC_SCREEN_ROWS[row] ?? "").padEnd(40, " "));
     return toScreenCode(rows.get(row)!.charAt(offset % 40));
   }
 
@@ -357,7 +385,7 @@ export class SidPlayerSimulation {
   private advanceTo(now: number) {
     const elapsed = Math.max(0, (now - this.lastUpdate) / 1000);
     this.lastUpdate = now;
-    if (this.paused) return;
+    if (this.paused || !this.showingPlayer) return;
     if (this.fastForwarding) {
       const clockGain = elapsed * (this.rates[this.cpuMhz] ?? this.rates[1]);
       this.clockSeconds += clockGain;
@@ -384,10 +412,9 @@ export const simulatedClockField = (layout: Partial<SidPlayerLayout> = {}) => {
 const DEFAULT_PLAYER_CODE = { keyboardAddress: 0xc340, flagAddress: 0xc1f0 };
 
 /**
- * Lay out the player code that `findFastForwardPatch` looks for, with the bytes of the built player
- * (1541ultimate software/6502/sidcrt/target/advancedplayer.bin and player.bin) at the addresses the
- * loader would have relocated them to: the keyboard routine's row scan ending in `ldy #0 / jmp
- * store`, the store `sty flag / rts`, and the interrupt handler's `lda #flag / beq / inc $d020`.
+ * Lays out the code `findFastForwardPatch` looks for, as the built player's bytes (1541ultimate
+ * software/6502/sidcrt/target/advancedplayer.bin and player.bin) at their relocated addresses: the row scan ending in
+ * `ldy #0 / jmp store`, the store `sty flag / rts`, and the interrupt handler's `lda #flag / beq / inc $d020`.
  */
 export const placeSidPlayerCode = (
   memory: Uint8Array,

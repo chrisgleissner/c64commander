@@ -7,13 +7,9 @@
  */
 
 /**
- * The machine a remote seek test runs against, over REST the way the app reaches it: a real
- * Ultimate by host name, or the mock server with its simulated SID player, so the same test runs on
- * the bench and in CI.
- *
- *   SOAK_HOST=c64u | u64 | u2       a real machine
- *   SOAK_HOST=mock                  a simulated Ultimate 64-family computer
- *   SOAK_HOST=mock-u2               a simulated Ultimate-II+(L): no key input, CPU Speed or Audio Mixer
+ * The machine a remote seek test runs against over REST: a real Ultimate (SOAK_HOST=c64u|u64|u2) or the mock server's
+ * SID player (`mock`: Ultimate 64-family; `mock-u2`: Ultimate-II+(L) with no key input, CPU Speed or Audio Mixer), so
+ * the same test runs on the bench and in CI.
  */
 
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";

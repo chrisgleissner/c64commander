@@ -7,14 +7,13 @@
  */
 
 /**
- * Fast forward, rewind and jumps against a simulated SID player whose rates are the ones measured
- * on a C64 Ultimate. Positions are checked against the music's own position, not the player's
- * clock, because the clock runs ahead of the music while fast forwarding any tune not called once
- * a frame.
+ * Fast forward, rewind and jumps against a simulated SID player with rates measured on a C64 Ultimate. Positions are
+ * checked against the music, not the player's clock, which runs ahead while fast forwarding a tune not called once a
+ * frame.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readRemoteSeekJournal } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
+import { readRemoteSeekJournal, RESTORE_RETRY_DELAYS_MS } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
 import { machineTimingFor } from "@/lib/playback/remoteSeek/remoteSeekPlan";
 import { FAST_FORWARD_MAX_HOLD_MS, RemoteSidSeekController } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 import {
@@ -407,6 +406,68 @@ describe("remote SID seek controller", () => {
     expect(controller.isBusy).toBe(false);
   });
 
+  it("lands a rewind to the start asked for in the tune's first second, without restarting it", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await vi.advanceTimersByTimeAsync(400);
+    const landing = await settle(controller.jumpTo(() => 0.5, 0));
+    expect(landing?.completed).toBe(true);
+    expect(device.player.restarts).toBe(0);
+    expect(device.log.filter((entry) => /^key press (minus|plus)/.test(entry))).toEqual([]);
+  });
+
+  it("reports a forward jump's landing without adding half a second to a position that holds its fraction", async () => {
+    const errors: number[] = [];
+    for (const startMs of [10_250, 20_500, 30_750, 40_100, 50_900]) {
+      const device = createFakeRemoteSeekDevice();
+      const controller = new RemoteSidSeekController(device.api, profile());
+      await vi.advanceTimersByTimeAsync(startMs);
+      const exact = () => device.player.tunePositionSeconds;
+      const jumped = await settle(controller.jumpTo(exact, exact() + 45));
+      errors.push(jumped!.seconds + (Date.now() - jumped!.atMs) / 1000 - exact());
+    }
+    // Measured in this simulation: a mean of 0.31 s, and 0.81 s with the half second added again.
+    const mean = errors.reduce((sum, error) => sum + error, 0) / errors.length;
+    expect(Math.abs(mean)).toBeLessThan(0.5);
+  });
+
+  it("jumps as quickly on a machine already at 64 MHz as on one at 1 MHz, measuring at the slowest speed first", async () => {
+    const tookMs = async (cpuSpeed: string) => {
+      const device = createFakeRemoteSeekDevice({ settings: { "CPU Speed": cpuSpeed } });
+      const controller = new RemoteSidSeekController(device.api, profile());
+      await vi.advanceTimersByTimeAsync(10_000);
+      const startedAt = Date.now();
+      const landing = await settle(controller.jumpTo(() => device.player.tunePositionSeconds, 610));
+      expect(landing?.completed).toBe(true);
+      expect(Math.abs(device.player.tunePositionSeconds - 610)).toBeLessThan(3);
+      return Date.now() - startedAt;
+    };
+    const atOne = await tookMs(" 1");
+    expect(await tookMs(" 64")).toBeLessThan(atOne * 2);
+  });
+
+  it("stops approaching in key pulses when the key does not fast forward the tune", async () => {
+    const normalSpeed = Object.fromEntries([1, 2, 4, 8, 16, 32, 48, 64].map((mhz) => [mhz, 1]));
+    const device = createFakeRemoteSeekDevice({ fastForwardRateByMhz: normalSpeed });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const startedAt = Date.now();
+    // Near enough that the jump approaches it in timed pulses rather than holding the key.
+    const landing = await settle(controller.jumpTo(() => device.player.tunePositionSeconds, 25));
+    expect(landing?.completed).toBe(false);
+    expect(Date.now() - startedAt).toBeLessThan(15_000);
+    expect(device.player.heldKeys).toEqual([]);
+  });
+
+  it("gives the device back once when a jump fails, not again on the way out", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    device.failures.configWrites = 1000;
+    const landing = await settle(controller.jumpTo(() => 0, 300));
+    expect(landing?.completed).toBe(false);
+    const restoreAttempts = device.log.filter((entry) => entry === "FAILED CPU Speed=1").length;
+    expect(restoreAttempts).toBe(RESTORE_RETRY_DELAYS_MS.length);
+  });
+
   it("sends no restart keys for a rewind cancelled before it began", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
@@ -542,8 +603,8 @@ describe("remote SID seek controller", () => {
     await settle(controller.endFastForward());
     const at = (entry: string) => device.log.indexOf(entry);
     expect(at("Vol Master=OFF (transient)")).toBeLessThan(at("key press arrow_left"));
-    expect(at("Vol Master=0 dB (restore)")).toBeGreaterThan(device.log.lastIndexOf("key release arrow_left"));
-    expect(at("Vol Master=0 dB (restore)")).toBeLessThan(at("CPU Speed=1 (restore)"));
+    expect(at("Vol Master=0 dB (transient)")).toBeGreaterThan(device.log.lastIndexOf("key release arrow_left"));
+    expect(at("Vol Master=0 dB (transient)")).toBeLessThan(at("CPU Speed=1 (restore)"));
     expect(device.settings["Vol Master"]).toBe(" 0 dB");
   });
 
@@ -616,6 +677,15 @@ describe("remote SID seek controller", () => {
     // The simulated clock turned a second every 1000 ms since 2_000_000.
     expect(tick?.clockSeconds).toBe(4);
     expect(Math.abs((tick?.tickAtMs ?? 0) - 2_004_000)).toBeLessThanOrEqual(25);
+  });
+
+  it("is not busy while it only re-syncs to the clock, so Stop and auto-advance need not wait for it", async () => {
+    const device = createFakeRemoteSeekDevice({ latencyMs: 12 });
+    const controller = new RemoteSidSeekController(device.api, profile());
+    const tick = controller.clockTick();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(controller.isBusy).toBe(false);
+    await settle(tick);
   });
 
   it("does not let a clock re-sync hold up the release of a fast forward", async () => {
@@ -710,16 +780,6 @@ describe("remote SID seek controller", () => {
       const at = () => device.player.tunePositionSeconds;
       const landed = await settle(controller.jumpTo(at, target));
       expect(Math.abs((landed?.seconds ?? 0) - at())).toBeLessThan(2);
-      if (at() - target < -2) {
-        const { addErrorLog } = await import("@/lib/logging");
-        console.log(
-          "SHORT",
-          target,
-          stalledRead,
-          landed,
-          JSON.stringify(vi.mocked(addErrorLog).mock.calls.slice(-2)).slice(0, 400),
-        );
-      }
       // A stall with the key up lets the tune play on at normal speed; it must not run any further.
       expect(at() - target).toBeLessThan(8 + 3);
       expect(at() - target).toBeGreaterThan(-2);
@@ -1289,6 +1349,45 @@ describe("remote SID seek controller when the device misbehaves", () => {
     await vi.advanceTimersByTimeAsync(150);
     expect(device.player.heldKeys).toEqual([]);
     await settle(jump);
+  });
+
+  it("ends a held fast forward once the VIC shows another screen, though the old one still reads as a clock", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const read = device.api.readMemory;
+    let otherScreen = false;
+    device.api.readMemory = async (address, length, options) =>
+      otherScreen && address === "D018" ? Uint8Array.of(0x15) : read(address, length, options);
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(device.player.heldKeys).toEqual(["arrow_left"]);
+    otherScreen = true;
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(device.player.heldKeys).toEqual([]);
+    expect(controller.isFastForwarding).toBe(false);
+  });
+
+  it("ends a held fast forward whose clock has stopped moving", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const controller = new RemoteSidSeekController(device.api, profile());
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1500);
+    device.player.setPaused(true);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(device.player.heldKeys).toEqual(["arrow_left"]);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(device.player.heldKeys).toEqual([]);
+    expect(controller.isFastForwarding).toBe(false);
   });
 
   it("sends no restart keys once the SID player has left the screen, where BASIC would type them", async () => {

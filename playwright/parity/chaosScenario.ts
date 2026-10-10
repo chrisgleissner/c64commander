@@ -7,16 +7,9 @@
  */
 
 /**
- * Playback chaos: a seeded random run of transport gestures, many of them overlapping — Pause in the
- * middle of a hold, a jump replaced by another, the app sent to the background or killed while a key
- * is held on the C64, the output switched while a tune plays.
- *
- * After every action, once the app is idle, the same things must hold whatever happened: the machine
- * has its settings back and no key held, the app has no seek journal left, the page shows where the
- * tune really is, the transport shows a state the action can lead to, and the app logged no error.
- *
- * Like the parity scenarios it only talks to a driver, so it runs in CI against the mock and on the
- * bench against the phone and a real Ultimate.
+ * Playback chaos: seeded random, often overlapping transport gestures (Pause mid-hold, a replaced jump, the app
+ * backgrounded or killed while a key is held, output switched). Once idle: settings restored, no held key or seek
+ * journal, the page shows the real position, the transport shows a state the action can lead to, no error logged.
  */
 
 import { landedSeconds, ParityFailure, type ParityDriver, type ParityRoute } from "./playbackParityScenarios";

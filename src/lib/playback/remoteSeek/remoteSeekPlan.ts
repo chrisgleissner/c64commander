@@ -7,13 +7,9 @@
  */
 
 /**
- * The numbers behind seeking a tune the C64 plays itself, measured with
- * `tools/hil/remote_sid_seek_poc.py` on a C64 Ultimate (firmware 1.2.1RC2).
- *
- * The Ultimate's SID player fast forwards while the left-arrow key is held, by calling the tune's
- * play routine back to back. That loop is bound by the CPU, so CPU Speed sets how fast it goes:
- * about 10-16x at 1 MHz, 40-57x at 4 MHz, 125-190x at 16 MHz and 295-430x at 64 MHz on a C64
- * Ultimate, and 10-19x, 54-97x, 210-352x and 391-638x at 1, 4, 16 and 48 MHz on an Ultimate 64 Elite.
+ * Rates measured with `tools/hil/remote_sid_seek_poc.py`. Held left-arrow calls the play routine back to back, so CPU
+ * Speed sets the rate: 10-16x at 1 MHz up to 295-430x at 64 MHz on a C64 Ultimate (1.2.1RC2), and 10-19x up to 391-638x
+ * at 48 MHz on an Ultimate 64 Elite.
  */
 
 /**
@@ -62,9 +58,8 @@ export const rewindOffsetSeconds = (stepsHeld: number): number => {
 
 /**
  * The least a CPU Speed multiplies the 1 MHz fast forward rate, from eight tunes measured on a C64
- * Ultimate (six from HVSC, a tone test tune and a play-call counter). The most it can multiply it
- * by is the clock ratio itself: the loop cannot outrun the CPU. Absolute rates cannot be tabulated,
- * because a light play routine fast forwards up to six times faster than real music at every speed.
+ * Ultimate; the most is the clock ratio itself. Absolute rates cannot be tabulated: a light play
+ * routine fast forwards up to six times faster than real music at every speed.
  */
 const RATE_RATIO_LOWER: ReadonlyArray<[number, number]> = [
   [1, 1],
@@ -110,22 +105,17 @@ const RELEASE_MARGIN_SECONDS = 0.05;
 const RATE_SAFETY_FACTOR = 1.3;
 
 /**
- * Chooses the CPU Speed for each step of a jump.
- *
- * A jump starts at the machine's own speed and measures how fast this tune fast forwards there.
- * Every other speed's rate is then bounded from above: by the clock ratio from a slower measurement,
- * and by the least measured ratio from a faster one. A speed is used while the remaining distance
- * exceeds what it covers, at that bound, in the lead time, so a jump slows down early rather than
- * overshoots. A measurement never lowers the bound: the first CPU Speed change after a tune starts
- * can take a second to apply, and a rate measured meanwhile is far too low. The tiers are the
- * maximum, 4 MHz and the slowest speed: each change costs a CPU Speed write that may wait out the
- * config write interval, so they are few.
+ * CPU Speed per jump step: the maximum, 4 MHz and the slowest, as each change may wait out the config write interval.
+ * One measured rate bounds every speed's rate from above; a speed is used while the distance left exceeds what it
+ * covers at that bound in the lead time. Measurements never lower a bound: the first change can take a second.
  */
 export class JumpSpeedPlanner {
   readonly tiers: string[];
   private readonly measured = new Map<string, number>();
   /** Tiers are only ever left downwards: each change costs a write, and climbing back invited oscillation. */
   private slowestChosen = 0;
+  /** Where the first rate is measured: the machine's own speed, unless that could overshoot unmeasured. */
+  private calibrationOption: string;
 
   constructor(
     options: readonly string[],
@@ -138,6 +128,12 @@ export class JumpSpeedPlanner {
       .map((mhz) => (mhz === undefined ? null : optionForMhz(options, mhz)))
       .filter((option): option is string => option !== null);
     this.tiers = tiers.length ? [...new Set(tiers)] : [baseOption];
+    this.calibrationOption = baseOption;
+  }
+
+  /** Measure the first rate at the slowest speed instead. */
+  calibrateAtFinalOption() {
+    this.calibrationOption = this.finalOption;
   }
 
   /** The speed a jump finishes at, and the only one whose landing is timed rather than read. */
@@ -173,7 +169,7 @@ export class JumpSpeedPlanner {
 
   /** The fastest tier that cannot overshoot `remainingClockSeconds` within the lead time. */
   choose(remainingClockSeconds: number, readPeriodSeconds: number): string {
-    if (!this.calibrated) return this.baseOption;
+    if (!this.calibrated) return this.calibrationOption;
     const leadSeconds = 2 * readPeriodSeconds + RELEASE_MARGIN_SECONDS;
     for (let index = this.slowestChosen; index < this.tiers.length; index += 1) {
       const option = this.tiers[index];
@@ -247,29 +243,43 @@ export const machineTimingFor = (
 export const isSixtyHzMachine = (machine: MachineTiming) => machine.frameCycles === NTSC_FRAME_CYCLES;
 
 /**
- * The tune's play-call rate from CIA 1 timer A samples (little-endian pairs read at $DC04).
- *
- * A sample can only fall short of the latch, so the highest one is snapped up, within 10% (and down
- * by at most 0.5%, for a latch rounded the other way), to the nearest period a composer writes: a PAL or NTSC frame divided by one to eight. The rate is the
- * machine's CIA clock over that period. It is not a multiple of 50 or 60 on the other standard's
- * clock: a PAL tune's twice-a-frame latch plays 104 times a second on an NTSC machine.
+ * Cycles between the player's calls of a once-a-frame tune made for the other standard: an NTSC tune on
+ * a PAL machine, measured on the C64 Ultimate, and a PAL tune on an NTSC one, the latch in player.asm.
+ */
+export const NTSC_TUNE_ON_PAL_CYCLES = 16388;
+export const PAL_TUNE_ON_NTSC_CYCLES = 20514;
+
+/**
+ * The latches a tune sets for a rate it was written for: a frame of either standard, 50 or 60 Hz on
+ * this machine's own CIA clock, or the player's own latch for a tune of the other standard, each
+ * divided by one to eight for multi-speed tunes.
+ */
+const composedPeriods = (machine: MachineTiming) =>
+  [
+    PAL_FRAME_CYCLES,
+    NTSC_FRAME_CYCLES,
+    machine.ciaClockHz / 50,
+    machine.ciaClockHz / 60,
+    NTSC_TUNE_ON_PAL_CYCLES,
+    PAL_TUNE_ON_NTSC_CYCLES,
+  ].flatMap((period) => [1, 2, 3, 4, 5, 6, 7, 8].map((perFrame) => Math.round(period / perFrame)));
+
+/**
+ * The play-call rate from CIA 1 timer A samples ($DC04). A sample only falls short of the latch, so the
+ * highest is snapped up (within 10%, or down 0.5%) to the nearest of `composedPeriods`, and the rate is
+ * the machine's CIA clock over it: a PAL tune's twice-a-frame latch plays 104 times a second on NTSC.
  */
 export const playCallRateFromTimerSamples = (samples: readonly number[], machine: MachineTiming): number | null => {
   const highest = Math.max(0, ...samples);
   if (highest <= 0) return null;
   const sampled = highest + 1;
-  const composed = [PAL_FRAME_CYCLES, NTSC_FRAME_CYCLES]
-    .flatMap((frame) => [1, 2, 3, 4, 5, 6, 7, 8].map((perFrame) => Math.round(frame / perFrame)))
-    .filter((period) => period >= sampled * 0.995 && period <= sampled * 1.1);
+  const composed = composedPeriods(machine).filter((period) => period >= sampled * 0.995 && period <= sampled * 1.1);
   return machine.ciaClockHz / (composed.length ? Math.min(...composed) : sampled);
 };
 
 /**
- * Clock seconds that pass per tune second while fast forwarding.
- *
- * The player's clock counts frames at normal speed, but while fast forwarding it counts play calls
- * as frames. An NTSC tune on a PAL machine (60 calls a second) therefore gains 1.2 clock seconds per
- * tune second, and a 4x multi-speed tune 4. Measured against a play-call counter on the C64 Ultimate.
+ * Clock seconds per tune second while fast forwarding, when the clock counts play calls as frames: an
+ * NTSC tune on a PAL machine gains 1.2, a 4x multi-speed tune 4 (measured with a play-call counter).
  */
 export const clockSecondsPerTuneSecond = (playCallHz: number, timing: MachineTiming): number =>
   playCallHz / timing.clockFrameHz;

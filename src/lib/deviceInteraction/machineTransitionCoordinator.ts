@@ -60,7 +60,10 @@ export const createMachineTransitionCoordinator = () => {
 
   return {
     request: (target: MachineTransitionTarget, run: () => Promise<void>) => {
-      if (activeEntry?.target === target && !queuedEntry) {
+      // The transition under way already reaches this target, so whatever was queued after it is moot.
+      if (activeEntry?.target === target) {
+        queuedEntry?.reject(new SupersededMachineTransitionError(queuedEntry.target));
+        queuedEntry = null;
         return activeEntry.promise;
       }
       if (queuedEntry?.target === target) {

@@ -6,19 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-/**
- * Fast forward on a machine that takes no key input, such as the Ultimate-II+(L).
- *
- * The SID player fast forwards while a flag in its interrupt handler is set
- * (player.asm: `fastForward lda #flag / beq`). Its keyboard routine (keyboard.asm) sets that flag
- * when the left-arrow key goes down and clears it on every frame without a key: it ends in
- * `ldy #0 / jmp store`, and `store` is `sty flag / rts`. Writing 1 into that `ldy #0` makes the
- * routine set the flag on every frame instead, which holds fast forward exactly as the key does;
- * writing 0 back releases it.
- *
- * The routine moves with the tune, so it is found by its code. Every link of the chain is checked
- * before the byte is touched, and anything that does not match leaves the machine alone.
- */
+// Fast forward without key input (Ultimate-II+(L)). The player fast forwards while a flag in its interrupt handler is
+// set (player.asm: `fastForward lda #flag / beq`). Its keyboard routine (keyboard.asm) sets it on left-arrow and clears
+// it each keyless frame via `ldy #0 / jmp store`, `store` being `sty flag / rts`. Writing 1 into that `ldy #0` holds
+// fast forward as the key does; 0 releases it. The routine moves with the tune, so it is found by its code; any link
+// that does not match leaves the machine alone.
 
 /** `sty $dc00 / lda $dc01 / cmp #$ff / bne`: the keyboard routine's row scan. */
 const ROW_SCAN = [0x8c, 0x00, 0xdc, 0xad, 0x01, 0xdc, 0xc9, 0xff, 0xd0];
@@ -82,9 +74,33 @@ export const findFastForwardPatch = (memory: Uint8Array, base: number): FastForw
   return found.length === 1 ? found[0] : null;
 };
 
-/** True when the two bytes at the `ldy` still read `ldy #0` or `ldy #1`: the routine is still there. */
-export const isFastForwardPatchSite = (ldyBytes: Uint8Array) =>
+const isFastForwardPatchSite = (ldyBytes: Uint8Array) =>
   ldyBytes[0] === LDY_IMMEDIATE && (ldyBytes[1] === FAST_FORWARD_RELEASED || ldyBytes[1] === FAST_FORWARD_HELD);
+
+/** Reading $DC0D would acknowledge the CIA's interrupts for whatever runs; a link into I/O is no player's. */
+const inIo = (address: number) => address >= 0xd000 && address < 0xe000;
+
+/**
+ * True when the routine found at `ldyOperandAddress` still links up as the player's, from its
+ * `ldy` through `jmp`, `sty flag / rts` to the handler's `lda #flag / beq / inc $d020`. `ldy #1`
+ * alone is common code, so another program loaded since would match two bytes.
+ */
+export const isFastForwardPatchStillThere = async (
+  readMemory: (address: string, length: number) => Promise<Uint8Array>,
+  ldyOperandAddress: number,
+): Promise<boolean> => {
+  const hex = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
+  const head = await readMemory(hex(ldyOperandAddress - 1), 5);
+  if (!isFastForwardPatchSite(head) || head[2] !== JMP_ABSOLUTE) return false;
+  const store = head[3] | (head[4] << 8);
+  if (inIo(store)) return false;
+  const storeBytes = await readMemory(hex(store), 4);
+  if (storeBytes[0] !== STY_ABSOLUTE || storeBytes[3] !== RTS) return false;
+  const flag = storeBytes[1] | (storeBytes[2] << 8);
+  if (inIo(flag - 1) || inIo(flag + 2 + INC_BORDER.length)) return false;
+  const handler = await readMemory(hex(flag - 1), 4 + INC_BORDER.length);
+  return handler[0] === LDA_IMMEDIATE && handler[2] === BEQ && matches((address) => handler[address], 4, INC_BORDER);
+};
 
 /** Read in pieces this size, so no single DMA read holds up the tune's CPU for long enough to hear. */
 const SCAN_CHUNK_BYTES = 0x800;

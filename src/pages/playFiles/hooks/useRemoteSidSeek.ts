@@ -17,6 +17,7 @@ import {
   createRemoteSeekApi,
   setActiveRemoteSidSeek,
   setRemoteSidSeekGesture,
+  setRemoteSidSeekGestureReset,
 } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { isRemoteSeekSuperseded, remoteSeekErrorDetails } from "@/lib/playback/remoteSeek/remoteSeekErrors";
 import { rewindOffsetSeconds } from "@/lib/playback/remoteSeek/remoteSeekPlan";
@@ -91,13 +92,9 @@ const machineInputAvailable = async (deviceInfo: DeviceInfo) => {
 };
 
 /**
- * Fast forward, rewind and jumps for a SID the C64 plays itself, behind the same gestures the
- * on-device engine uses: hold Next to fast forward (faster each second), hold Previous to move the
- * target back 10, 20, 40, then 80 seconds a second and jump there on release, and drag the bar.
- *
- * Returns no handlers until the tune is known to support it: a PSID with a play routine, on a
- * machine that takes key input, showing the Ultimate SID player. Until then Previous and Next stay
- * plain track controls, exactly as before.
+ * Remote SID seek behind the on-device gestures: hold Next to fast forward (faster each second), hold Previous to move
+ * the target back 10, 20, 40, then 80 seconds a second, jump on release, drag the bar. No handlers until the tune is a
+ * PSID with a play routine, on a machine with key input, showing the Ultimate SID player.
  */
 export const useRemoteSidSeek = ({
   item,
@@ -130,6 +127,12 @@ export const useRemoteSidSeek = ({
   const jumpAwaited = useCallback(() => jumpingRef.current || dragTimerRef.current !== null, []);
   const live = useRef({ elapsedMs, durationMs, rebasePlaybackPosition });
   live.current = { elapsedMs, durationMs, rebasePlaybackPosition };
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  /** A probe that met a paused tune, whose clock stands still; it runs again on resume. */
+  const probeDeferredRef = useRef(false);
+  const pausesRef = useRef(0);
+  const [probeRound, setProbeRound] = useState(0);
 
   const resetGestures = useCallback(() => {
     seekEpochRef.current += 1;
@@ -168,11 +171,16 @@ export const useRemoteSidSeek = ({
   const deviceId = deviceInfo?.unique_id ?? null;
 
   useEffect(() => {
+    probeDeferredRef.current = false;
     if (!active || !item || item.category !== "sid" || !deviceInfo) return;
     let current = true;
     const timer = setTimeout(() => {
       void (async () => {
         try {
+          if (pausedRef.current) {
+            probeDeferredRef.current = true;
+            return;
+          }
           const tune = await readTune(item);
           const header = tune?.header ?? null;
           const blocker = remoteSeekHeaderBlocker(header);
@@ -181,12 +189,18 @@ export const useRemoteSidSeek = ({
             return;
           }
           if (!current) return;
+          const pausesBefore = pausesRef.current;
           const keyInput = await machineInputAvailable(deviceInfo);
           const api = createRemoteSeekApi();
           const profile = await probeRemoteTuneSeek(api, header, songNr ?? header.startSong, () => current, {
             keyInput,
           });
           if (!current) return;
+          if (!profile && (pausedRef.current || pausesRef.current !== pausesBefore)) {
+            if (pausedRef.current) probeDeferredRef.current = true;
+            else setProbeRound((round) => round + 1);
+            return;
+          }
           if (!profile) {
             addLog("debug", "Remote seek unavailable: no SID player clock or fast forward found", {
               item: item.label,
@@ -236,21 +250,27 @@ export const useRemoteSidSeek = ({
       }
     };
     // `item` is read through its id: a new object for the same tune must not restart the probe.
-  }, [active, itemId, songNr, trackInstanceId, deviceId, resetGestures, syncToClock]);
+  }, [active, itemId, songNr, trackInstanceId, deviceId, probeRound, resetGestures, syncToClock]);
 
   // The phone's timer and the C64's drift apart, and a resumed or rebased timeline can land between
   // two of the C64's seconds; following its clock now and then keeps them on the same second.
   useEffect(() => {
-    if (!controller) return;
-    const timer = window.setInterval(() => void syncToClock(controller), CLOCK_FOLLOW_INTERVAL_MS);
+    if (!controller || paused) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "hidden") void syncToClock(controller);
+    }, CLOCK_FOLLOW_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [controller, syncToClock]);
+  }, [controller, paused, syncToClock]);
 
   // A pause stops whatever seek is under way and gives the device back; the probe stays, so the
   // gestures are back the moment the tune resumes, and the clock is followed again from there.
   useEffect(() => {
+    if (paused) pausesRef.current += 1;
     const owned = controllerRef.current;
-    if (!owned) return;
+    if (!owned) {
+      if (!paused && probeDeferredRef.current) setProbeRound((round) => round + 1);
+      return;
+    }
     if (paused) {
       resetGestures();
       void owned.cancel("paused");
@@ -265,6 +285,10 @@ export const useRemoteSidSeek = ({
     setRemoteSidSeekGesture(targetMs !== null);
   }, [targetMs]);
   useEffect(() => () => setRemoteSidSeekGesture(false), []);
+  useEffect(() => {
+    setRemoteSidSeekGestureReset(resetGestures);
+    return () => setRemoteSidSeekGestureReset(null);
+  }, [resetGestures]);
 
   // A hidden page stops running timers within a minute; a seek must not be left holding the key.
   useEffect(() => {

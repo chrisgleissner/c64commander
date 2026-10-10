@@ -10,10 +10,8 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 /**
- * Runs `tools/hil/*.hil.ts`: the app's own modules against a real Ultimate, in the same jsdom
- * environment the unit tests use. CI never runs these; they need the bench.
- *
- *   npx vitest run --config tools/hil/vitest.hil.config.ts
+ * Runs `tools/hil/*.hil.ts`: the app's modules against a real Ultimate in the unit tests' jsdom environment. CI runs
+ * them against the mock server (`npm run test:remote-seek:mock`); commands are in docs/testing/remote-sid-seek.md.
  */
 export default defineConfig({
   resolve: {

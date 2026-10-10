@@ -6,24 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-/**
- * Soak and stress test of remote SID seeking against a real Ultimate, using the app's own modules.
- *
- * It drives `RemoteSidSeekController`, `RemoteSeekDeviceSession` and the recovery path in a random
- * mix of fast forwards, jumps, chained and cancelled operations, simulated app deaths, device
- * switches, a user CPU Speed and Turbo Control Off, and background REST load. The tunes are silent
- * generated PSIDs whose play routine counts its calls, so every landing is checked against the
- * exact tune position. After every operation the device must be as it was before it: the user's
- * CPU Speed and Turbo Control, no key held, an empty journal, the SID player on screen and REST
- * answering.
- *
- *   SOAK_HOST=c64u SOAK_MINUTES=30 npx vitest run --config tools/hil/vitest.hil.config.ts
- *
- * Environment: SOAK_HOST (c64u; `mock` and `mock-u2` run it against the mock server, as CI does),
- * SOAK_MINUTES (20), SOAK_SEED (time), SOAK_WRITE_DELAY_MS (500, the app's config write interval in
- * Balanced mode), SOAK_OUT (artifacts/remote-seek-soak-<host>.json). On a machine without key input
- * (the Ultimate-II+(L)) the seeks go through the SID player's own keyboard routine instead.
- */
+// Soak test of remote SID seeking with the app's modules: random fast forwards, jumps, chained and cancelled
+// operations, app deaths, device switches, a user CPU Speed, Turbo Control Off and REST load, on PSIDs that count their
+// play calls. After each operation the device must be as before. SOAK_HOST, SOAK_MINUTES, commands:
+// docs/testing/remote-sid-seek.md. Also SOAK_SEED (default: time), SOAK_WRITE_DELAY_MS (500, the config write interval
+// in Balanced mode) and SOAK_OUT (artifacts/remote-seek-soak-<host>.json).
 
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -36,6 +23,7 @@ import {
   type DeviceTarget,
   type RequestTotals,
 } from "./remoteSeekHil/device";
+import { openMachineJournal, restoreFromMachineJournal } from "./remoteSeekHil/machineJournal";
 import { callHzOfTune, counterPsid, SOAK_TUNES, type CounterTune } from "./remoteSeekHil/tunes";
 
 const logs = vi.hoisted(() => ({ errors: [] as Array<[string, unknown]>, warns: [] as Array<[string, unknown]> }));
@@ -144,6 +132,12 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       master: await read(AUDIO_MIXER, "Vol Master"),
     });
     const baseline = await readSettings();
+    if (!target.simulated)
+      await openMachineJournal(HOST, [
+        [U64, "CPU Speed"],
+        [U64, "Turbo Control"],
+        [AUDIO_MIXER, "Vol Master"],
+      ]);
     const systemMode = (await read(U64, "System Mode"))?.trim() ?? "PAL";
     if (systemMode !== "PAL")
       throw new Error(`The soak's play-call rates are for a PAL machine; ${HOST} runs ${systemMode}`);
@@ -199,6 +193,8 @@ describe(`remote SID seek soak on ${HOST}`, () => {
       }
       const keys = await device.heldKeys();
       if (keys.length) violations.push(`keys held: ${keys.join(",")}`);
+      const typed = device.target.mock?.sidPlayer?.takeKeysOutsidePlayer() ?? [];
+      if (typed.length) violations.push(`seek keys pressed outside the SID player: ${typed.join(",")}`);
       if (profile?.fastForward.kind === "patch") {
         const site = await device.readmem(profile.fastForward.ldyOperandAddress - 1, 2);
         if (site[0] !== 0xa0 || site[1] !== 0x00) violations.push(`fast forward patch left: ${site.join(",")}`);
@@ -539,6 +535,7 @@ describe(`remote SID seek soak on ${HOST}`, () => {
         await device.write(U64, "Turbo Control", baseline.turbo);
       if (baseline.master !== null && end.master !== baseline.master)
         await device.write(AUDIO_MIXER, "Vol Master", baseline.master);
+      if (!target.simulated) final.push(...(await restoreFromMachineJournal(HOST)));
       await target.close();
       const landed = records.filter((record) => record.errorSeconds !== undefined && record.completed !== false);
       const byOp: Record<string, unknown> = {};

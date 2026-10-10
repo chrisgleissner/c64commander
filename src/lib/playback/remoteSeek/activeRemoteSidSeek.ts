@@ -29,6 +29,7 @@ export const createRemoteSeekApi = (): RemoteSeekApi => {
 };
 
 let active: RemoteSidSeekController | null = null;
+let gestureReset: (() => void) | null = null;
 
 export const setActiveRemoteSidSeek = (controller: RemoteSidSeekController | null) => {
   active = controller;
@@ -41,12 +42,19 @@ export const setActiveRemoteSidSeek = (controller: RemoteSidSeekController | nul
  */
 export const cancelRemoteSidSeek = async (reason: string): Promise<void> => {
   const controller = active;
+  // A tap on the bar still settling, or a held button, would otherwise start its seek after this.
+  gestureReset?.();
   if (!controller || !isRemoteSidSeekBusy()) return;
   addLog("debug", "Remote seek cancelled", { reason });
   await controller.cancel(reason);
 };
 
 let gestureActive = false;
+
+/** How the Play page drops a gesture it has not sent yet; `cancelRemoteSidSeek` calls it first. */
+export const setRemoteSidSeekGestureReset = (reset: (() => void) | null) => {
+  gestureReset = reset;
+};
 
 /** A hold or a drag is under way on the Play page, even before it has sent anything to the device. */
 export const setRemoteSidSeekGesture = (on: boolean) => {

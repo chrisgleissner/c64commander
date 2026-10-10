@@ -14,7 +14,7 @@ import { isSidVolumeOffValue } from "@/lib/config/sidVolumeControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
 import { grantSeekKeyPress } from "./seekKeyPermit";
-import { FAST_FORWARD_HELD, FAST_FORWARD_RELEASED, isFastForwardPatchSite } from "./sidPlayerFastForwardPatch";
+import { FAST_FORWARD_HELD, FAST_FORWARD_RELEASED, isFastForwardPatchStillThere } from "./sidPlayerFastForwardPatch";
 
 export { RemoteSeekSessionClosedError };
 
@@ -22,14 +22,9 @@ export { RemoteSeekSessionClosedError };
 export class RemoteSeekPlayerGoneError extends Error {}
 
 /**
- * The device state a remote seek borrows, and the guarantee that it is given back.
- *
- * A remote seek holds the left-arrow key and raises CPU Speed. Neither undoes itself: the firmware
- * keeps a REST-held key down until it is released, and keeps a CPU Speed until it is written again
- * or the machine is power cycled. A user left with a C64 at 64 MHz would find every game and demo
- * broken, so the original values are recorded in a journal BEFORE the first change, the journal is
- * cleared only once a read-back confirms the restore, and a journal left behind by a crash, a lost
- * connection or a killed app is replayed the next time the app reaches that device.
+ * A REST-held key and a CPU Speed stay until written again, and a C64 left at 64 MHz breaks every game. So the
+ * originals are journalled before the first change, the journal is cleared only after a read-back confirms the restore,
+ * and a journal left by a crash or a killed app is replayed when the app reaches the device.
  */
 
 export const U64_SETTINGS_CATEGORY = "U64 Specific Settings";
@@ -109,6 +104,10 @@ export const readRemoteSeekJournal = (deviceKey: string): RemoteSeekJournal | nu
 
 export const hasRemoteSeekJournal = (): boolean => Object.keys(readJournalStore()).length > 0;
 
+/**
+ * Record what a seek is about to change. Throws when that cannot be stored, so the change is not made:
+ * a killed app would leave it behind with nothing to replay.
+ */
 const writeJournal = (deviceKey: string, journal: RemoteSeekJournal | null) => {
   try {
     const store = readJournalStore();
@@ -117,7 +116,13 @@ const writeJournal = (deviceKey: string, journal: RemoteSeekJournal | null) => {
     if (Object.keys(store).length === 0) localStorage.removeItem(JOURNAL_STORAGE_KEY);
     else localStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(store));
   } catch (error) {
-    addErrorLog("Remote seek journal could not be written", { ...errorDetails(error), journal });
+    if (journal === null) {
+      addErrorLog("Remote seek journal could not be cleared", { ...errorDetails(error), deviceKey });
+      return;
+    }
+    throw new Error(`The remote seek journal could not be stored, so the seek changed nothing: ${String(error)}`, {
+      cause: error,
+    });
   }
 };
 
@@ -130,6 +135,11 @@ const liveSessions = new Map<string, RemoteSeekDeviceSession>();
 let sessionCounter = 0;
 
 /** The current value and options of one config item, read from the device itself. */
+class ConfigItemMissingError extends Error {}
+
+/** A machine without the item at all, such as the Ultimate-II+(L) without an Audio Mixer, answers 404. */
+const isMissingItem = (error: unknown) => error instanceof ConfigItemMissingError || /HTTP 404\b/.test(String(error));
+
 const readConfigItem = async (
   api: RemoteSeekDeviceApi,
   categoryName: string,
@@ -138,7 +148,7 @@ const readConfigItem = async (
   const response = await api.getConfigItem(categoryName, item, { __c64uIntent: "user", __c64uBypassCache: true });
   const category = response[categoryName] as Record<string, unknown> | undefined;
   const raw = category?.[item] ?? (category?.items as Record<string, unknown> | undefined)?.[item];
-  if (raw === undefined) throw new Error(`${categoryName} / ${item} is not reported by the device`);
+  if (raw === undefined) throw new ConfigItemMissingError(`${categoryName} / ${item} is not reported by the device`);
   const normalized = normalizeConfigItem(raw);
   return { value: String(normalized.value), options: normalized.options ?? [] };
 };
@@ -162,8 +172,7 @@ const hexAddress = (address: number) => address.toString(16).toUpperCase().padSt
  * tune has started, those cells belong to something else. Returns false when the site is gone.
  */
 const writeFastForwardPatch = async (api: RemoteSeekDeviceApi, ldyOperandAddress: number, value: number) => {
-  const site = await api.readMemory(hexAddress(ldyOperandAddress - 1), 2);
-  if (!isFastForwardPatchSite(site)) return false;
+  if (!(await isFastForwardPatchStillThere(api.readMemory, ldyOperandAddress))) return false;
   await api.writeMemory(hexAddress(ldyOperandAddress), Uint8Array.of(value));
   return true;
 };
@@ -186,10 +195,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /**
  * Put the key and the settings back to what the journal recorded, and confirm it by reading them.
- *
- * The key is released first: with the key up a raised CPU Speed only makes the tune's own code
- * faster, while with the key down the tune races ahead. Every attempt repeats every step, because
- * a step that seemed to fail may have landed and a step that seemed to land may not have.
+ * The key goes first: with it up a raised CPU Speed only speeds the tune's own code, with it down
+ * the tune races ahead. Every attempt repeats every step: a step that seemed to fail may have landed.
  */
 export const restoreFromJournal = async (
   api: RemoteSeekDeviceApi,
@@ -217,20 +224,20 @@ export const restoreFromJournal = async (
       else await releaseSeekKeys(api);
       // Sound comes back as soon as the tune plays at its own speed again, before the slower config writes.
       const masterVolume = journal.originalMasterVolume ?? null;
-      if (masterVolume !== null) {
-        await api.setConfigValue(AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM, masterVolume, {
-          __c64uTransientConfigRestore: true,
-        });
-      }
-      if (journal.cpuSpeedChanged) {
-        await api.setConfigValue(U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, journal.originalCpuSpeed, {
-          __c64uTransientConfigRestore: true,
-        });
-      }
-      if (journal.originalTurboControl !== null) {
-        await api.setConfigValue(U64_SETTINGS_CATEGORY, TURBO_CONTROL_ITEM, journal.originalTurboControl, {
-          __c64uTransientConfigRestore: true,
-        });
+      const writes: Array<[category: string, item: string, value: string]> = [];
+      if (masterVolume !== null) writes.push([AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM, masterVolume]);
+      if (journal.cpuSpeedChanged) writes.push([U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, journal.originalCpuSpeed]);
+      if (journal.originalTurboControl !== null)
+        writes.push([U64_SETTINGS_CATEGORY, TURBO_CONTROL_ITEM, journal.originalTurboControl]);
+      // Only the last write lets a held flash save go: after an earlier one, the others still hold seek values.
+      for (const [index, [category, item, value]] of writes.entries()) {
+        const last = index === writes.length - 1;
+        await api.setConfigValue(
+          category,
+          item,
+          value,
+          last ? { __c64uTransientConfigRestore: true } : { __c64uTransientConfigWrite: true },
+        );
       }
       const cpuSpeed = journal.cpuSpeedChanged ? await readU64ConfigItem(api, CPU_SPEED_ITEM) : null;
       const turbo = journal.originalTurboControl === null ? null : await readU64ConfigItem(api, TURBO_CONTROL_ITEM);
@@ -257,13 +264,25 @@ export const restoreFromJournal = async (
     }
     addLog("warn", "Remote seek restore attempt failed", { reason, attempt, journal, ...errorDetails(lastError) });
   }
-  addErrorLog("Remote seek could not restore the device; it will retry on the next connection", {
+  addErrorLog("Remote seek could not restore the device; it will retry", {
     reason,
     journal,
     ...errorDetails(lastError),
   });
+  restoreFailedListeners.forEach((listener) => listener());
   return false;
 };
+
+const restoreFailedListeners = new Set<() => void>();
+
+/** Told when a restore gives up while the app is connected to the device that owes it. Returns an unsubscribe. */
+export const onRemoteSeekRestoreFailed = (listener: () => void) => {
+  restoreFailedListeners.add(listener);
+  return () => void restoreFailedListeners.delete(listener);
+};
+
+/** Settings written over REST do not survive a power cycle, which a journal this old has most likely seen. */
+export const REMOTE_SEEK_JOURNAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Replay a journal left by an earlier session for this device. Returns true when nothing is left to undo. */
 export const recoverRemoteSeekJournal = async (
@@ -274,6 +293,12 @@ export const recoverRemoteSeekJournal = async (
   const journal = deviceKey === null ? null : readRemoteSeekJournal(deviceKey);
   if (!journal) return true;
   if (liveSessions.has(journal.deviceKey)) return true;
+  if (Date.now() - journal.startedAtMs > REMOTE_SEEK_JOURNAL_MAX_AGE_MS) {
+    // Replaying it now could overwrite settings chosen since; the machine was most likely restarted.
+    addLog("warn", "Remote seek dropped an unfinished seek too old to replay", { journal });
+    writeJournal(journal.deviceKey, null);
+    return true;
+  }
   addLog("warn", "Remote seek found an unfinished seek on this device and is undoing it", { journal });
   return restoreFromJournal(api, journal, "recovery", delaysMs);
 };
@@ -304,10 +329,8 @@ export class RemoteSeekDeviceSession {
   }
 
   /**
-   * `playerOnScreen` says whether the SID player is still what the C64 shows; it is asked right
-   * before every key press and patch write, which only go ahead when it says yes. `withCpuSpeed:
-   * false` is for a machine without CPU Speed, such as the Ultimate-II+(L): nothing is read or
-   * written there, and the session only ever fast forwards at the machine's own speed.
+   * `playerOnScreen` is asked right before every key press and patch write, which go ahead only on
+   * yes. `withCpuSpeed: false` is for a machine without CPU Speed, such as the Ultimate-II+(L).
    */
   static async open(
     api: RemoteSeekDeviceApi,
@@ -442,10 +465,9 @@ export class RemoteSeekDeviceSession {
   }
 
   /**
-   * Turn `Vol Master` off before the first key of the seek: a restart and a fast forward at any speed
-   * would otherwise be heard, also through the audio stream the phone mirrors. The original goes into
-   * the journal first, so every restore puts it back. A machine without `Vol Master`, such as the
-   * Ultimate-II+(L), stays as it is.
+   * Turn `Vol Master` off before the seek's first key, so neither a restart nor a fast forward is
+   * heard, on the speaker or the mirrored stream. The original is journalled first; a machine without
+   * `Vol Master`, such as the Ultimate-II+(L), stays as it is.
    */
   /** Whether this seek's first key turns the sound off; the user's setting decides per kind of seek. */
   muteWhenKeysPressed(enabled: boolean) {
@@ -457,7 +479,8 @@ export class RemoteSeekDeviceSession {
     this.muteAttempted = true;
     const master = await readConfigItem(this.api, AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM).catch(
       (error) => {
-        addLog("debug", "Remote seek: no Vol Master to mute", errorDetails(error));
+        if (isMissingItem(error)) addLog("debug", "Remote seek: no Vol Master to mute", errorDetails(error));
+        else addLog("warn", "Remote seek could not read Vol Master, so it is not muted", errorDetails(error));
         return null;
       },
     );

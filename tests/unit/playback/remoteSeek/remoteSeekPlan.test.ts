@@ -145,8 +145,17 @@ describe("remote seek plan", () => {
     expect(playCallRateFromTimerSamples([9700], pal)).toBeCloseTo(985248 / 9828, 9);
     // The same PAL latch on an NTSC machine plays 104 times a second, not 100.
     expect(playCallRateFromTimerSamples([9700], ntsc)).toBeCloseTo(1022727 / 9828, 9);
-    expect(playCallRateFromTimerSamples([4200], ntsc)).toBeCloseTo(1022727 / 4274, 9);
+    // An NTSC frame over four (4274) and 60 Hz over four on the NTSC clock (4261) are 0.3% apart; 100
+    // timer samples fall about 1% short of the latch, so the two cannot be told apart.
+    expect(Math.abs(playCallRateFromTimerSamples([4200], ntsc)! / (1022727 / 4274) - 1)).toBeLessThan(0.005);
     expect(playCallRateFromTimerSamples([], pal)).toBeNull();
+  });
+
+  it("times a tune's own 60 Hz latch on a PAL machine at 60 Hz, not at an NTSC frame's 57.6", () => {
+    const pal = machineTimingFor("PAL");
+    for (const sample of [16200, 16300, 16420]) {
+      expect(Math.abs(playCallRateFromTimerSamples([sample], pal)! / 60 - 1)).toBeLessThan(0.005);
+    }
   });
 
   it("leaves a latch no frame divides as sampled", () => {

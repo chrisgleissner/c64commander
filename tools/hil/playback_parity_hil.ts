@@ -6,26 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-/**
- * Playback parity on the bench: the scenarios of playwright/parity/playbackParityScenarios.ts, which
- * CI runs on the web build against the mock server, run here on the phone against real Ultimates,
- * with real touches on the transport and a microphone at the phone's grille.
- *
- *   npx tsx tools/hil/playback_parity_hil.ts --hosts c64u,u64,u2 --json artifacts/playback-parity.json
- *
- * For each host it uploads two generated tunes to the Ultimate's storage, adds them to the app's
- * playlist through the app's own picker if they are not there, switches the app to that host and
- * runs every scenario with the tune on the phone and on the C64:
- *
- * - Seek_Counter, a silent tune that counts its play calls, so on the C64 every landing is checked
- *   against where the tune really is;
- * - Tone-Low, a steady 550 Hz tone, for the scenario that listens: no sound while a seek rewinds.
- *
- * The phone's media volume is held at --volume (7 of 25 by default, never above 10) and restored.
- * The Ultimate-II+(L) shares its C64 with the c64u on this bench; it can only start the player while
- * the c64u's Cartridge Preference is External (see the memory note), which the run sets for the u2
- * and puts back afterwards.
- */
+// Playback parity on the bench: playwright/parity/playbackParityScenarios.ts on the phone against real Ultimates, with
+// real touches and a microphone at the grille, using generated tunes Seek_Counter (counts play calls, so C64 landings
+// are exact) and Tone-Low (550 Hz, for no sound while a seek rewinds). Media volume is held at --volume (default 7 of
+// 25, never above 10) and restored; for the u2 the c64u's Cartridge Preference is set to External and put back.
+// Commands: docs/testing/remote-sid-seek.md.
 
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -43,6 +28,7 @@ import { locateSidPlayerClock } from "@/lib/playback/remoteSeek/sidPlayerClock";
 import { readClockFromRow, SCREEN_COLUMNS } from "@/lib/playback/remoteSeek/sidPlayerScreen";
 import { connectPage } from "./cdp_page.mjs";
 import { createDroidDevice } from "./droidctl_device.mjs";
+import { openMachineJournal, restoreFromMachineJournal } from "./remoteSeekHil/machineJournal";
 import { callHzOfTune, counterPsid, type CounterTune } from "./remoteSeekHil/tunes";
 
 const argv = process.argv.slice(2);
@@ -50,7 +36,7 @@ const arg = (name: string, fallback: string) => {
   const index = argv.indexOf(`--${name}`);
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
-const HOSTS = arg("hosts", "c64u,u64,u2").split(",");
+const HOSTS = arg("hosts", "c64u,u2").split(",");
 const ROUTES = arg("routes", "phone,c64").split(",") as ParityRoute[];
 const OUT = arg("json", "artifacts/playback-parity.json");
 /**
@@ -161,13 +147,19 @@ const readVolume = async () => {
     index: Number(/streamVolume:(\d+)/.exec(block)?.[1] ?? "-1"),
   };
 };
-/** Stepped with the volume keys: `cmd media_session volume --set` leaves a muted stream where it was. */
+/**
+ * Stepped with the volume keys: `cmd media_session volume --set` leaves a muted stream where it was.
+ * Volume up is pressed only on a level just read, and never from 10 of 25 or above.
+ */
 const setVolume = async (target: number) => {
   if (target > 10) throw new Error("the phone's media volume never goes above 10 of 25");
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const { muted, index } = await readVolume();
+    if (index < 0) throw new Error("could not read the phone's media volume, so it was not changed");
     if (!muted && index === target) return;
-    await droid.pressKey(index < target || muted ? 24 : 25);
+    const up = muted || index < target;
+    if (up && index >= 10) throw new Error(`the media volume is ${index} of 25; it is never raised from 10 or above`);
+    await droid.pressKey(up ? 24 : 25);
     await sleep(250);
   }
   throw new Error(`could not set the media volume to ${target}`);
@@ -613,14 +605,14 @@ const initialVolume = await readVolume();
 await droid.call("droid_app.start_app", { targetId: droid.targetId, package: PACKAGE, waitForResume: true });
 await sleep(4000);
 await attach();
-const cartridgePreference = HOSTS.includes("u2")
-  ? await configValue("c64u", "C64 and Cartridge Settings", "Cartridge Preference")
-  : null;
 try {
   await setVolume(VOLUME);
   for (const host of HOSTS) {
-    if (host === "u2") await setConfig("c64u", "C64 and Cartridge Settings", "Cartridge Preference", "External");
     try {
+      if (host === "u2") {
+        await openMachineJournal("c64u", [["C64 and Cartridge Settings", "Cartridge Preference"]]);
+        await setConfig("c64u", "C64 and Cartridge Settings", "Cartridge Preference", "External");
+      }
       await prepareTunes(host);
       await openPlay();
       await switchTo(host);
@@ -675,8 +667,10 @@ try {
         }
       }
     } finally {
-      if (host === "u2" && cartridgePreference !== null)
-        await setConfig("c64u", "C64 and Cartridge Settings", "Cartridge Preference", cartridgePreference);
+      if (host === "u2") {
+        const differing = await restoreFromMachineJournal("c64u");
+        if (differing.length) notes.push(`c64u not restored: ${differing.join("; ")}`);
+      }
       await rest(host, "/v1/machine:reset", "PUT").catch((error) => log(`could not reset ${host}: ${error}`));
     }
   }

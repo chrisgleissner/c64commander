@@ -12,7 +12,7 @@
  * them back, and replayed on the next connection when anything cut the restore off.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   readRemoteSeekJournal,
   recoverRemoteSeekJournal,
@@ -34,6 +34,7 @@ const NO_RETRY_WAIT = [0, 0, 0, 0];
 describe("remote seek device guard", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
   });
 
   it("records the original CPU Speed before it changes anything", async () => {
@@ -56,7 +57,7 @@ describe("remote seek device guard", () => {
       "key press arrow_left",
       "CPU Speed=64 (transient)",
       "key release arrow_left+minus+plus",
-      "Vol Master=0 dB (restore)",
+      "Vol Master=0 dB (transient)",
       "CPU Speed=1 (restore)",
     ]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
@@ -73,7 +74,7 @@ describe("remote seek device guard", () => {
       "Turbo Control=Manual (transient)",
       "CPU Speed=64 (transient)",
       "key release arrow_left+minus+plus",
-      "CPU Speed=1 (restore)",
+      "CPU Speed=1 (transient)",
       "Turbo Control=Off (restore)",
     ]);
     expect(device.settings["Turbo Control"]).toBe("Off");
@@ -235,18 +236,59 @@ describe("remote seek device guard", () => {
     expect(addErrorLog).toHaveBeenCalledWith("Remote seek journal could not be read", expect.anything());
   });
 
-  it("logs a journal it cannot write", async () => {
-    const { addErrorLog } = await import("@/lib/logging");
+  it("opens no seek whose journal it cannot store, so a killed app leaves nothing it cannot replay", async () => {
     const device = createFakeRemoteSeekDevice();
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("quota");
     });
-    try {
-      await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
-    } finally {
-      setItem.mockRestore();
-    }
-    expect(addErrorLog).toHaveBeenCalledWith("Remote seek journal could not be written", expect.anything());
+    onTestFinished(() => setItem.mockRestore());
+    await expect(RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN })).rejects.toThrow(
+      /journal could not be stored/,
+    );
+    expect(device.log).toEqual([]);
+  });
+
+  it("changes nothing on the device once its journal can no longer be stored", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    await expect(session.setCpuSpeed("64")).rejects.toThrow(/journal could not be stored/);
+    await expect(session.pressKey()).rejects.toThrow(/journal could not be stored/);
+    expect(device.settings["CPU Speed"]).toBe(" 1");
+    expect(device.player.heldKeys).toEqual([]);
+    expect(device.log.filter((entry) => !entry.startsWith("Vol Master"))).toEqual([]);
+  });
+
+  it("warns when it cannot read Vol Master to mute a seek, and only notes a machine that has none", async () => {
+    const { addLog } = await import("@/lib/logging");
+    const device = createFakeRemoteSeekDevice();
+    const read = device.api.getConfigItem;
+    device.api.getConfigItem = async (category, item, options) => {
+      if (item === "Vol Master") throw new Error("Request timed out");
+      return read(category, item, options);
+    };
+    const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+    await session.pressKey();
+    await session.restore("test");
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Remote seek could not read Vol Master, so it is not muted",
+      expect.anything(),
+    );
+
+    vi.mocked(addLog).mockClear();
+    device.api.getConfigItem = async (category, item, options) => {
+      if (item === "Vol Master") throw new Error("HTTP 404");
+      return read(category, item, options);
+    };
+    const cartridge = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+    await cartridge.pressKey();
+    await cartridge.restore("test");
+    expect(addLog).toHaveBeenCalledWith("debug", "Remote seek: no Vol Master to mute", expect.anything());
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("Vol Master"), expect.anything());
   });
 
   it("reads config items in the app's own items shape, and names an item the device does not report", async () => {
@@ -376,7 +418,7 @@ describe("remote seek device guard", () => {
     vi.useRealTimers();
     expect(await restore).toBe(false);
     expect(addErrorLog).toHaveBeenCalledWith(
-      "Remote seek could not restore the device; it will retry on the next connection",
+      "Remote seek could not restore the device; it will retry",
       expect.objectContaining({ error: "Read-back after restore shows CPU Speed 64; expected  1" }),
     );
     device.api.setConfigValue = write;

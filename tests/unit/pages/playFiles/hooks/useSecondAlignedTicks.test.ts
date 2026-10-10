@@ -7,7 +7,7 @@
  */
 
 import { renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { msUntilNextSecond, useSecondAlignedTicks } from "@/pages/playFiles/hooks/useSecondAlignedTicks";
 
 describe("msUntilNextSecond", () => {
@@ -82,6 +82,15 @@ describe("useSecondAlignedTicks", () => {
     expect(shown.slice(-2)).toEqual([5, 5]);
   });
 
+  it("renders its first tick outside React's commit, where flushSync cannot render", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    onTestFinished(() => errors.mockRestore());
+    const startedAt = { current: 100_000 };
+    renderHook(() => useSecondAlignedTicks(vi.fn(), true, startedAt));
+    vi.advanceTimersByTime(1_000);
+    expect(errors.mock.calls.flat().join(" ")).not.toContain("flushSync");
+  });
+
   it("does nothing while disabled, and stops when unmounted", () => {
     const startedAt = { current: 100_000 };
     const tick = vi.fn();
@@ -91,6 +100,7 @@ describe("useSecondAlignedTicks", () => {
     vi.advanceTimersByTime(3_000);
     expect(tick).not.toHaveBeenCalled();
     rerender({ enabled: true });
+    vi.advanceTimersByTime(0);
     expect(tick).toHaveBeenCalledTimes(1);
     unmount();
     vi.advanceTimersByTime(3_000);

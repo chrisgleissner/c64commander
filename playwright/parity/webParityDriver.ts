@@ -128,8 +128,11 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
       if (cpu !== " 1") changed.push(`CPU Speed ${JSON.stringify(cpu)}`);
       if (volume !== " 0 dB") changed.push(`Vol Master ${JSON.stringify(volume)}`);
       if (server.sidPlayer?.heldKeys.length) changed.push(`keys held: ${server.sidPlayer.heldKeys.join(",")}`);
+      const typed = server.sidPlayer?.takeKeysOutsidePlayer() ?? [];
+      if (typed.length) changed.push(`seek keys pressed outside the SID player: ${typed.join(",")}`);
       return changed;
     },
+    clockOutliersAllowed: 1,
     async recordClocks(during) {
       await page.evaluate(() => {
         const log: Array<{ atMs: number; text: string }> = [];

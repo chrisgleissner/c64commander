@@ -24,13 +24,9 @@ export const msUntilNextSecond = (startedAtMs: number | null, now: number): numb
 };
 
 /**
- * Run `tick` now and then as each second of the track's elapsed time turns, rather than once a second
- * at whatever phase the timer happened to start: a plain one-second interval shows each second up to
- * a second after the C64's own clock does. `tick` is given the moment its render will be on screen
- * and renders synchronously; how long that takes (about 60 ms for the Play page on a Pixel 4) is
- * measured, and the next tick starts that much before its second turns. The start can move at any
- * time, so the elapsed second is checked at least every `CHECK_MS`, and `tick` runs when it turns,
- * or a second after it last ran.
+ * Run `tick` as each elapsed second turns; a plain one-second interval lags the C64's clock by up to a second. `tick`
+ * renders synchronously, so its measured render time (about 60 ms for the Play page on a Pixel 4) starts it that early.
+ * The start can move, so the second is checked every `CHECK_MS`; `tick` also runs a second after its last run.
  */
 export const useSecondAlignedTicks = (
   tick: (shownAtMs: number) => void,
@@ -64,7 +60,8 @@ export const useSecondAlignedTicks = (
       if (aim) aimedAt = showAt;
       timer = window.setTimeout(run, aim ? Math.max(0, untilFire) : CHECK_MS);
     };
-    run();
+    // Not `run()`: an effect runs inside React's commit, where `flushSync` cannot render.
+    timer = window.setTimeout(run, 0);
     return () => window.clearTimeout(timer);
   }, [enabled, startedAtRef, tick]);
 };

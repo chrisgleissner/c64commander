@@ -181,7 +181,7 @@ export async function createMockC64Server(
   let faultMode: FaultMode = "none";
   const machineInputEvents: Array<{ inputs: string[]; transition: string }> = [];
   const sidPlayer = options.sidPlayer
-    ? new SidPlayerSimulation(options.sidPlayer === true ? {} : options.sidPlayer)
+    ? new SidPlayerSimulation({ startsInPlayer: false, ...(options.sidPlayer === true ? {} : options.sidPlayer) })
     : null;
   const keyInput = options.keyInput ?? true;
   let latencyMs: number | null = null;
@@ -535,8 +535,8 @@ export async function createMockC64Server(
         syncAllDriveStateFromConfig();
       }
       if (parsed.pathname === "/v1/machine:pause") sidPlayer?.setPaused(true);
-      if (parsed.pathname === "/v1/machine:resume" || parsed.pathname === "/v1/machine:reset")
-        sidPlayer?.setPaused(false);
+      if (parsed.pathname === "/v1/machine:resume") sidPlayer?.setPaused(false);
+      if (parsed.pathname === "/v1/machine:reset" || parsed.pathname === "/v1/machine:reboot") sidPlayer?.leavePlayer();
       return sendJson(200, { errors: [] });
     }
 
@@ -637,6 +637,7 @@ export async function createMockC64Server(
       ) &&
       (method === "POST" || method === "PUT")
     ) {
+      sidPlayer?.leavePlayer();
       return sendJson(200, { errors: [] });
     }
 
@@ -755,8 +756,11 @@ export async function createMockC64Server(
         const current = state[category][item] ?? { value };
         state[category][item] = { ...current, value };
         syncDriveStateFromConfig(category, item, value);
-        if (sidPlayer && category === "U64 Specific Settings" && item === "CPU Speed") {
-          sidPlayer.setCpuSpeedMhz(Number(value.trim()) || 1);
+        if (sidPlayer && category === "U64 Specific Settings" && (item === "CPU Speed" || item === "Turbo Control")) {
+          // As on the machine: with Turbo Control Off the CPU runs at 1 MHz whatever CPU Speed says.
+          const settings = state["U64 Specific Settings"];
+          const turboOff = String(settings?.["Turbo Control"]?.value ?? "").trim() === "Off";
+          sidPlayer.setCpuSpeedMhz(turboOff ? 1 : Number(String(settings?.["CPU Speed"]?.value ?? "1").trim()) || 1);
         }
         return sendJson(200, { errors: [] });
       }

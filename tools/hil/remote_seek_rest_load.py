@@ -16,9 +16,10 @@ The keys only ever reach the SID player. The tool starts a silent counter tune i
 thread re-reads the player's clock every 100 ms. A key press is sent only while the guard saw the
 clock within the last 300 ms. The moment the clock is gone, the guard releases the key and the run
 stops. Vol Master is muted for the run; CPU Speed, Turbo Control and Vol Master are put back at the
-end, however the run ends.
+end, however the run ends. Each of those steps is tried on its own, retried, and read back; a value
+that still differs is reported and makes the run exit with 1.
 
-    python3 tools/hil/remote_seek_rest_load.py --host u64 --seconds 60 --json artifacts/rest-load-u64.json
+    python3 tools/hil/remote_seek_rest_load.py --host c64u --seconds 60 --json artifacts/rest-load-c64u.json
 """
 
 from __future__ import annotations
@@ -147,7 +148,7 @@ def summarise(records: list) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--host", default="u64")
+    parser.add_argument("--host", default="c64u")
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--cpu-rate", type=float, default=2, help="CPU Speed writes a second in the write phases")
     parser.add_argument("--json", type=Path)
@@ -198,15 +199,49 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if guard is not None:
             guard.stopping.set()
-        release_key(args.host)
-        device.set_config(CPU_SPEED, original[CPU_SPEED])
-        device.set_config(TURBO_CONTROL, original[TURBO_CONTROL])
-        device.request("PUT", f"/v1/configs/{urllib.parse.quote(AUDIO_MIXER)}/{urllib.parse.quote(VOL_MASTER)}?value={urllib.parse.quote(original_volume)}")
-        device.reset()
+        differing = restore(device, args.host, original, original_volume)
+        results["left_changed"] = differing
         if args.json:
             args.json.parent.mkdir(parents=True, exist_ok=True)
             args.json.write_text(json.dumps(results, indent=2))
-    return 0
+    return 1 if differing else 0
+
+
+def restore(device: Device, host: str, original: dict, original_volume: str) -> list[str]:
+    """Give back the key and every setting, each step on its own so one failure cannot skip the rest."""
+    volume_route = f"/v1/configs/{urllib.parse.quote(AUDIO_MIXER)}/{urllib.parse.quote(VOL_MASTER)}"
+    steps = [
+        ("release the keys", lambda: release_key(host)),
+        (f"put {CPU_SPEED} back", lambda: device.set_config(CPU_SPEED, original[CPU_SPEED])),
+        (f"put {TURBO_CONTROL} back", lambda: device.set_config(TURBO_CONTROL, original[TURBO_CONTROL])),
+        (f"put {VOL_MASTER} back", lambda: device.request("PUT", f"{volume_route}?value={urllib.parse.quote(original_volume)}")),
+        ("reset the machine", device.reset),
+    ]
+    for name, step in steps:
+        for attempt in range(1, 4):
+            try:
+                step()
+                break
+            except Exception as error:  # noqa: BLE001 - every failure is reported, and the next step still runs
+                print(f"WARNING: could not {name} on {host} (attempt {attempt} of 3): {error!r}", file=sys.stderr, flush=True)
+                time.sleep(2 * attempt)
+    differing = []
+    for item, value in ((CPU_SPEED, original[CPU_SPEED]), (TURBO_CONTROL, original[TURBO_CONTROL])):
+        try:
+            now = device.config_item(item)["current"]
+        except Exception as error:  # noqa: BLE001 - an unreadable value counts as not restored
+            now = f"unreadable: {error!r}"
+        if now != value:
+            differing.append(f"{item} is {now!r}, was {value!r}")
+    try:
+        now_volume = json.loads(device.request("GET", volume_route))[AUDIO_MIXER][VOL_MASTER]["current"]
+    except Exception as error:  # noqa: BLE001 - an unreadable value counts as not restored
+        now_volume = f"unreadable: {error!r}"
+    if now_volume != original_volume:
+        differing.append(f"{VOL_MASTER} is {now_volume!r}, was {original_volume!r}")
+    for line in differing:
+        print(f"ERROR: {host} was not restored: {line}", file=sys.stderr, flush=True)
+    return differing
 
 
 if __name__ == "__main__":
