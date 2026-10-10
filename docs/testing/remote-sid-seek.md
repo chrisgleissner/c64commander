@@ -196,11 +196,14 @@ on the machine's timing:
   NTSC frame, 50 or 60 Hz on the machine's own CIA clock, or the player's own latch for a tune of
   the other standard (16388 and 20514 cycles), each divided by 1 to 8. Without the 60 Hz latch, a
   PAL machine timed a tune's own 60 Hz timer at an NTSC frame's 57.6 Hz, 4% slow. Latches 0.3%
-  apart, such as an NTSC frame over four and 60 Hz over four, cannot be told apart this way. The same PAL tune's twice-a-frame latch plays 104.06 times a second on an NTSC machine,
-  not 100.
+  apart, such as an NTSC frame over four and 60 Hz over four, cannot be told apart this way. The
+  same PAL tune's twice-a-frame latch plays 104.06 times a second on an NTSC machine, not 100.
 - The player's own clock counts 50 or 60 frames a second, corrected for the standard PAL or NTSC
   rate. In NTSC-50, PAL-60 and the /L modes the frames run slightly faster, so the displayed time
-  itself gains up to 0.1% on real time. The app follows the displayed time.
+  itself gains up to 0.17% on real time. The app follows the displayed time. For a tune called once
+  a frame the clock is the position, and a jump counts in clock seconds too. It once divided them by
+  the 0.07-0.17% difference, and a jump 6300 s into a tune in NTSC-50/L on the Ultimate 64 landed
+  9.3 s short of the clock.
 
 ### What it does not support
 

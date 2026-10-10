@@ -127,10 +127,14 @@ export class RemoteSidSeekController {
     private readonly seekMute: () => C64SeekMute = loadC64SeekMute,
   ) {
     this.machine = new SeekMachine(api, profile);
+    // A tune called once a frame moves the clock in step with its calls, fast or not, and the clock is
+    // its position: counted in clock seconds, which in NTSC-50 and the /L modes run 0.07-0.17% fast.
     this.clockPerTuneSecond =
       profile.headerPlayCallHz === null
         ? null
-        : Promise.resolve(clockSecondsPerTuneSecond(profile.headerPlayCallHz, profile.timing));
+        : Promise.resolve(
+            this.machine.clockIsPosition ? 1 : clockSecondsPerTuneSecond(profile.headerPlayCallHz, profile.timing),
+          );
   }
 
   /** Measure what a seek needs before the first gesture, so the gesture does not wait for it. */

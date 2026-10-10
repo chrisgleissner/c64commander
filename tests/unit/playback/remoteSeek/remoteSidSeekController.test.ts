@@ -983,8 +983,10 @@ describe.each(["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"])(
       const controller = new RemoteSidSeekController(device.api, found!);
       const at = () => device.player.tunePositionSeconds;
       const landed = await settle(controller.jumpTo(at, 3600), 600_000);
-      // The clock shows whole seconds and a landing adds half of one; 0.1% of an hour would be 3.6 s.
-      expect(Math.abs((landed?.seconds ?? 0) - at())).toBeLessThan(1.5);
+      // Where the clock is the position, the landing is the clock, which runs up to 0.17% fast here.
+      const reference = controller.clockIsPosition ? device.player.shownClockSeconds + 0.5 : at();
+      // The clock shows whole seconds; 0.1% of an hour would be 3.6 s.
+      expect(Math.abs((landed?.seconds ?? 0) - reference)).toBeLessThan(1.5);
     });
 
     it("lands a CIA-timed tune by the rate its latch gives at this mode's clock, not a multiple of 50 or 60", async () => {

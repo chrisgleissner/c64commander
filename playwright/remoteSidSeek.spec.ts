@@ -17,6 +17,7 @@ import type { Locator, Page, TestInfo } from "@playwright/test";
 import * as path from "node:path";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server, type MockC64Server } from "../tests/mocks/mockC64Server";
+import { MEASURED_FAST_FORWARD_RATE_BY_MHZ } from "../tests/mocks/sidPlayerSimulation";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { clickSourceSelectionButton } from "./sourceSelection";
@@ -148,6 +149,14 @@ test.describe("Remote SID seek", () => {
   test("holding Next fast forwards the C64's tune faster each second and gives CPU Speed back", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
+    // A tenth of the measured rates, so the hold can last until 8 MHz on a slow runner and still stay
+    // well short of this 42 s tune's end, where a hold stops by itself.
+    await server.close();
+    const tenth = Object.fromEntries(
+      Object.entries(MEASURED_FAST_FORWARD_RATE_BY_MHZ).map(([mhz, rate]) => [mhz, rate / 10]),
+    );
+    server = await createMockC64Server(deviceConfigState(), {}, { sidPlayer: { fastForwardRateByMhz: tenth } });
+    await seedUiMocks(page, server.baseUrl);
     await startSeekableTune(page);
     // The tune's position every quarter second while the key is held, to see the rate rise.
     const held: Array<{ atMs: number; seconds: number }> = [];
@@ -155,8 +164,13 @@ test.describe("Remote SID seek", () => {
       if (server.sidPlayer?.fastForwarding)
         held.push({ atMs: Date.now(), seconds: server.sidPlayer.tunePositionSeconds });
     }, 250);
-    // Three seconds stays short of this 42 s tune's end, where a hold stops by itself.
-    await hold(page, page.getByTestId("playlist-next"), 3000);
+    const next = await page.getByTestId("playlist-next").boundingBox();
+    if (!next) throw new Error("Next has no box");
+    await page.mouse.move(next.x + next.width / 2, next.y + next.height / 2);
+    await page.mouse.down();
+    await expect.poll(() => cpuSpeedWrites().includes("8"), { timeout: 15000 }).toBe(true);
+    await page.waitForTimeout(1000);
+    await page.mouse.up();
     clearInterval(sampler);
 
     await expectDeviceGivenBack();
