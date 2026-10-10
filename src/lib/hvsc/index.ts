@@ -52,9 +52,9 @@ export {
   readStilCollections,
   readStilManifest,
 } from "./stilStore";
-export { isStilCollectionId, STIL_COLLECTION_IDS } from "./stilCollections";
+export { isStilCollectionId, STIL_COLLECTION_IDS, stilCollectionCounts } from "./stilCollections";
 export type { StilCollectionId, StilCollectionIndex, StilCollectionMember } from "./stilCollections";
-export { ensureStilReady } from "./stilService";
+export { ensureStilReady, isStilFetchNeeded, stilUnavailableReason } from "./stilService";
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from "./hvscMediaIndex";
 export { describeHvscPreparationTransition, resolveHvscPreparationSnapshot } from "./hvscPreparationState";
 export type {

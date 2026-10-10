@@ -2541,6 +2541,7 @@ export default function PlayFilesPage() {
                       station={sidRadio.station}
                       whyThisTune={sidRadioWhyThisTune}
                       collectionProgress={sidRadio.collectionProgress}
+                      preparingCollection={sidRadio.preparingCollection}
                       onStop={stationHandover.requestStop}
                     />
                   ) : undefined

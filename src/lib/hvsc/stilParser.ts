@@ -115,9 +115,15 @@ const finishComment = (lines: string[]): string =>
  * Meaningful in the full credit list, where they say when each part of a medley arrives. Noise on
  * the one credit that is actually shown, whose time is by definition where the tune starts.
  */
-const SECTION_TIMESTAMP = /\s*\(\d+:\d{2}(?:\s*-\s*\d+:\d{2})?\)\s*$/;
+const SECTION_TIMESTAMP = /\s*\((\d+):(\d{2})(?:\s*-\s*\d+:\d{2})?\)\s*$/;
 
 export const stripSectionTimestamp = (title: string): string => title.replace(SECTION_TIMESTAMP, "").trim();
+
+/** Where in the tune a credit's section starts, in seconds, or null when the title carries no time. */
+export const sectionStartSeconds = (title: string): number | null => {
+  const match = SECTION_TIMESTAMP.exec(title);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+};
 
 /**
  * Parse STIL into one entry per file.

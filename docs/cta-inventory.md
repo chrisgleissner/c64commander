@@ -337,7 +337,10 @@ not-connected / empty / single-device).
 - Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading (Previous, Pause, Next), or no previous/next item in the current repeat/shuffle traversal; while a launch is in flight Play shows Stop and stays enabled; after Stop is pressed the button is labelled "Stopping…" with a spinner and `aria-disabled` (still focusable), and a "Stopping…" line (`playback-stop-status`) shows under the transport, until the device answers the reset or reboot; if a stopped launch is still unwinding after that, it shows Play with `aria-disabled` until the launch returns]`
 - Now playing: where the queue comes from — `now-playing-source` — the first row of the card, present
   in both states and the same height in both (`data-station-active`); a running station renders
-  `sid-radio-chip` inside it, otherwise `now-playing-source-idle` names the playlist
+  `sid-radio-chip` inside it, otherwise `now-playing-source-idle` names the playlist. While a
+  collection start waits for the HVSC tune notes to download, a non-interactive status line
+  `sid-radio-preparing` ("Fetching tune notes…") takes the place of the station name or the playlist
+  name; Stop stays available when a station is running
 - Now playing: title — `playback-current-title` (title only; the ranking actions sit opposite it and
   do not move when a long title truncates)
 - Now playing, two lines: author · released — `playback-current-credits`; SID model · clock · tune position · length — `playback-current-facts`
@@ -401,9 +404,9 @@ Listed below in the order they are rendered and walked by the focus ring.
   - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅ `[disabled: no HVSC installed, or the export left this style with no tracks — see size `sid-radio-style-<bit>-size`]`
   - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅ `[disabled: no HVSC installed]`
   - Collections — button — `sid-radio-collection-<id>` (`winners`, `screen`, `games`, `pioneers`, `synthpop`,
-    `classical`, `remixes`, and `christmas` in December and the first week of January), in the
-    `sid-radio-collections` group after the style stations `[disabled: no HVSC installed, or the collection
-    holds no tunes in this release — see size `sid-radio-collection-<id>-size`]`. Inside the launcher sheet,
+    `classical`, `remixes`, and `christmas` from December 1 to January 6), in the
+    `sid-radio-collections` group after the style stations `[disabled: no HVSC installed, or none of the
+    collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`. Inside the launcher sheet,
     so the page count in §3 is unchanged. Code-verified, not yet enumerated on hardware
   - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: no HVSC installed, or not enough rankings yet — see hint `sid-radio-taste-hint`]`
   - Surprise me — button — `sid-radio-surprise` — R✅ I✅ `[disabled: no HVSC installed]`

@@ -10,16 +10,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const files = new Map<string, string>();
 const readCounts = new Map<string, number>();
+/** Hold every shard read, or the next write of one named file, until the test lets it through. */
+const gates: { shardReads: Promise<void> | null; writes: Map<string, Promise<void>> } = {
+  shardReads: null,
+  writes: new Map(),
+};
 
 const logs = vi.hoisted(() => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 vi.mock("@/lib/logging", () => logs);
 
 vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   writeStilFile: vi.fn(async (name: string, text: string) => {
+    const gate = gates.writes.get(name);
+    gates.writes.delete(name);
+    await gate;
     files.set(name, text);
   }),
   readStilFile: vi.fn(async (name: string) => {
     readCounts.set(name, (readCounts.get(name) ?? 0) + 1);
+    if (name.startsWith("shard-") && gates.shardReads) await gates.shardReads;
     return files.get(name) ?? null;
   }),
   resetStilStore: vi.fn(async () => {
@@ -34,12 +43,13 @@ import {
   getStilInfo,
   isStilInstalled,
   readStilCollections,
+  readStilManifest,
   shardForPath,
   STIL_SHARD_COUNT,
   writeStilShards,
 } from "@/lib/hvsc/stilStore";
 import { parseStil } from "@/lib/hvsc/stilParser";
-import { STIL_COLLECTIONS_VERSION } from "@/lib/hvsc/stilCollections";
+import { deriveStilCollections, STIL_COLLECTIONS_VERSION } from "@/lib/hvsc/stilCollections";
 
 const DOCUMENT = `/MUSICIANS/H/Hubbard_Rob/Commando.sid
 COMMENT: An arrangement of the arcade score.
@@ -206,15 +216,16 @@ describe("STIL collections", () => {
     readCounts.clear();
     logs.addLog.mockClear();
     logs.addErrorLog.mockClear();
+    gates.shardReads = null;
+    gates.writes.clear();
     __resetStilStoreCachesForTest();
     delete (window as Window & { __stilMock__?: unknown }).__stilMock__;
   });
 
-  it("stores the collections beside the shards and counts them in the manifest", async () => {
+  it("stores the collections beside the shards and records their rules version in the manifest", async () => {
     await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
     const manifest = JSON.parse(files.get("index.json")!);
     expect(manifest.collectionsVersion).toBe(STIL_COLLECTIONS_VERSION);
-    expect(manifest.collectionCounts).toMatchObject({ winners: 1, classical: 1, screen: 0 });
     expect(JSON.parse(files.get("collections.json")!).paths).toEqual([
       "/MUSICIANS/C/Crowley_Owen/A_Drop_of_Blue.sid",
       "/MUSICIANS/D/DJ_Space/Moonlight_Sonata.sid",
@@ -237,7 +248,6 @@ describe("STIL collections", () => {
     await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
     const legacy = JSON.parse(files.get("index.json")!);
     delete legacy.collectionsVersion;
-    delete legacy.collectionCounts;
     files.set("index.json", JSON.stringify(legacy));
     files.delete("collections.json");
     __resetStilStoreCachesForTest();
@@ -250,7 +260,6 @@ describe("STIL collections", () => {
     expect(JSON.parse(files.get("index.json")!)).toMatchObject({
       release: 85,
       collectionsVersion: STIL_COLLECTIONS_VERSION,
-      collectionCounts: { winners: 1, classical: 1 },
     });
   });
 
@@ -304,5 +313,114 @@ describe("STIL collections", () => {
     expect(await readStilCollections()).toBeNull();
     expect(logs.addErrorLog).toHaveBeenCalledWith("STIL collections could not be read", { error: "disk full" });
     expect((await readStilCollections())?.collections.winners).toEqual([[0, 1]]);
+  });
+
+  const NEWER_DOCUMENT = `/MUSICIANS/X/Xmas/Jingle.sid
+  TITLE: Jingle Bells
+ ARTIST: James Lord Pierpont
+`;
+
+  const storeWithoutCollections = async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 84);
+    const legacy = JSON.parse(files.get("index.json")!);
+    delete legacy.collectionsVersion;
+    files.set("index.json", JSON.stringify(legacy));
+    files.delete("collections.json");
+    __resetStilStoreCachesForTest();
+  };
+
+  const deferred = () => {
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  };
+
+  it("does not write the previous release's manifest over a store that was replaced while it was read", async () => {
+    await storeWithoutCollections();
+    // The app read the manifest at startup, before a new release's STIL arrived.
+    expect((await readStilManifest())?.release).toBe(84);
+
+    const shardWrite = deferred();
+    gates.writes.set("shard-0.json", shardWrite.promise);
+    const ingest = writeStilShards(parseStil(NEWER_DOCUMENT), 85);
+    await vi.waitFor(() => expect(files.has("index.json")).toBe(false));
+
+    const shardReads = deferred();
+    gates.shardReads = shardReads.promise;
+    const launcherRead = readStilCollections();
+
+    shardWrite.release();
+    await ingest;
+    shardReads.release();
+    await launcherRead;
+
+    expect(JSON.parse(files.get("index.json")!)).toMatchObject({ release: 85 });
+    expect(JSON.parse(files.get("collections.json")!)).toEqual(deriveStilCollections(parseStil(NEWER_DOCUMENT)));
+    expect((await readStilCollections())?.collections.christmas).toEqual([[0, 1]]);
+  });
+
+  it("discards a derivation whose store was replaced before it could be written", async () => {
+    await storeWithoutCollections();
+    const collectionsWrite = deferred();
+    gates.writes.set("collections.json", collectionsWrite.promise);
+    const launcherRead = readStilCollections();
+    await vi.waitFor(() => expect(shardReads()).toBe(STIL_SHARD_COUNT));
+
+    // The derivation is now waiting on its write while a new release's STIL is stored.
+    const ingest = writeStilShards(parseStil(NEWER_DOCUMENT), 85);
+    // Long enough for an unserialized ingestion to finish all 66 of its writes.
+    for (let turn = 0; turn < 1000; turn += 1) await Promise.resolve();
+    collectionsWrite.release();
+    await Promise.all([launcherRead, ingest]);
+
+    expect(JSON.parse(files.get("index.json")!)).toMatchObject({ release: 85 });
+    expect(JSON.parse(files.get("collections.json")!)).toEqual(deriveStilCollections(parseStil(NEWER_DOCUMENT)));
+  });
+
+  it("derives nothing, says which shard is missing, and tries again later, when the store is incomplete", async () => {
+    await storeWithoutCollections();
+    const missing = shardForPath("/MUSICIANS/D/DJ_Space/Moonlight_Sonata.sid");
+    const shard = files.get(`shard-${missing}.json`)!;
+    files.delete(`shard-${missing}.json`);
+
+    expect(await readStilCollections()).toBeNull();
+    expect(logs.addLog).toHaveBeenCalledWith(
+      "warn",
+      "STIL collections not derived: a stored shard is missing or unreadable",
+      { shard: missing, release: 84 },
+    );
+    expect(files.has("collections.json")).toBe(false);
+    expect(JSON.parse(files.get("index.json")!).collectionsVersion).toBeUndefined();
+
+    files.set(`shard-${missing}.json`, shard);
+    expect((await readStilCollections())?.collections.classical).toEqual([[1, 1]]);
+  });
+
+  it("discards a derivation when a store write queued ahead of it replaces the store", async () => {
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    await storeWithoutCollections();
+    const reset = deferred();
+    vi.mocked(filesystem.resetStilStore).mockImplementationOnce(async () => {
+      await reset.promise;
+      files.clear();
+    });
+    const clearing = clearStil();
+    const ingest = writeStilShards(parseStil(NEWER_DOCUMENT), 85);
+    const launcherRead = readStilCollections();
+    await vi.waitFor(() => expect(shardReads()).toBe(STIL_SHARD_COUNT));
+
+    reset.release();
+    await Promise.all([clearing, ingest]);
+
+    expect(await launcherRead).toBeNull();
+    expect(logs.addLog).toHaveBeenCalledWith(
+      "info",
+      "STIL collections derivation discarded: the store was replaced meanwhile",
+      { release: 84 },
+    );
+    expect(JSON.parse(files.get("index.json")!)).toMatchObject({ release: 85 });
+    expect(JSON.parse(files.get("collections.json")!)).toEqual(deriveStilCollections(parseStil(NEWER_DOCUMENT)));
   });
 });

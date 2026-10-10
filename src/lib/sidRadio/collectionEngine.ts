@@ -87,21 +87,54 @@ const likeAffinity = (bundle: SidcorrTinyBundle, liked: readonly number[]): Map<
 
 type Member = { ordinal: number; md5_48: string; songNr: number };
 
+/** Width of the ordinal range past the bundle's end that members it does not know are hashed into. */
+const UNKNOWN_MEMBER_ORDINAL_SPACE = 2 ** 30;
+
+/**
+ * The ordinal for a member the bundle does not know, taken from its identity alone.
+ *
+ * It is persisted in the station's played set, so it must not depend on the member's place in the
+ * pool: an ordinal derived from the pool index changed whenever the pool did, and a resumed station
+ * then forgot some tunes it had played and skipped others it had not.
+ */
+export const unknownMemberOrdinal = (trackCount: number, md5_48: string, songNr: number): number => {
+  const key = `${md5_48}#${songNr}`;
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return trackCount + (hash % UNKNOWN_MEMBER_ORDINAL_SPACE);
+};
+
 /**
  * Give every member an ordinal the queue provider can exclude.
  *
  * A member the similarity bundle does not know — STIL can name a tune added after the bundle was
- * built — still plays: it gets an ordinal past the end of the bundle, unique to its place in the
- * pool, and simply takes no part in the likes weighting.
+ * built — still plays: it gets {@link unknownMemberOrdinal} and takes no part in the likes weighting.
+ * Two such members whose hashes collide are resolved in the order of their identities, so adding a
+ * member can move only a member it collides with.
  */
 const resolveMembers = (bundle: SidcorrTinyBundle, pool: CollectionPool): Member[] => {
   const members: Member[] = [];
   const seen = new Set<number>();
+  const unknown = new Map<string, { md5_48: string; songNr: number }>();
   for (let index = 0; index < pool.md5_48.length; index += 1) {
     const md5_48 = pool.md5_48[index].slice(0, 12).toLowerCase();
     const songNr = pool.songNr[index] ?? 1;
-    const ordinal = bundle.trackOrdinalsForMd548(md5_48)[songNr - 1] ?? bundle.trackCount + index;
+    const ordinal = bundle.trackOrdinalsForMd548(md5_48)[songNr - 1];
+    if (ordinal === undefined) {
+      unknown.set(`${md5_48}#${songNr}`, { md5_48, songNr });
+      continue;
+    }
     if (seen.has(ordinal)) continue;
+    seen.add(ordinal);
+    members.push({ ordinal, md5_48, songNr });
+  }
+  for (const key of [...unknown.keys()].sort()) {
+    const { md5_48, songNr } = unknown.get(key)!;
+    let ordinal = unknownMemberOrdinal(bundle.trackCount, md5_48, songNr);
+    while (seen.has(ordinal)) ordinal += 1;
     seen.add(ordinal);
     members.push({ ordinal, md5_48, songNr });
   }

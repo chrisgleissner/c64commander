@@ -68,6 +68,9 @@ const songMoodOptions: ReadonlyArray<{ bit: number | null; key: string | null; l
   ...SID_RADIO_STYLE_TILES.map((tile) => ({ bit: tile.bit, key: tile.key, label: tile.label })),
 ];
 
+/** The sheet's `data-[state=open]:duration-500` slide-in. */
+export const COLLECTION_COUNTS_DELAY_MS = 500;
+
 /**
  * The SID Radio launcher (spec §5.2). Composes seed × optional style: a grid of
  * the 9 style tiles, a "based on my likes" composition toggle (Q4/D10), a Taste
@@ -96,7 +99,11 @@ export const SidRadioLauncherSheet = ({
 }: SidRadioLauncherSheetProps) => {
   const [fromLikes, setFromLikes] = useState(false);
   useEffect(() => {
-    if (open) onLoadCollectionCounts?.();
+    if (!open || !onLoadCollectionCounts) return;
+    // After the sheet's opening animation: reading the counts can derive the collections from the
+    // stored STIL, a few hundred milliseconds of work that would otherwise stall the slide-in.
+    const timer = window.setTimeout(onLoadCollectionCounts, COLLECTION_COUNTS_DELAY_MS);
+    return () => window.clearTimeout(timer);
   }, [open, onLoadCollectionCounts]);
   const tasteUnlocked = likeCount >= SID_RADIO_TASTE_UNLOCK_LIKES;
   const close = () => onOpenChange(false);
@@ -252,7 +259,7 @@ export const SidRadioLauncherSheet = ({
                           className="text-xs text-muted-foreground"
                           data-testid={`sid-radio-collection-${collection.id}-size`}
                         >
-                          {empty ? "None in this release" : `${count.toLocaleString("en-US")} tunes`}
+                          {empty ? "None installed" : `${count.toLocaleString("en-US")} tunes`}
                         </span>
                       ) : null}
                     </Button>

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { computeCollectionStation, type CollectionPool } from "@/lib/sidRadio/collectionEngine";
+import { computeCollectionStation, unknownMemberOrdinal, type CollectionPool } from "@/lib/sidRadio/collectionEngine";
 import { parseSidcorrTiny, type SidcorrTinyBundle } from "@/lib/sidRadio/sidcorrTiny";
 import { computeStation } from "@/lib/sidRadio/stationEngine";
 import { computeStationResponse } from "@/lib/sidRadio/sidRadioWorkerCore";
@@ -49,7 +49,7 @@ const POOL: CollectionPool = {
   md5_48: [MD5[1], MD5[3], MD5[5], MD5[7], MD5[8], MD5[8], UNKNOWN],
   songNr: [1, 1, 1, 1, 1, 3, 1],
 };
-const UNKNOWN_ORDINAL = bundle.trackCount + 6;
+const UNKNOWN_ORDINAL = unknownMemberOrdinal(bundle.trackCount, UNKNOWN, 1);
 const MEMBER_ORDINALS = [1, 3, 5, 7, 8, 10, UNKNOWN_ORDINAL];
 
 const orderFor = (options: Partial<Parameters<typeof computeCollectionStation>[0]> = {}) =>
@@ -107,8 +107,40 @@ describe("computeCollectionStation", () => {
   it("plays a tune number the bundle has no track for rather than dropping it", () => {
     const pool = { md5_48: [MD5[1]], songNr: [4] };
     expect(computeCollectionStation({ bundle, pool, shuffleSeed: 1 }).candidates).toMatchObject([
-      { trackOrdinal: bundle.trackCount, songNr: 4 },
+      { trackOrdinal: unknownMemberOrdinal(bundle.trackCount, MD5[1], 4), songNr: 4 },
     ]);
+  });
+
+  it("keeps the ordinal of a member the bundle does not know when other members join or leave the pool", () => {
+    const ordinalOf = (pool: CollectionPool, md5_48: string) =>
+      computeCollectionStation({ bundle, pool, shuffleSeed: 1 }).candidates.find(
+        (candidate) => candidate.md5_48 === md5_48,
+      )?.trackOrdinal;
+    const grown: CollectionPool = {
+      md5_48: ["888888888888", MD5[0], ...POOL.md5_48],
+      songNr: [2, 1, ...POOL.songNr],
+    };
+    const shrunk: CollectionPool = { md5_48: [UNKNOWN], songNr: [1] };
+    expect(ordinalOf(grown, UNKNOWN)).toBe(ordinalOf(POOL, UNKNOWN));
+    expect(ordinalOf(shrunk, UNKNOWN)).toBe(ordinalOf(POOL, UNKNOWN));
+    expect(ordinalOf(POOL, UNKNOWN)).toBeGreaterThanOrEqual(bundle.trackCount);
+  });
+
+  it("gives two unknown members whose identities hash alike distinct ordinals, in identity order", () => {
+    // Found by search: these two identities hash to the same ordinal.
+    const [lower, higher] = ["000000018d5c", "000000028a28"];
+    expect(unknownMemberOrdinal(bundle.trackCount, lower, 1)).toBe(unknownMemberOrdinal(bundle.trackCount, higher, 1));
+    const ordinalsFor = (md5_48: string[]) =>
+      Object.fromEntries(
+        computeCollectionStation({
+          bundle,
+          pool: { md5_48, songNr: md5_48.map(() => 1) },
+          shuffleSeed: 1,
+        }).candidates.map((candidate) => [candidate.md5_48, candidate.trackOrdinal]),
+      );
+    const base = unknownMemberOrdinal(bundle.trackCount, lower, 1);
+    expect(ordinalsFor([higher, lower])).toEqual({ [lower]: base, [higher]: base + 1 });
+    expect(ordinalsFor([lower, higher])).toEqual({ [lower]: base, [higher]: base + 1 });
   });
 
   it("never offers a tune marked Not for me", () => {

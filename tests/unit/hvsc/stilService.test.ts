@@ -24,6 +24,10 @@ vi.mock("@/lib/hvsc/stilStore", () => ({
 import {
   buildStilUrls,
   ensureStilReady,
+  isStilFetchNeeded,
+  STIL_FETCH_RETRY_AFTER_MS,
+  STIL_FETCH_TIMEOUT_MS,
+  stilUnavailableReason,
   storeStilFromArchive,
   __resetStilServiceForTest,
 } from "@/lib/hvsc/stilService";
@@ -88,6 +92,7 @@ describe("ensureStilReady", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("downloads nothing when there is no library to describe", async () => {
@@ -98,6 +103,7 @@ describe("ensureStilReady", () => {
 
   it("downloads nothing when the store is already current", async () => {
     readStilManifest.mockResolvedValue({ release: 85 });
+    isStilInstalled.mockResolvedValue(true);
     expect(await ensureStilReady()).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -146,5 +152,77 @@ describe("ensureStilReady", () => {
     fetchMock.mockRejectedValue(new Error("offline"));
     isStilInstalled.mockResolvedValue(false);
     expect(await ensureStilReady()).toBe(false);
+  });
+
+  /** A download that never answers until its signal is aborted. */
+  const stalledFetch = () =>
+    fetchMock.mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
+    );
+
+  it("gives up on a download that stalls, rather than waiting for ever", async () => {
+    vi.useFakeTimers();
+    stalledFetch();
+    const ready = ensureStilReady();
+    await vi.advanceTimersByTimeAsync(STIL_FETCH_TIMEOUT_MS);
+    expect(await ready).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(true);
+  });
+
+  it("waits before downloading again after a failure, unless the listener asked", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockRejectedValue(new Error("offline"));
+    expect(await ensureStilReady()).toBe(false);
+    const attempts = fetchMock.mock.calls.length;
+
+    expect(await ensureStilReady()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(attempts);
+
+    expect(await ensureStilReady({ retryNow: true })).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(attempts * 2);
+
+    vi.advanceTimersByTime(STIL_FETCH_RETRY_AFTER_MS);
+    fetchMock.mockResolvedValue(okResponse(LATIN1_DOC));
+    expect(await ensureStilReady()).toBe(true);
+    expect(ingestStilText).toHaveBeenCalledTimes(1);
+  });
+
+  it("downloads nothing for Demo Mode's library, whose tunes the published notes do not describe", async () => {
+    saveHvscState({ installedVersion: 85, installedBaselineVersion: 85, librarySource: "demo" } as never);
+    expect(await isStilFetchNeeded()).toBe(false);
+    expect(await ensureStilReady({ retryNow: true })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("says a download is needed only when the stored notes are missing or older than the library", async () => {
+    expect(await isStilFetchNeeded()).toBe(true);
+    readStilManifest.mockResolvedValue({ release: 84 });
+    expect(await isStilFetchNeeded()).toBe(true);
+    readStilManifest.mockResolvedValue({ release: 85 });
+    expect(await isStilFetchNeeded()).toBe(false);
+    hasMockedStil.mockReturnValue(true);
+    readStilManifest.mockResolvedValue(null);
+    expect(await isStilFetchNeeded()).toBe(false);
+  });
+
+  it.each([
+    [{ installedVersion: 0, installedBaselineVersion: null }, "no-library"],
+    [{ installedVersion: 85, installedBaselineVersion: 85, librarySource: "demo" }, "demo-library"],
+    [{ installedVersion: 85, installedBaselineVersion: 85 }, "not-downloaded"],
+  ] as const)("names why the notes are missing for %o", (state, reason) => {
+    saveHvscState(state as never);
+    expect(stilUnavailableReason()).toBe(reason);
+  });
+
+  it("logs a download it could not store, and waits before trying again", async () => {
+    fetchMock.mockResolvedValue(okResponse(LATIN1_DOC));
+    ingestStilText.mockRejectedValueOnce(new Error("disk full"));
+    expect(await ensureStilReady()).toBe(false);
+    expect(await ensureStilReady()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

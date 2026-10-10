@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { StilCollectionId } from "@/lib/hvsc/stilCollections";
 import { SID_RADIO_COLLECTIONS, sidRadioCollectionLabel } from "@/lib/sidRadio/stilCollectionCatalog";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
-import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { COLLECTION_COUNTS_DELAY_MS, SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import type { ActiveStation } from "@/pages/playFiles/hooks/useSidRadio";
 
 const JULY = new Date(2026, 6, 15);
@@ -39,6 +39,10 @@ const renderLauncher = (
   return { onStartCollection, onOpenChange };
 };
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("SID Radio collections in the launcher", () => {
   it("offers every collection outside its season except Christmas", () => {
     renderLauncher();
@@ -49,12 +53,14 @@ describe("SID Radio collections in the launcher", () => {
     }
   });
 
-  it("offers Christmas in December and in the first week of January, and not after", () => {
+  it("offers Christmas from December 1", () => {
     renderLauncher({ today: DECEMBER });
     expect(screen.getByTestId("sid-radio-collection-christmas")).toBeInTheDocument();
   });
 
   it.each([
+    [new Date(2026, 10, 30), false],
+    [new Date(2026, 11, 1), true],
     [new Date(2027, 0, 6), true],
     [new Date(2027, 0, 7), false],
   ])("decides the Christmas season on %s", (today, offered) => {
@@ -72,7 +78,7 @@ describe("SID Radio collections in the launcher", () => {
   it("shows how many tunes a collection holds, and retires one that holds none", () => {
     renderLauncher({ collectionCounts: { winners: 1423, classical: 0 } as Record<StilCollectionId, number> });
     expect(screen.getByTestId("sid-radio-collection-winners-size")).toHaveTextContent("1,423 tunes");
-    expect(screen.getByTestId("sid-radio-collection-classical-size")).toHaveTextContent("None in this release");
+    expect(screen.getByTestId("sid-radio-collection-classical-size")).toHaveTextContent("None installed");
     expect(screen.getByTestId("sid-radio-collection-classical")).toBeDisabled();
     expect(screen.getByTestId("sid-radio-collection-winners")).toBeEnabled();
   });
@@ -88,10 +94,32 @@ describe("SID Radio collections in the launcher", () => {
     expect(screen.getByTestId("sid-radio-collection-winners")).toBeDisabled();
   });
 
-  it("asks for the counts when it opens", () => {
+  it("asks for the counts once the sheet has finished opening, not during its animation", () => {
+    vi.useFakeTimers();
     const onLoadCollectionCounts = vi.fn();
     renderLauncher({ onLoadCollectionCounts });
+    act(() => vi.advanceTimersByTime(COLLECTION_COUNTS_DELAY_MS - 1));
+    expect(onLoadCollectionCounts).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
     expect(onLoadCollectionCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not ask for the counts when the sheet closes before it has finished opening", () => {
+    vi.useFakeTimers();
+    const onLoadCollectionCounts = vi.fn();
+    const props = {
+      onOpenChange: vi.fn(),
+      likeCount: 0,
+      onStartStyle: vi.fn(),
+      onStartTaste: vi.fn(),
+      onSurprise: vi.fn(),
+      onLoadCollectionCounts,
+      today: JULY,
+    };
+    const { rerender } = render(<SidRadioLauncherSheet open {...props} />);
+    rerender(<SidRadioLauncherSheet open={false} {...props} />);
+    act(() => vi.advanceTimersByTime(COLLECTION_COUNTS_DELAY_MS));
+    expect(onLoadCollectionCounts).not.toHaveBeenCalled();
   });
 
   it("hides the section where collections cannot be started", () => {
@@ -124,8 +152,28 @@ describe("SID Radio chip for a collection", () => {
     render(
       <SidRadioChip station={collectionStation} collectionProgress={{ heard: 12, total: 423 }} onStop={vi.fn()} />,
     );
-    expect(screen.getByTestId("sid-radio-chip")).toHaveTextContent("Competition winners Radio");
+    expect(screen.getByTestId("sid-radio-chip")).toHaveTextContent("Radio: Competition winners");
     expect(screen.getByTestId("sid-radio-collection-progress")).toHaveTextContent("12 of 423");
+  });
+
+  it("says it is fetching the tune notes while a collection waits for them, with no station running", () => {
+    render(<SidRadioChip station={null} preparingCollection onStop={vi.fn()} />);
+    expect(screen.getByTestId("sid-radio-preparing")).toHaveTextContent("Fetching tune notes…");
+    expect(screen.queryByText("Your playlist")).toBeNull();
+  });
+
+  it("says it is fetching the tune notes in place of the station's name, and keeps Stop", () => {
+    render(
+      <SidRadioChip
+        station={collectionStation}
+        collectionProgress={{ heard: 1, total: 2 }}
+        preparingCollection
+        onStop={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("sid-radio-preparing")).toHaveTextContent("Fetching tune notes…");
+    expect(screen.queryByTestId("sid-radio-collection-progress")).toBeNull();
+    expect(screen.getByTestId("sid-radio-stop")).toBeEnabled();
   });
 
   it("shows no progress before the collection's size is known", () => {

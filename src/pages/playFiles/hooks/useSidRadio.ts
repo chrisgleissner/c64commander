@@ -28,7 +28,12 @@ import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import { DEFAULT_STATION_BALANCE, type StationSeed } from "@/lib/sidRadio/stationEngine";
 import { loadCollectionPool } from "@/lib/sidRadio/collectionPool";
 import { sidRadioCollectionLabel } from "@/lib/sidRadio/stilCollectionCatalog";
-import { isStilCollectionId, readStilCollections, type StilCollectionId } from "@/lib/hvsc";
+import { isStilCollectionId, type StilCollectionId } from "@/lib/hvsc";
+import {
+  collectionEndNotice,
+  collectionProgressOf,
+  useSidRadioCollections,
+} from "@/pages/playFiles/hooks/useSidRadioCollections";
 import {
   recordAutoAdvance,
   recordEmitted,
@@ -120,6 +125,8 @@ export interface UseSidRadioResult {
   ensureCollectionCounts: () => Promise<void>;
   /** How far through its members a collection station is, or null for any other station. */
   collectionProgress: { heard: number; total: number } | null;
+  /** A collection start is waiting for the HVSC tune notes to download. */
+  preparingCollection: boolean;
   /** Per-style track counts, or null until the bundle has been read. */
   stylePopulations: SidRadioStylePopulations | null;
   /** Read the populations so the launcher can size (and retire) its tiles. */
@@ -258,8 +265,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const [station, setStation] = useState<ActiveStation | null>(null);
   const [notice, setNotice] = useState<SidRadioNotice | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
-  const [collectionCounts, setCollectionCounts] = useState<Record<StilCollectionId, number> | null>(null);
-  const [collectionSize, setCollectionSize] = useState<number | null>(null);
+  const collections = useSidRadioCollections({ enabled, ensureResolvable: params.ensureResolvable });
+  const { setCollectionSize, notesMissingRef, prepareNotes, restoreCollectionSize } = collections;
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
   const clientRef = useRef<SidRadioWorkerClient | null>(null);
@@ -281,6 +288,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
    * record or persist anything.
    */
   const stationGenerationRef = useRef(0);
+  /**
+   * Bumped by every start request and every stop, before anything is awaited. A collection start can
+   * wait on a download, and a station started or stopped meanwhile must not be replaced when it ends.
+   */
+  const startRequestRef = useRef(0);
   // The provider latches exhaustion, so every later refill reports it again; the notice is said once per station.
   const stationEndedNoticeGenerationRef = useRef(-1);
 
@@ -338,7 +350,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         lookahead: LOOKAHEAD,
         initialExclude,
         initialRecent,
-        minSeconds: loadSidRadioMinSeconds(),
+        // A collection is a curated list and its size is a promise: every member plays, however short.
+        minSeconds: seed.kind === "collection" ? 0 : loadSidRadioMinSeconds(),
         resolveDuration: params.resolveDurationSeconds,
         ensureResolvable: params.ensureResolvable,
         computeCandidates: async (exclude, recent, count) => {
@@ -352,6 +365,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
               ? await loadCollectionPool(seed.collectionId)
               : undefined;
           if (seed.kind === "collection") {
+            notesMissingRef.current = pool === null;
             if (!pool) return { candidates: [], empty: "no-neighbours" };
             if (stationGenerationRef.current === generation) setCollectionSize(pool.md5_48.length);
           }
@@ -382,7 +396,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         },
       });
     },
-    [ensureClient, resolvePath],
+    [ensureClient, resolvePath, setCollectionSize, notesMissingRef],
   );
 
   const persistSession = useCallback((descriptor: ActiveStation, seed: StationSeed) => {
@@ -408,13 +422,14 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
    */
   const stop = useCallback(() => {
     stationGenerationRef.current += 1;
+    startRequestRef.current += 1;
     refillingRef.current = false;
     setStation(null);
     setCollectionSize(null);
     providerRef.current = null;
     clearSidRadioSession();
     updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
-  }, []);
+  }, [setCollectionSize]);
 
   const refuseStart = useCallback((refusal: SidRadioNotice, context: Record<string, unknown>) => {
     setNotice(refusal);
@@ -422,10 +437,30 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   }, []);
 
   const startUnguarded = useCallback(
-    async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
+    async (
+      request: number,
+      seed: StationSeed,
+      styleFilter: number | null,
+      seedKind: ActiveStation["seedKind"],
+      seedLabel: string,
+    ) => {
       if (!enabled) {
         addLog("warn", "SID Radio: a station start was ignored because SID Radio is disabled", { seedKind });
         return;
+      }
+      if (seed.kind === "collection") {
+        const refusal = await prepareNotes(request);
+        if (startRequestRef.current !== request) {
+          addLog("info", "SID Radio: a collection start was superseded while its tune notes loaded", {
+            service: "sid-radio",
+            collection: seed.collectionId,
+          });
+          return;
+        }
+        if (refusal) {
+          refuseStart(refusal, { seedKind, collection: seed.collectionId, reason: "tune notes unavailable" });
+          return;
+        }
       }
       const client = ensureClient();
       const readyStats = await client.load();
@@ -501,7 +536,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           taste: "no-radio",
           collection: "no-radio-for-collection",
         };
-        const refusal = hvscMissing ? "no-hvsc" : emptyRefusal[seedKind];
+        const refusal = hvscMissing
+          ? "no-hvsc"
+          : seedKind === "collection" && notesMissingRef.current
+            ? "collection-notes-unavailable"
+            : emptyRefusal[seedKind];
         refuseStart(refusal, { seedKind, styleFilter, reason: "no playable tracks" });
         return;
       }
@@ -535,14 +574,17 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       persistSession,
       stop,
       refuseStart,
+      prepareNotes,
+      notesMissingRef,
     ],
   );
 
   // Every caller fires and forgets, so a rejection here would otherwise surface nowhere.
   const start = useCallback(
     async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
+      const request = (startRequestRef.current += 1);
       try {
-        await startUnguarded(seed, styleFilter, seedKind, seedLabel);
+        await startUnguarded(request, seed, styleFilter, seedKind, seedLabel);
       } catch (error) {
         addLog("error", "SID Radio: starting a station failed", {
           seedKind,
@@ -593,20 +635,6 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       start({ kind: "collection", collectionId: id }, null, "collection", sidRadioCollectionLabel(id)),
     [start],
   );
-  const ensureCollectionCounts = useCallback(async () => {
-    if (!enabled) return;
-    const index = await readStilCollections();
-    if (!index) return;
-    setCollectionCounts((previous) => {
-      const next = Object.fromEntries(
-        Object.entries(index.collections).map(([id, members]) => [id, members.length]),
-      ) as Record<StilCollectionId, number>;
-      return previous &&
-        Object.keys(next).every((id) => previous[id as StilCollectionId] === next[id as StilCollectionId])
-        ? previous
-        : next;
-    });
-  }, [enabled]);
 
   // Resume the chip after an app restart (D15): rebuild the provider with the
   // saved exclude set so the next refill continues the identical sequence.
@@ -640,6 +668,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       transportShuffleDisabled: true,
       transportRepeatDisabled: true,
     });
+    const resumedGeneration = stationGenerationRef.current;
+    restoreCollectionSize(saved.seed, () => stationGenerationRef.current === resumedGeneration);
     // A resumed station never passes through `start`, and the bundle it runs on loads lazily inside
     // the worker on the first compute — so nothing reported which corpus was parsed, and a device
     // that had been relaunched described its station without naming the data behind it. `load()` is
@@ -656,7 +686,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           error: error instanceof Error ? error.message : String(error),
         });
       });
-  }, [enabled, station, buildProvider, ensureClient]);
+  }, [enabled, station, buildProvider, ensureClient, restoreCollectionSize]);
 
   const steer = useCallback(
     (md5: string, signal: RankingSignal) => {
@@ -714,15 +744,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           // 4 — a Chill / Ambient station advertised as holding 17,574 tracks stopped dead after 25
           // and left no way to tell why. The provider latches this, so it will not resolve itself:
           // the station is over and picking another is the only way on.
-          if (stationEndedNoticeGenerationRef.current !== generation) {
+          const ended =
+            station.seedKind === "collection"
+              ? collectionEndNotice(reason, notesMissingRef.current, remaining)
+              : "station-ended";
+          if (ended && stationEndedNoticeGenerationRef.current !== generation) {
             stationEndedNoticeGenerationRef.current = generation;
-            setNotice(
-              station.seedKind !== "collection"
-                ? "station-ended"
-                : reason === "exhausted"
-                  ? "collection-ended"
-                  : "no-radio-for-collection",
-            );
+            setNotice(ended);
           }
         }
         recordRefill({
@@ -752,7 +780,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         // will, so the station stops after it, and the user is told why.
         if (stationGenerationRef.current === generation && remaining === 0) setNotice("refill-failed");
       });
-  }, [station, currentIndex, playlistLength, appendItems]);
+  }, [station, currentIndex, playlistLength, appendItems, notesMissingRef]);
 
   // Record auto-advances for the continuity stat (§9.2). The determinism
   // sequence is recorded at emit time instead -- see `recordEmitted`.
@@ -785,18 +813,17 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     startTasteRadio,
     startSurpriseRadio,
     startCollectionRadio,
-    collectionCounts,
-    ensureCollectionCounts,
+    collectionCounts: collections.collectionCounts,
+    ensureCollectionCounts: collections.ensureCollectionCounts,
     collectionProgress:
-      station?.seedKind === "collection" && collectionSize !== null
-        ? {
-            heard: Math.min(
-              collectionSize,
-              Math.max(0, (providerRef.current?.excludedOrdinals.length ?? 0) - (playlistLength - currentIndex - 1)),
-            ),
-            total: collectionSize,
-          }
+      station?.seedKind === "collection"
+        ? collectionProgressOf(
+            collections.collectionSize,
+            providerRef.current?.excludedOrdinals.length ?? 0,
+            playlistLength - currentIndex - 1,
+          )
         : null,
+    preparingCollection: collections.preparingCollection,
     stylePopulations,
     ensureStylePopulations,
     steer,

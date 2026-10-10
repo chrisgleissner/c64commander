@@ -16,14 +16,14 @@ export type SidRadioCollection = {
   inSeason?: (date: Date) => boolean;
 };
 
-/** December, and the first week of January. */
+/** December 1 to January 6. */
 const isChristmasSeason = (date: Date) => date.getMonth() === 11 || (date.getMonth() === 0 && date.getDate() <= 6);
 
 /** The collection tiles, in launcher order. Labels follow the app's sentence case. */
 export const SID_RADIO_COLLECTIONS: ReadonlyArray<SidRadioCollection> = [
   { id: "winners", label: "Competition winners", blurb: "First place at a party or online compo" },
   { id: "screen", label: "Movie & TV themes", blurb: "Film, TV and cartoon music" },
-  { id: "games", label: "Arcade & console", blurb: "Game music from other machines" },
+  { id: "games", label: "Games from other machines", blurb: "Arcade, console and computer games" },
   { id: "pioneers", label: "Electronic pioneers", blurb: "Jarre, Kraftwerk, Vangelis, Oldfield" },
   { id: "synthpop", label: "Synth-pop", blurb: "Depeche Mode, Pet Shop Boys, Erasure" },
   { id: "classical", label: "Classical", blurb: "Bach, Beethoven, Grieg and more" },

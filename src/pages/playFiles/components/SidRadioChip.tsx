@@ -22,6 +22,8 @@ export type SidRadioChipProps = {
   whyThisTune?: string | null;
   /** How far a collection station is through its members; absent for every other station. */
   collectionProgress?: { heard: number; total: number } | null;
+  /** A collection start is waiting for the HVSC tune notes to download. */
+  preparingCollection?: boolean;
   onStop: () => void;
 };
 
@@ -51,7 +53,9 @@ const stationName = (station: ActiveStation, friendlyNames: boolean): string => 
       ? `Radio: ${resolveTrackDisplayName({ label: station.seedLabel, category: "sid", friendlyNames }).title}`
       : station.seedKind === "taste"
         ? "Radio: Tunes you like"
-        : `${station.seedLabel} Radio`;
+        : station.seedKind === "collection"
+          ? `Radio: ${station.seedLabel}`
+          : `${station.seedLabel} Radio`;
   // A station can be constrained by a seed AND by a mood, and both decide what it plays, so the chip
   // has to name both — a listener who picked "Melodic" over a tune otherwise has no way to tell that
   // station from the unconstrained one. A style station is exempt because its seed label already IS
@@ -81,7 +85,15 @@ const stationName = (station: ActiveStation, friendlyNames: boolean): string => 
  * 28 px bare ×, which was under the project's hit-target floor and read as "close this" — the same
  * ambiguity the ranking ✕ has, and the same fix.
  */
-export const SidRadioChip = ({ station, whyThisTune, collectionProgress = null, onStop }: SidRadioChipProps) => {
+const PREPARING_TEXT = "Fetching tune notes…";
+
+export const SidRadioChip = ({
+  station,
+  whyThisTune,
+  collectionProgress = null,
+  preparingCollection = false,
+  onStop,
+}: SidRadioChipProps) => {
   const [expanded, setExpanded] = useState(false);
   const friendlyNames = useFriendlySidNames();
 
@@ -102,10 +114,20 @@ export const SidRadioChip = ({ station, whyThisTune, collectionProgress = null, 
               onClick={() => setExpanded((value) => !value)}
             >
               <Radio className="h-4 w-4 shrink-0 text-primary" />
-              <span className="truncate text-sm font-medium text-foreground">
-                {stationName(station, friendlyNames)}
-              </span>
-              {collectionProgress ? (
+              {preparingCollection ? (
+                <span
+                  className="truncate text-sm text-muted-foreground"
+                  data-testid="sid-radio-preparing"
+                  role="status"
+                >
+                  {PREPARING_TEXT}
+                </span>
+              ) : (
+                <span className="truncate text-sm font-medium text-foreground">
+                  {stationName(station, friendlyNames)}
+                </span>
+              )}
+              {collectionProgress && !preparingCollection ? (
                 <span className="shrink-0 text-sm text-muted-foreground" data-testid="sid-radio-collection-progress">
                   {collectionProgress.heard} of {collectionProgress.total}
                 </span>
@@ -132,12 +154,23 @@ export const SidRadioChip = ({ station, whyThisTune, collectionProgress = null, 
         </div>
       ) : (
         <div className={cn("flex items-center gap-2", ROW_HEIGHT)} data-testid="now-playing-source-idle">
-          <ListMusic className="h-4 w-4 shrink-0 text-muted-foreground" />
-          {/* "Your playlist", not "Playlist": the panel below this card is already headed Playlist, and
-              two identical labels one above the other read as a mistake. This phrasing also sits
-              parallel to the station state, which names a thing ("Melodic Radio") rather than
-              labelling a section. */}
-          <span className="truncate text-sm text-muted-foreground">Your playlist</span>
+          {preparingCollection ? (
+            <>
+              <Radio className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate text-sm text-muted-foreground" data-testid="sid-radio-preparing" role="status">
+                {PREPARING_TEXT}
+              </span>
+            </>
+          ) : (
+            <>
+              <ListMusic className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {/* "Your playlist", not "Playlist": the panel below this card is already headed Playlist, and
+                  two identical labels one above the other read as a mistake. This phrasing also sits
+                  parallel to the station state, which names a thing ("Melodic Radio") rather than
+                  labelling a section. */}
+              <span className="truncate text-sm text-muted-foreground">Your playlist</span>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -1071,13 +1071,13 @@ const seedStil = async (page: Page) => {
  */
 const STIL_V85_COLLECTION_SIZES = {
   Winners: [423, { comment: "Won first place at the Demo Party music competition." }],
-  Screen: [1805, { credits: [{ title: "Theme [from the TV series]", artist: "Composer" }] }],
-  Games: [1903, { credits: [{ title: "Title [from the arcade game Demo]", artist: "Composer" }] }],
-  Pioneers: [932, { credits: [{ title: "Oxygene", artist: "Jean-Michel Jarre" }] }],
-  Synthpop: [783, { credits: [{ title: "Song", artist: "Depeche Mode" }] }],
-  Classical: [1451, { credits: [{ title: "Air", artist: "Johann Sebastian Bach" }] }],
+  Screen: [1719, { credits: [{ title: "Theme [from the TV series]", artist: "Composer" }] }],
+  Games: [1888, { credits: [{ title: "Title [from the arcade game Demo]", artist: "Composer" }] }],
+  Pioneers: [895, { credits: [{ title: "Oxygene", artist: "Jean-Michel Jarre" }] }],
+  Synthpop: [759, { credits: [{ title: "Song", artist: "Depeche Mode" }] }],
+  Classical: [1328, { credits: [{ title: "Air", artist: "Johann Sebastian Bach" }] }],
   Remixes: [501, { comment: "Covers /MUSICIANS/H/Hubbard_Rob/Commando.sid." }],
-  Christmas: [373, { credits: [{ title: "Jingle Bells", artist: "James Lord Pierpont" }] }],
+  Christmas: [340, { credits: [{ title: "Jingle Bells", artist: "James Lord Pierpont" }] }],
 } as const;
 
 const seedStilCollections = async (page: Page) => {

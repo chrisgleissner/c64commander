@@ -11,14 +11,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StilCollectionIndex } from "@/lib/hvsc/stilCollections";
 
 const hvsc = vi.hoisted(() => ({
-  ensureStilReady: vi.fn(async () => true),
+  ensureStilReady: vi.fn(async (_options?: { retryNow?: boolean }) => true),
+  isStilFetchNeeded: vi.fn(async () => false),
+  stilUnavailableReason: vi.fn(() => "not-downloaded" as const),
   readStilCollections: vi.fn<() => Promise<StilCollectionIndex | null>>(),
 }));
-vi.mock("@/lib/hvsc", () => hvsc);
+vi.mock("@/lib/hvsc", async () => {
+  const collections = await import("@/lib/hvsc/stilCollections");
+  return {
+    ...hvsc,
+    STIL_COLLECTION_IDS: collections.STIL_COLLECTION_IDS,
+    stilCollectionCounts: collections.stilCollectionCounts,
+  };
+});
 const logs = vi.hoisted(() => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 vi.mock("@/lib/logging", () => logs);
 
-import { __resetCollectionPoolCacheForTest, loadCollectionPool } from "@/lib/sidRadio/collectionPool";
+import {
+  __resetCollectionPoolCacheForTest,
+  loadCollectionPool,
+  loadCollectionSizes,
+  prepareCollectionNotes,
+} from "@/lib/sidRadio/collectionPool";
 import { rebuildMd548PathIndex, resetMd548PathIndex } from "@/lib/sidRadio/md5PathIndex";
 
 const SONGLENGTHS = `[Database]
@@ -47,6 +61,8 @@ describe("loadCollectionPool", () => {
     resetMd548PathIndex();
     rebuildMd548PathIndex(SONGLENGTHS, { force: true });
     hvsc.ensureStilReady.mockClear();
+    hvsc.isStilFetchNeeded.mockReset();
+    hvsc.isStilFetchNeeded.mockResolvedValue(false);
     hvsc.readStilCollections.mockReset();
     logs.addLog.mockClear();
   });
@@ -61,13 +77,28 @@ describe("loadCollectionPool", () => {
     expect(await loadCollectionPool("winners")).toEqual({ md5_48: ["aaaaaaaaaaaa"], songNr: [1] });
   });
 
-  it("makes sure STIL is on disk before reading the collections", async () => {
+  it("never downloads STIL, because a station asks for its members on every refill", async () => {
     hvsc.readStilCollections.mockResolvedValue(index());
     await loadCollectionPool("winners");
-    expect(hvsc.ensureStilReady).toHaveBeenCalledTimes(1);
-    expect(hvsc.ensureStilReady.mock.invocationCallOrder[0]).toBeLessThan(
-      hvsc.readStilCollections.mock.invocationCallOrder[0],
-    );
+    await loadCollectionPool("winners");
+    expect(hvsc.ensureStilReady).not.toHaveBeenCalled();
+  });
+
+  it("counts a duplicate file once, because it is the same tune", async () => {
+    rebuildMd548PathIndex(`${SONGLENGTHS}; /MUSICIANS/D/Copy_of_Winner.sid\naaaaaaaaaaaa00000000000000000000=3:00\n`, {
+      force: true,
+    });
+    hvsc.readStilCollections.mockResolvedValue({
+      ...index(),
+      paths: ["/MUSICIANS/A/Winner.sid", "/MUSICIANS/D/Copy_of_Winner.sid"],
+      collections: {
+        winners: [
+          [0, 1],
+          [1, 1],
+        ],
+      },
+    } as unknown as StilCollectionIndex);
+    expect(await loadCollectionPool("winners")).toEqual({ md5_48: ["aaaaaaaaaaaa"], songNr: [1] });
   });
 
   it("answers null, and logs why, when STIL is not available", async () => {
@@ -101,4 +132,66 @@ describe("loadCollectionPool", () => {
     hvsc.readStilCollections.mockResolvedValue(index());
     expect(await loadCollectionPool("christmas")).toEqual({ md5_48: [], songNr: [] });
   });
+});
+
+describe("loadCollectionSizes", () => {
+  beforeEach(() => {
+    __resetCollectionPoolCacheForTest();
+    resetMd548PathIndex();
+    hvsc.readStilCollections.mockReset();
+  });
+
+  it("counts the tunes a station can play, which is what the station counts to", async () => {
+    rebuildMd548PathIndex(SONGLENGTHS, { force: true });
+    hvsc.readStilCollections.mockResolvedValue(index());
+    const sizes = await loadCollectionSizes();
+    expect(sizes).toMatchObject({ winners: 1, classical: 1, christmas: 0 });
+    expect(sizes?.winners).toBe((await loadCollectionPool("winners"))?.md5_48.length);
+  });
+
+  it("counts what STIL lists until the library's songlengths have been read", async () => {
+    hvsc.readStilCollections.mockResolvedValue(index());
+    expect(await loadCollectionSizes()).toMatchObject({ winners: 2, classical: 1 });
+  });
+
+  it("answers null while STIL is not stored", async () => {
+    hvsc.readStilCollections.mockResolvedValue(null);
+    expect(await loadCollectionSizes()).toBeNull();
+  });
+});
+
+describe("prepareCollectionNotes", () => {
+  beforeEach(() => {
+    hvsc.ensureStilReady.mockClear();
+    hvsc.isStilFetchNeeded.mockReset();
+    hvsc.readStilCollections.mockReset();
+    hvsc.stilUnavailableReason.mockReset();
+  });
+
+  it("downloads once, as the listener's own request, and says so first when a download is needed", async () => {
+    hvsc.isStilFetchNeeded.mockResolvedValue(true);
+    hvsc.readStilCollections.mockResolvedValue(index());
+    const onFetching = vi.fn();
+    expect(await prepareCollectionNotes(onFetching)).toBe("ready");
+    expect(onFetching).toHaveBeenCalledTimes(1);
+    expect(onFetching.mock.invocationCallOrder[0]).toBeLessThan(hvsc.ensureStilReady.mock.invocationCallOrder[0]);
+    expect(hvsc.ensureStilReady).toHaveBeenCalledTimes(1);
+    expect(hvsc.ensureStilReady).toHaveBeenCalledWith({ retryNow: true });
+  });
+
+  it("shows no wait when the notes are already on disk", async () => {
+    hvsc.readStilCollections.mockResolvedValue(index());
+    const onFetching = vi.fn();
+    expect(await prepareCollectionNotes(onFetching)).toBe("ready");
+    expect(onFetching).not.toHaveBeenCalled();
+  });
+
+  it.each(["no-library", "demo-library", "not-downloaded"] as const)(
+    "reports %s when no collections can be read afterwards",
+    async (reason) => {
+      hvsc.readStilCollections.mockResolvedValue(null);
+      hvsc.stilUnavailableReason.mockReturnValue(reason as never);
+      expect(await prepareCollectionNotes(vi.fn())).toBe(reason);
+    },
+  );
 });

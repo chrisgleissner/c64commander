@@ -164,3 +164,77 @@ describe("deriveStilCollections", () => {
     expect(isStilCollectionId(undefined)).toBe(false);
   });
 });
+
+// Verbatim from STIL v84; each one was a false member of a collection before the rules below.
+const FALSE_MEMBERS = `/DEMOS/A-F/Destroy_Nazis.sid
+  TITLE: Top Gun Anthem [from the movie] (0:30-0:45)
+ ARTIST: Harold Faltermeyer
+
+/GAMES/A-F/Alf_the_First_Adventure.sid
+(#5)
+  TITLE: Dragnet Theme [from the television series]
+ ARTIST: Miklós Rózsa & Walter Schumann
+
+/DEMOS/UNKNOWN/Master_Composer/All_I_Need.sid
+  TITLE: All I Need [from All I Need]
+ ARTIST: Jack Wagner
+
+/MUSICIANS/A/Arturo_Dente/Ranatan.sid
+  TITLE: La banda dei ranocchi [from the cartoon series]
+ ARTIST: Le Mele Verdi
+
+/MUSICIANS/T/Tamanegi-itame/Heat_Rock.sid
+  TITLE: Heat Rock [from the MSX game Super Laydock - Mission Striker]
+ ARTIST: Shigeru Tomita
+
+/MUSICIANS/C/Crowley_Owen/Axel_F.sid
+  TITLE: Axel F [from the movie Beverly Hills Cop] (0:00-1:31)
+ ARTIST: Harold Faltermeyer
+  TITLE: Mega Apocalypse, Tune #1 (1:32-2:17)
+ ARTIST: Rob Hubbard
+  TITLE: Axel F [from the movie Beverly Hills Cop] (2:18)
+ ARTIST: Harold Faltermeyer
+`;
+
+describe("deriveStilCollections on credits that only look like members", () => {
+  const index = deriveStilCollections(parseStil(FALSE_MEMBERS));
+
+  it("leaves out a tune whose first credit is quoted only partway through it", () => {
+    expect(membersOf(index, "screen")).not.toContain("/DEMOS/A-F/Destroy_Nazis.sid#1");
+    expect(membersOf(index, "pioneers")).not.toContain("/DEMOS/A-F/Destroy_Nazis.sid#1");
+  });
+
+  it("keeps a medley whose opening section belongs to the collection", () => {
+    expect(membersOf(index, "screen")).toContain("/MUSICIANS/C/Crowley_Owen/Axel_F.sid#1");
+    expect(membersOf(index, "pioneers")).toContain("/MUSICIANS/C/Crowley_Owen/Axel_F.sid#1");
+  });
+
+  it("does not take a composer's surname in someone else's name for the composer", () => {
+    expect(membersOf(index, "classical")).toEqual([]);
+    expect(membersOf(index, "screen")).toEqual(
+      expect.arrayContaining(["/GAMES/A-F/Alf_the_First_Adventure.sid#5", "/MUSICIANS/A/Arturo_Dente/Ranatan.sid#1"]),
+    );
+  });
+
+  it("keeps a real composer credited beside a name that is not one", () => {
+    const shared = deriveStilCollections(
+      parseStil(`/MUSICIANS/X/Example/Shared.sid
+  TITLE: Toccata
+ ARTIST: Johann Sebastian Bach & Walter Schumann
+`),
+    );
+    expect(membersOf(shared, "classical")).toEqual(["/MUSICIANS/X/Example/Shared.sid#1"]);
+  });
+
+  it("counts Isao Tomita among the electronic pioneers and not another Tomita", () => {
+    expect(membersOf(index, "pioneers")).not.toContain("/MUSICIANS/T/Tamanegi-itame/Heat_Rock.sid#1");
+    expect(membersOf(index, "games")).toContain("/MUSICIANS/T/Tamanegi-itame/Heat_Rock.sid#1");
+    const isao = deriveStilCollections(
+      parseStil(`/MUSICIANS/X/Example/Snowflakes.sid
+  TITLE: Snowflakes Are Dancing
+ ARTIST: Isao Tomita
+`),
+    );
+    expect(membersOf(isao, "pioneers")).toEqual(["/MUSICIANS/X/Example/Snowflakes.sid#1"]);
+  });
+});

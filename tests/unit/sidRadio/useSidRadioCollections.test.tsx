@@ -9,18 +9,18 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CollectionNotesStatus } from "@/lib/sidRadio/collectionPool";
 import type { CollectionPool } from "@/lib/sidRadio/collectionEngine";
-import type { StilCollectionIndex } from "@/lib/hvsc/stilCollections";
+import type { StilCollectionId } from "@/lib/hvsc/stilCollections";
 import type { StationRequest } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import type { StationResult } from "@/lib/sidRadio/stationEngine";
 
-const pools = vi.hoisted(() => ({ loadCollectionPool: vi.fn<(id: string) => Promise<CollectionPool | null>>() }));
-vi.mock("@/lib/sidRadio/collectionPool", () => pools);
-const stil = vi.hoisted(() => ({ readStilCollections: vi.fn<() => Promise<StilCollectionIndex | null>>() }));
-vi.mock("@/lib/hvsc", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/hvsc")>()),
-  readStilCollections: stil.readStilCollections,
+const pools = vi.hoisted(() => ({
+  loadCollectionPool: vi.fn<(id: string) => Promise<CollectionPool | null>>(),
+  loadCollectionSizes: vi.fn<() => Promise<Record<StilCollectionId, number> | null>>(),
+  prepareCollectionNotes: vi.fn<(onFetching: () => void) => Promise<CollectionNotesStatus>>(),
 }));
+vi.mock("@/lib/sidRadio/collectionPool", () => pools);
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 
@@ -73,7 +73,9 @@ beforeEach(async () => {
   rebuildMd548PathIndex(";/MUSICIANS/A/A.sid\naaaaaaaaaaaa00000000000000000000=3:00\n", { force: true });
   pools.loadCollectionPool.mockReset();
   pools.loadCollectionPool.mockResolvedValue(POOL);
-  stil.readStilCollections.mockReset();
+  pools.loadCollectionSizes.mockReset();
+  pools.prepareCollectionNotes.mockReset();
+  pools.prepareCollectionNotes.mockResolvedValue("ready");
   vi.mocked(toast).mockClear();
 });
 
@@ -121,15 +123,160 @@ describe("useSidRadio collection stations", () => {
     expect(result.current.collectionProgress).toBeNull();
   });
 
-  it("refuses the station, and says why, when the tune notes cannot be loaded", async () => {
+  it.each([
+    ["not-downloaded", "collection-notes-unavailable"],
+    ["no-library", "no-hvsc"],
+    ["demo-library", "no-radio-for-collection"],
+  ] as const)("refuses the station when the tune notes are %s, and says %s", async (status, notice) => {
+    pools.prepareCollectionNotes.mockResolvedValue(status);
+    const client = makeClient();
+    const { result } = renderHook(() => useSidRadio(paramsFor(client)));
+    await act(async () => {
+      await result.current.startCollectionRadio("classical");
+    });
+    expect(result.current.station).toBeNull();
+    expect(result.current.notice).toBe(notice);
+    expect(client.compute).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the missing tune notes when the members cannot be read after all", async () => {
     pools.loadCollectionPool.mockResolvedValue(null);
     const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
     await act(async () => {
       await result.current.startCollectionRadio("classical");
     });
-    expect(result.current.station).toBeNull();
+    expect(result.current.notice).toBe("collection-notes-unavailable");
+  });
+
+  it("says none of the collection is installed when its pool is empty", async () => {
+    pools.loadCollectionPool.mockResolvedValue({ md5_48: [], songNr: [] });
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
+    await act(async () => {
+      await result.current.startCollectionRadio("classical");
+    });
     expect(result.current.notice).toBe("no-radio-for-collection");
-    expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays every member however short, and counts each one heard only when it is reached", async () => {
+    // The mood stations' 15 s minimum would drop the second member.
+    const resolveDurationSeconds = vi.fn(async (path: string) => (path.includes("bbbbbbbbbbbb") ? 4 : 120));
+    const client = makeClient();
+    const params = paramsFor(client, { resolveDurationSeconds });
+    const { result, rerender } = renderHook((props: Params) => useSidRadio(props), { initialProps: params });
+    await act(async () => {
+      await result.current.startCollectionRadio("winners");
+    });
+    const items = vi.mocked(params.startPlaylist).mock.calls[0][0];
+    expect(items.map((item) => item.path)).toEqual([
+      "/HVSC/aaaaaaaaaaaa.sid",
+      "/HVSC/bbbbbbbbbbbb.sid",
+      "/HVSC/cccccccccccc.sid",
+    ]);
+    expect(items[1].durationMs).toBe(4000);
+    rerender({ ...params, currentIndex: 1, playlistLength: 3 });
+    expect(result.current.collectionProgress).toEqual({ heard: 2, total: 3 });
+    await act(async () => {
+      rerender({ ...params, currentIndex: 2, playlistLength: 3 });
+    });
+    expect(result.current.collectionProgress).toEqual({ heard: 3, total: 3 });
+    await waitFor(() => expect(result.current.notice).toBe("collection-ended"));
+  });
+
+  it("does not say every tune was heard while tunes are still queued", async () => {
+    const client = makeClient();
+    const params = paramsFor(client, { playlistLength: 3 });
+    const { result, rerender } = renderHook((props: Params) => useSidRadio(props), { initialProps: params });
+    await act(async () => {
+      await result.current.startCollectionRadio("winners");
+    });
+    await act(async () => {
+      rerender({ ...params, currentIndex: 1 });
+    });
+    // The refill found the pool empty while one tune was still ahead.
+    await waitFor(() => expect(client.compute).toHaveBeenCalledTimes(2));
+    expect(result.current.notice).toBeNull();
+    await act(async () => {
+      rerender({ ...params, currentIndex: 2 });
+    });
+    await waitFor(() => expect(result.current.notice).toBe("collection-ended"));
+  });
+
+  it("shows that it is fetching the tune notes while it waits for them, and only then", async () => {
+    let finish!: (status: CollectionNotesStatus) => void;
+    pools.prepareCollectionNotes.mockImplementation(async (onFetching) => {
+      onFetching();
+      return new Promise<CollectionNotesStatus>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const params = paramsFor(makeClient());
+    const { result } = renderHook(() => useSidRadio(params));
+    let started!: Promise<void>;
+    act(() => {
+      started = result.current.startCollectionRadio("winners");
+    });
+    await waitFor(() => expect(result.current.preparingCollection).toBe(true));
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+    await act(async () => {
+      finish("ready");
+      await started;
+    });
+    expect(result.current.preparingCollection).toBe(false);
+    expect(params.startPlaylist).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops showing the wait when preparing the tune notes fails", async () => {
+    pools.prepareCollectionNotes.mockImplementation(async (onFetching) => {
+      onFetching();
+      throw new Error("disk full");
+    });
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
+    await act(async () => {
+      await result.current.startCollectionRadio("winners");
+    });
+    expect(result.current.preparingCollection).toBe(false);
+    expect(result.current.notice).toBe("start-failed");
+  });
+
+  it("prepares the tune notes once per start, not on every refill", async () => {
+    const client = makeClient();
+    const params = paramsFor(client);
+    const { result, rerender } = renderHook((props: Params) => useSidRadio(props), { initialProps: params });
+    await act(async () => {
+      await result.current.startCollectionRadio("winners");
+    });
+    await act(async () => {
+      rerender({ ...params, currentIndex: 2, playlistLength: 3 });
+    });
+    await waitFor(() => expect(client.compute).toHaveBeenCalledTimes(2));
+    expect(pools.prepareCollectionNotes).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts nothing when the listener stops or starts another station while the notes download", async () => {
+    let finish!: (status: CollectionNotesStatus) => void;
+    pools.prepareCollectionNotes.mockImplementation(
+      () =>
+        new Promise<CollectionNotesStatus>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const client = makeClient();
+    const params = paramsFor(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    let started!: Promise<void>;
+    act(() => {
+      started = result.current.startCollectionRadio("winners");
+    });
+    await waitFor(() => expect(pools.prepareCollectionNotes).toHaveBeenCalled());
+    act(() => result.current.stop());
+    await act(async () => {
+      finish("ready");
+      await started;
+    });
+    expect(client.compute).not.toHaveBeenCalled();
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+    expect(result.current.station).toBeNull();
   });
 
   it("says the collection is finished, not merely ended, when every member has been played", async () => {
@@ -165,6 +312,60 @@ describe("useSidRadio collection stations", () => {
     expect(client.compute.mock.calls[0][0]).toMatchObject({ exclude: [0], pool: POOL });
   });
 
+  it("shows a resumed collection's progress before its first refill", async () => {
+    saveSidRadioSession({
+      seedKind: "collection",
+      seedLabel: "Classical",
+      seed: { kind: "collection", collectionId: "classical" },
+      styleFilter: null,
+      shuffleSeed: 99,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [0, 1],
+    });
+    const client = makeClient();
+    const { result } = renderHook(() => useSidRadio(paramsFor(client, { currentIndex: 0, playlistLength: 6 })));
+    await waitFor(() => expect(result.current.collectionProgress).toEqual({ heard: 0, total: 3 }));
+    expect(client.compute).not.toHaveBeenCalled();
+  });
+
+  it("logs, and shows no progress, when a resumed collection's size cannot be read", async () => {
+    pools.loadCollectionPool.mockRejectedValue(new Error("disk unreadable"));
+    saveSidRadioSession({
+      seedKind: "collection",
+      seedLabel: "Classical",
+      seed: { kind: "collection", collectionId: "classical" },
+      styleFilter: null,
+      shuffleSeed: 99,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [0],
+    });
+    const { addLog } = await import("@/lib/logging");
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient(), { currentIndex: 0, playlistLength: 6 })));
+    await waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith("warn", "SID Radio: could not read the size of a resumed collection", {
+        service: "sid-radio",
+        collection: "classical",
+        error: "disk unreadable",
+      }),
+    );
+    expect(result.current.collectionProgress).toBeNull();
+  });
+
+  it("names the missing tune notes when a resumed collection cannot read its members", async () => {
+    pools.loadCollectionPool.mockResolvedValue(null);
+    saveSidRadioSession({
+      seedKind: "collection",
+      seedLabel: "Classical",
+      seed: { kind: "collection", collectionId: "classical" },
+      styleFilter: null,
+      shuffleSeed: 99,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [],
+    });
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient(), { currentIndex: 0, playlistLength: 1 })));
+    await waitFor(() => expect(result.current.notice).toBe("collection-notes-unavailable"));
+  });
+
   it("says the collection cannot play, rather than that it finished, for a saved id this build does not know", async () => {
     saveSidRadioSession({
       seedKind: "collection",
@@ -184,42 +385,58 @@ describe("useSidRadio collection stations", () => {
 });
 
 describe("useSidRadio collection counts", () => {
-  const index = (winners: number): StilCollectionIndex =>
-    ({
-      version: 1,
-      paths: ["/A.sid"],
-      collections: { winners: Array.from({ length: winners }, () => [0, 1]), classical: [] },
-    }) as unknown as StilCollectionIndex;
+  const sizes = (winners: number) => ({ winners, classical: 0 }) as Record<StilCollectionId, number>;
 
-  it("reads the members per collection for the launcher", async () => {
-    stil.readStilCollections.mockResolvedValue(index(2));
-    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
+  it("reads the playable members per collection for the launcher, once the path index is ready", async () => {
+    pools.loadCollectionSizes.mockResolvedValue(sizes(2));
+    const ensureResolvable = vi.fn(async () => undefined);
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient(), { ensureResolvable })));
     await act(async () => {
       await result.current.ensureCollectionCounts();
     });
     expect(result.current.collectionCounts).toEqual({ winners: 2, classical: 0 });
+    expect(ensureResolvable.mock.invocationCallOrder[0]).toBeLessThan(
+      pools.loadCollectionSizes.mock.invocationCallOrder[0],
+    );
   });
 
   it("keeps the same counts object when nothing changed, so the launcher does not re-render for nothing", async () => {
-    stil.readStilCollections.mockResolvedValue(index(2));
+    pools.loadCollectionSizes.mockResolvedValue(sizes(2));
     const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
     await act(async () => {
       await result.current.ensureCollectionCounts();
     });
     const first = result.current.collectionCounts;
+    pools.loadCollectionSizes.mockResolvedValue(sizes(2));
     await act(async () => {
       await result.current.ensureCollectionCounts();
     });
     expect(result.current.collectionCounts).toBe(first);
-    stil.readStilCollections.mockResolvedValue(index(3));
+    pools.loadCollectionSizes.mockResolvedValue(sizes(3));
     await act(async () => {
       await result.current.ensureCollectionCounts();
     });
     expect(result.current.collectionCounts).toEqual({ winners: 3, classical: 0 });
   });
 
+  it("still reads the counts, and says so, when the path index fails to load", async () => {
+    pools.loadCollectionSizes.mockResolvedValue(sizes(2));
+    const { addLog } = await import("@/lib/logging");
+    const ensureResolvable = vi.fn(async () => Promise.reject(new Error("no songlengths")));
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient(), { ensureResolvable })));
+    await act(async () => {
+      await result.current.ensureCollectionCounts();
+    });
+    expect(result.current.collectionCounts).toEqual({ winners: 2, classical: 0 });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "SID Radio: path index was not ready for the collections",
+      expect.objectContaining({ purpose: "counts", error: "no songlengths" }),
+    );
+  });
+
   it("leaves the counts unknown while STIL is not stored", async () => {
-    stil.readStilCollections.mockResolvedValue(null);
+    pools.loadCollectionSizes.mockResolvedValue(null);
     const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
     await act(async () => {
       await result.current.ensureCollectionCounts();
@@ -232,6 +449,6 @@ describe("useSidRadio collection counts", () => {
     await act(async () => {
       await result.current.ensureCollectionCounts();
     });
-    expect(stil.readStilCollections).not.toHaveBeenCalled();
+    expect(pools.loadCollectionSizes).not.toHaveBeenCalled();
   });
 });

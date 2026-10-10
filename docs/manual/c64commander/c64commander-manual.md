@@ -574,9 +574,9 @@ You can also start from whatever is playing now. Tap **More like this**, and the
 A mood plays tunes that sound alike. A collection plays a list, and nothing else. The lists come from the tune notes that the HVSC team writes for its music:
 
 - **Competition winners.** Tunes that took first place at a demo party or an online music competition.
-- **Movie & TV themes**, **Arcade & console**, **Electronic pioneers** (Jarre, Kraftwerk, Vangelis and others), **Synth-pop**, and **Classical.** C64 versions of music first heard elsewhere.
+- **Movie & TV themes**, **Games from other machines** (arcade, console and computer games), **Electronic pioneers** (Jarre, Kraftwerk, Vangelis and others), **Synth-pop**, and **Classical.** C64 versions of music first heard elsewhere.
 - **C64 remixes.** New takes on tunes first written for the C64.
-- **Christmas.** Offered in December and the first week of January.
+- **Christmas.** Offered from December 1 to January 6.
 
 ![Collections: fixed lists of tunes from the HVSC tune notes](../../img/app/play/sid-radio/profiles/medium/06-collections.png)
 
@@ -596,7 +596,7 @@ Your choices stay on your phone or tablet. They belong to the music itself, not 
 
 **It never repeats itself.** No tune plays twice. A mood takes one tune from each file, while a collection plays every tune on its list, even two from the same file.
 
-**It skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything.
+**A mood skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything. A collection plays every tune on its list, however short.
 
 **It can run out.** A station follows a chain of similar tunes, and now and then it reaches the end, usually after many skips. The app tells you, and you can pick another mood.
 
