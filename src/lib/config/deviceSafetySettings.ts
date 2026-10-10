@@ -575,3 +575,20 @@ export const DEVICE_SAFETY_SETTING_KEYS = {
 };
 
 export const DEVICE_SAFETY_PRESETS = MODE_DEFAULTS;
+
+/** Spacing of a remote seek's CPU Speed writes where the safety mode allows it. */
+export const SEEK_CPU_SPEED_WRITE_INTERVAL_MS = 250;
+
+/**
+ * Four CPU Speed writes a second, among 30 clock reads and 4 key presses, all answered within 85 ms on
+ * the C64 Ultimate (1.2.1) and the Ultimate 64 (3.15), so a seek writes CPU Speed every 250 ms in
+ * Balanced and Relaxed. Conservative and Troubleshooting keep their own spacing.
+ */
+export const seekCpuSpeedWriteIntervalMs = (
+  config: Pick<DeviceSafetyConfig, "mode" | "resolution" | "configsCooldownMs">,
+) => {
+  const mode = config.resolution?.effectiveMode ?? config.mode;
+  return mode === "BALANCED" || mode === "RELAXED"
+    ? Math.min(config.configsCooldownMs, SEEK_CPU_SPEED_WRITE_INTERVAL_MS)
+    : config.configsCooldownMs;
+};

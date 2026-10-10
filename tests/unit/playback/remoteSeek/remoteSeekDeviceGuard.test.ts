@@ -182,6 +182,24 @@ describe("remote seek device guard", () => {
     expect(device.player.heldKeys).toEqual([]);
   });
 
+  it("asks for the seek's shorter spacing on CPU Speed writes only, not on Turbo Control or Vol Master", async () => {
+    const device = createFakeRemoteSeekDevice({ settings: { "Turbo Control": "Off" } });
+    const write = vi.spyOn(device.api, "setConfigValue");
+    const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+    await session.pressKey();
+    await session.setCpuSpeed("64");
+    await session.restore("test");
+    const flagged = write.mock.calls.map(([, item, , options]) => [item, Boolean(options?.__c64uSeekCpuSpeedWrite)]);
+    expect(flagged).toEqual([
+      ["Vol Master", false],
+      ["Turbo Control", false],
+      ["CPU Speed", true],
+      ["Vol Master", false],
+      ["CPU Speed", true],
+      ["Turbo Control", false],
+    ]);
+  });
+
   it("replays an unfinished journal before opening a new seek on the same device", async () => {
     const device = createFakeRemoteSeekDevice();
     const first = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });

@@ -55,10 +55,12 @@ const recordDeviceGuard = vi.fn();
 const addLog = vi.fn();
 const addErrorLog = vi.fn();
 
-vi.mock("@/lib/config/deviceSafetySettings", () => ({
+vi.mock("@/lib/config/deviceSafetySettings", async (importOriginal) => ({
   loadDeviceSafetyConfig,
   subscribeDeviceSafetyUpdates,
   getActiveAutoResolutionContext,
+  seekCpuSpeedWriteIntervalMs: (await importOriginal<typeof import("@/lib/config/deviceSafetySettings")>())
+    .seekCpuSpeedWriteIntervalMs,
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
@@ -391,6 +393,36 @@ describe("deviceInteractionManager", () => {
 
     expect(writeOrder).toEqual([20, 40, 60, 80]);
     expect(deviceValue).toBe(80);
+  });
+
+  it.each([
+    [true, 250],
+    [false, 500],
+  ])("lets the next config write follow a seek's CPU Speed write (%s) after %i ms in Balanced", async (seek, gapMs) => {
+    vi.useFakeTimers();
+    config = { ...createConfig(), configsCooldownMs: 500 };
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+    const meta = {
+      action: makeAction("rest-config-write"),
+      method: "PUT",
+      path: "/v1/configs/U64%20Specific%20Settings/CPU%20Speed?value=4",
+      normalizedUrl: "http://device/v1/configs/U64%20Specific%20Settings/CPU%20Speed",
+      intent: "user" as const,
+      baseUrl: "http://device",
+      seekCpuSpeedWrite: seek,
+    };
+    const startedAt: number[] = [];
+    const handler = vi.fn(async () => {
+      startedAt.push(Date.now());
+      return { errors: [] };
+    });
+    const first = withRestInteraction(meta, handler);
+    const second = withRestInteraction(meta, handler);
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.all([first, second]);
+    expect(startedAt[1] - startedAt[0]).toBe(gapMs);
   });
 
   it("does not let a cooled-down read occupy the only REST slot before a ready write can run", async () => {

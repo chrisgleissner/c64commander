@@ -11,6 +11,7 @@ import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 import type { TraceActionContext } from "@/lib/tracing/types";
 import {
   loadDeviceSafetyConfig,
+  seekCpuSpeedWriteIntervalMs,
   subscribeDeviceSafetyUpdates,
   type DeviceSafetyConfig,
 } from "@/lib/config/deviceSafetySettings";
@@ -52,6 +53,8 @@ type RestRequestMeta = {
   allowDuringError?: boolean;
   bypassCache?: boolean;
   bypassCooldown?: boolean;
+  /** A remote seek's CPU Speed write, spaced by `seekCpuSpeedWriteIntervalMs` rather than the config cooldown. */
+  seekCpuSpeedWrite?: boolean;
   bypassBackoff?: boolean;
   bypassCircuit?: boolean;
   /**
@@ -772,7 +775,11 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
-  const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const resolvedPolicy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const policy =
+    meta.seekCpuSpeedWrite && resolvedPolicy.key?.endsWith(":rest-config-mutation")
+      ? { ...resolvedPolicy, cooldownMs: seekCpuSpeedWriteIntervalMs(config) }
+      : resolvedPolicy;
   const usesSharedReadState =
     isReadOnlyRestMethod(meta.method) &&
     Boolean(policy.key) &&

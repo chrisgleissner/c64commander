@@ -56,7 +56,11 @@ export type RemoteSeekDeviceApi = {
     category: string,
     item: string,
     value: string | number,
-    options?: { __c64uTransientConfigWrite?: boolean; __c64uTransientConfigRestore?: boolean },
+    options?: {
+      __c64uTransientConfigWrite?: boolean;
+      __c64uTransientConfigRestore?: boolean;
+      __c64uSeekCpuSpeedWrite?: boolean;
+    },
   ) => Promise<ConfigResponse>;
   sendMachineInputBatch: (batch: MachineInputBatch) => Promise<unknown>;
   getMachineInputState: () => Promise<{ keyboard?: { inputs?: string[] } }>;
@@ -256,12 +260,10 @@ export const restoreFromJournal = async (
       // Only the last write lets a held flash save go: after an earlier one, the others still hold seek values.
       for (const [index, [category, item, value]] of writes.entries()) {
         const last = index === writes.length - 1;
-        await api.setConfigValue(
-          category,
-          item,
-          value,
-          last ? { __c64uTransientConfigRestore: true } : { __c64uTransientConfigWrite: true },
-        );
+        await api.setConfigValue(category, item, value, {
+          ...(last ? { __c64uTransientConfigRestore: true } : { __c64uTransientConfigWrite: true }),
+          ...(item === CPU_SPEED_ITEM ? { __c64uSeekCpuSpeedWrite: true } : {}),
+        });
       }
       const cpuSpeed = journal.cpuSpeedChanged ? await readU64ConfigItem(api, CPU_SPEED_ITEM) : null;
       const turbo = journal.originalTurboControl === null ? null : await readU64ConfigItem(api, TURBO_CONTROL_ITEM);
@@ -428,6 +430,7 @@ export class RemoteSeekDeviceSession {
       }
       await this.api.setConfigValue(U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, option, {
         __c64uTransientConfigWrite: true,
+        __c64uSeekCpuSpeedWrite: true,
       });
       this.currentCpuSpeed = option;
     });

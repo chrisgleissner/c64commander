@@ -7,7 +7,7 @@
  */
 
 import { loadConfigWriteIntervalMs } from "./appSettings";
-import { loadDeviceSafetyConfig } from "./deviceSafetySettings";
+import { loadDeviceSafetyConfig, seekCpuSpeedWriteIntervalMs } from "./deviceSafetySettings";
 import { addErrorLog, addLog } from "@/lib/logging";
 
 let lastWriteAt = 0;
@@ -65,10 +65,11 @@ const isConfigWriteCancelled = (error: unknown) =>
     (error as { name?: string; isCancellation?: boolean }).name === "ConfigWriteCancelledError" &&
     (error as { isCancellation?: boolean }).isCancellation === true);
 
-const waitForInterval = async (generation: number) => {
+const waitForInterval = async (generation: number, seekCpuSpeedWrite: boolean) => {
   const appIntervalMs = loadConfigWriteIntervalMs();
   const safety = loadDeviceSafetyConfig();
-  const minInterval = Math.max(appIntervalMs, safety.configsCooldownMs);
+  const cooldownMs = seekCpuSpeedWrite ? seekCpuSpeedWriteIntervalMs(safety) : safety.configsCooldownMs;
+  const minInterval = Math.max(appIntervalMs, cooldownMs);
   if (minInterval <= 0) {
     assertNotReset(generation);
     lastWriteAt = Date.now();
@@ -86,6 +87,7 @@ const waitForInterval = async (generation: number) => {
     addLog("debug", "Config write backoff delay applied", {
       waitMs,
       appIntervalMs,
+      cooldownMs,
       deviceSafetyConfigsCooldownMs: safety.configsCooldownMs,
       deviceSafetyMode: safety.mode,
       effectiveDeviceSafetyMode: safety.resolution?.effectiveMode ?? safety.mode,
@@ -96,11 +98,14 @@ const waitForInterval = async (generation: number) => {
   lastWriteAt = Date.now();
 };
 
-export const scheduleConfigWrite = async <T>(task: () => Promise<T>): Promise<T> => {
+export const scheduleConfigWrite = async <T>(
+  task: () => Promise<T>,
+  { seekCpuSpeedWrite = false }: { seekCpuSpeedWrite?: boolean } = {},
+): Promise<T> => {
   const generation = resetGeneration;
   const run = async () => {
     assertNotReset(generation);
-    await waitForInterval(generation);
+    await waitForInterval(generation, seekCpuSpeedWrite);
     assertNotReset(generation);
     addLog("debug", "Config write queue task starting", {
       deviceSafetyConfigsCooldownMs: loadDeviceSafetyConfig().configsCooldownMs,

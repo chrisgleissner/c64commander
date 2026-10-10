@@ -979,6 +979,8 @@ type C64ReadRequestOptions = RequestInit & {
    * that was armed before the transient write and held by it may now go out. See HARD27-011.
    */
   __c64uTransientConfigRestore?: boolean;
+  /** A remote seek's CPU Speed write: spaced by `seekCpuSpeedWriteIntervalMs`, not the config cooldown. */
+  __c64uSeekCpuSpeedWrite?: boolean;
   /**
    * An explicit, user-forced probe (the Diagnostics "Run health check" button).
    * Implies every bypass flag AND overrides the device-state gate, so it always
@@ -1580,6 +1582,7 @@ export class C64API {
     const recoveryProbe = Boolean(options.__c64uRecoveryProbe);
     const bypassCache = Boolean(options.__c64uBypassCache) || forceProbe;
     const bypassCooldown = Boolean(options.__c64uBypassCooldown) || forceProbe;
+    const seekCpuSpeedWrite = Boolean(options.__c64uSeekCpuSpeedWrite);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff) || forceProbe;
     const bypassCircuit = Boolean(options.__c64uBypassCircuit) || forceProbe || recoveryProbe;
     const suppressCircuitContribution = Boolean(options.__c64uSuppressCircuitContribution);
@@ -1665,6 +1668,7 @@ export class C64API {
             allowDuringError,
             bypassCache,
             bypassCooldown,
+            seekCpuSpeedWrite,
             bypassBackoff,
             bypassCircuit,
             forceProbe,
@@ -2435,12 +2439,14 @@ export class C64API {
       value: resolvedValue,
       categoryPayload,
     });
-    const response = await scheduleConfigWrite(() =>
-      this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
-        method: "PUT",
-        ...CONFIG_WRITE_REQUEST_OPTIONS,
-        ...options,
-      }),
+    const response = await scheduleConfigWrite(
+      () =>
+        this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
+          method: "PUT",
+          ...CONFIG_WRITE_REQUEST_OPTIONS,
+          ...options,
+        }),
+      { seekCpuSpeedWrite: Boolean(options.__c64uSeekCpuSpeedWrite) },
     );
     this.assertConfigWriteAccepted(response, { category, item, value: resolvedValue });
     this.setCachedConfigValue(category, item, resolvedValue);

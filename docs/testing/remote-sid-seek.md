@@ -46,9 +46,11 @@ speed, 4 MHz and the slowest speed in that order. When the machine's own speed c
 before its first read, the rate is measured at the slowest speed instead; before that change, a
 machine already at 64 MHz approached every jump under about 45 minutes in key pulses at 1 MHz, and a
 600 s jump took 77 s instead of 5 s. It leaves each speed while it can still stop in
-time. The key is released before every `CPU Speed` change. A config write can wait up to 1.2 s
-behind the device-safety interval, and with the key up the tune plays at normal speed instead of
-passing the target. Within the last read period the key is released on a timer.
+time. The key is released before every `CPU Speed` change. A config write can wait out the
+device-safety interval, and with the key up the tune plays at normal speed instead of passing the
+target. A seek's `CPU Speed` writes are spaced 250 ms apart in the Balanced and Relaxed safety
+modes, half the 500 ms Balanced spacing of other config writes; Conservative and Troubleshooting
+keep their own. `Turbo Control` and `Vol Master` writes keep the normal spacing. Within the last read period the key is released on a timer.
 
 Until the rate is measured, one read period of fast forward can pass a near target by several
 seconds: a light tune covers about 4 clock seconds per 60 ms read at 1 MHz. A target within 4 s is
@@ -380,6 +382,10 @@ seek: clock reads at 20 to 40 a second, fast forward key presses at 4 a second a
 writes at 2 a second, alone and together. It presses keys only while it has seen the SID player's
 clock within the last 300 ms. Measured in October 2026, with 60 s per phase on the Ultimate 64
 and 120 s per phase on the C64 Ultimate, every request was answered, the slowest in 68 and 78 ms.
+With `--cpu-rate 4`, the rate the seek spacing allows, 60 s per phase on the C64 Ultimate (1.2.1RC2)
+and the Ultimate 64 (3.15, build 29b219ab4) answered all 8409 requests each, the slowest in 85 and
+74 ms, and a 20-minute soak on the Ultimate 64 ran 228 operations and 20675 requests without a
+failure.
 
 The proof of concept measures the device directly, without the app:
 
