@@ -98,6 +98,7 @@ type DescriptorRegistration = { descriptor: FocusDescriptor; resolveElement: () 
  * wins, else the latest, and ending one leaves the other in place.
  */
 const pickRegistration = (registrations: readonly DescriptorRegistration[]): DescriptorRegistration => {
+  if (registrations.length === 1) return registrations[0];
   for (let index = registrations.length - 1; index >= 0; index -= 1) {
     const element = registrations[index].resolveElement();
     if (element !== null && isOnActivePage(element)) return registrations[index];

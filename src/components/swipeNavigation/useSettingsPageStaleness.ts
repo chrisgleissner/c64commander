@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 
@@ -46,12 +46,13 @@ export const useSettingsPageStaleness = (
   routeIndex: number,
   setPageGenerations: Dispatch<SetStateAction<Readonly<Record<number, number>>>>,
 ): void => {
-  const staleRef = useRef(false);
+  // State rather than a ref, so a route-change render that React discards and restarts cannot lose the flag.
+  const [stale, setStale] = useState(false);
   useEffect(() => {
     if (!cachePages) return;
     const markStale = (event: Event) => {
       if (leavesSettingsCurrent(event)) return;
-      if (tabIndexForPath(window.location.pathname) !== SETTINGS_PAGE_INDEX) staleRef.current = true;
+      if (tabIndexForPath(window.location.pathname) !== SETTINGS_PAGE_INDEX) setStale(true);
     };
     STORED_SETTING_EVENTS.forEach((type) => window.addEventListener(type, markStale));
     return () => STORED_SETTING_EVENTS.forEach((type) => window.removeEventListener(type, markStale));
@@ -60,8 +61,8 @@ export const useSettingsPageStaleness = (
   const [renderedRouteIndex, setRenderedRouteIndex] = useState(routeIndex);
   if (renderedRouteIndex !== routeIndex) {
     setRenderedRouteIndex(routeIndex);
-    if (routeIndex === SETTINGS_PAGE_INDEX && staleRef.current) {
-      staleRef.current = false;
+    if (routeIndex === SETTINGS_PAGE_INDEX && stale) {
+      setStale(false);
       setPageGenerations((generations) => ({
         ...generations,
         [SETTINGS_PAGE_INDEX]: (generations[SETTINGS_PAGE_INDEX] ?? 0) + 1,

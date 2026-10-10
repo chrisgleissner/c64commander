@@ -13,7 +13,7 @@ package uk.gleissner.c64commander
  *
  * Every presented frame used to cross the bridge whole, as 70 KB of Base64, even when the C64 was showing a still
  * screen. Only the changed span is sent now, and JS patches it into its copy of the previous frame. The first frame,
- * a frame whose height changed, and one frame in every [KEYFRAME_INTERVAL_FRAMES] are sent whole, so the two copies
+ * a frame whose height changed, and one presented frame in every [KEYFRAME_INTERVAL_FRAMES] are sent whole, so the copies
  * start from the same bytes and a span JS missed is repaired within seconds.
  */
 internal class VicFrameDelta(
@@ -67,7 +67,7 @@ internal class VicFrameDelta(
     const val WHOLE_FRAME = -1
     private const val NO_FRAME = -1
 
-    /** About five seconds of PAL frames: a span JS could not apply is repaired by the next whole frame. */
+    /** Presented frames between whole frames, five seconds of undecimated PAL: a span JS missed is repaired by the next. */
     const val KEYFRAME_INTERVAL_FRAMES = 250
   }
 }

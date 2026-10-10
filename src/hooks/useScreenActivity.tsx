@@ -70,7 +70,7 @@ export function ScreenActivityProvider({ active, children }: { active: boolean; 
 
   // The page's answer from before the app was hidden stands while it is hidden: backgrounding never unmounted a page,
   // and a page kept out of sight must not wake up because the whole app went to the background.
-  const [activeWhileVisible, setActiveWhileVisible] = useState(active || !appVisible);
+  const [activeWhileVisible, setActiveWhileVisible] = useState(active);
   if (appVisible && activeWhileVisible !== active) setActiveWhileVisible(active);
   const pageActive = appVisible ? active : activeWhileVisible;
 

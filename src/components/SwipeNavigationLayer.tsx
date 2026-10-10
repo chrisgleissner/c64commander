@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useSwipeGesture, type SwipeDirection, type SwipeGestureMetadata } from "@/hooks/useSwipeGesture";
@@ -122,14 +122,14 @@ const isTestProbeActive = () =>
   import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
   (typeof window !== "undefined" && Boolean((window as TestProbeWindow).__c64uTestProbeEnabled));
 
-/*
- * Test probes rebuild each page on every visit, so a test id names exactly one element in the document. A spec that
- * tests the page cache opts back in.
- */
 /* Without `content-visibility` (a WebView before Chrome 85) a hidden kept page is hidden and made inert instead. */
 const skipsHiddenContent = () =>
   typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("content-visibility", "hidden");
 
+/*
+ * Test probes rebuild each page on every visit, so a test id names exactly one element in the document. A spec that
+ * tests the page cache opts back in.
+ */
 const cachesVisitedPages = () =>
   !isTestProbeActive() ||
   (typeof window !== "undefined" && Boolean((window as TestProbeWindow).__c64uCacheVisitedPages));
@@ -455,6 +455,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     willChange: runway.phase === "idle" ? "auto" : "transform",
   };
 
+  // A swipe moves the runway in an urgent update, so a kept page is shown at once and hands over screen activity in a
+  // deferred render after its first frame: a page whose root reads activity re-renders whole on the flip. A tab tap
+  // already navigates inside a transition, where the deferred value changes in the same render.
+  const activePageIndex = runway.phase === "transitioning" ? runway.targetIndex : routeIndex;
+  const deferredActivePageIndex = useDeferredValue(activePageIndex);
+
   return (
     <div
       ref={containerRef}
@@ -550,7 +556,11 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
             >
               {/* A kept page keeps its DOM, state and effects while hidden. Work that stopped when a page unmounted
                   follows its screen activity (`usePageActivity`), so a hidden page neither polls nor listens. */}
-              <PageSlotBody pageIndex={pageIndex} isActive={isActive} cached={cachePages} />
+              <PageSlotBody
+                pageIndex={pageIndex}
+                isActive={cached && cachePages ? pageIndex === deferredActivePageIndex : isActive}
+                cached={cachePages}
+              />
             </div>
           );
         })}

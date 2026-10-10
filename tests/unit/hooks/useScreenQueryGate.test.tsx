@@ -87,4 +87,20 @@ describe("useScreenQueryGate", () => {
       delete (document as { hidden?: boolean }).hidden;
     }
   });
+
+  it("gives no queries to a kept page built while the app is in the background", () => {
+    const hidden = Object.getOwnPropertyDescriptor(Document.prototype, "hidden");
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    try {
+      render(
+        <ScreenActivityProvider active={false}>
+          <Reader name="builtHidden" wanted={true} />
+        </ScreenActivityProvider>,
+      );
+      expect(answers.builtHidden).toBe(false);
+    } finally {
+      if (hidden) Object.defineProperty(document, "hidden", hidden);
+      delete (document as { hidden?: boolean }).hidden;
+    }
+  });
 });

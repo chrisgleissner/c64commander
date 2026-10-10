@@ -270,6 +270,10 @@ describe("TourDriver", () => {
     it("spotlights the anchor on the page on screen, not the same anchor on a kept page before it", async () => {
       document.querySelectorAll('[data-testid^="home-tile-action."]').forEach((element) => element.remove());
       const kept = document.createElement("div");
+      onTestFinished(() => {
+        kept.remove();
+        shown.forEach((element) => element.remove());
+      });
       kept.setAttribute("data-slot-active", "false");
       document.body.appendChild(kept);
       kept.appendChild(mountAnchor("home-tile-action.resume-session", { top: 400, left: 200, width: 50, height: 44 }));
@@ -285,8 +289,6 @@ describe("TourDriver", () => {
       await waitFor(() => expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "your-tunes"));
       await waitFor(() => expect(screen.getByTestId("tour-spotlight")).toBeInTheDocument());
       expect(screen.getByTestId("tour-spotlight").style.left).toBe("4px");
-      kept.remove();
-      shown.forEach((element) => element.remove());
     });
 
     it("keeps every control at the 44 px floor", async () => {
