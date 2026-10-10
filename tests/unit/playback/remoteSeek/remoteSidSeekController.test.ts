@@ -469,6 +469,50 @@ describe("remote SID seek controller", () => {
     expect(restoreAttempts).toBe(RESTORE_RETRY_DELAYS_MS.length);
   });
 
+  it("lands a cartridge jump on its target though every read takes 80 ms, releasing in one read", async () => {
+    // A light tune: at the cartridge's own speed it fast forwards about 30 clock seconds a second.
+    const device = createFakeRemoteSeekDevice({ cartridge: true, latencyMs: 80, fastForwardRateByMhz: { 1: 30 } });
+    const patch = findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)!;
+    const controller = new RemoteSidSeekController(
+      device.api,
+      profile({ fastForward: { kind: "patch", ...patch }, cpuSpeedOptions: [], restart: "replay" }),
+      async () => device.player.replayTune(),
+    );
+    for (const target of [40, 90]) {
+      await settle(
+        controller.jumpTo(() => device.player.tunePositionSeconds, target),
+        120_000,
+      );
+      expect(Math.abs(device.player.tunePositionSeconds - target)).toBeLessThan(3);
+    }
+  });
+
+  it("does not take a release owed to a device the app switched away from for a damaged player", async () => {
+    const device = createFakeRemoteSeekDevice({ cartridge: true });
+    const patch = findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)!;
+    const controller = new RemoteSidSeekController(
+      device.api,
+      profile({ fastForward: { kind: "patch", ...patch }, cpuSpeedOptions: [], restart: "replay" }),
+      async () => device.player.replayTune(),
+    );
+    const unsafe = vi.fn();
+    controller.patchUnsafeListener = unsafe;
+    // As the soak's "device switched mid operation": a jump under way, the switch, its cancel, and the
+    // app back on the cartridge just before the check after the jump asks which device it is on.
+    const connected = device.api.currentDeviceKey;
+    let elsewhereFor = 0;
+    device.api.currentDeviceKey = () => (elsewhereFor-- > 0 ? "another device" : connected());
+    const jump = controller.jumpTo(() => device.player.tunePositionSeconds, 300);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(device.player.fastForwarding).toBe(true);
+    elsewhereFor = 5;
+    await settle(controller.cancel("device switched"));
+    await settle(jump);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(device.player.fastForwarding).toBe(true);
+    expect(unsafe).not.toHaveBeenCalled();
+  });
+
   it("keeps seeking on a cartridge whose clock reads the firmware answers late after a seek", async () => {
     const device = createFakeRemoteSeekDevice({ cartridge: true });
     const patch = findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)!;

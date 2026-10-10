@@ -11,7 +11,6 @@ import {
   findFastForwardPatch,
   isFastForwardPatchStillThere,
   patchRoutineDifferences,
-  restorePatchRoutine,
 } from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
 import { placeSidPlayerCode } from "../../../mocks/sidPlayerSimulation";
 
@@ -107,7 +106,7 @@ describe("SID player fast forward patch", () => {
     expect(operandRegion.bytes[placed.ldyOperandAddress - operandRegion.address]).toBe(0x00);
   });
 
-  it("names every byte of the routine that differs from how it was found, and writes them back", async () => {
+  it("names every byte of the routine that differs from how it was found", async () => {
     const memory = new Uint8Array(0x10000);
     const placed = placeSidPlayerCode(memory, { keyboardAddress: 0x0340, flagAddress: 0x1fe0 });
     const patch = findFastForwardPatch(memory, 0)!;
@@ -120,15 +119,6 @@ describe("SID player fast forward patch", () => {
       { address: placed.ldyOperandAddress, expected: 0x00, actual: 0x01 },
       { address: placed.storeAddress + 3, expected: 0x60, actual: 0xea },
     ]);
-    const writes: string[] = [];
-    const write = async (address: string, data: Uint8Array) => {
-      writes.push(address);
-      memory.set(data, parseInt(address, 16));
-    };
-    expect(await restorePatchRoutine(readerOf(memory), write, patch)).toEqual([]);
-    expect(memory[placed.ldyOperandAddress]).toBe(0x00);
-    expect(memory[0x1fe0]).toBe(0x01);
-    expect(writes).toHaveLength(2);
   });
 
   it("never reads I/O when a jump there would be followed, since reading $DC0D acknowledges an interrupt", async () => {

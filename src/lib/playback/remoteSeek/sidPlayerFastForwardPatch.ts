@@ -115,7 +115,6 @@ export const isFastForwardPatchStillThere = async (
 };
 
 type ReadMemory = (address: string, length: number) => Promise<Uint8Array>;
-type WriteMemory = (address: string, data: Uint8Array) => Promise<unknown>;
 const hex = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
 
 /**
@@ -144,20 +143,6 @@ export const patchRoutineDifferences = async (
     });
   }
   return differences;
-};
-
-/** Write back every part of the routine that differs from how it was found, and return what still differs. */
-export const restorePatchRoutine = async (
-  readMemory: ReadMemory,
-  writeMemory: WriteMemory,
-  patch: Pick<FastForwardPatch, "ldyOperandAddress" | "routine">,
-) => {
-  const differing = new Set((await patchRoutineDifferences(readMemory, patch)).map(({ address }) => address));
-  for (const { address, bytes } of patch.routine) {
-    if (bytes.some((_, index) => differing.has(address + index)))
-      await writeMemory(hex(address), Uint8Array.from(bytes));
-  }
-  return patchRoutineDifferences(readMemory, patch);
 };
 
 /** Read in pieces this size, so no single DMA read holds up the tune's CPU for long enough to hear. */

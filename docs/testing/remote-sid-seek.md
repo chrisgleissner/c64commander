@@ -76,16 +76,19 @@ forward writes 1 into that `ldy #0`, and releasing writes 0 back; each write fir
 recorded byte is still as found, apart from that operand reading 0 or 1. Memory is read in 2 KB
 pieces, never under `$D000`-`$DFFF`.
 
-The player must never be left damaged. After each seek on the cartridge, once the seek is given
-back, the app checks that the routine's bytes are still as found and that the clock moves one to
-three seconds over 1.2 s, as at normal speed. A check whose reads took over a second says nothing,
-and a slow clock with intact code is checked once more. When the player is not working, the app
-writes the recorded bytes back, and if that does not bring the clock back to normal speed, starts
-the tune again with `runners:sidplay`, which loads the player afresh. A check is skipped after
-Pause, Stop, another tune or a device switch, which change what the machine does on purpose.
-Once the player had to be put back, seeking is turned off for that device and firmware version:
-Previous and Next skip tracks, and a one-time notice says that fast forward and rewind were tried
-with that firmware's SID player, which does not support them. A firmware update is tried afresh. A rewind starts the same bytes and sub tune
+The player must never be left damaged. A seek writes only the `ldy` operand, and only while the
+routine's recorded bytes are as found: a press checks all of them, and a release, which is timed,
+checks the region the `ldy` sits in, in one read; checking all four regions there made each release
+land 0.2-0.5 s late, and jumps on the U2+L ran 6-11 s past their targets. After each seek on the
+cartridge a check queued behind it reads the routine, if the app is still on that device and no
+restore is waiting for the app to return to it. If the operand is still 1, fast forward was left held: the app writes 0,
+checks that the clock moves one to three seconds over 1.2 s, as at normal speed, and if it does not,
+starts the tune again with `runners:sidplay`, which loads the player afresh. Seeking is then turned
+off for that device and firmware version: Previous and Next skip tracks, and a one-time notice says
+that fast forward and rewind were tried with that firmware's SID player, which does not support them.
+A firmware update is tried afresh. Any other change to the routine, or a clock that misbehaves with
+the code intact, is not the seek's doing (another program, another client pausing the machine, a
+stall) and is logged and left alone. A rewind starts the same bytes and sub tune
 afresh with `runners:sidplay`, since there are no minus and plus keys to send. Fast forward runs at
 the machine's own speed.
 

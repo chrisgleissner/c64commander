@@ -178,10 +178,22 @@ type PatchSite = { ldyOperandAddress: number; routine?: PatchRoutine };
 /**
  * Write the patch byte, but only while the player's routine is still there: byte for byte as found
  * when the probe recorded it, or else linked up as the player's. Returns false when it is gone.
+ * `operandRegionOnly` checks just the recorded region the `ldy` sits in, in one read: a release is
+ * timed, and the cartridge answers each read in 40-140 ms.
  */
-const writeFastForwardPatch = async (api: RemoteSeekDeviceApi, site: PatchSite, value: number) => {
-  const there = site.routine
-    ? (await patchRoutineDifferences(api.readMemory, { ...site, routine: site.routine }, null)).length === 0
+const writeFastForwardPatch = async (
+  api: RemoteSeekDeviceApi,
+  site: PatchSite,
+  value: number,
+  { operandRegionOnly = false }: { operandRegionOnly?: boolean } = {},
+) => {
+  const routine = operandRegionOnly
+    ? site.routine?.filter(
+        ({ address, bytes }) => site.ldyOperandAddress - address < bytes.length && site.ldyOperandAddress >= address,
+      )
+    : site.routine;
+  const there = routine
+    ? (await patchRoutineDifferences(api.readMemory, { ...site, routine }, null)).length === 0
     : await isFastForwardPatchStillThere(api.readMemory, site.ldyOperandAddress);
   if (!there) return false;
   await api.writeMemory(hexAddress(site.ldyOperandAddress), Uint8Array.of(value));
@@ -456,7 +468,8 @@ export class RemoteSeekDeviceSession {
   async releaseKey(): Promise<void> {
     if (this.api.currentDeviceKey() !== this.journal.deviceKey) return;
     if (this.fastForward.kind === "key") await sendKey(this.api, "release");
-    else await writeFastForwardPatch(this.api, this.fastForward, FAST_FORWARD_RELEASED);
+    // Byte for byte when pressed; the release, which is timed, checks the `ldy`'s own region.
+    else await writeFastForwardPatch(this.api, this.fastForward, FAST_FORWARD_RELEASED, { operandRegionOnly: true });
   }
 
   /**

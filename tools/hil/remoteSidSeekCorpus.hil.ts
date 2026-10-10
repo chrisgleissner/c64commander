@@ -189,7 +189,9 @@ describe(`remote SID seek across tunes on ${HOST}`, () => {
     try {
       if (!target.simulated) {
         if (originalMode !== null && systemMode !== originalMode) await device.write(U64, "System Mode", systemMode);
-        await device.write(AUDIO_MIXER, "Vol Master", QUIET_VOLUME);
+        // A cartridge has no Audio Mixer; its player plays through the C64's own SID.
+        if (await device.optionalItem(AUDIO_MIXER, "Vol Master"))
+          await device.write(AUDIO_MIXER, "Vol Master", QUIET_VOLUME);
       }
       for (const entry of entries) {
         const result: Result = { name: entry.name, outcome: "unavailable", checks: [], violations: [] };

@@ -42,10 +42,12 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 const HEALTH_WINDOW_MS = 1200;
 
 /**
- * How the SID player is after a seek through its patched code. `unknown`: the player is no longer on
- * screen or the tune started again, so nothing about it can be judged.
+ * How the SID player is after a seek through its patched code. The app writes only the `ldy` operand,
+ * so `operand left set` is the one state it caused; `changed elsewhere` is someone else's doing.
+ * `unknown`: the player is off screen or the tune started again, so nothing can be judged.
  */
-export type PatchedPlayerHealth = "working" | "code changed" | "clock not at normal speed" | "unknown";
+export type PatchedPlayerHealth =
+  "working" | "operand left set" | "changed elsewhere" | "clock not at normal speed" | "unknown";
 
 /** What a seek reads from and does to the SID player on the C64, apart from borrowing its settings. */
 export class SeekMachine {
@@ -102,7 +104,9 @@ export class SeekMachine {
   /** After a seek through the patch: the routine is byte for byte as found, and the clock plays at normal speed. */
   async patchedPlayerHealth(patch: { ldyOperandAddress: number; routine: PatchRoutine }): Promise<PatchedPlayerHealth> {
     if (!(await this.showsPlayerScreen())) return "unknown";
-    if ((await patchRoutineDifferences(this.api.readMemory, patch)).length > 0) return "code changed";
+    const differences = await patchRoutineDifferences(this.api.readMemory, patch);
+    if (differences.some(({ address }) => address !== patch.ldyOperandAddress)) return "changed elsewhere";
+    if (differences.length > 0) return "operand left set";
     const startedAt = Date.now();
     const first = await this.readClockTwice();
     await sleep(HEALTH_WINDOW_MS);

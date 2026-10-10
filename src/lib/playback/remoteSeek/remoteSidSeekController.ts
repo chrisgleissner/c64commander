@@ -8,7 +8,7 @@
 
 import { loadC64SeekMute, type C64SeekMute } from "@/lib/config/appSettings";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { RemoteSeekDeviceSession, type RemoteSeekDeviceApi } from "./remoteSeekDeviceGuard";
+import { readRemoteSeekJournal, RemoteSeekDeviceSession, type RemoteSeekDeviceApi } from "./remoteSeekDeviceGuard";
 import {
   FASTEST_FAST_FORWARD_PER_MHZ,
   MAX_PULSE_MS,
@@ -31,7 +31,6 @@ import {
 } from "./remoteSeekErrors";
 import { JumpProgressWatch, PositionModel } from "./remoteSeekPositionModel";
 import { CLOCK_ROUNDING_SECONDS, SeekMachine, type PatchedPlayerHealth } from "./remoteSeekMachine";
-import { restorePatchRoutine } from "./sidPlayerFastForwardPatch";
 
 /**
  * Fast forward, rewind and jumps for a tune the C64 plays itself. Held left-arrow makes the SID player call the play
@@ -115,6 +114,10 @@ export class RemoteSidSeekController {
   patchUnsafeListener: ((health: PatchedPlayerHealth) => void) | null = null;
   /** The player's code proved unsafe to patch; no further seek goes through it. */
   private patchUnsafe = false;
+  /** The device the last seek borrowed, whose player the check after it reads. */
+  private seekedDeviceKey: string | null = null;
+  /** The last restore ran on that device and failed, rather than waiting for the app to reach it again. */
+  private restoreFailedThere = false;
   /** Told where a seek landed as soon as that is known, before the restore's config writes. */
   landingListener: ((landing: RemoteSeekLanding, kind: "jump" | "fast forward") => void) | null = null;
 
@@ -611,12 +614,14 @@ export class RemoteSidSeekController {
       withCpuSpeed: this.profile.cpuSpeedOptions.length > 0,
     });
     this.activeSession = session;
+    this.seekedDeviceKey = session.deviceKey;
     return session;
   }
 
   private async giveBack(session: RemoteSeekDeviceSession, reason: string) {
     if (this.activeSession === session) this.activeSession = null;
-    await session.restore(reason);
+    const restored = await session.restore(reason);
+    this.restoreFailedThere = !restored && this.api.currentDeviceKey() === session.deviceKey;
   }
 
   private stopTimers(run: FastForwardRun) {
@@ -680,29 +685,37 @@ export class RemoteSidSeekController {
   private async checkPatchedPlayer(generation: number) {
     const patch = this.profile.fastForward;
     if (patch.kind !== "patch" || this.patchUnsafe) return;
+    // Another device's memory says nothing about this player, and a restore deferred until the app is back
+    // on its device is recovery's to finish; one that ran there and failed is this check's.
+    const deviceKey = this.seekedDeviceKey;
+    if (deviceKey === null || this.api.currentDeviceKey() !== deviceKey) return;
+    if (readRemoteSeekJournal(deviceKey) && !this.restoreFailedThere) return;
     const check = () =>
       this.machine.patchedPlayerHealth(patch).catch((error) => {
         addLog("warn", "Remote seek could not check the SID player after a seek", errorDetails(error));
         return "unknown" as const;
       });
-    let health = await check();
-    // Intact code with an odd clock is looked at once more before seeking is given up on this firmware.
-    if (health === "clock not at normal speed" && generation === this.cancelGeneration) health = await check();
+    const health = await check();
     if (generation !== this.cancelGeneration || health === "working" || health === "unknown") return;
+    if (health !== "operand left set") {
+      // Not the seek's doing: it writes the operand alone. Another program, a paused machine or a stall.
+      addLog("warn", "Remote seek found the SID player changed by something else; leaving it alone", { health });
+      return;
+    }
     this.patchUnsafe = true;
-    addErrorLog("Remote seek left the SID player damaged; putting it back", { health, patch });
-    const left = await restorePatchRoutine(this.api.readMemory, this.api.writeMemory, patch).catch((error) => {
-      addErrorLog("Remote seek could not put the SID player's code back", errorDetails(error));
-      return null;
-    });
-    const healed =
-      left?.length === 0 && (await this.machine.patchedPlayerHealth(patch)) !== "clock not at normal speed";
-    if (!healed && this.replayTune) {
+    addErrorLog("Remote seek left the SID player's fast forward held; releasing it", { patch });
+    await this.api
+      .writeMemory(patch.ldyOperandAddress.toString(16).toUpperCase().padStart(4, "0"), Uint8Array.of(0))
+      .catch((error) =>
+        addErrorLog("Remote seek could not release the SID player's fast forward", errorDetails(error)),
+      );
+    const healed = generation === this.cancelGeneration && (await check()) === "working";
+    if (!healed && generation === this.cancelGeneration && this.replayTune) {
       await this.replayTune().catch((error) =>
         addErrorLog("Remote seek could not start the tune again to reload the SID player", errorDetails(error)),
       );
     }
-    addLog("warn", "Remote seek turned off: the SID player's code is not safe to patch", { health, healed });
+    addLog("warn", "Remote seek turned off: the SID player's code is not safe to patch", { healed });
     this.patchUnsafeListener?.(health);
   }
 

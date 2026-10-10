@@ -294,16 +294,28 @@ describe("useRemoteSidSeek", () => {
     expect(toasts.shown).toEqual([]);
   });
 
-  it("puts back a SID player a seek left damaged, says once that its firmware does not support seeking, and skips tracks", async () => {
+  /** Writes of 0 to the `ldy` operand are dropped `count` times, as a release that never lands. */
+  const dropReleases = (count: number) => {
+    const { ldyOperandAddress } = device.current!.player.code;
+    const site = ldyOperandAddress.toString(16).toUpperCase().padStart(4, "0");
+    const write = device.current!.api.writeMemory;
+    let dropped = 0;
+    device.current!.api.writeMemory = (address, data) => {
+      if (address === site && data[0] === 0 && dropped < count) {
+        dropped += 1;
+        return Promise.resolve({});
+      }
+      return write(address, data);
+    };
+  };
+
+  it("releases a fast forward a seek left held, says once that the firmware does not support seeking, and skips tracks", async () => {
     machineInput.status = "unsupported-family";
     device.current = createFakeRemoteSeekDevice({ cartridge: true });
-    const { storeAddress } = device.current.player.code;
-    // A write the player's code did not expect: its `rts` overwritten, so the player stops.
-    const { result, unmount } = await holdOnCartridge(() =>
-      device.current!.player.writeMemory(storeAddress + 3, Uint8Array.of(0xea)),
-    );
-    expect(device.current.player.playerIntact).toBe(true);
+    dropReleases(5);
+    const { result, unmount } = await holdOnCartridge();
     expect(device.current.player.fastForwarding).toBe(false);
+    expect(device.current.player.playerIntact).toBe(true);
     expect(replays.count).toBe(0);
     expect(result.current.handlers).toBeNull();
     expect(toasts.shown).toHaveLength(1);
@@ -320,21 +332,28 @@ describe("useRemoteSidSeek", () => {
     expect(toasts.shown).toHaveLength(1);
   });
 
-  it("starts the tune again to reload a SID player whose code cannot be written back", async () => {
+  it("starts the tune again to reload a SID player whose fast forward cannot be released", async () => {
+    machineInput.status = "unsupported-family";
+    device.current = createFakeRemoteSeekDevice({ cartridge: true });
+    dropReleases(Number.POSITIVE_INFINITY);
+    await holdOnCartridge();
+    expect(replays.count).toBe(1);
+    expect(device.current.player.fastForwarding).toBe(false);
+    expect(toasts.shown).toHaveLength(1);
+  });
+
+  it("leaves a SID player that something else changed alone, and keeps seeking", async () => {
     machineInput.status = "unsupported-family";
     device.current = createFakeRemoteSeekDevice({ cartridge: true });
     const { storeAddress } = device.current.player.code;
-    const write = device.current.api.writeMemory;
-    let damaged = false;
-    device.current.api.writeMemory = (address, data) =>
-      damaged && data.length > 1 ? Promise.resolve({}) : write(address, data);
-    await holdOnCartridge(() => {
-      damaged = true;
-      device.current!.player.writeMemory(storeAddress + 3, Uint8Array.of(0xea));
-    });
-    expect(replays.count).toBe(1);
-    expect(device.current.player.playerIntact).toBe(true);
-    expect(toasts.shown).toHaveLength(1);
+    // Another program's code where the player's `rts` was: not the seek's doing, and not its to write.
+    const { result } = await holdOnCartridge(() =>
+      device.current!.player.writeMemory(storeAddress + 3, Uint8Array.of(0xea)),
+    );
+    expect(device.current.player.playerIntact).toBe(false);
+    expect(replays.count).toBe(0);
+    expect(toasts.shown).toEqual([]);
+    expect(result.current.handlers).not.toBeNull();
   });
 
   it("rewinds a cartridge by starting the tune afresh, with the cartridge parked as for any SID", async () => {
