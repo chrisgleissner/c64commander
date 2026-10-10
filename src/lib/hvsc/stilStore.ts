@@ -22,6 +22,13 @@
 
 import { addErrorLog, addLog } from "@/lib/logging";
 import { readStilFile, resetStilStore, writeStilFile } from "./hvscFilesystem";
+import {
+  deriveStilCollections,
+  STIL_COLLECTIONS_VERSION,
+  stilCollectionCounts,
+  type StilCollectionId,
+  type StilCollectionIndex,
+} from "./stilCollections";
 import { parseStil, stilInfoForSubsong, type StilEntry, type StilInfo } from "./stilParser";
 
 /**
@@ -31,6 +38,7 @@ import { parseStil, stilInfoForSubsong, type StilEntry, type StilInfo } from "./
  */
 export const STIL_SHARD_COUNT = 64;
 const MANIFEST_NAME = "index.json";
+const COLLECTIONS_NAME = "collections.json";
 /**
  * Bumped when the parsed shape changes, so a shard written by an older build is discarded rather
  * than read as though it were current.
@@ -50,6 +58,9 @@ export type StilManifest = {
   entries: number;
   shards: number;
   updatedAt: number;
+  /** Absent in stores written before collections existed; those are derived again from the shards. */
+  collectionsVersion?: number;
+  collectionCounts?: Record<StilCollectionId, number>;
 };
 
 const shardName = (shard: number) => `shard-${shard}.json`;
@@ -111,6 +122,7 @@ const shardCache: Array<{ shard: number; entries: Shard }> = [];
  */
 let storeGeneration = 0;
 let manifestPromise: Promise<StilManifest | null> | null = null;
+let collectionsPromise: Promise<StilCollectionIndex | null> | null = null;
 const inFlight = new Map<number, Promise<Shard | null>>();
 
 const touch = (shard: number, entries: Shard) => {
@@ -204,18 +216,24 @@ export const writeStilShards = async (entries: Map<string, StilEntry>, release: 
   await resetStilStore();
   storeGeneration += 1;
   inFlight.clear();
+  collectionsPromise = null;
   for (let shard = 0; shard < STIL_SHARD_COUNT; shard += 1) {
     await writeStilFile(shardName(shard), JSON.stringify(shards[shard]));
   }
+  const collections = deriveStilCollections(entries);
+  await writeStilFile(COLLECTIONS_NAME, JSON.stringify(collections));
   const manifest: StilManifest = {
     version: STIL_STORE_VERSION,
     release,
     entries: entries.size,
     shards: STIL_SHARD_COUNT,
     updatedAt: Date.now(),
+    collectionsVersion: STIL_COLLECTIONS_VERSION,
+    collectionCounts: stilCollectionCounts(collections),
   };
   await writeStilFile(MANIFEST_NAME, JSON.stringify(manifest));
   manifestPromise = Promise.resolve(manifest);
+  collectionsPromise = Promise.resolve(collections);
   shardCache.length = 0;
   addLog("info", "STIL stored", { entries: entries.size, shards: STIL_SHARD_COUNT, release });
 };
@@ -273,6 +291,7 @@ export const getStilInfo = async (virtualPath: string, songNr?: number): Promise
 export const clearStil = async (): Promise<void> => {
   await resetStilStore();
   manifestPromise = null;
+  collectionsPromise = null;
   shardCache.length = 0;
   // A read already in flight when the store was removed still resolves, and would otherwise cache
   // a shard of the library that has just been deleted.
@@ -283,7 +302,73 @@ export const clearStil = async (): Promise<void> => {
 /** Test seam: drops the in-memory caches without touching what is on disk. */
 export const __resetStilStoreCachesForTest = () => {
   manifestPromise = null;
+  collectionsPromise = null;
   shardCache.length = 0;
   storeGeneration += 1;
   inFlight.clear();
+};
+
+const readStoredCollections = async (): Promise<StilCollectionIndex | null> => {
+  const text = await readStilFile(COLLECTIONS_NAME);
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as StilCollectionIndex;
+    return parsed.version === STIL_COLLECTIONS_VERSION ? parsed : null;
+  } catch (error) {
+    addErrorLog("STIL collections are not readable; deriving them again", { error: (error as Error).message });
+    return null;
+  }
+};
+
+/**
+ * Derive the collections from the shards already on disk.
+ *
+ * Reached when the store predates collections or their rules changed. Rebuilding the store would
+ * mean downloading STIL again; reading back its 64 shards costs a few file reads and no network.
+ */
+const rederiveCollections = async (manifest: StilManifest): Promise<StilCollectionIndex | null> => {
+  const generation = storeGeneration;
+  const entries = new Map<string, StilEntry>();
+  for (let shard = 0; shard < STIL_SHARD_COUNT; shard += 1) {
+    const entriesInShard = await readShard(shard);
+    if (!entriesInShard) continue;
+    for (const [path, entry] of Object.entries(entriesInShard)) entries.set(path, entry);
+  }
+  if (generation !== storeGeneration) return null;
+  const collections = deriveStilCollections(entries);
+  await writeStilFile(COLLECTIONS_NAME, JSON.stringify(collections));
+  const updated: StilManifest = {
+    ...manifest,
+    collectionsVersion: STIL_COLLECTIONS_VERSION,
+    collectionCounts: stilCollectionCounts(collections),
+  };
+  await writeStilFile(MANIFEST_NAME, JSON.stringify(updated));
+  manifestPromise = Promise.resolve(updated);
+  addLog("info", "STIL collections derived from the stored shards", {
+    release: manifest.release,
+    collectionsVersion: STIL_COLLECTIONS_VERSION,
+  });
+  return collections;
+};
+
+/**
+ * Every STIL collection, or null when STIL is not stored.
+ *
+ * Read once and kept: the whole index is about 340 KB of JSON for the real document and parses in a
+ * couple of milliseconds, against a station that asks for it on every start and refill.
+ */
+export const readStilCollections = async (): Promise<StilCollectionIndex | null> => {
+  const mock = mockedStil();
+  if (mock) return deriveStilCollections(new Map(Object.entries(mock)));
+  collectionsPromise ??= (async () => {
+    const manifest = await readStilManifest();
+    if (!manifest) return null;
+    const stored = manifest.collectionsVersion === STIL_COLLECTIONS_VERSION ? await readStoredCollections() : null;
+    return stored ?? rederiveCollections(manifest);
+  })().catch((error: unknown) => {
+    collectionsPromise = null;
+    addErrorLog("STIL collections could not be read", { error: (error as Error).message });
+    return null;
+  });
+  return collectionsPromise;
 };

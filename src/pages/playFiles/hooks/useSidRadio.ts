@@ -26,6 +26,9 @@ import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProt
 import { loadSidRadioMinSeconds } from "@/lib/config/appSettings";
 import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import { DEFAULT_STATION_BALANCE, type StationSeed } from "@/lib/sidRadio/stationEngine";
+import { loadCollectionPool } from "@/lib/sidRadio/collectionPool";
+import { sidRadioCollectionLabel } from "@/lib/sidRadio/stilCollectionCatalog";
+import { isStilCollectionId, readStilCollections, type StilCollectionId } from "@/lib/hvsc";
 import {
   recordAutoAdvance,
   recordEmitted,
@@ -45,7 +48,7 @@ import {
 const basename = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
 
 export interface ActiveStation {
-  seedKind: "song" | "style" | "taste";
+  seedKind: "song" | "style" | "taste" | "collection";
   seedLabel: string;
   styleBit: number | null;
   shuffleSeed: number;
@@ -109,6 +112,14 @@ export interface UseSidRadioResult {
   startTasteRadio: () => Promise<void>;
   /** Surprise: a random style / broad Deep-Discovery station (§5.2). */
   startSurpriseRadio: () => Promise<void>;
+  /** A STIL collection: plays its members and nothing else, leaning toward liked tunes. */
+  startCollectionRadio: (id: StilCollectionId) => Promise<void>;
+  /** Members per collection, or null until STIL has been read. */
+  collectionCounts: Record<StilCollectionId, number> | null;
+  /** Read the counts so the launcher can size (and retire) its collection tiles. */
+  ensureCollectionCounts: () => Promise<void>;
+  /** How far through its members a collection station is, or null for any other station. */
+  collectionProgress: { heard: number; total: number } | null;
   /** Per-style track counts, or null until the bundle has been read. */
   stylePopulations: SidRadioStylePopulations | null;
   /** Read the populations so the launcher can size (and retire) its tiles. */
@@ -247,6 +258,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const [station, setStation] = useState<ActiveStation | null>(null);
   const [notice, setNotice] = useState<SidRadioNotice | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
+  const [collectionCounts, setCollectionCounts] = useState<Record<StilCollectionId, number> | null>(null);
+  const [collectionSize, setCollectionSize] = useState<number | null>(null);
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
   const clientRef = useRef<SidRadioWorkerClient | null>(null);
@@ -334,7 +347,16 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           // empty likes/not-for-me list until the user happened to rate something. Idempotent, so
           // every later refill pays nothing.
           await loadRankings();
+          const pool =
+            seed.kind === "collection" && isStilCollectionId(seed.collectionId)
+              ? await loadCollectionPool(seed.collectionId)
+              : undefined;
+          if (seed.kind === "collection") {
+            if (!pool) return { candidates: [], empty: "no-neighbours" };
+            if (stationGenerationRef.current === generation) setCollectionSize(pool.md5_48.length);
+          }
           return client.compute({
+            ...(pool ? { pool } : {}),
             seed,
             styleFilter,
             shuffleSeed,
@@ -388,6 +410,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     stationGenerationRef.current += 1;
     refillingRef.current = false;
     setStation(null);
+    setCollectionSize(null);
     providerRef.current = null;
     clearSidRadioSession();
     updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
@@ -476,6 +499,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           song: "no-radio-for-tune",
           style: "no-radio-for-style",
           taste: "no-radio",
+          collection: "no-radio-for-collection",
         };
         const refusal = hvscMissing ? "no-hvsc" : emptyRefusal[seedKind];
         refuseStart(refusal, { seedKind, styleFilter, reason: "no playable tracks" });
@@ -563,6 +587,26 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     const tile = candidates[randomSeed() % candidates.length];
     await start({ kind: "style", styleBit: tile.bit }, tile.bit, "style", tile.label);
   }, [start, randomSeed, ensureStylePopulations, refuseStart]);
+
+  const startCollectionRadio = useCallback(
+    (id: StilCollectionId) =>
+      start({ kind: "collection", collectionId: id }, null, "collection", sidRadioCollectionLabel(id)),
+    [start],
+  );
+  const ensureCollectionCounts = useCallback(async () => {
+    if (!enabled) return;
+    const index = await readStilCollections();
+    if (!index) return;
+    setCollectionCounts((previous) => {
+      const next = Object.fromEntries(
+        Object.entries(index.collections).map(([id, members]) => [id, members.length]),
+      ) as Record<StilCollectionId, number>;
+      return previous &&
+        Object.keys(next).every((id) => previous[id as StilCollectionId] === next[id as StilCollectionId])
+        ? previous
+        : next;
+    });
+  }, [enabled]);
 
   // Resume the chip after an app restart (D15): rebuild the provider with the
   // saved exclude set so the next refill continues the identical sequence.
@@ -672,7 +716,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           // the station is over and picking another is the only way on.
           if (stationEndedNoticeGenerationRef.current !== generation) {
             stationEndedNoticeGenerationRef.current = generation;
-            setNotice("station-ended");
+            setNotice(
+              station.seedKind !== "collection"
+                ? "station-ended"
+                : reason === "exhausted"
+                  ? "collection-ended"
+                  : "no-radio-for-collection",
+            );
           }
         }
         recordRefill({
@@ -734,6 +784,19 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     startStyleRadio,
     startTasteRadio,
     startSurpriseRadio,
+    startCollectionRadio,
+    collectionCounts,
+    ensureCollectionCounts,
+    collectionProgress:
+      station?.seedKind === "collection" && collectionSize !== null
+        ? {
+            heard: Math.min(
+              collectionSize,
+              Math.max(0, (providerRef.current?.excludedOrdinals.length ?? 0) - (playlistLength - currentIndex - 1)),
+            ),
+            total: collectionSize,
+          }
+        : null,
     stylePopulations,
     ensureStylePopulations,
     steer,

@@ -122,6 +122,23 @@ describe("sidRadio worker contract (§8.3)", () => {
     );
   });
 
+  it("compute → a collection's members, carried in the request as two flat lists", async () => {
+    const client = clientFor(fixtureBytes());
+    await client.load();
+    const result = await client.compute({
+      seed: { kind: "collection", collectionId: "winners" },
+      shuffleSeed: 7,
+      likes: [],
+      notForMe: [],
+      exclude: [],
+      recent: [],
+      count: 10,
+      pool: { md5_48: ["bbbbbbbbbbbb", "dddddddddddd"], songNr: [1, 1] },
+    });
+    expect(result.candidates.map((candidate) => candidate.md5_48).sort()).toEqual(["bbbbbbbbbbbb", "dddddddddddd"]);
+    expect(result.candidates.every((candidate) => candidate.reason === "collection")).toBe(true);
+  });
+
   it("compute → empty for an unknown seed", async () => {
     const client = clientFor(fixtureBytes());
     await client.load();

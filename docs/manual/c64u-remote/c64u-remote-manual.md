@@ -559,12 +559,28 @@ There is no playlist to build, and nothing downloads while you listen. Once the 
 Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for:
 
 - **A mood.** There are nine: Fast-Paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer Deep-Dive, Era Explorer, Deep Cuts, and Game Themes. Each draws on tens of thousands of tunes.
+- **A collection.** A fixed list of tunes, such as competition winners or movie themes. See below.
 - **From tunes you like.** Once five tunes carry a heart, this builds a station from them.
 - **Surprise me.** Anything at all.
 
 Switch on **Based on my likes** to tilt any mood toward your own taste. The station keeps the mood's name, but reaches for music closer to what you like.
 
 You can also start from whatever is playing now. Tap **More like this**, and the station follows that tune. The button appears whenever a SID the collection recognizes is playing, even during another station.
+
+#### Collections
+
+A mood plays tunes that sound alike. A collection plays a list, and nothing else. The lists come from the tune notes that the HVSC team writes for its music:
+
+- **Competition winners.** Tunes that took first place at a demo party or an online music competition.
+- **Movie & TV themes**, **Arcade & console**, **Electronic pioneers** (Jarre, Kraftwerk, Vangelis and others), **Synth-pop**, and **Classical.** C64 versions of music first heard elsewhere.
+- **C64 remixes.** New takes on tunes first written for the C64.
+- **Christmas.** Offered in December and the first week of January.
+
+![Collections: fixed lists of tunes from the HVSC tune notes](../../img/app/play/sid-radio/profiles/compact/06-collections.png)
+
+Each tile says how many tunes it holds. A collection plays every one of them once, in a new order each time, then tells you it has finished. Hearts and crosses still count: a liked tune, and tunes that sound like it, come sooner, and a crossed-out tune never comes at all.
+
+The tune notes come with HVSC. If yours was installed before the app read them, they are fetched once, the first time you start a collection, so your phone needs to be online for that.
 
 #### Telling it what you like
 
@@ -576,7 +592,7 @@ Your choices stay on your phone. They belong to the music itself, not to a file 
 
 #### What a station will and will not do
 
-**It never repeats itself.** No tune plays twice, and no file gives more than one tune in a session.
+**It never repeats itself.** No tune plays twice. A mood takes one tune from each file, while a collection plays every tune on its list, even two from the same file.
 
 **It skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything.
 

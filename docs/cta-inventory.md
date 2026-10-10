@@ -400,6 +400,11 @@ Listed below in the order they are rendered and walked by the focus ring.
   - Song moods — button — `sid-radio-song-mood-<bit|all>` `[disabled: no HVSC installed, or the mood has no members]`
   - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅ `[disabled: no HVSC installed, or the export left this style with no tracks — see size `sid-radio-style-<bit>-size`]`
   - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅ `[disabled: no HVSC installed]`
+  - Collections — button — `sid-radio-collection-<id>` (`winners`, `screen`, `games`, `pioneers`, `synthpop`,
+    `classical`, `remixes`, and `christmas` in December and the first week of January), in the
+    `sid-radio-collections` group after the style stations `[disabled: no HVSC installed, or the collection
+    holds no tunes in this release — see size `sid-radio-collection-<id>-size`]`. Inside the launcher sheet,
+    so the page count in §3 is unchanged. Code-verified, not yet enumerated on hardware
   - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: no HVSC installed, or not enough rankings yet — see hint `sid-radio-taste-hint`]`
   - Surprise me — button — `sid-radio-surprise` — R✅ I✅ `[disabled: no HVSC installed]`
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the

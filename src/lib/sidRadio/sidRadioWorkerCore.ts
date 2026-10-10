@@ -7,7 +7,8 @@
  */
 
 import { SidcorrParseError, parseSidcorrTiny, type SidcorrTinyBundle } from "./sidcorrTiny";
-import { computeStation } from "./stationEngine";
+import { computeCollectionStation } from "./collectionEngine";
+import { computeStation, type StationResult } from "./stationEngine";
 import type {
   SidRadioCandidatesMessage,
   SidRadioEmptyMessage,
@@ -80,17 +81,28 @@ export const computeStationResponse = (
   id: number,
   request: StationRequest,
 ): SidRadioCandidatesMessage | SidRadioEmptyMessage => {
-  const result = computeStation({
-    bundle,
-    seed: request.seed,
-    styleFilter: request.styleFilter ?? null,
-    likes: request.likes,
-    notForMe: request.notForMe,
-    shuffleSeed: request.shuffleSeed,
-    exclude: request.exclude,
-    recent: request.recent,
-    limit: request.count,
-  });
+  const result: StationResult =
+    request.seed.kind === "collection"
+      ? computeCollectionStation({
+          bundle,
+          pool: request.pool ?? { md5_48: [], songNr: [] },
+          likes: request.likes,
+          notForMe: request.notForMe,
+          shuffleSeed: request.shuffleSeed,
+          exclude: request.exclude,
+          limit: request.count,
+        })
+      : computeStation({
+          bundle,
+          seed: request.seed,
+          styleFilter: request.styleFilter ?? null,
+          likes: request.likes,
+          notForMe: request.notForMe,
+          shuffleSeed: request.shuffleSeed,
+          exclude: request.exclude,
+          recent: request.recent,
+          limit: request.count,
+        });
   if (result.candidates.length === 0) {
     return { type: "empty", id, reason: result.empty ?? "exhausted" };
   }

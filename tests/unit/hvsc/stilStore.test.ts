@@ -11,6 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const files = new Map<string, string>();
 const readCounts = new Map<string, number>();
 
+const logs = vi.hoisted(() => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
+vi.mock("@/lib/logging", () => logs);
+
 vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   writeStilFile: vi.fn(async (name: string, text: string) => {
     files.set(name, text);
@@ -30,11 +33,13 @@ import {
   getStilEntry,
   getStilInfo,
   isStilInstalled,
+  readStilCollections,
   shardForPath,
   STIL_SHARD_COUNT,
   writeStilShards,
 } from "@/lib/hvsc/stilStore";
 import { parseStil } from "@/lib/hvsc/stilParser";
+import { STIL_COLLECTIONS_VERSION } from "@/lib/hvsc/stilCollections";
 
 const DOCUMENT = `/MUSICIANS/H/Hubbard_Rob/Commando.sid
 COMMENT: An arrangement of the arcade score.
@@ -60,9 +65,9 @@ describe("stilStore", () => {
     __resetStilStoreCachesForTest();
   });
 
-  it("writes every shard plus a manifest, so a path always has a file to land in", async () => {
+  it("writes every shard plus the collections and a manifest, so a path always has a file to land in", async () => {
     await writeStilShards(parseStil(DOCUMENT), 84);
-    expect(files.size).toBe(STIL_SHARD_COUNT + 1);
+    expect(files.size).toBe(STIL_SHARD_COUNT + 2);
     expect(JSON.parse(files.get("index.json")!)).toMatchObject({ entries: 2, release: 84, shards: STIL_SHARD_COUNT });
   });
 
@@ -182,5 +187,122 @@ describe("clearing the store while a read is in flight", () => {
 
     // Nothing on disk, nothing cached: the next lookup has to come back empty.
     expect(await getStilEntry(path)).toBeNull();
+  });
+});
+
+const COLLECTION_DOCUMENT = `/MUSICIANS/C/Crowley_Owen/A_Drop_of_Blue.sid
+COMMENT: Won the music competition at 15 Years Oxyron Party 2007
+
+/MUSICIANS/D/DJ_Space/Moonlight_Sonata.sid
+  TITLE: Piano Sonata No. 14 Op. 27 "Moonlight Sonata", 3rd Movement
+ ARTIST: Ludwig van Beethoven
+`;
+
+const shardReads = () => [...readCounts.entries()].filter(([name]) => name.startsWith("shard-")).length;
+
+describe("STIL collections", () => {
+  beforeEach(() => {
+    files.clear();
+    readCounts.clear();
+    logs.addLog.mockClear();
+    logs.addErrorLog.mockClear();
+    __resetStilStoreCachesForTest();
+    delete (window as Window & { __stilMock__?: unknown }).__stilMock__;
+  });
+
+  it("stores the collections beside the shards and counts them in the manifest", async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    const manifest = JSON.parse(files.get("index.json")!);
+    expect(manifest.collectionsVersion).toBe(STIL_COLLECTIONS_VERSION);
+    expect(manifest.collectionCounts).toMatchObject({ winners: 1, classical: 1, screen: 0 });
+    expect(JSON.parse(files.get("collections.json")!).paths).toEqual([
+      "/MUSICIANS/C/Crowley_Owen/A_Drop_of_Blue.sid",
+      "/MUSICIANS/D/DJ_Space/Moonlight_Sonata.sid",
+    ]);
+  });
+
+  it("reads the stored collections without touching a shard, and only once", async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    __resetStilStoreCachesForTest();
+    readCounts.clear();
+    const first = await readStilCollections();
+    const second = await readStilCollections();
+    expect(first?.collections.winners).toEqual([[0, 1]]);
+    expect(second).toBe(first);
+    expect(shardReads()).toBe(0);
+    expect(readCounts.get("collections.json")).toBe(1);
+  });
+
+  it("derives the collections from the stored shards when the store predates them", async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    const legacy = JSON.parse(files.get("index.json")!);
+    delete legacy.collectionsVersion;
+    delete legacy.collectionCounts;
+    files.set("index.json", JSON.stringify(legacy));
+    files.delete("collections.json");
+    __resetStilStoreCachesForTest();
+
+    const index = await readStilCollections();
+
+    expect(index?.collections.classical).toEqual([[1, 1]]);
+    expect(shardReads()).toBe(STIL_SHARD_COUNT);
+    expect(files.has("collections.json")).toBe(true);
+    expect(JSON.parse(files.get("index.json")!)).toMatchObject({
+      release: 85,
+      collectionsVersion: STIL_COLLECTIONS_VERSION,
+      collectionCounts: { winners: 1, classical: 1 },
+    });
+  });
+
+  it("derives them again when the stored rules are older than this build's", async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    files.set(
+      "collections.json",
+      JSON.stringify({ version: STIL_COLLECTIONS_VERSION - 1, paths: [], collections: {} }),
+    );
+    __resetStilStoreCachesForTest();
+    expect((await readStilCollections())?.collections.winners).toEqual([[0, 1]]);
+  });
+
+  it("derives them again, and says so, when the stored file is unreadable", async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    files.set("collections.json", "{not json");
+    __resetStilStoreCachesForTest();
+    expect((await readStilCollections())?.collections.winners).toEqual([[0, 1]]);
+    expect(logs.addErrorLog).toHaveBeenCalledWith(
+      "STIL collections are not readable; deriving them again",
+      expect.objectContaining({ error: expect.any(String) }),
+    );
+  });
+
+  it("answers null when no STIL is stored", async () => {
+    expect(await readStilCollections()).toBeNull();
+  });
+
+  it("derives the collections from STIL supplied by a test", async () => {
+    (window as Window & { __stilMock__?: unknown }).__stilMock__ = Object.fromEntries(parseStil(COLLECTION_DOCUMENT));
+    expect((await readStilCollections())?.collections.winners).toEqual([[0, 1]]);
+    expect(readCounts.size).toBe(0);
+  });
+
+  it("forgets the collections when the store is cleared", async () => {
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    expect(await readStilCollections()).not.toBeNull();
+    await clearStil();
+    expect(await readStilCollections()).toBeNull();
+  });
+
+  it("reports a derivation it could not store and tries again on the next call", async () => {
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    await writeStilShards(parseStil(COLLECTION_DOCUMENT), 85);
+    files.delete("collections.json");
+    const legacy = JSON.parse(files.get("index.json")!);
+    delete legacy.collectionsVersion;
+    files.set("index.json", JSON.stringify(legacy));
+    __resetStilStoreCachesForTest();
+    vi.mocked(filesystem.writeStilFile).mockRejectedValueOnce(new Error("disk full"));
+    expect(await readStilCollections()).toBeNull();
+    expect(logs.addErrorLog).toHaveBeenCalledWith("STIL collections could not be read", { error: "disk full" });
+    expect((await readStilCollections())?.collections.winners).toEqual([[0, 1]]);
   });
 });
