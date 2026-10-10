@@ -31,6 +31,7 @@ import {
 } from "./remoteSeekErrors";
 import { JumpProgressWatch, PositionModel } from "./remoteSeekPositionModel";
 import { CLOCK_ROUNDING_SECONDS, SeekMachine, type PatchedPlayerHealth } from "./remoteSeekMachine";
+import { patchRoutineDifferences } from "./sidPlayerFastForwardPatch";
 
 /**
  * Fast forward, rewind and jumps for a tune the C64 plays itself. Held left-arrow makes the SID player call the play
@@ -699,7 +700,14 @@ export class RemoteSidSeekController {
     if (generation !== this.cancelGeneration || health === "working" || health === "unknown") return;
     if (health !== "operand left set") {
       // Not the seek's doing: it writes the operand alone. Another program, a paused machine or a stall.
-      addLog("warn", "Remote seek found the SID player changed by something else; leaving it alone", { health });
+      const differences =
+        health === "changed elsewhere"
+          ? await patchRoutineDifferences(this.api.readMemory, patch).catch((error) => [String(error)])
+          : [];
+      addLog("warn", "Remote seek found the SID player changed by something else; leaving it alone", {
+        health,
+        differences: differences.slice(0, 8),
+      });
       return;
     }
     this.patchUnsafe = true;
