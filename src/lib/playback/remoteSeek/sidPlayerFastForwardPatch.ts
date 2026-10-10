@@ -25,8 +25,10 @@ const BEQ = 0xf0;
 /** `inc $d020`: the border flash the handler shows while it fast forwards. */
 const INC_BORDER = [0xee, 0x20, 0xd0];
 
-/** The operand of the routine's `ldy #0` and the flag it ends up in. */
-export type FastForwardPatch = { ldyOperandAddress: number; flagAddress: number };
+/** The routine's code as found, with the `ldy` operand at 0; the flag byte between them is data. */
+export type PatchRoutine = ReadonlyArray<{ address: number; bytes: readonly number[] }>;
+/** The operand of the routine's `ldy #0`, the flag it ends up in, and the routine as found. */
+export type FastForwardPatch = { ldyOperandAddress: number; flagAddress: number; routine: PatchRoutine };
 
 export const FAST_FORWARD_RELEASED = 0x00;
 export const FAST_FORWARD_HELD = 0x01;
@@ -53,7 +55,17 @@ const patchFrom = (byteAt: ByteAt, scanAddress: number): FastForwardPatch | null
     const flag = word(byteAt, store + 1);
     if (flag === undefined || byteAt(flag - 1) !== LDA_IMMEDIATE || byteAt(flag + 1) !== BEQ) continue;
     if (!matches(byteAt, flag + 3, INC_BORDER)) continue;
-    return { ldyOperandAddress: ldy + 1, flagAddress: flag };
+    const bytesAt = (address: number, length: number) =>
+      Array.from({ length }, (_, index) =>
+        address + index === ldy + 1 ? FAST_FORWARD_RELEASED : byteAt(address + index)!,
+      );
+    const routine = [
+      { address: scanAddress, bytes: bytesAt(scanAddress, ldy + 5 - scanAddress) },
+      { address: store, bytes: bytesAt(store, 4) },
+      { address: flag - 1, bytes: bytesAt(flag - 1, 1) },
+      { address: flag + 1, bytes: bytesAt(flag + 1, 2 + INC_BORDER.length) },
+    ];
+    return { ldyOperandAddress: ldy + 1, flagAddress: flag, routine };
   }
   return null;
 };
@@ -100,6 +112,52 @@ export const isFastForwardPatchStillThere = async (
   if (inIo(flag - 1) || inIo(flag + 2 + INC_BORDER.length)) return false;
   const handler = await readMemory(hex(flag - 1), 4 + INC_BORDER.length);
   return handler[0] === LDA_IMMEDIATE && handler[2] === BEQ && matches((address) => handler[address], 4, INC_BORDER);
+};
+
+type ReadMemory = (address: string, length: number) => Promise<Uint8Array>;
+type WriteMemory = (address: string, data: Uint8Array) => Promise<unknown>;
+const hex = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
+
+/**
+ * The routine's bytes that differ from how it was found. Its `ldy` operand must read `operand`, or
+ * either 0 or 1 when that is null, as while a seek may be holding it.
+ */
+export const patchRoutineDifferences = async (
+  readMemory: ReadMemory,
+  patch: Pick<FastForwardPatch, "ldyOperandAddress" | "routine">,
+  operand: number | null = FAST_FORWARD_RELEASED,
+): Promise<Array<{ address: number; expected: number; actual: number }>> => {
+  const differences: Array<{ address: number; expected: number; actual: number }> = [];
+  for (const { address, bytes } of patch.routine) {
+    const actual = await readMemory(hex(address), bytes.length);
+    bytes.forEach((expected, index) => {
+      const at = address + index;
+      const isOperand = at === patch.ldyOperandAddress;
+      if (
+        isOperand &&
+        operand === null &&
+        (actual[index] === FAST_FORWARD_RELEASED || actual[index] === FAST_FORWARD_HELD)
+      )
+        return;
+      const wanted = isOperand && operand !== null ? operand : expected;
+      if (actual[index] !== wanted) differences.push({ address: at, expected: wanted, actual: actual[index] });
+    });
+  }
+  return differences;
+};
+
+/** Write back every part of the routine that differs from how it was found, and return what still differs. */
+export const restorePatchRoutine = async (
+  readMemory: ReadMemory,
+  writeMemory: WriteMemory,
+  patch: Pick<FastForwardPatch, "ldyOperandAddress" | "routine">,
+) => {
+  const differing = new Set((await patchRoutineDifferences(readMemory, patch)).map(({ address }) => address));
+  for (const { address, bytes } of patch.routine) {
+    if (bytes.some((_, index) => differing.has(address + index)))
+      await writeMemory(hex(address), Uint8Array.from(bytes));
+  }
+  return patchRoutineDifferences(readMemory, patch);
 };
 
 /** Read in pieces this size, so no single DMA read holds up the tune's CPU for long enough to hear. */

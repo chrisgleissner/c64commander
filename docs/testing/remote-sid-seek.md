@@ -71,9 +71,21 @@ clears that flag on every frame without a key, by ending in `ldy #0 / jmp store`
 `sty flag / rts`. Without key input, the app finds that routine in memory by its code: the keyboard
 row scan (`sty $dc00 / lda $dc01 / cmp #$ff / bne`), the `ldy #0 / jmp` after it, a store of Y into
 an `lda #flag / beq` that is followed by the handler's `inc $d020`. It uses the routine only when
-exactly one such chain links up. Holding fast forward writes 1 into that `ldy #0`, and releasing
-writes 0 back; each write first checks that the two bytes still read `ldy #0` or `ldy #1`. Memory
-is read in 2 KB pieces, never under `$D000`-`$DFFF`. A rewind starts the same bytes and sub tune
+exactly one such chain links up, and records the routine's bytes as it found them. Holding fast
+forward writes 1 into that `ldy #0`, and releasing writes 0 back; each write first checks that every
+recorded byte is still as found, apart from that operand reading 0 or 1. Memory is read in 2 KB
+pieces, never under `$D000`-`$DFFF`.
+
+The player must never be left damaged. After each seek on the cartridge, once the seek is given
+back, the app checks that the routine's bytes are still as found and that the clock moves one to
+three seconds over 1.2 s, as at normal speed. A check whose reads took over a second says nothing,
+and a slow clock with intact code is checked once more. When the player is not working, the app
+writes the recorded bytes back, and if that does not bring the clock back to normal speed, starts
+the tune again with `runners:sidplay`, which loads the player afresh. A check is skipped after
+Pause, Stop, another tune or a device switch, which change what the machine does on purpose.
+Once the player had to be put back, seeking is turned off for that device and firmware version:
+Previous and Next skip tracks, and a one-time notice says that fast forward and rewind were tried
+with that firmware's SID player, which does not support them. A firmware update is tried afresh. A rewind starts the same bytes and sub tune
 afresh with `runners:sidplay`, since there are no minus and plus keys to send. Fast forward runs at
 the machine's own speed.
 

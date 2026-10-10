@@ -23,6 +23,7 @@ import {
   RemoteSeekSessionClosedError,
 } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
 import { createFakeRemoteSeekDevice, DEVICE_KEY } from "./fakeRemoteSeekDevice";
+import { findFastForwardPatch } from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
 
 /** The SID player is on screen: what the controller confirms before every key. */
 const ON_SCREEN = async () => true;
@@ -463,11 +464,21 @@ describe("remote seek device guard", () => {
     const openPatchSession = async (device: ReturnType<typeof createFakeRemoteSeekDevice>) =>
       RemoteSeekDeviceSession.open(device.api, {
         playerOnScreen: ON_SCREEN,
-        fastForward: { kind: "patch", ldyOperandAddress: device.player.code.ldyOperandAddress },
+        fastForward: { kind: "patch", ...findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)! },
         withCpuSpeed: false,
       });
     const site = (device: ReturnType<typeof createFakeRemoteSeekDevice>) =>
       device.player.code.ldyOperandAddress.toString(16).toUpperCase().padStart(4, "0");
+
+    it("leaves the routine alone when any byte of it differs from how the probe found it", async () => {
+      const device = createFakeRemoteSeekDevice({ cartridge: true });
+      const session = await openPatchSession(device);
+      // The row scan's `lda $dc01`: no link of the chain, so only the recorded bytes catch it.
+      const scan = device.player.code.ldyOperandAddress - 14;
+      device.player.writeMemory(scan, Uint8Array.of(0xc8));
+      await expect(session.pressKey()).rejects.toThrow(/no longer where it was found/);
+      expect(device.log.filter((entry) => entry.startsWith("writemem"))).toEqual([]);
+    });
 
     it("holds fast forward through the player's routine, journals it, and gives it back without touching config", async () => {
       const device = createFakeRemoteSeekDevice({ cartridge: true });

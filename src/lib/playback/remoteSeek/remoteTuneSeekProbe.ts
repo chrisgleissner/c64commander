@@ -110,7 +110,7 @@ export const probeRemoteTuneSeek = async (
     return null;
   }
   const fastForward: FastForwardMethod = patch
-    ? { kind: "patch", ldyOperandAddress: patch.ldyOperandAddress }
+    ? { kind: "patch", ldyOperandAddress: patch.ldyOperandAddress, routine: patch.routine }
     : { kind: "key" };
   const systemMode = await readU64ConfigItem(api, SYSTEM_MODE_ITEM).catch((error) => {
     addLog("warn", "Remote seek: System Mode unreadable; assuming PAL timing", errorDetails(error));

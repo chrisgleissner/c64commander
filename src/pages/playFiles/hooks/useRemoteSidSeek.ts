@@ -24,6 +24,12 @@ import { rewindOffsetSeconds } from "@/lib/playback/remoteSeek/remoteSeekPlan";
 import { RemoteSidSeekController, type RemoteSeekLanding } from "@/lib/playback/remoteSeek/remoteSidSeekController";
 import { probeRemoteTuneSeek, remoteSeekHeaderBlocker } from "@/lib/playback/remoteSeek/remoteTuneSeekProbe";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
+import { toast } from "@/hooks/use-toast";
+import {
+  isPatchSeekUnsafe,
+  markPatchSeekUnsafe,
+  patchSeekFirmwareKey,
+} from "@/lib/playback/remoteSeek/patchSeekSupport";
 import { parseSidHeaderMetadata, type SidHeaderMetadata } from "@/lib/sid/sidUtils";
 import type { PlaylistItem } from "../types";
 
@@ -191,6 +197,11 @@ export const useRemoteSidSeek = ({
           if (!current) return;
           const pausesBefore = pausesRef.current;
           const keyInput = await machineInputAvailable(deviceInfo);
+          const firmwareKey = patchSeekFirmwareKey(deviceInfo);
+          if (!keyInput && isPatchSeekUnsafe(firmwareKey)) {
+            addLog("debug", "Remote seek off: this firmware's SID player is unsafe to patch", { item: item.label });
+            return;
+          }
           const api = createRemoteSeekApi();
           const profile = await probeRemoteTuneSeek(api, header, songNr ?? header.startSong, () => current, {
             keyInput,
@@ -210,6 +221,21 @@ export const useRemoteSidSeek = ({
           }
           const replay = profile.restart === "replay" ? replayTune(tune.blob, songNr ?? undefined, item.path) : null;
           const created = new RemoteSidSeekController(api, profile, replay);
+          created.patchUnsafeListener = (health) => {
+            if (markPatchSeekUnsafe(firmwareKey, health)) {
+              toast({
+                title: "Seeking not supported",
+                description:
+                  `Fast forward and rewind were tried with the SID player of firmware ${deviceInfo.firmware_version ?? "on this device"}, ` +
+                  "which does not support them. The player was restored; Previous and Next skip tracks.",
+              });
+            }
+            if (controllerRef.current !== created) return;
+            controllerRef.current = null;
+            setActiveRemoteSidSeek(null);
+            resetGestures();
+            setController(null);
+          };
           // Show where a seek landed while its settings are still being given back, unless a jump
           // asked for since then still has to get there.
           created.landingListener = (landing, kind) => {

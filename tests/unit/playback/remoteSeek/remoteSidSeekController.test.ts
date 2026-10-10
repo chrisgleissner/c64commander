@@ -23,6 +23,7 @@ import {
   type RemoteTuneSeekProfile,
 } from "@/lib/playback/remoteSeek/remoteTuneSeekProbe";
 import { locateSidPlayerClock } from "@/lib/playback/remoteSeek/sidPlayerClock";
+import { findFastForwardPatch } from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
 import type { SidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { MEASURED_FAST_FORWARD_RATE_BY_MHZ, simulatedClockField } from "../../../mocks/sidPlayerSimulation";
 import { C64U_CPU_SPEEDS, createFakeRemoteSeekDevice, DEVICE_KEY } from "./fakeRemoteSeekDevice";
@@ -466,6 +467,37 @@ describe("remote SID seek controller", () => {
     expect(landing?.completed).toBe(false);
     const restoreAttempts = device.log.filter((entry) => entry === "FAILED CPU Speed=1").length;
     expect(restoreAttempts).toBe(RESTORE_RETRY_DELAYS_MS.length);
+  });
+
+  it("keeps seeking on a cartridge whose clock reads the firmware answers late after a seek", async () => {
+    const device = createFakeRemoteSeekDevice({ cartridge: true });
+    const patch = findFastForwardPatch(device.player.readMemory(0, 0x10000), 0)!;
+    const controller = new RemoteSidSeekController(
+      device.api,
+      profile({ fastForward: { kind: "patch", ...patch }, cpuSpeedOptions: [], restart: "replay" }),
+      async () => device.player.replayTune(),
+    );
+    const unsafe = vi.fn();
+    controller.patchUnsafeListener = unsafe;
+    await settle(
+      controller.beginFastForward(
+        () => 0,
+        () => undefined,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle(controller.endFastForward());
+    const read = device.api.readMemory;
+    let clockReads = 0;
+    device.api.readMemory = async (address, length, options) => {
+      const value = await read(address, length, options);
+      if (address === "0B98" && [1, 5].includes(++clockReads)) await new Promise((r) => setTimeout(r, 8000));
+      return value;
+    };
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(clockReads).toBeGreaterThan(0);
+    expect(unsafe).not.toHaveBeenCalled();
+    expect(device.player.playerIntact).toBe(true);
   });
 
   it("sends no restart keys for a rewind cancelled before it began", async () => {

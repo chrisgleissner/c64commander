@@ -149,8 +149,15 @@ test.describe("Remote SID seek", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startSeekableTune(page);
-    const startedAt = server.sidPlayer?.tunePositionSeconds ?? 0;
+    // The tune's position every quarter second while the key is held, to see the rate rise.
+    const held: Array<{ atMs: number; seconds: number }> = [];
+    const sampler = setInterval(() => {
+      if (server.sidPlayer?.fastForwarding)
+        held.push({ atMs: Date.now(), seconds: server.sidPlayer.tunePositionSeconds });
+    }, 250);
+    // Three seconds stays short of this 42 s tune's end, where a hold stops by itself.
     await hold(page, page.getByTestId("playlist-next"), 3000);
+    clearInterval(sampler);
 
     await expectDeviceGivenBack();
     expect(keyEvents("arrow_left")[0]).toBe("press");
@@ -158,9 +165,12 @@ test.describe("Remote SID seek", () => {
     // One step a second: 4 MHz, then 8. Turbo Control was Off, so it is switched to Manual for that and
     // back to Off afterwards (checked by expectDeviceGivenBack).
     expect(cpuSpeedWrites().slice(0, 2)).toEqual(["4", "8"]);
-    // Three seconds at 1 MHz alone would gain 30 s in this simulation.
-    const gained = (server.sidPlayer?.tunePositionSeconds ?? 0) - startedAt;
-    expect(gained).toBeGreaterThan(60);
+    const rates = held.slice(1).map((sample, index) => {
+      const previous = held[index];
+      return (sample.seconds - previous.seconds) / ((sample.atMs - previous.atMs) / 1000);
+    });
+    expect(rates.length).toBeGreaterThan(4);
+    expect(Math.max(...rates)).toBeGreaterThan(2.5 * Math.min(...rates));
     const shown = await page.getByTestId("playback-elapsed").innerText();
     const [minutes, seconds] = shown
       .replace(/[^0-9:]/g, "")

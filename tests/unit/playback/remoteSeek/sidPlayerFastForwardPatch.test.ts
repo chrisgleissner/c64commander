@@ -10,6 +10,8 @@ import { describe, expect, it } from "vitest";
 import {
   findFastForwardPatch,
   isFastForwardPatchStillThere,
+  patchRoutineDifferences,
+  restorePatchRoutine,
 } from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
 import { placeSidPlayerCode } from "../../../mocks/sidPlayerSimulation";
 
@@ -18,7 +20,7 @@ describe("SID player fast forward patch", () => {
     for (const keyboardAddress of [0x0340, 0x8a00, 0xc123]) {
       const memory = new Uint8Array(0x10000);
       const placed = placeSidPlayerCode(memory, { keyboardAddress, flagAddress: 0x1fe0 });
-      expect(findFastForwardPatch(memory, 0)).toEqual({
+      expect(findFastForwardPatch(memory, 0)).toMatchObject({
         ldyOperandAddress: placed.ldyOperandAddress,
         flagAddress: 0x1fe0,
       });
@@ -91,6 +93,42 @@ describe("SID player fast forward patch", () => {
     memory.set([placed.storeAddress & 0xff, placed.storeAddress >> 8], placed.ldyOperandAddress + 2);
     memory.set([0x8d, 0x00, 0x04, 0x60], placed.storeAddress);
     expect(await isFastForwardPatchStillThere(readerOf(memory), placed.ldyOperandAddress)).toBe(false);
+  });
+
+  it("records the routine as found, with its ldy at 0 and the flag byte left out", () => {
+    const memory = new Uint8Array(0x10000);
+    const placed = placeSidPlayerCode(memory, { keyboardAddress: 0x0340, flagAddress: 0x1fe0 });
+    memory[placed.ldyOperandAddress] = 0x01;
+    const { routine } = findFastForwardPatch(memory, 0)!;
+    const covered = routine.flatMap(({ address, bytes }) => bytes.map((_, index) => address + index));
+    expect(covered).toContain(placed.ldyOperandAddress);
+    expect(covered).not.toContain(0x1fe0);
+    const operandRegion = routine.find(({ address, bytes }) => placed.ldyOperandAddress < address + bytes.length)!;
+    expect(operandRegion.bytes[placed.ldyOperandAddress - operandRegion.address]).toBe(0x00);
+  });
+
+  it("names every byte of the routine that differs from how it was found, and writes them back", async () => {
+    const memory = new Uint8Array(0x10000);
+    const placed = placeSidPlayerCode(memory, { keyboardAddress: 0x0340, flagAddress: 0x1fe0 });
+    const patch = findFastForwardPatch(memory, 0)!;
+    memory[0x1fe0] = 0x01;
+    expect(await patchRoutineDifferences(readerOf(memory), patch)).toEqual([]);
+    memory[placed.ldyOperandAddress] = 0x01;
+    expect(await patchRoutineDifferences(readerOf(memory), patch, null)).toEqual([]);
+    memory[placed.storeAddress + 3] = 0xea;
+    expect(await patchRoutineDifferences(readerOf(memory), patch)).toEqual([
+      { address: placed.ldyOperandAddress, expected: 0x00, actual: 0x01 },
+      { address: placed.storeAddress + 3, expected: 0x60, actual: 0xea },
+    ]);
+    const writes: string[] = [];
+    const write = async (address: string, data: Uint8Array) => {
+      writes.push(address);
+      memory.set(data, parseInt(address, 16));
+    };
+    expect(await restorePatchRoutine(readerOf(memory), write, patch)).toEqual([]);
+    expect(memory[placed.ldyOperandAddress]).toBe(0x00);
+    expect(memory[0x1fe0]).toBe(0x01);
+    expect(writes).toHaveLength(2);
   });
 
   it("never reads I/O when a jump there would be followed, since reading $DC0D acknowledges an interrupt", async () => {

@@ -14,7 +14,13 @@ import { isSidVolumeOffValue } from "@/lib/config/sidVolumeControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
 import { grantSeekKeyPress } from "./seekKeyPermit";
-import { FAST_FORWARD_HELD, FAST_FORWARD_RELEASED, isFastForwardPatchStillThere } from "./sidPlayerFastForwardPatch";
+import {
+  FAST_FORWARD_HELD,
+  FAST_FORWARD_RELEASED,
+  isFastForwardPatchStillThere,
+  patchRoutineDifferences,
+  type PatchRoutine,
+} from "./sidPlayerFastForwardPatch";
 
 export { RemoteSeekSessionClosedError };
 
@@ -66,7 +72,7 @@ export type RemoteSeekDeviceApi = {
  * How a seek holds fast forward: the left-arrow key through machine:input, or, on a machine that
  * takes no key input, one byte of the player's keyboard routine (see sidPlayerFastForwardPatch.ts).
  */
-export type FastForwardMethod = { kind: "key" } | { kind: "patch"; ldyOperandAddress: number };
+export type FastForwardMethod = { kind: "key" } | { kind: "patch"; ldyOperandAddress: number; routine: PatchRoutine };
 
 export type RemoteSeekJournal = {
   /** Which session wrote it: a restore clears the journal only if it is still its own. */
@@ -80,7 +86,7 @@ export type RemoteSeekJournal = {
   /** `Vol Master` before a rewind turned it off; absent when nothing was muted, and in older journals. */
   originalMasterVolume?: string | null;
   /** Set when fast forward is held through the player's code instead of the key; absent in older journals. */
-  fastForwardPatch?: { ldyOperandAddress: number } | null;
+  fastForwardPatch?: PatchSite | null;
   startedAtMs: number;
 };
 
@@ -167,19 +173,25 @@ const sameOption = (a: string, b: string) => a.trim().toLowerCase() === b.trim()
 
 const hexAddress = (address: number) => address.toString(16).toUpperCase().padStart(4, "0");
 
+type PatchSite = { ldyOperandAddress: number; routine?: PatchRoutine };
+
 /**
- * Write the patch byte, but only where the player's `ldy #0` or `ldy #1` still is: after another
- * tune has started, those cells belong to something else. Returns false when the site is gone.
+ * Write the patch byte, but only while the player's routine is still there: byte for byte as found
+ * when the probe recorded it, or else linked up as the player's. Returns false when it is gone.
  */
-const writeFastForwardPatch = async (api: RemoteSeekDeviceApi, ldyOperandAddress: number, value: number) => {
-  if (!(await isFastForwardPatchStillThere(api.readMemory, ldyOperandAddress))) return false;
-  await api.writeMemory(hexAddress(ldyOperandAddress), Uint8Array.of(value));
+const writeFastForwardPatch = async (api: RemoteSeekDeviceApi, site: PatchSite, value: number) => {
+  const there = site.routine
+    ? (await patchRoutineDifferences(api.readMemory, { ...site, routine: site.routine }, null)).length === 0
+    : await isFastForwardPatchStillThere(api.readMemory, site.ldyOperandAddress);
+  if (!there) return false;
+  await api.writeMemory(hexAddress(site.ldyOperandAddress), Uint8Array.of(value));
   return true;
 };
 
 /** Undo the patch and read it back. A site that is gone has nothing left to undo. */
-const releaseFastForwardPatch = async (api: RemoteSeekDeviceApi, ldyOperandAddress: number) => {
-  if (!(await writeFastForwardPatch(api, ldyOperandAddress, FAST_FORWARD_RELEASED))) return;
+const releaseFastForwardPatch = async (api: RemoteSeekDeviceApi, site: PatchSite) => {
+  const { ldyOperandAddress } = site;
+  if (!(await writeFastForwardPatch(api, site, FAST_FORWARD_RELEASED))) return;
   const [, operand] = await api.readMemory(hexAddress(ldyOperandAddress - 1), 2);
   if (operand !== FAST_FORWARD_RELEASED) throw new Error(`Fast forward patch still reads ${operand} after release`);
 };
@@ -220,7 +232,7 @@ export const restoreFromJournal = async (
     }
     try {
       const patch = journal.fastForwardPatch ?? null;
-      if (patch) await releaseFastForwardPatch(api, patch.ldyOperandAddress);
+      if (patch) await releaseFastForwardPatch(api, patch);
       else await releaseSeekKeys(api);
       // Sound comes back as soon as the tune plays at its own speed again, before the slower config writes.
       const masterVolume = journal.originalMasterVolume ?? null;
@@ -361,7 +373,10 @@ export class RemoteSeekDeviceSession {
       cpuSpeedChanged: false,
       originalTurboControl: null,
       keyHeld: false,
-      fastForwardPatch: fastForward.kind === "patch" ? { ldyOperandAddress: fastForward.ldyOperandAddress } : null,
+      fastForwardPatch:
+        fastForward.kind === "patch"
+          ? { ldyOperandAddress: fastForward.ldyOperandAddress, routine: fastForward.routine }
+          : null,
       startedAtMs: Date.now(),
     };
     writeJournal(deviceKey, journal);
@@ -416,7 +431,7 @@ export class RemoteSeekDeviceSession {
         await sendKey(this.api, "press");
         return;
       }
-      if (!(await writeFastForwardPatch(this.api, this.fastForward.ldyOperandAddress, FAST_FORWARD_HELD))) {
+      if (!(await writeFastForwardPatch(this.api, this.fastForward, FAST_FORWARD_HELD))) {
         throw new Error("The SID player's keyboard routine is no longer where it was found");
       }
     });
@@ -441,7 +456,7 @@ export class RemoteSeekDeviceSession {
   async releaseKey(): Promise<void> {
     if (this.api.currentDeviceKey() !== this.journal.deviceKey) return;
     if (this.fastForward.kind === "key") await sendKey(this.api, "release");
-    else await writeFastForwardPatch(this.api, this.fastForward.ldyOperandAddress, FAST_FORWARD_RELEASED);
+    else await writeFastForwardPatch(this.api, this.fastForward, FAST_FORWARD_RELEASED);
   }
 
   /**

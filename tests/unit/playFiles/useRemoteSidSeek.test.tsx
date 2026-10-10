@@ -23,12 +23,16 @@ const machineInput = vi.hoisted(() => ({ status: "available" }));
 const device = vi.hoisted(() => ({ current: null as ReturnType<typeof createFakeRemoteSeekDevice> | null }));
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
+const toasts = vi.hoisted(() => ({ shown: [] as Array<{ title?: string; description?: string }> }));
+vi.mock("@/hooks/use-toast", () => ({
+  toast: (notice: { title?: string; description?: string }) => void toasts.shown.push(notice),
+}));
 const replays = vi.hoisted(() => ({ count: 0 }));
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({
     playSidUpload: async () => {
       replays.count += 1;
-      device.current?.player.restart();
+      device.current?.player.replayTune();
       return { errors: [] };
     },
   }),
@@ -128,6 +132,7 @@ describe("useRemoteSidSeek", () => {
     ultimateBlob.bytes = null;
     replays.count = 0;
     parked.count = 0;
+    toasts.shown.length = 0;
     device.current = createFakeRemoteSeekDevice();
   });
   afterEach(() => {
@@ -264,6 +269,74 @@ describe("useRemoteSidSeek", () => {
     );
   });
 
+  /** Hold Next on a cartridge for 2 s, with `during` run a second in, and release. */
+  const holdOnCartridge = async (during: () => void = () => undefined) => {
+    const hook = render();
+    await advance(PROBED_MS);
+    act(() => {
+      hook.result.current.handlers?.onScrubStart?.();
+      hook.result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(1000);
+    during();
+    await advance(1000);
+    act(() => hook.result.current.handlers?.onScrubEnd?.());
+    await advance(8000);
+    return hook;
+  };
+
+  it("leaves a cartridge's SID player working after a seek, and says nothing", async () => {
+    machineInput.status = "unsupported-family";
+    device.current = createFakeRemoteSeekDevice({ cartridge: true });
+    const { result } = await holdOnCartridge();
+    expect(device.current.player.playerIntact).toBe(true);
+    expect(result.current.handlers).not.toBeNull();
+    expect(toasts.shown).toEqual([]);
+  });
+
+  it("puts back a SID player a seek left damaged, says once that its firmware does not support seeking, and skips tracks", async () => {
+    machineInput.status = "unsupported-family";
+    device.current = createFakeRemoteSeekDevice({ cartridge: true });
+    const { storeAddress } = device.current.player.code;
+    // A write the player's code did not expect: its `rts` overwritten, so the player stops.
+    const { result, unmount } = await holdOnCartridge(() =>
+      device.current!.player.writeMemory(storeAddress + 3, Uint8Array.of(0xea)),
+    );
+    expect(device.current.player.playerIntact).toBe(true);
+    expect(device.current.player.fastForwarding).toBe(false);
+    expect(replays.count).toBe(0);
+    expect(result.current.handlers).toBeNull();
+    expect(toasts.shown).toHaveLength(1);
+    expect(toasts.shown[0].title).toBe("Seeking not supported");
+    expect(toasts.shown[0].description).toContain("firmware 1.2.1");
+    unmount();
+
+    // The next tune on the same firmware gets plain track controls at once, and no second notice.
+    const writes = device.current.log.length;
+    const next = render();
+    await advance(PROBED_MS + 2000);
+    expect(next.result.current.handlers).toBeNull();
+    expect(device.current.log.length).toBe(writes);
+    expect(toasts.shown).toHaveLength(1);
+  });
+
+  it("starts the tune again to reload a SID player whose code cannot be written back", async () => {
+    machineInput.status = "unsupported-family";
+    device.current = createFakeRemoteSeekDevice({ cartridge: true });
+    const { storeAddress } = device.current.player.code;
+    const write = device.current.api.writeMemory;
+    let damaged = false;
+    device.current.api.writeMemory = (address, data) =>
+      damaged && data.length > 1 ? Promise.resolve({}) : write(address, data);
+    await holdOnCartridge(() => {
+      damaged = true;
+      device.current!.player.writeMemory(storeAddress + 3, Uint8Array.of(0xea));
+    });
+    expect(replays.count).toBe(1);
+    expect(device.current.player.playerIntact).toBe(true);
+    expect(toasts.shown).toHaveLength(1);
+  });
+
   it("rewinds a cartridge by starting the tune afresh, with the cartridge parked as for any SID", async () => {
     machineInput.status = "unsupported-family";
     device.current = createFakeRemoteSeekDevice({ cartridge: true });
@@ -272,11 +345,14 @@ describe("useRemoteSidSeek", () => {
     act(() => result.current.handlers?.onSeekToFraction?.(0.3));
     await advance(10_000);
     rerender({ active: true, elapsedMs: rebasedSeconds(rebasePlaybackPosition) * 1000 });
+    const rebasesBefore = rebasePlaybackPosition.mock.calls.length;
     act(() => result.current.handlers?.onSeekToFraction?.(0.1));
     await advance(10_000);
     expect(replays.count).toBe(1);
     expect(parked.count).toBe(1);
-    expect(Math.abs(rebasedSeconds(rebasePlaybackPosition) - 18)).toBeLessThan(2);
+    // The landing; later rebases follow the clock on from there.
+    const landedMs = rebasePlaybackPosition.mock.calls[rebasesBefore]?.[0] ?? NaN;
+    expect(Math.abs(landedMs / 1000 - 18)).toBeLessThan(2);
     expect(device.current.player.fastForwarding).toBe(false);
   });
 

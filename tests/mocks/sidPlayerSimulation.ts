@@ -140,6 +140,8 @@ export class SidPlayerSimulation {
   readonly layout: SidPlayerLayout;
   /** RAM as far as the player's code goes; everything else is computed in `byteAt`. */
   private readonly ram = new Uint8Array(0x10000);
+  /** The player's code as loaded, which `runners:sidplay` loads afresh. */
+  private readonly pristineCode: Uint8Array;
   readonly code: ReturnType<typeof placeSidPlayerCode>;
   private readonly tornClockReads: ReadonlySet<number>;
   private readonly timerFractions: readonly number[];
@@ -175,8 +177,9 @@ export class SidPlayerSimulation {
     this.layout = { ...CURRENT_PLAYER_LAYOUT, ...options.layout };
     this.code =
       options.playerCode === null
-        ? { ldyOperandAddress: -1, storeAddress: -1, covers: () => false }
+        ? { ldyOperandAddress: -1, storeAddress: -1, flagAddress: -1, regions: [], covers: () => false }
         : placeSidPlayerCode(this.ram, options.playerCode ?? DEFAULT_PLAYER_CODE);
+    this.pristineCode = this.ram.slice();
     this.tornClockReads = new Set(options.tornClockReads ?? []);
     this.timerFractions = options.timerFractions ?? [];
     this.showingPlayer = options.startsInPlayer ?? true;
@@ -194,6 +197,21 @@ export class SidPlayerSimulation {
   get shownClockSeconds() {
     this.advance();
     return Math.floor(this.clockSeconds);
+  }
+
+  /**
+   * The player's code is as loaded, apart from the two bytes it may differ in: the patched `ldy`
+   * operand (0 or 1) and the flag its `sty` writes. A player whose code was overwritten has crashed.
+   */
+  get playerIntact() {
+    return this.code.regions.every(([start, length]) => {
+      for (let address = start; address < start + length; address += 1) {
+        if (address === this.code.flagAddress) continue;
+        if (address === this.code.ldyOperandAddress && this.ram[address] <= 1) continue;
+        if (this.ram[address] !== this.pristineCode[address]) return false;
+      }
+      return true;
+    });
   }
 
   /** Fast forward runs while the key is down, or while the keyboard routine's `ldy #0` reads `ldy #1`. */
@@ -279,14 +297,22 @@ export class SidPlayerSimulation {
     this.playCallHz = playCallHz;
     this.machineFrameHz = machineFrameHz;
     this.paused = false;
-    this.showingPlayer = true;
-    this.restart();
+    this.replayTune();
   }
 
   /** machine:pause stops the CPU, so the tune and its clock stand still until machine:resume. */
   setPaused(paused: boolean) {
     this.advance();
     this.paused = paused;
+  }
+
+  /** Start the same tune again as `runners:sidplay` does: the player's code is loaded afresh. */
+  replayTune() {
+    this.advance();
+    this.showingPlayer = true;
+    for (const [start, length] of this.code.regions)
+      this.ram.set(this.pristineCode.subarray(start, start + length), start);
+    this.restart();
   }
 
   restart() {
@@ -385,7 +411,7 @@ export class SidPlayerSimulation {
   private advanceTo(now: number) {
     const elapsed = Math.max(0, (now - this.lastUpdate) / 1000);
     this.lastUpdate = now;
-    if (this.paused || !this.showingPlayer) return;
+    if (this.paused || !this.showingPlayer || !this.playerIntact) return;
     if (this.fastForwarding) {
       const clockGain = elapsed * (this.rates[this.cpuMhz] ?? this.rates[1]);
       this.clockSeconds += clockGain;
@@ -439,6 +465,8 @@ export const placeSidPlayerCode = (
   return {
     ldyOperandAddress: keyboardAddress + keyboard.length - 4,
     storeAddress,
+    flagAddress,
+    regions,
     covers: (address: number) => regions.some(([start, length]) => address >= start && address < start + length),
   };
 };

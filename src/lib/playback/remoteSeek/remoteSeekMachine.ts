@@ -13,6 +13,7 @@ import type { PositionModel } from "./remoteSeekPositionModel";
 import type { RemoteSeekOrigin } from "./remoteSidSeekController";
 import type { RemoteTuneSeekProfile } from "./remoteTuneSeekProbe";
 import { readSidPlayerClock } from "./sidPlayerClock";
+import { patchRoutineDifferences, type PatchRoutine } from "./sidPlayerFastForwardPatch";
 import { sidPlayerScreenAddress } from "./sidPlayerScreen";
 
 /** The clock shows whole seconds, so the tune is on average half a second past what it shows. */
@@ -37,6 +38,14 @@ const HELD_READ_DEADLINE_MS = 250;
 const STALE_READ_MS = 1000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Over this long a clock playing at normal speed moves on one or two seconds, a stuck fast forward many. */
+const HEALTH_WINDOW_MS = 1200;
+
+/**
+ * How the SID player is after a seek through its patched code. `unknown`: the player is no longer on
+ * screen or the tune started again, so nothing about it can be judged.
+ */
+export type PatchedPlayerHealth = "working" | "code changed" | "clock not at normal speed" | "unknown";
 
 /** What a seek reads from and does to the SID player on the C64, apart from borrowing its settings. */
 export class SeekMachine {
@@ -88,6 +97,24 @@ export class SeekMachine {
     if (!(await this.showsPlayerScreen())) return false;
     // One blank read can be a passing frame; two in a row are a screen without the player's clock.
     return (await this.readClock(true)) !== null || (await this.readClock(true)) !== null;
+  }
+
+  /** After a seek through the patch: the routine is byte for byte as found, and the clock plays at normal speed. */
+  async patchedPlayerHealth(patch: { ldyOperandAddress: number; routine: PatchRoutine }): Promise<PatchedPlayerHealth> {
+    if (!(await this.showsPlayerScreen())) return "unknown";
+    if ((await patchRoutineDifferences(this.api.readMemory, patch)).length > 0) return "code changed";
+    const startedAt = Date.now();
+    const first = await this.readClockTwice();
+    await sleep(HEALTH_WINDOW_MS);
+    const second = await this.readClockTwice();
+    // A read the firmware answered seconds late says nothing about the speed the clock runs at.
+    if (Date.now() - startedAt > HEALTH_WINDOW_MS + STALE_READ_MS) return "unknown";
+    if (first === null || second === null) return "clock not at normal speed";
+    const moved = second - first;
+    // Back to the start: another tune or a restart, which is not the seek's doing.
+    if (moved < 0 && first + 3 < this.profile.clock.wrapSeconds) return "unknown";
+    const sinceFirst = moved < 0 ? moved + this.profile.clock.wrapSeconds : moved;
+    return sinceFirst >= 1 && sinceFirst <= 3 ? "working" : "clock not at normal speed";
   }
 
   /** Read the clock once the key is surely up, crediting what ran since the last read to the fast forward. */
