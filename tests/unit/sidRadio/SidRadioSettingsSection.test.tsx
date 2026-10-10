@@ -37,8 +37,10 @@ import {
   loadLocalEngineEnabled,
   loadLocalSidModel,
   loadLocalSidModelFromDevice,
+  loadSidEmulationEngine,
   loadSidRadioEnabled,
   saveLearnedDeviceSidModel,
+  saveLocalEngineEnabled,
   saveLocalSidModelFromDevice,
 } from "@/lib/config/appSettings";
 import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/rankingStore";
@@ -165,6 +167,30 @@ describe("SidRadioSettingsSection crossfade availability", () => {
     expect(screen.queryByTestId("settings-sid-radio-status")).toBeNull();
     // Undoing your own rankings is not a developer concern.
     expect(screen.getByTestId("settings-clear-rankings")).toBeVisible();
+  });
+});
+
+describe("SidRadioSettingsSection SID emulation", () => {
+  it("offers the emulation choice without developer mode, with reSIDfp selected by default", () => {
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-sid-engine")).toBeVisible();
+    expect(screen.getByTestId("settings-sid-engine-residfp")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("settings-sid-engine-sidlite")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("keeps SIDLite once the listener picks it", async () => {
+    const view = render(<SidRadioSettingsSection />);
+    fireEvent.click(screen.getByTestId("settings-sid-engine-sidlite"));
+    await waitFor(() => expect(loadSidEmulationEngine()).toBe("sidlite"));
+    view.unmount();
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-sid-engine-sidlite")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("hides the emulation choice when on-device playback is switched off", () => {
+    saveLocalEngineEnabled(false);
+    render(<SidRadioSettingsSection />);
+    expect(screen.queryByTestId("settings-sid-engine")).toBeNull();
   });
 });
 

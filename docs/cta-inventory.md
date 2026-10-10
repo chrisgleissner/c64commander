@@ -622,7 +622,8 @@ when SID Radio is on]` ;
   On-device playback engine — checkbox — `settings-local-engine-enabled` — R✅ I✅
   `[developer-mode only]` ;
   SID emulation — button group — `settings-sid-engine-residfp|sidlite`
-  (`settings-sid-engine`) — R✅ I✅ _(on-device engine only)_ ; SID chip
+  (`settings-sid-engine`) — R✅ I✅ _(shown whenever on-device playback is on, also
+  without developer mode; Accurate (reSIDfp) is the default)_ ; SID chip
   (`settings-sid-chip`): Match my Commodore 64 — checkbox —
   `settings-sid-chip-from-device` — R✅ I✅ _(default on; reads the chip from the
   connected Ultimate and remembers it)_ ; fallback chip — button group —

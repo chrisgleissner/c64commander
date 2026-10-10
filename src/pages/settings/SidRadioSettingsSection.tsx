@@ -184,7 +184,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             onChange={saveLocalEngineEnabled}
           />
         ) : null}
-        {developerMode && localEngineEnabled ? (
+        {localEngineEnabled ? (
           <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-engine">
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
