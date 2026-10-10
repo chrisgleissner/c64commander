@@ -529,6 +529,8 @@ export class LocalSidEngine {
   /** One recovery per tune; a second stall is left to the playlist's own advance. */
   private stallRecoveryUsed = false;
   private stallRecoveryInFlight = false;
+  /** Where a stall recovery resumes, and the position reported while it re-opens: a seek meanwhile moves it. */
+  private recoveringAtSeconds: number | null = null;
   /** Guards {@link play}'s single retry after an open timeout, so a retry can never retry itself. */
   private openRetryInFlight = false;
   /** Kept so a stalled tune can be re-opened where it stopped; the played bytes are transferred away. */
@@ -1481,8 +1483,12 @@ export class LocalSidEngine {
    * does prefetching resume.
    */
   async seekTo(positionSeconds: number): Promise<void> {
-    if (!this.worker || !this.scheduler) return;
     const target = Math.max(0, positionSeconds);
+    if (this.stallRecoveryInFlight) {
+      this.recoveringAtSeconds = target;
+      return;
+    }
+    if (!this.worker || !this.scheduler) return;
     const id = this.nextId;
     this.nextId += 1;
 
@@ -1771,17 +1777,9 @@ export class LocalSidEngine {
   }
 
   /**
-   * Put a stalled tune back on the air: throw the worker away and re-open the same tune where it
-   * fell silent.
-   *
-   * The bytes have to be kept for this — `play()` transfers ownership of the caller's buffer to the
-   * worker, so by the time it stalls there is nothing left to re-open with. A SID is a few KB, so
-   * the copy costs nothing worth counting.
-   *
-   * Once per tune. If a re-opened tune stalls again the fault is not transient, and retrying on a
-   * timer would spend the rest of the track restarting instead of playing; the playlist's own
-   * advance already moves on at the songlength. Recovery is announced either way — silence that
-   * repaired itself is still worth knowing about.
+   * Put a stalled tune back on the air: throw the worker away and re-open it where it fell silent,
+   * from a copy of its bytes, since `play()` hands the caller's buffer to the worker. Once per tune:
+   * a re-opened tune that stalls again is not a transient fault, and the playlist moves on.
    */
   private async recoverFromStall(): Promise<void> {
     const tune = this.currentTune;
@@ -1801,13 +1799,18 @@ export class LocalSidEngine {
     }
     this.stallRecoveryInFlight = true;
     this.stallRecoveryUsed = true;
+    this.recoveringAtSeconds = resumeAt;
     this.discardWorker("audio stalled");
     try {
       // `play()` resets the per-tune state, including the flag above, so restore it afterwards:
       // this restart must not hand the same tune a second free recovery.
       await this.play(tune.bytes.slice(0), tune.songIndex, this.callbacks);
       this.stallRecoveryUsed = true;
-      if (resumeAt > 0) await this.seekTo(resumeAt);
+      // Re-opened: from here a seek is an ordinary one, to wherever the listener last asked.
+      const resumeTarget = this.recoveringAtSeconds ?? resumeAt;
+      this.stallRecoveryInFlight = false;
+      this.recoveringAtSeconds = null;
+      if (resumeTarget > 0) await this.seekTo(resumeTarget);
       addLog("info", "Local SID playback recovered from a stall", {
         service: "local-sid",
         resumedAtSeconds: Math.round(resumeAt),
@@ -1822,6 +1825,7 @@ export class LocalSidEngine {
       this.callbacks.onUnrecoverable?.();
     } finally {
       this.stallRecoveryInFlight = false;
+      this.recoveringAtSeconds = null;
     }
   }
 
@@ -1981,7 +1985,7 @@ export class LocalSidEngine {
       peakRenderMsPerSec: this.peakRenderMsPerSec,
       audioUnderruns: Math.max(stats?.underruns ?? 0, this.audio?.audioUnderruns?.() ?? 0),
       bufferedSeconds: stats?.bufferedSeconds ?? 0,
-      positionSeconds: this.scheduler?.positionSeconds() ?? 0,
+      positionSeconds: this.recoveringAtSeconds ?? this.scheduler?.positionSeconds() ?? 0,
       chunksScheduled: stats?.chunksScheduled ?? 0,
     };
   }

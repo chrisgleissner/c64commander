@@ -706,15 +706,18 @@ describe("silence self-healing", () => {
   let silentFault: boolean;
   let silenceResets: number;
 
+  let workers: FakeWorker[];
   const makeEngine = () => {
     worker = new FakeWorker();
+    workers = [];
     silentFault = false;
     silenceResets = 0;
     let handedOut = 0;
     const factory = () => {
       handedOut += 1;
-      if (handedOut === 1) return worker;
-      return new FakeWorker();
+      const handed = handedOut === 1 ? worker : new FakeWorker();
+      workers.push(handed);
+      return handed;
     };
     const { sink } = makeSink();
     return new LocalSidEngine({
@@ -767,6 +770,68 @@ describe("silence self-healing", () => {
     // Recovery is the same one a stall gets: throw the worker away and re-open the tune.
     expect(silenceResets).toBeGreaterThan(0);
     expect(worker.terminated || worker.ofType("open").length > opensBefore).toBe(true);
+  });
+
+  /** Seek to `seconds` and let the worker acknowledge it. */
+  const seekTo = async (engine: LocalSidEngine, seconds: number) => {
+    const seek = engine.seekTo(seconds);
+    await Promise.resolve();
+    const posted = worker.ofType("seek").at(-1) as { id: number } | undefined;
+    if (posted) worker.emit({ type: "seeked", id: posted.id } as never);
+    await seek;
+  };
+
+  /** Let the re-opening worker start, up to where it has asked to open the tune again. */
+  const startReopen = async () => {
+    for (let tick = 0; tick < 20 && workers.length < 2; tick += 1) await Promise.resolve();
+    const reopened = workers[1];
+    reopened.emit({ type: "ready", moduleLoadMs: 1 });
+    for (let tick = 0; tick < 20 && reopened.ofType("open").length === 0; tick += 1) await Promise.resolve();
+    return reopened;
+  };
+
+  /** And let it finish opening. */
+  const finishReopen = async () => {
+    const reopened = workers[1];
+    const opens = reopened.ofType("open");
+    reopened.emit({
+      type: "opened",
+      id: (opens[opens.length - 1] as unknown as { id: number }).id,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: {},
+    } as never);
+    for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+    return reopened;
+  };
+
+  it("reports where it will resume while it re-opens a tune that fell silent, not the start", async () => {
+    const engine = makeEngine();
+    await openTune(engine);
+    await seekTo(engine, 90);
+    silentFault = true;
+    tick(engine);
+    await startReopen();
+    expect(engine.getStats().positionSeconds).toBe(90);
+    const reopened = await finishReopen();
+    expect(reopened.ofType("seek").map((message) => (message as { positionSeconds: number }).positionSeconds)).toEqual([
+      90,
+    ]);
+  });
+
+  it("resumes where a seek asked for during the re-open went, instead of where the tune fell silent", async () => {
+    const engine = makeEngine();
+    await openTune(engine);
+    await seekTo(engine, 90);
+    silentFault = true;
+    tick(engine);
+    await startReopen();
+    await engine.seekTo(10);
+    expect(engine.getStats().positionSeconds).toBe(10);
+    const reopened = await finishReopen();
+    expect(reopened.ofType("seek").map((message) => (message as { positionSeconds: number }).positionSeconds)).toEqual([
+      10,
+    ]);
   });
 
   it("leaves a muted tune alone, because that silence is what was asked for", async () => {
