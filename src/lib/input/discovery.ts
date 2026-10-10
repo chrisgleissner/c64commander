@@ -147,20 +147,27 @@ const computedStyleOf = (element: Element, scan?: DiscoveryScan): CSSStyleDeclar
   return style;
 };
 
-const isNodeShown = (node: HTMLElement, scan?: DiscoveryScan): boolean => {
-  if (node.hasAttribute("hidden")) return false;
-  if (node.getAttribute("aria-hidden") === "true") return false;
-  if (node.hasAttribute("inert")) return false;
+const isMarkedHidden = (node: HTMLElement): boolean =>
+  node.hasAttribute("hidden") || node.getAttribute("aria-hidden") === "true" || node.hasAttribute("inert");
+
+const isStyledShown = (node: HTMLElement, scan?: DiscoveryScan): boolean => {
   const style = computedStyleOf(node, scan);
   if (style?.display === "none") return false;
   return !(style?.visibility === "hidden" || style?.visibility === "collapse");
 };
 
+const isNodeShown = (node: HTMLElement, scan?: DiscoveryScan): boolean =>
+  !isMarkedHidden(node) && isStyledShown(node, scan);
+
+/*
+ * Ancestors are settled before the node's own style is read, so a hidden subtree (a cached page) costs one
+ * attribute check per node rather than a getComputedStyle each.
+ */
 const isChainVisible = (node: Element | null, scan: DiscoveryScan): boolean => {
   if (!(node instanceof HTMLElement)) return true;
   const cached = scan.visible.get(node);
   if (cached !== undefined) return cached;
-  const visible = isNodeShown(node, scan) && isChainVisible(node.parentElement, scan);
+  const visible = !isMarkedHidden(node) && isChainVisible(node.parentElement, scan) && isStyledShown(node, scan);
   scan.visible.set(node, visible);
   return visible;
 };

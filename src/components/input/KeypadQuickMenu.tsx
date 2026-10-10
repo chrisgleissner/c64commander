@@ -120,7 +120,9 @@ export function KeypadQuickMenu() {
   const [sectionCounts, setSectionCounts] = useState({ total: 0, closed: 0 });
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
-    const cards = document.querySelectorAll("[data-section-label][data-open]");
+    // Cached pages keep their cards in the document while hidden; only the page on screen is counted.
+    const page = document.querySelector('[data-slot-active="true"]') ?? document;
+    const cards = page.querySelectorAll("[data-section-label][data-open]");
     let closed = 0;
     for (const card of cards) if (card.getAttribute("data-open") === "false") closed += 1;
     setSectionCounts({ total: cards.length, closed });

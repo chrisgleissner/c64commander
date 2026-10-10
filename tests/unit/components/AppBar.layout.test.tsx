@@ -147,4 +147,32 @@ describe("AppBar header height", () => {
       document.documentElement.style.removeProperty("--app-bar-height");
     }
   });
+
+  it("keeps a tab page's header height on its own slot and never restyles the whole document through <html>", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.tagName === "HEADER" ? 131 : 0;
+    });
+    const rootWrite = vi.spyOn(document.documentElement.style, "setProperty");
+    try {
+      const { container } = render(
+        <div data-route-index="3">
+          <DisplayProfileProvider>
+            <ScreenActivityProvider active>
+              <AppBar title="Kept page" />
+            </ScreenActivityProvider>
+          </DisplayProfileProvider>
+        </div>,
+      );
+      const slot = container.querySelector<HTMLElement>("[data-route-index]")!;
+      expect(slot.style.getPropertyValue("--app-bar-height")).toBe("131px");
+      expect(rootWrite.mock.calls.filter(([name]) => name === "--app-bar-height")).toEqual([]);
+    } finally {
+      offsetHeight.mockRestore();
+      rootWrite.mockRestore();
+    }
+  });
 });

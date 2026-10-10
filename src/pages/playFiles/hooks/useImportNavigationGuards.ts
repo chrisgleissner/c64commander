@@ -7,9 +7,14 @@
  */
 
 import { useEffect } from "react";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 
-export function useImportNavigationGuards(isImportNavigationBlocked: boolean) {
+/** Only while the page is on screen: leaving it cancels the import, and a guard left behind would ask on other tabs. */
+export function useImportNavigationGuards(isImportBlocking: boolean) {
+  const pageActive = usePageActivity();
+  const isImportNavigationBlocked = isImportBlocking && pageActive;
+
   useEffect(() => {
     if (!isImportNavigationBlocked) return;
     return registerNavigationGuard(() =>

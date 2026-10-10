@@ -23,6 +23,9 @@ import { reportUserError } from "@/lib/uiErrors";
  */
 export const useConfigLeafWrite = (authoritativeValues: AuthoritativeConfigValueState, markChanged: () => void) => {
   const setConfig = useC64SetConfig();
+  // The mutation result is a new object on every render; its mutateAsync is not. Depending on the stable
+  // function keeps writeLeaf, and so every memoized row it is passed to, unchanged between renders.
+  const { mutateAsync } = setConfig;
 
   const writeLeaf = useCallback(
     async (category: string, item: string, value: string | number): Promise<boolean> => {
@@ -30,7 +33,7 @@ export const useConfigLeafWrite = (authoritativeValues: AuthoritativeConfigValue
       const previousEntry = authoritativeValues.entriesRef.current[key];
       authoritativeValues.replaceEntry(key, value);
       try {
-        await setConfig.mutateAsync({ category, item, value });
+        await mutateAsync({ category, item, value });
         markChanged();
         toast({ title: `${item} updated` });
         return true;
@@ -46,7 +49,7 @@ export const useConfigLeafWrite = (authoritativeValues: AuthoritativeConfigValue
         return false;
       }
     },
-    [authoritativeValues, markChanged, setConfig],
+    [authoritativeValues, markChanged, mutateAsync],
   );
 
   return { writeLeaf, isWriting: setConfig.isPending };

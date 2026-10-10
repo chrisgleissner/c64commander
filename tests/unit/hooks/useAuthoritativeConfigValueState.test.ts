@@ -263,3 +263,14 @@ describe("useAuthoritativeConfigValueState rollback to an earlier pin", () => {
     expect(result.current.values).toEqual({});
   });
 });
+
+describe("useAuthoritativeConfigValueState identity", () => {
+  it("keeps the same object across renders that change nothing, and a new one when an entry changes", () => {
+    const { result, rerender } = renderHook(() => useAuthoritativeConfigValueState());
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+    act(() => result.current.replaceEntry("Audio Mixer::Vol UltiSid 1", "+6 dB"));
+    expect(result.current).not.toBe(first);
+  });
+});

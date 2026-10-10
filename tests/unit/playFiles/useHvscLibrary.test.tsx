@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { createHvscDemoLibraryCleanup } from "@/lib/hvsc/hvscDemoLibraryCleanup";
@@ -333,6 +335,57 @@ describe("useHvscLibrary", () => {
         title: "HVSC updates available",
       }),
     );
+  });
+
+  it("checks for HVSC updates again on each visit to Play, within the cadence, as when each visit mounted the page", async () => {
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(true);
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42, ingestionState: "ready" }));
+    mocks.checkForHvscUpdatesMock.mockResolvedValue({ latestVersion: 42, installedVersion: 42, requiredUpdates: [] });
+    let playOnScreen = true;
+    const { rerender } = renderHook(() => useHvscLibrary(true), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <ScreenActivityProvider active={playOnScreen}>{children}</ScreenActivityProvider>
+      ),
+    });
+    await waitFor(() => expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(1));
+
+    playOnScreen = false;
+    rerender();
+    await act(async () => undefined);
+    expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(1);
+
+    playOnScreen = true;
+    rerender();
+    await waitFor(() => expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(2));
+
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
+    playOnScreen = false;
+    rerender();
+    playOnScreen = true;
+    rerender();
+    await act(async () => undefined);
+    expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops the update notice of a check that finishes after Play was left, as it did when leaving unmounted the page", async () => {
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(true);
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 42, ingestionState: "ready" }));
+    let resolveCheck: (value: unknown) => void = () => undefined;
+    mocks.checkForHvscUpdatesMock.mockImplementation(() => new Promise((resolve) => (resolveCheck = resolve)));
+    let playOnScreen = true;
+    const { rerender } = renderHook(() => useHvscLibrary(true), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <ScreenActivityProvider active={playOnScreen}>{children}</ScreenActivityProvider>
+      ),
+    });
+    await waitFor(() => expect(mocks.checkForHvscUpdatesMock).toHaveBeenCalledTimes(1));
+    mocks.shouldCheckForHvscUpdatesMock.mockReturnValue(false);
+    playOnScreen = false;
+    rerender();
+    await act(async () => {
+      resolveCheck({ latestVersion: 43, installedVersion: 42, requiredUpdates: [43] });
+    });
+    expect(mocks.toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ title: "HVSC updates available" }));
   });
 
   it("reports folder loading failures", async () => {

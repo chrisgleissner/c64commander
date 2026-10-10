@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
@@ -39,6 +39,7 @@ vi.mock("@/lib/logging", () => ({
 
 import { useDeviceConfigOptionDomains } from "@/pages/home/hooks/useDeviceConfigOptionDomains";
 import { notifyConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrichmentNamespaceSignal";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const REFS = [{ category: "Cat", item: "Item" }] as const;
 
@@ -71,6 +72,31 @@ describe("useDeviceConfigOptionDomains", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("asks the device nothing while its page is hidden, and asks once the page is shown", async () => {
+    hoisted.getConfigItemMock.mockResolvedValue(domainPayload());
+    const Card = () => {
+      useDeviceConfigOptionDomains("test", REFS, true);
+      return null;
+    };
+    const slot = (active: boolean) => (
+      <ScreenActivityProvider active={active}>
+        <Card />
+      </ScreenActivityProvider>
+    );
+    const view = render(slot(false));
+    await flush();
+    await bumpEpochAndRerender(() => view.rerender(slot(false)));
+
+    expect(hoisted.getCategoriesMock).not.toHaveBeenCalled();
+    expect(hoisted.getConfigItemMock).not.toHaveBeenCalled();
+
+    view.rerender(slot(true));
+    await flush();
+
+    expect(hoisted.getCategoriesMock).toHaveBeenCalledTimes(1);
+    expect(hoisted.getConfigItemMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not ask for the items of a category the device does not list", async () => {

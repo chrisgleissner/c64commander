@@ -30,7 +30,7 @@ import {
 } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 import { useDiagnosticsSuppressionActive } from "@/hooks/useDiagnosticsSuppressionActive";
-import { useAppVisibilityState, useScreenActivity } from "@/hooks/useScreenActivity";
+import { useAppVisibilityState, useScreenActivity, useScreenQueryGate } from "@/hooks/useScreenActivity";
 import { isDiagnosticsOverlaySuppressionArmed } from "@/lib/diagnostics/diagnosticsOverlayState";
 import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
@@ -465,8 +465,10 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
   const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
   const queryActive = (options.active ?? true) && (screenActive || !appVisible);
-  const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
-  const placeholderData = (() => {
+  // Only read when the query has no data of its own: parsing the stored snapshot on every render cost Home
+  // 9 ms a second while Live View re-rendered its stream rows.
+  const snapshotPlaceholder = () => {
+    const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
     if (!snapshot?.data?.[category]) return undefined;
     const categoryPayload = snapshot.data[category] as Record<string, unknown>;
     const categoryBlock = categoryPayload[category] ?? categoryPayload;
@@ -485,7 +487,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
       },
       errors: [],
     } as ConfigResponse;
-  })();
+  };
   return useQuery({
     // routingEpoch is appended (not prepended) so prefix-based invalidation —
     // ["c64-config-items"] and ["c64-config-items", category] — still matches.
@@ -499,7 +501,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
       });
     },
     enabled: queryActive && enabled && !!category && items.length > 0 && connectionActive,
-    placeholderData: (previousData) => previousData ?? placeholderData,
+    placeholderData: (previousData) => previousData ?? snapshotPlaceholder(),
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
   });
@@ -618,10 +620,8 @@ export function useC64UpdateConfigBatch() {
 export function useC64ConfigItem(category?: string, item?: string, enabled = true, options: C64QueryOptions = {}) {
   const routingEpoch = useConnectionRoutingEpoch();
   const intent = options.intent ?? "background";
-  const screenActive = useScreenActivity();
-  const appVisible = useAppVisibilityState();
   const connectionActive = useConnectionActive();
-  const queryActive = (options.active ?? true) && (screenActive || !appVisible);
+  const queryActive = useScreenQueryGate((options.active ?? true) && enabled && !!category && !!item);
   return useQuery({
     // routingEpoch is appended (not prepended) so prefix-based invalidation —
     // ["c64-config-item"] and ["c64-config-item", category] — still matches, while a
@@ -635,7 +635,7 @@ export function useC64ConfigItem(category?: string, item?: string, enabled = tru
       }
       return api.getConfigItem(category, item, { __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
-    enabled: queryActive && enabled && !!category && !!item && connectionActive,
+    enabled: queryActive && connectionActive,
     staleTime: 30000,
     refetchOnMount: options.refetchOnMount,
   });

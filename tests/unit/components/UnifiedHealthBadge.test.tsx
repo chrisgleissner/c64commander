@@ -701,6 +701,32 @@ describe("UnifiedHealthBadge", () => {
     }
   });
 
+  it("runs saved-device health checks only for the badge of the page on screen, and again when it is shown", () => {
+    const { rerender } = render(
+      <ScreenActivityProvider active={false}>
+        <UnifiedHealthBadge />
+      </ScreenActivityProvider>,
+    );
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenLastCalledWith(
+      mockState.savedDevices.devices,
+      false,
+      expect.objectContaining({ context: "background-maintenance" }),
+      "device-office",
+    );
+
+    rerender(
+      <ScreenActivityProvider active>
+        <UnifiedHealthBadge />
+      </ScreenActivityProvider>,
+    );
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenLastCalledWith(
+      mockState.savedDevices.devices,
+      true,
+      expect.objectContaining({ context: "background-maintenance" }),
+      "device-office",
+    );
+  });
+
   it("says there is nothing to switch to when # is pressed with one saved device", () => {
     const originalDevices = mockState.savedDevices.devices;
     mockState.savedDevices.devices = [originalDevices[0]];

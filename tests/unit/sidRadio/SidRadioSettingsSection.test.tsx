@@ -30,6 +30,9 @@ vi.mock("framer-motion", () => ({
 }));
 
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
+import { updateHvscState } from "@/lib/hvsc/hvscStateStore";
+import { saveRom } from "@/lib/roms/romStore";
 import {
   loadLocalEngineEnabled,
   loadLocalSidModel,
@@ -219,5 +222,31 @@ describe("SidRadioSettingsSection SID chip", () => {
     render(<SidRadioSettingsSection developerMode />);
     fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
     await waitFor(() => expect(screen.queryByTestId("settings-sid-chip")).toBeNull());
+  });
+
+  it("shows what was installed and stored while Settings was kept out of sight, once it is shown again", () => {
+    const view = (active: boolean) => (
+      <ScreenActivityProvider active={active}>
+        <SidRadioSettingsSection developerMode />
+      </ScreenActivityProvider>
+    );
+    const { rerender } = render(view(true));
+    rerender(view(false));
+    updateHvscState({ installedBaselineVersion: 83, installedVersion: 86 });
+    saveRom("kernal", new Uint8Array([1, 2, 3]), {
+      description: "KERNAL 901227-03",
+      fingerprint: "abc",
+      capturedFrom: "c64u",
+    });
+    saveRom("basic", new Uint8Array([4, 5, 6]), {
+      description: "BASIC 901226-01",
+      fingerprint: "def",
+      capturedFrom: "c64u",
+    });
+
+    rerender(view(true));
+
+    expect(screen.getByTestId("settings-sid-radio-status")).toHaveTextContent("baseline 83 + update 86");
+    expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("KERNAL 901227-03");
   });
 });

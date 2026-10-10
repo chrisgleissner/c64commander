@@ -277,4 +277,26 @@ describe("KeypadQuickMenu function-key summary", () => {
 
     expect(screen.queryByTestId("keypad-quick-menu-function-summary")).toBeNull();
   });
+
+  it("counts only the cards of the page on screen, not those of pages kept hidden", async () => {
+    const pages = document.createElement("div");
+    pages.innerHTML = `
+      <div data-slot-active="false" data-slot-cached="true">
+        <section data-section-label="Hidden A" data-open="false"></section>
+        <section data-section-label="Hidden B" data-open="false"></section>
+      </div>
+      <div data-slot-active="true">
+        <section data-section-label="Shown" data-open="true"></section>
+      </div>`;
+    document.body.appendChild(pages);
+    try {
+      renderMenu();
+      requestQuickMenuOpen();
+      const expand = await screen.findByRole("button", { name: "Expand all sections" });
+      expect(expand).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Collapse all sections" })).toBeEnabled();
+    } finally {
+      pages.remove();
+    }
+  });
 });

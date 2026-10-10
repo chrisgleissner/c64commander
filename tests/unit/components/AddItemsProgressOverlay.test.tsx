@@ -10,7 +10,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
-import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
+import { InterstitialStateProvider, useInterstitialActive } from "@/components/ui/interstitial-state";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { resolveCenteredOverlayLayout } from "@/components/ui/interstitialStyles";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { discoverInteractiveElements, resolveActiveScope } from "@/lib/input/discovery";
@@ -191,6 +192,32 @@ describe("AddItemsProgressOverlay", () => {
 
     fireEvent.keyDown(document, { key: "ArrowDown", code: "ArrowDown" });
 
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("is not shown over another tab, and takes neither Back nor the app's interstitial state, while its page is kept off screen", () => {
+    const onCancel = vi.fn();
+    let interstitialActive: boolean | null = null;
+    const InterstitialProbe = () => {
+      interstitialActive = useInterstitialActive();
+      return null;
+    };
+    const renderInPage = (pageOnScreen: boolean) => (
+      <InterstitialStateProvider>
+        <InterstitialProbe />
+        <ScreenActivityProvider active={pageOnScreen}>
+          <AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />
+        </ScreenActivityProvider>
+      </InterstitialStateProvider>
+    );
+    const { rerender } = render(renderInPage(true));
+    expect(screen.getByTestId("progress")).toBeInTheDocument();
+    expect(interstitialActive).toBe(true);
+
+    rerender(renderInPage(false));
+    expect(screen.queryByTestId("progress")).toBeNull();
+    expect(interstitialActive).toBe(false);
+    fireEvent.keyDown(document, { key: "Escape", code: "", keyCode: 0 });
     expect(onCancel).not.toHaveBeenCalled();
   });
 });

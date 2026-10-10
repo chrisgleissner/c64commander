@@ -105,7 +105,8 @@ export const createMapper = (mapDir) => {
     }
     const entry = load(url);
     const script = url.split("/").pop();
-    if (!entry) {
+    // A frame for a whole script (its top-level evaluation) carries line -1; a source map has no line 0.
+    if (!entry || lineNumber < 0) {
       return {
         key: `${script}:${lineNumber + 1} ${functionName || "(anonymous)"}`,
         source: script,

@@ -10,7 +10,8 @@ import type { ReactNode } from "react";
 import { MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
-import { useInsertionEffect, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
+import { rememberSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { AvMirrorLivePip } from "@/components/streams/AvMirrorLivePip";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -38,16 +39,24 @@ type Props = {
 };
 
 /*
- * Each page's header height, from its last visit. Writing a new --app-bar-height on <html> after the
- * page has been styled restyled the whole document a second time: 3433 elements, 123 ms, switching to
- * Config on a Pixel 4, whose header is taller than the others. Applied before the page is first
- * measured, the measurement then finds it already in place.
+ * Each page's header height, from its last visit, applied before the page is first measured so the measurement
+ * finds it already in place.
+ *
+ * A page in a tab slot keeps its height on the slot, never on <html>: a custom property is inherited, so changing
+ * it at the root restyles the whole document, every kept page included. That was 6203 elements and 400 ms on a
+ * Pixel 4, per tab switch between pages whose headers differ. A header outside the tab slots still uses the root.
  */
 const appBarHeightByPage = new Map<string, string>();
 
-const writeAppBarHeight = (value: string) => {
-  const rootStyle = document.documentElement.style;
-  if (rootStyle.getPropertyValue("--app-bar-height") !== value) rootStyle.setProperty("--app-bar-height", value);
+const PAGE_SLOT_SELECTOR = "[data-route-index]";
+
+const heightTarget = (header: HTMLElement) =>
+  header.closest<HTMLElement>(PAGE_SLOT_SELECTOR) ?? document.documentElement;
+
+const writeAppBarHeight = (header: HTMLElement, value: string) => {
+  const target = heightTarget(header);
+  if (target.dataset.routeIndex !== undefined) rememberSlotAppBarHeight(Number(target.dataset.routeIndex), value);
+  if (target.style.getPropertyValue("--app-bar-height") !== value) target.style.setProperty("--app-bar-height", value);
 };
 
 export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, titleTestId, children }: Props) {
@@ -62,24 +71,21 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
   const pageKey = typeof title === "string" ? title : titleTestId;
   const heightKey = pageKey ? `${pageKey}|${profile}|${children ? "with-row" : "bare"}` : null;
 
-  useInsertionEffect(() => {
-    if (typeof window === "undefined" || !screenActive || !heightKey) return;
-    const remembered = appBarHeightByPage.get(heightKey);
-    if (remembered) writeAppBarHeight(remembered);
-  }, [screenActive, heightKey]);
-
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     if (!screenActive) return;
     const element = headerRef.current;
     if (!element) return;
 
+    const remembered = heightKey ? appBarHeightByPage.get(heightKey) : undefined;
+    if (remembered) writeAppBarHeight(element, remembered);
+
     const updateHeight = () => {
       const nextHeight = element.offsetHeight;
       if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
       const value = `${nextHeight}px`;
       if (heightKey) appBarHeightByPage.set(heightKey, value);
-      writeAppBarHeight(value);
+      writeAppBarHeight(element, value);
     };
 
     updateHeight();

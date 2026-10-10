@@ -6,8 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, {
+  lazy,
+  Suspense,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { UNSAFE_LocationContext as LocationContext, useLocation, useNavigate } from "react-router-dom";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { useSwipeGesture, type SwipeDirection, type SwipeGestureMetadata } from "@/hooks/useSwipeGesture";
@@ -25,12 +35,14 @@ import {
   resolveAdjacentIndexes,
   resolveDragRevealedIndex,
   resolveNavigationDirection,
+  rememberCachedPage,
   resolveRunwayTranslatePercent,
   type RunwayPanelIndexes,
 } from "@/lib/navigation/swipeNavigationModel";
 import { PageLoadingFallback } from "@/components/PageLoadingFallback";
 import { subscribePageReset } from "@/lib/navigation/pageReset";
 import { forgetPagePosition, rememberPagePosition, restorePagePosition } from "@/lib/navigation/pagePositions";
+import { rememberedSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const PlayFilesPage = lazy(() => import("@/pages/PlayFilesPage"));
@@ -115,6 +127,68 @@ const PagePosition = ({ pageIndex }: { pageIndex: number }) => {
   return null;
 };
 
+/*
+ * A kept page keeps its own scroll offset. Its position is still noted when it is left, while it is on screen, for
+ * the rare rebuild of a kept page (Settings after a setting changed elsewhere), which then opens where it was left.
+ */
+const CachedPagePosition = ({ pageIndex, active }: { pageIndex: number; active: boolean }) => {
+  useLayoutEffect(() => {
+    restorePagePosition(pageIndex, slotFor(pageIndex));
+  }, [pageIndex]);
+  const wasActive = useRef(active);
+  useLayoutEffect(() => {
+    if (wasActive.current && !active) rememberPagePosition(pageIndex, slotFor(pageIndex));
+    wasActive.current = active;
+  }, [active, pageIndex]);
+  return null;
+};
+
+/*
+ * A page that is not on screen keeps the location it last saw. Every useLocation and useNavigate consumer re-renders
+ * when the location changes, so without this each tab switch re-rendered those in every kept page: a 169 ms task
+ * on a Pixel 4 at half its CPU rate before the new page could start to show.
+ */
+const LocationWhileActive = ({ active, children }: { active: boolean; children: React.ReactNode }) => {
+  const live = React.useContext(LocationContext);
+  const seen = useRef(live);
+  if (active) seen.current = live;
+  return <LocationContext.Provider value={seen.current}>{children}</LocationContext.Provider>;
+};
+
+const PageSlotBody = React.memo(function PageSlotBody({
+  pageIndex,
+  isActive,
+  cached,
+}: {
+  pageIndex: number;
+  isActive: boolean;
+  cached: boolean;
+}) {
+  // The same element across activity changes, so turning a page on or off re-renders only what reads that state.
+  const page = useMemo(() => {
+    const Component = SLOT_COMPONENTS[pageIndex];
+    return (
+      <AppChromeModeProvider mode="sticky">
+        <Component />
+      </AppChromeModeProvider>
+    );
+  }, [pageIndex]);
+  return (
+    <PageErrorBoundary active={isActive}>
+      <Suspense fallback={<PageLoadingFallback />}>
+        {cached ? (
+          <CachedPagePosition pageIndex={pageIndex} active={isActive} />
+        ) : (
+          <PagePosition pageIndex={pageIndex} />
+        )}
+        <ScreenActivityProvider active={isActive}>
+          <LocationWhileActive active={isActive}>{page}</LocationWhileActive>
+        </ScreenActivityProvider>
+      </Suspense>
+    </PageErrorBoundary>
+  );
+});
+
 const buildIdleState = (index: number): RunwayState => ({
   phase: "idle",
   centerIndex: index,
@@ -168,6 +242,32 @@ export const resolveTransitionConfig = (profile: string, runtimeMotionMode: Runt
   };
 };
 
+type TestProbeWindow = Window & { __c64uTestProbeEnabled?: boolean; __c64uCacheVisitedPages?: boolean };
+
+const isTestProbeActive = () =>
+  import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
+  (typeof window !== "undefined" && Boolean((window as TestProbeWindow).__c64uTestProbeEnabled));
+
+/*
+ * Test probes rebuild each page on every visit, so a test id names exactly one element in the document. A spec that
+ * tests the page cache opts back in.
+ */
+const cachesVisitedPages = () =>
+  !isTestProbeActive() ||
+  (typeof window !== "undefined" && Boolean((window as TestProbeWindow).__c64uCacheVisitedPages));
+
+/*
+ * Settings reads its values from storage when it is built. Kept built while another page changes one of them (the
+ * quick menu, the Demo Mode offer, the device switcher), it would show the old value, so it is rebuilt instead.
+ */
+const SETTINGS_PAGE_INDEX = TAB_ROUTES.findIndex((route) => route.path === "/settings");
+const STORED_SETTING_EVENTS = [
+  "c64u-app-settings-updated",
+  "c64u-ui-preferences-changed",
+  "c64u-device-safety-updated",
+  "c64u-ram-dump-folder-updated",
+];
+
 export function SwipeNavigationLayer() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -183,6 +283,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   const interstitialActive = useInterstitialActive();
   const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
   const [pageGenerations, setPageGenerations] = useState<Readonly<Record<number, number>>>({});
+  const [cachePages] = useState(cachesVisitedPages);
+  const [cachedPages, setCachedPages] = useState<readonly number[]>(() => (cachePages ? [routeIndex] : []));
   const [swipeNavigationEnabled, setSwipeNavigationEnabled] = useState(() => loadEnableSwipeNavigation());
   // Disabled outright while the tour runs: a swipe that changed the page under a spotlight would
   // leave the spotlight pointing at nothing (spec.md section 8.1).
@@ -268,6 +370,33 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       }),
     [],
   );
+
+  useEffect(() => {
+    if (cachePages) setCachedPages((cached) => rememberCachedPage(cached, routeIndex));
+  }, [cachePages, routeIndex]);
+
+  const settingsStaleRef = useRef(false);
+  useEffect(() => {
+    if (!cachePages) return;
+    const markStale = () => {
+      if (tabIndexForPath(window.location.pathname) !== SETTINGS_PAGE_INDEX) settingsStaleRef.current = true;
+    };
+    STORED_SETTING_EVENTS.forEach((type) => window.addEventListener(type, markStale));
+    return () => STORED_SETTING_EVENTS.forEach((type) => window.removeEventListener(type, markStale));
+  }, [cachePages]);
+
+  // Decided while rendering the route change, so a stale Settings page is never shown for a frame first.
+  const [renderedRouteIndex, setRenderedRouteIndex] = useState(routeIndex);
+  if (renderedRouteIndex !== routeIndex) {
+    setRenderedRouteIndex(routeIndex);
+    if (routeIndex === SETTINGS_PAGE_INDEX && settingsStaleRef.current) {
+      settingsStaleRef.current = false;
+      setPageGenerations((generations) => ({
+        ...generations,
+        [SETTINGS_PAGE_INDEX]: (generations[SETTINGS_PAGE_INDEX] ?? 0) + 1,
+      }));
+    }
+  }
 
   useEffect(() => {
     const current = runwayRef.current;
@@ -477,6 +606,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     willChange: runway.phase === "idle" ? "auto" : "transform",
   };
 
+  // A page already built is shown at once and hands over screen activity in a deferred render after its first frame:
+  // a page whose root reads activity re-renders whole on the flip, 3929 components for Home, which held the frame
+  // back by about 100 ms on a Pixel 4 at half its CPU rate. A page built for the first time takes it at once, as before.
+  const activePageIndex = runway.phase === "transitioning" ? runway.targetIndex : routeIndex;
+  const deferredActivePageIndex = useDeferredValue(activePageIndex);
+
   return (
     <div
       ref={containerRef}
@@ -495,44 +630,51 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <div
-        className="flex h-full"
+        className="relative h-full"
         style={trackStyle}
         onTransitionEnd={handleTransitionEnd}
         data-testid="swipe-navigation-runway"
         data-runway-index={runway.phase === "transitioning" ? runway.targetIndex : runway.centerIndex}
         data-runway-phase={runway.phase}
       >
-        {runway.panelIndexes.map((pageIndex, panelPosition) => {
-          const Component = SLOT_COMPONENTS[pageIndex];
+        {/* Slots stay in tab order whichever panels the runway shows, so a cached page is never moved in the
+            document: moving it would rebuild its layout and lose its scroll position. */}
+        {TAB_ROUTES.map((_, pageIndex) => {
+          const panelPosition = runway.panelIndexes.indexOf(pageIndex);
+          const inRunway = panelPosition >= 0;
+          const cached = cachedPages.includes(pageIndex);
+          if (!inRunway && !cached) return null;
+          const label = TAB_ROUTES[pageIndex].label.toLowerCase();
+          const key = `${pageIndex}:${pageGenerations[pageIndex] ?? 0}`;
           const isActive =
             runway.phase === "transitioning" ? pageIndex === runway.targetIndex : pageIndex === routeIndex;
-          const testProbeActive =
-            import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
-            (typeof window !== "undefined" &&
-              (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
-          const renderPlaceholderOnly =
-            !isActive && (runway.phase === "idle" || testProbeActive || !runway.revealedIndexes.includes(pageIndex));
+          // HARD12-022: the departing page stays shown all transition and the preview shows its real content, so
+          // pages holding state across the overlap defend themselves per effect (BUG-040 wake lock, HARD12-006
+          // volume session, HARD12-020 machine execution). HARD27-038: a gesture shows only the panels it revealed.
+          const shown =
+            isActive ||
+            (inRunway && runway.phase !== "idle" && !isTestProbeActive() && runway.revealedIndexes.includes(pageIndex));
+          // A hidden kept page is parked left of the runway, where no transform ever brings it into view, and its
+          // content is skipped: not styled, laid out, painted, hit or focused until it is shown again.
+          const slotStyle = {
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: `${((inRunway ? panelPosition : -1) * 100) / 3}%`,
+            width: "33.333333%",
+            "--app-bar-height": rememberedSlotAppBarHeight(pageIndex),
+            ...(shown ? {} : { contentVisibility: "hidden" }),
+          } as React.CSSProperties;
 
-          // Idle inactive slots are placeholders; a gesture also mounts the
-          // panels it revealed. HARD12-022: the departing page stays mounted all
-          // transition and the preview shows its real content, so pages holding
-          // state across the overlap defend themselves per effect (BUG-040 wake
-          // lock, HARD12-006 volume session, HARD12-020 machine execution).
-          //
-          // HARD27-038: a gesture moves one way, so the panel opposite the
-          // centre is off screen throughout and mounting its hook tree was pure
-          // cost during the animation. Revealed panels are never dropped before
-          // the runway settles, so a reversed drag reveals the other neighbour
-          // instead of churning mounts.
-          if (renderPlaceholderOnly) {
+          if (!shown && !cached) {
             return (
               <div
-                key={`${pageIndex}:${pageGenerations[pageIndex] ?? 0}`}
+                key={key}
                 className="relative h-full overflow-hidden overflow-clip"
-                style={{ width: "33.333333%", flexShrink: 0 }}
+                style={slotStyle}
                 aria-hidden={true}
                 inert
-                data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
+                data-testid={`swipe-slot-${label}`}
                 data-route-index={pageIndex}
                 data-slot-active="false"
                 data-panel-position={panelPosition}
@@ -542,36 +684,51 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
           return (
             <div
-              key={`${pageIndex}:${pageGenerations[pageIndex] ?? 0}`}
+              key={key}
               // `overflow-clip` where supported: a hidden box can still be scrolled by a
               // scrollIntoView, which slid the page header up under the status bar.
               className="relative h-full overflow-hidden overflow-clip"
-              style={{ width: "33.333333%", flexShrink: 0 }}
+              style={slotStyle}
               aria-hidden={!isActive}
-              inert={!isActive}
+              // A kept page is not made inert when it is hidden: toggling `inert` restyles the whole page, 117 ms for
+              // Config on a Pixel 4. Skipped content cannot be focused or hit, and the transition cover below
+              // stops a departing page from taking a tap.
+              inert={!isActive && !cachePages}
               // Only the active slot carries this id, so exactly one `page-*` id exists at a
               // time and it names the tab on screen. Maestro matches `id:` against the HTML id
               // attribute, and the tab-bar labels it would otherwise assert on render outside
               // the page and are present whichever tab is selected.
-              id={isActive ? `page-${TAB_ROUTES[pageIndex].label.toLowerCase()}` : undefined}
-              data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
+              id={isActive ? `page-${label}` : undefined}
+              data-testid={`swipe-slot-${label}`}
               data-route-index={pageIndex}
               data-slot-active={isActive ? "true" : "false"}
+              data-slot-cached={shown ? undefined : "true"}
               data-panel-position={panelPosition}
             >
-              <PageErrorBoundary active={isActive}>
-                <Suspense fallback={<PageLoadingFallback />}>
-                  <ScreenActivityProvider active={isActive}>
-                    <AppChromeModeProvider mode="sticky">
-                      <PagePosition pageIndex={pageIndex} />
-                      <Component />
-                    </AppChromeModeProvider>
-                  </ScreenActivityProvider>
-                </Suspense>
-              </PageErrorBoundary>
+              {/* A cached page keeps its DOM and state while hidden; its effects stop as they would on unmount
+                  and start again when it is shown, so it neither polls nor listens while off screen. */}
+              <PageSlotBody
+                pageIndex={pageIndex}
+                isActive={cached && cachePages ? pageIndex === deferredActivePageIndex : isActive}
+                cached={cachePages}
+              />
             </div>
           );
         })}
+        {cachePages && runway.phase === "transitioning" && runway.targetIndex !== runway.centerIndex ? (
+          // Kept pages are not made inert (see the slot above), so the page sliding out is covered for the
+          // length of the slide instead, as inert covered it before.
+          <div
+            aria-hidden={true}
+            className="absolute inset-y-0"
+            style={{
+              left: `${(runway.panelIndexes.indexOf(runway.centerIndex) * 100) / 3}%`,
+              width: "33.333333%",
+              zIndex: 1,
+            }}
+            data-testid="swipe-departing-page-cover"
+          />
+        ) : null}
       </div>
     </div>
   );

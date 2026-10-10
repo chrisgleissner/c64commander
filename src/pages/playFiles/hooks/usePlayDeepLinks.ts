@@ -7,7 +7,10 @@
  */
 
 import { useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useStableNavigate } from "@/hooks/useStableNavigate";
+import { useAppVisibilityState } from "@/hooks/useScreenActivity";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { transportCommandBus, type TransportCommand } from "@/lib/input/latchedCommandBus";
 
 /**
@@ -40,7 +43,7 @@ const PARAM_TO_HANDLER: Readonly<Record<string, keyof PlayDeepLinkHandlers>> = {
 
 export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useStableNavigate();
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
 
@@ -84,13 +87,29 @@ export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
  * an effect declared far below the one that drained the latch — so the command reached a page whose
  * playlist was still empty, and Play or Next did nothing at all. Held until the page says it is
  * ready; the latch's own expiry still drops it if that never happens.
+ *
+ * Only while Play is the tab on screen, as when it was unmounted on every other tab: a key pressed elsewhere navigates
+ * here first, or, on the compact handset, says to open Play (`publishTransport`). While the app is in the background a
+ * hidden Play listens too, so a lock-screen button acts at once, as it did on the Play page it then navigates to.
  */
+/**
+ * The deep links as a leaf that renders nothing. The route is read here, so a route change re-renders this leaf rather
+ * than the whole Play page, which stays built while other tabs are shown.
+ */
+export const PlayDeepLinks = (handlers: PlayDeepLinkHandlers): null => {
+  usePlayDeepLinks(handlers);
+  return null;
+};
+
 export const useTransportCommands = (run: (command: TransportCommand) => void, ready = true): void => {
   const runRef = useRef(run);
   runRef.current = run;
+  const pageActive = usePageActivity();
+  const appVisible = useAppVisibilityState();
+  const listening = ready && (pageActive || !appVisible);
 
   useEffect(() => {
-    if (!ready) return undefined;
+    if (!listening) return undefined;
     const pending = transportCommandBus.takePending();
     if (pending !== null) runRef.current(pending);
     return transportCommandBus.subscribe((command) => {
@@ -98,5 +117,5 @@ export const useTransportCommands = (run: (command: TransportCommand) => void, r
       transportCommandBus.takePending();
       runRef.current(command);
     });
-  }, [ready]);
+  }, [listening]);
 };

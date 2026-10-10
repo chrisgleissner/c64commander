@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "react";
+import { memo, useState, useMemo, useEffect, useReducer, useRef, useCallback } from "react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion } from "framer-motion";
 import { Search, Loader2, RefreshCw, FolderOpen } from "lucide-react";
@@ -176,7 +177,7 @@ const resolveClockSyncValue = (item: ConfigListItem, numericValue: number): stri
   return oneBasedOption ?? numericValue;
 };
 
-function CategorySection({
+const CategorySection = memo(function CategorySection({
   categoryName,
   displayTitle,
   groupLabel,
@@ -511,21 +512,16 @@ function CategorySection({
   }, [applySoloRouting, isAudioMixer, readFreshSoloSnapshot, soloState.soloItem]);
 
   const restoreSoloRouting = useCallback(
-    (reason: "close" | "unmount") => {
+    (reason: "close" | "page-left" | "unmount") => {
       if (!isAudioMixer) return;
       if (!wasSoloActiveRef.current && !soloItemRef.current) return;
       const configured = audioConfiguredRef.current.length ? audioConfiguredRef.current : itemsRef.current;
       const fallbackSnapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
-      // readFreshSoloSnapshot discards a stale snapshot instead of returning
-      // it; fall back to the in-memory ref/current items in that case
-      // (normally this snapshot was just written moments ago when solo was
-      // toggled on, so it is fresh - the fallback only matters if the tab
-      // was backgrounded for a long time while solo was active). See
-      // HARD9-054.
+      // A stale stored snapshot is discarded (HARD9-054), so the in-memory levels stand in for it.
       const snapshot = readFreshSoloSnapshot() ?? fallbackSnapshot;
       const restored = snapshot.length ? applySoloRouting(null, snapshot) : undefined;
       wasSoloActiveRef.current = false;
-      if (reason === "close") {
+      if (reason !== "unmount") {
         resetActiveSolo();
       }
       return restored;
@@ -550,6 +546,14 @@ function CategorySection({
     if (!isAudioMixer) return undefined;
     return () => void restoreSoloRouting("unmount");
   }, [isAudioMixer, restoreSoloRouting]);
+
+  // Leaving the page used to unmount it, and Solo must not keep the other SIDs muted on the device while it is hidden.
+  const restoreSoloWhenPageLeft = useCallback(
+    (onScreen: boolean) => {
+      if (!onScreen) void restoreSoloRouting("page-left");
+    },
+    [restoreSoloRouting],
+  );
 
   const handleValueChange = async (itemName: string, value: string | number) => {
     const key = canonicalConfigKey(categoryName, itemName);
@@ -824,6 +828,7 @@ function CategorySection({
       onOpenChange={setIsOpen}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
+      {isAudioMixer ? <ScreenActivityWatch onChange={restoreSoloWhenPageLeft} /> : null}
       <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
         <div className="flex items-center gap-2">
           {categoryName === "Audio Mixer" && (
@@ -931,7 +936,7 @@ function CategorySection({
       )}
     </CollapsibleSection>
   );
-}
+});
 
 const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   const entries: MenuPageEntry[] = [];
@@ -967,6 +972,18 @@ export default function ConfigBrowserPage() {
   const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(CONFIG_BROWSER_QUERY_OPTIONS);
   const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
+  // One callback per section for the life of the page, so a section is not re-rendered for a new function.
+  const openChangeFor = useMemo(() => {
+    const callbacks = new Map<string, (isOpen: boolean) => void>();
+    return (key: string) => {
+      let callback = callbacks.get(key);
+      if (!callback) {
+        callback = (isOpen: boolean) => setConfigExpanded(key, isOpen);
+        callbacks.set(key, callback);
+      }
+      return callback;
+    };
+  }, [setConfigExpanded]);
   const markChanged = useCallback(() => {
     updateHasChanges(runtimeBaseUrl, true);
   }, [runtimeBaseUrl]);
@@ -1095,7 +1112,7 @@ export default function ConfigBrowserPage() {
                           groupLabel={entry.groupLabel}
                           overlay={TERMINOLOGY_OVERLAY}
                           authoritativeValues={authoritativeValues}
-                          onOpenChange={(isOpen) => setConfigExpanded(entry.page.label, isOpen)}
+                          onOpenChange={openChangeFor(entry.page.label)}
                           markChanged={markChanged}
                           focusOrder={focusOrder}
                         />
@@ -1147,7 +1164,7 @@ export default function ConfigBrowserPage() {
                   categoryName={category}
                   overlay={TERMINOLOGY_OVERLAY}
                   authoritativeValues={authoritativeValues}
-                  onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
+                  onOpenChange={openChangeFor(category)}
                   markChanged={markChanged}
                   focusOrder={CONFIG_CATEGORY_FOCUS_ORDER_BASE + index * CONFIG_CATEGORY_FOCUS_ORDER_STEP}
                 />

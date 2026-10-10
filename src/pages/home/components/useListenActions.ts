@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCurrentPathReader, useStableNavigate } from "@/hooks/useStableNavigate";
 import { History, Monitor, Play, Radio, type LucideIcon } from "lucide-react";
 
 import { toast } from "@/hooks/use-toast";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { useRequirementContext } from "@/hooks/useSearchResults";
 import { t } from "@/lib/i18n";
 import { loadRecentlyPlayed } from "@/lib/sidRadio/recentlyPlayed";
@@ -60,8 +61,16 @@ interface Tile {
   readonly detail?: string | null;
 }
 
-const readSessionLabel = (): string | null => {
-  const session = readStoredPlaybackSession();
+/** What the tiles show from local storage. */
+interface StoredTileState {
+  readonly sessionLabel: string | null;
+  /** Null until read here; the requirement context's own reading is used until then. */
+  readonly restorableSession: boolean | null;
+  readonly recentCount: number;
+  readonly hvscReady: boolean;
+}
+
+const readSessionLabel = (session: ReturnType<typeof readStoredPlaybackSession>): string | null => {
   if (!session?.currentItemId) return null;
   // "Chess", not "Chess.sid": in a 64 px tile the extension broke the name mid-word onto a second line.
   return typeof session.currentItemLabel === "string"
@@ -69,21 +78,47 @@ const readSessionLabel = (): string | null => {
     : null;
 };
 
+const readStoredTileState = (): StoredTileState => {
+  const session = readStoredPlaybackSession();
+  return {
+    sessionLabel: readSessionLabel(session),
+    restorableSession: Boolean(session?.currentItemId),
+    recentCount: loadRecentlyPlayed().length,
+    hvscReady: isHvscInstalled(),
+  };
+};
+
 export const useListenActions = (): ListenAction[] => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [sessionLabel, setSessionLabel] = useState<string | null>(null);
-  const [recentCount, setRecentCount] = useState(0);
-
-  useEffect(() => {
-    setSessionLabel(readSessionLabel());
-    setRecentCount(loadRecentlyPlayed().length);
-  }, []);
-
+  const navigate = useStableNavigate();
+  const currentPath = useCurrentPathReader();
   // Read, not assumed: an entry that needs the archive must resolve as unavailable where it has
   // never been prepared, so the tile says what it is waiting for instead of failing when tapped.
-  const hvscReady = useMemo(() => isHvscInstalled(), []);
-  const ctx = useRequirementContext(hvscReady);
+  const [stored, setStored] = useState<StoredTileState>(() => ({
+    sessionLabel: null,
+    restorableSession: null,
+    recentCount: 0,
+    hvscReady: isHvscInstalled(),
+  }));
+  const { sessionLabel, recentCount, hvscReady, restorableSession } = stored;
+
+  // Home stays mounted while another tab is shown, where a tune can be played or the archive installed,
+  // so the tiles are read again each time Home is shown, as remounting it did.
+  const pageActive = usePageActivity();
+  const readOnceRef = useRef(false);
+  useEffect(() => {
+    if (!pageActive && readOnceRef.current) return;
+    readOnceRef.current = true;
+    setStored(readStoredTileState());
+  }, [pageActive]);
+
+  const requirementContext = useRequirementContext(hvscReady);
+  const ctx = useMemo(
+    () =>
+      restorableSession === null || restorableSession === requirementContext.hasRestorableSession
+        ? requirementContext
+        : { ...requirementContext, hasRestorableSession: restorableSession },
+    [requirementContext, restorableSession],
+  );
 
   /*
    * Built from the shared list, in its order. The tiles and the search overlay's chips are the same
@@ -133,14 +168,14 @@ export const useListenActions = (): ListenAction[] => {
     async (entry: ResolvedSearchEntry) => {
       await navigateToSearchTarget(entry.entry.target, {
         navigate: (path) => navigate(path),
-        currentPath: location.pathname,
+        currentPath: currentPath(),
         label: t(entry.entry.titleKey, entry.entry.titleDefault),
         onToast: (message) => toast({ title: message, variant: "destructive" }),
         runAction: (handlerId) =>
-          resolveSearchHandler(handlerId)?.({ navigate: (path) => navigate(path), currentPath: location.pathname }),
+          resolveSearchHandler(handlerId)?.({ navigate: (path) => navigate(path), currentPath: currentPath() }),
       });
     },
-    [location.pathname, navigate],
+    [currentPath, navigate],
   );
 
   /*

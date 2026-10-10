@@ -24,6 +24,7 @@ import { useHealthState } from "@/hooks/useHealthState";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -416,7 +417,10 @@ export function UnifiedHealthBadge({ className }: Props) {
   // context split is unchanged, so the picker still gets the fuller
   // `switchDeviceDialog` behaviour when open. The hook's existing freshness /
   // circuit gates bound the added background probe traffic.
-  const shouldRunSavedDeviceHealthChecks = canSwitchDevices;
+  // Every page has its own badge and stays mounted behind the page on screen, so only the badge on screen
+  // probes. Turning back on runs a forced cycle, as remounting did on every visit.
+  const pageActive = usePageActivity();
+  const shouldRunSavedDeviceHealthChecks = canSwitchDevices && pageActive;
   const {
     byDeviceId: healthByDeviceId,
     refreshAll,

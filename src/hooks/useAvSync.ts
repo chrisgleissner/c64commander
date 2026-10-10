@@ -14,6 +14,7 @@ import { runAvSyncTest } from "@/lib/streams/avSyncPrg";
 import { runAvSyncKeyTest } from "@/lib/streams/avSyncKeyPrg";
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { usePageActivity } from "@/hooks/usePageActivity";
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -86,9 +87,23 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     setLatencyStats(latencyRef.current!.getStats());
   }, []);
 
+  /*
+   * Measures only while its page is the tab on screen, as when leaving the page unmounted it. Pops seen
+   * before leaving cannot pair with pops seen after returning, so a return starts a fresh measurement,
+   * as a remount did.
+   */
+  const pageActive = usePageActivity();
+  const measuredBeforeRef = useRef(false);
   useEffect(() => {
+    if (!pageActive) return;
     const analyzer = analyzerRef.current!;
     const latency = latencyRef.current!;
+    if (measuredBeforeRef.current) {
+      analyzer.reset();
+      latency.reset();
+      refresh();
+    }
+    measuredBeforeRef.current = true;
     const unsubscribeFrames = session.subscribeFrames((frame, _height, arrivalMs) => {
       videoObserveRef.current = now();
       const offset = analyzer.pushVideoFrame(frame, arrivalMs);
@@ -106,7 +121,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
       unsubscribeFrames();
       clearInterval(poll);
     };
-  }, [refresh, session]);
+  }, [pageActive, refresh, session]);
 
   /**
    * Listen to audio only while a test program is on the device.
@@ -122,7 +137,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
     // `runningTest` as well as `testActive`: the latter is only set once the program has loaded, and
     // subscribing after that point would race the first pop. `runningTest` flips synchronously when a
     // run starts, so the subscription is always up before the device can make a sound.
-    if (!testActive && !runningTest) return;
+    if (!pageActive || (!testActive && !runningTest)) return;
     const analyzer = analyzerRef.current!;
     const latency = latencyRef.current!;
     return session.subscribeAudio((samples, arrivalMs) => {
@@ -133,7 +148,7 @@ export const useAvSync = (session: AvMirrorSession = avMirrorSession) => {
         refresh();
       }
     });
-  }, [refresh, runningTest, session, testActive]);
+  }, [pageActive, refresh, runningTest, session, testActive]);
 
   const reset = useCallback(() => {
     analyzerRef.current!.reset();

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Layers } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -60,7 +60,7 @@ export const slugifyCategory = (category: string): string =>
  * were hidden IN. It also needs no maintenance: a category this app has never heard of gets a
  * correctly-labelled card the first time a device reports it.
  */
-export function UnroutedCategorySections({
+export const UnroutedCategorySections = memo(function UnroutedCategorySections({
   categories,
   hierarchy,
   family,
@@ -85,7 +85,7 @@ export function UnroutedCategorySections({
       ))}
     </>
   );
-}
+});
 
 function UnroutedCategorySection({
   category,

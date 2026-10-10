@@ -17,6 +17,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Process
 import android.util.Base64
+import android.util.Base64.NO_WRAP
 import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -138,18 +139,22 @@ class StreamUdpPlugin : Plugin() {
 
   /**
    * Test seam: how an assembled VIC frame is delivered to JS (default: a `videoframe` event).
-   * `data` is base64 of the whole 52224-byte frame, `arrivalMs` the frame-start wire time (earliest
-   * packet), `height` the line count (PAL 272 / NTSC 240), `dropped` the cumulative sequence-gap
-   * (packet-loss) count, `lost` the cumulative FRAME-loss count (gaps in the frame-number sequence).
+   * `data` is base64 of lines `firstLine` until `firstLine + lineCount` of the 52224-byte frame
+   * (the whole frame when `lineCount` is [VicFrameDelta.WHOLE_FRAME], nothing when it is 0),
+   * `arrivalMs` the frame-start wire time (earliest packet), `height` the line count (PAL 272 /
+   * NTSC 240), `dropped` the cumulative sequence-gap (packet-loss) count, `lost` the cumulative
+   * FRAME-loss count (gaps in the frame-number sequence).
    */
-  internal var emitFrame: (String, String, Double, Int, Int, Int, Boolean) -> Unit = {
+  internal var emitFrame: (String, String, Double, Int, Int, Int, Boolean, Int, Int) -> Unit = {
     name,
     data,
     arrivalMs,
     height,
     dropped,
     lost,
-    present ->
+    present,
+    firstLine,
+    lineCount ->
     val event = JSObject()
     event.put("name", name)
     event.put("data", data)
@@ -158,6 +163,8 @@ class StreamUdpPlugin : Plugin() {
     event.put("dropped", dropped)
     event.put("lost", lost)
     event.put("present", present)
+    event.put("firstLine", firstLine)
+    event.put("lineCount", lineCount)
     notifyListeners("videoframe", event)
   }
 
@@ -852,6 +859,7 @@ class StreamUdpPlugin : Plugin() {
     // the hot video receive thread (~3400/s).
     val packet = DatagramPacket(buffer, buffer.size)
     val frame = ByteArray(VIC_BYTES_PER_FRAME)
+    val delta = VicFrameDelta(VIC_BYTES_PER_LINE, VIC_BYTES_PER_FRAME)
     var lastSeq = -1
     var dropped = 0
     var lost = 0
@@ -949,9 +957,11 @@ class StreamUdpPlugin : Plugin() {
           phaseAccum += permille
           val present = phaseAccum >= 1000
           if (present) phaseAccum -= 1000
-          val encoded =
-            if (present) Base64.encodeToString(frame, 0, VIC_BYTES_PER_FRAME, Base64.NO_WRAP) else ""
-          emitFrame(name, encoded, frameStartNanos / 1_000_000.0, frameHeight, dropped, lost, present)
+          val span = if (present) delta.next(frame, frameHeight) else VicFrameDelta.Span(0, 0)
+          val bytes = span.bytes(VIC_BYTES_PER_LINE, VIC_BYTES_PER_FRAME)
+          val encoded = if (bytes.isEmpty()) "" else Base64.encodeToString(frame, bytes.first, bytes.count(), NO_WRAP)
+          val startMs = frameStartNanos / 1_000_000.0
+          emitFrame(name, encoded, startMs, frameHeight, dropped, lost, present, span.firstLine, span.lineCount)
           curFrameNum = -1
           frameStartNanos = Long.MAX_VALUE
           stats.record(arrivalNanos, 1, dropped, lost)

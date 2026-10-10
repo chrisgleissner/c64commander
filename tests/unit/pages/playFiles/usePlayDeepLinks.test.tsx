@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { LATCHED_COMMAND_TTL_MS, transportCommandBus, type TransportCommand } from "@/lib/input/latchedCommandBus";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import {
   usePlayDeepLinks,
   useTransportCommands,
@@ -161,6 +162,47 @@ describe("useTransportCommands", () => {
     unmount();
     transportCommandBus.publish("next");
     expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  const renderInPlaySlot = (onCommand: (command: TransportCommand) => void, playOnScreen: boolean) => {
+    const view = render(
+      <ScreenActivityProvider active={playOnScreen}>
+        <TransportProbe onCommand={onCommand} />
+      </ScreenActivityProvider>,
+    );
+    return (nextOnScreen: boolean) =>
+      view.rerender(
+        <ScreenActivityProvider active={nextOnScreen}>
+          <TransportProbe onCommand={onCommand} />
+        </ScreenActivityProvider>,
+      );
+  };
+
+  it("stops listening while another tab is on screen, and runs a key pressed there once Play is shown", () => {
+    const onCommand = vi.fn();
+    const showPlay = renderInPlaySlot(onCommand, true);
+    showPlay(false);
+    expect(transportCommandBus.hasSubscribers()).toBe(false);
+    transportCommandBus.publish("next");
+    expect(onCommand).not.toHaveBeenCalled();
+    showPlay(true);
+    expect(onCommand).toHaveBeenCalledTimes(1);
+    expect(onCommand).toHaveBeenCalledWith("next");
+  });
+
+  it("listens on a hidden Play while the app is in the background, so a lock-screen button acts at once", () => {
+    const onCommand = vi.fn();
+    renderInPlaySlot(onCommand, false);
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    try {
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      transportCommandBus.publish("playPause");
+      expect(onCommand).toHaveBeenCalledWith("playPause");
+    } finally {
+      Reflect.deleteProperty(document, "hidden");
+    }
   });
 });
 

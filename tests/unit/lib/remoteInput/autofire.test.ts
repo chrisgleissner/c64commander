@@ -12,7 +12,9 @@ import {
   AUTOFIRE_VISIBILITY_CHANGE_EVENT,
   DEFAULT_AUTOFIRE_RATE_HZ,
   DEFAULT_SHOW_AUTOFIRE_BUTTON,
+  loadAutofireRateHz,
   loadShowAutofireButton,
+  saveAutofireRateHz,
   saveShowAutofireButton,
 } from "@/lib/remoteInput/autofire";
 
@@ -98,5 +100,25 @@ describe("show-autofire-button preference", () => {
     const spy = vi.spyOn(window, "dispatchEvent");
     saveShowAutofireButton(true);
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: AUTOFIRE_VISIBILITY_CHANGE_EVENT }));
+  });
+});
+
+describe("autofire rate preference", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("announces a saved rate on the shared app-settings event, which rebuilds a hidden Settings page", () => {
+    const announced: unknown[] = [];
+    const listener = (event: Event) => announced.push((event as CustomEvent).detail);
+    window.addEventListener("c64u-app-settings-updated", listener);
+    try {
+      saveAutofireRateHz(42);
+    } finally {
+      window.removeEventListener("c64u-app-settings-updated", listener);
+    }
+
+    expect(loadAutofireRateHz()).toBe(10);
+    expect(announced).toEqual([{ key: "c64u_remote_input_autofire_rate_hz", value: 10 }]);
   });
 });

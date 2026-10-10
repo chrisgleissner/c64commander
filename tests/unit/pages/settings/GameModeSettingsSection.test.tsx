@@ -6,10 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
+import { isCapturingKeyBinding } from "@/lib/input/keyCaptureState";
 import {
   loadCustomBinding,
   loadJoystickLayout,
@@ -96,6 +98,32 @@ describe("GameModeSettingsSection", () => {
 
     expect(screen.getByTestId("settings-joystick-bind-up")).toHaveTextContent("Not set");
     expect(loadCustomBinding()).toEqual({});
+  });
+
+  it("ends a capture and lets keys through again when the user leaves the Settings tab", () => {
+    saveJoystickLayout("custom");
+    const settingsTab = (active: boolean) => (
+      <ScreenActivityProvider active={active}>
+        <GameModeSettingsSection />
+      </ScreenActivityProvider>
+    );
+    const view = render(settingsTab(true));
+    fireEvent.click(screen.getByTestId("settings-joystick-bind-fire"));
+    fireEvent.keyDown(window, { key: "#" });
+    expect(isCapturingKeyBinding()).toBe(true);
+    expect(screen.getByTestId("settings-joystick-bind-rejection")).toBeInTheDocument();
+
+    view.rerender(settingsTab(false));
+
+    expect(isCapturingKeyBinding()).toBe(false);
+    const keyOnAnotherPage = createEvent.keyDown(window, { code: "Digit5", key: "5" });
+    fireEvent(window, keyOnAnotherPage);
+    expect(keyOnAnotherPage.defaultPrevented).toBe(false);
+    expect(loadCustomBinding()).toEqual({});
+
+    view.rerender(settingsTab(true));
+    expect(screen.getByTestId("settings-joystick-bind-fire")).toHaveTextContent("Not set");
+    expect(screen.queryByTestId("settings-joystick-bind-rejection")).not.toBeInTheDocument();
   });
 
   it("persists the auto-enter switch", () => {

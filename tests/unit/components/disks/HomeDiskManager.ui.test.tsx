@@ -1145,6 +1145,30 @@ describe("HomeDiskManager UI & Interactions", () => {
     );
   });
 
+  it("reads the drives again when Disks is shown after another tab, as remounting the page used to", async () => {
+    const refetch = vi.fn().mockResolvedValue({});
+    (useC64Drives as any).mockReturnValue({
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+      refetch,
+    });
+    const inDisksSlot = (onScreen: boolean) => (
+      <ScreenActivityProvider active={onScreen}>
+        <HomeDiskManager />
+      </ScreenActivityProvider>
+    );
+
+    const view = render(inDisksSlot(true));
+    view.rerender(inDisksSlot(false));
+    expect(refetch).not.toHaveBeenCalled();
+
+    view.rerender(inDisksSlot(true));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledWith({ cancelRefetch: false });
+
+    view.rerender(inDisksSlot(true));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it("eject failure reports error", async () => {
     const driveA = createMockDrive();
     driveA.image_file = "test.d64";

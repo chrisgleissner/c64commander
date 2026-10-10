@@ -7,7 +7,7 @@
  */
 
 import { useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useCurrentPathReader } from "@/hooks/useStableNavigate";
 import { useQueryClient } from "@tanstack/react-query";
 import { applyC64APIRuntimeConfig, buildBaseUrlFromDeviceHost } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
@@ -67,7 +67,7 @@ const awaitQueuedSavedDeviceSwitch = (target: QueuedSavedDeviceSwitch, queuedPro
 
 export function useSavedDeviceSwitching() {
   const queryClient = useQueryClient();
-  const location = useLocation();
+  const currentPath = useCurrentPathReader();
 
   const executeSavedDeviceSwitch = useCallback(
     async (deviceId: string) => {
@@ -150,7 +150,7 @@ export function useSavedDeviceSwitching() {
       const attemptId = beginSavedDeviceSwitchAttempt({
         fromDeviceId,
         toDeviceId: deviceId,
-        routePath: location.pathname,
+        routePath: currentPath(),
       });
 
       setTraceDeviceAttributionContext(buildSavedDeviceDiagnosticsAttribution(device, null));
@@ -204,7 +204,7 @@ export function useSavedDeviceSwitching() {
           });
         }
 
-        const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(location.pathname));
+        const savedDeviceSwitchPrefixes = new Set<string>(getSavedDeviceSwitchPrefixes(currentPath()));
         void queryClient
           .cancelQueries({
             predicate: (query) => savedDeviceSwitchPrefixes.has(String(query.queryKey[0] ?? "")),
@@ -262,7 +262,7 @@ export function useSavedDeviceSwitching() {
         throw error;
       }
     },
-    [location.pathname, queryClient],
+    [currentPath, queryClient],
   );
 
   return useCallback(

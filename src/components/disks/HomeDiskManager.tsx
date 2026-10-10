@@ -125,6 +125,7 @@ import {
 import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
+import { useOnPageLeft, useOnPageReturn } from "@/hooks/useOnPageLeft";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { ProfileSplitSection } from "@/components/layout/PageContainer";
@@ -261,7 +262,8 @@ export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
   const screenActive = useScreenActivity();
   const { status } = useC64Connection();
-  const { data: drivesData, dataUpdatedAt: drivesDataUpdatedAt = 0 } = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
+  const drivesQuery = useC64Drives(HOME_SUMMARY_QUERY_OPTIONS);
+  const { data: drivesData, dataUpdatedAt: drivesDataUpdatedAt = 0 } = drivesQuery;
   const trace = useActionTrace("HomeDiskManager");
 
   const diskLibrary = useDiskLibrary(SHARED_DISK_LIBRARY_ID);
@@ -318,6 +320,7 @@ export const HomeDiskManager = () => {
     if (!controller || controller.signal.aborted) return;
     controller.abort();
   }, []);
+  useOnPageLeft(cancelAddItemsScan);
   const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [addItemsSurface, setAddItemsSurface] = useState<"dialog" | "page">("dialog");
   const [isAddingItems, setIsAddingItems] = useState(false);
@@ -634,6 +637,8 @@ export const HomeDiskManager = () => {
       b: (mountCompletionGenerationRef.current.b ?? 0) + 1,
     };
   }, [screenActive]);
+  // Coming back used to remount the page and read the drives again; a mount that finished meanwhile was dropped above.
+  useOnPageReturn(() => void drivesQuery.refetch({ cancelRefetch: false }));
 
   const handleAutoConfirmStart = useCallback(() => {
     setAddItemsSurface("page");

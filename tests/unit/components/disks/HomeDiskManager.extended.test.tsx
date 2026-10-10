@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 // Mock child components
@@ -927,6 +928,25 @@ describe("HomeDiskManager Extended", () => {
         expect.anything(),
       );
     });
+  });
+
+  it("cancels an in-flight directory scan when another tab replaces Disks, as leaving the page used to", async () => {
+    const inDisksSlot = (onScreen: boolean) => (
+      <ScreenActivityProvider active={onScreen}>
+        <HomeDiskManager />
+      </ScreenActivityProvider>
+    );
+    const { rerender } = render(inDisksSlot(true));
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Import Slow Directory"));
+    rerender(inDisksSlot(false));
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ path: "/nested/slow.d64" })]),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("continues importing after the dialog closes before confirmation", async () => {

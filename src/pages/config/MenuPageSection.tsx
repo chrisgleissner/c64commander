@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, RefreshCw } from "lucide-react";
 import { configCategorySectionId } from "@/lib/search/configDeepLink";
@@ -48,7 +48,7 @@ interface MenuPageSectionProps {
  * U64 Specific Settings + LED Strip Settings + Keyboard Lighting), preserving the lazy,
  * routing-epoch-keyed fetch behavior. All edits keep the canonical REST `{category,item}`.
  */
-export function MenuPageSection({
+export const MenuPageSection = memo(function MenuPageSection({
   page,
   groupLabel,
   hierarchy,
@@ -162,4 +162,4 @@ export function MenuPageSection({
       ) : null}
     </CollapsibleSection>
   );
-}
+});

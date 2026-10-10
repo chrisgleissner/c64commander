@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { createElement, type ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingSeekState } from "@/lib/playback/pendingSeekStatus";
@@ -27,6 +28,7 @@ vi.mock("@/lib/playback/localSidPlaybackController", () => ({
   }),
 }));
 
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { AWAITING_POLL_MS, IDLE_POLL_MS, useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
 
 const waiting: PendingSeekState = {
@@ -96,5 +98,27 @@ describe("useLocalPendingSeek", () => {
     act(() => vi.advanceTimersByTime(IDLE_POLL_MS * 4));
     expect(result.current).toEqual({ renderedSeconds: null, pendingSeekState: null });
     expect(engine.reads).toBe(0);
+  });
+
+  it("does not poll the engine while the Play page is off screen, and reads it at once when it is shown again", () => {
+    let onScreen = true;
+    const { result, rerender } = renderHook(() => useLocalPendingSeek(true, "tune", vi.fn()), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(ScreenActivityProvider, { active: onScreen }, children),
+    });
+    expect(result.current.renderedSeconds).toBe(10);
+
+    onScreen = false;
+    rerender();
+    engine.reads = 0;
+    engine.rendered = 42;
+    act(() => vi.advanceTimersByTime(IDLE_POLL_MS * 10));
+    expect(engine.reads).toBe(0);
+    expect(result.current.renderedSeconds).toBe(10);
+
+    onScreen = true;
+    rerender();
+    expect(engine.reads).toBe(1);
+    expect(result.current.renderedSeconds).toBe(42);
   });
 });
