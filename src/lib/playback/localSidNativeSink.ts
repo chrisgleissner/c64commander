@@ -472,8 +472,10 @@ export const createNativeLocalSidSink = (
 ): LocalSidAudioSink | null => {
   if (!backend) return null;
   const sink = new NativeLocalSidSink(sampleRate, backend, renderer);
-  // Debug seam: what this sink has handed over, beside what the feed reports.
-  (globalThis as Record<string, unknown>).__localSinkDebug = () => sink.debug();
+  // Debug seam: what the newest open sink has handed over, beside what the feed reports.
+  const debugSeam = globalThis as { __localSinkDebug?: () => Record<string, unknown> };
+  const debug = () => sink.debug();
+  debugSeam.__localSinkDebug = debug;
   return {
     sink,
     audioUnderruns: () => sink.underruns(),
@@ -492,6 +494,9 @@ export const createNativeLocalSidSink = (
     fadeIn: (ms: number, toGain = 1) => sink.fadeIn(ms, toGain),
     setGain: (value: number) => sink.setMasterGain(value),
     flush: () => sink.flush(),
-    close: () => sink.close(),
+    close: () => {
+      sink.close();
+      if (debugSeam.__localSinkDebug === debug) delete debugSeam.__localSinkDebug;
+    },
   };
 };

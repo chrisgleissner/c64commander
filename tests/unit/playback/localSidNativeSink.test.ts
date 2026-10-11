@@ -131,6 +131,16 @@ describe("the native sink controller", () => {
     expect(open.sampleRate).toBe(RATE);
   });
 
+  it("lets go of its debug seam when it closes, but not of a newer sink's", () => {
+    const seam = globalThis as { __localSinkDebug?: () => unknown };
+    const first = build();
+    const second = build();
+    first.audio.close();
+    expect(seam.__localSinkDebug).toBeTypeOf("function");
+    second.audio.close();
+    expect(seam.__localSinkDebug).toBeUndefined();
+  });
+
   it("is unavailable without a backend, so the engine falls back to Web Audio", () => {
     expect(createNativeLocalSidSink(RATE, null)).toBeNull();
   });
