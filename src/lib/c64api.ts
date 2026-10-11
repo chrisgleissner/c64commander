@@ -3386,7 +3386,7 @@ export function applyC64APIRuntimeConfig(
   baseUrl: string,
   password?: string,
   deviceHost?: string,
-  options?: { reason?: string },
+  options?: { reason?: string; mockToken?: string },
 ) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost, {
@@ -3396,10 +3396,10 @@ export function applyC64APIRuntimeConfig(
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
-  // Clear any prior mock token by default; the demo-mode caller re-applies it via
-  // setMockToken() right after this call so the token never leaks to a real device
-  // (HARD10-005).
-  api.setMockToken(undefined);
+  // Only a route to the simulated device carries its token, so it never leaks to a real device (HARD10-005).
+  // It is set here, before the change is announced below: listeners refetch at once, and a request built
+  // before the token was in place was refused 401 by the simulated device.
+  api.setMockToken(options?.mockToken);
   addLog("info", "API routing updated (runtime)", {
     baseUrl: resolvedBaseUrl,
     deviceHost: resolvedDeviceHost,

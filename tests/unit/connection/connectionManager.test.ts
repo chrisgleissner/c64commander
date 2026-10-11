@@ -248,6 +248,36 @@ describe("connectionManager", () => {
     );
   });
 
+  it("routes to the simulated device with its token in the same step, so no request goes out without it", async () => {
+    const mockBaseUrl = "http://127.0.0.1:37297";
+    startMockServer.mockImplementation(async () => ({ baseUrl: mockBaseUrl, token: "boot-token" }) as never);
+    getActiveMockBaseUrl.mockReturnValue(mockBaseUrl as never);
+    getActiveMockToken.mockReturnValue("boot-token" as never);
+    try {
+      const { applyC64APIRuntimeConfig } = await import("../../../src/lib/c64api");
+      const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+        await import("../../../src/lib/connection/connectionManager");
+      localStorage.setItem("c64u_device_host", "127.0.0.1:1");
+      vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+      vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+      vi.mocked(applyC64APIRuntimeConfig).mockClear();
+
+      await initializeConnectionManager();
+      void discoverConnection("startup");
+      await vi.advanceTimersByTimeAsync(9000);
+
+      expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+      const routesToMock = vi
+        .mocked(applyC64APIRuntimeConfig)
+        .mock.calls.filter(([baseUrl]) => baseUrl === mockBaseUrl);
+      expect(routesToMock.length).toBeGreaterThan(0);
+      for (const call of routesToMock) expect(call[3]).toEqual(expect.objectContaining({ mockToken: "boot-token" }));
+    } finally {
+      getActiveMockBaseUrl.mockReturnValue(null);
+      getActiveMockToken.mockReturnValue(null);
+    }
+  });
+
   it("manual discovery transitions from demo to real when probe succeeds", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
@@ -1187,6 +1217,7 @@ describe("connectionManager", () => {
       "http://127.0.0.1:7777",
       undefined,
       getDeviceHostFromBaseUrl("http://127.0.0.1:7777"),
+      { mockToken: undefined },
     );
   });
 
@@ -1379,6 +1410,7 @@ describe("connectionManager", () => {
       "http://127.0.0.1:7777",
       undefined,
       "127.0.0.1:7777",
+      { mockToken: undefined },
     );
   });
 
