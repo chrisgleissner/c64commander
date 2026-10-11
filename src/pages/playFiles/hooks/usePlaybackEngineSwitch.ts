@@ -16,6 +16,8 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 
 type PlaybackEngineSwitchOptions = {
   selectedEngineRef: MutableRefObject<PlaybackEngine>;
+  /** Counts Stop presses; a move that a Stop overtook must not start the tune again. */
+  stopCountRef: MutableRefObject<number>;
   currentPlaybackIsLocalRef: MutableRefObject<boolean>;
   currentIndexRef: MutableRefObject<number>;
   playlistRef: MutableRefObject<PlaylistItem[]>;
@@ -25,7 +27,7 @@ type PlaybackEngineSwitchOptions = {
   enqueuePlayTransition: (task: () => Promise<void>) => Promise<void>;
   playItem: (
     item: PlaylistItem,
-    options: { playlistIndex: number; playlistSize: number; origin: "auto" },
+    options: { playlistIndex: number; playlistSize: number; origin: "auto"; stopsAtRequest: number },
   ) => Promise<void>;
   /** Stops the tune on the C64. Reports its own failure; a tune that would not stop must not block the move. */
   stopOnC64: (item: PlaylistItem) => Promise<void>;
@@ -47,9 +49,9 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
   const latestMoveRef = useRef(0);
 
   useEffect(() => {
-    const moveTune = async (move: number, startedAt: number) => {
+    const moveTune = async (move: number, startedAt: number, stopsAtRequest: number) => {
       const current = optionsRef.current;
-      const isLatest = () => move === latestMoveRef.current;
+      const isLatest = () => move === latestMoveRef.current && current.stopCountRef.current === stopsAtRequest;
       const decided: { restart?: { item: PlaylistItem; index: number } } = {};
       await current.enqueuePlayTransition(async () => {
         if (!isLatest()) return;
@@ -58,16 +60,15 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
         // Only a playing SID can move between engines; anything else changes engine from the next track.
         if (!current.isPlayingRef.current || !item || item.category !== "sid") return;
         const wantsHere = loadPlaybackEngine() === "local";
-        // The phone's engine is shared, so a page that remounted is playing on it without having started it.
-        const soundsHere = current.currentPlaybackIsLocalRef.current || current.getLocalSidPlayback().isActive();
+        // From the engine, not this page's record: the phone's engine is shared, so a remounted page plays on it
+        // without having started it, and the C64's streamed audio can take the speaker from it without telling us.
+        const soundsHere = current.getLocalSidPlayback().isActive();
         const soundsOnC64 = isRemotePlaybackActive();
         // A tune playing here would only start again here, or not at all with the C64 out of reach.
         if (soundsHere && !soundsOnC64 && (wantsHere || isDeviceOutOfReach())) return;
         if (soundsOnC64 && !soundsHere && !wantsHere) return;
-        if (soundsHere) {
-          current.getLocalSidPlayback().stop();
-          current.setCurrentPlaybackIsLocal(false);
-        }
+        if (soundsHere) current.getLocalSidPlayback().stop();
+        current.setCurrentPlaybackIsLocal(false);
         if (soundsOnC64) await current.stopOnC64(item);
         decided.restart = { item, index };
       });
@@ -79,6 +80,7 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
           playlistIndex: index,
           playlistSize: current.playlistRef.current.length,
           origin: "auto",
+          stopsAtRequest,
         });
         // §12.6 `engineSwitchMs`: press → the tune is audible again.
         updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
@@ -93,7 +95,7 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
       if (nextEngine === current.selectedEngineRef.current) return;
       current.selectedEngineRef.current = nextEngine;
       latestMoveRef.current += 1;
-      void moveTune(latestMoveRef.current, performance.now());
+      void moveTune(latestMoveRef.current, performance.now(), current.stopCountRef.current);
     };
     window.addEventListener("c64u-app-settings-updated", onSettingsUpdated);
     return () => window.removeEventListener("c64u-app-settings-updated", onSettingsUpdated);

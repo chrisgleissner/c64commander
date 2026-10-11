@@ -28,7 +28,7 @@ const tune = { id: "tune", label: "Tune", category: "sid", path: "/Tune.sid", re
  */
 const C64_LAUNCH_MS = 400;
 
-const harness = (initialEngine: PlaybackEngine) => {
+const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
   savePlaybackEngine(initialEngine);
   let localSounding = initialEngine === "local";
   if (initialEngine === "c64") markRemotePlaybackStarted();
@@ -59,10 +59,15 @@ const harness = (initialEngine: PlaybackEngine) => {
       markRemotePlaybackStarted();
     }),
   );
-  const stopOnC64 = vi.fn(async () => markRemotePlaybackStopped());
+  const stopOnC64 = vi.fn(async () => {
+    if (stopOnC64Ms) await new Promise((resolve) => setTimeout(resolve, stopOnC64Ms));
+    markRemotePlaybackStopped();
+  });
+  const stopCountRef = { current: 0 };
   renderHook(() =>
     usePlaybackEngineSwitch({
       selectedEngineRef: { current: initialEngine },
+      stopCountRef,
       currentPlaybackIsLocalRef,
       currentIndexRef: { current: 0 },
       playlistRef: { current: [tune] },
@@ -91,7 +96,19 @@ const harness = (initialEngine: PlaybackEngine) => {
       await vi.advanceTimersByTimeAsync(ms);
     });
   };
-  return { choose, settle, wait, playItem, stopOnC64, soundsHere: () => localSounding };
+  return {
+    choose,
+    settle,
+    wait,
+    playItem,
+    stopOnC64,
+    stopCountRef,
+    currentPlaybackIsLocalRef,
+    soundsHere: () => localSounding,
+    silenceHere: () => {
+      localSounding = false;
+    },
+  };
 };
 
 describe("usePlaybackEngineSwitch", () => {
@@ -147,5 +164,33 @@ describe("usePlaybackEngineSwitch", () => {
 
     expect(h.playItem).not.toHaveBeenCalled();
     expect(h.stopOnC64).not.toHaveBeenCalled();
+  });
+
+  it("does not start the tune again when Stop arrives while the C64 is being stopped for a move", async () => {
+    const h = harness("c64", { stopOnC64Ms: 1000 });
+    h.choose("local");
+    await h.wait(200);
+    h.stopCountRef.current += 1;
+    await h.settle();
+
+    expect(h.stopOnC64).toHaveBeenCalledTimes(1);
+    expect(h.playItem).not.toHaveBeenCalled();
+    expect(h.soundsHere()).toBe(false);
+  });
+
+  it("restarts the tune here when the phone's engine was silenced behind the page's back", async () => {
+    // The C64's streamed audio takes the speaker from the phone's engine without this page hearing of it, so
+    // the page's own record still says the tune plays here.
+    const h = harness("c64");
+    h.choose("local");
+    await h.settle();
+    h.silenceHere();
+    expect(h.currentPlaybackIsLocalRef.current).toBe(true);
+    h.choose("c64");
+    h.choose("local");
+    await h.settle();
+
+    expect(h.soundsHere()).toBe(true);
+    expect(h.playItem).toHaveBeenCalledTimes(2);
   });
 });

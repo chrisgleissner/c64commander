@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
@@ -203,18 +204,21 @@ const renderPlaybackController = (
     deviceProduct?: string | null;
     localSidPlaybackController?: unknown;
     stationActiveRef?: { current: boolean };
+    /** Real pause state, as the page holds it, instead of a fixed prop and a mock setter. */
+    statefulPause?: boolean;
   },
 ) =>
-  renderHook(() =>
-    usePlaybackController({
+  renderHook(() => {
+    const [pausedState, setPausedState] = useState(options?.isPaused ?? false);
+    return usePlaybackController({
       playlist,
       setPlaylist: options?.setPlaylist ?? vi.fn(),
       currentIndex: options?.currentIndex ?? 0,
       setCurrentIndex: options?.setCurrentIndex ?? vi.fn(),
       isPlaying: options?.isPlaying ?? false,
       setIsPlaying: options?.setIsPlaying ?? vi.fn(),
-      isPaused: options?.isPaused ?? false,
-      setIsPaused: options?.setIsPaused ?? vi.fn(),
+      isPaused: options?.statefulPause ? pausedState : (options?.isPaused ?? false),
+      setIsPaused: options?.statefulPause ? setPausedState : (options?.setIsPaused ?? vi.fn()),
       setIsPlaylistLoading: options?.setIsPlaylistLoading ?? vi.fn(),
       elapsedMs: options?.elapsedMs ?? 0,
       setElapsedMs: options?.setElapsedMs ?? vi.fn(),
@@ -277,8 +281,8 @@ const renderPlaybackController = (
       ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
       localSidPlaybackController: options?.localSidPlaybackController as any,
       stationActiveRef: options?.stationActiveRef,
-    }),
-  );
+    });
+  });
 
 describe("usePlaybackController", () => {
   beforeEach(() => {
@@ -3198,17 +3202,26 @@ describe("usePlaybackController", () => {
         } as any,
       });
 
-    const fakeController = () => ({
-      play: vi.fn(async () => ({ romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null })),
-      stop: vi.fn(),
-      pause: vi.fn(async () => undefined),
-      resume: vi.fn(async () => undefined),
-      getStats: vi.fn(() => null),
-      dispose: vi.fn(),
-      warmLeadIn: vi.fn(),
-      prerender: vi.fn(),
-      isActive: vi.fn(() => false),
-    });
+    // Active from a play until a stop, as the real engine is: the engine switch asks it whether a tune plays here.
+    const fakeController = () => {
+      let active = false;
+      return {
+        play: vi.fn(async () => {
+          active = true;
+          return { romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null };
+        }),
+        stop: vi.fn(() => {
+          active = false;
+        }),
+        pause: vi.fn(async () => undefined),
+        resume: vi.fn(async () => undefined),
+        getStats: vi.fn(() => null),
+        dispose: vi.fn(),
+        warmLeadIn: vi.fn(),
+        prerender: vi.fn(),
+        isActive: vi.fn(() => active),
+      };
+    };
 
     const enableLocal = () => {
       localStorage.setItem("c64u_local_engine_enabled", "1");
@@ -3947,6 +3960,52 @@ describe("usePlaybackController", () => {
 
         await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
         expect(calls.slice(0, 2)).toEqual(["resume", "reset"]);
+      });
+
+      // A pause still waiting on the machine when the tune moved here was applied after the reset, and the C64 was
+      // left frozen and muted while the phone played.
+      it("lets a pause still under way finish, then resumes before the reset, when the tune moves to the device", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const calls: string[] = [];
+        let answerPause!: () => void;
+        const machinePause = vi.fn(
+          () =>
+            new Promise<void>((resolve) => {
+              answerPause = () => {
+                calls.push("pause");
+                resolve();
+              };
+            }),
+        );
+        const machineResume = vi.fn(async () => void calls.push("resume"));
+        const machineReset = vi.fn(async () => void calls.push("reset"));
+        vi.mocked(getC64API).mockReturnValue({ machinePause, machineResume, machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+          statefulPause: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+        let pausing!: Promise<void>;
+        act(() => {
+          pausing = result.current.handlePauseResume();
+        });
+        await waitFor(() => expect(machinePause).toHaveBeenCalled());
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+        await act(async () => {
+          answerPause();
+          await pausing;
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(calls).toEqual(["pause", "resume", "reset"]);
       });
 
       // The Play page remounts on every tab change, and the new instance has not started the tune the

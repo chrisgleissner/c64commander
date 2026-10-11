@@ -642,7 +642,10 @@ export function usePlaybackController({
 
   /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
   const stopTuneOnC64 = useCallback(
-    async (api: ReturnType<typeof getC64API>, wasPaused: boolean, shouldReboot: boolean, itemId?: string) => {
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string) => {
+      // A pause still under way would otherwise freeze the machine after the reset, muted.
+      await machineTransitionCoordinatorRef.current.idle();
+      const wasPaused = isPausedRef.current;
       const report = (title: string, error: unknown) =>
         addErrorLog(title, {
           error: error instanceof Error ? error.message : String(error),
@@ -1451,6 +1454,7 @@ export function usePlaybackController({
 
   usePlaybackEngineSwitch({
     selectedEngineRef,
+    stopCountRef,
     currentPlaybackIsLocalRef,
     currentIndexRef,
     playlistRef,
@@ -1462,7 +1466,7 @@ export function usePlaybackController({
     stopOnC64: async (item) => {
       try {
         // A tune paused on the C64 and then moved here left the machine frozen and muted: a reset does not unpause it.
-        await stopTuneOnC64(getC64API(), isPausedRef.current, false, item.id);
+        await stopTuneOnC64(getC64API(), false, item.id);
         markRemotePlaybackStopped();
       } catch (error) {
         addErrorLog("Stopping the C64 for a playback-engine switch failed", {
@@ -1613,7 +1617,7 @@ export function usePlaybackController({
         setCurrentPlaybackIsLocal(false);
       } else {
         try {
-          await stopTuneOnC64(getC64API(), isPaused, shouldReboot, currentItem?.id);
+          await stopTuneOnC64(getC64API(), shouldReboot, currentItem?.id);
           markRemotePlaybackStopped();
         } catch (error) {
           reportUserError({
@@ -1844,6 +1848,7 @@ export function usePlaybackController({
               await resumeMachineWithRetry(api);
               endTransition(); // The unmute waits for transitions to settle: held, this one delayed it 20 s.
               await unmuteAfterMachineResume();
+              isPausedRef.current = false;
               setIsPaused(false);
               // HARD12-020: publish the resumed state so Home's pause/resume converges with Play.
               writeMachineExecutionFromPlay("running");
@@ -1870,6 +1875,8 @@ export function usePlaybackController({
             const now = Date.now();
             playedClockRef.current.pause(now);
             setPlayedMs(playedClockRef.current.current(now));
+            // Set now, not on the next render: a stop waiting for this pause to finish reads it straight after.
+            isPausedRef.current = true;
             setIsPaused(true);
             setAutoAdvanceDueAtMs(null);
             // HARD12-020: publish the paused state and any SID pause-mute snapshot, so Home can label
