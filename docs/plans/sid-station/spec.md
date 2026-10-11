@@ -83,19 +83,18 @@ same table is the HIL/CI dashboard (mirrors `docs/plans/live-view` §6 red/green
 | `c64u_sid_ranking_enabled`    | `sidRankingEnabled`    | The ♥/✕ affordance                                    | follows master         |
 | `c64u_local_playback_enabled` | `localPlaybackEnabled` | Gates _availability_ of the Local engine toggle (§12) | **off → on**           |
 
-> **Why the emulation default is uniform (for now).** Measured like-for-like, reSIDfp runs at 4.3×
-> realtime and SIDLite at 23.8× (`AUDIO-FIDELITY-TEST.md` §6.3a). The keypad variant targets the
-> **unreleased** Callback 8020, which cannot be measured — so it defaults to reSIDfp like everything
-> else rather than shipping an audible downgrade on a spec-sheet projection. `variants.yaml` carries
-> `default_sid_emulation_engine` per variant, so that flips with one line once gate L1 can actually
-> be run.
+> **Why the emulation default differs between editions.** On a Pixel 4, reSIDfp costs 495 ms of CPU per
+> second of audio and SIDLite 158 ms (`AUDIO-FIDELITY-TEST.md` §6.3a). The keypad edition's target
+> handset is projected 1.6-3x slower per core, too slow to render reSIDfp in real time, so that edition
+> defaults to SIDLite; the general edition keeps reSIDfp. `variants.yaml` carries
+> `default_sid_emulation_engine` per variant. Revisit once gate L1 can run on the handset.
 
 **User-choice setting** (not a flag — a persisted selection):
 
 | Storage key                 | Type                 | Values                   | Default                                                            |
 | --------------------------- | -------------------- | ------------------------ | ------------------------------------------------------------------ |
 | `c64u_playback_engine`      | `PlaybackEngine`     | `"c64" \| "local"`       | `"c64"`                                                            |
-| `c64u_sid_emulation_engine` | `SidEmulationEngine` | `"residfp" \| "sidlite"` | `"residfp"` on every variant (per-variant override exists, unused) |
+| `c64u_sid_emulation_engine` | `SidEmulationEngine` | `"residfp" \| "sidlite"` | `"residfp"`; `"sidlite"` in the keypad edition                     |
 
 > The flag `localPlaybackEnabled` decides whether the engine _toggle is shown at all_;
 > `c64u_playback_engine` records the user's _choice_. Never conflate them.

@@ -328,13 +328,9 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       ? requireBoolean(runtime.default_t9_input_enabled, `variants.${variantId}.runtime.default_t9_input_enabled`)
       : false;
   // Which SID emulation the on-device engine defaults to. This is a per-device
-  // decision, not a taste one: measured like-for-like, reSIDfp costs ~5.5x
-  // SIDLite (4.3x realtime vs 23.8x on the same tunes), and a Pixel 4 spends
-  // ~39% of a core on it. The keypad variant targets low-power handsets whose
-  // single-thread performance is projected at roughly 2-3x below the Pixel's
-  // Snapdragon 855. That projection is not sufficient to flip the default:
-  // every variant stays on reSIDfp until measurement on the real hardware shows
-  // it cannot hold realtime there.
+  // decision, not a taste one: reSIDfp renders at about a third of SIDLite's
+  // speed, so a variant whose target hardware cannot hold reSIDfp in real time
+  // defaults to SIDLite. See the variant's own comment in variants.yaml.
   const defaultSidEmulationEngine =
     runtime.default_sid_emulation_engine !== undefined
       ? requireOneOf(

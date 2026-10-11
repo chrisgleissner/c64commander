@@ -93,18 +93,13 @@ variants:
       # full padding, page dimmed behind it). Screen size decides the layout; the variant does not.
       default_display_profile: auto
       default_t9_input_enabled: true
-      # Deliberately NOT overridden to `sidlite`.
-      #
-      # This variant targets a compact keypad handset that has not been released
-      # and cannot be measured. Defaulting it to the lesser engine on
-      # the strength of a spec-sheet projection would ship a real, audible
-      # quality regression on every device that DOES exist, to protect one that
-      # does not. reSIDfp is what makes a SID sound like a C64, and the only
-      # hardware we can actually test (Pixel 4) runs it with zero underruns.
-      #
-      # When the 8020 exists: measure it (gate L1) and set
-      # `default_sid_emulation_engine: sidlite` here if it cannot hold realtime.
-      # The mechanism is in place and the user can already switch in Settings.
+      # SIDLite, because the handset this edition targets is not expected to render reSIDfp in real time.
+      # A Pixel 4 spends 495 ms of one Cortex-A76 core per second of reSIDfp audio, about 2x real time.
+      # That handset's fastest cores are Cortex-A75 at 2.0 GHz on 12 nm, projected 1.6-3x slower: 0.7-1.3x
+      # real time, against the 1.15x the engine needs before it falls back on its own. Starting on reSIDfp
+      # there would mean a stall on the first tune and then SIDLite anyway. Listeners can still pick
+      # reSIDfp in Settings; measure on the handset (gate L1) and revisit once it can be tested.
+      default_sid_emulation_engine: sidlite
       # Keypad-first appliance UX: the compact handset this variant targets has no physical
       # navigation buttons, so hiding Android's on-screen ones there loses nothing. This default
       # only takes effect at the compact display profile — the same APK run on a phone or tablet
