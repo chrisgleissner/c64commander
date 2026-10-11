@@ -225,21 +225,22 @@ android {
     sourceSets {
         main {
             manifest.srcFile selectedAndroidManifest
+            // License and credit files of the native libraries, under the web assets' licenses/
+            // (THIRD_PARTY_NOTICES.md points there). The build scripts check them against the
+            // verified source archives, so they cannot describe a different version.
+            assets.srcDirs += ['src/main/nativeLicenses']
         }
         debug {
             jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug")]
             jniLibs.srcDirs += [new File(libsidplayezGeneratedJniLibsBaseDir, "debug")]
-            assets.srcDirs += [new File(buildDir, "generated/assets/nativeLicenses/debug")]
         }
         minifiedDebug {
             jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("minifiedDebug")]
             jniLibs.srcDirs += [new File(libsidplayezGeneratedJniLibsBaseDir, "minifiedDebug")]
-            assets.srcDirs += [new File(buildDir, "generated/assets/nativeLicenses/minifiedDebug")]
         }
         release {
             jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("release")]
             jniLibs.srcDirs += [new File(libsidplayezGeneratedJniLibsBaseDir, "release")]
-            assets.srcDirs += [new File(buildDir, "generated/assets/nativeLicenses/release")]
         }
         androidTest {
             assets.srcDirs += ['src/test/fixtures']
@@ -461,39 +462,6 @@ upstream7zipVariantAbis.each { variantName, abis ->
         }
     }
 
-    tasks.matching { it.name == "pre${capitalizedVariantName}Build" }.configureEach {
-        dependsOn(tasks.named(taskName))
-    }
-}
-
-// The license texts of the native libraries, packaged beside them under the web assets' licenses/
-// directory (THIRD_PARTY_NOTICES.md points there). Copied from the very source archives the
-// libraries are built from, so they cannot describe a different version.
-def nativeLicensesDirForVariant = { String variantName -> new File(buildDir, "generated/assets/nativeLicenses/${variantName}") }
-upstream7zipVariantAbis.each { variantName, abis ->
-    def capitalizedVariantName = variantName.substring(0, 1).toUpperCase() + variantName.substring(1)
-    def taskName = "collectNativeLicenses${capitalizedVariantName}"
-    tasks.register(taskName, Copy) {
-        group = 'build'
-        description = "Packages the license texts of libSidplayEZ and 7-Zip for the ${variantName} variant."
-        dependsOn "buildLibSidplayEz${capitalizedVariantName}AndroidLibraries", "buildUpstream7zip${capitalizedVariantName}AndroidBinaries"
-        into(new File(nativeLicensesDirForVariant(variantName), "public/licenses"))
-        from(new File(libsidplayezWorkBaseDir, "${variantName}/src/libSidplayEZ-${libsidplayezRevision}")) {
-            include 'COPYING', 'AUTHORS', 'README.md'
-            into 'libsidplayez'
-        }
-        from(new File(upstream7zipWorkDirForVariant(variantName), "src/7zip/DOC")) {
-            include 'License.txt', 'copying.txt'
-            into '7-zip'
-        }
-        doLast {
-            ['libsidplayez/COPYING', 'libsidplayez/AUTHORS', '7-zip/License.txt', '7-zip/copying.txt'].each { required ->
-                if (!new File(destinationDir, required).isFile()) {
-                    throw new GradleException("Native license text missing from the package: ${required}")
-                }
-            }
-        }
-    }
     tasks.matching { it.name == "pre${capitalizedVariantName}Build" }.configureEach {
         dependsOn(tasks.named(taskName))
     }

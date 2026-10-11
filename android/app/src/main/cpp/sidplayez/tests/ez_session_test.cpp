@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "ez_session.h"
+#include "session_handle.h"
 
 using c64commander::EzSession;
 using c64commander::EzSidModel;
@@ -391,6 +392,47 @@ void testProfileChangesApplyToTheOpenTune() {
   CHECK(peakToPeak(pcm, 0) * 2 < digiPeakToPeak(-16700, Model::M8580));
 }
 
+/** A PSID that writes nothing to the SID: its output is whatever the analogue model settles to. */
+std::vector<uint8_t> makeSilentPsid(Model model) {
+  auto tune = makeVolumeDigiPsid(model);
+  tune[0x7c + 2 + 0x10] = 0x60;  // play returns at once
+  return tune;
+}
+
+int startPeak(Model model) {
+  const auto tune = makeSilentPsid(model);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  const auto pcm = renderSeconds(session, 0.3);
+  int peak = 0;
+  for (const auto sample : pcm) peak = std::max(peak, std::abs(static_cast<int>(sample)));
+  return peak;
+}
+
+void testASilentTuneStartsSilent() {
+  // The analogue settings move the output's DC level. Applied after the power-on warm-up they
+  // reached the speaker as a step at the start of every tune (about 3700 on an 8580, 2300 on a 6581);
+  // applied as each chip is created, the warm-up absorbs it. reSIDfp starts these at 815 and 46.
+  CHECK(startPeak(Model::M8580) < 1500);
+  CHECK(startPeak(Model::M6581) < 1500);
+}
+
+void testACallAfterADestroyIsRefused() {
+  // The state a call finds when a destroy emptied the handle between the lookup and the lock.
+  c64commander::SessionHandle emptied;
+  bool ran = false;
+  const int result = c64commander::runLocked(emptied, [] { return -1; }, [&](EzSession&) {
+    ran = true;
+    return 1;
+  });
+  CHECK(result == -1);
+  CHECK(!ran);
+  c64commander::SessionHandle live;
+  live.session = std::make_unique<EzSession>(kRate);
+  CHECK(c64commander::runLocked(live, [] { return -1; }, [](EzSession& s) { return s.sampleRate(); }) == kRate);
+}
+
 void testRsidWithEndlessInit() {
   const auto tune = makePsid(1, Model::M6581, 0, true);
   EzSession session(kRate);
@@ -473,6 +515,8 @@ int main(int argc, char** argv) {
   testExternalInputDoesNotTouchA6581();
   testVolumeStepsBeforeTheFirstNoteAreHeard();
   testProfileChangesApplyToTheOpenTune();
+  testASilentTuneStartsSilent();
+  testACallAfterADestroyIsRefused();
   testRsidWithEndlessInit();
   testRomsAreValidatedBySize();
   testConcurrentIndependentSessions(ladder);

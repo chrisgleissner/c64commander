@@ -19,6 +19,7 @@ class SidTune;
 
 namespace libsidplayfp {
 class Player;
+class sidemu;
 }
 
 namespace c64commander {
@@ -94,7 +95,7 @@ public:
 
   explicit EzSession(int sampleRate);
 
-  /** Analogue settings for the tunes loaded from now on, and for the open one. */
+  /** Analogue settings for the tunes loaded from now on; an open tune is reloaded at its start. */
   void setProfile(const AnalogueProfile& profile);
   const AnalogueProfile& profile() const { return profile_; }
   ~EzSession();
@@ -135,7 +136,6 @@ public:
   int chips() const;
 
 private:
-  void applyProfile();
 
   const int sampleRate_;
   std::unique_ptr<libsidplayfp::Player> player_;
@@ -169,6 +169,9 @@ void blendTwoChipStereo(float* left, float* right, int frames);
  * uncorrelated chips the power reSIDfp gives each side.
  */
 void centreThreeChipMix(float* mono, float* right, int frames);
+
+/** Apply `profile` to one chip; the session runs it on every chip as libSidplayEZ creates it. */
+void applyProfileToChip(libsidplayfp::sidemu& chip, const AnalogueProfile& profile);
 
 /** Saturating float-to-S16 conversion, matching libSidplayEZ's own 1/32768 scale. */
 int16_t floatToS16(float value);

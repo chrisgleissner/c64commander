@@ -97,6 +97,10 @@ internal class SidplayEzRenderer(
           // A missing or mismatched native library must fail the request, not leave its caller waiting.
           Log.e(TAG, "libSidplayEZ renderer $id hit a native linkage error", error)
           callbacks.failure(IllegalStateException("libSidplayEZ is not usable: ${error.message}", error))
+        } catch (error: OutOfMemoryError) {
+          // Likewise for memory: the request fails and its caller hears so; the thread lives on.
+          Log.e(TAG, "libSidplayEZ renderer $id ran out of memory", error)
+          callbacks.failure(IllegalStateException("libSidplayEZ ran out of memory: ${error.message}", error))
         }
       }
     } catch (error: RejectedExecutionException) {
@@ -162,7 +166,8 @@ internal class SidplayEzRenderer(
     val goal = buffer.frames + frames
     while (buffer.frames < goal && !stop()) {
       val want = minOf(RENDER_BLOCK_FRAMES.toLong(), goal - buffer.frames).toInt()
-      val produced = buffer.appendWith(want) { block, offset, count -> native.nativeRender(target, block, offset, count) }
+      val produced =
+          buffer.appendWith(want) { block, offset, count -> native.nativeRenderDirect(target, block, offset, count) }
       if (produced <= 0) break
     }
   }
@@ -215,10 +220,12 @@ internal class SidplayEzRenderer(
         }
     submit(callbacks) {
       val offline = native.nativeCreate(request.sampleRate)
+      var buffer: PcmBuffer? = null
+      var announced = false
       try {
         loadInto(offline, request)
         val rate = native.nativeSampleRate(offline)
-        val buffer = store.create(rate, retained = true)
+        buffer = store.create(rate, retained = true)
         val total = (seconds * rate).toLong()
         val superseded = { disposed || generation.get() != myGeneration }
         while (buffer.frames < total && !superseded()) {
@@ -226,12 +233,18 @@ internal class SidplayEzRenderer(
           renderInto(offline, buffer, minOf(PRERENDER_SLICE_FRAMES_PER_SECOND * rate, total - buffer.frames), superseded)
           if (buffer.frames == before) break
           listener.chunk(buffer.id, buffer.frames, buffer.frames.toDouble() / rate)
+          announced = true
         }
         if (superseded()) {
           listener.cancelled(buffer.id, buffer.frames, buffer.frames.toDouble() / rate)
           return@submit
         }
         listener.done(buffer.id, buffer.frames, buffer.frames.toDouble() / rate)
+      } catch (error: Throwable) {
+        // The web layer only learns a buffer's id from a slice. One that failed before its first
+        // slice would otherwise sit in the store until the next attach.
+        if (!announced) buffer?.let { store.release(it.id) }
+        throw error
       } finally {
         native.nativeDestroy(offline)
       }
@@ -256,7 +269,7 @@ internal class SidplayEzRenderer(
     try {
       executor.execute { destroySession() }
     } catch (error: RejectedExecutionException) {
-      Log.d(TAG, "Renderer $id was already shut down", error)
+      Log.w(TAG, "Renderer $id was already shut down", error)
     }
     executor.shutdown()
   }

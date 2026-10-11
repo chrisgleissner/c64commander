@@ -56,4 +56,25 @@ describe("android libSidplayEZ packaging", () => {
       "[name: 'Wrapper', binary: 'ez_session_test', sanitizers: ['none', 'address', 'thread']]",
     );
   });
+
+  it("packages the native libraries' license and credit files in every variant, from the repository", () => {
+    // They were copied out of the build's extracted sources, which a build cache can skip; then the
+    // APK shipped without them and nothing noticed.
+    const licenses = "android/app/src/main/nativeLicenses/public/licenses";
+    expect(buildGradle).toContain("assets.srcDirs += ['src/main/nativeLicenses']");
+    expect(read(`${licenses}/libsidplayez/COPYING`)).toContain(
+      "GNU GENERAL PUBLIC LICENSE\n                       Version 2",
+    );
+    expect(read(`${licenses}/libsidplayez/AUTHORS`)).toContain("Michael Hartmann");
+    expect(read(`${licenses}/libsidplayez/residfp-AUTHORS`)).toContain("Dag Lem");
+    expect(read(`${licenses}/7-zip/License.txt`)).toContain("GNU LGPL");
+    expect(read(`${licenses}/7-zip/copying.txt`)).toContain("GNU LESSER GENERAL PUBLIC LICENSE");
+  });
+
+  it("fails the build when an upstream license file no longer matches the packaged copy", () => {
+    expect(buildScript).toContain('if ! cmp -s "$SRC_DIR/${pair%%:*}" "$copies/${pair##*:}"; then');
+    expect(read("android/scripts/build-upstream-7zip.sh")).toContain(
+      'if ! cmp -s "$EXTRACT_DIR/DOC/$license" "$LICENSE_COPIES/$license"; then',
+    );
+  });
 });

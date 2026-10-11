@@ -18,24 +18,18 @@
 #include <vector>
 
 #include "ez_session.h"
+#include "session_handle.h"
 
 using c64commander::EzSession;
+using c64commander::SessionHandle;
 using c64commander::EzSidModel;
 
 namespace {
 
-/**
- * A session behind an opaque id.
- *
- * Ids, not pointers, cross JNI: an id that has been destroyed is simply not found, where a stale
- * pointer would be a use-after-free. The registry hands out shared ownership, so a destroy that
- * races a render leaves the session alive until that render has returned, and the per-session
- * mutex keeps two threads from ever driving one player at the same time.
- */
-struct Handle {
-  std::mutex lock;
-  std::unique_ptr<EzSession> session;
-};
+// Ids, not pointers, cross JNI: an id that has been destroyed is simply not found, where a stale
+// pointer would be a use-after-free. The registry hands out shared ownership; see runLocked for
+// what makes a call that races a destroy safe.
+using Handle = SessionHandle;
 
 std::mutex registryLock;
 std::unordered_map<jlong, std::shared_ptr<Handle>> registry;
@@ -71,9 +65,14 @@ Result withSession(JNIEnv* env, jlong id, Result fallback, Body body) {
     throwIllegalState(env, "libSidplayEZ session has been destroyed");
     return fallback;
   }
-  std::lock_guard<std::mutex> guard(handle->lock);
   try {
-    return body(*handle->session);
+    return c64commander::runLocked(
+        *handle,
+        [&] {
+          throwIllegalState(env, "libSidplayEZ session has been destroyed");
+          return fallback;
+        },
+        [&](EzSession& session) -> Result { return body(session); });
   } catch (const std::exception& error) {
     throwIllegalState(env, error.what());
   } catch (...) {
@@ -141,10 +140,10 @@ JNIEXPORT jint JNICALL JNI_FN(nativeLiveSessions)(JNIEnv*, jobject) {
 
 JNIEXPORT void JNICALL JNI_FN(nativeSetRoms)(JNIEnv* env, jobject, jlong id, jbyteArray kernal, jbyteArray basic,
                                             jbyteArray chargen) {
-  const auto k = copyBytes(env, kernal);
-  const auto b = copyBytes(env, basic);
-  const auto c = copyBytes(env, chargen);
   withSession<int>(env, id, 0, [&](EzSession& session) {
+    const auto k = copyBytes(env, kernal);
+    const auto b = copyBytes(env, basic);
+    const auto c = copyBytes(env, chargen);
     session.setRoms(k.empty() ? nullptr : k.data(), k.size(), b.empty() ? nullptr : b.data(), b.size(),
                     c.empty() ? nullptr : c.data(), c.size());
     return 0;
@@ -153,8 +152,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetRoms)(JNIEnv* env, jobject, jlong id, jby
 
 JNIEXPORT jstring JNICALL JNI_FN(nativeLoad)(JNIEnv* env, jobject, jlong id, jbyteArray sid, jint songIndex,
                                             jint fallbackModel) {
-  const auto bytes = copyBytes(env, sid);
   return withSession<jstring>(env, id, nullptr, [&](EzSession& session) -> jstring {
+    const auto bytes = copyBytes(env, sid);
     std::string error;
     const auto model = fallbackModel == 0 ? EzSidModel::Mos6581 : EzSidModel::Mos8580;
     if (session.load(bytes.data(), bytes.size(), songIndex, model, error)) return nullptr;
@@ -189,14 +188,38 @@ JNIEXPORT jint JNICALL JNI_FN(nativeRender)(JNIEnv* env, jobject, jlong id, jbyt
     throwIllegalState(env, "Render target is too small for the request");
     return 0;
   }
-  std::vector<int16_t> scratch(static_cast<size_t>(frames) * EzSession::kChannels);
-  const jint produced =
-      withSession<jint>(env, id, 0, [&](EzSession& session) { return session.render(scratch.data(), frames); });
-  if (produced > 0 && !env->ExceptionCheck()) {
-    env->SetByteArrayRegion(out, offsetBytes, produced * EzSession::kChannels * 2,
-                            reinterpret_cast<const jbyte*>(scratch.data()));
+  return withSession<jint>(env, id, 0, [&](EzSession& session) {
+    std::vector<int16_t> scratch(static_cast<size_t>(frames) * EzSession::kChannels);
+    const jint produced = session.render(scratch.data(), frames);
+    if (produced > 0) {
+      env->SetByteArrayRegion(out, offsetBytes, produced * EzSession::kChannels * 2,
+                              reinterpret_cast<const jbyte*>(scratch.data()));
+    }
+    return produced;
+  });
+}
+
+/**
+ * Render straight into a direct ByteBuffer (interleaved stereo S16LE) at `offsetBytes`.
+ *
+ * The PCM store keeps its blocks off the Java heap, so this writes them in place: no scratch and no
+ * copy, where `nativeRender` needs both.
+ */
+JNIEXPORT jint JNICALL JNI_FN(nativeRenderDirect)(JNIEnv* env, jobject, jlong id, jobject out, jint offsetBytes,
+                                                 jint frames) {
+  auto* base = out ? static_cast<uint8_t*>(env->GetDirectBufferAddress(out)) : nullptr;
+  if (!base || frames <= 0 || offsetBytes < 0 || offsetBytes % (EzSession::kChannels * 2) != 0) {
+    throwIllegalState(env, "Invalid direct render target");
+    return 0;
   }
-  return produced;
+  const jlong capacity = env->GetDirectBufferCapacity(out);
+  const jlong needed = static_cast<jlong>(offsetBytes) + static_cast<jlong>(frames) * EzSession::kChannels * 2;
+  if (capacity < 0 || needed > capacity) {
+    throwIllegalState(env, "Direct render target is too small for the request");
+    return 0;
+  }
+  auto* target = reinterpret_cast<int16_t*>(base + offsetBytes);
+  return withSession<jint>(env, id, 0, [&](EzSession& session) { return session.render(target, frames); });
 }
 
 JNIEXPORT jlong JNICALL JNI_FN(nativeSkip)(JNIEnv* env, jobject, jlong id, jlong frames) {

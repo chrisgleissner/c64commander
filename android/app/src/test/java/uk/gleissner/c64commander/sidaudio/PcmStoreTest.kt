@@ -77,4 +77,40 @@ class PcmStoreTest {
     assertNull(store.get(first.id))
     assertNotNull(store.get(third.id))
   }
+
+  @Test
+  fun `a retained buffer that grows past the budget drops the least recently used other one`() {
+    // The budget used to be checked only when a buffer was created, while it was still empty, so a
+    // pre-render that grew afterwards was never held to it.
+    val older = store.create(48000, retained = true, blockFrames = 64)
+    older.appendBytes(frames(64, 0), 0, 256)
+    now += 1
+    val growing = store.create(48000, retained = true, blockFrames = 64)
+    growing.appendBytes(frames(64, 0), 0, 256)
+    assertNotNull(store.get(older.id))
+    now += 1
+    growing.appendBytes(frames(128, 0), 0, 512)
+    assertNull(store.get(older.id))
+    assertNotNull(store.get(growing.id))
+    assertEquals(192L, growing.frames)
+  }
+
+  @Test
+  fun `a buffer that alone exceeds the budget keeps growing rather than dropping itself`() {
+    val only = store.create(48000, retained = true, blockFrames = 64)
+    only.appendBytes(frames(320, 0), 0, 1280)
+    assertNotNull(store.get(only.id))
+    assertEquals(320L, only.frames)
+  }
+
+  @Test
+  fun `writing a buffer counts as using it`() {
+    val first = store.create(48000, retained = true, blockFrames = 64)
+    now += 1
+    val second = store.create(48000, retained = true, blockFrames = 64)
+    now += 1
+    first.appendBytes(frames(64, 0), 0, 256)
+    assertEquals(now, first.lastTouchedNanos)
+    assertEquals(true, second.lastTouchedNanos < first.lastTouchedNanos)
+  }
 }

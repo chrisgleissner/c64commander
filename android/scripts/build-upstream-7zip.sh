@@ -62,6 +62,16 @@ if [[ ! -d "$EXTRACT_DIR" || ! -f "$STAMP_PATH" || "$(cat "$STAMP_PATH")" != "$S
   printf '%s' "$SOURCE_SHA256" > "$STAMP_PATH"
 fi
 
+# The app packages copies of 7-Zip's license texts (android/app/src/main/nativeLicenses). They must
+# be the texts of the version built here, so a version bump that changes them fails the build.
+LICENSE_COPIES="$(cd "$(dirname "${BASH_SOURCE[0]}")/../app/src/main/nativeLicenses/public/licenses/7-zip" && pwd)"
+for license in License.txt copying.txt; do
+  if ! cmp -s "$EXTRACT_DIR/DOC/$license" "$LICENSE_COPIES/$license"; then
+    echo "7-Zip's DOC/$license differs from the packaged copy in $LICENSE_COPIES; update the copy" >&2
+    exit 1
+  fi
+done
+
 sed -i -e 's/-Werror//' "$EXTRACT_DIR/CPP/7zip/7zip_gcc.mak"
 
 resolve_compiler_prefix() {

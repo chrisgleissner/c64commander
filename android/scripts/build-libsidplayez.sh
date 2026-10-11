@@ -56,6 +56,15 @@ fetch_source() {
     done
     printf '%s' "$tree_key" > "$SRC_DIR/.source-sha256"
   fi
+  # The app packages copies of the license and credit files (android/app/src/main/nativeLicenses).
+  # They must be this revision's, so a revision bump that changes them fails the build.
+  local copies="$WRAPPER_DIR/../../nativeLicenses/public/licenses/libsidplayez" pair
+  for pair in COPYING:COPYING AUTHORS:AUTHORS README.md:README.md src/sidplayfp/residfp/AUTHORS:residfp-AUTHORS; do
+    if ! cmp -s "$SRC_DIR/${pair%%:*}" "$copies/${pair##*:}"; then
+      echo "libSidplayEZ's ${pair%%:*} differs from the packaged copy $copies/${pair##*:}; update the copy" >&2
+      exit 1
+    fi
+  done
 }
 
 # The engine sources: everything under src/ except the ultraSID application layer (src/EZ/*.cpp:
@@ -124,6 +133,9 @@ android)
     echo "libSidplayEZ outputs already exist for the current build config, skipping build."
     exit 0
   fi
+  # Removed before building, so an interrupted or failed build can never leave libraries from one
+  # configuration under the stamp of another.
+  rm -f "$STAMP"
   fetch_source "$WORK_DIR" "$SOURCE_URL" "$SOURCE_SHA256" "$REVISION"
   JNI_INCLUDES=()
   for ABI in "${ABIS[@]}"; do
@@ -153,6 +165,9 @@ host)
   CXX="${HOST_CXX:-clang++-18}"
   command -v "$CXX" >/dev/null || CXX=clang++
   fetch_source "$WORK_DIR" "$SOURCE_URL" "$SOURCE_SHA256" "$REVISION"
+  # Every link takes all objects in its directory, so an object from a source file that a revision
+  # removed must not survive from a previous build.
+  rm -rf "${WORK_DIR:?}/obj"
   JNI_INCLUDES=()
   if [[ -n "$JDK_HOME" && -f "$JDK_HOME/include/jni.h" ]]; then
     JNI_INCLUDES=(-I"$JDK_HOME/include" -I"$JDK_HOME/include/linux")

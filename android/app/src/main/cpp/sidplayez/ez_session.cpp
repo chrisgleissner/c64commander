@@ -175,6 +175,10 @@ bool EzSession::reload(std::string& error) {
   config.defaultSidModel = fallbackModel_ == EzSidModel::Mos6581 ? SidConfig::MOS6581 : SidConfig::MOS8580;
   config.forceSidModel = false;
   config.useFilter = true;
+  // Settings go on each chip as it is created, before libSidplayEZ's power-on warm-up, so the
+  // first sample already has them; applied afterwards, their DC shift reached the output as a step.
+  player_->setChipSetup([this](libsidplayfp::sidemu& chip) { applyProfileToChip(chip, profile_); });
+  player_->setStartupDeclick(profile_.startupDeclick);
   if (!player_->setConfig(config)) {
     error = player_->error();
     return false;
@@ -185,7 +189,6 @@ bool EzSession::reload(std::string& error) {
     tune_.reset();
     return false;
   }
-  applyProfile();
   stereoPlacement_ = chooseStereoPlacement(player_->getNumChips(), info && info->hasSidChannels());
   ready_ = true;
   return true;
@@ -193,26 +196,27 @@ bool EzSession::reload(std::string& error) {
 
 void EzSession::setProfile(const AnalogueProfile& profile) {
   profile_ = profile;
-  if (ready_) applyProfile();
+  if (!ready_) return;
+  std::string error;
+  reload(error);
 }
 
-void EzSession::applyProfile() {
-  player_->set6581Filter_uCoxAndCap(profile_.uCox, profile_.oldCap);
-  player_->set6581FilterCurve(profile_.filter6581Curve);
-  player_->set6581FilterGain(profile_.filter6581Gain);
-  player_->set6581FilterSaturation(profile_.filter6581Saturation);
-  player_->set6581FilterResonance(profile_.filter6581Resonance);
-  player_->set6581WaveDCOffset(profile_.waveDCOffset);
-  player_->set6581ExtInDC(profile_.extInDC);
-  player_->set6581VoiceDCBias(profile_.voiceDCBias);
-  player_->set6581LeakageRate(profile_.leakageRate);
-  player_->set6581VoiceDCDrift(profile_.voiceDCDrift);
-  player_->set6581CombinedWaveforms(reSIDfp::CombinedWaveforms::AVERAGE, kCombinedWaveformThreshold);
-  player_->set6581SawPulseUltra(false);
-  player_->setDacLeakage(profile_.dacLeakage);
-  player_->setExternalFilterResistance(profile_.externalFilterOhms);
-  player_->set8580ExternalInput(static_cast<int16_t>(std::clamp(profile_.externalInput8580, -32768, 32767)));
-  player_->setStartupDeclick(profile_.startupDeclick);
+void applyProfileToChip(libsidplayfp::sidemu& chip, const AnalogueProfile& profile) {
+  chip.filter6581_uCoxAndCap(profile.uCox, profile.oldCap);
+  chip.filter6581Curve(profile.filter6581Curve);
+  chip.filter6581Gain(profile.filter6581Gain);
+  chip.filter6581Saturation(profile.filter6581Saturation);
+  chip.filter6581Resonance(profile.filter6581Resonance);
+  chip.voice6581WaveDCOffset(profile.waveDCOffset);
+  chip.filter6581ExtInDC(profile.extInDC);
+  chip.voice6581DCBias(profile.voiceDCBias);
+  chip.voice6581LeakageRate(profile.leakageRate);
+  chip.voice6581DCDrift(profile.voiceDCDrift);
+  chip.voice6581CombinedWaveforms(reSIDfp::CombinedWaveforms::AVERAGE, kCombinedWaveformThreshold);
+  chip.voiceSawPulseUltra(false);
+  chip.setDacLeakage(profile.dacLeakage);
+  chip.externalFilterResistance(profile.externalFilterOhms);
+  chip.filter8580ExternalInput(static_cast<int16_t>(std::clamp(profile.externalInput8580, -32768, 32767)));
 }
 
 StereoPlacement chooseStereoPlacement(int chips, bool tunePlacesChips) {

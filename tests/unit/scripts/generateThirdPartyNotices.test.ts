@@ -212,18 +212,32 @@ describe("the native components section", () => {
     for (const name of ["Simon White", "Antti Lankila", "Leandro Nini", "Michael Hartmann", "Dag Lem", "VICE"]) {
       expect(text).toContain(name);
     }
-    expect(text).toContain("It applies one patch to the upstream source");
+    expect(text).toContain("On 2026-10-11 Christian Gleissner modified four upstream files");
+    expect(text).toContain("each modified file carries a notice saying so");
+    for (const holder of ["Dag Lem", "VICE Project", "Michael Schwendt", "André Fachat", "Ken Händel"]) {
+      expect(text).toContain(holder);
+    }
     expect(text).toContain("Aladdin Enterprises");
     expect(text).toContain("Redistributions in binary form must reproduce the above copyright notice");
     expect(text).toContain("Yann Collet");
   });
 
-  it("names every patch the build applies to libSidplayEZ", () => {
+  it("names every patch the build applies to libSidplayEZ, and every patched file carries a dated notice", () => {
     const text = renderNativeNotices(readNativePins(gradle));
     const patchDir = path.resolve(process.cwd(), "android/app/src/main/cpp/sidplayez/patches");
     const patches = readdirSync(patchDir).filter((name) => name.endsWith(".patch"));
     expect(patches.length).toBeGreaterThan(0);
-    for (const patch of patches) expect(text).toContain(`patches/${patch}`);
+    for (const patch of patches) {
+      expect(text).toContain(`patches/${patch}`);
+      const body = readFileSync(path.join(patchDir, patch), "utf8");
+      const files = [...body.matchAll(/^\+\+\+ b\/(\S+)/gm)].map((match) => match[1]);
+      expect(files.length).toBeGreaterThan(0);
+      for (const file of files) {
+        const hunk = body.slice(body.indexOf(`+++ b/${file}`));
+        expect(hunk, file).toMatch(/^\+\/\/ Modified for C64 Commander on \d{4}-\d{2}-\d{2}/m);
+        expect(text, file).toContain(`\`${file}\``);
+      }
+    }
   });
 
   it("is part of the committed notices file", () => {

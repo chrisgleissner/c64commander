@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander.sidaudio
 
 import android.util.Log
+import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -23,37 +24,55 @@ import java.util.concurrent.atomic.AtomicLong
  * One writer and any number of readers. Frames are published through [frames] only after their
  * bytes are in place, so a reader never sees a half-written frame.
  */
-internal class PcmBuffer(val id: Long, val sampleRate: Int, val retained: Boolean, private val blockFrames: Int) {
-  private val blocks = ArrayList<ByteArray>()
+internal class PcmBuffer(
+    val id: Long,
+    val sampleRate: Int,
+    val retained: Boolean,
+    private val blockFrames: Int,
+    private val nanoTime: () -> Long = System::nanoTime,
+    /** Called after each new block, so the store can hold a growing buffer to its budget. */
+    private val onGrow: (PcmBuffer) -> Unit = {},
+) {
+  // Direct, so a whole pre-rendered tune lives outside the Java heap and the renderer can write
+  // into it in place.
+  private val blocks = ArrayList<ByteBuffer>()
 
   @Volatile
   var frames: Long = 0
     private set
 
-  @Volatile var lastTouchedNanos: Long = System.nanoTime()
+  @Volatile var lastTouchedNanos: Long = nanoTime()
 
   val byteSize: Long
     get() = synchronized(blocks) { blocks.size.toLong() * blockFrames * BYTES_PER_FRAME }
 
-  private fun blockFor(frame: Long): ByteArray {
+  private fun blockFor(frame: Long): ByteBuffer {
     val index = (frame / blockFrames).toInt()
-    synchronized(blocks) {
-      while (blocks.size <= index) blocks.add(ByteArray(blockFrames * BYTES_PER_FRAME))
-      return blocks[index]
-    }
+    var grew = false
+    val block =
+        synchronized(blocks) {
+          while (blocks.size <= index) {
+            blocks.add(ByteBuffer.allocateDirect(blockFrames * BYTES_PER_FRAME))
+            grew = true
+          }
+          blocks[index]
+        }
+    if (grew) onGrow(this)
+    return block
   }
 
   /**
    * Append by letting [produce] write into the block in place, at most [maxFrames] at a time and
    * never across a block boundary. Returns the frames appended; 0 when [produce] produced nothing.
    */
-  fun appendWith(maxFrames: Int, produce: (block: ByteArray, offsetBytes: Int, frames: Int) -> Int): Int {
+  fun appendWith(maxFrames: Int, produce: (block: ByteBuffer, offsetBytes: Int, frames: Int) -> Int): Int {
     val start = frames
     val within = (start % blockFrames).toInt()
     val room = minOf(maxFrames, blockFrames - within)
     if (room <= 0) return 0
     val produced = produce(blockFor(start), within * BYTES_PER_FRAME, room).coerceIn(0, room)
     frames = start + produced
+    lastTouchedNanos = nanoTime()
     return produced
   }
 
@@ -63,7 +82,7 @@ internal class PcmBuffer(val id: Long, val sampleRate: Int, val retained: Boolea
     while (position < end) {
       val appended =
           appendWith((end - position) / BYTES_PER_FRAME) { block, at, count ->
-            System.arraycopy(data, position, block, at, count * BYTES_PER_FRAME)
+            block.duplicate().apply { position(at) }.put(data, position, count * BYTES_PER_FRAME)
             count
           }
       position += appended * BYTES_PER_FRAME
@@ -79,7 +98,7 @@ internal class PcmBuffer(val id: Long, val sampleRate: Int, val retained: Boolea
       val within = (frame % blockFrames).toInt()
       val run = minOf(available - copied, blockFrames - within)
       val block = synchronized(blocks) { blocks[(frame / blockFrames).toInt()] }
-      System.arraycopy(block, within * BYTES_PER_FRAME, dst, dstOffset + copied * BYTES_PER_FRAME, run * BYTES_PER_FRAME)
+      block.duplicate().apply { position(within * BYTES_PER_FRAME) }.get(dst, dstOffset + copied * BYTES_PER_FRAME, run * BYTES_PER_FRAME)
       copied += run
     }
     return copied
@@ -100,7 +119,8 @@ internal class PcmBuffer(val id: Long, val sampleRate: Int, val retained: Boolea
  *
  * Both are bounded here as well, because a leaked id must cost a log line rather than the process:
  * an ephemeral buffer nobody consumed expires, and retained buffers beyond the budget are dropped
- * oldest first.
+ * least recently used first. The budget is checked whenever a retained buffer grows, so a pre-render
+ * that keeps growing is held to it too; the growing buffer itself is never the one dropped.
  */
 internal class PcmStore(
     private val retainedBudgetBytes: Long = DEFAULT_RETAINED_BUDGET_BYTES,
@@ -112,7 +132,10 @@ internal class PcmStore(
 
   fun create(sampleRate: Int, retained: Boolean, blockFrames: Int = DEFAULT_BLOCK_FRAMES): PcmBuffer {
     expireEphemeral()
-    val buffer = PcmBuffer(nextId.getAndIncrement(), sampleRate, retained, blockFrames)
+    val buffer =
+        PcmBuffer(nextId.getAndIncrement(), sampleRate, retained, blockFrames, nanoTime) { grown ->
+          if (grown.retained) enforceRetainedBudget(grown.id)
+        }
     buffer.lastTouchedNanos = nanoTime()
     buffers[buffer.id] = buffer
     if (retained) enforceRetainedBudget(buffer.id)

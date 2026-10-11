@@ -67,6 +67,9 @@ internal object SidplayEzNative {
   /** Frames written into [out] (stereo S16LE) at [offsetBytes]; 0 once the emulated CPU has jammed. */
   external fun nativeRender(id: Long, out: ByteArray, offsetBytes: Int, frames: Int): Int
 
+  /** As [nativeRender], into a direct buffer in place; the PCM store's blocks are direct. */
+  external fun nativeRenderDirect(id: Long, out: java.nio.ByteBuffer, offsetBytes: Int, frames: Int): Int
+
   external fun nativeSkip(id: Long, frames: Long): Long
 
   external fun nativeTuneInfo(id: Long): String?

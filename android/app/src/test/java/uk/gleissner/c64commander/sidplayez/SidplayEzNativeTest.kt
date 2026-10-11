@@ -118,6 +118,30 @@ class SidplayEzNativeTest {
   }
 
   @Test
+  fun `rendering into a direct buffer gives the same samples as into an array, and checks its target`() {
+    val a = SidplayEzNative.nativeCreate(48000)
+    val b = SidplayEzNative.nativeCreate(48000)
+    try {
+      assertEquals(null, SidplayEzNative.nativeLoad(a, tune, 0, 1))
+      assertEquals(null, SidplayEzNative.nativeLoad(b, tune, 0, 1))
+      val array = ByteArray(2000 * 4)
+      assertEquals(2000, SidplayEzNative.nativeRender(a, array, 0, 2000))
+      val direct = java.nio.ByteBuffer.allocateDirect(2004 * 4)
+      assertEquals(2000, SidplayEzNative.nativeRenderDirect(b, direct, 16, 2000))
+      val copied = ByteArray(2000 * 4)
+      direct.position(16)
+      direct.get(copied)
+      org.junit.Assert.assertArrayEquals(array, copied)
+      assertThrows(IllegalStateException::class.java) { SidplayEzNative.nativeRenderDirect(b, java.nio.ByteBuffer.allocate(400), 0, 100) }
+      assertThrows(IllegalStateException::class.java) { SidplayEzNative.nativeRenderDirect(b, direct, 2, 10) }
+      assertThrows(IllegalStateException::class.java) { SidplayEzNative.nativeRenderDirect(b, direct, 16, 2004) }
+    } finally {
+      SidplayEzNative.nativeDestroy(a)
+      SidplayEzNative.nativeDestroy(b)
+    }
+  }
+
+  @Test
   fun `repeated create and destroy leaves no session behind`() {
     val before = SidplayEzNative.nativeLiveSessions()
     repeat(25) {

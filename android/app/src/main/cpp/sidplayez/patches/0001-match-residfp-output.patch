@@ -1,6 +1,12 @@
 --- a/src/player.cpp
 +++ b/src/player.cpp
-@@ -201,9 +201,10 @@
+@@ -1,3 +1,5 @@
++// Modified for C64 Commander on 2026-10-11 (Christian Gleissner): added set8580ExternalInput, setStartupDeclick and the chip setup hook in sidCreate.
++// See android/app/src/main/cpp/sidplayez/patches/ at https://github.com/chrisgleissner/c64commander
+ /*
+ * This file is part of libsidplayfp, a SID player engine.
+ *
+@@ -201,9 +203,10 @@
  	// tune, handshake or not: the declick settles the whole start-up burst but releases the
  	// instant a write stream proves itself a sustained digi, so even non-returning
  	// (digi/BASIC) tunes, whose $d418 writes are the actual audio, are safe to arm.
@@ -14,7 +20,17 @@
  
  	m_startTime = m_c64.getTimeMs ();
  
-@@ -610,6 +611,25 @@
+@@ -510,6 +513,9 @@
+ 		}
+ 
+ 		m_mixer.addSid ( s );
++
++		if ( m_chipSetup )
++			m_chipSetup ( *s );
+ 	}
+ }
+ //-----------------------------------------------------------------------------
+@@ -610,6 +616,25 @@
  }
  //-----------------------------------------------------------------------------
  
@@ -42,28 +58,56 @@
  	for ( auto i = 0; i < m_mixer.getNumChips (); i++ )
 --- a/src/player.h
 +++ b/src/player.h
-@@ -56,6 +56,7 @@
+@@ -1,3 +1,5 @@
++// Modified for C64 Commander on 2026-10-11 (Christian Gleissner): added set8580ExternalInput, setStartupDeclick and setChipSetup.
++// See android/app/src/main/cpp/sidplayez/patches/ at https://github.com/chrisgleissner/c64commander
+ #pragma once
+ /*
+ * This file is part of libsidplayfp, a SID player engine.
+@@ -32,6 +34,7 @@
+ #include "mixer.h"
+ #include "c64/c64.h"
+ 
++#include <functional>
+ #include <vector>
+ 
+ namespace libsidplayfp
+@@ -56,6 +59,10 @@
  	uint8_t		videoSwitch;					// PAL/NTSC switch value
  	uint16_t	m_irqOverhead = 0;				// PSID driver cycles inside the measured IRQ
  	bool		m_kernalRom = false;
 +	bool		m_startupDeclick = true;
++
++	// Runs on every chip sidCreate () makes, before the power-on warm-up
++	std::function<void ( sidemu& )>	m_chipSetup;
  
  	// RAM and color RAM as initialise () left them, the baseline a save-state
  	// stores its RAM changes against
-@@ -120,6 +121,10 @@
+@@ -120,6 +127,15 @@
  	void set6581FilterResonance ( const double value );
  
  	void setDacLeakage ( const double value );
 +	void set8580ExternalInput ( const int16_t level );
++
 +	// Whether a tune's start opens the declick window (see SID::armStartupDeclick); on by default.
 +	// Turning it off also closes the window of the tune already loaded.
 +	void setStartupDeclick ( const bool enable );
++
++	// Configure each chip as it is created, so the settings are in place for the power-on warm-up
++	// and the first sample is produced with them. Applies from the next loadTune () or setConfig ().
++	void setChipSetup ( std::function<void ( sidemu& )> setup ) { m_chipSetup = std::move ( setup ); }
  	void setExternalFilterResistance ( const double ohms );
  	void set6581VoiceDCDrift ( const double value );
  	void set6581WaveDCOffset ( const double value );
 --- a/src/sidemu.h
 +++ b/src/sidemu.h
-@@ -111,6 +111,7 @@
+@@ -1,3 +1,5 @@
++// Modified for C64 Commander on 2026-10-11 (Christian Gleissner): added filter8580ExternalInput and disarmStartupDeclick.
++// See android/app/src/main/cpp/sidplayez/patches/ at https://github.com/chrisgleissner/c64commander
+ #pragma once
+ /*
+ * This file is part of libsidplayfp, a SID player engine.
+@@ -111,6 +113,7 @@
  	* Arm the one-shot start-up declick. Call at the warm-up -> playback boundary.
  	*/
  	virtual void armStartupDeclick () noexcept {}
@@ -71,7 +115,7 @@
  
  	virtual void voice6581CombinedWaveforms ( reSIDfp::CombinedWaveforms cws, const float threshold ) noexcept = 0;
  	virtual void voice8580CombinedWaveforms ( reSIDfp::CombinedWaveforms cws, const float threshold ) noexcept = 0;
-@@ -142,6 +143,7 @@
+@@ -142,6 +145,7 @@
  	virtual void filter8580Curve ( double filterCurve ) noexcept = 0;
  
  	virtual void setDacLeakage ( const double leakage ) noexcept = 0;
@@ -79,7 +123,7 @@
  	virtual void externalFilterResistance ( double ohms ) noexcept = 0;
  
  	[[ nodiscard ]] virtual float getInternalEnvValue ( int voiceNo ) const noexcept = 0;
-@@ -218,6 +220,7 @@
+@@ -218,6 +222,7 @@
  	}
  
  	void armStartupDeclick () noexcept override { m_sid.armStartupDeclick (); }
@@ -87,7 +131,7 @@
  
  	void voice6581CombinedWaveforms ( reSIDfp::CombinedWaveforms cws, const float threshold ) noexcept override { m_sid.setCombinedWaveforms6581 ( cws, threshold ); }
  	void voice8580CombinedWaveforms ( reSIDfp::CombinedWaveforms cws, const float threshold ) noexcept override { m_sid.setCombinedWaveforms8580 ( cws, threshold ); }
-@@ -244,6 +247,7 @@
+@@ -244,6 +249,7 @@
  	void filter8580Curve ( double filterCurve ) noexcept override { m_sid.setFilter8580Curve ( filterCurve ); }
  
  	void setDacLeakage ( const double leakage ) noexcept override { m_sid.setDacLeakage ( leakage ); }
@@ -97,11 +141,16 @@
  	[[ nodiscard ]] float getInternalEnvValue ( int voiceNo ) const noexcept override	{	return m_sid.getEnvLevel ( voiceNo );	}
 --- a/src/sidplayfp/residfp/SID.h
 +++ b/src/sidplayfp/residfp/SID.h
-@@ -613,6 +613,16 @@
- 	* Deliberately separate from reset(): reset() issues a $d418 write that would
- 	* otherwise be treated as part of the opening dance.
- 	*/
-+	/**
+@@ -1,3 +1,5 @@
++// Modified for C64 Commander on 2026-10-11 (Christian Gleissner): added set8580ExternalInput and disarmStartupDeclick.
++// See android/app/src/main/cpp/sidplayez/patches/ at https://github.com/chrisgleissner/c64commander
+ #pragma once
+ /*
+ * This file is part of libSidplayEZ, a SID player engine based on libsidplayfp.
+@@ -625,6 +627,16 @@
+ 	}
+ 
+ 	/**
 +	* Close the start-up declick window, so volume and filter register steps reach the output as
 +	* they do in reSIDfp. Undoes armStartupDeclick().
 +	*/
@@ -111,10 +160,11 @@
 +		startupDeclickPending = false;
 +	}
 +
- 	void armStartupDeclick () noexcept
- 	{
- 		startupDeclickActive = true;
-@@ -942,6 +952,17 @@
++	/**
+ 	* Read registers
+ 	*
+ 	* Reading a write only register returns the last uint8_t written to any SID register.
+@@ -942,6 +954,17 @@
  	}
  
  	/**
