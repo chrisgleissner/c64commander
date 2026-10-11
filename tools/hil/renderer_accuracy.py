@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import subprocess
 import sys
 import wave
 from pathlib import Path
@@ -42,7 +43,7 @@ FRAME_SECONDS = 0.01
 ACOUSTIC_BAND_HZ = (300.0, 6000.0)
 RENDERERS = ("sidplayez", "residfp", "sidlite")
 # Two microphone takes start within this of each other: each is started a fixed time after its tune.
-MAX_TAKE_OFFSET_SECONDS = 3.0
+MAX_TAKE_OFFSET_SECONDS = 6.0
 
 
 def read_wav(path: Path) -> tuple[np.ndarray, int]:
@@ -156,6 +157,20 @@ def acoustic(reference_take: np.ndarray, take: np.ndarray, rate: int) -> dict:
     }
 
 
+def against_stream(stream: np.ndarray, capture: np.ndarray, rate: int) -> dict:
+    """The phone's PCM against the Ultimate's own output: both digital, so timbre is comparable too."""
+    a, b = aligned_pair(stream.mean(axis=1), capture.mean(axis=1), rate)
+    bands_a, bands_b = compare_engines.band_levels_db(a, rate), compare_engines.band_levels_db(b, rate)
+    offset = np.median(bands_b - bands_a)
+    audible = bands_a > bands_a.max() - 60
+    return {
+        "chroma_sim": chroma_similarity(a, b, rate),
+        "envelope_corr": envelope_correlation(a, b, rate),
+        "band_db_mae": float(np.mean(np.abs(bands_b - bands_a - offset)[audible])) if audible.any() else 0.0,
+        "seconds": len(a) / rate,
+    }
+
+
 def digital(host_render: np.ndarray, capture: np.ndarray, rate: int) -> dict:
     """The capture against the host render of the same renderer: where it sits, and what differs."""
     ref_mono, cap_mono = host_render.mean(axis=1), capture.mean(axis=1)
@@ -174,13 +189,19 @@ def to_rate(samples: np.ndarray, rate: int) -> np.ndarray:
 
 
 def host_render(renderer: str, tune: Path, song: int, seconds: float, out: Path, ez_render: Path | None,
-                roms: Path | None) -> np.ndarray:
+                roms: Path | None, model: str) -> np.ndarray:
+    """The tune rendered on the host as the phone rendered it: same renderer, fallback chip and ROMs."""
+    rom_args = [str(roms / "kernal.901227-03.bin"), str(roms / "basic.901226-01.bin")] if roms else []
     if renderer == "sidplayez":
         if ez_render is None:
             raise ValueError("--ez-render is needed to grade libSidplayEZ captures")
-        run_matrix.render_ez(ez_render, tune, song, seconds, out, roms)
+        cmd = [str(ez_render), str(tune), str(song), str(seconds), str(RATE), model, str(out)]
+        if roms:
+            cmd += rom_args + [str(roms / "characters.901225-01.bin")]
     else:
-        run_matrix.render_wasm(renderer, tune, song, seconds, out, roms)
+        cmd = ["node", str(run_matrix.REPO / "tools/sid-engines/render-wasm.mjs"), renderer, str(tune), str(song),
+               str(seconds), str(RATE), model, str(out), *rom_args]
+    subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=run_matrix.REPO)
     return read_raw_stereo(out)
 
 
@@ -192,6 +213,8 @@ def grade(run_dir: Path, ez_render: Path | None, roms: Path | None) -> dict:
         row = {"tune": stem, "song": song, "renderers": {}}
         c64_path = run_dir / f"{stem}.c64.wav"
         c64 = to_rate(*read_wav(c64_path)).mean(axis=1) if c64_path.exists() else None
+        stream_path = run_dir / f"{stem}.c64stream.wav"
+        stream = to_rate(*read_wav(stream_path)) if stream_path.exists() else None
         residfp_path = run_dir / f"{stem}.residfp.mic.wav"
         residfp_mic = to_rate(*read_wav(residfp_path)).mean(axis=1) if residfp_path.exists() else None
         for renderer in RENDERERS:
@@ -206,8 +229,11 @@ def grade(run_dir: Path, ez_render: Path | None, roms: Path | None) -> dict:
                 entry["vs_residfp_mic"] = acoustic(residfp_mic, mic, RATE)
             if pcm_path.exists():
                 capture = to_rate(*read_wav(pcm_path))
+                if stream is not None:
+                    entry["vs_c64_stream"] = against_stream(stream, capture, RATE)
+                model = manifest.get("phone", {}).get(f"{stem}.{renderer}", {}).get("fallbackSidModel") or "8580"
                 reference = host_render(renderer, Path(tune["path"]), song, tune["render_seconds"],
-                                        run_dir / f"{stem}.{renderer}.host.raw", ez_render, roms)
+                                        run_dir / f"{stem}.{renderer}.host.raw", ez_render, roms, model)
                 entry["digital"] = digital(reference, capture, RATE)
             row["renderers"][renderer] = entry
         results.append(row)
@@ -216,15 +242,18 @@ def grade(run_dir: Path, ez_render: Path | None, roms: Path | None) -> dict:
 
 def markdown(report: dict) -> str:
     lines = [
-        "| Tune | Renderer | Digital residual (dB) | vs C64 chroma | vs C64 envelope r | vs reSIDfp chroma | vs reSIDfp envelope r | vs reSIDfp band error (dB) |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Tune | Renderer | Digital residual (dB) | vs C64 stream chroma | vs C64 stream envelope r | vs C64 stream band error (dB) | vs C64 mic chroma | vs C64 mic envelope r | vs reSIDfp mic chroma | vs reSIDfp mic envelope r | vs reSIDfp mic band error (dB) |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     fmt = lambda value, spec: format(value, spec) if value is not None else "—"  # noqa: E731
     for row in report["tunes"]:
         for renderer, entry in row["renderers"].items():
             c64, rel, dig = entry.get("vs_c64", {}), entry.get("vs_residfp_mic", {}), entry.get("digital", {})
+            wire = entry.get("vs_c64_stream", {})
             lines.append(
                 f"| {row['tune']} | {renderer} | {fmt(dig.get('residual_db'), '.1f')} | "
+                f"{fmt(wire.get('chroma_sim'), '.3f')} | {fmt(wire.get('envelope_corr'), '.3f')} | "
+                f"{fmt(wire.get('band_db_mae'), '.2f')} | "
                 f"{fmt(c64.get('chroma_sim'), '.3f')} | {fmt(c64.get('envelope_corr'), '.3f')} | "
                 f"{fmt(rel.get('chroma_sim'), '.3f')} | {fmt(rel.get('envelope_corr'), '.3f')} | "
                 f"{fmt(rel.get('band_db_mae'), '.2f')} |"

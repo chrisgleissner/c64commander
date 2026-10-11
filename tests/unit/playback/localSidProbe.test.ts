@@ -125,6 +125,7 @@ describe("registerLocalSidProbe", () => {
     expect(engine.opened!.songIndex).toBe(1);
     expect(engine.opened!.key).toBe("probe-sidlite-1");
     expect(result.renderer).toBe("sidlite");
+    expect(result.fallbackSidModel).toMatch(/^(6581|8580)$/);
     expect(result.started).toBe(true);
     expect(result.samples).toHaveLength(4);
     expect(result.firstPositionMs).not.toBeNull();

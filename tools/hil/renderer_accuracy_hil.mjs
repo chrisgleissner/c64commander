@@ -13,7 +13,8 @@
 //     [--tunes <path>[#song],...] [--no-c64] [--out artifacts/renderer-accuracy]
 //     [--ez-render android/app/build/intermediates/libsidplayez-host/out/ez_render] [--roms <dir>]
 //
-// For each tune: the C64 plays it (REST upload) while the microphone records, then the phone plays it
+// For each tune: the C64 plays it (REST upload) while the microphone records and its own audio stream
+// is captured off the wire, then the phone plays it
 // once per renderer through window.__localSidProbe, while the microphone records and the app's own
 // pipeline captures what it hands the AudioTrack. tools/hil/renderer_accuracy.py then grades the
 // takes. One sound at a time, so the microphone never hears both machines. Phone media volume is held
@@ -61,6 +62,8 @@ const OUT = path.resolve(REPO, arg("out", "artifacts/renderer-accuracy"), RUN);
 const PACKAGE = "uk.gleissner.c64commander";
 /** How long a probe tune plays before recording starts, so every renderer is past its open. */
 const LEAD_IN_SECONDS = 4;
+/** How long the probe plays on after the recording, so the capture is read from an open pipeline. */
+const TAIL_SECONDS = 6;
 
 if (VOLUME > MAX_VOLUME) throw new Error(`--volume ${VOLUME} is above the ${MAX_VOLUME} of 25 ceiling`);
 
@@ -120,6 +123,25 @@ const silenceC64 = async () => {
   await c64("PUT", "/v1/machine:reset");
 };
 
+const STREAM_DESTINATION = "239.0.1.65:11001";
+
+/** The Ultimate's own audio, off the wire: its SID output before a speaker or the room touches it. */
+const captureC64Stream = (file) =>
+  run("python3", [
+    "-c",
+    "import sys; sys.path.insert(0, 'tools/hil'); from lan_iface import local_lan_address; print(local_lan_address())",
+  ]).then((iface) =>
+    run("python3", [
+      "tools/hil/capture_mirror_pcm.py",
+      "--seconds",
+      String(SECONDS),
+      "--out",
+      file,
+      "--iface",
+      iface.out.trim(),
+    ]),
+  );
+
 const playOnC64 = async (tune) => {
   const form = new FormData();
   form.append("file", new Blob([readFileSync(tune.path)]), `${tune.stem}.sid`);
@@ -148,13 +170,13 @@ const setVolume = async (device, target) => {
 
 const startProbe = async (tune, renderer, runId) => {
   const sid = readFileSync(tune.path).toString("base64");
-  const request = { sid, songIndex: tune.song, renderer, seconds: LEAD_IN_SECONDS + SECONDS + 1, volume: 1 };
+  const request = { sid, songIndex: tune.song, renderer, seconds: LEAD_IN_SECONDS + SECONDS + TAIL_SECONDS, volume: 1 };
   const started = await js(`(() => {
     if (typeof window.__localSidProbe !== "function") return "on-device playback is not enabled in this app";
     window.__accuracyOutcome = { run: ${JSON.stringify(runId)}, text: null };
     const settle = (text) => { if (window.__accuracyOutcome.run === ${JSON.stringify(runId)}) window.__accuracyOutcome.text = text; };
     window.__localSidProbe(${JSON.stringify(request)}).then(
-      (result) => settle(JSON.stringify({ renderer: result.renderer, started: result.started, final: result.final })),
+      (result) => settle(JSON.stringify({ renderer: result.renderer, started: result.started, final: result.final, fallbackSidModel: result.fallbackSidModel })),
       (error) => settle(JSON.stringify({ error: String((error && error.stack) || error) })),
     );
     return "started";
@@ -189,6 +211,8 @@ const playOnPhone = async (device, tune, renderer) => {
   await sleep(LEAD_IN_SECONDS * 1000);
   await js(`(async()=>{await window.Capacitor.Plugins.StreamUdp.startAudioCapture({seconds:${SECONDS}});return 1})()`);
   await recordMic(path.join(OUT, `${tune.stem}.${renderer}.mic.wav`), SECONDS);
+  // While the probe still plays: its engine closes the pipeline, and the capture with it, when it ends.
+  await pullCapture(device, path.join(OUT, `${tune.stem}.${renderer}.pcm.wav`));
   const outcome = await awaitProbe(runId);
   if (outcome.error) throw new Error(`${tune.stem} on ${renderer}: ${outcome.error}`);
   if (!outcome.started) throw new Error(`${tune.stem} on ${renderer}: the tune did not start on the phone`);
@@ -196,8 +220,11 @@ const playOnPhone = async (device, tune, renderer) => {
   if (engineRenderer && engineRenderer !== renderer) {
     throw new Error(`${tune.stem}: asked for ${renderer}, the engine played ${engineRenderer}`);
   }
-  await pullCapture(device, path.join(OUT, `${tune.stem}.${renderer}.pcm.wav`));
-  return { underruns: outcome.final?.audioUnderruns ?? null, renderMsPerSec: outcome.final?.renderMsPerSec ?? null };
+  return {
+    underruns: outcome.final?.audioUnderruns ?? null,
+    renderMsPerSec: outcome.final?.renderMsPerSec ?? null,
+    fallbackSidModel: outcome.fallbackSidModel ?? null,
+  };
 };
 
 // ---- the run -------------------------------------------------------------------------------------
@@ -225,12 +252,19 @@ const main = async () => {
       manifest.tunes.push(entry);
       if (WITH_C64) {
         log(`${tune.stem}: on ${HOST}`);
+        await c64("PUT", `/v1/streams/audio:start?ip=${encodeURIComponent(STREAM_DESTINATION)}`);
         await playOnC64(tune);
         await sleep(1500);
         try {
-          await recordMic(path.join(OUT, `${tune.stem}.c64.wav`), SECONDS);
+          const [, stream] = await Promise.all([
+            recordMic(path.join(OUT, `${tune.stem}.c64.wav`), SECONDS),
+            captureC64Stream(path.join(OUT, `${tune.stem}.c64stream.wav`)),
+          ]);
+          if (!stream.ok)
+            log(`${tune.stem}: the C64's audio stream could not be captured: ${stream.out.trim().slice(-200)}`);
         } finally {
           await silenceC64();
+          await c64("PUT", "/v1/streams/audio:stop").catch((error) => log(`stop audio stream: ${error.message}`));
         }
         await sleep(1000);
       }
@@ -246,7 +280,7 @@ const main = async () => {
     writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
   }
   const ezRender = arg("ez-render", "android/app/build/intermediates/libsidplayez-host/out/ez_render");
-  const roms = arg("roms", "");
+  const roms = arg("roms", path.join(process.env.HOME ?? "", "dev/c64/roms"));
   const graded = await run("python3", [
     path.join("tools", "hil", "renderer_accuracy.py"),
     OUT,

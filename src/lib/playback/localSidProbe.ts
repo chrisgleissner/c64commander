@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadLocalEngineEnabled } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled, resolveLocalSidModel, type LocalSidModel } from "@/lib/config/appSettings";
 import { LocalSidEngine } from "./localSidEngine";
 import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
 
@@ -41,6 +41,8 @@ export interface LocalSidProbeSample {
 
 export interface LocalSidProbeResult {
   renderer: SidRendererId;
+  /** The chip a tune that names none was rendered with, so a host render can match it. */
+  fallbackSidModel: LocalSidModel;
   started: boolean;
   openMs: number;
   firstPositionMs: number | null;
@@ -188,6 +190,7 @@ export const registerLocalSidProbe = (): void => {
       const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
       return {
         renderer: request.renderer,
+        fallbackSidModel: resolveLocalSidModel(),
         started: result.started,
         openMs,
         firstPositionMs,

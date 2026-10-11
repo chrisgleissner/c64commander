@@ -73,3 +73,12 @@ def test_resampling_keeps_the_length_in_time():
     samples = np.stack([melody(1.0), melody(1.0)], axis=1)
     resampled = ra.to_rate(samples, 44100)
     assert len(resampled) == int(len(samples) * RATE / 44100)
+
+
+def test_the_same_audio_off_the_wire_and_from_the_phone_matches_on_every_measure():
+    take = np.stack([melody(), melody()], axis=1)
+    delayed = np.concatenate([np.zeros((int(1.3 * RATE), 2)), 0.7 * take])[: len(take)]
+    result = ra.against_stream(take, delayed, RATE)
+    assert result["chroma_sim"] > 0.99
+    assert result["envelope_corr"] > 0.99
+    assert result["band_db_mae"] < 0.2
