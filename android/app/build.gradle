@@ -533,8 +533,9 @@ tasks.register('checkSidRendererEquivalence', Exec) {
     description = 'Compares the output of every SID renderer the app ships against reSIDfp.'
     dependsOn 'buildLibSidplayEzHost'
     workingDir rootProject.file('..')
+    // A long-lived Gradle daemon keeps the PATH it started with, so CI names the interpreter it set up.
     commandLine(
-        'python3',
+        providers.gradleProperty('sidEnginesPython').getOrElse('python3'),
         'tools/sid-engines/run_matrix.py',
         '--ez-render', new File(libsidplayezHostOutputDir, 'ez_render').absolutePath,
         '--tunes', 'fixtures',

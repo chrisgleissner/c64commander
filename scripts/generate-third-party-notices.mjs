@@ -538,6 +538,20 @@ export const readNativePins = (gradleText) => {
   };
 };
 
+/**
+ * The native components' section, or nothing where the Android project is not present: the web
+ * image is built without it and ships none of these libraries.
+ */
+export const readNativeNotices = async (gradlePath) => {
+  if (!(await fileExists(gradlePath))) {
+    console.warn(
+      `android build metadata missing at ${gradlePath}; leaving out the native components, which only the Android app ships`,
+    );
+    return '';
+  }
+  return renderNativeNotices(readNativePins(await fs.readFile(gradlePath, 'utf8')));
+};
+
 export const renderNativeNotices = ({ libsidplayez, sevenZip }) => {
   const sevenZipVersion =
     (/7z(\d{2})(\d{2})-src/.exec(sevenZip.url) ?? []).slice(1).join('.') ||
@@ -655,14 +669,7 @@ const main = async () => {
     renderNotices(allEntries),
     '',
     ...(needsLicenseNotes ? [LICENSE_NOTES, ''] : []),
-    renderNativeNotices(
-      readNativePins(
-        await fs.readFile(
-          path.join(rootDir, 'android', 'app', 'build.gradle'),
-          'utf8',
-        ),
-      ),
-    ),
+    await readNativeNotices(path.join(rootDir, 'android', 'app', 'build.gradle')),
     DATA_NOTICES,
   ].join('\n');
 

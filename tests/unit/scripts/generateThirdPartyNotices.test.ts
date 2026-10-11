@@ -8,6 +8,7 @@ import {
   detectLicenseFromFiles,
   isUnresolvedLicense,
   normalizeLicense,
+  readNativeNotices,
   readNativePins,
   renderNativeNotices,
   resolveLicenseUrl,
@@ -205,6 +206,15 @@ describe("the native components section", () => {
     expect(text).toContain(pins.libsidplayez.sha256);
     expect(text).toContain(pins.sevenZip.sha256);
     expect(text).toContain("| 26.00 |");
+  });
+
+  it("leaves the native components out where the Android project is not present, as in the web image", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "notices-no-android-"));
+    tempDirs.push(dir);
+    expect(await readNativeNotices(path.join(dir, "android", "app", "build.gradle"))).toBe("");
+    expect(await readNativeNotices(path.resolve(process.cwd(), "android/app/build.gradle"))).toBe(
+      renderNativeNotices(readNativePins(gradle)),
+    );
   });
 
   it("credits libSidplayEZ's authors, states what the app changes, and reproduces the notices it must", () => {

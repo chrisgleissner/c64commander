@@ -1004,8 +1004,9 @@ jobs:
           # the runner kernel uses by default.
           sudo sysctl -w vm.mmap_rnd_bits=28
           python3 -m pip install numpy
+          python="$(command -v python3)"
           cd android
-          ./gradlew :app:testLibSidplayEzNative :app:checkSidRendererEquivalence
+          ./gradlew :app:testLibSidplayEzNative :app:checkSidRendererEquivalence -PsidEnginesPython="$python"
           end=$(date +%s)
           echo "- libSidplayEZ native tests + equivalence: $((end-start))s" >> $GITHUB_STEP_SUMMARY
           cat app/build/reports/sid-engines/matrix.md >> $GITHUB_STEP_SUMMARY
