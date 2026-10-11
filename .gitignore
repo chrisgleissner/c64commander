@@ -85,6 +85,7 @@ android/app/src/test/fixtures/HVSC_Update_84.7z
 
 # Android build and generated files
 .gradle/
+.kotlin/
 android/**/build/
 android/**/*.aar
 android/**/*.aab

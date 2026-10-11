@@ -8,7 +8,7 @@
 
 // Every SID renderer on the phone against the C64 and against itself, heard through a microphone.
 //
-//   node tools/hil/renderer_accuracy_hil.mjs [--host c64u] [--password <pw>] [--cdp-port 9333]
+//   node tools/hil/renderer_accuracy_hil.mjs [--host c64u] [--password pwd] [--cdp-port 9333]
 //     [--mic plughw:CARD=SF558,DEV=0] [--seconds 12] [--volume 5] [--renderers sidplayez,residfp,sidlite]
 //     [--tunes <path>[#song],...] [--no-c64] [--out artifacts/renderer-accuracy]
 //     [--ez-render android/app/build/intermediates/libsidplayez-host/out/ez_render] [--roms <dir>]
@@ -32,7 +32,7 @@ const arg = (name, fallback) => {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
 const HOST = arg("host", "c64u");
-const PASSWORD = arg("password", "");
+const PASSWORD = arg("password", "pwd");
 const CDP_PORT = Number(arg("cdp-port", "9333"));
 const MIC = arg("mic", "plughw:CARD=SF558,DEV=0");
 const SECONDS = Number(arg("seconds", "12"));
