@@ -155,6 +155,34 @@ describe("an engine with three renderers", () => {
     engine.dispose();
   });
 
+  it("gives every new sink the listener's level, full volume included", async () => {
+    // On Android the level is the native feed's master gain, which outlives a sink, so a tune at
+    // full volume inherited whatever level an earlier session had left there.
+    const gains: number[][] = [];
+    channels = [];
+    sinks = [];
+    const engine = new LocalSidEngine({
+      rendererFactory: (renderer, role) => {
+        const channel = new FakeChannel(renderer, role);
+        channels.push(channel);
+        return channel;
+      },
+      audioSinkFactory: (): LocalSidAudioSink => {
+        const made = makeSink();
+        sinks.push(made);
+        const set: number[] = [];
+        gains.push(set);
+        return { sink: made.sink, resume: vi.fn(), close: vi.fn(), setGain: (value: number) => set.push(value) };
+      },
+    });
+    await open(engine);
+    expect(gains[0]).toEqual([1]);
+    engine.setVolume(0.5);
+    await open(engine);
+    expect(gains.at(-1)).toEqual([0.5]);
+    engine.dispose();
+  });
+
   it("names the renderer in the log of every tune it opens", async () => {
     saveDebugLoggingEnabled(true);
     clearLogs();

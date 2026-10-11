@@ -19,6 +19,11 @@
     },
     {
       "t": 0,
+      "method": "setGain",
+      "gain": 1
+    },
+    {
+      "t": 0,
       "method": "fadeIn",
       "serial": 1,
       "seq": 1,
@@ -182,6 +187,11 @@
       "method": "release",
       "serial": 1,
       "seq": 20
+    },
+    {
+      "t": 6600,
+      "method": "setGain",
+      "gain": 1
     },
     {
       "t": 6600,

@@ -1236,9 +1236,10 @@ export class LocalSidEngine {
       return;
     }
     void this.audio.resume?.();
-    // Carry the listener's level onto the new tune's sink.
+    // Always, full volume included: on Android the level is the native feed's master gain, which
+    // outlives a sink and would otherwise keep the level an earlier session left.
     const level = this.muted ? 0 : this.volume;
-    if (this.volume !== 1 || this.muted) this.audio.setGain?.(level);
+    this.audio.setGain?.(level);
     // Fade UP TO the listener's level. `fadeIn` cancels whatever `setGain` just
     // scheduled, so a fade to a hardcoded 1 would undo the line above and the
     // volume control would silently reset on every crossfade.
@@ -1351,7 +1352,7 @@ export class LocalSidEngine {
     }
     void this.audio.resume?.();
     const level = this.muted ? 0 : this.volume;
-    if (this.volume !== 1 || this.muted) this.audio.setGain?.(level);
+    this.audio.setGain?.(level);
     if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs, level);
     this.pendingCrossfadeMs = 0;
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {

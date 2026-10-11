@@ -13,6 +13,11 @@
       "primeMs": 1200
     },
     {
+      "t": 0,
+      "method": "setGain",
+      "gain": 1
+    },
+    {
       "t": 1,
       "method": "enqueuePcm",
       "serial": 1,
@@ -154,6 +159,11 @@
       "maxRingMs": 20000,
       "trackBursts": 16,
       "primeMs": 1200
+    },
+    {
+      "t": 4000,
+      "method": "setGain",
+      "gain": 1
     },
     {
       "t": 4001,

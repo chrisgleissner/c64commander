@@ -149,7 +149,7 @@ const main = async () => {
           `window.__localSidProbe(${JSON.stringify({ sid, renderer, seconds: 3, volume: 1 })}).then((r) => JSON.stringify({ openMs: r.openMs, firstPositionMs: r.firstPositionMs }))`,
           30_000,
         );
-        const outcome = JSON.parse(await probe);
+        const outcome = await probe;
         const recorded = await recording;
         if (!recorded.ok) throw new Error(`the microphone would not record: ${recorded.out.trim()}`);
         const onset = onsetMs(wav);
