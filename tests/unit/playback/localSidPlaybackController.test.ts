@@ -146,3 +146,36 @@ describe("LocalSidPlaybackController", () => {
     expect(engine.play).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("LocalSidPlaybackController seek announcements", () => {
+  const playing = async () => {
+    let accepted = false;
+    const engine = fakeEngine({
+      seekTo: vi.fn(() => {
+        accepted = true;
+        return new Promise<void>(() => undefined);
+      }),
+    });
+    const controller = new LocalSidPlaybackController(() => engine);
+    await controller.play(byteSource(), 0);
+    return { controller, engine, isAccepted: () => accepted };
+  };
+
+  it("announces a seek once the engine has accepted it and before it lands", async () => {
+    const { controller, isAccepted } = await playing();
+    const seen: boolean[] = [];
+    controller.onSeek(() => seen.push(isAccepted()));
+    void controller.seekTo(90);
+    void controller.seekBy(-5);
+    expect(seen).toEqual([true, true]);
+  });
+
+  it("stops announcing to a listener that unsubscribed", async () => {
+    const { controller } = await playing();
+    const listener = vi.fn();
+    const unsubscribe = controller.onSeek(listener);
+    unsubscribe();
+    void controller.seekTo(10);
+    expect(listener).not.toHaveBeenCalled();
+  });
+});

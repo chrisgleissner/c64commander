@@ -65,6 +65,7 @@ export const resetSharedLocalSidPlaybackController = (): void => {
 
 export class LocalSidPlaybackController {
   private engine: LocalSidEngine | null = null;
+  private readonly seekListeners = new Set<() => void>();
 
   constructor(private readonly engineFactory: LocalSidEngineFactory = () => new LocalSidEngine()) {}
 
@@ -256,7 +257,7 @@ export class LocalSidPlaybackController {
     const engine = this.engine;
     if (!engine) return;
     const target = Math.max(0, engine.getStats().positionSeconds + deltaSeconds);
-    await engine.seekTo(target);
+    await this.announced(engine.seekTo(target));
   }
 
   /**
@@ -268,7 +269,22 @@ export class LocalSidPlaybackController {
    * finger is NOW, not once per repeat tick.
    */
   async seekTo(positionSeconds: number): Promise<void> {
-    await this.engine?.seekTo(Math.max(0, positionSeconds));
+    if (this.engine) await this.announced(this.engine.seekTo(Math.max(0, positionSeconds)));
+  }
+
+  /**
+   * Told of every seek once the engine has accepted it, before it lands. Whether it waits for the
+   * pre-render is decided by then, so the page can show the wait in the same update that ends the
+   * gesture instead of showing the target as reached until its next poll.
+   */
+  onSeek(listener: () => void): () => void {
+    this.seekListeners.add(listener);
+    return () => this.seekListeners.delete(listener);
+  }
+
+  private announced(seek: Promise<void>): Promise<void> {
+    for (const listener of this.seekListeners) listener();
+    return seek;
   }
 
   /** Resume after {@link pause}. */

@@ -1414,6 +1414,7 @@ export class LocalSidEngine {
     // Stopping the scheduled sources is not enough on a native sink: the audio it has already been
     // given is queued ahead of the speaker and would keep playing the old position.
     this.audio?.flush?.();
+    this.emitPosition();
 
     // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
     // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
@@ -1430,7 +1431,6 @@ export class LocalSidEngine {
       // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
       this.followingPrerender = Boolean(rendered.partial) && this.prerenderingForThisRenderer(this.currentKey);
       if (rendered.partial && !this.followingPrerender) this.scheduleHandoff(rendered.durationSeconds);
-      this.emitPosition();
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
         seconds: target,
@@ -1451,10 +1451,9 @@ export class LocalSidEngine {
         generation: epoch,
         trackInstanceId: this.trackInstanceId,
       };
-      // Silent and held at the last heard position, not playing on and not shown at the target: the
-      // page learns of the wait only on its next poll, and nothing has landed yet.
+      // Held silent at the target rather than playing on from the old position, which would sound
+      // as though the seek did nothing; the pre-render fill shows the wait.
       this.audio?.flush?.();
-      this.callbacks.onPosition?.(audibleAtRequest);
       addLog("debug", "Local SID seek waiting for the pre-render to reach it", {
         service: "local-sid",
         seconds: target,
@@ -1462,7 +1461,6 @@ export class LocalSidEngine {
       return;
     }
 
-    this.emitPosition();
     await new Promise<void>((resolve) => {
       // Hand the slot over rather than overwrite it: the `seeked` handler only resolves the current
       // id, so a dropped resolver never settles, and `seekPending` gates every chunk — a leaked entry

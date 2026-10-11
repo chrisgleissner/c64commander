@@ -588,7 +588,7 @@ native suites, the equivalence check and the tool tests together; the equivalenc
 - WASM PCM still crosses the main thread once per chunk, because the binary port is bound to the
   page and not to workers.
 - libSidplayEZ upstream defects are documented, not patched (see above); the one patch the build
-  applies only adds settings.
+  applies adds two settings and a chip-setup hook and changes no existing behaviour.
 - The keypad handset the `c64u-remote` variant targets is not available; the Pixel 4 stands in.
 
 ## Troubleshooting

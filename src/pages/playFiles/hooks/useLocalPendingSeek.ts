@@ -47,15 +47,19 @@ export const useLocalPendingSeek = (localEngineActive: boolean, trackKey: unknow
     (globalThis as Record<string, unknown>).__localEngineDebug = () =>
       getSharedLocalSidPlaybackController().debugState();
     if (!onScreen) return;
+    const controller = getSharedLocalSidPlaybackController();
     const read = () => {
-      const controller = getSharedLocalSidPlaybackController();
       setRenderedSeconds(controller.renderedSeconds());
       const pending = controller.pendingSeek();
       setPendingSeekState((previous) => (samePendingSeek(previous, pending) ? previous : pending));
     };
     read();
     const timer = window.setInterval(read, awaiting ? AWAITING_POLL_MS : IDLE_POLL_MS);
-    return () => window.clearInterval(timer);
+    const stopListening = controller.onSeek(read);
+    return () => {
+      window.clearInterval(timer);
+      stopListening();
+    };
   }, [localEngineActive, trackKey, awaiting, onScreen]);
 
   const wasAwaitingRef = useRef(false);
