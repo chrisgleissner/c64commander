@@ -18,13 +18,15 @@
 // once per renderer through window.__localSidProbe, while the microphone records and the app's own
 // pipeline captures what it hands the AudioTrack. tools/hil/renderer_accuracy.py then grades the
 // takes. One sound at a time, so the microphone never hears both machines. Phone media volume is held
-// at --volume (never above 10 of 25) and restored.
+// at --volume (never above 10 of 25) and restored. The Ultimate's audio and video streams are stopped
+// at the start, so a mirror cannot play the C64 through the phone, and are left stopped.
 
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDroidDevice } from "./droidctl_device.mjs";
+import { MAX_VOLUME, readVolume, restoreVolume, setVolume } from "./phone_volume.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const argv = process.argv.slice(2);
@@ -37,7 +39,6 @@ const PASSWORD = arg("password", "pwd");
 const CDP_PORT = Number(arg("cdp-port", "9333"));
 const MIC = arg("mic", "plughw:CARD=SF558,DEV=0");
 const SECONDS = Number(arg("seconds", "12"));
-const MAX_VOLUME = 10;
 const VOLUME = Number(arg("volume", "5"));
 const RENDERERS = arg("renderers", "sidplayez,residfp,sidlite").split(",");
 const WITH_C64 = !argv.includes("--no-c64");
@@ -150,24 +151,6 @@ const playOnC64 = async (tune) => {
 
 // ---- the phone -----------------------------------------------------------------------------------
 
-const readVolume = async (device) => {
-  const dump = await device.shell(["sh", "-c", "dumpsys audio | grep -A8 -- '- STREAM_MUSIC:'"]);
-  const muted = /Muted: true/.test(dump);
-  const speaker = /\(speaker\): (\d+)/.exec(dump);
-  return { muted, level: speaker ? Number(speaker[1]) : null };
-};
-
-const setVolume = async (device, target) => {
-  for (let tries = 0; tries < 30; tries += 1) {
-    const { level } = await readVolume(device);
-    if (level === null) throw new Error("could not read the phone's media volume");
-    if (level === target) return;
-    await device.pressKey(level < target ? 24 : 25);
-    await sleep(250);
-  }
-  throw new Error(`the phone's media volume would not settle at ${target}`);
-};
-
 const startProbe = async (tune, renderer, runId) => {
   const sid = readFileSync(tune.path).toString("base64");
   const request = { sid, songIndex: tune.song, renderer, seconds: LEAD_IN_SECONDS + SECONDS + TAIL_SECONDS, volume: 1 };
@@ -176,7 +159,7 @@ const startProbe = async (tune, renderer, runId) => {
     window.__accuracyOutcome = { run: ${JSON.stringify(runId)}, text: null };
     const settle = (text) => { if (window.__accuracyOutcome.run === ${JSON.stringify(runId)}) window.__accuracyOutcome.text = text; };
     window.__localSidProbe(${JSON.stringify(request)}).then(
-      (result) => settle(JSON.stringify({ renderer: result.renderer, started: result.started, final: result.final, fallbackSidModel: result.fallbackSidModel })),
+      (result) => settle(JSON.stringify({ renderer: result.renderer, started: result.started, final: result.final, fallbackSidModel: result.fallbackSidModel, romsAvailable: result.romsAvailable })),
       (error) => settle(JSON.stringify({ error: String((error && error.stack) || error) })),
     );
     return "started";
@@ -224,6 +207,7 @@ const playOnPhone = async (device, tune, renderer) => {
     underruns: outcome.final?.audioUnderruns ?? null,
     renderMsPerSec: outcome.final?.renderMsPerSec ?? null,
     fallbackSidModel: outcome.fallbackSidModel ?? null,
+    romsAvailable: outcome.romsAvailable ?? null,
   };
 };
 
@@ -252,10 +236,10 @@ const main = async () => {
       manifest.tunes.push(entry);
       if (WITH_C64) {
         log(`${tune.stem}: on ${HOST}`);
-        await c64("PUT", `/v1/streams/audio:start?ip=${encodeURIComponent(STREAM_DESTINATION)}`);
-        await playOnC64(tune);
-        await sleep(1500);
         try {
+          await c64("PUT", `/v1/streams/audio:start?ip=${encodeURIComponent(STREAM_DESTINATION)}`);
+          await playOnC64(tune);
+          await sleep(1500);
           const [, stream] = await Promise.all([
             recordMic(path.join(OUT, `${tune.stem}.c64.wav`), SECONDS),
             captureC64Stream(path.join(OUT, `${tune.stem}.c64stream.wav`)),
@@ -276,7 +260,7 @@ const main = async () => {
       writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
     }
   } finally {
-    if (before.level !== null) await setVolume(device, Math.min(before.level, MAX_VOLUME));
+    await restoreVolume(device, before, log);
     writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
   }
   const ezRender = arg("ez-render", "android/app/build/intermediates/libsidplayez-host/out/ez_render");

@@ -171,16 +171,18 @@ const main = async () => {
       await sleep(2000);
     }
   }
+  // The 30 s of playback render 50 s of audio: the look-ahead fills as well.
+  const renderedSeconds = (outcome) => outcome.final.positionSeconds + outcome.final.bufferedSeconds;
   const ms = (value) => (value === null || value === undefined ? "—" : `${Math.round(value)}`);
   const s = (value) => (value === null || value === undefined ? "—" : (value / 1000).toFixed(1));
   const lines = [
-    "| Tune | Renderer | Open (ms) | First position (ms) | CPU per s of playback (ms) | Lag p95 (ms) | Whole pre-render (s) | CPU meanwhile, with playback (s) | Seek in pre-render (ms) | Seek 0:35 to 1:30, no pre-render (ms) | Skip, open (ms) | Skip, first position (ms) |",
+    "| Tune | Renderer | Open (ms) | First position (ms) | CPU per s of audio rendered (ms) | Lag p95 (ms) | Whole pre-render (s) | CPU meanwhile, with playback (s) | Seek in pre-render (ms) | Seek 0:35 to 1:30, no pre-render (ms) | Skip, open (ms) | Skip, first position (ms) |",
     "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
   ];
   for (const row of rows) {
     lines.push(
       `| ${row.tune} (${Math.round(row.lengthSeconds)} s) | ${row.renderer} | ${ms(row.play.openMs)} | ${ms(row.play.firstPositionMs)} | ` +
-        `${ms((row.play.cpuSeconds * 1000) / 30)} | ${row.play.eventLoopLagMs.p95.toFixed(1)} | ${s(row.whole.prerenderMs)} | ` +
+        `${ms((row.play.cpuSeconds * 1000) / renderedSeconds(row.play))} | ${row.play.eventLoopLagMs.p95.toFixed(1)} | ${s(row.whole.prerenderMs)} | ` +
         `${row.whole.cpuSeconds.toFixed(1)} | ${ms(row.whole.cachedSeekLatencyMs)} | ${ms(row.seek.seekLatencyMs)} | ` +
         `${ms(row.seek.nextOpenMs)} | ${ms(row.seek.nextFirstPositionMs)} |`,
     );

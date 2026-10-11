@@ -82,3 +82,14 @@ def test_the_same_audio_off_the_wire_and_from_the_phone_matches_on_every_measure
     assert result["chroma_sim"] > 0.99
     assert result["envelope_corr"] > 0.99
     assert result["band_db_mae"] < 0.2
+
+
+def test_a_known_offset_places_a_repeating_tune_on_the_right_bar():
+    # A one-second phrase played over and over: a free search finds a good match every second.
+    phrase = melody(1.0)
+    music = np.tile(phrase, 14) + np.random.default_rng(9).normal(0, 1e-4, 14 * RATE)
+    start = round(2.3 * RATE)
+    reference, take = music[: 12 * RATE], music[start : start + 12 * RATE]
+    assert ra.envelope_lag(reference, take, RATE, 0.25, -2.3) == -230
+    a, b = ra.aligned_pair(reference, take, RATE, 0.25, 2.3)
+    assert np.allclose(a, b)

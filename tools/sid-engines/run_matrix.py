@@ -61,17 +61,18 @@ SELF_VARIATION_POWER_ON_DELAY = 5002
 
 
 def render_wasm(engine: str, tune: Path, song: int, seconds: float, out: Path, roms: Path | None,
-                power_on_delay: int | None = None) -> dict:
+                power_on_delay: int | None = None, model: str = "8580") -> dict:
     env = dict(os.environ, POWER_ON_DELAY=str(power_on_delay)) if power_on_delay is not None else None
     cmd = ["node", str(REPO / "tools/sid-engines/render-wasm.mjs"), engine, str(tune), str(song), str(seconds),
-           str(RATE), "8580", str(out)]
+           str(RATE), model, str(out)]
     if roms:
         cmd += [str(roms / "kernal.901227-03.bin"), str(roms / "basic.901226-01.bin")]
     return json.loads(subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=REPO, env=env).stdout)
 
 
-def render_ez(binary: Path, tune: Path, song: int, seconds: float, out: Path, roms: Path | None) -> dict:
-    cmd = [str(binary), str(tune), str(song), str(seconds), str(RATE), "8580", str(out)]
+def render_ez(binary: Path, tune: Path, song: int, seconds: float, out: Path, roms: Path | None,
+              model: str = "8580") -> dict:
+    cmd = [str(binary), str(tune), str(song), str(seconds), str(RATE), model, str(out)]
     if roms:
         cmd += [str(roms / "kernal.901227-03.bin"), str(roms / "basic.901226-01.bin"),
                 str(roms / "characters.901225-01.bin")]

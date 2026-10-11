@@ -7,6 +7,7 @@
  */
 
 import { loadLocalEngineEnabled, resolveLocalSidModel, type LocalSidModel } from "@/lib/config/appSettings";
+import { hasCompleteRomSet } from "@/lib/roms/romStore";
 import { LocalSidEngine } from "./localSidEngine";
 import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
 
@@ -41,8 +42,10 @@ export interface LocalSidProbeSample {
 
 export interface LocalSidProbeResult {
   renderer: SidRendererId;
-  /** The chip a tune that names none was rendered with, so a host render can match it. */
+  /** The chip a tune that names none was rendered with, and whether the C64 ROMs were there, so a
+   * host render can match it. */
   fallbackSidModel: LocalSidModel;
+  romsAvailable: boolean;
   started: boolean;
   openMs: number;
   firstPositionMs: number | null;
@@ -191,6 +194,7 @@ export const registerLocalSidProbe = (): void => {
       return {
         renderer: request.renderer,
         fallbackSidModel: resolveLocalSidModel(),
+        romsAvailable: hasCompleteRomSet(),
         started: result.started,
         openMs,
         firstPositionMs,

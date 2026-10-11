@@ -116,7 +116,11 @@ export const landedSeconds = async (driver: ParityDriver): Promise<number> => {
     }
     await driver.wait(250);
   }
-  throw new ParityFailure(`no landing within ${LANDING_TIMEOUT_MS} ms`);
+  throw new ParityFailure(
+    lastProgress === null
+      ? `no landing within ${LANDING_TIMEOUT_MS} ms`
+      : `no landing within ${RENDER_WAIT_LIMIT_MS} ms of waiting for the render`,
+  );
 };
 
 /** Wait while a seek waits for the phone's render, as long as that render is visibly moving. */

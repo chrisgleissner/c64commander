@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import subprocess
 import sys
 import wave
 from pathlib import Path
@@ -42,8 +41,10 @@ RATE = 48000
 FRAME_SECONDS = 0.01
 ACOUSTIC_BAND_HZ = (300.0, 6000.0)
 RENDERERS = ("sidplayez", "residfp", "sidlite")
-# Two microphone takes start within this of each other: each is started a fixed time after its tune.
-MAX_TAKE_OFFSET_SECONDS = 6.0
+# How far apart a C64 take and a phone take of one tune may start. Two phone takes are placed by
+# their PCM captures instead (see `grade`), so a repeating tune cannot align them a bar out.
+C64_TAKE_OFFSET_SECONDS = 6.0
+REFINE_SECONDS = 0.25
 
 
 def read_wav(path: Path) -> tuple[np.ndarray, int]:
@@ -90,13 +91,17 @@ def locate(reference: np.ndarray, excerpt: np.ndarray, rate: int) -> int:
     return int(np.argmax(correlation / np.sqrt(np.maximum(window[: len(correlation)], 1e-20))))
 
 
-def envelope_lag(reference: np.ndarray, take: np.ndarray, rate: int, max_seconds: float) -> int:
-    """How many envelope frames `take` lags `reference` by, searched over +-max_seconds."""
+def envelope_lag(reference: np.ndarray, take: np.ndarray, rate: int, max_seconds: float,
+                 centre_seconds: float = 0.0) -> int:
+    """How many envelope frames `take` lags `reference` by, searched over centre +-max_seconds.
+
+    Negative when `take` starts later in the music than `reference`."""
     a = np.maximum(envelope(reference, rate), -70.0)
     b = np.maximum(envelope(take, rate), -70.0)
     limit = int(max_seconds / FRAME_SECONDS)
-    best, best_score = 0, -np.inf
-    for lag in sorted(range(-limit, limit + 1), key=abs):
+    centre = int(round(centre_seconds / FRAME_SECONDS))
+    best, best_score = centre, -np.inf
+    for lag in sorted(range(centre - limit, centre + limit + 1), key=lambda value: abs(value - centre)):
         x, y = (a[: len(a) - lag], b[lag:]) if lag >= 0 else (a[-lag:], b[: len(b) + lag])
         n = min(len(x), len(y))
         if n < min(len(a), len(b)) // 2:
@@ -136,16 +141,22 @@ def envelope_correlation(a: np.ndarray, b: np.ndarray, rate: int) -> float:
     return float(np.corrcoef(ea, eb)[0, 1]) if ea.std() > 0 and eb.std() > 0 else 1.0
 
 
-def aligned_pair(reference: np.ndarray, take: np.ndarray, rate: int) -> tuple[np.ndarray, np.ndarray]:
-    """The overlap of two takes of the same music once `take` is shifted onto `reference`."""
-    shift = envelope_lag(reference, take, rate, MAX_TAKE_OFFSET_SECONDS) * int(rate * FRAME_SECONDS)
+def aligned_pair(reference: np.ndarray, take: np.ndarray, rate: int, max_offset_seconds: float,
+                 known_offset_seconds: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    """The overlap of two takes of the same music once `take` is shifted onto `reference`.
+
+    `known_offset_seconds` is how much later in the music `take` starts, when that is known."""
+    lag = envelope_lag(reference, take, rate, max_offset_seconds, -known_offset_seconds)
+    shift = lag * int(rate * FRAME_SECONDS)
     a, b = (reference[: len(reference) - shift], take[shift:]) if shift >= 0 else (reference[-shift:], take[:shift])
     n = min(len(a), len(b))
     return a[:n], b[:n]
 
 
-def acoustic(reference_take: np.ndarray, take: np.ndarray, rate: int) -> dict:
-    a, b = aligned_pair(band_limit(reference_take, rate), band_limit(take, rate), rate)
+def acoustic(reference_take: np.ndarray, take: np.ndarray, rate: int,
+             max_offset_seconds: float = C64_TAKE_OFFSET_SECONDS, known_offset_seconds: float = 0.0) -> dict:
+    a, b = aligned_pair(band_limit(reference_take, rate), band_limit(take, rate), rate, max_offset_seconds,
+                        known_offset_seconds)
     bands_a, bands_b = compare_engines.band_levels_db(a, rate), compare_engines.band_levels_db(b, rate)
     offset = np.median(bands_b - bands_a)
     audible = bands_a > bands_a.max() - 40
@@ -159,7 +170,7 @@ def acoustic(reference_take: np.ndarray, take: np.ndarray, rate: int) -> dict:
 
 def against_stream(stream: np.ndarray, capture: np.ndarray, rate: int) -> dict:
     """The phone's PCM against the Ultimate's own output: both digital, so timbre is comparable too."""
-    a, b = aligned_pair(stream.mean(axis=1), capture.mean(axis=1), rate)
+    a, b = aligned_pair(stream.mean(axis=1), capture.mean(axis=1), rate, C64_TAKE_OFFSET_SECONDS)
     bands_a, bands_b = compare_engines.band_levels_db(a, rate), compare_engines.band_levels_db(b, rate)
     offset = np.median(bands_b - bands_a)
     audible = bands_a > bands_a.max() - 60
@@ -191,17 +202,12 @@ def to_rate(samples: np.ndarray, rate: int) -> np.ndarray:
 def host_render(renderer: str, tune: Path, song: int, seconds: float, out: Path, ez_render: Path | None,
                 roms: Path | None, model: str) -> np.ndarray:
     """The tune rendered on the host as the phone rendered it: same renderer, fallback chip and ROMs."""
-    rom_args = [str(roms / "kernal.901227-03.bin"), str(roms / "basic.901226-01.bin")] if roms else []
     if renderer == "sidplayez":
         if ez_render is None:
             raise ValueError("--ez-render is needed to grade libSidplayEZ captures")
-        cmd = [str(ez_render), str(tune), str(song), str(seconds), str(RATE), model, str(out)]
-        if roms:
-            cmd += rom_args + [str(roms / "characters.901225-01.bin")]
+        run_matrix.render_ez(ez_render, tune, song, seconds, out, roms, model)
     else:
-        cmd = ["node", str(run_matrix.REPO / "tools/sid-engines/render-wasm.mjs"), renderer, str(tune), str(song),
-               str(seconds), str(RATE), model, str(out), *rom_args]
-    subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=run_matrix.REPO)
+        run_matrix.render_wasm(renderer, tune, song, seconds, out, roms, model=model)
     return read_raw_stereo(out)
 
 
@@ -217,6 +223,9 @@ def grade(run_dir: Path, ez_render: Path | None, roms: Path | None) -> dict:
         stream = to_rate(*read_wav(stream_path)) if stream_path.exists() else None
         residfp_path = run_dir / f"{stem}.residfp.mic.wav"
         residfp_mic = to_rate(*read_wav(residfp_path)).mean(axis=1) if residfp_path.exists() else None
+        # Each microphone take starts with its PCM capture, whose place in the tune `digital` finds
+        # exactly, so two takes are offset by the difference of those places.
+        starts: dict[str, float] = {}
         for renderer in RENDERERS:
             mic_path, pcm_path = run_dir / f"{stem}.{renderer}.mic.wav", run_dir / f"{stem}.{renderer}.pcm.wav"
             if not mic_path.exists():
@@ -225,17 +234,25 @@ def grade(run_dir: Path, ez_render: Path | None, roms: Path | None) -> dict:
             entry: dict = {}
             if c64 is not None:
                 entry["vs_c64"] = acoustic(c64, mic, RATE)
-            if residfp_mic is not None and renderer != "residfp":
-                entry["vs_residfp_mic"] = acoustic(residfp_mic, mic, RATE)
             if pcm_path.exists():
                 capture = to_rate(*read_wav(pcm_path))
                 if stream is not None:
                     entry["vs_c64_stream"] = against_stream(stream, capture, RATE)
-                model = manifest.get("phone", {}).get(f"{stem}.{renderer}", {}).get("fallbackSidModel") or "8580"
+                phone = manifest.get("phone", {}).get(f"{stem}.{renderer}", {})
+                model = phone.get("fallbackSidModel") or "8580"
+                # The ROMs only where the phone had them; an older manifest that does not say assumes it did.
+                rendered_roms = roms if phone.get("romsAvailable", True) else None
                 reference = host_render(renderer, Path(tune["path"]), song, tune["render_seconds"],
-                                        run_dir / f"{stem}.{renderer}.host.raw", ez_render, roms, model)
+                                        run_dir / f"{stem}.{renderer}.host.raw", ez_render, rendered_roms, model)
                 entry["digital"] = digital(reference, capture, RATE)
+                starts[renderer] = entry["digital"]["start_seconds"]
             row["renderers"][renderer] = entry
+        for renderer, entry in row["renderers"].items():
+            if renderer == "residfp" or residfp_mic is None or not {"residfp", renderer} <= set(starts):
+                continue
+            mic = to_rate(*read_wav(run_dir / f"{stem}.{renderer}.mic.wav")).mean(axis=1)
+            entry["vs_residfp_mic"] = acoustic(residfp_mic, mic, RATE, REFINE_SECONDS,
+                                               starts[renderer] - starts["residfp"])
         results.append(row)
     return {"run": manifest.get("run"), "tunes": results}
 

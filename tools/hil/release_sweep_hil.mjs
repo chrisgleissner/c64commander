@@ -708,6 +708,9 @@ const screenOff = async () => {
   try {
     await sleepAndGrade(before);
   } finally {
+    // Here, not only on success: a stage that threw would otherwise leave the phone asleep.
+    await shell("input keyevent KEYCODE_WAKEUP");
+    await shell("wm dismiss-keyguard");
     if (/^\d+$/.test(stayOn)) await shell(`settings put global stay_on_while_plugged_in ${stayOn}`);
   }
 };

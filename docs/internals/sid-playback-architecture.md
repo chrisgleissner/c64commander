@@ -211,9 +211,8 @@ One patch is applied to the verified archive before compiling,
 libsidplayfp's `digiBoost` drives), a switch for the start-up declick (`setStartupDeclick`, on by
 default as upstream), and a hook that configures each chip as `sidCreate` makes it
 (`setChipSetup`), so the analogue profile is in place before the power-on warm-up and the first
-sample. It changes one behaviour: a PSID whose init routine has not returned after about 10
-emulated seconds plays on, as in libsidplayfp, instead of failing to load after about 935 (see D3
-below). Each modified file carries a dated notice naming the change, as GPL
+sample. It changes one behaviour: a PSID whose init routine has not returned after about 9.4
+emulated seconds plays on from there instead of failing to load after about 935 (see D3 below). Each modified file carries a dated notice naming the change, as GPL
 section 5(a) requires. The extracted tree is keyed by the archive's checksum and the patches, so a
 changed patch re-extracts. The third-party notices name every patch, and a unit test fails when
 one is not named. Upstream's licence, author and credit files are kept in the repository under
@@ -276,9 +275,11 @@ session happen on one thread. Long work (seek, pre-render) checks a generation c
   [fork review](https://github.com/chrisgleissner/libSidplayEZ/blob/benchmark-tooling/docs/performance-and-upstream-comparison.md)
   are not patched, except D3: upstream waits about 935 emulated seconds for a PSID's init routine
   to return and then fails the load, which kept a core busy for 118 s on a desktop CPU and longer
-  on a phone. The patch waits about 10 emulated seconds, as upstream's comment states, and then
-  lets the tune play on with the handshake left so that the play routine starts if init returns
-  later; libsidplayfp does not wait at all.
+  on a phone. The patch waits about 9.4 emulated seconds and then lets the tune play on from that
+  point, with the handshake left so that the play routine starts if init returns later.
+  libsidplayfp does not wait at all, so it also plays those first 9.4 seconds, and its clock is
+  that much ahead. No PSID in HVSC is affected: loading all 56,178 of them (first song) found
+  none whose init takes longer than the budget.
 
 ## Renderer selection and fallback
 

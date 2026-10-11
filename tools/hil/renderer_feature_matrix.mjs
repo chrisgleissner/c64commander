@@ -126,9 +126,13 @@ const removeParityTunes = async () => {
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     document.querySelector('[data-testid="tab-play"]')?.click();
     await wait(2500);
-    const boxes = [...document.querySelectorAll('[data-testid^="playlist-item-select-"]')]
-      .filter((box) => /Seek[ _]Counter/i.test(box.getAttribute("aria-label") || ""));
-    for (const box of boxes) { if (box.getAttribute("aria-checked") !== "true") box.click(); await wait(200); }
+    const all = [...document.querySelectorAll('[data-testid^="playlist-item-select-"]')];
+    const isParity = (box) => /Seek[ _]Counter/i.test(box.getAttribute("aria-label") || "");
+    // Only the counter tune may be selected when "remove selected" is pressed.
+    for (const box of all) {
+      if ((box.getAttribute("aria-checked") === "true") !== isParity(box)) { box.click(); await wait(200); }
+    }
+    const boxes = all.filter(isParity);
     if (!boxes.length) return "0";
     document.querySelector('[data-testid="playlist-list-remove-selected"]')?.click();
     await wait(1500);

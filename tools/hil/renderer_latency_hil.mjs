@@ -17,7 +17,7 @@
 // known to a few milliseconds, and the latency is the tone's onset in the recording minus that send
 // time. The recording is counted from when arecord was started, not from its first sample, so the
 // absolute figures are low by arecord's start-up delay; the renderers share that error, so their
-// differences do not. Media volume is held at --volume (never above 10 of 25) and restored.
+// differences do not. Media volume is held at --volume (never above 10 of 25) and restored, mute included.
 
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { connectPage } from "./cdp_page.mjs";
 import { createDroidDevice } from "./droidctl_device.mjs";
+import { MAX_VOLUME, readVolume, restoreVolume, setVolume } from "./phone_volume.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const argv = process.argv.slice(2);
@@ -36,7 +37,6 @@ const CDP_PORT = Number(arg("cdp-port", "9333"));
 const MIC = arg("mic", "plughw:CARD=SF558,DEV=0");
 const RENDERERS = arg("renderers", "sidplayez,residfp,sidlite").split(",");
 const REPEATS = Number(arg("repeats", "5"));
-const MAX_VOLUME = 10;
 const VOLUME = Math.min(MAX_VOLUME, Number(arg("volume", "3")));
 const OUT = path.resolve(
   REPO,
@@ -59,24 +59,11 @@ const run = (command, args) =>
     child.on("close", (code) => resolve({ ok: code === 0, out }));
   });
 
-const readVolume = async (device) => {
-  const dump = await device.shell(["sh", "-c", "dumpsys audio | grep -A8 -- '- STREAM_MUSIC:'"]);
-  const speaker = /\(speaker\): (\d+)/.exec(dump);
-  return speaker ? Number(speaker[1]) : null;
-};
-const setVolume = async (device, target) => {
-  for (let tries = 0; tries < 30; tries += 1) {
-    const level = await readVolume(device);
-    if (level === null) throw new Error("could not read the phone's media volume");
-    if (level === target) return;
-    await device.pressKey(level < target ? 24 : 25);
-    await sleep(250);
-  }
-  throw new Error(`the phone's media volume would not settle at ${target}`);
-};
-
-/** Milliseconds into a 48 kHz mono S16 WAV where the 550 Hz tone first holds for 50 ms. */
-const onsetMs = (file) => {
+/**
+ * Milliseconds into a 48 kHz mono S16 WAV where the 550 Hz tone first holds for 50 ms, or null when
+ * the tone never rises 10 dB above its level in the lead-in, before the command was sent.
+ */
+const onsetMs = (file, leadMs) => {
   const data = readFileSync(file);
   const samples = new Int16Array(data.buffer, data.byteOffset + 44, Math.floor((data.length - 44) / 2));
   const window = 480;
@@ -95,6 +82,9 @@ const onsetMs = (file) => {
     energies.push({ tone: (re * re + im * im) / window, total });
   }
   const peak = Math.max(...energies.map((e) => e.tone));
+  const lead = energies.slice(0, Math.floor((leadMs * RATE) / 1000 / window));
+  const floor = lead.reduce((sum, e) => sum + e.tone, 0) / Math.max(1, lead.length);
+  if (peak < floor * 10) return null;
   const threshold = peak / 10;
   for (let index = 0; index + 5 <= energies.length; index += 1) {
     if (energies.slice(index, index + 5).every((e) => e.tone >= threshold)) return (index * window * 1000) / RATE;
@@ -122,7 +112,9 @@ const main = async () => {
   await device.forwardWebview(PACKAGE, CDP_PORT);
   const page = await connectPage(String(CDP_PORT));
   const before = await readVolume(device);
-  if (before !== null && before > MAX_VOLUME) throw new Error(`media volume is ${before}, above ${MAX_VOLUME}`);
+  if (before.level !== null && before.level > MAX_VOLUME) {
+    throw new Error(`media volume is ${before.level}, above ${MAX_VOLUME}`);
+  }
   const results = [];
   try {
     await setVolume(device, VOLUME);
@@ -152,7 +144,8 @@ const main = async () => {
         const outcome = await probe;
         const recorded = await recording;
         if (!recorded.ok) throw new Error(`the microphone would not record: ${recorded.out.trim()}`);
-        const onset = onsetMs(wav);
+        if (outcome.firstPositionMs === null) throw new Error(`${renderer}: the tune never started playing`);
+        const onset = onsetMs(wav, sentAt - recordStarted);
         const latencyMs = onset === null ? null : onset - (sentAt - recordStarted);
         results.push({ renderer, repeat: repeat + 1, latencyMs, ...outcome });
         console.log(
@@ -162,7 +155,7 @@ const main = async () => {
       }
     }
   } finally {
-    if (before !== null) await setVolume(device, Math.min(before, MAX_VOLUME));
+    await restoreVolume(device, before);
     page.close();
     writeFileSync(path.join(OUT, "latency.json"), JSON.stringify(results, null, 2));
   }

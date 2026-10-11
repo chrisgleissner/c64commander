@@ -1,21 +1,24 @@
 --- a/src/player.cpp
 +++ b/src/player.cpp
 @@ -1,3 +1,5 @@
-+// Modified for C64 Commander on 2026-10-11 (Christian Gleissner): added set8580ExternalInput, setStartupDeclick and the chip setup hook in sidCreate; an init routine still running after about 10 emulated seconds plays on instead of failing the load.
++// Modified for C64 Commander on 2026-10-11 (Christian Gleissner): added set8580ExternalInput, setStartupDeclick and the chip setup hook in sidCreate; a tune whose init routine is still running after about 9.4 emulated seconds plays on instead of failing to load.
 +// See android/app/src/main/cpp/sidplayez/patches/ at https://github.com/chrisgleissner/c64commander
  /*
  * This file is part of libsidplayfp, a SID player engine.
  *
-@@ -169,19 +171,24 @@
+@@ -167,21 +169,25 @@
+ 	// Run for some cycles until the initialization routine is done
+ 	if ( const auto	handshakeAddr = driver.getHandshakeAddr (); mem.readMemByte ( handshakeAddr ) == 0 )
  	{
- 		// Wait for the handshake to be acknowledged. A jammed CPU never sets it,
- 		// and the budget (~10 emulated seconds, far beyond any real init routine)
+-		// Wait for the handshake to be acknowledged. A jammed CPU never sets it,
+-		// and the budget (~10 emulated seconds, far beyond any real init routine)
 -		// bounds an init that loops forever without jamming
 -		auto	initBudget = 10'000;
-+		// bounds an init that loops forever without jamming. Each step is about
-+		// 0.1 emulated seconds. An init still running then plays on, as it does in
-+		// libsidplayfp: the handshake is left at 1, so the driver's own increment
-+		// lets the play routine start if init ever returns
++		// Wait for the handshake to be acknowledged. A jammed CPU never sets it, and the
++		// budget (100 steps of ~0.1 emulated seconds) bounds an init that never returns.
++		// Such a tune then plays on from there, its first ~9.4 s unheard, instead of
++		// failing to load; the handshake is left at 1 so that the driver's own increment
++		// starts the play routine if init returns later
 +		auto	initBudget = 100;
  		while ( mem.readMemByte ( handshakeAddr ) == 0 && ! m_c64.isJammed () )
  		{
@@ -37,7 +40,7 @@
  		// Let the INIT routine's own volume-register pokes settle before capture. These
  		// writes happen here, BEFORE the start-up declick is armed (below), so the declick
  		// can't settle them, their ring must decay naturally through the ~1.6 Hz DC-blocker,
-@@ -193,6 +200,7 @@
+@@ -193,6 +199,7 @@
  
  		// Set the handshake to continue
  		mem.writeMemByte ( handshakeAddr, 2 );
@@ -45,7 +48,7 @@
  	}
  
  	// Open the start-up declick window so the external filter absorbs the volume/filter
-@@ -201,9 +209,10 @@
+@@ -201,9 +208,10 @@
  	// tune, handshake or not: the declick settles the whole start-up burst but releases the
  	// instant a write stream proves itself a sustained digi, so even non-returning
  	// (digi/BASIC) tunes, whose $d418 writes are the actual audio, are safe to arm.
@@ -59,7 +62,7 @@
  
  	m_startTime = m_c64.getTimeMs ();
  
-@@ -510,6 +519,9 @@
+@@ -510,6 +518,9 @@
  		}
  
  		m_mixer.addSid ( s );
@@ -69,7 +72,7 @@
  	}
  }
  //-----------------------------------------------------------------------------
-@@ -610,6 +622,25 @@
+@@ -610,6 +621,25 @@
  }
  //-----------------------------------------------------------------------------
  
