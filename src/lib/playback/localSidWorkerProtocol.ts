@@ -31,16 +31,15 @@ export type EngineSidModel = "MOS6581" | "MOS8580";
 
 export const toEngineSidModel = (model: "6581" | "8580"): EngineSidModel => (model === "6581" ? "MOS6581" : "MOS8580");
 
+/**
+ * Which SID emulation renders a tune: `residfp` (accurate, the default) or `sidlite` (much cheaper).
+ * They are separate WASM artifacts shipped side by side.
+ */
+export type LocalSidEmulation = "residfp" | "sidlite";
+
 /** main → worker: instantiate the WASM module (idempotent). */
 export interface LocalSidLoadMessage {
   type: "load";
-  /**
-   * Which SID emulation to instantiate: `residfp` (accurate, the default) or
-   * `sidlite` (a ~10x cheaper approximation). The two are separate WASM
-   * artifacts shipped side by side, so this is chosen before the module loads
-   * and a change requires a fresh worker.
-   */
-  engine?: "residfp" | "sidlite";
 }
 
 /** main → worker: open a SID tune and select a song, ready to render. */
@@ -77,7 +76,7 @@ export interface LocalSidOpenMessage {
    */
   sidModel?: EngineSidModel;
   /** The emulation to render with, sent with every tune so a change in Settings applies to the next one. */
-  engine?: LocalSidLoadMessage["engine"];
+  engine: LocalSidEmulation;
 }
 
 /** main → worker: render the next `seconds` of PCM for the open tune. */
@@ -192,7 +191,7 @@ export interface LocalSidPrerenderMessage {
    */
   sidModel?: EngineSidModel;
   /** The emulation to render with, sent with every tune so a change in Settings applies to the next one. */
-  engine?: LocalSidLoadMessage["engine"];
+  engine: LocalSidEmulation;
 }
 
 /** worker → main: how far a pre-render has got (0..1). */

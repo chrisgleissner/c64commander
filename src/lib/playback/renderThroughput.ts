@@ -202,6 +202,8 @@ const VIABLE_RATIO = 1.15;
  */
 const MIN_SAMPLES_TO_DEMOTE = 5;
 
+let accurateDemoted = false;
+
 /**
  * Whether the accurate emulation can keep up here.
  *
@@ -213,13 +215,19 @@ const MIN_SAMPLES_TO_DEMOTE = 5;
  * evidence that a device cannot manage. Before that threshold the accurate renderer is kept, which
  * is the same answer an unmeasured device already got.
  */
-export const accurateEngineViable = (): boolean => renderRatio() >= VIABLE_RATIO || samples < MIN_SAMPLES_TO_DEMOTE;
+export const accurateEngineViable = (): boolean => {
+  // Sticky for the session: SIDLite's chunks feed the same ratio, so judging reSIDfp by them would
+  // bring it back on the next tune, which would stall and fall back again.
+  if (!accurateDemoted) accurateDemoted = renderRatio() < VIABLE_RATIO && samples >= MIN_SAMPLES_TO_DEMOTE;
+  return !accurateDemoted;
+};
 
 /** Test seam: forget what has been learned. */
 export const __resetRenderThroughput = (): void => {
   cached = null;
   measured = false;
   samples = 0;
+  accurateDemoted = false;
   try {
     globalThis.localStorage?.removeItem(STORAGE_KEY);
   } catch (error) {

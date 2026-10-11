@@ -22,7 +22,7 @@ import {
   nativeLocalAudioAvailable,
   type NativeLocalAudioBackend,
 } from "./localSidNativeSink";
-import { accurateEngineViable, recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
+import { recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
@@ -39,7 +39,7 @@ import { traceLocalSid } from "./localSidTrace";
  * transition; too large only costs a little memory.
  */
 const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
-import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -2147,7 +2147,7 @@ export class LocalSidEngine {
             ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
             : undefined,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-        engine: effectiveSidEmulationEngine(hasCompleteRomSet()),
+        engine: playbackSidEmulation(),
       },
       [sidBytes],
     );
@@ -2172,8 +2172,8 @@ export class LocalSidEngine {
    * taken because a tune that pauses is worse than a tune that sounds a little different.
    */
   private chosenEmulation(): SidEmulationEngine {
-    const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
-    const fallingBack = preferred === "residfp" && !accurateEngineViable();
+    const chosen = playbackSidEmulation();
+    const fallingBack = chosen !== effectiveSidEmulationEngine(hasCompleteRomSet());
     if (fallingBack && !this.announcedSlowDeviceFallback) {
       addLog("warn", "Falling back to SIDLite: this device cannot render reSIDfp in real time", {
         service: "local-sid",
@@ -2181,7 +2181,7 @@ export class LocalSidEngine {
       });
     }
     this.announcedSlowDeviceFallback = fallingBack;
-    return fallingBack ? "sidlite" : preferred;
+    return chosen;
   }
 
   private ensureWarmWorker(): LocalSidWorkerLike {
@@ -2402,7 +2402,7 @@ export class LocalSidEngine {
         seconds,
         roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-        engine: effectiveSidEmulationEngine(hasCompleteRomSet()),
+        engine: playbackSidEmulation(),
       },
       romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
     );

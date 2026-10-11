@@ -253,7 +253,7 @@ describe("localSid.worker fallback SID model", () => {
 
 describe("localSid.worker emulation", () => {
   it("builds each tune's engine, and each pre-render's, on the emulation the message names", async () => {
-    send({ type: "load", engine: "residfp" } as LocalSidMainToWorker);
+    send({ type: "load" } as LocalSidMainToWorker);
     send({
       type: "open",
       id: 1,

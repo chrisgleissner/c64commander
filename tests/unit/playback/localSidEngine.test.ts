@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { saveSidEmulationEngine } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
+import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { __resetRenderThroughput, recordRenderMeasurement } from "@/lib/playback/renderThroughput";
 import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
@@ -709,6 +710,10 @@ describe("LocalSidEngine emulation choice", () => {
     await second;
 
     expect(worker.sentOfType("open").map((message) => message.engine)).toEqual(["sidlite", "sidlite"]);
+    engine.prerender("tune-a", new ArrayBuffer(8), 0, 4);
+    engine.warmLeadIn("tune-b", new ArrayBuffer(8), 0, 4);
+    expect(worker.sentOfType("prerender").map((message) => message.engine)).toEqual(["sidlite", "sidlite"]);
+    expect(buildRenderedTuneKey("tune-a", 0)).toContain("/sidlite");
     expect(getLogs().filter((entry) => entry.message.startsWith("Falling back to SIDLite"))).toHaveLength(1);
   });
 });

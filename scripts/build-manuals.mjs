@@ -1380,7 +1380,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `When a tune plays on your ${appDeviceName(
       variant,
-    )}, **SID emulation** sets how closely the chip is modeled. **Accurate**, the default, follows it cycle by cycle. **Light** renders at about a fifth of the processing cost but sounds less like a real C64. A change applies from the next tune.`,
+    )}, **SID emulation** sets how closely the chip is modeled. **Accurate**, the default, follows it cycle by cycle. **Light** renders at about a third of the processing cost but sounds less like a real C64. A change applies from the next tune.`,
     "",
     "#### The SID Audio Mixer",
     "",
