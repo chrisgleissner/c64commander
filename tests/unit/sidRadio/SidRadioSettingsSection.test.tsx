@@ -42,8 +42,10 @@ import {
   saveLearnedDeviceSidModel,
   saveLocalEngineEnabled,
   saveLocalSidModelFromDevice,
+  saveSidEmulationEngine,
 } from "@/lib/config/appSettings";
 import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/rankingStore";
+import { __setSidplayEzAvailabilityForTests } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 
 beforeEach(async () => {
   localStorage.clear();
@@ -171,11 +173,34 @@ describe("SidRadioSettingsSection crossfade availability", () => {
 });
 
 describe("SidRadioSettingsSection SID emulation", () => {
-  it("offers the emulation choice without developer mode, with reSIDfp selected by default", () => {
+  it("offers Accurate and Light where libSidplayEZ does not exist, with Accurate selected by default", () => {
     render(<SidRadioSettingsSection />);
     expect(screen.getByTestId("settings-sid-engine")).toBeVisible();
+    expect(screen.queryByTestId("settings-sid-engine-sidplayez")).toBeNull();
+    expect(screen.getByTestId("settings-sid-engine-residfp")).toHaveTextContent("Accurate");
     expect(screen.getByTestId("settings-sid-engine-residfp")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("settings-sid-engine-sidlite")).toHaveTextContent("Light");
     expect(screen.getByTestId("settings-sid-engine-sidlite")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("offers Fast & accurate where libSidplayEZ runs, selected by default", () => {
+    __setSidplayEzAvailabilityForTests(true);
+    try {
+      render(<SidRadioSettingsSection />);
+      expect(screen.getByTestId("settings-sid-engine-sidplayez")).toHaveTextContent("Fast & accurate");
+      expect(screen.getByTestId("settings-sid-engine-sidplayez")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("settings-sid-engine-residfp")).toHaveAttribute("aria-pressed", "false");
+      expect(screen.getByTestId("settings-sid-engine")).toHaveTextContent(/libSidplayEZ/);
+    } finally {
+      __setSidplayEzAvailabilityForTests(null);
+    }
+  });
+
+  it("shows what will actually play when the stored choice is not available here, without forgetting it", () => {
+    saveSidEmulationEngine("sidplayez");
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-sid-engine-residfp")).toHaveAttribute("aria-pressed", "true");
+    expect(loadSidEmulationEngine()).toBe("sidplayez");
   });
 
   it("keeps SIDLite once the listener picks it", async () => {

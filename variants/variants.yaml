@@ -99,8 +99,8 @@ variants:
       # and cannot be measured. Defaulting it to the lesser engine on
       # the strength of a spec-sheet projection would ship a real, audible
       # quality regression on every device that DOES exist, to protect one that
-      # does not. reSIDfp is what makes a SID sound like a C64, and the only
-      # hardware we can actually test (Pixel 4) runs it with zero underruns.
+      # does not. The default, libSidplayEZ ("Fast & accurate"), already renders
+      # accurate SID audio at about a third of the CPU of reSIDfp.
       #
       # When the 8020 exists: measure it (gate L1) and set
       # `default_sid_emulation_engine: sidlite` here if it cannot hold realtime.

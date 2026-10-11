@@ -16,13 +16,42 @@ import {
   resolveLocalSidModel,
   type SidEmulationEngine,
 } from "@/lib/config/appSettings";
-import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   createNativeLocalSidSink,
+  defaultNativeLocalAudioBackend,
+  NATIVE_PCM_HEADER_SAMPLES,
   nativeLocalAudioAvailable,
-  type NativeLocalAudioBackend,
 } from "./localSidNativeSink";
-import { recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
+import {
+  recordRenderMeasurement,
+  renderRatio,
+  setActiveRenderThroughputRenderer,
+  startupBufferSeconds,
+} from "./renderThroughput";
+import {
+  defaultRendererChannelFactory,
+  LocalSidUnavailableError,
+  type RendererChannelFactory,
+  type RendererRole,
+} from "./sidRenderer/rendererFactory";
+import {
+  isSidRendererAvailable,
+  probeSidRenderers,
+  settleSidRendererAvailabilitySync,
+  sidplayEzUnavailableReason,
+  sidRendererRuntime,
+  type SidRendererId,
+} from "./sidRenderer/sidRendererAvailability";
+import {
+  isNativeCachedPcm,
+  isNativePcm,
+  NativePcmBuffer,
+  payloadSamples,
+  type CachedPcm,
+  type PcmPayload,
+} from "./sidRenderer/pcmPayload";
+import { releaseNativePcm } from "./sidRenderer/nativePcmRelease";
+import { PcmAccumulator } from "./sidRenderer/pcmAccumulator";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
@@ -116,7 +145,7 @@ export interface LocalSidAudioSink {
    * it interleave rather than mix, and a sink's gain ramp is applied when a slice is converted, so it
    * cannot reach audio already converted. The incoming sink therefore does the mixing.
    */
-  takeCrossfadeTail?: (seconds: number) => Int16Array[];
+  takeCrossfadeTail?: (seconds: number) => CrossfadeTail;
   /**
    * Start a track change: recover this tune's unplayed audio and keep playing it from JS.
    *
@@ -127,7 +156,7 @@ export interface LocalSidAudioSink {
   /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
   releaseForHandover?: () => void;
   /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
-  adoptCrossfadeTail?: (slices: Int16Array[], seconds: number) => void;
+  adoptCrossfadeTail?: (tail: CrossfadeTail, seconds: number) => void;
   /**
    * Throw away audio already handed to the output, for a seek.
    *
@@ -140,7 +169,15 @@ export interface LocalSidAudioSink {
   close: () => void;
 }
 
-export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink;
+export type LocalSidAudioSinkFactory = (sampleRate: number, renderer?: SidRendererId) => LocalSidAudioSink;
+
+/**
+ * What one sink hands the next for a crossfade. The native sink's tail stays on the native side and
+ * is named by an id; the shape is the sink's own business, the engine only passes it along.
+ */
+export interface CrossfadeTail {
+  readonly frames: number;
+}
 
 /**
  * How long to wait for the worker to answer a module load or a tune open.
@@ -254,36 +291,7 @@ const releaseAudioOwnership = (engine: object): void => {
 /** Test seam: is on-device audio currently owned by anyone? */
 export const __hasLocalSidAudioOwner = (): boolean => phoneAudioOwner() !== null;
 
-export class LocalSidUnavailableError extends Error {
-  constructor(message = "Local SID engine requires Web Workers and Web Audio") {
-    super(message);
-    this.name = "LocalSidUnavailableError";
-  }
-}
-
-const defaultWorkerFactory: LocalSidWorkerFactory = () => {
-  if (typeof Worker === "undefined") throw new LocalSidUnavailableError();
-  // Vite compiles this into a module-worker chunk for both the web build and
-  // the Capacitor WebView.
-  return new Worker(new URL("./localSid.worker.ts", import.meta.url), { type: "module" });
-};
-
-/**
- * The native track, when this platform has one.
- *
- * Preferred over Web Audio because the two do not sound the same. Web Audio inside the WebView lands
- * on a direct output that bypasses the mixer's effect chain — on a Pixel 4 that chain is the
- * speaker's own EQ, and without it on-device playback measured 7.5 dB quieter with a thirtieth of the
- * energy in 120-300 Hz, against the identical PCM sent through the mirror's native track. See
- * `localSidNativeSink` for the measurements. Null on the web build and on iOS, where the plugin does
- * not exist ([[streamudp-android-only]]): those fall back to Web Audio, which is all they have.
- */
-const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
-  // The same predicate the buffer sizes are chosen from, so the two can never disagree about which
-  // sink this platform is going to get.
-  if (!nativeLocalAudioAvailable()) return null;
-  return StreamUdp;
-};
+export { LocalSidUnavailableError };
 
 /**
  * A gain ramp that could not be scheduled has already been replaced by a direct assignment, so the
@@ -377,7 +385,10 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
 };
 
 export interface LocalSidEngineOptions {
+  /** One factory for every renderer and role; tests use it to inject a fake worker. */
   workerFactory?: LocalSidWorkerFactory;
+  /** Builds the channel for a renderer and role; defaults to a Web Worker or a native renderer. */
+  rendererFactory?: RendererChannelFactory;
   audioSinkFactory?: LocalSidAudioSinkFactory;
   /** Seconds of audio rendered per chunk (D6 chunked pre-render). */
   chunkSeconds?: number;
@@ -455,12 +466,15 @@ interface OpenPending {
  * path the A/V mirror uses, which is the whole point: "Listen on: this device" and "Both" should
  * reach the speaker through identical processing.
  */
-const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =>
-  createNativeLocalSidSink(sampleRate, nativeAudioBackend()) ?? webAudioSinkFactory(sampleRate);
+const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number, renderer?: SidRendererId) =>
+  createNativeLocalSidSink(
+    sampleRate,
+    nativeLocalAudioAvailable() ? defaultNativeLocalAudioBackend() : null,
+    renderer,
+  ) ?? webAudioSinkFactory(sampleRate);
 
 const RENDER_RATE_SAMPLES = 4096;
 
-const EMPTY_PCM = new Int16Array(0);
 const DEFAULT_CHUNK_SECONDS = 0.5;
 /**
  * How far ahead of the audio clock to keep the schedule.
@@ -506,13 +520,22 @@ const DEFAULT_SAMPLE_RATE = 48000;
 const MAX_IN_FLIGHT_RENDERS = Math.max(4, Math.ceil(DEFAULT_TARGET_BUFFER_SECONDS / DEFAULT_CHUNK_SECONDS / 5));
 
 export class LocalSidEngine {
-  private readonly workerFactory: LocalSidWorkerFactory;
+  private readonly channelFactory: RendererChannelFactory;
   private readonly audioSinkFactory: LocalSidAudioSinkFactory;
   private readonly chunkSeconds: number;
   private readonly targetBufferSeconds: number;
   private readonly requestedSampleRate: number;
 
   private worker: LocalSidWorkerLike | null = null;
+  /**
+   * Which runtime each channel speaks to. The WASM renderers share a worker, so moving between
+   * reSIDfp and SIDLite keeps it; moving to or from libSidplayEZ needs a different channel.
+   */
+  private workerRuntime: "native" | "wasm" | null = null;
+  private prerenderRuntime: "native" | "wasm" | null = null;
+  private warmRuntime: "native" | "wasm" | null = null;
+  /** The renderer of the tune being opened or played, for throughput learning and channel choice. */
+  private renderer: SidRendererId = "residfp";
   private announcedSlowDeviceFallback = false;
   private loadPending: { resolve: () => void; reject: (e: Error) => void } | null = null;
   /** Shared in-flight module load, so overlapping callers cannot displace each other's resolver. */
@@ -553,7 +576,7 @@ export class LocalSidEngine {
   private endedFired = false;
   private chunksEnded = 0;
   /** Fully-rendered tunes (previous/current/next), so a seek is a buffer offset. */
-  private readonly renderCache = new RenderedTuneCache();
+  private readonly renderCache = new RenderedTuneCache(undefined, undefined, (tune) => this.releaseIfUnused(tune.pcm));
   private prerenderId = 0;
   private prerenderKey: string | null = null;
   /** Set while the running pre-render is only a lead-in, not the whole tune. */
@@ -568,8 +591,7 @@ export class LocalSidEngine {
    * a 250 ms dropout. Writing each chunk into a buffer sized up front is O(n), and the cache is
    * handed a `subarray` view of the filled prefix rather than a fresh copy.
    */
-  private prerenderAccumulated: Int16Array = EMPTY_PCM;
-  private prerenderFilled = 0;
+  private readonly prerenderPcm = new PcmAccumulator();
   /**
    * A second offline renderer, for the tracks either side of the one playing.
    *
@@ -582,7 +604,7 @@ export class LocalSidEngine {
   private warmWorker: LocalSidWorkerLike | null = null;
   private warmId = 0;
   private warmKey: string | null = null;
-  private warmAccumulated: Int16Array = EMPTY_PCM;
+  private readonly warmPcm = new PcmAccumulator();
   /**
    * A seek waiting for the pre-render to reach it.
    *
@@ -629,7 +651,37 @@ export class LocalSidEngine {
    * cache mid-playback would splice a separately-rendered copy into audio that
    * is already sounding, and the two renders need not be sample-identical.
    */
-  private cached: RenderedTune | null = null;
+  private cachedTune: RenderedTune | null = null;
+
+  private get cached(): RenderedTune | null {
+    return this.cachedTune;
+  }
+
+  /** Moving playback off a native buffer may be the last thing holding it, so it is checked here. */
+  private set cached(next: RenderedTune | null) {
+    const previous = this.cachedTune;
+    this.cachedTune = next;
+    if (previous && previous.pcm !== next?.pcm) this.releaseIfUnused(previous.pcm);
+  }
+
+  /**
+   * Give a native PCM buffer back once nothing here holds it: not the cache, not the buffer playback
+   * is reading from, not a render still growing it. A JS buffer is left to the garbage collector.
+   */
+  private releaseIfUnused(pcm: CachedPcm | PcmPayload | null | undefined): void {
+    if (!pcm) return;
+    const id = isNativePcm(pcm)
+      ? pcm.bufferId
+      : isNativeCachedPcm(pcm as CachedPcm)
+        ? (pcm as NativePcmBuffer).bufferId
+        : null;
+    if (id === null) return;
+    const probe = new NativePcmBuffer(id, 0);
+    if (this.cachedTune && isNativeCachedPcm(this.cachedTune.pcm) && this.cachedTune.pcm.bufferId === id) return;
+    if (this.prerenderPcm.nativeBuffer?.bufferId === id || this.warmPcm.nativeBuffer?.bufferId === id) return;
+    if (this.renderCache.holds(probe)) return;
+    releaseNativePcm(probe);
+  }
   private cachedCursor = 0;
   /**
    * Playback is being fed from the pre-render's buffer while that pre-render is still growing it.
@@ -653,7 +705,7 @@ export class LocalSidEngine {
   /** Crossfade length to apply to the tune currently being opened (0 = cut). */
   private pendingCrossfadeMs = 0;
   /** The outgoing tune's audio, waiting for the incoming sink to fade it out underneath itself. */
-  private crossfadeTail: Int16Array[] | null = null;
+  private crossfadeTail: CrossfadeTail | null = null;
   /** The tune being faded out, still playing from JS while the next one opens. */
   private crossfadeOut: LocalSidAudioSink | null = null;
   /** Where the live renderer takes over from a pre-rendered opening, once the worker has the tune. */
@@ -667,7 +719,8 @@ export class LocalSidEngine {
   private renderRates: number[] = [];
 
   constructor(options: LocalSidEngineOptions = {}) {
-    this.workerFactory = options.workerFactory ?? defaultWorkerFactory;
+    const injected = options.workerFactory;
+    this.channelFactory = injected ? () => injected() : (options.rendererFactory ?? defaultRendererChannelFactory);
     this.audioSinkFactory = options.audioSinkFactory ?? defaultAudioSinkFactory;
     this.chunkSeconds = options.chunkSeconds ?? DEFAULT_CHUNK_SECONDS;
     this.targetBufferSeconds = options.targetBufferSeconds ?? DEFAULT_TARGET_BUFFER_SECONDS;
@@ -705,9 +758,18 @@ export class LocalSidEngine {
     this.loadInFlight = null;
   }
 
-  private ensureWorker(): LocalSidWorkerLike {
+  private createChannel(renderer: SidRendererId, role: RendererRole): LocalSidWorkerLike {
+    return this.channelFactory(renderer, role);
+  }
+
+  private ensureWorker(renderer: SidRendererId = this.renderer): LocalSidWorkerLike {
+    const runtime = sidRendererRuntime(renderer);
+    if (this.worker && this.workerRuntime !== runtime) {
+      this.discardWorker(`switching to the ${runtime} renderer`, "info");
+    }
     if (!this.worker) {
-      this.worker = this.workerFactory();
+      this.worker = this.createChannel(renderer, "playback");
+      this.workerRuntime = runtime;
       this.worker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onMessage(event.data),
       );
@@ -738,9 +800,15 @@ export class LocalSidEngine {
    *
    * Separate workers are separate threads, and a phone has cores to spare.
    */
-  private ensurePrerenderWorker(): LocalSidWorkerLike {
+  private ensurePrerenderWorker(renderer: SidRendererId): LocalSidWorkerLike {
+    const runtime = sidRendererRuntime(renderer);
+    if (this.prerenderWorker && this.prerenderRuntime !== runtime) {
+      this.prerenderWorker.terminate();
+      this.prerenderWorker = null;
+    }
     if (!this.prerenderWorker) {
-      this.prerenderWorker = this.workerFactory();
+      this.prerenderWorker = this.createChannel(renderer, "prerender");
+      this.prerenderRuntime = runtime;
       // Routed into the same handler: pre-render replies are matched on
       // `prerenderId`, which is independent of the playback ids.
       this.prerenderWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
@@ -799,6 +867,7 @@ export class LocalSidEngine {
     this.prerenderKey = null;
     this.prerenderWorker?.terminate();
     this.prerenderWorker = null;
+    this.releaseIfUnused(this.prerenderPcm.reset());
   }
 
   /**
@@ -832,6 +901,9 @@ export class LocalSidEngine {
    * one in-flight load fixes both.
    */
   load(): Promise<void> {
+    if (this.worker && this.workerRuntime !== sidRendererRuntime(this.renderer)) {
+      this.discardWorker(`switching to the ${sidRendererRuntime(this.renderer)} renderer`, "info");
+    }
     if (this.moduleReady) return Promise.resolve();
     if (this.loadInFlight) return this.loadInFlight;
     // One promise, not a chained `.catch` — the memo must settle on exactly the
@@ -864,7 +936,7 @@ export class LocalSidEngine {
       };
       // The emulation is not chosen here: every open names its own, so a change in Settings applies
       // to the next tune on this same worker.
-      worker.postMessage({ type: "load" });
+      worker.postMessage({ type: "load", pcmHeadroomSamples: this.pcmHeadroomSamples() });
     });
     return this.loadInFlight;
   }
@@ -955,6 +1027,10 @@ export class LocalSidEngine {
     if (this.seekPending || this.seeksInFlight > 0) {
       this.discardWorker("a new tune superseded an unfinished seek", "info");
     }
+    // Whether libSidplayEZ runs here is a question for the native side, asked once and bounded.
+    if (!settleSidRendererAvailabilitySync()) await probeSidRenderers();
+    this.renderer = this.chosenEmulation();
+    setActiveRenderThroughputRenderer(this.renderer);
     await this.load();
     // A switchover ALWAYS starts from silence unless the listener has asked for a crossfade. Zero (the default) is a
     // hard cut, and so is leaving a paused tune: faded out, it came back and held the next tune in a paused track.
@@ -1010,7 +1086,7 @@ export class LocalSidEngine {
           // Read per-play, like the ROMs above and for the same reason: changing the chip in
           // Settings then applies from the very next tune rather than after a restart.
           sidModel: toEngineSidModel(resolveLocalSidModel()),
-          engine: this.chosenEmulation(),
+          engine: this.renderer,
         },
         transfer,
       );
@@ -1043,24 +1119,16 @@ export class LocalSidEngine {
         // Accumulate as it arrives, and publish the growing buffer to the cache each time. That is
         // what makes a seek into the part already rendered instant instead of waiting for the whole
         // tune, and it is what the progress bar's pre-render fill reads.
-        if (message.id !== this.prerenderId || !this.prerenderKey) return;
-        // Size the destination from what the worker was asked to render. A render that overruns
-        // the estimate grows the buffer once rather than failing — the estimate comes from a
-        // declared duration and can be short.
-        const needed = this.prerenderFilled + message.pcm.length;
-        if (this.prerenderAccumulated.length < needed) {
-          // `Math.max` with a non-finite estimate is non-finite, and `new Int16Array(NaN)` is an
-          // array of length ZERO — which then throws "offset is out of bounds" on the very next
-          // write. A chunk that does not carry a usable rate or channel count sizes to what this
-          // write needs and nothing more.
-          const planned = Math.ceil(message.seconds * message.sampleRate * message.channels);
-          const sized = new Int16Array(Number.isFinite(planned) ? Math.max(planned, needed) : needed);
-          sized.set(this.prerenderAccumulated.subarray(0, this.prerenderFilled), 0);
-          this.prerenderAccumulated = sized;
+        if (message.id !== this.prerenderId || !this.prerenderKey) {
+          this.releaseIfUnused(message.pcm);
+          return;
         }
-        this.prerenderAccumulated.set(message.pcm, this.prerenderFilled);
-        this.prerenderFilled += message.pcm.length;
-        const grown = this.prerenderAccumulated.subarray(0, this.prerenderFilled);
+        // Sized from what the worker was asked to render; an overrun grows the buffer once.
+        const grown = this.prerenderPcm.append(
+          message.pcm,
+          Math.ceil(message.seconds * message.sampleRate * message.channels),
+          message.channels,
+        );
         // A seek is waiting on this: hand playback the buffer the moment coverage reaches the target,
         // rather than leaving it silent while a second render of the same audio catches up.
         //
@@ -1076,7 +1144,7 @@ export class LocalSidEngine {
         // starting so it cannot run dry — is what the measured start-up buffer already answers, so
         // it answers this one too. It costs a fraction of a second more waiting on a wait that is
         // measured in tens of them.
-        const cushion = startupBufferSeconds();
+        const cushion = startupBufferSeconds(this.renderer);
         const awaiting = this.activePendingSeek;
         if (awaiting !== null && message.seconds > awaiting.targetSeconds + cushion) {
           const awaited = awaiting.targetSeconds;
@@ -1123,18 +1191,19 @@ export class LocalSidEngine {
         return;
       }
       case "prerendered": {
-        if (message.id !== this.prerenderId || !this.prerenderKey) return;
+        if (message.id !== this.prerenderId || !this.prerenderKey) {
+          this.releaseIfUnused(this.prerenderPcm.reset());
+          return;
+        }
         this.prerenderFraction = null;
         // Only a lead-in was asked for, so what is cached remains a partial even though the render
         // finished. A full render becomes authoritative: seeks inside it are pure buffer offsets and
         // running off its end really is the end of the tune.
         const partial = this.prerenderPartialSeconds !== null;
         this.prerenderPartialSeconds = null;
-        // Copied so a cache entry never pins a buffer larger than the audio it holds.
-        const pcm = this.prerenderAccumulated.subarray(0, this.prerenderFilled).slice();
-        this.prerenderAccumulated = EMPTY_PCM;
-        this.prerenderFilled = 0;
+        const pcm = this.prerenderPcm.finish();
         queueMicrotask(() => this.drainPendingWarms());
+        if (pcm.length === 0) this.releaseIfUnused(pcm);
         if (pcm.length > 0) {
           this.renderCache.set(this.prerenderKey, {
             partial,
@@ -1199,20 +1268,16 @@ export class LocalSidEngine {
         // previous tune's id and is dropped; once the budget was gone `pump()` could never ask for
         // audio again and the tune went silent with the clock still running.
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
-        if (message.id !== this.activeId) return; // stale tune
-        // The worker handles messages in order, so anything still arriving
-        // before the "seeked" reply was rendered for the position we just left.
-        // Scheduling it would play the wrong part of the tune.
-        if (this.seekPending) return;
-        // The same is true for a seek waiting on the pre-render, and for a less obvious reason: that
-        // path never repositions the live renderer at all, precisely so it does not pay for a second
-        // re-render. So the live worker is still sitting at the position the listener just left, and
-        // every chunk it produces is that old audio. Scheduling it plays the part of the tune the
-        // listener seeked AWAY from while the bar, the clock and the status all describe the target —
-        // the exact "heard the old position while the bar showed the new one" failure the wait exists
-        // to avoid. Flushing the queued audio was not enough on its own, because the renderer kept
-        // refilling it.
-        if (this.activePendingSeek) return;
+        // Three reasons to throw a chunk away. It belongs to a tune that has been replaced. It was
+        // rendered before the "seeked" reply, so for the position just left. Or a seek is waiting on
+        // the pre-render: that path never repositions the live renderer (so it does not pay for a
+        // second re-render), so everything the live renderer produces is the old position, and
+        // scheduling it plays what the listener seeked away from while the bar shows the target.
+        // A libSidplayEZ chunk also holds a native buffer that nothing else will give back.
+        if (message.id !== this.activeId || this.seekPending || this.activePendingSeek) {
+          releaseNativePcm(message.pcm);
+          return;
+        }
         this.recordRender(message.renderMs, message.samples);
         // Learn how fast this device renders, so the next tune knows how much to buffer before it
         // starts. Only real renders count — a chunk served from the cache took no time and would
@@ -1220,6 +1285,7 @@ export class LocalSidEngine {
         recordRenderMeasurement(
           message.samples / Math.max(1, this.channels) / this.requestedSampleRate,
           message.renderMs,
+          this.renderer,
         );
         this.scheduler?.schedule(message.pcm, this.channels);
         this.emitPosition();
@@ -1325,7 +1391,7 @@ export class LocalSidEngine {
     }
     claimAudioOwnership(this);
     try {
-      this.audio = this.audioSinkFactory(message.sampleRate);
+      this.audio = this.audioSinkFactory(message.sampleRate, this.renderer);
     } catch (error) {
       releaseAudioOwnership(this);
       pending?.reject(error as Error);
@@ -1398,13 +1464,10 @@ export class LocalSidEngine {
       if (fadingOut.releaseForHandover) fadingOut.releaseForHandover();
       else fadingOut.close();
     }
-    if (this.crossfadeTail?.length && this.audio) {
+    if (this.crossfadeTail && this.audio) {
       this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
     }
-    traceLocalSid("crossfade-tail-adopted", {
-      slices: this.crossfadeTail?.length ?? 0,
-      frames: (this.crossfadeTail ?? []).reduce((n, slice) => n + slice.length / 2, 0),
-    });
+    traceLocalSid("crossfade-tail-adopted", { frames: this.crossfadeTail?.frames ?? 0 });
     this.crossfadeTail = null;
   }
 
@@ -1433,7 +1496,7 @@ export class LocalSidEngine {
     this.currentKey = key;
     claimAudioOwnership(this);
     try {
-      this.audio = this.audioSinkFactory(warmed.sampleRate);
+      this.audio = this.audioSinkFactory(warmed.sampleRate, this.renderer);
     } catch (error) {
       // No sink is not fatal here: the ordinary open follows and builds one, so the tune still
       // plays — it just starts from the worker rather than from the cached opening, which costs the
@@ -1653,7 +1716,7 @@ export class LocalSidEngine {
    * sitting silent on a tune that has nothing left to render.
    */
   private resolvePendingSeekAgainstCompletedRender(
-    pcm: Int16Array,
+    pcm: CachedPcm,
     sampleRate: number,
     channels: number,
     seconds: number,
@@ -1861,10 +1924,10 @@ export class LocalSidEngine {
           return;
         }
         const end = Math.min(pcm.length, this.cachedCursor + chunkSamples);
-        // A copy, because the scheduler hands the buffer to Web Audio.
+        // A copy for a JS buffer, because the scheduler hands it to the sink; a range for a native one.
         const slice = pcm.slice(this.cachedCursor, end);
         this.cachedCursor = end;
-        this.recordRender(0, slice.length);
+        this.recordRender(0, payloadSamples(slice, channels));
         this.scheduler.schedule(slice, channels);
         this.emitPosition();
       }
@@ -2133,8 +2196,9 @@ export class LocalSidEngine {
     }
     this.warmId += 1;
     this.warmKey = key;
-    this.warmAccumulated = EMPTY_PCM;
-    this.ensureWarmWorker().postMessage(
+    this.releaseIfUnused(this.warmPcm.reset());
+    const renderer = playbackSidEmulation();
+    this.ensureWarmWorker(renderer).postMessage(
       {
         type: "prerender",
         id: this.warmId,
@@ -2147,7 +2211,7 @@ export class LocalSidEngine {
             ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
             : undefined,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-        engine: playbackSidEmulation(),
+        engine: renderer,
       },
       [sidBytes],
     );
@@ -2173,20 +2237,40 @@ export class LocalSidEngine {
    */
   private chosenEmulation(): SidEmulationEngine {
     const chosen = playbackSidEmulation();
-    const fallingBack = chosen !== effectiveSidEmulationEngine(hasCompleteRomSet());
+    const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
+    const fallingBack = chosen !== preferred;
     if (fallingBack && !this.announcedSlowDeviceFallback) {
-      addLog("warn", "Falling back to SIDLite: this device cannot render reSIDfp in real time", {
-        service: "local-sid",
-        renderRatio: +renderRatio().toFixed(2),
-      });
+      addLog(
+        "warn",
+        chosen === "sidlite"
+          ? `Falling back to SIDLite: this device cannot render ${preferred} in real time`
+          : `Using ${chosen}: ${preferred} is not available on this device`,
+        {
+          service: "local-sid",
+          preferred,
+          chosen,
+          renderRatio: +renderRatio(isSidRendererAvailable(preferred) ? preferred : "residfp").toFixed(2),
+          unavailableReason: preferred === "sidplayez" ? sidplayEzUnavailableReason() : null,
+        },
+      );
     }
     this.announcedSlowDeviceFallback = fallingBack;
     return chosen;
   }
 
-  private ensureWarmWorker(): LocalSidWorkerLike {
+  /** Room for the native feed's message header in front of each live WASM chunk, on Android. */
+  private pcmHeadroomSamples(): number | undefined {
+    return sidRendererRuntime(this.renderer) === "wasm" && nativeLocalAudioAvailable()
+      ? NATIVE_PCM_HEADER_SAMPLES
+      : undefined;
+  }
+
+  private ensureWarmWorker(renderer: SidRendererId): LocalSidWorkerLike {
+    const runtime = sidRendererRuntime(renderer);
+    if (this.warmWorker && this.warmRuntime !== runtime) this.discardWarmWorker();
     if (!this.warmWorker) {
-      this.warmWorker = this.workerFactory();
+      this.warmWorker = this.createChannel(renderer, "warm");
+      this.warmRuntime = runtime;
       this.warmWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onWarmMessage(event.data),
       );
@@ -2221,7 +2305,7 @@ export class LocalSidEngine {
     this.warmWorker?.terminate();
     this.warmWorker = null;
     this.warmKey = null;
-    this.warmAccumulated = EMPTY_PCM;
+    this.releaseIfUnused(this.warmPcm.reset());
     this.drainPendingWarms();
   }
 
@@ -2233,19 +2317,23 @@ export class LocalSidEngine {
    */
   private onWarmMessage(message: LocalSidWorkerToMain): void {
     if (message.type === "prerender-chunk") {
-      if (message.id !== this.warmId || !this.warmKey) return;
-      const grown = new Int16Array(this.warmAccumulated.length + message.pcm.length);
-      grown.set(this.warmAccumulated, 0);
-      grown.set(message.pcm, this.warmAccumulated.length);
-      this.warmAccumulated = grown;
+      if (message.id !== this.warmId || !this.warmKey) {
+        this.releaseIfUnused(message.pcm);
+        return;
+      }
+      this.warmPcm.append(
+        message.pcm,
+        Math.ceil(message.seconds * message.sampleRate * message.channels),
+        message.channels,
+      );
       return;
     }
     if (message.type === "prerendered") {
       if (message.id !== this.warmId || !this.warmKey) return;
       const key = this.warmKey;
-      const pcm = this.warmAccumulated;
+      const pcm = this.warmPcm.finish();
       this.warmKey = null;
-      this.warmAccumulated = EMPTY_PCM;
+      if (pcm.length === 0) this.releaseIfUnused(pcm);
       if (pcm.length > 0) {
         // Always a partial: it is only the opening, so running off its end has to hand over to live
         // rendering rather than end the tune.
@@ -2269,7 +2357,7 @@ export class LocalSidEngine {
     if (message.type === "error" && message.id === this.warmId) {
       addLog("debug", "Local SID lead-in warm failed", { service: "local-sid", error: message.message });
       this.warmKey = null;
-      this.warmAccumulated = EMPTY_PCM;
+      this.releaseIfUnused(this.warmPcm.reset());
       this.drainPendingWarms();
     }
   }
@@ -2388,11 +2476,11 @@ export class LocalSidEngine {
     this.prerenderId += 1;
     this.prerenderKey = key;
     this.prerenderFraction = 0;
-    this.prerenderAccumulated = EMPTY_PCM;
-    this.prerenderFilled = 0;
+    this.releaseIfUnused(this.prerenderPcm.reset());
+    const renderer = playbackSidEmulation();
     const romPayload =
       roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;
-    this.ensurePrerenderWorker().postMessage(
+    this.ensurePrerenderWorker(renderer).postMessage(
       {
         type: "prerender",
         id: this.prerenderId,
@@ -2402,7 +2490,7 @@ export class LocalSidEngine {
         seconds,
         roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-        engine: playbackSidEmulation(),
+        engine: renderer,
       },
       romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
     );
@@ -2528,8 +2616,9 @@ export class LocalSidEngine {
     this.warmWorker?.terminate();
     this.warmWorker = null;
     this.warmKey = null;
-    this.warmAccumulated = EMPTY_PCM;
+    this.releaseIfUnused(this.warmPcm.reset());
     this.pendingWarms.clear();
+    this.renderCache.clear();
     this.stopWatchdog();
     this.worker?.terminate();
     this.worker = null;

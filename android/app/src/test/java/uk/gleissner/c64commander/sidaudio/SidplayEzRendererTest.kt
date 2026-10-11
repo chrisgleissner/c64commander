@@ -115,6 +115,10 @@ class SidplayEzRendererTest {
             done.complete(bufferId to frames)
           }
 
+          override fun cancelled(bufferId: Long, frames: Long, seconds: Double) {
+            done.completeExceptionally(IllegalStateException("cancelled"))
+          }
+
           override fun failed(error: Exception) {
             done.completeExceptionally(error)
           }
@@ -129,7 +133,7 @@ class SidplayEzRendererTest {
   }
 
   @Test
-  fun `disposing stops a pre-render and releases its buffer`() {
+  fun `disposing stops a pre-render, which keeps its buffer for the web layer to release`() {
     val r = renderer(background = true)
     val outcome = CompletableFuture<String>()
     r.prerender(
@@ -144,13 +148,43 @@ class SidplayEzRendererTest {
             outcome.complete("done")
           }
 
+          override fun cancelled(bufferId: Long, frames: Long, seconds: Double) {
+            outcome.complete("cancelled")
+          }
+
           override fun failed(error: Exception) {
             outcome.complete("failed")
           }
         })
-    Thread.sleep(3000)
-    assertTrue(!outcome.isDone)
-    assertEquals(0, store.size)
+    assertEquals("cancelled", outcome.get(30, TimeUnit.SECONDS))
+    assertEquals(1, store.size)
+  }
+
+  @Test
+  fun `cancelling a pre-render reports how far it got`() {
+    val r = renderer(background = true)
+    val outcome = CompletableFuture<Long>()
+    r.prerender(
+        request(),
+        600.0,
+        object : SidplayEzRenderer.PrerenderListener {
+          override fun chunk(bufferId: Long, frames: Long, seconds: Double) {
+            r.cancelPrerender()
+          }
+
+          override fun done(bufferId: Long, frames: Long, seconds: Double) {
+            outcome.completeExceptionally(IllegalStateException("ran to the end"))
+          }
+
+          override fun cancelled(bufferId: Long, frames: Long, seconds: Double) {
+            outcome.complete(frames)
+          }
+
+          override fun failed(error: Exception) {
+            outcome.completeExceptionally(error)
+          }
+        })
+    assertEquals(240000L, outcome.get(30, TimeUnit.SECONDS))
   }
 
   @Test

@@ -28,8 +28,28 @@
  */
 
 import { addLog } from "@/lib/logging";
+import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
 
 const STORAGE_KEY = "c64c.local-sid.render-throughput";
+
+/**
+ * Each renderer is measured on its own. libSidplayEZ renders about three times faster than reSIDfp
+ * in WASM, and SIDLite faster still, so one shared figure would size the start-up buffer for
+ * whichever ran last and let a fast renderer's chunks argue a slow one back into use. reSIDfp keeps
+ * the original key, which is what every earlier release measured.
+ */
+const storageKey = (renderer: SidRendererId): string =>
+  renderer === "residfp" ? STORAGE_KEY : `${STORAGE_KEY}.${renderer}`;
+
+/**
+ * The renderer the playback engine opened last, which is what a caller without a renderer of its
+ * own (the seek-progress estimate, the native sink's prime depth) is asking about.
+ */
+let active: SidRendererId = "residfp";
+
+export const setActiveRenderThroughputRenderer = (renderer: SidRendererId): void => {
+  active = renderer;
+};
 
 /**
  * Weight given to each new measurement.
@@ -72,29 +92,41 @@ const MAX_PLAUSIBLE_RATIO = 200;
  */
 const ASSUMED_RATIO = 2;
 
-let cached: number | null = null;
-/**
- * How many measurements have been folded in this session.
- *
- * Kept because {@link accurateEngineViable} may only demote the renderer on evidence, and one
- * chunk is not evidence. See {@link MIN_SAMPLES_TO_DEMOTE}.
- */
-let samples = 0;
-/**
- * Whether `cached` came from a measurement rather than from {@link ASSUMED_RATIO}.
- *
- * `renderRatio()` deliberately never returns null — the startup buffer has to be sized before
- * anything has been measured, and the assumption is the right answer there. But a figure shown to
- * the listener is different: "about 4 s" derived from a guess is a number the app has no business
- * stating. So the estimator keeps one flag saying whether it has evidence, and the only consumer
- * that needs evidence asks for it through {@link measuredRenderRatio}. One estimator, one flag —
- * a second rate tracker for the UI would drift away from the one that sizes the buffer.
- */
-let measured = false;
+interface RendererThroughput {
+  cached: number | null;
+  /**
+   * How many measurements have been folded in this session.
+   *
+   * Kept because {@link accurateEngineViable} may only demote the renderer on evidence, and one
+   * chunk is not evidence. See {@link MIN_SAMPLES_TO_DEMOTE}.
+   */
+  samples: number;
+  /**
+   * Whether `cached` came from a measurement rather than from {@link ASSUMED_RATIO}.
+   *
+   * `renderRatio()` deliberately never returns null — the startup buffer has to be sized before
+   * anything has been measured, and the assumption is the right answer there. But a figure shown to
+   * the listener is different: "about 4 s" derived from a guess is a number the app has no business
+   * stating, so the only consumer that needs evidence asks for it through {@link measuredRenderRatio}.
+   */
+  measured: boolean;
+  demoted: boolean;
+}
 
-const readStored = (): number | null => {
+const state = new Map<SidRendererId, RendererThroughput>();
+
+const throughputOf = (renderer: SidRendererId): RendererThroughput => {
+  let entry = state.get(renderer);
+  if (!entry) {
+    entry = { cached: null, samples: 0, measured: false, demoted: false };
+    state.set(renderer, entry);
+  }
+  return entry;
+};
+
+const readStored = (renderer: SidRendererId): number | null => {
   try {
-    const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
+    const raw = globalThis.localStorage?.getItem(storageKey(renderer));
     if (!raw) return null;
     const value = Number(raw);
     return Number.isFinite(value) && value >= MIN_PLAUSIBLE_RATIO && value <= MAX_PLAUSIBLE_RATIO ? value : null;
@@ -108,21 +140,22 @@ const readStored = (): number | null => {
 };
 
 /** Seconds of audio this device renders per second of wall time, as measured so far. */
-export const renderRatio = (): number => {
-  if (cached === null) {
-    const stored = readStored();
+export const renderRatio = (renderer: SidRendererId = active): number => {
+  const entry = throughputOf(renderer);
+  if (entry.cached === null) {
+    const stored = readStored(renderer);
     // A remembered ratio is still a measurement — it was measured in an earlier session — so it
     // counts as evidence. The assumption does not. It also counts as ALREADY past the demotion
     // threshold: it is the settled average of an earlier session's samples, not a single reading,
     // so a device measured too slow yesterday must not be handed the accurate renderer again today
     // while this session works its way back up to five samples.
     if (stored !== null) {
-      measured = true;
-      samples = Math.max(samples, MIN_SAMPLES_TO_DEMOTE);
+      entry.measured = true;
+      entry.samples = Math.max(entry.samples, MIN_SAMPLES_TO_DEMOTE);
     }
-    cached = stored ?? ASSUMED_RATIO;
+    entry.cached = stored ?? ASSUMED_RATIO;
   }
-  return cached;
+  return entry.cached;
 };
 
 /**
@@ -131,9 +164,9 @@ export const renderRatio = (): number => {
  * Used where the figure is shown to the listener rather than used to size a buffer. Callers must
  * drop whatever they derived from it when this turns null again, which it does after a reset.
  */
-export const measuredRenderRatio = (): number | null => {
-  const ratio = renderRatio();
-  return measured ? ratio : null;
+export const measuredRenderRatio = (renderer: SidRendererId = active): number | null => {
+  const ratio = renderRatio(renderer);
+  return throughputOf(renderer).measured ? ratio : null;
 };
 
 /**
@@ -143,16 +176,21 @@ export const measuredRenderRatio = (): number | null => {
  * that report no time are ignored rather than treated as infinitely fast — those come from the
  * pre-render cache, which is a buffer read and says nothing about the renderer.
  */
-export const recordRenderMeasurement = (audioSeconds: number, wallMs: number): void => {
+export const recordRenderMeasurement = (
+  audioSeconds: number,
+  wallMs: number,
+  renderer: SidRendererId = active,
+): void => {
   if (audioSeconds <= 0 || wallMs <= 0) return;
   const ratio = audioSeconds / (wallMs / 1000);
   if (ratio < MIN_PLAUSIBLE_RATIO || ratio > MAX_PLAUSIBLE_RATIO) return;
-  const next = cached === null ? ratio : cached * (1 - SMOOTHING) + ratio * SMOOTHING;
-  cached = next;
-  samples += 1;
-  measured = true;
+  const entry = throughputOf(renderer);
+  const next = entry.cached === null ? ratio : entry.cached * (1 - SMOOTHING) + ratio * SMOOTHING;
+  entry.cached = next;
+  entry.samples += 1;
+  entry.measured = true;
   try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, String(next));
+    globalThis.localStorage?.setItem(storageKey(renderer), String(next));
   } catch (error) {
     // A device that cannot persist this still benefits within the session.
     addLog("debug", "Could not persist render throughput", { error: (error as Error)?.message ?? String(error) });
@@ -165,8 +203,8 @@ export const recordRenderMeasurement = (audioSeconds: number, wallMs: number): v
  * Derived from the measured ratio, so it tightens as the device proves itself and loosens when it
  * struggles. Never a fixed delay.
  */
-export const startupBufferSeconds = (): number => {
-  const ratio = renderRatio();
+export const startupBufferSeconds = (renderer: SidRendererId = active): number => {
+  const ratio = renderRatio(renderer);
   // A renderer at or below real time can never build headroom, so it gets the cap: the buffer is all
   // the protection available to it.
   const headroomPerSecond = ratio - 1;
@@ -175,7 +213,8 @@ export const startupBufferSeconds = (): number => {
 };
 
 /** The same figure in milliseconds, which is what the native track's prime depth is set from. */
-export const startupBufferMs = (): number => Math.round(startupBufferSeconds() * 1000);
+export const startupBufferMs = (renderer: SidRendererId = active): number =>
+  Math.round(startupBufferSeconds(renderer) * 1000);
 
 /**
  * Ratio below which reSIDfp is not viable on this device.
@@ -202,8 +241,6 @@ const VIABLE_RATIO = 1.15;
  */
 const MIN_SAMPLES_TO_DEMOTE = 5;
 
-let accurateDemoted = false;
-
 /**
  * Whether the accurate emulation can keep up here.
  *
@@ -215,21 +252,22 @@ let accurateDemoted = false;
  * evidence that a device cannot manage. Before that threshold the accurate renderer is kept, which
  * is the same answer an unmeasured device already got.
  */
-export const accurateEngineViable = (): boolean => {
-  // Sticky for the session: SIDLite's chunks feed the same ratio, so judging reSIDfp by them would
-  // bring it back on the next tune, which would stall and fall back again.
-  if (!accurateDemoted) accurateDemoted = renderRatio() < VIABLE_RATIO && samples >= MIN_SAMPLES_TO_DEMOTE;
-  return !accurateDemoted;
+export const accurateEngineViable = (renderer: SidRendererId = "residfp"): boolean => {
+  // Sticky for the session: once demoted, the renderer is no longer used, so nothing would ever
+  // measure it again — and bringing it back on the next tune would stall and fall back again.
+  const entry = throughputOf(renderer);
+  if (!entry.demoted) entry.demoted = renderRatio(renderer) < VIABLE_RATIO && entry.samples >= MIN_SAMPLES_TO_DEMOTE;
+  return !entry.demoted;
 };
 
 /** Test seam: forget what has been learned. */
 export const __resetRenderThroughput = (): void => {
-  cached = null;
-  measured = false;
-  samples = 0;
-  accurateDemoted = false;
+  state.clear();
+  active = "residfp";
   try {
-    globalThis.localStorage?.removeItem(STORAGE_KEY);
+    for (const renderer of ["residfp", "sidlite", "sidplayez"] as const) {
+      globalThis.localStorage?.removeItem(storageKey(renderer));
+    }
   } catch (error) {
     // Nothing stored, nothing to forget.
     addLog("debug", "Could not clear stored render throughput", {
