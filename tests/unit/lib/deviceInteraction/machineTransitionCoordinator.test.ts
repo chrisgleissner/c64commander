@@ -86,4 +86,22 @@ describe("createMachineTransitionCoordinator", () => {
 
     expect(order).toEqual(["resume", "pause"]);
   });
+
+  it("is idle only once the transition under way and the one queued behind it have both ended", async () => {
+    const coordinator = createMachineTransitionCoordinator();
+    const order: string[] = [];
+    let finishPause!: () => void;
+    void coordinator
+      .request("paused", () => new Promise<void>((resolve) => (finishPause = resolve)))
+      .then(() => order.push("paused"));
+    void coordinator.request("running", async () => void order.push("running")).catch(() => undefined);
+
+    const idle = coordinator.idle().then(() => order.push("idle"));
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    finishPause();
+    await idle;
+
+    expect(order).toEqual(["paused", "running", "idle"]);
+  });
 });

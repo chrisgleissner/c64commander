@@ -499,6 +499,26 @@ describe("c64api", () => {
     window.removeEventListener("c64u-connection-change", handler as EventListener);
   });
 
+  it("holds the simulated device's token before listeners hear of the route to it", () => {
+    const tokensSeenByListeners: (string | undefined)[] = [];
+    const handler = () => tokensSeenByListeners.push(getC64API().getMockToken());
+    window.addEventListener("c64u-connection-change", handler);
+
+    applyC64APIRuntimeConfig("http://127.0.0.1:37297", undefined, "127.0.0.1:37297", { mockToken: "boot-token" });
+    applyC64APIRuntimeConfig("http://runtime", "runtime-pass", "runtime-host");
+
+    window.removeEventListener("c64u-connection-change", handler);
+    expect(tokensSeenByListeners).toEqual(["boot-token", undefined]);
+  });
+
+  it("does not send the simulated device's token to a host entered in Settings", () => {
+    applyC64APIRuntimeConfig("http://127.0.0.1:37297", undefined, "127.0.0.1:37297", { mockToken: "boot-token" });
+
+    updateC64APIConfig("http://real-host", undefined, "real-host");
+
+    expect(getC64API().getMockToken()).toBeUndefined();
+  });
+
   it("migrates legacy base url into device host storage", () => {
     localStorage.setItem("c64u_base_url", "http://192.0.2.55");
 

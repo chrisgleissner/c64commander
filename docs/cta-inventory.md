@@ -631,7 +631,7 @@ when SID Radio is on]` ;
   `[developer-mode only]` ;
   SID emulation — button group — `settings-sid-engine-residfp|sidlite`
   (`settings-sid-engine`) — R✅ I✅ _(shown whenever on-device playback is on, also
-  without developer mode; Accurate (reSIDfp) is the default)_ ; SID chip
+  without developer mode; the default is Accurate (reSIDfp), or Light (SIDLite) in the keypad edition)_ ; SID chip
   (`settings-sid-chip`): Match my Commodore 64 — checkbox —
   `settings-sid-chip-from-device` — R✅ I✅ _(default on; reads the chip from the
   connected Ultimate and remembers it)_ ; fallback chip — button group —

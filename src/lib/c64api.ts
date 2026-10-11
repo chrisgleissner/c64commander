@@ -2228,7 +2228,8 @@ export class C64API {
               // Always log as error so the entry is captured when the diagnostics
               // overlay is open. The transient flag marks recoverable upload failures.
               addErrorLog(
-                "C64 API upload failed",
+                // This path also carries readMemory, whose failures are reads, not uploads.
+                nativeArrayBufferResponse ? "C64 API memory read failed" : "C64 API upload failed",
                 transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
               );
             }
@@ -3311,6 +3312,8 @@ export function updateC64APIConfig(
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
+  // A host the user enters is never the simulated device, so its token must not follow them there.
+  api.setMockToken(undefined);
   localStorage.removeItem("c64u_base_url");
   persistDeviceHostToStorage(resolvedDeviceHost);
   localStorage.removeItem("c64u_password");
@@ -3386,7 +3389,7 @@ export function applyC64APIRuntimeConfig(
   baseUrl: string,
   password?: string,
   deviceHost?: string,
-  options?: { reason?: string },
+  options?: { reason?: string; mockToken?: string },
 ) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost, {
@@ -3396,10 +3399,10 @@ export function applyC64APIRuntimeConfig(
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
-  // Clear any prior mock token by default; the demo-mode caller re-applies it via
-  // setMockToken() right after this call so the token never leaks to a real device
-  // (HARD10-005).
-  api.setMockToken(undefined);
+  // Only a route to the simulated device carries its token, so it never leaks to a real device (HARD10-005).
+  // It is set here, before the change is announced below: listeners refetch at once, and a request built
+  // before the token was in place was refused 401 by the simulated device.
+  api.setMockToken(options?.mockToken);
   addLog("info", "API routing updated (runtime)", {
     baseUrl: resolvedBaseUrl,
     deviceHost: resolvedDeviceHost,

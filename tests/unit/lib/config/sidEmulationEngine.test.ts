@@ -1,16 +1,17 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_SID_EMULATION_ENGINE, loadSidEmulationEngine, saveSidEmulationEngine } from "@/lib/config/appSettings";
 import { variant } from "@/generated/variant";
+import { DEFAULT_VARIANTS_PATH, parseVariantSource } from "../../../../scripts/generate-variant.mjs";
 
 /**
- * Every variant defaults to the accurate engine, and that is worth pinning:
- * the cheap one is a real, audible downgrade, so switching a variant's default
- * to it must be a deliberate act backed by a measurement on that device.
+ * The default emulation is a per-edition decision and is worth pinning: SIDLite is audibly not a C64,
+ * so only an edition whose target hardware cannot hold reSIDfp in real time may default to it.
  *
- * Measured like-for-like (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §6.3a):
- *   reSIDfp   4.3x realtime  — ~39% of one core on a Pixel 4, 0 underruns
- *   SIDLite  23.8x realtime  — ~5.5x cheaper, but audibly not a C64
+ * Measured on a Pixel 4 (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §6.3a):
+ *   reSIDfp   495 ms of CPU per second of audio, 0 underruns
+ *   SIDLite   158 ms of CPU per second of audio
  */
 describe("SID emulation engine setting", () => {
   beforeEach(() => {
@@ -23,11 +24,22 @@ describe("SID emulation engine setting", () => {
     );
   });
 
-  it("defaults to the accurate engine on every shipped variant", () => {
-    // No variant may quietly ship the lesser engine. The keypad variant targets
-    // an unreleased handset; defaulting it to SIDLite on a spec-sheet
-    // projection would degrade the hardware that exists to protect hardware that
-    // does not. Change this only alongside a measurement on the real device.
+  it("defaults the general edition to reSIDfp and the keypad edition to SIDLite", () => {
+    const config = parseVariantSource(readFileSync(DEFAULT_VARIANTS_PATH, "utf8"));
+    const editions = Object.values(config.variants) as {
+      runtime: { defaultT9InputEnabled: boolean; defaultSidEmulationEngine: string };
+    }[];
+    const keypadEditions = editions.filter((edition) => edition.runtime.defaultT9InputEnabled);
+
+    expect(config.variants[config.repo.defaultVariant].runtime.defaultSidEmulationEngine).toBe("residfp");
+    expect(keypadEditions.length).toBeGreaterThan(0);
+    for (const edition of keypadEditions) expect(edition.runtime.defaultSidEmulationEngine).toBe("sidlite");
+    for (const edition of editions.filter((candidate) => !keypadEditions.includes(candidate))) {
+      expect(edition.runtime.defaultSidEmulationEngine).toBe("residfp");
+    }
+  });
+
+  it("builds the general edition with reSIDfp as its default", () => {
     expect(variant.runtime.defaultSidEmulationEngine).toBe("residfp");
     expect(DEFAULT_SID_EMULATION_ENGINE).toBe("residfp");
   });

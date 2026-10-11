@@ -37,7 +37,7 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
 
 const mirror = {
   audioLive: false,
-  session: { startAudio: vi.fn().mockResolvedValue(undefined), stopAudio: vi.fn().mockResolvedValue(undefined) },
+  session: { setAudioWanted: vi.fn().mockResolvedValue(undefined) },
 };
 vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
 
@@ -186,8 +186,7 @@ describe("PlaybackEngineToggle listen targets", () => {
     localStorage.clear();
     mirror.audioLive = false;
     playback.deviceInfo = null;
-    mirror.session.startAudio.mockClear();
-    mirror.session.stopAudio.mockClear();
+    mirror.session.setAudioWanted.mockClear();
   });
   afterEach(() => cleanup());
 
@@ -202,7 +201,16 @@ describe("PlaybackEngineToggle listen targets", () => {
     renderChooser();
     fireEvent.click(screen.getByTestId("playback-listen-both"));
     expect(loadPlaybackEngine()).toBe("c64");
-    expect(mirror.session.startAudio).toHaveBeenCalledTimes(1);
+    expect(mirror.session.setAudioWanted).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("asks for the mirror it wants even when the last state it saw already matches", () => {
+    // A stop still queued from "Here" leaves the mirror reading live. Deciding from that skipped the
+    // start, so the stop then ran and "Both" played on the C64 alone.
+    mirror.audioLive = true;
+    renderChooser();
+    fireEvent.click(screen.getByTestId("playback-listen-both"));
+    expect(mirror.session.setAudioWanted).toHaveBeenCalledExactlyOnceWith(true);
   });
 
   it("shows Both as selected while the mirror is live", () => {
@@ -222,7 +230,7 @@ describe("PlaybackEngineToggle listen targets", () => {
     expect(screen.getByTestId("playback-engine-c64")).toBeInTheDocument();
     expect(screen.getByTestId("playback-engine-local")).toBeInTheDocument();
     expect(screen.queryByTestId("playback-listen-both")).not.toBeInTheDocument();
-    expect(mirror.session.startAudio).not.toHaveBeenCalled();
+    expect(mirror.session.setAudioWanted).not.toHaveBeenCalled();
   });
 
   it("offers Both on an integrated Ultimate 64-family computer", () => {
@@ -235,7 +243,7 @@ describe("PlaybackEngineToggle listen targets", () => {
     mirror.audioLive = true;
     renderChooser();
     fireEvent.click(screen.getByTestId("playback-engine-c64"));
-    expect(mirror.session.stopAudio).toHaveBeenCalledTimes(1);
+    expect(mirror.session.setAudioWanted).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it("stops the mirror when moving to this device, so the C64 is not left sounding under it", () => {
@@ -243,7 +251,7 @@ describe("PlaybackEngineToggle listen targets", () => {
     renderChooser();
     fireEvent.click(screen.getByTestId("playback-engine-local"));
     expect(loadPlaybackEngine()).toBe("local");
-    expect(mirror.session.stopAudio).toHaveBeenCalledTimes(1);
+    expect(mirror.session.setAudioWanted).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   /**
@@ -253,7 +261,7 @@ describe("PlaybackEngineToggle listen targets", () => {
    */
   it("logs a failed stop when moving to this device, matching the c64/both branch", async () => {
     mirror.audioLive = true;
-    mirror.session.stopAudio.mockRejectedValueOnce(new Error("bridge unavailable"));
+    mirror.session.setAudioWanted.mockRejectedValueOnce(new Error("bridge unavailable"));
     vi.mocked(addLog).mockClear();
     renderChooser();
     await act(async () => {
@@ -265,6 +273,22 @@ describe("PlaybackEngineToggle listen targets", () => {
       "warn",
       expect.stringContaining("could not stop"),
       expect.objectContaining({ error: expect.stringContaining("bridge unavailable") }),
+    );
+  });
+
+  it("logs a stop that failed with something other than an Error, as text", async () => {
+    mirror.session.setAudioWanted.mockRejectedValueOnce("bridge down");
+    vi.mocked(addLog).mockClear();
+    renderChooser();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("playback-engine-local"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not stop"),
+      expect.objectContaining({ error: "bridge down" }),
     );
   });
 

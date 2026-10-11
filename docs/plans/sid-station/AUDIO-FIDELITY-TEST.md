@@ -473,16 +473,15 @@ is specified as a **MediaTek Helio G81** — 2× Cortex-A75 @ 2.0 GHz + 6× A55 
 single-threaded** than the Pixel 4's Cortex-A76 @ 2.84 GHz on 7 nm, which would put reSIDfp at
 ~1240 ms/sec: past realtime.
 
-**Decision: every variant defaults to reSIDfp, including the keypad one.** The projection above is
-not a measurement, and acting on it would ship an audible quality regression on the hardware that
-exists in order to protect hardware that does not. Sounding like a C64 is the point of playing a SID,
-and the only device we can test runs reSIDfp with zero underruns. SIDLite is built, shipped and one
-tap away in Settings for anyone who needs it.
+**Decision: the general edition defaults to reSIDfp, and the keypad edition to SIDLite.** The Pixel 4
+renders reSIDfp at about 2x real time, and the keypad handset is projected 1.6-3x slower per core, which
+puts it at 0.7-1.3x real time. The engine falls back to SIDLite on its own below 1.15x, so on that
+handset a reSIDfp default would most likely mean a stall on the first tune and SIDLite afterwards. The
+keypad edition therefore starts on SIDLite, and reSIDfp stays one tap away in Settings. This is still a
+projection: run gate L1 on the handset once it can be tested, and revisit.
 
-The mechanism is in place: `variants.yaml` carries `default_sid_emulation_engine` per variant. When
-the 8020 ships, run gate L1 on it and set that key to `sidlite` if it cannot hold realtime. A unit
-test pins the current state so no variant can quietly start shipping the lesser engine without a
-measurement behind it.
+`variants.yaml` carries `default_sid_emulation_engine` per variant, with the reasoning next to it. A
+unit test pins the default of every edition, so none can change without that test changing too.
 
 ### 6.4 Engine strategy — WASM vs a bundled native libsidplayfp
 

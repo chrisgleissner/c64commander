@@ -1091,7 +1091,9 @@ const transitionToDemoActive = async (
   }
   if (startedMock) {
     demoServerStartedThisSession = true;
-    applyC64APIRuntimeConfig(startedMock.baseUrl, undefined, getDeviceHostFromBaseUrl(startedMock.baseUrl));
+    applyC64APIRuntimeConfig(startedMock.baseUrl, undefined, getDeviceHostFromBaseUrl(startedMock.baseUrl), {
+      mockToken: startedMock.token,
+    });
     if (startedMock.ftpPort) setRuntimeFtpPortOverride(startedMock.ftpPort);
     // The token is applied below, once the active server is known.
   }
@@ -1099,10 +1101,8 @@ const transitionToDemoActive = async (
   const activeMockUrl = getActiveMockBaseUrl();
   if (activeMockUrl) {
     const mockHost = getDeviceHostFromBaseUrl(activeMockUrl);
-    applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost);
-    // Authenticate the WebView to the (now token-gated) loopback mock servers and redirect every
-    // service that has to follow the mock. applyC64APIRuntimeConfig above cleared any prior mock
-    // token, so this re-applies it.
+    applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost, { mockToken: getActiveMockToken() ?? undefined });
+    // Redirect every other service that has to follow the mock, authenticated with the same token.
     pointServicesAtMock(activeMockUrl, getActiveMockFtpPort(), getActiveMockToken() ?? null);
     addLog("info", "Demo mode using mock C64U", {
       trigger,
@@ -1139,7 +1139,7 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   const { baseUrl, ftpPort, token } = await startMockServer();
   demoServerStartedThisSession = true;
   const mockHost = getDeviceHostFromBaseUrl(baseUrl);
-  applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
+  applyC64APIRuntimeConfig(baseUrl, undefined, mockHost, { mockToken: token });
   pointServicesAtMock(baseUrl, ftpPort, token ?? null);
   setSnapshot({
     lastProbeAtMs: Date.now(),

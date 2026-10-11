@@ -76,20 +76,17 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
 
   const select = (target: ListenTarget) => {
     if (target === "local") {
-      // Nothing to mirror once the tune renders here, and leaving the stream up
-      // would keep the C64's audio playing underneath the on-device engine.
-      if (audioLive) {
-        void session.stopAudio().catch((error) => {
-          // A failed stop here means the C64's mirrored audio keeps playing
-          // audibly underneath the newly started local engine (HARD25-007) - log it
-          // the same way the "both"/"c64" branch below logs its own stopAudio()/
-          // startAudio() failure, instead of discarding it silently.
-          addLog("warn", "Playback: could not stop Live View audio", {
-            service: "playback",
-            error: error instanceof Error ? error.message : String(error),
-          });
+      // Nothing to mirror once the tune renders here, and leaving the stream up would keep the C64's audio
+      // playing underneath the on-device engine. Asked of the session's queue, never decided from `audioLive`:
+      // a start still queued from a "Both" a moment ago reads as not live and would otherwise be left to run.
+      void session.setAudioWanted(false).catch((error) => {
+        // A failed stop here means the C64's mirrored audio keeps playing audibly underneath the newly
+        // started local engine (HARD25-007).
+        addLog("warn", "Playback: could not stop Live View audio", {
+          service: "playback",
+          error: error instanceof Error ? error.message : String(error),
         });
-      }
+      });
       setEngine("local");
       return;
     }
@@ -99,8 +96,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     // to the C64, and without a recorded preference it did that even to a listener who had just
     // chosen the C64's own speakers — so "<device>" lasted until the next track and no longer.
     saveMirrorC64Audio(wantMirror);
-    if (wantMirror === audioLive) return;
-    void (wantMirror ? session.startAudio() : session.stopAudio()).catch((error) => {
+    void session.setAudioWanted(wantMirror).catch((error) => {
       // A start that fails means this device cannot stream its audio here, so
       // stop offering the option rather than leaving a button that does nothing.
       if (wantMirror) setStreamingFailed(true);
