@@ -19,7 +19,12 @@
  */
 
 import { toLocalSidError } from "./localSidWorkerCore";
-import type { EngineSidModel, LocalSidMainToWorker, LocalSidWorkerToMain } from "./localSidWorkerProtocol";
+import type {
+  EngineSidModel,
+  LocalSidEmulation,
+  LocalSidMainToWorker,
+  LocalSidWorkerToMain,
+} from "./localSidWorkerProtocol";
 
 /**
  * Absolute path to the loader, served from the app root like the SID Radio bundle.
@@ -43,13 +48,11 @@ interface SidAudioEngineLike {
   dispose(): void;
 }
 interface SidAudioEngineCtor {
-  new (options: { sampleRate?: number; stereo?: boolean; engine?: SidEmulation }): SidAudioEngineLike;
+  new (options: { sampleRate?: number; stereo?: boolean; engine?: LocalSidEmulation }): SidAudioEngineLike;
 }
 interface LibsidplayfpModule {
   SidAudioEngine: SidAudioEngineCtor;
 }
-
-type SidEmulation = "residfp" | "sidlite";
 
 interface WorkerScope {
   postMessage(message: LocalSidWorkerToMain, transfer?: Transferable[]): void;
@@ -63,12 +66,6 @@ ctx.__runsInWorker = true;
 
 let EngineCtor: SidAudioEngineCtor | null = null;
 let engine: SidAudioEngineLike | null = null;
-/**
- * Which emulation to instantiate. reSIDfp and SIDLite are separate WASM
- * artifacts shipped side by side; `SidAudioEngine` resolves the right one from
- * this option, and caches per engine, so the module import itself is shared.
- */
-let requestedEmulation: SidEmulation = "residfp";
 
 async function ensureModule(): Promise<SidAudioEngineCtor> {
   if (EngineCtor) return EngineCtor;
@@ -123,7 +120,6 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
     switch (message.type) {
       case "load": {
         const startedAt = performance.now();
-        if (message.engine) requestedEmulation = message.engine;
         await ensureModule();
         ctx.postMessage({ type: "ready", moduleLoadMs: performance.now() - startedAt });
         return;
@@ -152,7 +148,11 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         const openStartedAt = performance.now();
         const Ctor = await ensureModule();
         const moduleReadyAt = performance.now();
-        engine = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
+        engine = new Ctor({
+          sampleRate: message.sampleRate,
+          stereo: true,
+          engine: message.engine,
+        });
         const engineReadyAt = performance.now();
         // Must precede loadSidBuffer: the engine reloads the current tune when
         // ROMs change, and we want the tune opened against the real ROMs once.
@@ -215,7 +215,11 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         // render the future would fast-forward what the listener is hearing.
         const Ctor = await ensureModule();
         const bytes = new Uint8Array(message.sidBytes);
-        const offline = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
+        const offline = new Ctor({
+          sampleRate: message.sampleRate,
+          stereo: true,
+          engine: message.engine,
+        });
         try {
           // Nulls when there are no images, for the same reason the `open` branch above takes them:
           // libsidplayfp synthesizes a minimal KERNAL and a PSID renders identically either way.

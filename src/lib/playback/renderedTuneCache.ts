@@ -7,8 +7,19 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { effectiveSidEmulationEngine, resolveLocalSidModel } from "@/lib/config/appSettings";
+import { effectiveSidEmulationEngine, resolveLocalSidModel, type SidEmulationEngine } from "@/lib/config/appSettings";
 import { hasCompleteRomSet } from "@/lib/roms/romStore";
+import { accurateEngineViable } from "./renderThroughput";
+
+/**
+ * The emulation a tune renders with: the listener's choice, or SIDLite on a device measured too slow for
+ * reSIDfp. Live playback, the pre-render, the lead-in and the cache key all take it from here, so cached
+ * audio is never spliced into live audio of the other emulation.
+ */
+export const playbackSidEmulation = (): SidEmulationEngine => {
+  const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
+  return preferred === "residfp" && !accurateEngineViable() ? "sidlite" : preferred;
+};
 
 /**
  * The cache key for one rendered tune.
@@ -38,9 +49,7 @@ import { hasCompleteRomSet } from "@/lib/roms/romStore";
  */
 export const buildRenderedTuneKey = (itemId: string, tuneIndex: number): string => {
   const romsAvailable = hasCompleteRomSet();
-  return `${itemId}#${tuneIndex}@${resolveLocalSidModel()}/${effectiveSidEmulationEngine(romsAvailable)}${
-    romsAvailable ? "" : "/noroms"
-  }`;
+  return `${itemId}#${tuneIndex}@${resolveLocalSidModel()}/${playbackSidEmulation()}${romsAvailable ? "" : "/noroms"}`;
 };
 
 /**

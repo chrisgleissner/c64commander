@@ -22,7 +22,7 @@ import {
   nativeLocalAudioAvailable,
   type NativeLocalAudioBackend,
 } from "./localSidNativeSink";
-import { accurateEngineViable, recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
+import { recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
@@ -39,7 +39,7 @@ import { traceLocalSid } from "./localSidTrace";
  * transition; too large only costs a little memory.
  */
 const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
-import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -513,6 +513,7 @@ export class LocalSidEngine {
   private readonly requestedSampleRate: number;
 
   private worker: LocalSidWorkerLike | null = null;
+  private announcedSlowDeviceFallback = false;
   private loadPending: { resolve: () => void; reject: (e: Error) => void } | null = null;
   /** Shared in-flight module load, so overlapping callers cannot displace each other's resolver. */
   private loadInFlight: Promise<void> | null = null;
@@ -861,13 +862,9 @@ export class LocalSidEngine {
           reject(error);
         },
       };
-      // Read at load time, not construction: the worker is torn down between
-      // sessions, so a change in Settings takes effect on the next play.
-      // Chosen against the ROMs actually stored, not just the preference: the accurate engine cannot
-      // render a note without them. The worker is loaded once, so a set of ROMs that arrives later
-      // takes effect on the next worker rather than mid-tune — which is the same rule the emulation
-      // preference itself already follows.
-      worker.postMessage({ type: "load", engine: this.chosenEmulation() });
+      // The emulation is not chosen here: every open names its own, so a change in Settings applies
+      // to the next tune on this same worker.
+      worker.postMessage({ type: "load" });
     });
     return this.loadInFlight;
   }
@@ -1013,6 +1010,7 @@ export class LocalSidEngine {
           // Read per-play, like the ROMs above and for the same reason: changing the chip in
           // Settings then applies from the very next tune rather than after a restart.
           sidModel: toEngineSidModel(resolveLocalSidModel()),
+          engine: this.chosenEmulation(),
         },
         transfer,
       );
@@ -2149,6 +2147,7 @@ export class LocalSidEngine {
             ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
             : undefined,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
+        engine: playbackSidEmulation(),
       },
       [sidBytes],
     );
@@ -2173,13 +2172,16 @@ export class LocalSidEngine {
    * taken because a tune that pauses is worse than a tune that sounds a little different.
    */
   private chosenEmulation(): SidEmulationEngine {
-    const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
-    if (preferred === "sidlite" || accurateEngineViable()) return preferred;
-    addLog("warn", "Falling back to SIDLite: this device cannot render reSIDfp in real time", {
-      service: "local-sid",
-      renderRatio: +renderRatio().toFixed(2),
-    });
-    return "sidlite";
+    const chosen = playbackSidEmulation();
+    const fallingBack = chosen !== effectiveSidEmulationEngine(hasCompleteRomSet());
+    if (fallingBack && !this.announcedSlowDeviceFallback) {
+      addLog("warn", "Falling back to SIDLite: this device cannot render reSIDfp in real time", {
+        service: "local-sid",
+        renderRatio: +renderRatio().toFixed(2),
+      });
+    }
+    this.announcedSlowDeviceFallback = fallingBack;
+    return chosen;
   }
 
   private ensureWarmWorker(): LocalSidWorkerLike {
@@ -2202,10 +2204,7 @@ export class LocalSidEngine {
         });
         if (this.warmWorker === warmWorker) this.discardWarmWorker();
       });
-      this.warmWorker.postMessage({
-        type: "load",
-        engine: effectiveSidEmulationEngine(hasCompleteRomSet()),
-      });
+      this.warmWorker.postMessage({ type: "load" });
     }
     return this.warmWorker;
   }
@@ -2403,6 +2402,7 @@ export class LocalSidEngine {
         seconds,
         roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
+        engine: playbackSidEmulation(),
       },
       romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
     );

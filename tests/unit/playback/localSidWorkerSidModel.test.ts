@@ -27,6 +27,8 @@ type TuneSidModel = "UNKNOWN" | "MOS6581" | "MOS8580" | "ANY";
 let declaredModels: TuneSidModel[] = ["UNKNOWN"];
 /** Ordered log of the engine calls the worker made, so ordering is assertable. */
 let calls: string[] = [];
+/** The emulation each engine instance was built with. */
+let constructedEmulations: (string | undefined)[] = [];
 
 class FakeSidAudioEngine {
   /** libsidplayfp's own SidConfig defaults, which is what an unconfigured engine has. */
@@ -36,8 +38,9 @@ class FakeSidAudioEngine {
   };
   private loaded = false;
 
-  constructor(_options: { sampleRate?: number; stereo?: boolean }) {
+  constructor(options: { sampleRate?: number; stereo?: boolean; engine?: string }) {
     calls.push("construct");
+    constructedEmulations.push(options.engine);
   }
   async setSystemROMs(_kernal: Uint8Array | null, _basic: Uint8Array | null, _chargen: Uint8Array | null) {
     calls.push("setSystemROMs");
@@ -146,6 +149,7 @@ beforeEach(async () => {
   await drain();
   declaredModels = ["UNKNOWN"];
   calls = [];
+  constructedEmulations = [];
   posted.length = 0;
 });
 
@@ -244,5 +248,31 @@ describe("localSid.worker fallback SID model", () => {
     expect(opened).toBeDefined();
     expect(calls).not.toContain("setEmulationConfig");
     expect(effectiveModels(opened)).toEqual(["MOS8580"]);
+  });
+});
+
+describe("localSid.worker emulation", () => {
+  it("builds each tune's engine, and each pre-render's, on the emulation the message names", async () => {
+    send({ type: "load" } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 1,
+      sidBytes: PSID_BYTES(),
+      songIndex: 0,
+      sampleRate: 48000,
+      engine: "sidlite",
+    } as LocalSidMainToWorker);
+    send({
+      type: "prerender",
+      id: 1,
+      sidBytes: PSID_BYTES(),
+      songIndex: 0,
+      sampleRate: 48000,
+      seconds: 1,
+      engine: "sidlite",
+    } as LocalSidMainToWorker);
+    await drainUntil(() => constructedEmulations.length >= 2);
+
+    expect(constructedEmulations).toEqual(["sidlite", "sidlite"]);
   });
 });

@@ -129,6 +129,14 @@ describe("whether the accurate renderer is still viable", () => {
     expect(accurateEngineViable()).toBe(false);
   });
 
+  it("stays demoted for the session however fast SIDLite then renders", () => {
+    for (let i = 0; i < 5; i += 1) recordRenderMeasurement(0.5, 2000);
+    expect(accurateEngineViable()).toBe(false);
+    for (let i = 0; i < 20; i += 1) recordRenderMeasurement(0.5, 20); // SIDLite, 25x
+    expect(renderRatio()).toBeGreaterThan(1.15);
+    expect(accurateEngineViable()).toBe(false);
+  });
+
   it("keeps the accurate renderer when a transient is averaged away again", () => {
     recordRenderMeasurement(0.5, 2000); // one bad chunk
     for (let i = 0; i < 20; i += 1) recordRenderMeasurement(0.5, 100); // 5x, sustained
