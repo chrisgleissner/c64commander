@@ -48,6 +48,9 @@ internal object SidplayEzNative {
 
   external fun nativeRevision(): String
 
+  /** The ABI the loaded library was built for: what this process runs, which a 64-bit phone may not. */
+  external fun nativeAbi(): String
+
   external fun nativeCreate(sampleRate: Int): Long
 
   external fun nativeDestroy(id: Long)

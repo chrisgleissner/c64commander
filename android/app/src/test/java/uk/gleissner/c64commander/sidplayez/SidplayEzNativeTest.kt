@@ -53,6 +53,13 @@ class SidplayEzNativeTest {
   }
 
   @Test
+  fun `reports the ABI the library was built for, not the phone's preferred one`() {
+    // A 32-bit build runs in a 32-bit process on a 64-bit phone; Build.SUPPORTED_ABIS would still
+    // name arm64-v8a there. The host library under test is the x86_64 build.
+    assertEquals("x86_64", SidplayEzNative.nativeAbi())
+  }
+
+  @Test
   fun `loads, renders audible and deterministic stereo, and describes the tune`() {
     val a = SidplayEzNative.nativeCreate(48000)
     val b = SidplayEzNative.nativeCreate(48000)

@@ -3,59 +3,41 @@
   "sidplayez": {
     "default": {
       "max_abs_offset_ms": 40,
-      "level_db": [-1.5, 1.5],
-      "min_envelope_corr": 0.85,
-      "min_chroma_sim": 0.85,
-      "max_band_db_mae": 2.0,
+      "level_db": [-1.0, 1.0],
+      "min_envelope_corr": 0.8,
+      "min_chroma_sim": 0.9,
+      "max_band_db_mae": 0.5,
       "max_abs_stereo_delta": 0.1
     },
     "overrides": [
       {
-        "tune": "digi-6581",
-        "level_db": [0.5, 3.5],
-        "reason": "libSidplayEZ plays $D418 volume-register samples on a 6581 about 2 dB louder than reSIDfp."
+        "tune": "envelopes",
+        "min_chroma_sim": 0.82,
+        "reason": "Gate retriggers faster than the envelope completes: the notes' onsets differ by a few samples, which moves the chroma of the short notes. reSIDfp against itself from another power-on state scores 0.98, so this is a libSidplayEZ difference, in the attack of retriggered notes."
       },
       {
-        "tune": "digi-8580",
-        "level_db": [-11.5, -7.0],
-        "reason": "On an 8580 libSidplayEZ plays $D418 volume-register samples about 9 dB quieter than reSIDfp; the real 8580 barely reproduces them, and which emulation is closer is not settled."
-      },
-      {
-        "tune": "tone-ladder",
-        "max_band_db_mae": 3.5,
-        "reason": "The ladder ramps $D418 to silence at the end of every note, so the same 8580 volume-register difference as digi-8580 shapes its spectrum."
-      },
-      {
-        "tune": "Commando",
-        "min_envelope_corr": 0.6,
-        "reason": "HVSC: reSIDfp's envelope differs on the fast arpeggios; chroma and band balance match closely."
-      },
-      {
-        "tune": "Cybernoid_II",
-        "min_envelope_corr": 0.75,
-        "reason": "HVSC: as Commando."
-      },
-      {
-        "tune": "Tusari",
-        "min_envelope_corr": 0.7,
-        "reason": "HVSC: as Commando; subsong 10 also starts 50 ms earlier, the start-up difference described in the architecture document.",
-        "max_abs_offset_ms": 60
-      },
-      {
-        "tune": "Storebror",
-        "level_db": [-2.5, 1.5],
-        "reason": "HVSC: an 8-bit digi, played about 1.7 dB quieter, the same register difference as digi-6581 in the other direction."
+        "tune": "three-sid",
+        "level_db": [-1.5, 0.5],
+        "max_band_db_mae": 1.0,
+        "reason": "Three chips play as libSidplayEZ's centred mono mix at the power reSIDfp gives uncorrelated chips (see the architecture document); this probe's chips are correlated, so the level and band balance differ."
       },
       {
         "tune": "A_Walk_in_the_Countryside_3SID",
-        "level_db": [-1.5, 2.5],
-        "reason": "HVSC: three chips. The wrapper plays them as a centred mono mix (see the architecture document), where reSIDfp's two sides correlate at 0.88 for this tune. The chips are correlated, so the mix also plays about 1.2 dB louder.",
-        "max_abs_stereo_delta": 0.15
+        "level_db": [0.0, 2.0],
+        "max_band_db_mae": 1.0,
+        "max_abs_stereo_delta": 0.15,
+        "reason": "HVSC: three chips, as three-sid. reSIDfp's two sides correlate at 0.88 here, against 1.0 for the centred mix."
       },
       {
-        "tune": "filter-6581",
-        "min_envelope_corr": 0.8,
-        "reason": "Filter sweeps at full resonance on a 6581: libSidplayEZ's tuned 6581 filter (gain, curve, leakage) swells differently from reSIDfp's; 0.88 over 20 s, 0.84 over 30 s."
+        "tune": "Commando",
+        "min_envelope_corr": 0.5,
+        "reason": "HVSC: the envelope measure depends on the oscillators' start phase in this tune. reSIDfp against itself scores 0.60 to 0.90 depending on the power-on delay alone; chroma 0.99 and band error 0.1 dB show the same notes and timbre."
+      },
+      {
+        "tune": "Tusari",
+        "max_abs_offset_ms": 60,
+        "min_envelope_corr": 0.7,
+        "reason": "HVSC: subsong 10 starts 50 ms earlier (libSidplayEZ discards the audio of the init routine), and its envelope measure moves with start phase as Commando's does; reSIDfp against itself scores 0.82."
       }
     ]
   },
@@ -113,6 +95,11 @@
         "tune": "filter-6581",
         "min_envelope_corr": 0.55,
         "reason": "SIDLite's 6581 filter is a simpler approximation; 0.69 over 20 s, 0.59 over 30 s."
+      },
+      {
+        "tune": "volume-steps-8580",
+        "level_db": [2.5, 6.5],
+        "reason": "As digi-8580: SIDLite plays 8580 volume-register steps about 4.5 dB louder than reSIDfp."
       }
     ]
   }

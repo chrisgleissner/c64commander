@@ -133,7 +133,7 @@ class SidAudioPlugin : Plugin() {
     result.put("sidplayezAvailable", reason == null)
     result.put("sidplayezUnavailableReason", reason)
     result.put("sidplayezRevision", if (reason == null) SidplayEzNative.nativeRevision() else null)
-    result.put("abi", Build.SUPPORTED_ABIS.firstOrNull())
+    result.put("abi", if (reason == null) SidplayEzNative.nativeAbi() else Build.SUPPORTED_ABIS.firstOrNull())
     result.put("binaryPortInstalled", portInstalled)
     result.put("binaryPortError", portError)
     result.put("binaryPortProbes", port.probesReceived)

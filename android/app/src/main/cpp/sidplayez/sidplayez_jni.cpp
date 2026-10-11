@@ -92,6 +92,10 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeCpuSupported)(JNIEnv*, jobject) {
   return c64commander::cpuSupported() ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jstring JNICALL JNI_FN(nativeAbi)(JNIEnv* env, jobject) {
+  return toJString(env, c64commander::libraryAbi());
+}
+
 JNIEXPORT jstring JNICALL JNI_FN(nativeRevision)(JNIEnv* env, jobject) {
   return toJString(env, c64commander::libraryRevision());
 }

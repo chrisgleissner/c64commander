@@ -179,4 +179,7 @@ bool cpuSupported();
 /** The pinned libSidplayEZ commit, injected by the build script. */
 const char* libraryRevision();
 
+/** The Android ABI this library was built for, which is the process's own. */
+const char* libraryAbi();
+
 } // namespace c64commander
