@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadLocalEngineEnabled, saveSidEmulationEngine, loadSidEmulationEngine } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled } from "@/lib/config/appSettings";
 import { LocalSidEngine } from "./localSidEngine";
 import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
 
@@ -97,9 +97,7 @@ export const registerLocalSidProbe = (): void => {
     // Two probes at once would each take the speaker from the other, and report the wreckage.
     if (running) throw new Error("A local SID probe is already running");
     running = true;
-    const previous = loadSidEmulationEngine();
-    saveSidEmulationEngine(request.renderer);
-    const engine = new LocalSidEngine();
+    const engine = new LocalSidEngine({ renderer: request.renderer });
     engine.setVolume(request.volume ?? 0);
     const startedAt = performance.now();
     const samples: LocalSidProbeSample[] = [];
@@ -152,7 +150,6 @@ export const registerLocalSidProbe = (): void => {
     } finally {
       stopLagMeasurement();
       engine.dispose();
-      saveSidEmulationEngine(previous);
       running = false;
     }
   };

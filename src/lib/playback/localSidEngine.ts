@@ -231,6 +231,8 @@ export interface LocalSidEngineOptions {
   targetBufferSeconds?: number;
   /** Requested output sample rate (engine may override). */
   sampleRate?: number;
+  /** Render with this one whatever Settings says, with no fallback: the device probe's choice. */
+  renderer?: SidEmulationEngine;
 }
 
 export interface LocalSidPlayCallbacks {
@@ -357,6 +359,7 @@ const MAX_IN_FLIGHT_RENDERS = Math.max(4, Math.ceil(DEFAULT_TARGET_BUFFER_SECOND
 export class LocalSidEngine {
   private readonly channelFactory: RendererChannelFactory;
   private readonly audioSinkFactory: LocalSidAudioSinkFactory;
+  private readonly fixedRenderer: SidEmulationEngine | null;
   private readonly chunkSeconds: number;
   private readonly targetBufferSeconds: number;
   private readonly requestedSampleRate: number;
@@ -555,6 +558,7 @@ export class LocalSidEngine {
     const injected = options.workerFactory;
     this.channelFactory = injected ? () => injected() : (options.rendererFactory ?? defaultRendererChannelFactory);
     this.audioSinkFactory = options.audioSinkFactory ?? defaultAudioSinkFactory;
+    this.fixedRenderer = options.renderer ?? null;
     this.chunkSeconds = options.chunkSeconds ?? DEFAULT_CHUNK_SECONDS;
     this.targetBufferSeconds = options.targetBufferSeconds ?? DEFAULT_TARGET_BUFFER_SECONDS;
     this.requestedSampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
@@ -2055,7 +2059,7 @@ export class LocalSidEngine {
     this.warmId += 1;
     this.warmKey = key;
     this.releaseIfUnused(this.warmPcm.reset());
-    const renderer = playbackSidEmulation();
+    const renderer = this.fixedRenderer ?? playbackSidEmulation();
     this.warmRenderer = renderer;
     this.ensureWarmWorker(renderer).postMessage(
       {
@@ -2095,6 +2099,7 @@ export class LocalSidEngine {
    * taken because a tune that pauses is worse than a tune that sounds a little different.
    */
   private chosenEmulation(): SidEmulationEngine {
+    if (this.fixedRenderer) return this.fixedRenderer;
     const chosen = playbackSidEmulation();
     const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
     const fallingBack = chosen !== preferred;
@@ -2348,7 +2353,7 @@ export class LocalSidEngine {
     this.prerenderKey = key;
     this.prerenderFraction = 0;
     this.releaseIfUnused(this.prerenderPcm.reset());
-    const renderer = playbackSidEmulation();
+    const renderer = this.fixedRenderer ?? playbackSidEmulation();
     this.prerenderRenderer = renderer;
     const romPayload =
       roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;

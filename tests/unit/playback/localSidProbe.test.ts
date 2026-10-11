@@ -20,7 +20,7 @@ const { FakeEngine } = vi.hoisted(() => {
     playResult = { started: true, romRequired: false, sampleRate: 48000, channels: 2, tuneInfo: null };
     playError: Error | null = null;
 
-    constructor() {
+    constructor(readonly options: { renderer?: string } = {}) {
       FakeEngine.instances.push(this);
     }
 
@@ -91,12 +91,16 @@ describe("registerLocalSidProbe", () => {
     expect(window.__localSidProbe).toBeUndefined();
   });
 
-  it("plays the tune silently through the chosen renderer, then restores the listener's choice", async () => {
+  it("plays the tune silently on an engine fixed to the chosen renderer, leaving the listener's choice alone", async () => {
     saveLocalEngineEnabled(true);
     saveSidEmulationEngine("residfp");
     registerLocalSidProbe();
-    const result = await run({ sid, renderer: "sidlite", seconds: 2, songIndex: 1 });
+    const pending = window.__localSidProbe!({ sid, renderer: "sidlite", seconds: 2, songIndex: 1 });
+    expect(loadSidEmulationEngine()).toBe("residfp");
+    await vi.advanceTimersByTimeAsync(3000);
+    const result = await pending;
     const engine = engines[0];
+    expect(engine.options.renderer).toBe("sidlite");
     expect(engine.volume).toBe(0);
     expect(Array.from(engine.opened!.bytes)).toEqual([0x50, 0x53, 0x49, 0x44]);
     expect(engine.opened!.songIndex).toBe(1);
@@ -134,7 +138,7 @@ describe("registerLocalSidProbe", () => {
     await expect(run({ sid, renderer: "residfp", seconds: 1 })).resolves.toMatchObject({ renderer: "residfp" });
   });
 
-  it("disposes the engine and restores the choice when the tune fails to open", async () => {
+  it("disposes the engine when the tune fails to open, leaving the listener's choice alone", async () => {
     saveLocalEngineEnabled(true);
     saveSidEmulationEngine("sidlite");
     registerLocalSidProbe();

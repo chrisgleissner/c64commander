@@ -162,6 +162,30 @@ describe("an engine with three renderers", () => {
     engine.dispose();
   });
 
+  it("renders with a renderer fixed at construction, whatever Settings says", async () => {
+    saveSidEmulationEngine("sidplayez");
+    channels = [];
+    sinks = [];
+    const engine = new LocalSidEngine({
+      renderer: "sidlite",
+      rendererFactory: (renderer, role) => {
+        const channel = new FakeChannel(renderer, role);
+        channels.push(channel);
+        return channel;
+      },
+      audioSinkFactory: (): LocalSidAudioSink => {
+        const made = makeSink();
+        sinks.push(made);
+        return { sink: made.sink, resume: vi.fn(), close: vi.fn() };
+      },
+    });
+    const { channel } = await open(engine, "tune");
+    expect(channel.last("open").engine).toBe("sidlite");
+    engine.prerender("tune", new ArrayBuffer(8), 0, 4);
+    expect(channels.find((c) => c.role === "prerender")!.last("prerender").engine).toBe("sidlite");
+    engine.dispose();
+  });
+
   it("moves to a WASM channel when the listener picks a WASM renderer, but keeps it between the two WASM ones", async () => {
     const engine = makeEngine();
     const first = (await open(engine)).channel;
