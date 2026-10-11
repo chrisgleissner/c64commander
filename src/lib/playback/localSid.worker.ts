@@ -152,7 +152,11 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         const openStartedAt = performance.now();
         const Ctor = await ensureModule();
         const moduleReadyAt = performance.now();
-        engine = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
+        engine = new Ctor({
+          sampleRate: message.sampleRate,
+          stereo: true,
+          engine: message.engine ?? requestedEmulation,
+        });
         const engineReadyAt = performance.now();
         // Must precede loadSidBuffer: the engine reloads the current tune when
         // ROMs change, and we want the tune opened against the real ROMs once.
@@ -215,7 +219,11 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         // render the future would fast-forward what the listener is hearing.
         const Ctor = await ensureModule();
         const bytes = new Uint8Array(message.sidBytes);
-        const offline = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
+        const offline = new Ctor({
+          sampleRate: message.sampleRate,
+          stereo: true,
+          engine: message.engine ?? requestedEmulation,
+        });
         try {
           // Nulls when there are no images, for the same reason the `open` branch above takes them:
           // libsidplayfp synthesizes a minimal KERNAL and a PSID renders identically either way.

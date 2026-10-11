@@ -6,7 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { saveSidEmulationEngine } from "@/lib/config/appSettings";
+import { clearLogs, getLogs } from "@/lib/logging";
+import { __resetRenderThroughput, recordRenderMeasurement } from "@/lib/playback/renderThroughput";
 import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
@@ -658,5 +661,54 @@ describe("LocalSidEngine — default environment factories", () => {
     await play;
     worker.emitError("worker died");
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("worker died") }));
+  });
+});
+
+describe("LocalSidEngine emulation choice", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    clearLogs();
+    __resetRenderThroughput();
+  });
+
+  it("opens the next tune on the emulation picked in Settings, without a new worker", async () => {
+    const { engine, worker } = makeEngine();
+    const first = engine.play(new ArrayBuffer(64), 0, {});
+    await completeOpen(worker);
+    await first;
+
+    saveSidEmulationEngine("sidlite");
+    const second = engine.play(new ArrayBuffer(64), 0, {});
+    await flush();
+    worker.emit({ type: "opened", id: 2, sampleRate: 48000, channels: 2, tuneInfo: null, romRequired: false });
+    await second;
+
+    expect(worker.sentOfType("open").map((message) => message.engine)).toEqual(["residfp", "sidlite"]);
+    expect(worker.sentOfType("load")).toHaveLength(1);
+  });
+
+  it("pre-renders and warms lead-ins on the emulation picked in Settings", () => {
+    const { engine, worker } = makeEngine();
+    engine.prerender("tune-a", new ArrayBuffer(8), 0, 4);
+    saveSidEmulationEngine("sidlite");
+    engine.prerender("tune-b", new ArrayBuffer(8), 0, 4);
+    engine.warmLeadIn("tune-c", new ArrayBuffer(8), 0, 4);
+
+    expect(worker.sentOfType("prerender").map((message) => message.engine)).toEqual(["residfp", "sidlite", "sidlite"]);
+  });
+
+  it("falls back to SIDLite on a device too slow for reSIDfp, and says so once rather than every tune", async () => {
+    for (let i = 0; i < 5; i += 1) recordRenderMeasurement(0.5, 2000);
+    const { engine, worker } = makeEngine();
+    const first = engine.play(new ArrayBuffer(64), 0, {});
+    await completeOpen(worker);
+    await first;
+    const second = engine.play(new ArrayBuffer(64), 0, {});
+    await flush();
+    worker.emit({ type: "opened", id: 2, sampleRate: 48000, channels: 2, tuneInfo: null, romRequired: false });
+    await second;
+
+    expect(worker.sentOfType("open").map((message) => message.engine)).toEqual(["sidlite", "sidlite"]);
+    expect(getLogs().filter((entry) => entry.message.startsWith("Falling back to SIDLite"))).toHaveLength(1);
   });
 });

@@ -76,6 +76,8 @@ export interface LocalSidOpenMessage {
    * setting, so changing it in Settings applies from the very next tune.
    */
   sidModel?: EngineSidModel;
+  /** The emulation to render with, sent with every tune so a change in Settings applies to the next one. */
+  engine?: LocalSidLoadMessage["engine"];
 }
 
 /** main → worker: render the next `seconds` of PCM for the open tune. */
@@ -189,6 +191,8 @@ export interface LocalSidPrerenderMessage {
    * different performances, and the handover between them would be audible.
    */
   sidModel?: EngineSidModel;
+  /** The emulation to render with, sent with every tune so a change in Settings applies to the next one. */
+  engine?: LocalSidLoadMessage["engine"];
 }
 
 /** worker → main: how far a pre-render has got (0..1). */

@@ -189,7 +189,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
               <strong>Accurate</strong> models the chip cycle-by-cycle for best fidelity. <strong>Light</strong> uses
-              about a third the CPU and sounds close. Takes effect next track.
+              about a fifth of the CPU but sounds less like a real C64. Takes effect next track.
             </p>
             {/* Wraps rather than shrinks: both labels are set nowrap, so on the
                 smallest screen the two buttons squeezed each other and each label was
