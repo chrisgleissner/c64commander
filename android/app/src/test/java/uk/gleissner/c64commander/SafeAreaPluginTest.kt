@@ -57,12 +57,12 @@ class SafeAreaPluginTest {
   }
 
   @Test
-  fun safeAreaScriptWritesAllFourInsetProperties() {
+  fun safeAreaScriptWritesAllFourInsetPropertiesAndToleratesAPageWithoutADocumentYet() {
     assertEquals(
-            "document.documentElement.style.setProperty(\"--safe-area-inset-top\", \"24px\");" +
-                    "document.documentElement.style.setProperty(\"--safe-area-inset-right\", \"1px\");" +
-                    "document.documentElement.style.setProperty(\"--safe-area-inset-bottom\", \"48px\");" +
-                    "document.documentElement.style.setProperty(\"--safe-area-inset-left\", \"2px\");",
+            "document.documentElement?.style.setProperty(\"--safe-area-inset-top\", \"24px\");" +
+                    "document.documentElement?.style.setProperty(\"--safe-area-inset-right\", \"1px\");" +
+                    "document.documentElement?.style.setProperty(\"--safe-area-inset-bottom\", \"48px\");" +
+                    "document.documentElement?.style.setProperty(\"--safe-area-inset-left\", \"2px\");",
             safeAreaScript(SafeAreaLayout(24, 1, 48, 2, 0)),
     )
   }

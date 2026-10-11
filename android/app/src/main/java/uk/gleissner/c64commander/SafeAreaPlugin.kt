@@ -52,7 +52,9 @@ internal fun safeAreaLayout(
 }
 
 internal fun safeAreaScript(layout: SafeAreaLayout): String {
-  val style = "document.documentElement.style"
+  // An insets pass can run before the page has a document: `documentElement` is null then, and an unguarded
+  // write threw an uncaught TypeError at every launch. The page-load listener sends the insets again.
+  val style = "document.documentElement?.style"
   return listOf("top" to layout.top, "right" to layout.right, "bottom" to layout.bottom, "left" to layout.left)
           .joinToString("") { (edge, value) ->
             String.format(Locale.US, "%s.setProperty(\"--safe-area-inset-%s\", \"%dpx\");", style, edge, value)

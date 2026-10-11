@@ -56,7 +56,11 @@ export const stopWebViewKeepAlive = () => {
     running.stop();
     running.disconnect();
     // Suspended, which releases the audio output, and resumed by the next start.
-    void context?.suspend().catch(() => undefined);
+    void context?.suspend().catch((error: unknown) => {
+      addLog("warn", "Background playback: could not release the keep-awake audio output", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   } catch (error) {
     addLog("debug", "Background playback: the keep-awake source was already stopped", {
       error: error instanceof Error ? error.message : String(error),

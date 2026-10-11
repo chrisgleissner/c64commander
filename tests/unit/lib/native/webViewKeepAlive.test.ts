@@ -180,4 +180,21 @@ describe("keeping the page awake during background playback", () => {
     expect(audio.contexts).toHaveLength(0);
     expect(isWebViewKeepAliveRunning()).toBe(false);
   });
+
+  it("logs a keep-awake output that could not be released, instead of dropping the failure", async () => {
+    const { addLog } = await import("@/lib/logging");
+    vi.mocked(addLog).mockClear();
+    startWebViewKeepAlive();
+    audio.contexts[0].suspend.mockRejectedValueOnce(new Error("context closed"));
+
+    stopWebViewKeepAlive();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not release"),
+      expect.objectContaining({ error: "context closed" }),
+    );
+  });
 });
