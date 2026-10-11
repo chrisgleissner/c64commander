@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { dismissAllToasts } from "@/hooks/use-toast";
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
+import { queryOnActivePage } from "@/lib/navigation/activePage";
 import { ANCHOR_WAIT_CEILING_MS, navigateToSearchTarget, waitForElement } from "@/lib/search/navigate";
 import {
   captionPlacement,
@@ -47,7 +48,7 @@ import { TOUR_ACTIVE_ATTRIBUTE, loadTourState, saveTourState, type TourStartRequ
 
 const anchorElements = (testIds: readonly string[]): HTMLElement[] =>
   testIds
-    .map((testId) => document.querySelector<HTMLElement>(`[data-testid="${CSS.escape(testId)}"]`))
+    .map((testId) => queryOnActivePage(`[data-testid="${CSS.escape(testId)}"]`))
     .filter((element): element is HTMLElement => element !== null);
 
 const measureAnchors = (testIds: readonly string[]): Rect[] => {

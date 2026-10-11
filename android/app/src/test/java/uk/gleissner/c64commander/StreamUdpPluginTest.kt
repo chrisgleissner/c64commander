@@ -53,6 +53,8 @@ class StreamUdpPluginTest {
     val dropped: Int,
     val lost: Int,
     val present: Boolean,
+    val firstLine: Int,
+    val lineCount: Int,
   )
 
   @Before
@@ -68,8 +70,8 @@ class StreamUdpPluginTest {
       received.add(Triple(name, data, arrivalMs))
       latch.countDown()
     }
-    plugin.emitFrame = { name, data, arrivalMs, height, dropped, lost, present ->
-      frames.add(AssembledFrame(name, data, arrivalMs, height, dropped, lost, present))
+    plugin.emitFrame = { name, data, arrivalMs, height, dropped, lost, present, firstLine, lineCount ->
+      frames.add(AssembledFrame(name, data, arrivalMs, height, dropped, lost, present, firstLine, lineCount))
       latch.countDown()
     }
   }
@@ -99,9 +101,10 @@ class StreamUdpPluginTest {
     return resolved!!.getInteger("port")!!
   }
 
-  /** A single VIC datagram: 12-byte little-endian header + 192-byte (all-black) payload. */
-  private fun vicPacket(seq: Int, frame: Int, line: Int, lastLine: Boolean): ByteArray {
+  /** A single VIC datagram: 12-byte little-endian header + 192-byte payload, all black unless [fill] says otherwise. */
+  private fun vicPacket(seq: Int, frame: Int, line: Int, lastLine: Boolean, fill: Byte = 0): ByteArray {
     val packet = ByteArray(12 + 192)
+    packet.fill(fill, 12)
     fun putU16(index: Int, value: Int) {
       packet[index] = (value and 0xFF).toByte()
       packet[index + 1] = ((value shr 8) and 0xFF).toByte()
@@ -341,10 +344,46 @@ class StreamUdpPluginTest {
     assertEquals(n, frames.size)
     assertEquals(5, frames.count { it.present }) // exactly half presented at 50%
     assertEquals(5, frames.count { !it.present })
-    // Presented frames carry a full 52224-byte 4bpp payload …
-    assertTrue(frames.filter { it.present }.all { Base64.decode(it.data, Base64.NO_WRAP).size == 52224 })
+    // The first presented frame carries the full 52224-byte 4bpp payload; the later ones are identical
+    // to it, so they carry no lines at all …
+    val presented = frames.filter { it.present }
+    assertEquals(52224, Base64.decode(presented.first().data, Base64.NO_WRAP).size)
+    assertEquals(VicFrameDelta.WHOLE_FRAME, presented.first().lineCount)
+    assertTrue(presented.drop(1).all { it.lineCount == 0 && it.data.isEmpty() })
     // … skipped frames carry NO base64 (the elided encode + bridge payload = the CPU win).
     assertTrue(frames.filter { !it.present }.all { it.data.isEmpty() })
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
+  fun aPresentedFrameCarriesOnlyTheLinesThatChangedSinceThePreviousPresentedFrame() {
+    val port = bindAssemble()
+    latch = CountDownLatch(3)
+    DatagramSocket().use { sender ->
+      val addr = InetAddress.getByName("127.0.0.1")
+      sendFrame(sender, addr, port, 0, 0)
+      Thread.sleep(3)
+      // Frame 1 repaints line 8 (a test packet carries one line of payload) and ends on the usual last line.
+      val changed = vicPacket(seq = 2, frame = 1, line = 8, lastLine = false, fill = 0x11)
+      val last = vicPacket(seq = 3, frame = 1, line = 4, lastLine = true)
+      sender.send(DatagramPacket(changed, changed.size, addr, port))
+      sender.send(DatagramPacket(last, last.size, addr, port))
+      Thread.sleep(3)
+      sendFrame(sender, addr, port, 4, 2)
+    }
+
+    assertTrue("expected 3 completed frames", latch.await(5, TimeUnit.SECONDS))
+    assertEquals(VicFrameDelta.WHOLE_FRAME, frames[0].lineCount)
+    assertEquals(8, frames[1].firstLine)
+    assertEquals(1, frames[1].lineCount)
+    assertTrue(Base64.decode(frames[1].data, Base64.NO_WRAP).all { it == 0x11.toByte() })
+    assertEquals(192, Base64.decode(frames[1].data, Base64.NO_WRAP).size)
+    // Frame 2 rewrites lines 0 and 4 only; line 8 keeps frame 1's colour, so nothing differs.
+    assertEquals(0, frames[2].lineCount)
+    assertEquals("", frames[2].data)
 
     val closeCall = mock(PluginCall::class.java)
     `when`(closeCall.getString("name")).thenReturn("video")

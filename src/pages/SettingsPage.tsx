@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useOnPageReturn } from "@/hooks/useOnPageLeft";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Wifi,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/c64api/hostConfig";
 import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
+import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { useAppStyleContext } from "@/components/AppStyleProvider";
@@ -218,7 +220,7 @@ import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachab
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
-import { useNavigate } from "react-router-dom";
+import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
 import { TEXT_SCALE_OPTIONS } from "@/lib/textScale";
 import { getTextScaleId, setTextScaleId } from "@/lib/uiPreferences";
@@ -323,7 +325,7 @@ const describeSwitchFailure = (
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const isCompactProfile = profile === "compact";
-  const navigate = useNavigate();
+  const navigate = useStableNavigate();
   const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig } = useC64Connection();
   const [textScaleId, setTextScaleIdState] = useState(getTextScaleId);
   const savedDevices = useSavedDevices();
@@ -496,7 +498,9 @@ export default function SettingsPage() {
   const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>
     String(getHvscUpdateCheckIntervalDays()),
   );
-  const [hvscLastUpdateCheckAt] = useState(() => getHvscLastUpdateCheckAt());
+  const [hvscLastUpdateCheckAt, setHvscLastUpdateCheckAt] = useState(() => getHvscLastUpdateCheckAt());
+  // The Play page checks for HVSC updates while Settings is kept out of sight; show the time it last did.
+  useOnPageReturn(() => setHvscLastUpdateCheckAt(getHvscLastUpdateCheckAt()));
   const [archiveHostOverride, setArchiveHostOverride] = useState(loadArchiveHostOverride());
   const [archiveClientIdOverride, setArchiveClientIdOverride] = useState(loadArchiveClientIdOverride());
   const [archiveUserAgentOverride, setArchiveUserAgentOverride] = useState(loadArchiveUserAgentOverride());
@@ -1121,6 +1125,16 @@ export default function SettingsPage() {
     applyFullScreenFromSettings();
   };
 
+  // Their defaults follow the display profile, which can change while another tab is shown; a visit used to rebuild them.
+  const rereadFullScreenSettingsOnReturn = useCallback(
+    (onScreen: boolean) => {
+      if (!onScreen) return;
+      setHideStatusBar(loadHideStatusBar(profile));
+      setHideNavigationBar(loadHideNavigationBar(profile));
+    },
+    [profile],
+  );
+
   // Clamped on commit, not per keystroke: clamping "3" to 100 made any value from 101 to 499 untypeable.
   const commitVolumeSliderPreviewInterval = () => {
     const parsed = Number(volumeSliderPreviewInput);
@@ -1288,10 +1302,15 @@ export default function SettingsPage() {
                   "Auto", so on their own a screen reader announces "Auto, button" twice with no way
                   to tell them apart. Naming the GROUP resolves that without renaming the buttons,
                   whose visible labels are what everyone else reads. */}
-              {/* Three columns leave a 52px line at 320px, and "Light" is 64px at the largest
-                  Text size. One column on the compact profile. */}
+              {/* On the compact profile each group places as many options side by side as fit whole: a
+                  track is never narrower than its longest word plus padding, in rem, so the Large Text
+                  size drops a column instead of breaking a label. Measured at 320px: "Light" needs 57px,
+                  "Default" 82px, "Standard" 96px, "Landscape" 112px. */}
               <div
-                className={cn("grid gap-2", profile === "compact" ? "grid-cols-1" : "grid-cols-3")}
+                className={cn(
+                  "grid gap-2",
+                  profile === "compact" ? "grid-cols-[repeat(auto-fit,minmax(3.75rem,1fr))]" : "grid-cols-3",
+                )}
                 role="group"
                 aria-label="Theme"
               >
@@ -1441,11 +1460,11 @@ export default function SettingsPage() {
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Text size</Label>
-                {/* One column on the compact profile, for the same reason as Display profile
-                    above: two columns leave a 66px line at 320px, and this control is the one
-                    that makes the text larger, so its own labels are the first to outgrow it. */}
                 <div
-                  className={cn("grid gap-2", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}
+                  className={cn(
+                    "grid gap-2",
+                    profile === "compact" ? "grid-cols-[repeat(auto-fit,minmax(5.25rem,1fr))]" : "grid-cols-2",
+                  )}
                   data-testid="settings-text-size"
                 >
                   {TEXT_SCALE_OPTIONS.map((option) => {
@@ -1493,12 +1512,13 @@ export default function SettingsPage() {
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Display profile</Label>
-                {/* One column on the compact profile. Two columns leave an 87px line at 320px, and
-                    the app's own Text size setting scales the label with it: at Large, "Standard"
-                    alone is 90px, so `overflow-wrap: anywhere` split it after "Standar". No label
-                    wrap can help, because the single longest word already exceeds the line. */}
+                {/* A label may wrap between its words, never inside one: break-normal overrides the global
+                    `overflow-wrap: anywhere`, which split "Standard" after "Standar" in a narrower track. */}
                 <div
-                  className={cn("grid gap-2", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}
+                  className={cn(
+                    "grid gap-2",
+                    profile === "compact" ? "grid-cols-[repeat(auto-fit,minmax(6.25rem,1fr))]" : "grid-cols-2",
+                  )}
                   role="group"
                   aria-label="Display profile"
                   data-testid="settings-display-profile-override"
@@ -1510,7 +1530,7 @@ export default function SettingsPage() {
                         key={option.value}
                         type="button"
                         variant={isActive ? "default" : "outline"}
-                        className="h-auto justify-start whitespace-normal px-3 py-2 text-left"
+                        className="h-auto justify-start whitespace-normal break-normal px-3 py-2 text-left"
                         onClick={() => setDisplayProfileOverride(option.value)}
                       >
                         {option.label}
@@ -1529,10 +1549,11 @@ export default function SettingsPage() {
                   <div
                     // 5.75rem is a fixed track floor, so at the largest Text size the labels
                     // outgrew it: "Landscape" needed 109px in a track sized for smaller type.
-                    // One column on the compact profile, like the two choosers above.
                     className={cn(
                       "grid gap-2",
-                      profile === "compact" ? "grid-cols-1" : "grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))]",
+                      profile === "compact"
+                        ? "grid-cols-[repeat(auto-fit,minmax(7.25rem,1fr))]"
+                        : "grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))]",
                     )}
                     data-testid="settings-screen-orientation-mode"
                   >
@@ -3463,6 +3484,7 @@ export default function SettingsPage() {
         />
       ) : null}
 
+      <ScreenActivityWatch onChange={rereadFullScreenSettingsOnReturn} />
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
           <DialogHeader>

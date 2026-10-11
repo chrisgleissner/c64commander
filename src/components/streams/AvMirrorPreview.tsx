@@ -27,7 +27,7 @@ export interface AvMirrorPreviewProps {
  * they all render the one shared stream (a Home "check" and the Remote Input preview).
  */
 export function AvMirrorPreview({ size = "check", session, className }: AvMirrorPreviewProps) {
-  const { videoLive, video } = useAvMirror(session);
+  const { videoLive, video } = useAvMirror(session, { frameRate: true });
   const showBadges = useStreamVideoBadges();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useAvMirrorCanvas(canvasRef, session);

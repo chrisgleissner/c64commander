@@ -69,6 +69,26 @@ describe("waitForElement", () => {
     await expect(promise).resolves.toBeNull();
   });
 
+  it("ignores the anchor a kept page holds and returns it once that page is shown", async () => {
+    const kept = document.createElement("div");
+    kept.setAttribute("data-slot-active", "false");
+    const anchor = document.createElement("button");
+    anchor.setAttribute("data-testid", "kept-anchor");
+    kept.appendChild(anchor);
+    document.body.appendChild(kept);
+
+    let settled = false;
+    const promise = waitForElement('[data-testid="kept-anchor"]', 60_000).then((element) => {
+      settled = true;
+      return element;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    kept.setAttribute("data-slot-active", "true");
+    await expect(promise).resolves.toBe(anchor);
+  });
+
   it("has a ceiling of two seconds", () => {
     expect(ANCHOR_WAIT_CEILING_MS).toBe(2_000);
   });

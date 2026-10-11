@@ -9,10 +9,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { closeAllCards, ensureCardOpen } from "../helpers/cards";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { afterRingRescan } from "../helpers/ringRescan";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import {
   FocusNavigationProvider,
   useFocusNavigationContext,
@@ -154,6 +155,30 @@ const renderConfigBrowserPage = () =>
       }}
     />,
   );
+
+// The page as a tab slot holds it: kept mounted, and told when another tab is on screen instead.
+const renderConfigBrowserPageAsTab = () => {
+  let setActive: (active: boolean) => void = () => undefined;
+  const Tab = () => {
+    const [active, setActiveState] = useState(true);
+    setActive = setActiveState;
+    return (
+      <ScreenActivityProvider active={active}>
+        <ConfigBrowserPage />
+      </ScreenActivityProvider>
+    );
+  };
+  render(
+    <RouterProvider
+      router={buildRouter(<Tab />)}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    />,
+  );
+  return { setActive: (active: boolean) => act(() => setActive(active)) };
+};
 
 // Same page, but mounted inside the keypad focus ring (C64U Remote) so d-pad +
 // center exercise the category-header registration.
@@ -764,6 +789,54 @@ describe("ConfigBrowserPage", () => {
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
 
     ensureCardOpen(cardToggle);
+    expect(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1")).not.toBeChecked();
+    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the other SID volumes once and turns Solo off when the user leaves the Config tab while Solo is on", async () => {
+    sessionStorage.clear();
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isLoading: false,
+    });
+    const audioMixerItems = {
+      "Vol Ultisid 1": { selected: "0 dB", options: ["OFF", "0 dB"] },
+      "Vol Ultisid 2": { selected: "0 dB", options: ["OFF", "0 dB"] },
+    };
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    mockUseC64UpdateConfigBatch.mockReturnValue({
+      mutateAsync: updateConfigBatch,
+      isPending: false,
+    });
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: { [categoryName]: { items: audioMixerItems } },
+      isLoading: false,
+      refetch: vi.fn(),
+    }));
+
+    const tab = renderConfigBrowserPageAsTab();
+
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+    await waitFor(() =>
+      expect(updateConfigBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ updates: expect.objectContaining({ "Vol Ultisid 2": "OFF" }) }),
+      ),
+    );
+    updateConfigBatch.mockClear();
+
+    tab.setActive(false);
+
+    await waitFor(() =>
+      expect(updateConfigBatch).toHaveBeenCalledWith({
+        category: "Audio Mixer",
+        updates: { "Vol Ultisid 1": "0 dB", "Vol Ultisid 2": "0 dB" },
+      }),
+    );
+    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+
+    tab.setActive(true);
     expect(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1")).not.toBeChecked();
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
   });

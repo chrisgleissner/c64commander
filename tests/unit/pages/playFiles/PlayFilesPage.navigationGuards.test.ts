@@ -13,4 +13,11 @@ describe("PlayFilesPage import navigation guards", () => {
     expect(playFilesPageSource).not.toContain("registerNavigationGuard(");
     expect(playFilesPageSource).not.toContain('window.addEventListener("beforeunload"');
   });
+
+  it("cancels an import through the Cancel handler when another tab replaces Play, which used to unmount it", () => {
+    expect(playFilesPageSource).toContain(`const handleCancelAddItems = useCallback(() => {
+    addItemsAbortControllerRef.current?.abort();
+  }, []);`);
+    expect(playFilesPageSource).toContain("useOnPageLeft(handleCancelAddItems);");
+  });
 });

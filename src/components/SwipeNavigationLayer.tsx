@@ -6,17 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { useSwipeGesture, type SwipeDirection, type SwipeGestureMetadata } from "@/hooks/useSwipeGesture";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { addLog } from "@/lib/logging";
 import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { confirmNavigation } from "@/lib/navigation/navigationGuards";
-import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
-import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
 import { useTourActive } from "@/hooks/useTourActive";
 import {
@@ -25,20 +22,15 @@ import {
   resolveAdjacentIndexes,
   resolveDragRevealedIndex,
   resolveNavigationDirection,
+  rememberCachedPage,
   resolveRunwayTranslatePercent,
   type RunwayPanelIndexes,
 } from "@/lib/navigation/swipeNavigationModel";
-import { PageLoadingFallback } from "@/components/PageLoadingFallback";
 import { subscribePageReset } from "@/lib/navigation/pageReset";
-import { forgetPagePosition, rememberPagePosition, restorePagePosition } from "@/lib/navigation/pagePositions";
-
-const HomePage = lazy(() => import("@/pages/HomePage"));
-const PlayFilesPage = lazy(() => import("@/pages/PlayFilesPage"));
-const DisksPage = lazy(() => import("@/pages/DisksPage"));
-const ConfigBrowserPage = lazy(() => import("@/pages/ConfigBrowserPage"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
-const OpenSourceLicensesPage = lazy(() => import("@/pages/OpenSourceLicensesPage"));
-const DocsPage = lazy(() => import("@/pages/DocsPage"));
+import { forgetPagePosition } from "@/lib/navigation/pagePositions";
+import { PageSlotBody } from "@/components/swipeNavigation/PageSlotBody";
+import { useSettingsPageStaleness } from "@/components/swipeNavigation/useSettingsPageStaleness";
+import { rememberedSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 
 type RuntimeMotionMode = "standard" | "reduced";
 type RunwayPhase = "idle" | "dragging" | "transitioning";
@@ -70,50 +62,6 @@ const TRANSITION_DURATION_REDUCED_MS = 180;
 const TRANSITION_DURATION_TEST_MS = 1200;
 const TRANSITION_SETTLE_BUFFER_MS = 80;
 const DRAG_SETTLE_TIMEOUT_MS = 600;
-
-const HomeSlot = () => <HomePage />;
-const PlaySlot = () => <PlayFilesPage />;
-const DisksSlot = () => <DisksPage />;
-const ConfigSlot = () => <ConfigBrowserPage />;
-const DocsSlot = () => <DocsPage />;
-
-const SettingsSlot = () => {
-  const location = useLocation();
-  return (
-    <>
-      <SettingsPage />
-      {location.pathname === "/settings/open-source-licenses" ? (
-        <Suspense fallback={null}>
-          <OpenSourceLicensesPage />
-        </Suspense>
-      ) : null}
-    </>
-  );
-};
-
-const SLOT_COMPONENTS: Array<() => React.ReactNode> = [
-  HomeSlot,
-  PlaySlot,
-  DisksSlot,
-  ConfigSlot,
-  SettingsSlot,
-  DocsSlot,
-];
-
-const RUNWAY_SELECTOR = '[data-testid="swipe-navigation-runway"]';
-const slotFor = (pageIndex: number) => document.querySelector(`${RUNWAY_SELECTOR} > [data-route-index="${pageIndex}"]`);
-
-/*
- * Rendered before the page, so its layout effect puts the scroll offset back before the page's cards
- * decide which of them are in view, and its cleanup reads the position before the page leaves the DOM.
- */
-const PagePosition = ({ pageIndex }: { pageIndex: number }) => {
-  useLayoutEffect(() => {
-    restorePagePosition(pageIndex, slotFor(pageIndex));
-    return () => rememberPagePosition(pageIndex, slotFor(pageIndex));
-  }, [pageIndex]);
-  return null;
-};
 
 const buildIdleState = (index: number): RunwayState => ({
   phase: "idle",
@@ -168,6 +116,24 @@ export const resolveTransitionConfig = (profile: string, runtimeMotionMode: Runt
   };
 };
 
+type TestProbeWindow = Window & { __c64uTestProbeEnabled?: boolean; __c64uCacheVisitedPages?: boolean };
+
+const isTestProbeActive = () =>
+  import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
+  (typeof window !== "undefined" && Boolean((window as TestProbeWindow).__c64uTestProbeEnabled));
+
+/* Without `content-visibility` (a WebView before Chrome 85) a hidden kept page is hidden and made inert instead. */
+const skipsHiddenContent = () =>
+  typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("content-visibility", "hidden");
+
+/*
+ * Test probes rebuild each page on every visit, so a test id names exactly one element in the document. A spec that
+ * tests the page cache opts back in.
+ */
+const cachesVisitedPages = () =>
+  !isTestProbeActive() ||
+  (typeof window !== "undefined" && Boolean((window as TestProbeWindow).__c64uCacheVisitedPages));
+
 export function SwipeNavigationLayer() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -183,6 +149,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   const interstitialActive = useInterstitialActive();
   const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
   const [pageGenerations, setPageGenerations] = useState<Readonly<Record<number, number>>>({});
+  const [cachePages] = useState(cachesVisitedPages);
+  const [hiddenContentSkipped] = useState(skipsHiddenContent);
+  const hiddenSlotStyle: React.CSSProperties = hiddenContentSkipped
+    ? { contentVisibility: "hidden" }
+    : { visibility: "hidden" };
+  const [cachedPages, setCachedPages] = useState<readonly number[]>(() => (cachePages ? [routeIndex] : []));
   const [swipeNavigationEnabled, setSwipeNavigationEnabled] = useState(() => loadEnableSwipeNavigation());
   // Disabled outright while the tour runs: a swipe that changed the page under a spotlight would
   // leave the spotlight pointing at nothing (spec.md section 8.1).
@@ -268,6 +240,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       }),
     [],
   );
+
+  useEffect(() => {
+    if (cachePages) setCachedPages((cached) => rememberCachedPage(cached, routeIndex));
+  }, [cachePages, routeIndex]);
+
+  useSettingsPageStaleness(cachePages, routeIndex, setPageGenerations);
 
   useEffect(() => {
     const current = runwayRef.current;
@@ -477,6 +455,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     willChange: runway.phase === "idle" ? "auto" : "transform",
   };
 
+  // A swipe moves the runway in an urgent update, so a kept page is shown at once and hands over screen activity in a
+  // deferred render after its first frame: a page whose root reads activity re-renders whole on the flip. A tab tap
+  // already navigates inside a transition, where the deferred value changes in the same render.
+  const activePageIndex = runway.phase === "transitioning" ? runway.targetIndex : routeIndex;
+  const deferredActivePageIndex = useDeferredValue(activePageIndex);
+
   return (
     <div
       ref={containerRef}
@@ -495,44 +479,51 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <div
-        className="flex h-full"
+        className="relative h-full"
         style={trackStyle}
         onTransitionEnd={handleTransitionEnd}
         data-testid="swipe-navigation-runway"
         data-runway-index={runway.phase === "transitioning" ? runway.targetIndex : runway.centerIndex}
         data-runway-phase={runway.phase}
       >
-        {runway.panelIndexes.map((pageIndex, panelPosition) => {
-          const Component = SLOT_COMPONENTS[pageIndex];
+        {/* Slots stay in tab order whichever panels the runway shows, so a cached page is never moved in the
+            document: moving it would rebuild its layout and lose its scroll position. */}
+        {TAB_ROUTES.map((_, pageIndex) => {
+          const panelPosition = runway.panelIndexes.indexOf(pageIndex);
+          const inRunway = panelPosition >= 0;
+          const cached = cachedPages.includes(pageIndex);
+          if (!inRunway && !cached) return null;
+          const label = TAB_ROUTES[pageIndex].label.toLowerCase();
+          const key = `${pageIndex}:${pageGenerations[pageIndex] ?? 0}`;
           const isActive =
             runway.phase === "transitioning" ? pageIndex === runway.targetIndex : pageIndex === routeIndex;
-          const testProbeActive =
-            import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
-            (typeof window !== "undefined" &&
-              (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
-          const renderPlaceholderOnly =
-            !isActive && (runway.phase === "idle" || testProbeActive || !runway.revealedIndexes.includes(pageIndex));
+          // HARD12-022: the departing page stays shown all transition and the preview shows its real content, so
+          // pages holding state across the overlap defend themselves per effect (BUG-040 wake lock, HARD12-006
+          // volume session, HARD12-020 machine execution). HARD27-038: a gesture shows only the panels it revealed.
+          const shown =
+            isActive ||
+            (inRunway && runway.phase !== "idle" && !isTestProbeActive() && runway.revealedIndexes.includes(pageIndex));
+          // A hidden kept page is parked left of the runway, where no transform ever brings it into view, and its
+          // content is skipped: not styled, laid out, painted, hit or focused until it is shown again.
+          const slotStyle = {
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: `${((inRunway ? panelPosition : -1) * 100) / 3}%`,
+            width: "33.333333%",
+            "--app-bar-height": rememberedSlotAppBarHeight(pageIndex),
+            ...(shown ? {} : hiddenSlotStyle),
+          } as React.CSSProperties;
 
-          // Idle inactive slots are placeholders; a gesture also mounts the
-          // panels it revealed. HARD12-022: the departing page stays mounted all
-          // transition and the preview shows its real content, so pages holding
-          // state across the overlap defend themselves per effect (BUG-040 wake
-          // lock, HARD12-006 volume session, HARD12-020 machine execution).
-          //
-          // HARD27-038: a gesture moves one way, so the panel opposite the
-          // centre is off screen throughout and mounting its hook tree was pure
-          // cost during the animation. Revealed panels are never dropped before
-          // the runway settles, so a reversed drag reveals the other neighbour
-          // instead of churning mounts.
-          if (renderPlaceholderOnly) {
+          if (!shown && !cached) {
             return (
               <div
-                key={`${pageIndex}:${pageGenerations[pageIndex] ?? 0}`}
+                key={key}
                 className="relative h-full overflow-hidden overflow-clip"
-                style={{ width: "33.333333%", flexShrink: 0 }}
+                style={slotStyle}
                 aria-hidden={true}
                 inert
-                data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
+                data-testid={`swipe-slot-${label}`}
                 data-route-index={pageIndex}
                 data-slot-active="false"
                 data-panel-position={panelPosition}
@@ -542,36 +533,51 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
           return (
             <div
-              key={`${pageIndex}:${pageGenerations[pageIndex] ?? 0}`}
+              key={key}
               // `overflow-clip` where supported: a hidden box can still be scrolled by a
               // scrollIntoView, which slid the page header up under the status bar.
               className="relative h-full overflow-hidden overflow-clip"
-              style={{ width: "33.333333%", flexShrink: 0 }}
+              style={slotStyle}
               aria-hidden={!isActive}
-              inert={!isActive}
+              // A kept page is not made inert when it is hidden: toggling `inert` restyles the whole page, 117 ms for
+              // Config on a Pixel 4. Skipped content cannot be focused or hit, and the transition cover below
+              // stops a departing page from taking a tap.
+              inert={!isActive && (!cachePages || !hiddenContentSkipped)}
               // Only the active slot carries this id, so exactly one `page-*` id exists at a
               // time and it names the tab on screen. Maestro matches `id:` against the HTML id
               // attribute, and the tab-bar labels it would otherwise assert on render outside
               // the page and are present whichever tab is selected.
-              id={isActive ? `page-${TAB_ROUTES[pageIndex].label.toLowerCase()}` : undefined}
-              data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
+              id={isActive ? `page-${label}` : undefined}
+              data-testid={`swipe-slot-${label}`}
               data-route-index={pageIndex}
               data-slot-active={isActive ? "true" : "false"}
+              data-slot-cached={shown ? undefined : "true"}
               data-panel-position={panelPosition}
             >
-              <PageErrorBoundary active={isActive}>
-                <Suspense fallback={<PageLoadingFallback />}>
-                  <ScreenActivityProvider active={isActive}>
-                    <AppChromeModeProvider mode="sticky">
-                      <PagePosition pageIndex={pageIndex} />
-                      <Component />
-                    </AppChromeModeProvider>
-                  </ScreenActivityProvider>
-                </Suspense>
-              </PageErrorBoundary>
+              {/* A kept page keeps its DOM, state and effects while hidden. Work that stopped when a page unmounted
+                  follows its screen activity (`usePageActivity`), so a hidden page neither polls nor listens. */}
+              <PageSlotBody
+                pageIndex={pageIndex}
+                isActive={cached && cachePages ? pageIndex === deferredActivePageIndex : isActive}
+                cached={cachePages}
+              />
             </div>
           );
         })}
+        {cachePages && runway.phase === "transitioning" && runway.targetIndex !== runway.centerIndex ? (
+          // Kept pages are not made inert (see the slot above), so the page sliding out is covered for the
+          // length of the slide instead, as inert covered it before.
+          <div
+            aria-hidden={true}
+            className="absolute inset-y-0"
+            style={{
+              left: `${(runway.panelIndexes.indexOf(runway.centerIndex) * 100) / 3}%`,
+              width: "33.333333%",
+              zIndex: 1,
+            }}
+            data-testid="swipe-departing-page-cover"
+          />
+        ) : null}
       </div>
     </div>
   );

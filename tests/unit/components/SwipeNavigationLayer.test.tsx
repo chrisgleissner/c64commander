@@ -16,6 +16,7 @@ import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 import { requestPageReset } from "@/lib/navigation/pageReset";
 import { resetPagePositionsForTests } from "@/lib/navigation/pagePositions";
 import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 type GestureCallbacks = {
@@ -37,6 +38,9 @@ const mocks = vi.hoisted(() => ({
     docs: 0,
   },
   playInstances: { count: 0 },
+  settingsInstances: { count: 0 },
+  homeRenders: { count: 0 },
+  docsLastPath: { value: "" },
   unmountCounts: {
     home: 0,
     play: 0,
@@ -69,10 +73,6 @@ vi.mock("@/hooks/useSwipeGesture", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useScreenActivity", () => ({
-  ScreenActivityProvider: ({ children }: { active: boolean; children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock("@/lib/logging", () => ({
   addLog: mocks.addLog,
   addErrorLog: mocks.addErrorLog,
@@ -84,6 +84,8 @@ vi.mock("@/lib/i18n", () => ({
 
 vi.mock("@/pages/HomePage", () => ({
   default: function HomePageMock() {
+    mocks.homeRenders.count += 1;
+    useStableNavigate();
     React.useEffect(() => {
       mocks.mountCounts.home += 1;
     }, []);
@@ -130,6 +132,7 @@ vi.mock("@/pages/SettingsPage", () => ({
     React.useEffect(() => {
       mocks.mountCounts.settings += 1;
     }, []);
+    React.useState(() => ++mocks.settingsInstances.count);
     return <div>Settings Page</div>;
   },
 }));
@@ -139,6 +142,7 @@ vi.mock("@/pages/DocsPage", () => ({
     React.useEffect(() => {
       mocks.mountCounts.docs += 1;
     }, []);
+    mocks.docsLastPath.value = useLocation().pathname;
     if (shouldThrowDocsPage) {
       throw new Error("docs render failed");
     }
@@ -164,7 +168,7 @@ const PathNavigationProbe = () => {
   const navigate = useNavigate();
   return (
     <>
-      {["/play", "/disks"].map((path) => (
+      {["/", "/play", "/disks", "/settings", "/docs"].map((path) => (
         <button key={path} type="button" onClick={() => navigate(path)}>
           {`Go ${path}`}
         </button>
@@ -225,6 +229,9 @@ describe("SwipeNavigationLayer", () => {
       mocks.unmountCounts[key as keyof typeof mocks.unmountCounts] = 0;
     });
     mocks.playInstances.count = 0;
+    mocks.settingsInstances.count = 0;
+    mocks.homeRenders.count = 0;
+    mocks.docsLastPath.value = "";
     resetPagePositionsForTests();
     mocks.addLog.mockReset();
     mocks.addErrorLog.mockReset();
@@ -562,23 +569,192 @@ describe("SwipeNavigationLayer", () => {
   });
 
   describe("page positions", () => {
+    const cssSupports = CSS.supports;
+    beforeEach(() => {
+      CSS.supports = ((property: string, value?: string) =>
+        property === "content-visibility" && value === "hidden") as typeof CSS.supports;
+    });
+    afterEach(() => {
+      CSS.supports = cssSupports;
+    });
+
     const visit = (path: string) => {
       fireEvent.click(screen.getByRole("button", { name: `Go ${path}` }));
       const runway = screen.getByTestId("swipe-navigation-runway");
       fireEvent.transitionEnd(runway, { target: runway });
     };
 
-    it("opens a page again at the scroll offset it was left at", async () => {
+    it("keeps a visited page built and hidden, and shows the same page again at its scroll offset", async () => {
       renderLayer("/play", <PathNavigationProbe />);
-      (await screen.findByTestId("play-scroller")).scrollTop = 480;
+      const first = await screen.findByTestId("play-scroller");
+      first.scrollTop = 480;
 
-      visit("/disks");
-      expect(screen.queryByTestId("play-scroller")).not.toBeInTheDocument();
+      visit("/settings");
+      expect(first).toBeInTheDocument();
+      const hidden = screen.getByTestId("swipe-slot-play");
+      expect(hidden).toHaveAttribute("data-slot-cached", "true");
+      expect(hidden).toHaveAttribute("aria-hidden", "true");
+      expect(hidden.style.contentVisibility).toBe("hidden");
+      expect(hidden.style.left).toBe(`${-100 / 3}%`);
+      expect(hidden).not.toHaveAttribute("inert");
       visit("/play");
 
       const scroller = await screen.findByTestId("play-scroller");
-      expect(Number(scroller.getAttribute("data-instance"))).toBeGreaterThan(1);
+      expect(scroller).toBe(first);
       expect(scroller.scrollTop).toBe(480);
+      const shown = screen.getByTestId("swipe-slot-play");
+      expect(shown).not.toHaveAttribute("data-slot-cached");
+      expect(shown.style.contentVisibility).toBe("");
+      expect(mocks.unmountCounts.play).toBe(0);
+    });
+
+    it("hides and disables a kept page some other way where content-visibility is not supported", async () => {
+      CSS.supports = (() => false) as typeof CSS.supports;
+      renderLayer("/play", <PathNavigationProbe />);
+      await screen.findByTestId("play-scroller");
+      visit("/settings");
+      const hidden = screen.getByTestId("swipe-slot-play");
+      expect(hidden.style.contentVisibility).toBe("");
+      expect(hidden.style.visibility).toBe("hidden");
+      expect(hidden).toHaveAttribute("inert");
+      visit("/play");
+      const shown = screen.getByTestId("swipe-slot-play");
+      expect(shown.style.visibility).toBe("");
+      expect(shown).not.toHaveAttribute("inert");
+      expect(mocks.unmountCounts.play).toBe(0);
+    });
+
+    it("does not re-render a kept page that navigates while other pages are navigated", async () => {
+      renderLayer("/", <PathNavigationProbe />);
+      await screen.findByText("Home Page");
+      visit("/play");
+      const rendersWhenHidden = mocks.homeRenders.count;
+      visit("/disks");
+      visit("/settings");
+      expect(mocks.homeRenders.count).toBe(rendersWhenHidden);
+    });
+
+    it("shows a kept page the location it last had while other pages are navigated", async () => {
+      renderLayer("/docs", <PathNavigationProbe />);
+      await screen.findByText("Docs Page");
+      visit("/play");
+      visit("/disks");
+      expect(mocks.docsLastPath.value).toBe("/docs");
+      fireEvent.click(screen.getByRole("button", { name: "Go /docs" }));
+      const runway = screen.getByTestId("swipe-navigation-runway");
+      fireEvent.transitionEnd(runway, { target: runway });
+      expect(mocks.docsLastPath.value).toBe("/docs");
+    });
+
+    it("rebuilds a kept Settings page that a setting changed behind, at the position it was left", async () => {
+      renderLayer("/settings", <PathNavigationProbe />);
+      await screen.findByText("Settings Page");
+      const before = mocks.settingsInstances.count;
+      visit("/play");
+      act(() => {
+        window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: "x", value: 1 } }));
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Go /settings" }));
+      await screen.findByText("Settings Page");
+      expect(mocks.settingsInstances.count).toBe(before + 1);
+    });
+
+    it("keeps a kept Settings page when playback writes a setting it does not show or follows itself", async () => {
+      renderLayer("/settings", <PathNavigationProbe />);
+      await screen.findByText("Settings Page");
+      const before = mocks.settingsInstances.count;
+      visit("/play");
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent("c64u-app-settings-updated", {
+            detail: { key: APP_SETTINGS_KEYS.LEARNED_DEVICE_SID_MODEL_KEY, value: "8580" },
+          }),
+        );
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Go /settings" }));
+      await screen.findByText("Settings Page");
+      expect(mocks.settingsInstances.count).toBe(before);
+    });
+
+    it("does not draw a kept Settings page's licenses overlay over another tab", async () => {
+      renderLayer("/settings/open-source-licenses", <PathNavigationProbe />);
+      expect(await screen.findByText("Open Source Licenses Page")).toBeInTheDocument();
+      visit("/play");
+      expect(screen.queryByText("Open Source Licenses Page")).not.toBeInTheDocument();
+      expect(mocks.unmountCounts.settings).toBe(0);
+    });
+
+    it("keeps a kept Settings page when nothing changed behind it", async () => {
+      renderLayer("/settings", <PathNavigationProbe />);
+      await screen.findByText("Settings Page");
+      const before = mocks.settingsInstances.count;
+      visit("/play");
+      fireEvent.click(screen.getByRole("button", { name: "Go /settings" }));
+      await screen.findByText("Settings Page");
+      expect(mocks.settingsInstances.count).toBe(before);
+    });
+
+    it("covers the departing page for the length of the slide, and only then", async () => {
+      renderLayer("/play", <PathNavigationProbe />);
+      await screen.findByTestId("play-scroller");
+      fireEvent.click(screen.getByRole("button", { name: "Go /disks" }));
+      const cover = screen.getByTestId("swipe-departing-page-cover");
+      expect(cover.style.left).toBe(`${100 / 3}%`);
+      const runway = screen.getByTestId("swipe-navigation-runway");
+      fireEvent.transitionEnd(runway, { target: runway });
+      expect(screen.queryByTestId("swipe-departing-page-cover")).not.toBeInTheDocument();
+    });
+
+    it("keeps every visited page in tab order, so showing one never moves another in the document", async () => {
+      renderLayer("/disks", <PathNavigationProbe />);
+      await screen.findByText("Disks Page");
+      visit("/play");
+      visit("/");
+      const order = () =>
+        Array.from(screen.getByTestId("swipe-navigation-runway").children).map((slot) =>
+          slot.getAttribute("data-route-index"),
+        );
+      const cached = () =>
+        Array.from(screen.getByTestId("swipe-navigation-runway").querySelectorAll("[data-slot-cached]")).map((slot) =>
+          slot.getAttribute("data-route-index"),
+        );
+      expect(order()).toEqual([...order()].sort());
+      expect(cached()).toEqual(["1", "2"]);
+    });
+
+    describe("with test probes, which rebuild every page", () => {
+      beforeEach(() => {
+        (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+      });
+      afterEach(() => {
+        delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+      });
+
+      it("opens a page again at the scroll offset it was left at", async () => {
+        renderLayer("/play", <PathNavigationProbe />);
+        (await screen.findByTestId("play-scroller")).scrollTop = 480;
+
+        visit("/disks");
+        expect(screen.queryByTestId("play-scroller")).not.toBeInTheDocument();
+        visit("/play");
+
+        const scroller = await screen.findByTestId("play-scroller");
+        expect(Number(scroller.getAttribute("data-instance"))).toBeGreaterThan(1);
+        expect(scroller.scrollTop).toBe(480);
+      });
+
+      it("lets a spec that tests the page cache opt back in", async () => {
+        (window as Window & { __c64uCacheVisitedPages?: boolean }).__c64uCacheVisitedPages = true;
+        try {
+          renderLayer("/play", <PathNavigationProbe />);
+          const first = await screen.findByTestId("play-scroller");
+          visit("/disks");
+          visit("/play");
+          expect(await screen.findByTestId("play-scroller")).toBe(first);
+        } finally {
+          delete (window as Window & { __c64uCacheVisitedPages?: boolean }).__c64uCacheVisitedPages;
+        }
+      });
     });
 
     it("opens the page fresh and at the top when its tab is tapped while it is selected", async () => {
@@ -724,45 +900,27 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.getByTestId("swipe-navigation-container")).toHaveAttribute("inert", "");
   });
 
-  // HARD12-022: every tab transition (probes off, i.e. the real production
-  // path) keeps the departing page's real component mounted for the whole
-  // "transitioning" phase - it is only placeholder-rendered once the runway
-  // settles back to idle. This is the mechanism the finding is about: a page
-  // holding a stateful effect (background-execution wake lock, the playback
-  // volume-override session, the shared machine-execution store) is NOT
-  // guaranteed a hard unmount at the moment the user navigates away - it must
-  // defend itself against surviving the whole transition, then unmounting
-  // exactly once when the transition finally settles. This test makes that
-  // mount/unmount boundary observable so future changes to the transition
-  // rendering cannot silently start double-mounting or skipping the unmount.
-  it("keeps the departing page mounted for the full transition, then unmounts it exactly once on settle (HARD12-022)", async () => {
+  // HARD12-022: the departing page stays mounted for the whole transition, and pages holding state across
+  // the overlap defend themselves per effect (BUG-040 wake lock, HARD12-006 volume session, HARD12-020
+  // machine-execution state). A kept page is never unmounted at all: it is hidden when the runway settles.
+  it("keeps the departing page mounted through the transition and kept, hidden, after it settles (HARD12-022)", async () => {
     renderLayer("/play", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
     expect(mocks.mountCounts.play).toBe(1);
-    expect(mocks.unmountCounts.play).toBe(0);
-
     act(() => {
       capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
     });
     expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
-
-    // Mid-transition: the departing Play page is still fully mounted with
-    // real content, not a placeholder - the transient overlap HARD12-022
-    // flags. Its own dedicated regressions (BUG-040 wake lock, HARD12-006
-    // volume session, HARD12-020 machine-execution state) rely on this
-    // overlap not silently unmounting them early.
     expect(screen.getByText("Play Page")).toBeInTheDocument();
-    expect(mocks.unmountCounts.play).toBe(0);
+    expect(screen.getByTestId("swipe-slot-play")).not.toHaveAttribute("data-slot-cached");
     expect(mocks.mountCounts.disks).toBe(1);
 
     fireEvent.transitionEnd(runway, { target: runway });
 
-    // Settling to idle placeholder-renders the now-inactive Play slot,
-    // unmounting its real content exactly once - not zero (leaked) and not
-    // more than once (a double-teardown that would double-run cleanup).
-    expect(screen.queryByText("Play Page")).not.toBeInTheDocument();
-    expect(mocks.unmountCounts.play).toBe(1);
-    expect(mocks.mountCounts.disks).toBe(1);
+    expect(screen.getByText("Play Page")).toBeInTheDocument();
+    expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-cached", "true");
+    expect(mocks.unmountCounts.play).toBe(0);
+    expect(mocks.mountCounts.play).toBe(1);
     expect(mocks.unmountCounts.disks).toBe(0);
   });
 

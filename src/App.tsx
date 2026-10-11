@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppStyleProvider } from "@/components/AppStyleProvider";
 import { TabBar } from "@/components/TabBar";
@@ -412,6 +412,8 @@ const App = () => (
   </QueryClientProvider>
 );
 
+const APP_LAUNCH_READY_CLASS = "app-launch-ready";
+
 const StartupLaunchCoordinator = () => {
   const timings = React.useMemo(() => resolveStartupLaunchSequenceTimings(), []);
   const [phase, setPhase] = React.useState<LaunchSequencePhase>(() =>
@@ -437,6 +439,10 @@ const StartupLaunchCoordinator = () => {
   }, [timings, visible]);
 
   const activePhase: LaunchSequencePhase = visible ? phase : "app-ready";
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle(APP_LAUNCH_READY_CLASS, activePhase === "app-ready");
+  }, [activePhase]);
 
   return (
     <>

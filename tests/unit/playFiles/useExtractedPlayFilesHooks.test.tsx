@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LAST_DEVICE_ID_KEY } from "@/pages/playFiles/playFilesUtils";
 import * as logging from "@/lib/logging";
@@ -75,6 +77,24 @@ describe("extracted PlayFiles hooks", () => {
     expect(addEventListenerSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
 
     unmount();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+  });
+
+  it("drops the import guards when another tab replaces the page, so they do not ask on that tab", () => {
+    const unregister = vi.fn();
+    registerNavigationGuard.mockReturnValue(unregister);
+    const removeEventListenerSpy = vi.spyOn(window, "removeEventListener");
+    let pageOnScreen = true;
+    const { rerender } = renderHook(() => useImportNavigationGuards(true), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <ScreenActivityProvider active={pageOnScreen}>{children}</ScreenActivityProvider>
+      ),
+    });
+    expect(registerNavigationGuard).toHaveBeenCalledTimes(1);
+
+    pageOnScreen = false;
+    rerender();
+    expect(unregister).toHaveBeenCalledTimes(1);
     expect(removeEventListenerSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
   });
 

@@ -20,6 +20,8 @@ physical rig), while the host-deterministic budget checks run in CI.
   enter the app the way a handset's keypad enters it.
 - **`hvsc_search_soak.mjs`** — "Find a tune" latency over many consecutive queries. See **HVSC
   search** below.
+- **`small_screen_profile.mjs`** — what the app costs on the smallest supported phone: the Pixel at that panel
+  geometry and CPU rate, in Demo Mode and flight mode. See **Small-screen profile** below.
 - **`demo_mode_hil.ts`** — Demo Mode end to end with no Ultimate involved at all. See **Demo Mode**
   below.
 - **`release_sweep_hil.mjs`** — the four ordinary events the merge gate does not cover: the app is
@@ -581,3 +583,32 @@ packets a second with 0 lost and 0 underruns; 48,288 frames a second reaching th
 tune plays; 13.4% of the device's processors; every tab answering a press in 34-254 ms except Home,
 which takes about 410 ms while streaming against 30 ms with the mirror stopped, because returning to
 it re-mounts the Live View card.
+
+## Small-screen profile
+
+`small_screen_profile.mjs` measures what the app costs on the smallest supported phone, with the Pixel standing in for
+it. It sets that panel (`wm size 480x640`, `wm density 240`, so 320 x 426.7 CSS px and the compact profile),
+throttles the WebView to the calibrated reference rate (2 by default), and runs in Demo Mode. It refuses to start unless
+the phone is in flight mode with no routable interface, which is what keeps every stage away from a real Ultimate.
+It restores the geometry when it ends, and keeps the media volume at 5 of 25 or below.
+
+```bash
+node tools/hil/small_screen_profile.mjs --label baseline --output artifacts/small-screen/baseline.json
+node tools/hil/small_screen_profile.mjs --label candidate --only idle,navigation --profiles artifacts/small-screen/prof
+```
+
+| Stage        | What it reports                                                                                                   |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `cold-start` | Activity start, first contentful paint, first route drawn, Demo Mode entry, and script time to three seconds later |
+| `idle`       | Per main page: main-thread busy share, app and renderer process CPU, requests per minute, DOM size, heap and PSS   |
+| `navigation` | Keypad page jumps (keys 1 to 6) from the Android key event to a drawn page, with task and script time and layout shift |
+| `live-view`  | Live View in Demo Mode: frame rate, main-thread share, process CPU and PSS                                         |
+
+Process CPU and the idle stage are read with the throttle off and with no profiler attached. CDP's CPU throttle costs
+the renderer about two thirds of a core by itself, and a 0.5 ms sampling profiler about a fifth; either one would be
+measured instead of the app. `--profiles <dir>` takes the CPU profiles in their own windows afterwards, for
+`symbolize_cpuprofile.mjs` with maps from `build_sourcemapped.mjs`.
+
+Somebody who has used a real device before is not offered Demo Mode on an offline launch; the harness then enters it
+the way the app offers it, through the health badge and "Use the simulated device".
+

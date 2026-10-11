@@ -20,10 +20,12 @@ import {
   AppSheetTitle,
 } from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
+import { resolveAppBarHeightPx } from "@/components/ui/interstitialStyles";
 import { useHealthState } from "@/hooks/useHealthState";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { useSavedDeviceHealthChecks } from "@/hooks/useSavedDeviceHealthChecks";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -357,7 +359,8 @@ export const CONNECTED_DEVICE_ANNOUNCEMENT_MS = 3_000;
  * The full name of the device, for a few seconds after the app connects to it or switches to it,
  * when more than one device is saved. The badge itself has room only for a short label on a phone.
  */
-// Shared by every page's badge: each tab mounts its own, and moving to another tab is not a new connection.
+// Shared by every page's badge: each tab has its own, and moving to another tab is not a new connection. Only the badge
+// on screen claims it, as hidden pages are kept with their badges.
 let announcedDeviceId: string | null = null;
 
 export const forgetConnectedDeviceAnnouncementForTests = () => {
@@ -367,6 +370,7 @@ export const forgetConnectedDeviceAnnouncementForTests = () => {
 const useConnectedDeviceAnnouncement = (
   target: ReturnType<typeof useTargetDeviceIdentity>,
   connected: boolean,
+  onScreen: boolean,
 ): string | null => {
   const [announcement, setAnnouncement] = useState<string | null>(null);
   useEffect(() => {
@@ -374,13 +378,16 @@ const useConnectedDeviceAnnouncement = (
       announcedDeviceId = null;
       return undefined;
     }
-    if (!target.multiDevice || !target.deviceId || !target.fullLabel) return undefined;
+    if (!onScreen || !target.multiDevice || !target.deviceId || !target.fullLabel) return undefined;
     if (announcedDeviceId === target.deviceId) return undefined;
     announcedDeviceId = target.deviceId;
     setAnnouncement(target.fullLabel);
     const timer = window.setTimeout(() => setAnnouncement(null), CONNECTED_DEVICE_ANNOUNCEMENT_MS);
-    return () => window.clearTimeout(timer);
-  }, [connected, target.deviceId, target.fullLabel, target.multiDevice]);
+    return () => {
+      window.clearTimeout(timer);
+      setAnnouncement(null);
+    };
+  }, [connected, onScreen, target.deviceId, target.fullLabel, target.multiDevice]);
   return announcement;
 };
 
@@ -416,7 +423,10 @@ export function UnifiedHealthBadge({ className }: Props) {
   // context split is unchanged, so the picker still gets the fuller
   // `switchDeviceDialog` behaviour when open. The hook's existing freshness /
   // circuit gates bound the added background probe traffic.
-  const shouldRunSavedDeviceHealthChecks = canSwitchDevices;
+  // Every page has its own badge and stays mounted behind the page on screen, so only the badge on screen
+  // probes. Turning back on runs a forced cycle, as remounting did on every visit.
+  const pageActive = usePageActivity();
+  const shouldRunSavedDeviceHealthChecks = canSwitchDevices && pageActive;
   const {
     byDeviceId: healthByDeviceId,
     refreshAll,
@@ -458,7 +468,11 @@ export function UnifiedHealthBadge({ className }: Props) {
     targetDevice.multiDevice &&
     targetDevice.shortLabel !== null &&
     (connectivity === "Online" || connectivity === "Checking");
-  const connectedAnnouncement = useConnectedDeviceAnnouncement(targetDevice, rawConnectionState === "REAL_CONNECTED");
+  const connectedAnnouncement = useConnectedDeviceAnnouncement(
+    targetDevice,
+    rawConnectionState === "REAL_CONNECTED",
+    screenActive,
+  );
 
   const glyph = HEALTH_GLYPHS[state];
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
@@ -766,12 +780,13 @@ export function UnifiedHealthBadge({ className }: Props) {
         </span>
       </button>
       {narrowHeader && connectedAnnouncement && typeof document !== "undefined"
-        ? // The header is its own containing block for fixed elements, so the note is placed from the body.
+        ? // The header is its own containing block for fixed elements, so the note is placed from the body, below
+          // the header height of the page on screen, which its tab slot holds.
           createPortal(
             <span
               role="status"
               className="pointer-events-none fixed right-2 z-[60] max-w-[calc(100vw-1rem)] truncate rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-[var(--interstitial-shadow)]"
-              style={{ top: "calc(var(--safe-area-inset-top, 0px) + var(--app-bar-height, 72px))" }}
+              style={{ top: `calc(var(--safe-area-inset-top, 0px) + ${resolveAppBarHeightPx()}px)` }}
               data-testid="unified-health-badge-announcement"
             >
               Connected to {connectedAnnouncement}

@@ -106,8 +106,13 @@ import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRankin
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
-import { usePlayDeepLinks, useTransportCommands } from "@/pages/playFiles/hooks/usePlayDeepLinks";
-import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedCommandBus";
+import {
+  PlayDeepLinks,
+  useTransportCommands,
+  type PlayDeepLinkHandlers,
+} from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import { transportCommandBus } from "@/lib/input/latchedCommandBus";
+import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
@@ -148,8 +153,9 @@ import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFiles
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
 import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOverlayState";
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
+import { useOnPageLeft } from "@/hooks/useOnPageLeft";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
-import { useSecondAlignedTicks } from "@/pages/playFiles/hooks/useSecondAlignedTicks";
+import { usePlaybackTimelineTicks } from "@/pages/playFiles/hooks/usePlaybackTimelineTicks";
 import { useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
 import { isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
@@ -164,7 +170,7 @@ import {
   resolveBackgroundExecutionAction,
   shouldSyncBackgroundExecutionDueAt,
 } from "@/pages/playFiles/backgroundExecutionPolicy";
-import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
+import { usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedPlaybackTrace";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import {
@@ -182,7 +188,6 @@ import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
-import { syncPlaybackDecisionFromTrace } from "@/lib/diagnostics/decisionState";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
@@ -357,22 +362,8 @@ export default function PlayFilesPage() {
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
-  /*
-   * The Remote Input request, claimed here as well as on Home.
-   *
-   * The search handler publishes and navigates to Home only when the current page is neither Home
-   * nor Play, on the stated grounds that both own a sheet. Only Home subscribed, so activating the
-   * result from Play published a command nobody claimed: no navigation, no sheet, and the latch
-   * expired five seconds later. The claim inside the handler is what stops the mount-time drain
-   * delivering it a second time.
-   */
-  useEffect(() => {
-    if (remoteInputRequestBus.takePending() !== null) setRemoteInputSheetOpen(true);
-    return remoteInputRequestBus.subscribe(() => {
-      remoteInputRequestBus.takePending();
-      setRemoteInputSheetOpen(true);
-    });
-  }, []);
+  // Claimed here as well as on Home: search publishes without navigating when Play is on screen.
+  useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
@@ -649,7 +640,7 @@ export default function PlayFilesPage() {
   }, [handleNext]);
 
   // Home's tiles and the search overlay send this page here to do one thing (spec.md 6.3).
-  usePlayDeepLinks({
+  const deepLinkHandlers: PlayDeepLinkHandlers = {
     openRadioLauncher: () => setSidRadioLauncherOpen(true),
     // Recently played is the empty state of the archive search sheet, which is where that list has
     // always lived; a second list of the same rows would be a second idea of what a result is.
@@ -660,7 +651,7 @@ export default function PlayFilesPage() {
     },
     openLikedTunes: () => setLikedTunesSheetOpen(true),
     resumeSession: () => transportCommandBus.publish("play"),
-  });
+  };
 
   // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
   // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
@@ -1468,6 +1459,8 @@ export default function PlayFilesPage() {
   const handleCancelAddItems = useCallback(() => {
     addItemsAbortControllerRef.current?.abort();
   }, []);
+  // Leaving Play unmounted it, and the import with it; the page is now kept, so leaving cancels the import instead.
+  useOnPageLeft(handleCancelAddItems);
 
   const syncPlaybackTimeline = useCallback(
     (options?: { allowAutoAdvance?: boolean; shownAtMs?: number }) => {
@@ -1528,7 +1521,12 @@ export default function PlayFilesPage() {
   }, [syncPlaybackTimeline]);
 
   const tickTimeline = useCallback((shownAtMs: number) => syncPlaybackTimeline({ shownAtMs }), [syncPlaybackTimeline]);
-  useSecondAlignedTicks(tickTimeline, isPlaying && !isPaused && currentIndex >= 0, trackStartedAtRef);
+  usePlaybackTimelineTicks({
+    tick: tickTimeline,
+    running: isPlaying && !isPaused && currentIndex >= 0,
+    startedAtRef: trackStartedAtRef,
+    autoAdvanceDueAtMs,
+  });
 
   usePlaybackResumeTriggers(syncPlaybackTimeline);
 
@@ -1778,18 +1776,7 @@ export default function PlayFilesPage() {
     trackInstanceId,
   ]);
 
-  useEffect(() => {
-    setPlaybackTraceSnapshot(playbackTraceContext);
-    syncPlaybackDecisionFromTrace(playbackTraceContext, "Play page playback state updated");
-  }, [playbackTraceContext]);
-
-  useEffect(
-    () => () => {
-      setPlaybackTraceSnapshot(null);
-      syncPlaybackDecisionFromTrace(null, "Play page unmounted; playback state is no longer directly observable");
-    },
-    [],
-  );
+  usePublishedPlaybackTrace(playbackTraceContext);
   useEffect(() => {
     setPlaybackContext({
       sourceBucket:
@@ -2514,6 +2501,7 @@ export default function PlayFilesPage() {
 
   return (
     <div className={pageShellClassName}>
+      <PlayDeepLinks {...deepLinkHandlers} />
       <AppBar title="Play" />
       <PageContainer>
         <PageStack>

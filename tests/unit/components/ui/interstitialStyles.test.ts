@@ -9,6 +9,7 @@ import {
   resolveInterstitialBackdropZIndex,
   resolveInterstitialSurfaceZIndex,
   resolveCenteredOverlayLayout,
+  resolveAppBarHeightPx,
   resolveHeaderOverlapDeltaPx,
 } from "@/components/ui/interstitialStyles";
 
@@ -72,6 +73,42 @@ describe("interstitialStyles", () => {
     document.body.appendChild(badge);
 
     expect(resolveAppSheetTopClearancePx()).toBe(47);
+  });
+
+  it("measures the header and the header height of the page on screen, not of a kept page before it", () => {
+    const pageSlot = (active: boolean, headerBottom: number, appBarHeight: string) => {
+      const slot = document.createElement("div");
+      slot.setAttribute("data-slot-active", active ? "true" : "false");
+      slot.style.setProperty("--app-bar-height", appBarHeight);
+      const header = document.createElement("div");
+      header.setAttribute("data-testid", "app-bar-row");
+      stubRect(header, { top: 0, left: 0, right: 390, bottom: headerBottom });
+      const title = document.createElement("div");
+      title.setAttribute("data-testid", "app-bar-title-zone");
+      stubRect(title, { top: 0, left: 18, right: 158, bottom: headerBottom - 20 });
+      slot.append(header, title);
+      document.body.appendChild(slot);
+    };
+    pageSlot(false, 0, "40px");
+    pageSlot(true, 120, "120px");
+
+    expect(resolveAppBarHeightPx()).toBe(120);
+    expect(resolveCenteredOverlayLayout(900, 900).top).toBe(128);
+  });
+
+  it("bounds the badge's critical parts on the page on screen only", () => {
+    const badgeIn = (active: boolean, rect: { top: number; left: number; right: number; bottom: number }) => {
+      const slot = document.createElement("div");
+      slot.setAttribute("data-slot-active", active ? "true" : "false");
+      slot.innerHTML =
+        '<button data-testid="unified-health-badge"><span data-overlay-critical="badge"></span></button>';
+      stubRect(slot.querySelector("span")!, rect);
+      document.body.appendChild(slot);
+    };
+    badgeIn(false, { top: 0, left: 0, right: 10, bottom: 10 });
+    badgeIn(true, { top: 20, left: 300, right: 360, bottom: 50 });
+
+    expect(getBadgeCriticalBounds()).toMatchObject({ top: 20, left: 300, right: 360, bottom: 50 });
   });
 
   it("keeps centered modals below both the header and badge band", () => {

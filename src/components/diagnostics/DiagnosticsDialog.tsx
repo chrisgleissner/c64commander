@@ -111,7 +111,6 @@ import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView
 import { ActionExpandedContent } from "./ActionExpandedContent";
 import { ConfigDriftView } from "./ConfigDriftView";
 import { DecisionStateView } from "./DecisionStateView";
-import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 
 // Opened from the overflow menu only, so loaded then rather than with the startup bundle, which was over budget.
@@ -124,6 +123,7 @@ const KeyExplorerPopup = lazy(() =>
 const HealthHistoryPopup = lazy(() =>
   import("./HealthHistoryPopup").then((module) => ({ default: module.HealthHistoryPopup })),
 );
+const HeatMapPopup = lazy(() => import("./HeatMapPopup").then((module) => ({ default: module.HeatMapPopup })));
 
 export type EvidenceType = "Problems" | "Actions" | "Logs" | "Traces";
 type SeverityFilter = "All" | "Errors" | "Warnings" | "Info";
@@ -1063,7 +1063,7 @@ export function DiagnosticsDialog({
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
   const [decisionStateOpen, setDecisionStateOpen] = useState(false);
   const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
-  const lastHeatMapVariantRef = useRef<HeatMapVariant>("REST");
+  const lastHeatMapVariantRef = useRef<HeatMapVariant | null>(null);
   if (heatMapVariant !== null) lastHeatMapVariantRef.current = heatMapVariant;
   const [overflowOpen, setOverflowOpen] = useState(false);
   /*
@@ -1999,12 +1999,17 @@ export function DiagnosticsDialog({
         ) : null}
         {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       </Suspense>
-      <HeatMapPopup
-        open={open && heatMapVariant !== null}
-        onClose={() => setHeatMapVariant(null)}
-        variant={heatMapVariant ?? lastHeatMapVariantRef.current}
-        traceEvents={traceEvents}
-      />
+      {lastHeatMapVariantRef.current ? (
+        // Loaded at its first opening and kept mounted from then on, so closing it still plays its exit.
+        <Suspense fallback={null}>
+          <HeatMapPopup
+            open={open && heatMapVariant !== null}
+            onClose={() => setHeatMapVariant(null)}
+            variant={heatMapVariant ?? lastHeatMapVariantRef.current}
+            traceEvents={traceEvents}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

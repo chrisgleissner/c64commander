@@ -267,6 +267,30 @@ describe("TourDriver", () => {
       expect(spotlight.style.width).toBe("132px");
     });
 
+    it("spotlights the anchor on the page on screen, not the same anchor on a kept page before it", async () => {
+      document.querySelectorAll('[data-testid^="home-tile-action."]').forEach((element) => element.remove());
+      const kept = document.createElement("div");
+      onTestFinished(() => {
+        kept.remove();
+        shown.forEach((element) => element.remove());
+      });
+      kept.setAttribute("data-slot-active", "false");
+      document.body.appendChild(kept);
+      kept.appendChild(mountAnchor("home-tile-action.resume-session", { top: 400, left: 200, width: 50, height: 44 }));
+      kept.appendChild(mountAnchor("home-tile-action.recently-played", { top: 400, left: 260, width: 50, height: 44 }));
+      const shown = [
+        mountAnchor("home-tile-action.resume-session", { top: 100, left: 10, width: 50, height: 44 }),
+        mountAnchor("home-tile-action.recently-played", { top: 100, left: 80, width: 50, height: 44 }),
+      ];
+      renderDriver();
+      await startTour();
+      for (let index = 0; index < 3; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
+
+      await waitFor(() => expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "your-tunes"));
+      await waitFor(() => expect(screen.getByTestId("tour-spotlight")).toBeInTheDocument());
+      expect(screen.getByTestId("tour-spotlight").style.left).toBe("4px");
+    });
+
     it("keeps every control at the 44 px floor", async () => {
       renderDriver();
       await startTour();

@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAvSync } from "@/hooks/useAvSync";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 const { runAvSyncTest } = vi.hoisted(() => ({ runAvSyncTest: vi.fn().mockResolvedValue({ errors: [] }) }));
@@ -225,5 +226,66 @@ describe("useAvSync", () => {
       await second.result.current.stopTest();
     });
     expect(second.result.current.testActive).toBe(false);
+  });
+
+  describe("on a page kept mounted behind the one on screen", () => {
+    const renderInSlot = (fake: FakeSession, active: boolean) => {
+      const result: { current: ReturnType<typeof useAvSync> | null } = { current: null };
+      const Panel = () => {
+        result.current = useAvSync(asSession(fake));
+        return null;
+      };
+      const slot = (slotActive: boolean) => (
+        <ScreenActivityProvider active={slotActive}>
+          <Panel />
+        </ScreenActivityProvider>
+      );
+      const view = render(slot(active));
+      return { result, show: (next: boolean) => view.rerender(slot(next)) };
+    };
+
+    it("listens to neither frames nor audio while hidden, even with a test program running", async () => {
+      const fake = new FakeSession();
+      const { result, show } = renderInSlot(fake, true);
+      await act(async () => {
+        await result.current!.runTest();
+      });
+      expect(fake.frameSubs).toBe(1);
+      expect(fake.audioSubs).toBe(1);
+
+      show(false);
+      expect(fake.frameSubs).toBe(0);
+      expect(fake.audioSubs).toBe(0);
+
+      show(true);
+      expect(fake.frameSubs).toBe(1);
+      expect(fake.audioSubs).toBe(1);
+      await act(async () => {
+        await result.current!.stopTest();
+      });
+    });
+
+    it("starts a fresh measurement when its page is shown again", async () => {
+      const fake = new FakeSession();
+      const { result, show } = renderInSlot(fake, true);
+      await act(async () => {
+        await result.current!.runTest();
+      });
+      act(() => {
+        fake.emitFrame(black());
+        fake.emitAudio(silent());
+        fake.emitFrame(white());
+        fake.emitFrame(black());
+        fake.emitAudio(loud());
+      });
+      expect(result.current!.stats.count).toBe(1);
+
+      show(false);
+      show(true);
+      expect(result.current!.stats.count).toBe(0);
+      await act(async () => {
+        await result.current!.stopTest();
+      });
+    });
   });
 });

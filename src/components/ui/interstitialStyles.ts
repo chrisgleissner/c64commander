@@ -7,6 +7,7 @@
  */
 
 import type { CSSProperties } from "react";
+import { activePageStyleRoot, queryAllOnActivePage, queryOnActivePage } from "@/lib/navigation/activePage";
 import { readKeypadGuidanceReservePx } from "@/lib/ui/keypadGuidanceReserve";
 
 export type OverlayBounds = {
@@ -89,7 +90,7 @@ const intersects = (first: OverlayBounds, second: OverlayBounds) =>
 const readBounds = (selector: string): OverlayBounds | null => {
   if (typeof document === "undefined") return null;
 
-  const element = document.querySelector<HTMLElement>(selector);
+  const element = queryOnActivePage(selector);
   if (!element) return null;
 
   return toBounds(element.getBoundingClientRect());
@@ -98,14 +99,14 @@ const readBounds = (selector: string): OverlayBounds | null => {
 const readGroupedBounds = (selector: string): OverlayBounds | null => {
   if (typeof document === "undefined") return null;
 
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  const nodes = queryAllOnActivePage(selector);
   return unionBounds(nodes.map((node) => toBounds(node.getBoundingClientRect())));
 };
 
 const readCssNumber = (variableName: string, fallback: number) => {
   if (typeof window === "undefined") return fallback;
 
-  const rawValue = window.getComputedStyle(document.documentElement).getPropertyValue(variableName);
+  const rawValue = window.getComputedStyle(activePageStyleRoot()).getPropertyValue(variableName);
   const parsed = Number.parseFloat(rawValue);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };

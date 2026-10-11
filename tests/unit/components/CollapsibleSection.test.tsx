@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import {
   readSectionStates,
   requestSectionOpen,
+  requestSectionsBulk,
   resetSectionOpenLatchForTests,
   writeSectionState,
 } from "@/lib/ui/collapsibleSectionStore";
@@ -451,6 +453,38 @@ describe("CollapsibleSection", () => {
       act(() => requestSectionOpen("settings", "drives"));
       act(() => requestSectionOpen("home", "printers"));
       await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeNull());
+    });
+  });
+
+  describe("requestSectionsBulk", () => {
+    const twoTabs = (homeActive: boolean) => (
+      <>
+        <ScreenActivityProvider active={homeActive}>
+          <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio}>
+            <p>Drive A</p>
+          </CollapsibleSection>
+        </ScreenActivityProvider>
+        <ScreenActivityProvider active={!homeActive}>
+          <CollapsibleSection scope="config" id="audio-mixer" title="Audio Mixer" icon={Radio}>
+            <p>Vol UltiSID 1</p>
+          </CollapsibleSection>
+        </ScreenActivityProvider>
+      </>
+    );
+
+    it("opens and closes only the cards of the tab on screen, not those of a visited tab kept mounted", async () => {
+      const view = render(twoTabs(true));
+
+      act(() => requestSectionsBulk(true));
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeInTheDocument());
+      expect(document.getElementById("config-section-body-audio-mixer")).toBeNull();
+      expect(readSectionStates("config").has("audio-mixer")).toBe(false);
+
+      view.rerender(twoTabs(false));
+      act(() => requestSectionsBulk(false));
+
+      expect(document.getElementById("home-section-body-drives")).toBeInTheDocument();
+      expect(readSectionStates("home").get("drives")).toBe(true);
     });
   });
 

@@ -11,6 +11,7 @@ import { getC64API } from "@/lib/c64api";
 import { subscribeConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrichmentNamespaceSignal";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { addLog } from "@/lib/logging";
 import { readItemDetails, readItemOptions } from "../utils/HomeConfigUtils";
 
@@ -104,7 +105,12 @@ export function useDeviceConfigOptionDomains(
   // the flip signal to force a re-seed + re-interrogation against the new identity.
   useEffect(() => subscribeConfigEnrichmentNamespaceChange(() => setNamespaceEpoch((previous) => previous + 1)), []);
 
+  // A page kept mounted behind the one on screen defers its reads until it is shown, which then asks for
+  // exactly what remounting it did.
+  const pageActive = usePageActivity();
+
   useEffect(() => {
+    if (!pageActive) return;
     let cancelled = false;
 
     // Re-seed from the (device-namespaced) cache first — instant for already-learned firmwares
@@ -182,7 +188,7 @@ export function useDeviceConfigOptionDomains(
     };
     // `scopeKey` distinguishes independent consumers; `refs` is expected stable. routingEpoch
     // re-resolves against the newly connected device; namespaceEpoch against a same-host flip.
-  }, [enabled, routingEpoch, namespaceEpoch, scopeKey, refs]);
+  }, [enabled, pageActive, routingEpoch, namespaceEpoch, scopeKey, refs]);
 
   return domains;
 }

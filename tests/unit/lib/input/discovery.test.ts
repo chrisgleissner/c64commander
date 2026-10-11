@@ -332,3 +332,24 @@ describe("discovery scan", () => {
     }
   });
 });
+
+describe("a hidden kept page", () => {
+  it("costs the scan no style reads for the controls inside it", () => {
+    const host = mount(`
+      <div id="shown"><button id="visible">on screen</button></div>
+      <div id="kept" aria-hidden="true">
+        <section><div><button class="kept">a</button><button class="kept">b</button></div></section>
+        <section><div><div><button class="kept">c</button></div></div></section>
+      </div>
+    `);
+    const kept = host.querySelector("#kept")!;
+    const spy = vi.spyOn(window, "getComputedStyle");
+
+    const found = discoverInteractiveElements(host, { scan: createDiscoveryScan() });
+
+    expect(found.map((element) => element.id)).toEqual(["visible"]);
+    const readInsideKept = spy.mock.calls.filter(([element]) => kept.contains(element as Node));
+    expect(readInsideKept).toEqual([]);
+    spy.mockRestore();
+  });
+});

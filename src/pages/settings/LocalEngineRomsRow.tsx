@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import { useOnPageReturn } from "@/hooks/useOnPageLeft";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,8 @@ import { loadLocalEngineAutoRoms, saveLocalEngineAutoRoms } from "@/lib/config/a
  */
 export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
   const [summaries, setSummaries] = useState<RomSummary[]>(() => loadRomSummaries());
+  // Playback stores the images in the background while Settings is kept out of sight.
+  useOnPageReturn(() => setSummaries(loadRomSummaries()));
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState<RomFetchOutcome[] | null>(null);
   const [autoRead, setAutoRead] = useState<boolean>(() => loadLocalEngineAutoRoms());

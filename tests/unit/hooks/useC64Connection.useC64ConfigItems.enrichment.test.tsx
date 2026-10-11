@@ -94,4 +94,24 @@ describe("useC64ConfigItems enrichment", () => {
       }),
     );
   });
+
+  it("reads the stored snapshot only while the query has no data of its own", async () => {
+    const { loadInitialSnapshot } = await import("@/lib/config/appConfigStore");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { useC64ConfigItems, useConnectionRoutingEpoch } = await import("@/hooks/useC64Connection");
+    const epoch = renderHook(() => useConnectionRoutingEpoch()).result.current;
+    client.setQueryData(["c64-config-items", "U64 Specific Settings", "System Mode", epoch], {
+      "U64 Specific Settings": { items: { "System Mode": "NTSC" } },
+      errors: [],
+    });
+
+    const { rerender } = renderHook(
+      () => useC64ConfigItems("U64 Specific Settings", ["System Mode"], true, { staleTime: 60_000 }),
+      { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> },
+    );
+    rerender();
+    rerender();
+
+    expect(loadInitialSnapshot).not.toHaveBeenCalled();
+  });
 });
