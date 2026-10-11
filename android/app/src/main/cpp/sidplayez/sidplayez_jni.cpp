@@ -166,21 +166,33 @@ JNIEXPORT jstring JNICALL JNI_FN(nativeReload)(JNIEnv* env, jobject, jlong id) {
   });
 }
 
-JNIEXPORT jint JNICALL JNI_FN(nativeRender)(JNIEnv* env, jobject, jlong id, jobject buffer, jint offsetBytes,
+/**
+ * Render into `out` (interleaved stereo S16LE) at `offsetBytes`.
+ *
+ * Rendered into the session's own scratch and copied out with one SetByteArrayRegion, rather than
+ * written through GetPrimitiveArrayCritical: a render takes tens of milliseconds, and holding a
+ * critical section that long stalls the garbage collector for the whole app.
+ */
+JNIEXPORT jint JNICALL JNI_FN(nativeRender)(JNIEnv* env, jobject, jlong id, jbyteArray out, jint offsetBytes,
                                            jint frames) {
-  if (!buffer || frames <= 0 || offsetBytes < 0 || (offsetBytes & 1) != 0) {
+  if (!out || frames <= 0 || offsetBytes < 0) {
     throwIllegalState(env, "Invalid render target");
     return 0;
   }
-  auto* base = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
-  const jlong capacity = env->GetDirectBufferCapacity(buffer);
+  const jlong capacity = env->GetArrayLength(out);
   const jlong needed = static_cast<jlong>(offsetBytes) + static_cast<jlong>(frames) * EzSession::kChannels * 2;
-  if (!base || capacity < 0 || needed > capacity || (reinterpret_cast<uintptr_t>(base) & 1) != 0) {
-    throwIllegalState(env, "Render target is not a direct buffer large enough for the request");
+  if (needed > capacity) {
+    throwIllegalState(env, "Render target is too small for the request");
     return 0;
   }
-  auto* out = reinterpret_cast<int16_t*>(base + offsetBytes);
-  return withSession<jint>(env, id, 0, [&](EzSession& session) { return session.render(out, frames); });
+  std::vector<int16_t> scratch(static_cast<size_t>(frames) * EzSession::kChannels);
+  const jint produced =
+      withSession<jint>(env, id, 0, [&](EzSession& session) { return session.render(scratch.data(), frames); });
+  if (produced > 0 && !env->ExceptionCheck()) {
+    env->SetByteArrayRegion(out, offsetBytes, produced * EzSession::kChannels * 2,
+                            reinterpret_cast<const jbyte*>(scratch.data()));
+  }
+  return produced;
 }
 
 JNIEXPORT jlong JNICALL JNI_FN(nativeSkip)(JNIEnv* env, jobject, jlong id, jlong frames) {

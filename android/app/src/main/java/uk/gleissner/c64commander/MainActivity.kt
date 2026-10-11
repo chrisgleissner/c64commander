@@ -154,6 +154,7 @@ open class MainActivity : BridgeActivity() {
     registerPlugin(SafeAreaPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(StreamUdpPlugin::class.java)
+    registerPlugin(uk.gleissner.c64commander.sidaudio.SidAudioPlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
     bridgeBuilder.addWebViewListener(renderProcessGoneRecovery)
     super.onCreate(savedInstanceState)

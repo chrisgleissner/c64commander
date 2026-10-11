@@ -390,6 +390,24 @@ class StreamUdpPlugin : Plugin() {
     // Depth to reach before the first sound. Kept small on a deep ring so playback starts promptly.
     val primeMs = call.getInt("primeMs") ?: 0
     try {
+      val pipeline = openPipeline(sampleRate, bufferMs, maxRingMs, trackBursts, primeMs)
+      val result = JSObject()
+      result.put("sampleRate", sampleRate)
+      result.put("bufferMs", pipeline.bufferCapacityMs)
+      call.resolve(result)
+    } catch (error: Exception) {
+      Log.w(logTag, "openAudioTrack failed (rate=$sampleRate)", error)
+      call.reject("openAudioTrack failed: ${error.message}", error)
+    }
+  }
+
+  /**
+   * Replace whatever pipeline is open with a new one and take audio focus for it.
+   *
+   * Shared by [openAudioTrack] (the A/V mirror) and the on-device SID feed, so both reach the speaker
+   * through the same pipeline construction, focus handling and ducking.
+   */
+  internal fun openPipeline(sampleRate: Int, bufferMs: Int, maxRingMs: Int, trackBursts: Int, primeMs: Int): AudioPipeline =
       synchronized(audioLifecycleLock) {
         audioPipeline?.close()
         val pipeline =
@@ -407,15 +425,23 @@ class StreamUdpPlugin : Plugin() {
         requestPlaybackAudioFocus()
         nativeAudioOwnsPlayback = true
         audioArrivals.reset()
-        val result = JSObject()
-        result.put("sampleRate", sampleRate)
-        result.put("bufferMs", pipeline.bufferCapacityMs)
-        call.resolve(result)
+        pipeline
       }
-    } catch (error: Exception) {
-      Log.w(logTag, "openAudioTrack failed (rate=$sampleRate)", error)
-      call.reject("openAudioTrack failed: ${error.message}", error)
-    }
+
+  /** Whether [pipeline] is still the open one, i.e. nobody has replaced it since it was opened. */
+  internal fun isCurrentPipeline(pipeline: AudioPipeline): Boolean = audioPipeline === pipeline
+
+  /** Close [pipeline] if it is still the open one; a pipeline someone else has replaced is left alone. */
+  internal fun closePipelineIfCurrent(pipeline: AudioPipeline) {
+    val closed =
+        synchronized(audioLifecycleLock) {
+          if (audioPipeline !== pipeline) return@synchronized false
+          nativeAudioOwnsPlayback = false
+          pipeline.close()
+          audioPipeline = null
+          true
+        }
+    if (closed) abandonPlaybackAudioFocus()
   }
 
   /**

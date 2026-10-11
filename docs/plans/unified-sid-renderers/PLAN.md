@@ -76,3 +76,7 @@ agent.
     corresponding source travels with the binary.
   - The revision in the notices is read from `android/app/build.gradle`, and a unit test fails if
     the two disagree.
+- **Settings names** (user decision 2026-10-11): **Fast & accurate** = libSidplayEZ (Android
+  default), **Accurate** = reSIDfp WASM (web/iOS default), **Light** = SIDLite. Speed is the
+  difference between the first two, so the labels say so. The old fidelity setting migrates by
+  meaning: a stored "accurate" choice becomes Fast & accurate where it exists, else Accurate.
