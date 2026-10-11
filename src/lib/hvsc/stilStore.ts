@@ -136,6 +136,15 @@ const serializeStoreWrite = <T>(write: () => Promise<T>): Promise<T> => {
   return run;
 };
 
+/** Drop everything held in memory about the store, and overtake every read still in flight. */
+const forgetStore = () => {
+  storeGeneration += 1;
+  inFlight.clear();
+  manifestPromise = null;
+  collectionsPromise = null;
+  shardCache.length = 0;
+};
+
 const touch = (shard: number, entries: Shard) => {
   const existing = shardCache.findIndex((cached) => cached.shard === shard);
   if (existing >= 0) shardCache.splice(existing, 1);
@@ -227,19 +236,7 @@ const replaceStore = async (entries: Map<string, StilEntry>, release: number): P
   for (const [path, entry] of entries) {
     shards[shardForPath(path)][path] = entry;
   }
-  // Forgotten before the reset, so nothing read while the store is being rewritten is served from
-  // the manifest of the store being replaced.
-  storeGeneration += 1;
-  inFlight.clear();
-  manifestPromise = null;
-  collectionsPromise = null;
-  shardCache.length = 0;
-  await resetStilStore();
-  for (let shard = 0; shard < STIL_SHARD_COUNT; shard += 1) {
-    await writeStilFile(shardName(shard), JSON.stringify(shards[shard]));
-  }
   const collections = deriveStilCollections(entries);
-  await writeStilFile(COLLECTIONS_NAME, JSON.stringify(collections));
   const manifest: StilManifest = {
     version: STIL_STORE_VERSION,
     release,
@@ -248,14 +245,23 @@ const replaceStore = async (entries: Map<string, StilEntry>, release: number): P
     updatedAt: Date.now(),
     collectionsVersion: STIL_COLLECTIONS_VERSION,
   };
-  await writeStilFile(MANIFEST_NAME, JSON.stringify(manifest));
-  // Bumped again on completion: a read that began during the rewrite saw the previous manifest, and
-  // must not write a derivation under it now that this one is on disk.
-  storeGeneration += 1;
-  inFlight.clear();
+  // Forgotten before the reset, so nothing read while the store is being rewritten is served from
+  // the manifest of the store being replaced.
+  forgetStore();
+  try {
+    await resetStilStore();
+    for (let shard = 0; shard < STIL_SHARD_COUNT; shard += 1) {
+      await writeStilFile(shardName(shard), JSON.stringify(shards[shard]));
+    }
+    await writeStilFile(COLLECTIONS_NAME, JSON.stringify(collections));
+    await writeStilFile(MANIFEST_NAME, JSON.stringify(manifest));
+  } finally {
+    // Forgotten again whether or not the rewrite completed: a read that began during it saw the
+    // previous manifest, and must not write a derivation under it over what is on disk now.
+    forgetStore();
+  }
   manifestPromise = Promise.resolve(manifest);
   collectionsPromise = Promise.resolve(collections);
-  shardCache.length = 0;
   addLog("info", "STIL stored", { entries: entries.size, shards: STIL_SHARD_COUNT, release });
 };
 
@@ -309,26 +315,17 @@ export const getStilInfo = async (virtualPath: string, songNr?: number): Promise
   return stilInfoForSubsong(entry ?? undefined, songNr) ?? null;
 };
 
-export const clearStil = (): Promise<void> =>
-  serializeStoreWrite(async () => {
-    await resetStilStore();
-    manifestPromise = null;
-    collectionsPromise = null;
-    shardCache.length = 0;
-    // A read already in flight when the store was removed still resolves, and would otherwise cache
-    // a shard of the library that has just been deleted.
-    storeGeneration += 1;
-    inFlight.clear();
-  });
+const removeStore = async () => {
+  await resetStilStore();
+  // A read already in flight when the store was removed still resolves, and would otherwise cache a
+  // shard of the library that has just been deleted.
+  forgetStore();
+};
+
+export const clearStil = (): Promise<void> => serializeStoreWrite(removeStore);
 
 /** Test seam: drops the in-memory caches without touching what is on disk. */
-export const __resetStilStoreCachesForTest = () => {
-  manifestPromise = null;
-  collectionsPromise = null;
-  shardCache.length = 0;
-  storeGeneration += 1;
-  inFlight.clear();
-};
+export const __resetStilStoreCachesForTest = forgetStore;
 
 const readStoredCollections = async (): Promise<StilCollectionIndex | null> => {
   const text = await readStilFile(COLLECTIONS_NAME);
@@ -343,26 +340,37 @@ const readStoredCollections = async (): Promise<StilCollectionIndex | null> => {
 };
 
 /**
+ * Remove a store found to be missing a shard, so that it reads as absent and is downloaded again.
+ *
+ * Left in place, its manifest would keep saying the release is stored: nothing would ever fetch it
+ * again, and every read of the collections would scan all 64 shards to fail the same way.
+ */
+const removeIncompleteStore = (generation: number, release: number, shard: number): Promise<void> =>
+  serializeStoreWrite(async () => {
+    if (generation !== storeGeneration) return;
+    addLog("warn", "STIL store is incomplete: a stored shard is missing or unreadable; removing it", {
+      shard,
+      release,
+    });
+    await removeStore();
+  });
+
+/**
  * Derive the collections from the shards already on disk.
  *
  * Reached when the store predates collections or their rules changed. Rebuilding the store would
  * mean downloading STIL again; reading back its 64 shards costs a few file reads and no network.
  *
  * Every shard has to be read: a derivation that skipped one would be saved as complete and served
- * until the next rules change. Nothing is written once the store has been replaced or removed.
+ * until the next rules change. Nothing is written once the store has been replaced or removed since
+ * `generation`, which the caller takes before it reads the manifest.
  */
-const rederiveCollections = async (manifest: StilManifest): Promise<StilCollectionIndex | null> => {
-  const generation = storeGeneration;
+const rederiveCollections = async (manifest: StilManifest, generation: number): Promise<StilCollectionIndex | null> => {
   const entries = new Map<string, StilEntry>();
   for (let shard = 0; shard < STIL_SHARD_COUNT; shard += 1) {
     const entriesInShard = await readShard(shard);
     if (!entriesInShard) {
-      if (generation === storeGeneration) {
-        addLog("warn", "STIL collections not derived: a stored shard is missing or unreadable", {
-          shard,
-          release: manifest.release,
-        });
-      }
+      await removeIncompleteStore(generation, manifest.release, shard);
       return null;
     }
     for (const [path, entry] of Object.entries(entriesInShard)) entries.set(path, entry);
@@ -403,10 +411,11 @@ export const readStilCollections = async (): Promise<StilCollectionIndex | null>
   const mock = mockedStil();
   if (mock) return deriveStilCollections(new Map(Object.entries(mock)));
   const load = (collectionsPromise ??= (async () => {
+    const generation = storeGeneration;
     const manifest = await readStilManifest();
     if (!manifest) return null;
     const stored = manifest.collectionsVersion === STIL_COLLECTIONS_VERSION ? await readStoredCollections() : null;
-    return stored ?? rederiveCollections(manifest);
+    return stored ?? rederiveCollections(manifest, generation);
   })().catch((error: unknown) => {
     addErrorLog("STIL collections could not be read", { error: (error as Error).message });
     return null;

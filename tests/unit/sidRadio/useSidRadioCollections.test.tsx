@@ -279,6 +279,197 @@ describe("useSidRadio collection stations", () => {
     expect(result.current.station).toBeNull();
   });
 
+  /** A promise the test settles by hand. */
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((settle) => {
+      resolve = settle;
+    });
+    return { promise, resolve };
+  };
+
+  /** Each collection start waits for the download until the test finishes it. */
+  const fetchingNotes = () => {
+    const pending: Array<(status: CollectionNotesStatus) => void> = [];
+    pools.prepareCollectionNotes.mockImplementation(async (onFetching) => {
+      onFetching();
+      return new Promise<CollectionNotesStatus>((resolve) => pending.push(resolve));
+    });
+    return pending;
+  };
+
+  it("stops showing the wait for the tune notes as soon as the listener stops", async () => {
+    fetchingNotes();
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
+    act(() => {
+      void result.current.startCollectionRadio("winners");
+    });
+    await waitFor(() => expect(result.current.preparingCollection).toBe(true));
+    act(() => result.current.stop());
+    expect(result.current.preparingCollection).toBe(false);
+  });
+
+  it("stops showing the wait for the tune notes when another station is started", async () => {
+    const pending = fetchingNotes();
+    const client = makeClient();
+    const compute = client.compute.getMockImplementation()!;
+    client.compute.mockImplementation(async (request) => compute({ ...request, pool: request.pool ?? POOL }));
+    const params = paramsFor(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    let collectionStart!: Promise<void>;
+    act(() => {
+      collectionStart = result.current.startCollectionRadio("winners");
+    });
+    await waitFor(() => expect(result.current.preparingCollection).toBe(true));
+    await act(async () => {
+      await result.current.startStyleRadio(2, "Melodic");
+    });
+    expect(result.current.preparingCollection).toBe(false);
+    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Melodic" });
+
+    await act(async () => {
+      pending[0]("ready");
+      await collectionStart;
+    });
+    expect(params.startPlaylist).toHaveBeenCalledTimes(1);
+    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Melodic" });
+  });
+
+  it("does not show the wait of a start that was abandoned before its download began", async () => {
+    const beginFetch = deferred<void>();
+    const download = deferred<CollectionNotesStatus>();
+    let fetching = false;
+    pools.prepareCollectionNotes.mockImplementationOnce(async (onFetching) => {
+      await beginFetch.promise;
+      onFetching();
+      fetching = true;
+      return download.promise;
+    });
+    const { result } = renderHook(() => useSidRadio(paramsFor(makeClient())));
+    let started!: Promise<void>;
+    act(() => {
+      started = result.current.startCollectionRadio("winners");
+    });
+    act(() => result.current.stop());
+    await act(async () => {
+      beginFetch.resolve();
+    });
+    await waitFor(() => expect(fetching).toBe(true));
+    expect(result.current.preparingCollection).toBe(false);
+    await act(async () => {
+      download.resolve("ready");
+      await started;
+    });
+    expect(result.current.preparingCollection).toBe(false);
+  });
+
+  it("does not let a collection start superseded while the bundle loads replace the playlist", async () => {
+    const pending = fetchingNotes();
+    pools.prepareCollectionNotes.mockResolvedValueOnce("ready");
+    const client = makeClient();
+    const bundle = deferred<void>();
+    const loaded = client.load.getMockImplementation()!;
+    client.load.mockImplementationOnce(async () => {
+      await bundle.promise;
+      return loaded();
+    });
+    const params = paramsFor(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.startCollectionRadio("winners");
+    });
+    await waitFor(() => expect(client.load).toHaveBeenCalledTimes(1));
+    act(() => {
+      void result.current.startCollectionRadio("classical");
+    });
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await act(async () => {
+      bundle.resolve();
+      await first;
+    });
+    expect(client.compute).not.toHaveBeenCalled();
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+    expect(result.current.preparingCollection).toBe(true);
+
+    await act(async () => {
+      pending[0]("ready");
+    });
+    await waitFor(() => expect(params.startPlaylist).toHaveBeenCalledTimes(1));
+    expect(result.current.station).toMatchObject({ seedKind: "collection", seedLabel: "Classical" });
+  });
+
+  it("does not let a collection start superseded during its first batch replace the playlist", async () => {
+    const pending = fetchingNotes();
+    pools.prepareCollectionNotes.mockResolvedValueOnce("ready");
+    const client = makeClient();
+    const firstBatch = deferred<void>();
+    const compute = client.compute.getMockImplementation()!;
+    client.compute.mockImplementationOnce(async (request) => {
+      await firstBatch.promise;
+      return compute(request);
+    });
+    const params = paramsFor(client);
+    const { result } = renderHook(() => useSidRadio(params));
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.startCollectionRadio("winners");
+    });
+    await waitFor(() => expect(client.compute).toHaveBeenCalledTimes(1));
+    act(() => {
+      void result.current.startCollectionRadio("classical");
+    });
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await act(async () => {
+      firstBatch.resolve();
+      await first;
+    });
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+    expect(result.current.station).toBeNull();
+    expect(loadSidRadioSession()).toBeNull();
+  });
+
+  it("does not let a superseded station's refill decide why the new collection could not start", async () => {
+    // Enough members that the first batch leaves the first station able to refill.
+    const LARGE_POOL: CollectionPool = {
+      md5_48: Array.from({ length: 20 }, (_, index) => index.toString(16).padStart(12, "0")),
+      songNr: Array.from({ length: 20 }, () => 1),
+    };
+    const staleRefillPool = deferred<CollectionPool | null>();
+    pools.loadCollectionPool
+      .mockResolvedValueOnce(LARGE_POOL)
+      .mockReturnValueOnce(staleRefillPool.promise)
+      .mockResolvedValueOnce({ md5_48: [], songNr: [] });
+    const client = makeClient();
+    const newBatch = deferred<void>();
+    const compute = client.compute.getMockImplementation()!;
+    client.compute.mockImplementation(async (request) => {
+      if (request.seed.kind === "collection" && request.seed.collectionId === "classical") await newBatch.promise;
+      return compute({ ...request, count: Math.min(request.count, 10) });
+    });
+    const { result } = renderHook(() => useSidRadio(paramsFor(client, { currentIndex: 0, playlistLength: 3 })));
+    await act(async () => {
+      await result.current.startCollectionRadio("winners");
+    });
+    // The lookahead refill of the first station is now waiting on its members.
+    await waitFor(() => expect(pools.loadCollectionPool).toHaveBeenCalledTimes(2));
+
+    let second!: Promise<void>;
+    act(() => {
+      second = result.current.startCollectionRadio("classical");
+    });
+    await waitFor(() => expect(pools.loadCollectionPool).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      staleRefillPool.resolve(null);
+      await staleRefillPool.promise;
+    });
+    await act(async () => {
+      newBatch.resolve();
+      await second;
+    });
+    expect(result.current.notice).toBe("no-radio-for-collection");
+  });
+
   it("says the collection is finished, not merely ended, when every member has been played", async () => {
     const client = makeClient();
     const params = paramsFor(client);

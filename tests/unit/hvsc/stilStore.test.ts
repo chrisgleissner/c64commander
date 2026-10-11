@@ -10,9 +10,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const files = new Map<string, string>();
 const readCounts = new Map<string, number>();
-/** Hold every shard read, or the next write of one named file, until the test lets it through. */
-const gates: { shardReads: Promise<void> | null; writes: Map<string, Promise<void>> } = {
+/**
+ * Hold every shard read, or the next read or write of one named file, until the test lets it through.
+ * A held read of a named file answers with what was on disk when it was asked.
+ */
+const gates: {
+  shardReads: Promise<void> | null;
+  reads: Map<string, Promise<void>>;
+  writes: Map<string, Promise<void>>;
+} = {
   shardReads: null,
+  reads: new Map(),
   writes: new Map(),
 };
 
@@ -28,6 +36,13 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   }),
   readStilFile: vi.fn(async (name: string) => {
     readCounts.set(name, (readCounts.get(name) ?? 0) + 1);
+    const readGate = gates.reads.get(name);
+    if (readGate) {
+      gates.reads.delete(name);
+      const text = files.get(name) ?? null;
+      await readGate;
+      return text;
+    }
     if (name.startsWith("shard-") && gates.shardReads) await gates.shardReads;
     return files.get(name) ?? null;
   }),
@@ -50,6 +65,8 @@ import {
 } from "@/lib/hvsc/stilStore";
 import { parseStil } from "@/lib/hvsc/stilParser";
 import { deriveStilCollections, STIL_COLLECTIONS_VERSION } from "@/lib/hvsc/stilCollections";
+import { saveHvscState } from "@/lib/hvsc/hvscStateStore";
+import { isStilFetchNeeded } from "@/lib/hvsc/stilService";
 
 const DOCUMENT = `/MUSICIANS/H/Hubbard_Rob/Commando.sid
 COMMENT: An arrangement of the arcade score.
@@ -217,6 +234,7 @@ describe("STIL collections", () => {
     logs.addLog.mockClear();
     logs.addErrorLog.mockClear();
     gates.shardReads = null;
+    gates.reads.clear();
     gates.writes.clear();
     __resetStilStoreCachesForTest();
     delete (window as Window & { __stilMock__?: unknown }).__stilMock__;
@@ -379,23 +397,64 @@ describe("STIL collections", () => {
     expect(JSON.parse(files.get("collections.json")!)).toEqual(deriveStilCollections(parseStil(NEWER_DOCUMENT)));
   });
 
-  it("derives nothing, says which shard is missing, and tries again later, when the store is incomplete", async () => {
+  it("removes a store that is missing a shard, so the next prepare downloads it again", async () => {
+    saveHvscState({ installedVersion: 84, installedBaselineVersion: 84 } as never);
     await storeWithoutCollections();
     const missing = shardForPath("/MUSICIANS/D/DJ_Space/Moonlight_Sonata.sid");
-    const shard = files.get(`shard-${missing}.json`)!;
     files.delete(`shard-${missing}.json`);
+    expect(await isStilFetchNeeded()).toBe(false);
 
     expect(await readStilCollections()).toBeNull();
     expect(logs.addLog).toHaveBeenCalledWith(
       "warn",
-      "STIL collections not derived: a stored shard is missing or unreadable",
+      "STIL store is incomplete: a stored shard is missing or unreadable; removing it",
       { shard: missing, release: 84 },
     );
-    expect(files.has("collections.json")).toBe(false);
-    expect(JSON.parse(files.get("index.json")!).collectionsVersion).toBeUndefined();
+    expect(files.has("index.json")).toBe(false);
+    expect(await isStilInstalled()).toBe(false);
+    expect(await isStilFetchNeeded()).toBe(true);
 
-    files.set(`shard-${missing}.json`, shard);
-    expect((await readStilCollections())?.collections.classical).toEqual([[1, 1]]);
+    readCounts.clear();
+    expect(await readStilCollections()).toBeNull();
+    expect(shardReads()).toBe(0);
+  });
+
+  it("does not write a manifest read before the store was replaced over the new one", async () => {
+    await storeWithoutCollections();
+    const manifestRead = deferred();
+    gates.reads.set("index.json", manifestRead.promise);
+    const launcherRead = readStilCollections();
+    await vi.waitFor(() => expect(readCounts.get("index.json")).toBe(1));
+
+    await writeStilShards(parseStil(NEWER_DOCUMENT), 85);
+    manifestRead.release();
+    await launcherRead;
+
+    expect(JSON.parse(files.get("index.json")!)).toMatchObject({ release: 85 });
+  });
+
+  it("discards a derivation that began during an ingestion that then failed", async () => {
+    const filesystem = await import("@/lib/hvsc/hvscFilesystem");
+    await storeWithoutCollections();
+    const reset = deferred();
+    vi.mocked(filesystem.resetStilStore).mockImplementationOnce(async () => {
+      await reset.promise;
+      files.clear();
+    });
+    const resetsBefore = vi.mocked(filesystem.resetStilStore).mock.calls.length;
+    const ingest = writeStilShards(parseStil(NEWER_DOCUMENT), 85);
+    // The ingestion has forgotten the previous store and is removing it when the launcher reads.
+    await vi.waitFor(() => expect(filesystem.resetStilStore).toHaveBeenCalledTimes(resetsBefore + 1));
+    const launcherRead = readStilCollections();
+    await vi.waitFor(() => expect(shardReads()).toBe(STIL_SHARD_COUNT));
+
+    vi.mocked(filesystem.writeStilFile).mockRejectedValueOnce(new Error("disk full"));
+    reset.release();
+    await expect(ingest).rejects.toThrow("disk full");
+
+    expect(await launcherRead).toBeNull();
+    expect(files.has("index.json")).toBe(false);
+    expect(files.has("collections.json")).toBe(false);
   });
 
   it("discards a derivation when a store write queued ahead of it replaces the store", async () => {

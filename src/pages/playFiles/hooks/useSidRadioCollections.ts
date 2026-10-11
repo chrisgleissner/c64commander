@@ -88,15 +88,26 @@ export const useSidRadioCollections = (params: { enabled: boolean; ensureResolva
     setCollectionCounts((previous) => (previous && sameCounts(previous, sizes) ? previous : sizes));
   }, [enabled, awaitResolvable]);
 
-  /** Make STIL available for the start identified by `request`; returns the refusal, or null when ready. */
-  const prepareNotes = useCallback(async (request: number): Promise<SidRadioNotice | null> => {
-    try {
-      const status = await prepareCollectionNotes(() => setPreparingRequest(request));
-      return status === "ready" ? null : NOTES_REFUSAL[status];
-    } finally {
-      setPreparingRequest((current) => (current === request ? null : current));
-    }
-  }, []);
+  /**
+   * Make STIL available for the start identified by `request`; returns the refusal, or null when ready.
+   * The wait is shown only while `request` is still the latest start.
+   */
+  const prepareNotes = useCallback(
+    async (request: number, isCurrent: () => boolean): Promise<SidRadioNotice | null> => {
+      try {
+        const status = await prepareCollectionNotes(() => {
+          if (isCurrent()) setPreparingRequest(request);
+        });
+        return status === "ready" ? null : NOTES_REFUSAL[status];
+      } finally {
+        setPreparingRequest((current) => (current === request ? null : current));
+      }
+    },
+    [],
+  );
+
+  /** A stop or a newer start abandons the wait, even though its download runs on. */
+  const abandonPreparing = useCallback(() => setPreparingRequest(null), []);
 
   /** A station resumed after a restart has not refilled yet, so its size is read here. */
   const restoreCollectionSize = useCallback(
@@ -125,6 +136,7 @@ export const useSidRadioCollections = (params: { enabled: boolean; ensureResolva
     setCollectionSize,
     preparingCollection: preparingRequest !== null,
     prepareNotes,
+    abandonPreparing,
     restoreCollectionSize,
     notesMissingRef,
   };

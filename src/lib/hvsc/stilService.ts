@@ -140,10 +140,16 @@ export const ensureStilReady = async (options?: { signal?: AbortSignal; retryNow
         // An older stored copy is still better than nothing.
         return isStilInstalled();
       }
-      lastFailedFetchAt = null;
       const count = await ingestStilText(decodeStilText(bytes), release);
+      if (count === 0) {
+        // A captive portal answers with a page that parses to nothing; that is a failed download too.
+        lastFailedFetchAt = Date.now();
+        addLog("warn", "STIL download held no entries", { release, bytes: bytes.length });
+        return isStilInstalled();
+      }
+      lastFailedFetchAt = null;
       addLog("info", "STIL downloaded", { release, entries: count, bytes: bytes.length });
-      return count > 0;
+      return true;
     } catch (error) {
       lastFailedFetchAt = Date.now();
       addErrorLog("STIL preparation failed", { release, error: (error as Error).message });

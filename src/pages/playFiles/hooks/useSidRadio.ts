@@ -266,7 +266,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const [notice, setNotice] = useState<SidRadioNotice | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
   const collections = useSidRadioCollections({ enabled, ensureResolvable: params.ensureResolvable });
-  const { setCollectionSize, notesMissingRef, prepareNotes, restoreCollectionSize } = collections;
+  const { setCollectionSize, notesMissingRef, prepareNotes, abandonPreparing, restoreCollectionSize } = collections;
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
   const clientRef = useRef<SidRadioWorkerClient | null>(null);
@@ -365,9 +365,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
               ? await loadCollectionPool(seed.collectionId)
               : undefined;
           if (seed.kind === "collection") {
-            notesMissingRef.current = pool === null;
+            if (stationGenerationRef.current === generation) {
+              notesMissingRef.current = pool === null;
+              if (pool) setCollectionSize(pool.md5_48.length);
+            }
             if (!pool) return { candidates: [], empty: "no-neighbours" };
-            if (stationGenerationRef.current === generation) setCollectionSize(pool.md5_48.length);
           }
           return client.compute({
             ...(pool ? { pool } : {}),
@@ -413,16 +415,14 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   }, []);
 
   /**
-   * Take the station down: no chip, no provider, no saved session, nothing left in flight.
+   * Take the station down: no chip, no provider, no saved session, no refill left in flight.
    *
-   * The user-facing Stop, and also what a start that came back empty calls, because both leave the
-   * app in the same place — there is no station. A start that produced nothing has already retired
-   * the previous station's provider, so leaving its chip up would advertise one that can never
-   * refill again.
+   * Part of the user-facing Stop, and also what a start that came back empty or was superseded
+   * calls, because each leaves the app with no station. Such a start has already retired the
+   * previous station's provider, so leaving its chip up would advertise one that can never refill.
    */
-  const stop = useCallback(() => {
+  const retireStation = useCallback(() => {
     stationGenerationRef.current += 1;
-    startRequestRef.current += 1;
     refillingRef.current = false;
     setStation(null);
     setCollectionSize(null);
@@ -430,6 +430,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     clearSidRadioSession();
     updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
   }, [setCollectionSize]);
+
+  /** Also abandons a start still in progress, including the wait shown for its tune notes. */
+  const stop = useCallback(() => {
+    startRequestRef.current += 1;
+    abandonPreparing();
+    retireStation();
+  }, [abandonPreparing, retireStation]);
 
   const refuseStart = useCallback((refusal: SidRadioNotice, context: Record<string, unknown>) => {
     setNotice(refusal);
@@ -448,15 +455,19 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         addLog("warn", "SID Radio: a station start was ignored because SID Radio is disabled", { seedKind });
         return;
       }
+      const isCurrentRequest = () => startRequestRef.current === request;
+      const superseded = (stage: string) => {
+        if (isCurrentRequest()) return false;
+        addLog("info", "SID Radio: a station start was superseded by a newer start or a stop", {
+          service: "sid-radio",
+          seedKind,
+          stage,
+        });
+        return true;
+      };
       if (seed.kind === "collection") {
-        const refusal = await prepareNotes(request);
-        if (startRequestRef.current !== request) {
-          addLog("info", "SID Radio: a collection start was superseded while its tune notes loaded", {
-            service: "sid-radio",
-            collection: seed.collectionId,
-          });
-          return;
-        }
+        const refusal = await prepareNotes(request, isCurrentRequest);
+        if (superseded("tune notes")) return;
         if (refusal) {
           refuseStart(refusal, { seedKind, collection: seed.collectionId, reason: "tune notes unavailable" });
           return;
@@ -466,6 +477,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       const readyStats = await client.load();
       rememberStylePopulations(readyStats.stylePopulations);
       recordCorpusIdentity(readyStats);
+      if (superseded("similarity bundle")) return;
       // The launcher opens before the populations are read, so a fast tap reaches
       // a tile the disabled state had no counts to refuse yet. They are known
       // here, ahead of any compute, and a style with no members admits nothing
@@ -492,6 +504,12 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       // Its tracks were chosen under a constraint that is no longer the one in force, so they are
       // dropped whole — not queued, not counted, not persisted.
       if (stationGenerationRef.current !== generation) return;
+      // A newer start is still waiting on its tune notes, so this one's tracks must not stand in for
+      // it. The previous station's provider was already retired above, so its chip goes too.
+      if (superseded("first batch")) {
+        retireStation();
+        return;
+      }
       providerRef.current = provider;
       // `lastRefillMs` is end-to-end latency (it spans the await, so it includes
       // worker compute). `mainThreadMs` must NOT: its budget is one 60 fps frame
@@ -576,6 +594,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       refuseStart,
       prepareNotes,
       notesMissingRef,
+      retireStation,
     ],
   );
 
@@ -583,6 +602,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const start = useCallback(
     async (seed: StationSeed, styleFilter: number | null, seedKind: ActiveStation["seedKind"], seedLabel: string) => {
       const request = (startRequestRef.current += 1);
+      abandonPreparing();
       try {
         await startUnguarded(request, seed, styleFilter, seedKind, seedLabel);
       } catch (error) {
@@ -595,7 +615,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         refuseStart("start-failed", { seedKind, styleFilter, reason: "error" });
       }
     },
-    [startUnguarded, refuseStart],
+    [startUnguarded, refuseStart, abandonPreparing],
   );
 
   const startSongRadio = useCallback(

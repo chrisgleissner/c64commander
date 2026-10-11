@@ -218,6 +218,16 @@ describe("ensureStilReady", () => {
     expect(stilUnavailableReason()).toBe(reason);
   });
 
+  it("treats a download that parses to no entries as failed, and waits before downloading again", async () => {
+    // A captive portal answers 200 with an HTML page; it parses to nothing and stores nothing.
+    fetchMock.mockResolvedValue(okResponse(new TextEncoder().encode("<html>Sign in</html>")));
+    ingestStilText.mockResolvedValue(0);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(await ensureStilReady()).toBe(false);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("logs a download it could not store, and waits before trying again", async () => {
     fetchMock.mockResolvedValue(okResponse(LATIN1_DOC));
     ingestStilText.mockRejectedValueOnce(new Error("disk full"));

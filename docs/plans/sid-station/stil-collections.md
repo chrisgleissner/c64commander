@@ -173,14 +173,16 @@ The STIL ingestion already parses the whole document once per HVSC install or up
   `ensureStilReady` download STIL again. Version 2 of the rules (§2) is derived again this way on
   existing installs.
 - The re-derivation requires every one of the 64 shards. If a shard is missing or unreadable it logs
-  a warning naming the shard, writes nothing, and returns null; a null result is not cached, so the
-  next read tries again.
+  a warning naming the shard and removes the whole store, so `index.json` no longer says the release
+  is stored. The read returns null, the next collection start finds STIL missing and downloads it
+  again, and later reads do not scan the shards again.
 - Store writes are serialized: storing a new STIL document, writing a re-derivation, and clearing the
   store each run after the previous write has settled. Storing a new document forgets the cached
   manifest before it resets the store and bumps the store generation both before and after its
-  writes. A re-derivation checks the generation before and after each of its writes and discards its
-  result when the store was replaced meanwhile, so it cannot leave a partial `collections.json` or the
-  previous release's manifest behind.
+  writes, including when a write fails. `readStilCollections` takes the generation before it reads
+  the manifest. A re-derivation checks that generation before and after each of its writes and
+  discards its result when the store was replaced meanwhile, so it cannot leave a partial
+  `collections.json` or the previous release's manifest behind.
 - A new HVSC release replaces STIL through the existing paths (the archive during ingestion, or
   `ensureStilReady` when `manifest.release` is older than the installed release), and the
   collections are derived again with it.
@@ -194,7 +196,8 @@ The STIL ingestion already parses the whole document once per HVSC install or up
   and calls `ensureStilReady({ retryNow: true })` once. It then reports `ready`, or why STIL is not
   available: no library, Demo Mode's library, or a download that did not succeed.
 - `ensureStilReady` bounds the download: one 60 s deadline (`STIL_FETCH_TIMEOUT_MS`) covers both
-  URLs and aborts the request when it passes. After a failed download, callers that only want notes
+  URLs and aborts the request when it passes. A download that parses to no entries, such as a
+  captive portal's sign-in page, counts as failed. After a failed download, callers that only want notes
   for the playing tune wait 5 minutes (`STIL_FETCH_RETRY_AFTER_MS`) before the next attempt; a
   collection start passes `retryNow`, because the listener asked. Nothing is downloaded without an
   installed library, or for Demo Mode's library, whose tunes the published STIL does not describe.
@@ -231,8 +234,11 @@ parses, stores and derives on the main thread after the download; that runs once
   this collection's tunes are in the installed HVSC library.") when the pool is empty, for Demo
   Mode's library, and for a saved id this build does not know; `collection-ended` when every member
   has played. A start that is refused is also shown as a toast.
-- **Superseded start:** a collection start that is waiting for STIL is abandoned when the listener
-  starts another station or stops the current one meanwhile.
+- **Superseded start:** a collection start is abandoned when the listener starts another station,
+  stops the current one, or clears the playlist before it has queued its first tunes. The start checks
+  this after the STIL download, after loading the similarity bundle, and after computing its first
+  batch, so an abandoned start never replaces the playlist. Stopping or starting another station also
+  removes "Fetching tune notes…" at once, even though the download continues.
 - **Session restore:** the descriptor stores `{ kind: "collection", collectionId }`. A restored
   station loads its pool on the first refill.
 
