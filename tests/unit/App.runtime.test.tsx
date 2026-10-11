@@ -713,6 +713,25 @@ describe("App runtime wiring", () => {
     );
   });
 
+  it("records Chromium's ResizeObserver loop notice as debug, not as a window error", async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    act(() => {
+      window.dispatchEvent(
+        new ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }),
+      );
+    });
+
+    expect(mocks.addErrorLog).not.toHaveBeenCalledWith("Window error", expect.anything());
+    expect(mocks.recordTraceError).not.toHaveBeenCalled();
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "debug",
+      expect.stringContaining("ResizeObserver"),
+      expect.objectContaining({ message: "ResizeObserver loop completed with undelivered notifications." }),
+    );
+  });
+
   it('falls back to the default "Window error" message when the browser event has no error payload', async () => {
     render(<App />);
     await screen.findByText("Home Page");
