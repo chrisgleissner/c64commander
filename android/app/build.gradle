@@ -28,6 +28,17 @@ def upstream7zipWorkDirForVariant = { String variantName ->
     new File(upstream7zipWorkBaseDir, variantName)
 }
 
+// libSidplayEZ: the native SID renderer, pinned to one upstream commit and verified by SHA-256.
+// See android/scripts/build-libsidplayez.sh and docs/internals/sid-playback-architecture.md.
+def libsidplayezRevision = "4c8664c80df8d363049e1a3eadf59cd9e52afd1f"
+def libsidplayezSourceUrl = "https://github.com/Toddler-Boy/libSidplayEZ/archive/${libsidplayezRevision}.tar.gz"
+def libsidplayezSourceSha256 = "b74103101f95e1635a064147d9b83c54a6f128a28e2ded043e70779513075590"
+def libsidplayezBuildScript = rootProject.file("scripts/build-libsidplayez.sh")
+def libsidplayezWrapperDir = file("src/main/cpp/sidplayez")
+def libsidplayezGeneratedJniLibsBaseDir = new File(buildDir, "generated/jniLibs/libsidplayez")
+def libsidplayezWorkBaseDir = new File(buildDir, "intermediates/libsidplayez")
+def libsidplayezHostOutputDir = new File(buildDir, "intermediates/libsidplayez-host/out")
+
 def loadAndroidLocalProperties = {
     def props = new Properties()
     def localPropsFile = rootProject.file("local.properties")
@@ -216,13 +227,13 @@ android {
             manifest.srcFile selectedAndroidManifest
         }
         debug {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug")]
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug"), new File(libsidplayezGeneratedJniLibsBaseDir, "debug")]
         }
         minifiedDebug {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("minifiedDebug")]
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("minifiedDebug"), new File(libsidplayezGeneratedJniLibsBaseDir, "minifiedDebug")]
         }
         release {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("release")]
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("release"), new File(libsidplayezGeneratedJniLibsBaseDir, "release")]
         }
         androidTest {
             assets.srcDirs += ['src/test/fixtures']
@@ -399,6 +410,107 @@ upstream7zipVariantAbis.each { variantName, abis ->
     tasks.matching { it.name == "pre${capitalizedVariantName}Build" }.configureEach {
         dependsOn(tasks.named(taskName))
     }
+}
+
+upstream7zipVariantAbis.each { variantName, abis ->
+    def capitalizedVariantName = variantName.substring(0, 1).toUpperCase() + variantName.substring(1)
+    def taskName = "buildLibSidplayEz${capitalizedVariantName}AndroidLibraries"
+    def outputDir = new File(libsidplayezGeneratedJniLibsBaseDir, variantName)
+    def workDir = new File(libsidplayezWorkBaseDir, variantName)
+
+    tasks.register(taskName, Exec) {
+        group = 'build'
+        description = "Builds the pinned libSidplayEZ renderer and its JNI wrapper for the ${variantName} variant."
+
+        inputs.file(libsidplayezBuildScript)
+        inputs.dir(libsidplayezWrapperDir)
+        inputs.property('abis', abis.join(','))
+        inputs.property('sourceUrl', libsidplayezSourceUrl)
+        inputs.property('sourceSha256', libsidplayezSourceSha256)
+        inputs.property('revision', libsidplayezRevision)
+        inputs.property('apiLevel', upstream7zipApiLevel.toString())
+        inputs.property('ndkVersion', upstream7zipNdkVersion)
+        outputs.dir(outputDir)
+        outputs.cacheIf { true }
+
+        doFirst {
+            def ndkDir = resolveAndroidNdkDir()
+            if (!ndkDir.exists()) {
+                throw new GradleException("Android NDK not found for the libSidplayEZ build: ${ndkDir}")
+            }
+            outputDir.mkdirs()
+            commandLine(
+                'bash',
+                libsidplayezBuildScript.absolutePath,
+                'android',
+                ndkDir.absolutePath,
+                workDir.absolutePath,
+                outputDir.absolutePath,
+                libsidplayezSourceUrl,
+                libsidplayezSourceSha256,
+                libsidplayezRevision,
+                upstream7zipApiLevel.toString(),
+                *abis,
+            )
+        }
+    }
+
+    tasks.matching { it.name == "pre${capitalizedVariantName}Build" }.configureEach {
+        dependsOn(tasks.named(taskName))
+    }
+}
+
+// The same library built for this machine, so the JVM tests exercise the real JNI wrapper, plus the
+// C++ tests of the wrapper run plain, under AddressSanitizer/UBSan and under ThreadSanitizer.
+def libsidplayezJdkHome = {
+    javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }.get().metadata.installationPath.asFile.absolutePath
+}
+
+tasks.register('buildLibSidplayEzHost', Exec) {
+    group = 'verification'
+    description = 'Builds libSidplayEZ and its JNI wrapper for the build machine, with sanitizer test programs.'
+    inputs.file(libsidplayezBuildScript)
+    inputs.dir(libsidplayezWrapperDir)
+    inputs.property('sourceSha256', libsidplayezSourceSha256)
+    outputs.dir(libsidplayezHostOutputDir)
+    doFirst {
+        libsidplayezHostOutputDir.mkdirs()
+        commandLine(
+            'bash',
+            libsidplayezBuildScript.absolutePath,
+            'host',
+            new File(libsidplayezWorkBaseDir, "host").absolutePath,
+            libsidplayezHostOutputDir.absolutePath,
+            libsidplayezSourceUrl,
+            libsidplayezSourceSha256,
+            libsidplayezRevision,
+            libsidplayezJdkHome(),
+        )
+    }
+}
+
+['none', 'address', 'thread'].each { sanitizer ->
+    tasks.register("testLibSidplayEzNative${sanitizer.capitalize()}", Exec) {
+        group = 'verification'
+        description = "Runs the libSidplayEZ wrapper's C++ tests (${sanitizer} sanitizer)."
+        dependsOn 'buildLibSidplayEzHost'
+        commandLine(
+            new File(libsidplayezHostOutputDir, "ez_session_test-${sanitizer}").absolutePath,
+            rootProject.file("../tests/fixtures/tone-ladder.sid").absolutePath,
+        )
+    }
+}
+
+tasks.register('testLibSidplayEzNative') {
+    group = 'verification'
+    description = "Runs the libSidplayEZ wrapper's C++ tests under every sanitizer configuration."
+    dependsOn 'testLibSidplayEzNativeNone', 'testLibSidplayEzNativeAddress', 'testLibSidplayEzNativeThread'
+}
+
+tasks.withType(Test).configureEach {
+    dependsOn 'buildLibSidplayEzHost'
+    systemProperty 'c64c.sidplayez.hostLibrary', new File(libsidplayezHostOutputDir, 'libc64sidplayez.so').absolutePath
+    systemProperty 'c64c.sidplayez.toneLadder', rootProject.file("../tests/fixtures/tone-ladder.sid").absolutePath
 }
 
 dependencies {

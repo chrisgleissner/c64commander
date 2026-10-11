@@ -1,0 +1,207 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+#include <jni.h>
+
+#include <atomic>
+#include <cstdint>
+#include <exception>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "ez_session.h"
+
+using c64commander::EzSession;
+using c64commander::EzSidModel;
+
+namespace {
+
+/**
+ * A session behind an opaque id.
+ *
+ * Ids, not pointers, cross JNI: an id that has been destroyed is simply not found, where a stale
+ * pointer would be a use-after-free. The registry hands out shared ownership, so a destroy that
+ * races a render leaves the session alive until that render has returned, and the per-session
+ * mutex keeps two threads from ever driving one player at the same time.
+ */
+struct Handle {
+  std::mutex lock;
+  std::unique_ptr<EzSession> session;
+};
+
+std::mutex registryLock;
+std::unordered_map<jlong, std::shared_ptr<Handle>> registry;
+std::atomic<jlong> nextId{1};
+
+std::shared_ptr<Handle> find(jlong id) {
+  std::lock_guard<std::mutex> guard(registryLock);
+  const auto it = registry.find(id);
+  return it == registry.end() ? nullptr : it->second;
+}
+
+jstring toJString(JNIEnv* env, const std::string& value) { return env->NewStringUTF(value.c_str()); }
+
+std::vector<uint8_t> copyBytes(JNIEnv* env, jbyteArray array) {
+  std::vector<uint8_t> out;
+  if (!array) return out;
+  const jsize length = env->GetArrayLength(array);
+  out.resize(static_cast<size_t>(length));
+  if (length > 0) env->GetByteArrayRegion(array, 0, length, reinterpret_cast<jbyte*>(out.data()));
+  return out;
+}
+
+void throwIllegalState(JNIEnv* env, const char* message) {
+  jclass type = env->FindClass("java/lang/IllegalStateException");
+  if (type) env->ThrowNew(type, message);
+}
+
+/** Run `body` against a live session, translating every C++ failure into a Java exception. */
+template <typename Result, typename Body>
+Result withSession(JNIEnv* env, jlong id, Result fallback, Body body) {
+  const auto handle = find(id);
+  if (!handle) {
+    throwIllegalState(env, "libSidplayEZ session has been destroyed");
+    return fallback;
+  }
+  std::lock_guard<std::mutex> guard(handle->lock);
+  try {
+    return body(*handle->session);
+  } catch (const std::exception& error) {
+    throwIllegalState(env, error.what());
+  } catch (...) {
+    throwIllegalState(env, "libSidplayEZ raised a non-standard exception");
+  }
+  return fallback;
+}
+
+} // namespace
+
+#define JNI_FN(name) Java_uk_gleissner_c64commander_sidplayez_SidplayEzNative_##name
+
+extern "C" {
+
+JNIEXPORT jboolean JNICALL JNI_FN(nativeCpuSupported)(JNIEnv*, jobject) {
+  return c64commander::cpuSupported() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jstring JNICALL JNI_FN(nativeRevision)(JNIEnv* env, jobject) {
+  return toJString(env, c64commander::libraryRevision());
+}
+
+JNIEXPORT jlong JNICALL JNI_FN(nativeCreate)(JNIEnv* env, jobject, jint sampleRate) {
+  if (!c64commander::cpuSupported()) {
+    throwIllegalState(env, "This CPU lacks SSE4.1, which the x86 libSidplayEZ build requires");
+    return 0;
+  }
+  try {
+    auto handle = std::make_shared<Handle>();
+    handle->session = std::make_unique<EzSession>(sampleRate);
+    const jlong id = nextId.fetch_add(1);
+    std::lock_guard<std::mutex> guard(registryLock);
+    registry.emplace(id, std::move(handle));
+    return id;
+  } catch (const std::exception& error) {
+    throwIllegalState(env, error.what());
+  } catch (...) {
+    throwIllegalState(env, "libSidplayEZ session could not be created");
+  }
+  return 0;
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeDestroy)(JNIEnv*, jobject, jlong id) {
+  std::shared_ptr<Handle> handle;
+  {
+    std::lock_guard<std::mutex> guard(registryLock);
+    const auto it = registry.find(id);
+    if (it == registry.end()) return;
+    handle = std::move(it->second);
+    registry.erase(it);
+  }
+  // Waits for a call already inside the session, then frees it with nobody else able to reach it.
+  std::lock_guard<std::mutex> guard(handle->lock);
+  handle->session.reset();
+}
+
+JNIEXPORT jint JNICALL JNI_FN(nativeLiveSessions)(JNIEnv*, jobject) {
+  std::lock_guard<std::mutex> guard(registryLock);
+  return static_cast<jint>(registry.size());
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetRoms)(JNIEnv* env, jobject, jlong id, jbyteArray kernal, jbyteArray basic,
+                                            jbyteArray chargen) {
+  const auto k = copyBytes(env, kernal);
+  const auto b = copyBytes(env, basic);
+  const auto c = copyBytes(env, chargen);
+  withSession<int>(env, id, 0, [&](EzSession& session) {
+    session.setRoms(k.empty() ? nullptr : k.data(), k.size(), b.empty() ? nullptr : b.data(), b.size(),
+                    c.empty() ? nullptr : c.data(), c.size());
+    return 0;
+  });
+}
+
+JNIEXPORT jstring JNICALL JNI_FN(nativeLoad)(JNIEnv* env, jobject, jlong id, jbyteArray sid, jint songIndex,
+                                            jint fallbackModel) {
+  const auto bytes = copyBytes(env, sid);
+  return withSession<jstring>(env, id, nullptr, [&](EzSession& session) -> jstring {
+    std::string error;
+    const auto model = fallbackModel == 0 ? EzSidModel::Mos6581 : EzSidModel::Mos8580;
+    if (session.load(bytes.data(), bytes.size(), songIndex, model, error)) return nullptr;
+    return toJString(env, error.empty() ? "libSidplayEZ could not load the tune" : error);
+  });
+}
+
+JNIEXPORT jstring JNICALL JNI_FN(nativeReload)(JNIEnv* env, jobject, jlong id) {
+  return withSession<jstring>(env, id, nullptr, [&](EzSession& session) -> jstring {
+    std::string error;
+    if (session.reload(error)) return nullptr;
+    return toJString(env, error.empty() ? "libSidplayEZ could not reload the tune" : error);
+  });
+}
+
+JNIEXPORT jint JNICALL JNI_FN(nativeRender)(JNIEnv* env, jobject, jlong id, jobject buffer, jint offsetBytes,
+                                           jint frames) {
+  if (!buffer || frames <= 0 || offsetBytes < 0 || (offsetBytes & 1) != 0) {
+    throwIllegalState(env, "Invalid render target");
+    return 0;
+  }
+  auto* base = static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
+  const jlong capacity = env->GetDirectBufferCapacity(buffer);
+  const jlong needed = static_cast<jlong>(offsetBytes) + static_cast<jlong>(frames) * EzSession::kChannels * 2;
+  if (!base || capacity < 0 || needed > capacity || (reinterpret_cast<uintptr_t>(base) & 1) != 0) {
+    throwIllegalState(env, "Render target is not a direct buffer large enough for the request");
+    return 0;
+  }
+  auto* out = reinterpret_cast<int16_t*>(base + offsetBytes);
+  return withSession<jint>(env, id, 0, [&](EzSession& session) { return session.render(out, frames); });
+}
+
+JNIEXPORT jlong JNICALL JNI_FN(nativeSkip)(JNIEnv* env, jobject, jlong id, jlong frames) {
+  return withSession<jlong>(env, id, 0, [&](EzSession& session) { return session.skip(frames, nullptr); });
+}
+
+JNIEXPORT jstring JNICALL JNI_FN(nativeTuneInfo)(JNIEnv* env, jobject, jlong id) {
+  return withSession<jstring>(env, id, nullptr,
+                              [&](EzSession& session) { return toJString(env, session.tuneInfoJson()); });
+}
+
+JNIEXPORT jint JNICALL JNI_FN(nativeChips)(JNIEnv* env, jobject, jlong id) {
+  return withSession<jint>(env, id, 0, [&](EzSession& session) { return session.chips(); });
+}
+
+JNIEXPORT jint JNICALL JNI_FN(nativeSampleRate)(JNIEnv* env, jobject, jlong id) {
+  return withSession<jint>(env, id, 0, [&](EzSession& session) { return session.sampleRate(); });
+}
+
+JNIEXPORT jint JNICALL JNI_FN(nativeSongIndex)(JNIEnv* env, jobject, jlong id) {
+  return withSession<jint>(env, id, 0, [&](EzSession& session) { return session.songIndex(); });
+}
+
+} // extern "C"
