@@ -724,43 +724,58 @@ export class AvMirrorSession {
   }
 
   startAudio(): Promise<void> {
+    return this.serialize(() => this.startAudioNow());
+  }
+
+  /**
+   * Bring the audio feed to the wanted state, judged when this request's turn in the queue comes rather
+   * than when it was made. A caller deciding from the state it last saw skipped a start behind a stop that
+   * was still queued, so the stop then ran and the feed it was asked for never came.
+   */
+  setAudioWanted(want: boolean): Promise<void> {
     return this.serialize(async () => {
-      this.beginSessionIfIdle();
-      // Take the speaker before opening the stream. The local SID engine can be
-      // playing a tune here, and the C64's audio laid over the top of it is two
-      // pieces of music at once with no way for the listener to tell which
-      // control stops which. Claiming first means the tune is already silenced
-      // by the time the first packet arrives.
-      claimPhoneAudio(
-        "av-mirror",
-        this,
-        () => {
-          void this.stopAudio().catch((error) => {
-            // Not cosmetic: if the stop fails, the C64's audio keeps playing and
-            // the local tune starts underneath it — the two-sounds-at-once
-            // failure this registry exists to prevent.
-            addLog("warn", "A/V mirror: stopping audio during eviction failed", {
-              service: "streams",
-              error: error instanceof Error ? error.message : String(error),
-            });
-          });
-        },
-        {
-          // A focus loss (HARD27-006): the C64 keeps streaming, so there is no position to hold —
-          // stop receiving and start again if the loss turns out to have been transient.
-          pause: () => void this.stopAudio().catch((error) => warnAudioFocusFailure("pause", error)),
-          resume: () => void this.startAudio().catch((error) => warnAudioFocusFailure("resume", error)),
-        },
-      );
-      try {
-        await this.audio.start();
-      } catch (error) {
-        // Nothing is playing, so do not keep holding the speaker against a
-        // local tune that could otherwise start.
-        releasePhoneAudio(this);
-        throw error;
-      }
+      const failed = this.snapshot.audio.state === "error";
+      if (want ? this.audioLive : !this.audioLive && !failed) return;
+      await (want ? this.startAudioNow() : this.stopAudioNow());
     });
+  }
+
+  private async startAudioNow(): Promise<void> {
+    this.beginSessionIfIdle();
+    // Take the speaker before opening the stream. The local SID engine can be
+    // playing a tune here, and the C64's audio laid over the top of it is two
+    // pieces of music at once with no way for the listener to tell which
+    // control stops which. Claiming first means the tune is already silenced
+    // by the time the first packet arrives.
+    claimPhoneAudio(
+      "av-mirror",
+      this,
+      () => {
+        void this.stopAudio().catch((error) => {
+          // Not cosmetic: if the stop fails, the C64's audio keeps playing and
+          // the local tune starts underneath it — the two-sounds-at-once
+          // failure this registry exists to prevent.
+          addLog("warn", "A/V mirror: stopping audio during eviction failed", {
+            service: "streams",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      },
+      {
+        // A focus loss (HARD27-006): the C64 keeps streaming, so there is no position to hold —
+        // stop receiving and start again if the loss turns out to have been transient.
+        pause: () => void this.stopAudio().catch((error) => warnAudioFocusFailure("pause", error)),
+        resume: () => void this.startAudio().catch((error) => warnAudioFocusFailure("resume", error)),
+      },
+    );
+    try {
+      await this.audio.start();
+    } catch (error) {
+      // Nothing is playing, so do not keep holding the speaker against a
+      // local tune that could otherwise start.
+      releasePhoneAudio(this);
+      throw error;
+    }
   }
 
   stopAudio(): Promise<void> {

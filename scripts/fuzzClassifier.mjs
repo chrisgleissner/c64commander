@@ -94,6 +94,7 @@ const DEVICE_ACTION_SUBSTRINGS = [
 const NETWORK_SUBSTRINGS = [
   'C64 API request failed',
   'C64 API upload failed',
+  'C64 API memory read failed',
   'FTP listing failed',
   'Source browse failed',
   'service unavailable',
@@ -344,6 +345,7 @@ export const classifyIssue = (group) => {
         includes(rawMsg, [
           'C64 API request failed',
           'C64 API upload failed',
+          'C64 API memory read failed',
           'FTP listing failed',
           'Source browse failed',
         ])

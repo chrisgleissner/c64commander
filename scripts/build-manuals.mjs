@@ -217,6 +217,29 @@ const isC64uRemoteVariant = (variant) => variant.id === "c64u-remote";
 // it keeps the wider "phone or tablet" phrasing unchanged.
 const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
 
+/**
+ * The SID emulation choices, led by the edition's default. Fast & accurate exists only on Android,
+ * so the broad edition says where it applies; the keypad edition runs on Android alone.
+ */
+export const sidEmulationProse = (variant) => {
+  const choices = {
+    sidplayez:
+      "**Fast & accurate** models the chip as closely as **Accurate** but runs it natively, so it needs about a third of the processing power and the battery lasts longer.",
+    residfp: "**Accurate** follows the chip cycle by cycle inside the app itself.",
+    sidlite:
+      "**Light** is a lighter model of the chip that also saves processing power and battery, though its sound is not an exact match for a real C64.",
+  };
+  const preferred = variant.runtime.defaultSidEmulationEngine;
+  const order = [preferred, ...["sidplayez", "residfp", "sidlite"].filter((engine) => engine !== preferred)];
+  const sentences = order.map((engine, index) =>
+    index === 0 ? choices[engine].replace(/^(\*\*[^*]+\*\*) /, "$1, the default, ") : choices[engine],
+  );
+  const where = isC64uRemoteVariant(variant)
+    ? ""
+    : " Fast & accurate is offered on Android; on an iPhone, an iPad and in a web browser, Accurate is the default.";
+  return sentences.join(" ") + where;
+};
+
 // Subject noun for the device the app runs on, e.g. "on your phone". The broad
 // edition ships for Android, iOS and as a self-hosted web build, so it must not
 // name one of them.
@@ -1378,9 +1401,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Many older files say nothing. For those, turn on **Match my Commodore 64** and the app reads the chip from your own machine. Until it has, **Otherwise use** picks 6581 or 8580. A line underneath tells you which is in use.",
     "",
-    `When a tune plays on your ${appDeviceName(
-      variant,
-    )}, **SID emulation** sets how closely the chip is modeled. **Accurate**, the default, follows it cycle by cycle. **Light** renders at about a third of the processing cost but sounds less like a real C64. A change applies from the next tune.`,
+    `When a tune plays on your ${appDeviceName(variant)}, **SID emulation** sets how closely the chip is modeled. ${sidEmulationProse(variant)} A change applies from the next tune.`,
     "",
     "#### The SID Audio Mixer",
     "",

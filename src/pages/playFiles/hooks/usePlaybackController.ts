@@ -90,6 +90,7 @@ import {
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
+import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
@@ -354,6 +355,9 @@ export function usePlaybackController({
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
   /** What the latest pause tap asked for while its transition runs; null when none runs. */
   const requestedPauseRef = useRef<boolean | null>(null);
+  // Shown on the button from the tap on: the machine takes a second or two to answer, and a button that had
+  // not changed by then drew a second tap, which undid the first.
+  const [requestedPause, setRequestedPause] = useState<boolean | null>(null);
   const pauseRequestRef = useRef(0);
   const localPauseChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
@@ -634,6 +638,29 @@ export function usePlaybackController({
       }
     },
     [withTimeout],
+  );
+
+  /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
+  const stopTuneOnC64 = useCallback(
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string) => {
+      // A pause still under way would otherwise freeze the machine after the reset, muted.
+      await machineTransitionCoordinatorRef.current.idle();
+      const wasPaused = isPausedRef.current;
+      const report = (title: string, error: unknown) =>
+        addErrorLog(title, {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          itemId,
+        });
+      if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
+      await stopMachineWithGracePeriod(api, shouldReboot);
+      await endPlayLaunchMounts(api);
+      // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
+      if (wasPaused && pauseMuteSnapshotRef.current) {
+        await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
+      }
+    },
+    [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
   );
 
   const resolveSidMetadata = useCallback(
@@ -1241,14 +1268,14 @@ export function usePlaybackController({
           // Bring the tune to this device's speakers too, unless the listener chose otherwise: the preference
           // check is what makes "Listen on: <device>" mean anything. Best-effort, as a device that will not
           // stream must not stop the tune from playing.
+          // Queued, not judged from `audioLive`: a stop still queued read as live, and Both played on the C64 alone.
           if (
             featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
             loadMirrorC64Audio() &&
             // An Ultimate II+L has no /v1/streams: asking it answered 404, logged twice as an error.
-            identifiedDeviceStreams(getConnectionSnapshot().deviceInfo) &&
-            !avMirrorSession.audioLive
+            identifiedDeviceStreams(getConnectionSnapshot().deviceInfo)
           ) {
-            void avMirrorSession.startAudio().catch((error) => {
+            void avMirrorSession.setAudioWanted(true).catch((error) => {
               addLog("warn", "Playback: could not start Live View audio for C64 playback", {
                 service: "playback",
                 error: error instanceof Error ? error.message : String(error),
@@ -1425,66 +1452,37 @@ export function usePlaybackController({
     [],
   );
 
-  // Track B (LE2, §12.5): switching "Play on: C64 / This device" acts on the
-  // tune that is playing *now* — stop whichever engine owns it and restart it
-  // on the chosen one — instead of waiting for the next track. `playItem`
-  // re-reads the engine setting, so the restart lands on the new engine.
-  useEffect(() => {
-    const onSettingsUpdated = () => {
-      const nextEngine = loadPlaybackEngine();
-      if (nextEngine === selectedEngineRef.current) return;
-      selectedEngineRef.current = nextEngine;
-      // A tune playing here would only start again here, or not at all with the C64 out of reach; the next tune moves.
-      // The phone's engine is shared, so a page that remounted is playing on it without having started it.
-      const playsHere = currentPlaybackIsLocalRef.current || getLocalSidPlayback().isActive();
-      if (playsHere && (nextEngine === "local" || isDeviceOutOfReach())) return;
-      const index = currentIndexRef.current;
-      const item = playlistRef.current[index];
-      // Only a playing SID can move between engines; everything else is a
-      // no-op that takes effect on the next track, as before.
-      if (!isPlayingRef.current || !item || item.category !== "sid") return;
-      const startedAt = performance.now();
-      void (async () => {
-        if (playsHere) {
-          // getLocalSidPlayback(), never the raw ref: the ref is per-page and
-          // starts null, so a page that adopted an already-running session (a
-          // remount, or the transient second instance a tab switch creates)
-          // silently no-opped here and the tune kept playing after the user had
-          // switched engines.
-          getLocalSidPlayback().stop();
-          setCurrentPlaybackIsLocal(false);
-        } else {
-          try {
-            await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
-            markRemotePlaybackStopped();
-          } catch (error) {
-            addErrorLog("Stopping the C64 for a playback-engine switch failed", {
-              error: (error as Error).message,
-              item: item.label,
-            });
-          }
-        }
-        try {
-          await playItem(item, {
-            playlistIndex: index,
-            playlistSize: playlistRef.current.length,
-            origin: "auto",
-          });
-          // §12.6 `engineSwitchMs`: press → the tune is audible again.
-          updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
-        } catch (error) {
-          if (!isHandledUiError(error)) {
-            addErrorLog("Restarting the tune on the new playback engine failed", {
-              error: (error as Error).message,
-              item: item.label,
-            });
-          }
-        }
-      })();
-    };
-    window.addEventListener("c64u-app-settings-updated", onSettingsUpdated);
-    return () => window.removeEventListener("c64u-app-settings-updated", onSettingsUpdated);
-  }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS, getLocalSidPlayback]);
+  usePlaybackEngineSwitch({
+    selectedEngineRef,
+    stopCountRef,
+    currentPlaybackIsLocalRef,
+    currentIndexRef,
+    playlistRef,
+    isPlayingRef,
+    getLocalSidPlayback,
+    setCurrentPlaybackIsLocal,
+    enqueuePlayTransition,
+    playItem,
+    stopOnC64: async (item) => {
+      try {
+        // A tune paused on the C64 and then moved here left the machine frozen and muted: a reset does not unpause it.
+        await stopTuneOnC64(getC64API(), false, item.id);
+        markRemotePlaybackStopped();
+      } catch (error) {
+        addErrorLog("Stopping the C64 for a playback-engine switch failed", {
+          error: (error as Error).message,
+          item: item.label,
+        });
+      }
+    },
+    onRestartFailed: (error, item) => {
+      if (isHandledUiError(error)) return;
+      addErrorLog("Restarting the tune on the new playback engine failed", {
+        error: (error as Error).message,
+        item: item.label,
+      });
+    },
+  });
 
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }): Promise<boolean> => {
@@ -1619,33 +1617,7 @@ export function usePlaybackController({
         setCurrentPlaybackIsLocal(false);
       } else {
         try {
-          const api = getC64API();
-          if (isPaused) {
-            try {
-              await resumeMachineWithRetry(api);
-            } catch (error) {
-              addErrorLog("Resume before stop failed", {
-                error: error instanceof Error ? error.message : String(error),
-                stack: error instanceof Error ? error.stack : undefined,
-                itemId: currentItem?.id,
-              });
-            }
-          }
-          await stopMachineWithGracePeriod(api, shouldReboot);
-          await endPlayLaunchMounts(api);
-          // Keep the resumed program muted until reset/reboot finishes, so Stop
-          // cannot replay a fragment. Restore Pause's snapshot only afterwards.
-          if (isPaused && pauseMuteSnapshotRef.current) {
-            try {
-              await unmuteAfterMachineResume();
-            } catch (error) {
-              addErrorLog("Pause mute restore after stop failed", {
-                error: error instanceof Error ? error.message : String(error),
-                stack: error instanceof Error ? error.stack : undefined,
-                itemId: currentItem?.id,
-              });
-            }
-          }
+          await stopTuneOnC64(getC64API(), shouldReboot, currentItem?.id);
           markRemotePlaybackStopped();
         } catch (error) {
           reportUserError({
@@ -1845,9 +1817,12 @@ export function usePlaybackController({
       // From what was last asked for: a second tap read from a pause still under way repeated it.
       const target = (requestedPauseRef.current ?? isPaused) ? "running" : "paused";
       requestedPauseRef.current = target === "paused";
+      setRequestedPause(target === "paused");
       const request = ++pauseRequestRef.current;
       const settled = () => {
-        if (pauseRequestRef.current === request) requestedPauseRef.current = null;
+        if (pauseRequestRef.current !== request) return;
+        requestedPauseRef.current = null;
+        setRequestedPause(null);
       };
       if (currentPlaybackIsLocalRef.current || isLocalPlaybackActive()) {
         // In order: a resume finishing before the pause it follows would leave the tune paused.
@@ -1873,6 +1848,7 @@ export function usePlaybackController({
               await resumeMachineWithRetry(api);
               endTransition(); // The unmute waits for transitions to settle: held, this one delayed it 20 s.
               await unmuteAfterMachineResume();
+              isPausedRef.current = false;
               setIsPaused(false);
               // HARD12-020: publish the resumed state so Home's pause/resume converges with Play.
               writeMachineExecutionFromPlay("running");
@@ -1899,6 +1875,8 @@ export function usePlaybackController({
             const now = Date.now();
             playedClockRef.current.pause(now);
             setPlayedMs(playedClockRef.current.current(now));
+            // Set now, not on the next render: a stop waiting for this pause to finish reads it straight after.
+            isPausedRef.current = true;
             setIsPaused(true);
             setAutoAdvanceDueAtMs(null);
             // HARD12-020: publish the paused state and any SID pause-mute snapshot, so Home can label
@@ -2511,6 +2489,7 @@ export function usePlaybackController({
   });
 
   return {
+    pauseShown: requestedPause ?? isPaused,
     beginScrub,
     scrubBy,
     endScrub,

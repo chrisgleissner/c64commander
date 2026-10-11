@@ -206,13 +206,14 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
               {sidplayEzAvailable ? (
                 <>
                   <strong>Fast & accurate</strong> (libSidplayEZ) and <strong>Accurate</strong> (reSIDfp) sound alike;
-                  Fast & accurate uses about a third of the CPU and battery. <strong>Light</strong> (SIDLite) uses the
-                  least CPU but sounds less like a real C64. Takes effect next track.
+                  Fast & accurate needs about a third of the CPU and saves battery. <strong>Light</strong> (SIDLite) is
+                  similarly light on the CPU, though it is not an exact match for a real C64. Takes effect next track.
                 </>
               ) : (
                 <>
-                  <strong>Accurate</strong> (reSIDfp) models the chip cycle by cycle. <strong>Light</strong> (SIDLite)
-                  uses far less CPU but sounds less like a real C64. Takes effect next track.
+                  <strong>Accurate</strong> (reSIDfp) models the chip cycle by cycle for best fidelity.{" "}
+                  <strong>Light</strong> (SIDLite) needs about a third of the CPU and saves battery, though it is not an
+                  exact match for a real C64. Takes effect next track.
                 </>
               )}
             </p>

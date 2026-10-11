@@ -59,6 +59,10 @@ export const createMachineTransitionCoordinator = () => {
   };
 
   return {
+    /** Resolves once no pause or resume is under way or queued, however each of them ended. */
+    idle: async () => {
+      while (activeEntry || queuedEntry) await (queuedEntry ?? activeEntry)!.promise.catch(() => undefined);
+    },
     request: (target: MachineTransitionTarget, run: () => Promise<void>) => {
       // The transition under way already reaches this target, so whatever was queued after it is moot.
       if (activeEntry?.target === target) {

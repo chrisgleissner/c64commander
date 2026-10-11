@@ -628,10 +628,10 @@ const isSidEmulationEngine = (value: unknown): value is SidEmulationEngine =>
   value === "sidplayez" || value === "residfp" || value === "sidlite";
 
 /**
- * Variant-driven. Every variant prefers libSidplayEZ: where it does not exist (web, iOS) the
- * playback layer uses reSIDfp, which renders the same notes. A variant that names `sidlite`
- * defaults to the cheap one — none does, because sounding like a C64 is the point of playing a SID,
- * and the keypad variant's handset cannot be measured yet.
+ * Variant-driven. Every edition prefers libSidplayEZ: where it does not exist (web, iOS) the
+ * playback layer uses reSIDfp, which renders the same notes. An edition whose target hardware cannot
+ * render even libSidplayEZ in real time names `sidlite` (`default_sid_emulation_engine` in
+ * variants.yaml, which records the reasoning).
  */
 const VARIANT_SID_EMULATION_ENGINE: unknown = variant.runtime.defaultSidEmulationEngine;
 

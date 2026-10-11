@@ -328,9 +328,9 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       ? requireBoolean(runtime.default_t9_input_enabled, `variants.${variantId}.runtime.default_t9_input_enabled`)
       : false;
   // Which SID renderer the on-device engine prefers. libSidplayEZ ("sidplayez") where it exists —
-  // it renders what reSIDfp renders at about a third of the CPU — and reSIDfp elsewhere, a fallback
-  // the playback layer makes on its own. `sidlite` is the cheap one and is audibly not a C64, so a
-  // variant only names it after measurement on its own hardware shows it cannot hold realtime.
+  // it renders what reSIDfp renders at about a third of reSIDfp's CPU — and reSIDfp elsewhere, a
+  // fallback the playback layer makes on its own. A variant whose target hardware cannot render
+  // even libSidplayEZ in real time names `sidlite`; see the variant's own comment in variants.yaml.
   const defaultSidEmulationEngine =
     runtime.default_sid_emulation_engine !== undefined
       ? requireOneOf(

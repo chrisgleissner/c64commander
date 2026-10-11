@@ -544,7 +544,7 @@ The SID chip came in two versions, the **6581** and the **8580**, and music writ
 
 Many older files say nothing. For those, turn on **Match my Commodore 64** and the app reads the chip from your own machine. Until it has, **Otherwise use** picks 6581 or 8580. A line underneath tells you which is in use.
 
-When a tune plays on your phone or tablet, **SID emulation** sets how closely the chip is modeled. **Accurate**, the default, follows it cycle by cycle. **Light** renders at about a third of the processing cost but sounds less like a real C64. A change applies from the next tune.
+When a tune plays on your phone or tablet, **SID emulation** sets how closely the chip is modeled. **Fast & accurate**, the default, models the chip as closely as **Accurate** but runs it natively, so it needs about a third of the processing power and the battery lasts longer. **Accurate** follows the chip cycle by cycle inside the app itself. **Light** is a lighter model of the chip that also saves processing power and battery, though its sound is not an exact match for a real C64. Fast & accurate is offered on Android; on an iPhone, an iPad and in a web browser, Accurate is the default. A change applies from the next tune.
 
 #### The SID Audio Mixer
 

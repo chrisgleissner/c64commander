@@ -6,15 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_SID_EMULATION_ENGINE, loadSidEmulationEngine, saveSidEmulationEngine } from "@/lib/config/appSettings";
 import { variant } from "@/generated/variant";
+import { DEFAULT_VARIANTS_PATH, parseVariantSource } from "../../../../scripts/generate-variant.mjs";
 
 /**
- * Every variant prefers libSidplayEZ ("Fast & accurate"), which renders what reSIDfp renders at
- * about a third of the CPU. Where it does not exist the playback layer falls back to reSIDfp; the
- * cheap SIDLite is never a default, because it audibly is not a C64.
+ * The default renderer is a per-edition decision and is worth pinning. Every edition prefers
+ * libSidplayEZ ("Fast & accurate"), which renders what reSIDfp renders natively. Measured on a
+ * Pixel 4 for the same 50 s of audio: libSidplayEZ 10.8 s of CPU, reSIDfp 27.7 s, SIDLite 13.6 s
+ * (docs/internals/sid-playback-architecture.md, "Performance"). Where libSidplayEZ does not exist
+ * the playback layer falls back to reSIDfp.
  */
 describe("SID emulation engine setting", () => {
   beforeEach(() => {
@@ -25,7 +29,16 @@ describe("SID emulation engine setting", () => {
     expect(DEFAULT_SID_EMULATION_ENGINE).toBe(variant.runtime.defaultSidEmulationEngine);
   });
 
-  it("prefers libSidplayEZ on every shipped variant", () => {
+  it("defaults every edition to libSidplayEZ", () => {
+    const config = parseVariantSource(readFileSync(DEFAULT_VARIANTS_PATH, "utf8"));
+    const editions = Object.values(config.variants) as {
+      runtime: { defaultT9InputEnabled: boolean; defaultSidEmulationEngine: string };
+    }[];
+    expect(editions.some((edition) => edition.runtime.defaultT9InputEnabled)).toBe(true);
+    for (const edition of editions) expect(edition.runtime.defaultSidEmulationEngine).toBe("sidplayez");
+  });
+
+  it("builds the general edition with libSidplayEZ as its default", () => {
     expect(variant.runtime.defaultSidEmulationEngine).toBe("sidplayez");
     expect(DEFAULT_SID_EMULATION_ENGINE).toBe("sidplayez");
   });

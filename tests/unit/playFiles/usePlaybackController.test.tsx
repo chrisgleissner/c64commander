@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
@@ -114,6 +115,7 @@ vi.mock("@/lib/streams/avMirrorSession", () => ({
     audioLive: false,
     startAudio: vi.fn(() => Promise.resolve()),
     stopAudio: vi.fn(() => Promise.resolve()),
+    setAudioWanted: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -202,18 +204,21 @@ const renderPlaybackController = (
     deviceProduct?: string | null;
     localSidPlaybackController?: unknown;
     stationActiveRef?: { current: boolean };
+    /** Real pause state, as the page holds it, instead of a fixed prop and a mock setter. */
+    statefulPause?: boolean;
   },
 ) =>
-  renderHook(() =>
-    usePlaybackController({
+  renderHook(() => {
+    const [pausedState, setPausedState] = useState(options?.isPaused ?? false);
+    return usePlaybackController({
       playlist,
       setPlaylist: options?.setPlaylist ?? vi.fn(),
       currentIndex: options?.currentIndex ?? 0,
       setCurrentIndex: options?.setCurrentIndex ?? vi.fn(),
       isPlaying: options?.isPlaying ?? false,
       setIsPlaying: options?.setIsPlaying ?? vi.fn(),
-      isPaused: options?.isPaused ?? false,
-      setIsPaused: options?.setIsPaused ?? vi.fn(),
+      isPaused: options?.statefulPause ? pausedState : (options?.isPaused ?? false),
+      setIsPaused: options?.statefulPause ? setPausedState : (options?.setIsPaused ?? vi.fn()),
       setIsPlaylistLoading: options?.setIsPlaylistLoading ?? vi.fn(),
       elapsedMs: options?.elapsedMs ?? 0,
       setElapsedMs: options?.setElapsedMs ?? vi.fn(),
@@ -276,8 +281,8 @@ const renderPlaybackController = (
       ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
       localSidPlaybackController: options?.localSidPlaybackController as any,
       stationActiveRef: options?.stationActiveRef,
-    }),
-  );
+    });
+  });
 
 describe("usePlaybackController", () => {
   beforeEach(() => {
@@ -1317,6 +1322,34 @@ describe("usePlaybackController", () => {
     expect(pauseMuteSnapshotRef.current).toEqual({ volumes: { "SID 1": "0 dB" }, enablement: {} });
   });
 
+  it("shows the button as paused from the tap, before the C64 has answered, and as it was if the pause fails", async () => {
+    // A button that changed only when the machine answered, a second or two later, drew a second tap that undid
+    // the first.
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    let answer!: (error?: Error) => void;
+    const machinePause = vi.fn(
+      () => new Promise<void>((resolve, reject) => (answer = (error) => (error ? reject(error) : resolve()))),
+    );
+    vi.mocked(getC64API).mockReturnValue({ machinePause } as any);
+    const { result } = renderPlaybackController(playlist, { isPlaying: true, isPaused: false });
+    expect(result.current.pauseShown).toBe(false);
+
+    let pausing!: Promise<void>;
+    act(() => {
+      pausing = result.current.handlePauseResume();
+    });
+    await waitFor(() => expect(machinePause).toHaveBeenCalled());
+    expect(result.current.pauseShown).toBe(true);
+
+    await act(async () => {
+      answer(new Error("pause failed"));
+      await pausing;
+    });
+    expect(result.current.pauseShown).toBe(false);
+  });
+
   it("restores the pause mute snapshot when machine pause fails after muting", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
@@ -1669,7 +1702,7 @@ describe("usePlaybackController", () => {
   it("leaves no tune recorded as playing and starts no mirror when Stop overtakes a C64 launch", async () => {
     const machineReset = vi.fn().mockResolvedValue(undefined);
     vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     let finishLaunch!: () => void;
     vi.mocked(executePlayPlan).mockImplementationOnce(
       () => new Promise<void>((resolve) => (finishLaunch = () => resolve())),
@@ -1683,7 +1716,7 @@ describe("usePlaybackController", () => {
     await launch;
 
     expect(isRemotePlaybackActive()).toBe(false);
-    expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    expect(avMirrorSession.setAudioWanted).not.toHaveBeenCalled();
     expect(machineReset).toHaveBeenCalledTimes(2);
   });
 
@@ -3169,17 +3202,26 @@ describe("usePlaybackController", () => {
         } as any,
       });
 
-    const fakeController = () => ({
-      play: vi.fn(async () => ({ romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null })),
-      stop: vi.fn(),
-      pause: vi.fn(async () => undefined),
-      resume: vi.fn(async () => undefined),
-      getStats: vi.fn(() => null),
-      dispose: vi.fn(),
-      warmLeadIn: vi.fn(),
-      prerender: vi.fn(),
-      isActive: vi.fn(() => false),
-    });
+    // Active from a play until a stop, as the real engine is: the engine switch asks it whether a tune plays here.
+    const fakeController = () => {
+      let active = false;
+      return {
+        play: vi.fn(async () => {
+          active = true;
+          return { romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null };
+        }),
+        stop: vi.fn(() => {
+          active = false;
+        }),
+        pause: vi.fn(async () => undefined),
+        resume: vi.fn(async () => undefined),
+        getStats: vi.fn(() => null),
+        dispose: vi.fn(),
+        warmLeadIn: vi.fn(),
+        prerender: vi.fn(),
+        isActive: vi.fn(() => active),
+      };
+    };
 
     const enableLocal = () => {
       localStorage.setItem("c64u_local_engine_enabled", "1");
@@ -3892,6 +3934,164 @@ describe("usePlaybackController", () => {
         expect(machineReset).toHaveBeenCalled();
       });
 
+      // A reset does not unpause the Ultimate. A tune paused on the C64 and then moved here left the machine
+      // frozen with the tune in memory, and muted by Pause, while the phone played.
+      it("resumes a paused C64 before resetting it when the paused tune moves to the device", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const calls: string[] = [];
+        const machineResume = vi.fn(async () => void calls.push("resume"));
+        const machineReset = vi.fn(async () => void calls.push("reset"));
+        vi.mocked(getC64API).mockReturnValue({ machineReset, machineResume } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+          isPaused: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        calls.length = 0;
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(calls.slice(0, 2)).toEqual(["resume", "reset"]);
+      });
+
+      // A pause still waiting on the machine when the tune moved here was applied after the reset, and the C64 was
+      // left frozen and muted while the phone played.
+      it("lets a pause still under way finish, then resumes before the reset, when the tune moves to the device", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const calls: string[] = [];
+        let answerPause!: () => void;
+        const machinePause = vi.fn(
+          () =>
+            new Promise<void>((resolve) => {
+              answerPause = () => {
+                calls.push("pause");
+                resolve();
+              };
+            }),
+        );
+        const machineResume = vi.fn(async () => void calls.push("resume"));
+        const machineReset = vi.fn(async () => void calls.push("reset"));
+        vi.mocked(getC64API).mockReturnValue({ machinePause, machineResume, machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+          statefulPause: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+        let pausing!: Promise<void>;
+        act(() => {
+          pausing = result.current.handlePauseResume();
+        });
+        await waitFor(() => expect(machinePause).toHaveBeenCalled());
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+        await act(async () => {
+          answerPause();
+          await pausing;
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(calls).toEqual(["pause", "resume", "reset"]);
+      });
+
+      it("logs a C64 that could not be stopped for the move, and still starts the tune on the device", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const machineReset = vi.fn().mockRejectedValue(new Error("Host unreachable"));
+        vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        vi.mocked(addErrorLog).mockClear();
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Stopping the C64 for a playback-engine switch failed",
+          expect.objectContaining({ error: expect.stringContaining("Host unreachable") }),
+        );
+      });
+
+      it("does not log a restart failure that was already reported to the listener", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        const reported = Object.assign(new Error("already shown"), { c64uHandled: true });
+        controller.play.mockRejectedValueOnce(reported);
+        vi.mocked(addErrorLog).mockClear();
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        // The first play went to the C64; the one here is the restart, which fails.
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        });
+        expect(addErrorLog).not.toHaveBeenCalledWith(
+          "Restarting the tune on the new playback engine failed",
+          expect.anything(),
+        );
+      });
+
+      it("logs a tune that could not be started on its new output", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        controller.play.mockRejectedValueOnce(new Error("worker gone"));
+        vi.mocked(addErrorLog).mockClear();
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() =>
+          expect(addErrorLog).toHaveBeenCalledWith(
+            "Restarting the tune on the new playback engine failed",
+            expect.objectContaining({ error: expect.stringContaining("worker gone") }),
+          ),
+        );
+      });
+
       // The Play page remounts on every tab change, and the new instance has not started the tune the
       // phone is playing. Moving it to the C64 reset the C64 and left the phone playing, so both sounded.
       it("stops the phone's tune, not the C64, when a remounted page moves it to the C64", async () => {
@@ -4353,19 +4553,33 @@ describe("playback and the Listen-on choice", () => {
     createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" });
 
   it("starts the mirror by default, so a tune is audible from the phone", async () => {
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
-    expect(avMirrorSession.startAudio).toHaveBeenCalled();
+    expect(avMirrorSession.setAudioWanted).toHaveBeenCalledWith(true);
+  });
+
+  it("asks for the mirror even while a stop it has not yet run makes it read as live", async () => {
+    // The phone's engine taking the speaker queues a stop. Judged from `audioLive`, which still read true, the
+    // start was skipped, the stop then ran, and Both played on the C64 alone.
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
+    (avMirrorSession as { audioLive: boolean }).audioLive = true;
+    try {
+      const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
+      await result.current.handlePlay();
+      expect(avMirrorSession.setAudioWanted).toHaveBeenCalledWith(true);
+    } finally {
+      (avMirrorSession as { audioLive: boolean }).audioLive = false;
+    }
   });
 
   it("does not ask a device that cannot stream to start the mirror", async () => {
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     deviceInfoOverride.current = { product: "Ultimate II+L", firmware_version: "3.15" };
     try {
       const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
       await result.current.handlePlay();
-      expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+      expect(avMirrorSession.setAudioWanted).not.toHaveBeenCalled();
     } finally {
       deviceInfoOverride.current = undefined;
     }
@@ -4374,11 +4588,11 @@ describe("playback and the Listen-on choice", () => {
   it("leaves the mirror alone once the C64's own speakers have been chosen", async () => {
     // Without the preference check this switches the mirror straight back on, which is the defect:
     // the listener turned phone audio off and the very next track turned it back on.
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     saveMirrorC64Audio(false);
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
-    expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    expect(avMirrorSession.setAudioWanted).not.toHaveBeenCalled();
   });
 });
 

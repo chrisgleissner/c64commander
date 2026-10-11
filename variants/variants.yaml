@@ -93,18 +93,14 @@ variants:
       # full padding, page dimmed behind it). Screen size decides the layout; the variant does not.
       default_display_profile: auto
       default_t9_input_enabled: true
-      # Deliberately NOT overridden to `sidlite`.
-      #
-      # This variant targets a compact keypad handset that has not been released
-      # and cannot be measured. Defaulting it to the lesser engine on
-      # the strength of a spec-sheet projection would ship a real, audible
-      # quality regression on every device that DOES exist, to protect one that
-      # does not. The default, libSidplayEZ ("Fast & accurate"), already renders
-      # accurate SID audio at about a third of the CPU of reSIDfp.
-      #
-      # When the 8020 exists: measure it (gate L1) and set
-      # `default_sid_emulation_engine: sidlite` here if it cannot hold realtime.
-      # The mechanism is in place and the user can already switch in Settings.
+      # libSidplayEZ ("Fast & accurate"), the default of every edition. main defaulted this edition to
+      # SIDLite because its handset is projected unable to render reSIDfp in real time (a Pixel 4 needs
+      # 495 ms of one Cortex-A76 core per second of reSIDfp audio, and that handset's fastest cores are
+      # projected 1.6-3x slower). libSidplayEZ renders the same notes natively at about 103 ms per second
+      # on a Pixel 4, about 10x real time, so the same projection leaves it 3-6x real time there; and on
+      # the Pixel it used a similar share of the CPU as SIDLite (10.8 s against 9.3 s for the same 50 s
+      # of audio), with the accuracy of reSIDfp. Where libSidplayEZ cannot run, the engine falls back on
+      # its own. Measure on the handset (gate L1) once it can be tested.
       # Keypad-first appliance UX: the compact handset this variant targets has no physical
       # navigation buttons, so hiding Android's on-screen ones there loses nothing. This default
       # only takes effect at the compact display profile — the same APK run on a phone or tablet

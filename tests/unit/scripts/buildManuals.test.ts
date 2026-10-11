@@ -4,6 +4,7 @@ import {
   assertSingleDisplayProfile,
   buildManualContexts,
   renderManualMarkdown,
+  sidEmulationProse,
 } from "../../../scripts/build-manuals.mjs";
 
 const contextByVariant = async () => {
@@ -12,6 +13,24 @@ const contextByVariant = async () => {
 };
 
 describe("manual generator", () => {
+  it("describes the SID emulation choices led by the edition's default, with the platform note only where it applies", async () => {
+    const contexts = await contextByVariant();
+    const remote = sidEmulationProse(contexts["c64u-remote"].variant);
+    const broad = sidEmulationProse(contexts.c64commander.variant);
+    for (const text of [remote, broad]) {
+      expect(text.startsWith("**Fast & accurate**, the default,")).toBe(true);
+      expect(text).toContain("**Accurate** follows");
+      expect(text).toContain("**Light** is a lighter model");
+    }
+    expect(remote).not.toMatch(/iPhone|browser/);
+    expect(broad).toContain("Fast & accurate is offered on Android");
+    const lightFirst = sidEmulationProse({
+      ...contexts.c64commander.variant,
+      runtime: { ...contexts.c64commander.variant.runtime, defaultSidEmulationEngine: "sidlite" },
+    });
+    expect(lightFirst.startsWith("**Light**, the default,")).toBe(true);
+  });
+
   it("renders variant-specific names and feature references", async () => {
     const contexts = await contextByVariant();
     const c64uRemote = renderManualMarkdown(contexts["c64u-remote"]);
