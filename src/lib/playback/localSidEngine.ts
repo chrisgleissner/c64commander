@@ -1236,8 +1236,7 @@ export class LocalSidEngine {
       return;
     }
     void this.audio.resume?.();
-    // Always, full volume included: on Android the level is the native feed's master gain, which
-    // outlives a sink and would otherwise keep the level an earlier session left.
+    // Always, full volume included: on Android it is the feed's master gain, which outlives a sink.
     const level = this.muted ? 0 : this.volume;
     this.audio.setGain?.(level);
     // Fade UP TO the listener's level. `fadeIn` cancels whatever `setGain` just
