@@ -160,6 +160,26 @@ describe("a seek waiting for the pre-render to reach it", () => {
     expect(flushes).toBeGreaterThan(0);
   });
 
+  it("reports the last heard position, never the target, when it has to wait", async () => {
+    // The Play page polls the pending seek, so a position report of the target showed the clock
+    // landed there for up to half a second before "Preparing audio" replaced it with the held one.
+    const engine = makeEngine();
+    const positions: number[] = [];
+    const play = engine.play(new ArrayBuffer(8), 0, { onPosition: (seconds) => positions.push(seconds) }, "tune#0");
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await Promise.resolve();
+    worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+    engine.prerender("tune#0", new ArrayBuffer(8), 0, 300);
+    positions.length = 0;
+
+    await engine.seekTo(200);
+
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 200 });
+    expect(positions).not.toContain(200);
+    expect(positions.at(-1)).toBe(engine.getPendingSeek()!.audibleAtRequestSeconds);
+  });
+
   it("keeps the last heard position when a second seek replaces one still waiting", async () => {
     const engine = makeEngine();
     await openWithPrerenderRunning(engine);

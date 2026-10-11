@@ -545,8 +545,8 @@ What was tried, measured and kept or rejected:
 
 - **Kept:** native rendering and output without JavaScript in the sample path; one binary message
   per WASM chunk; registering the binary port during plugin load (the earlier posted registration
-  crashed WebView 150 on every launch); a plain copy in `AudioPipeline` when the ratio is exactly 1
-  (on-device playback), which the drift correction leaves at exactly 1 in steady state; stopping
+  crashed WebView 150 on every launch); a plain copy in `AudioPipeline` when the ratio is exactly 1,
+  which it always is for on-device playback at the output rate because drift correction is off there; stopping
   the feed's silence scan once a slice is known not to be silent.
 - **Rejected, no measurable gain:** `-O3` against `-O2` (1%), ThinLTO (2%), profile-guided
   optimisation (between −8% and +4% across runs, output bit-identical), `--icf=all` (2% smaller).
@@ -572,6 +572,8 @@ about 200 KB. One library contains both chip models.
 | Equivalence              | `tools/sid-engines/run_matrix.py --check tools/sid-engines/tolerances.json` (CI: `checkSidRendererEquivalence`) | the three renderers compared on the repository's tunes in CI, and on HVSC tunes locally, against recorded tolerances |
 | Probe tunes and tools    | `tools/sid-engines/tests/` (pytest; CI)                                                   | each probe tune's register writes under a small 6502 interpreter, the committed copies against the generator, the comparison measures on signals with known answers, the tolerance check |
 | Hardware                 | `tools/hil/merge_gate.mjs` (`sid-local`, `crossfade`, …), `tools/sid-engines/android-bench.mjs` | playback on the Pixel 4; the crossfade graded from the pipeline's own capture |
+| Hardware, per renderer   | `tools/hil/renderer_feature_matrix.mjs`                                                    | the gate's local playback stages, the playback parity scenarios and the release sweep's Wi-Fi-off and screen-off stages, once per renderer, failing on any tune opened on another renderer |
+| Hardware, accuracy       | `tools/hil/renderer_accuracy_hil.mjs`, graded by `tools/hil/renderer_accuracy.py` (pytest)  | each renderer's PCM on the phone against a host render by the same renderer, and its microphone take against the C64's and against reSIDfp's on the same speaker |
 
 Run the native suites with `cd android && ./gradlew testLibSidplayEzNative`; the JVM tests build and
 load the host library automatically (`buildLibSidplayEzHost`). `npm run test:sid-engines` runs the

@@ -1414,7 +1414,6 @@ export class LocalSidEngine {
     // Stopping the scheduled sources is not enough on a native sink: the audio it has already been
     // given is queued ahead of the speaker and would keep playing the old position.
     this.audio?.flush?.();
-    this.emitPosition();
 
     // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
     // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
@@ -1431,6 +1430,7 @@ export class LocalSidEngine {
       // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
       this.followingPrerender = Boolean(rendered.partial) && this.prerenderingForThisRenderer(this.currentKey);
       if (rendered.partial && !this.followingPrerender) this.scheduleHandoff(rendered.durationSeconds);
+      this.emitPosition();
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
         seconds: target,
@@ -1439,11 +1439,8 @@ export class LocalSidEngine {
       return;
     }
 
-    // Nothing cached can answer this one yet. Before falling back to a worker seek — which re-renders
-    // the tune from the start with the audio gated shut, fifteen to twenty seconds of silence measured
-    // on a Pixel 4 — check whether the pre-render is already on its way there. It usually is: it began
-    // when the tune did, and it is rendering exactly the audio this seek needs. Racing it does the same
-    // work twice and plays nothing while both run.
+    // Nothing cached answers it yet. Wait for a pre-render already on its way there rather than a
+    // worker seek, which re-renders from the start with the audio gated (15-20 s on a Pixel 4).
     this.cached = null;
     this.cachedCursor = 0;
     if (this.prerenderingForThisRenderer(this.currentKey)) {
@@ -1454,11 +1451,10 @@ export class LocalSidEngine {
         generation: epoch,
         trackInstanceId: this.trackInstanceId,
       };
-      // Held at the target, not drifting on from where it was. Letting playback carry on meant the
-      // listener heard the old position while the bar showed the new one, which is worse than a pause:
-      // there is no way to tell whether the drag did anything. Silence with a visibly advancing
-      // pre-render fill says exactly what is happening.
+      // Silent and held at the last heard position, not playing on and not shown at the target: the
+      // page learns of the wait only on its next poll, and nothing has landed yet.
       this.audio?.flush?.();
+      this.callbacks.onPosition?.(audibleAtRequest);
       addLog("debug", "Local SID seek waiting for the pre-render to reach it", {
         service: "local-sid",
         seconds: target,
@@ -1466,6 +1462,7 @@ export class LocalSidEngine {
       return;
     }
 
+    this.emitPosition();
     await new Promise<void>((resolve) => {
       // Hand the slot over rather than overwrite it: the `seeked` handler only resolves the current
       // id, so a dropped resolver never settles, and `seekPending` gates every chunk — a leaked entry

@@ -109,12 +109,34 @@ const selectRenderer = async (renderer) => {
   const state = JSON.parse(
     await js(`(() => {
       localStorage.setItem("c64u_sid_renderer", ${JSON.stringify(renderer)});
-      localStorage.setItem("c64u_debug_logging_enabled", "true");
+      localStorage.setItem("c64u_debug_logging_enabled", "1");
       return JSON.stringify({ renderer: localStorage.getItem("c64u_sid_renderer"), now: Date.now() });
     })()`),
   );
   if (state.renderer !== renderer) throw new Error(`the app would not take ${renderer}`);
   return state.now;
+};
+
+/**
+ * Take the parity suite's counter tune back out of the playlist. It is silent by design, so a later
+ * suite that plays through the playlist would meet the silence watchdog rather than the renderer.
+ */
+const removeParityTunes = async () => {
+  const removed = await js(`(async () => {
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    document.querySelector('[data-testid="tab-play"]')?.click();
+    await wait(2500);
+    const boxes = [...document.querySelectorAll('[data-testid^="playlist-item-select-"]')]
+      .filter((box) => /Seek[ _]Counter/i.test(box.getAttribute("aria-label") || ""));
+    for (const box of boxes) { if (box.getAttribute("aria-checked") !== "true") box.click(); await wait(200); }
+    if (!boxes.length) return "0";
+    document.querySelector('[data-testid="playlist-list-remove-selected"]')?.click();
+    await wait(1500);
+    return String([...document.querySelectorAll('[data-testid="playlist-item"]')]
+      .some((row) => /Seek[ _]Counter/i.test(row.innerText || "")) ? -1 : boxes.length);
+  })()`);
+  if (removed === "-1") throw new Error("the parity suite's counter tune would not leave the playlist");
+  console.log(`[matrix] removed ${removed} parity tune(s) from the playlist`);
 };
 
 /** Which renderers the app opened tunes on since `since` (the phone's clock). */
@@ -138,8 +160,20 @@ const main = async () => {
         const since = await selectRenderer(renderer);
         console.log(`\n[matrix] ${renderer} / ${suite}`);
         const [command, args] = SUITE_COMMANDS[suite](dir);
+        // Sampled throughout, because the log keeps only its newest 500 entries and a long suite fills it.
+        const seen = new Set();
+        let sampling = Promise.resolve();
+        const sample = () =>
+          (sampling = sampling
+            .then(() => openedRenderers(since))
+            .then((names) => names.forEach((name) => seen.add(name)))
+            .catch((error) => console.error(`[matrix] could not read the app log: ${error.message}`)));
+        const timer = setInterval(sample, 5000);
         const outcome = await run(command, args, path.join(dir, "output.log"));
-        const opened = await openedRenderers(since);
+        clearInterval(timer);
+        await sample();
+        const opened = [...seen];
+        if (suite === "parity") await removeParityTunes();
         const fellBack = opened.filter((name) => name !== renderer);
         const result = {
           renderer,
