@@ -16,6 +16,7 @@ import { buildRenderedTuneKey, RenderedTuneCache, DEFAULT_MAX_TUNES } from "@/li
  * out-of-memory crash.
  */
 const tune = (seconds: number) => ({
+  renderer: "residfp" as const,
   pcm: new Int16Array(48000 * 2 * seconds),
   sampleRate: 48000,
   channels: 2,

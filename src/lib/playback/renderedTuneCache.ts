@@ -85,6 +85,11 @@ export interface RenderedTune {
    * native buffer for libSidplayEZ. Either is sliced the same way.
    */
   pcm: CachedPcm;
+  /**
+   * The renderer that produced it. A key built before the native probe answered names reSIDfp on a
+   * device that then plays libSidplayEZ, so the key alone cannot keep the two apart.
+   */
+  renderer: SidEmulationEngine;
   sampleRate: number;
   channels: number;
   /** Rendered length in seconds (pcm.length / channels / sampleRate). */

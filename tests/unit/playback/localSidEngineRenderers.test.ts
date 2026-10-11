@@ -225,6 +225,29 @@ describe("an engine with three renderers", () => {
     expect(released).toContain(31);
   });
 
+  it("does not serve a tune audio rendered by another renderer under the same key", async () => {
+    // A key built before the native probe answered names reSIDfp; the tune then opens on libSidplayEZ.
+    __setSidplayEzAvailabilityForTests(false);
+    const engine = makeEngine();
+    engine.prerender("tune", new ArrayBuffer(8), 0, 4);
+    const prerender = channels.find((c) => c.role === "prerender")!;
+    expect(prerender.renderer).toBe("residfp");
+    const id = prerender.last("prerender").id;
+    const wasmPcm = new Int16Array(RATE * 2 * 4);
+    prerender.emit({ type: "prerender-chunk", id, pcm: wasmPcm, sampleRate: RATE, channels: 2, seconds: 4 });
+    prerender.emit({ type: "prerendered", id, sampleRate: RATE, channels: 2, seconds: 4 });
+
+    __setSidplayEzAvailabilityForTests(true);
+    const { channel } = await open(engine, "tune");
+    expect(channel.renderer).toBe("sidplayez");
+    expect(engine.getRenderedSeconds()).toBeNull();
+    void engine.seekTo(3);
+    await settle();
+    expect(sinks.flatMap((made) => made.scheduled).some((pcm) => !isNativePcm(pcm))).toBe(false);
+    expect(channel.last("seek")?.positionSeconds).toBe(3);
+    engine.dispose();
+  });
+
   it("does not give back a buffer that playback is still reading from when the cache evicts it", async () => {
     const engine = makeEngine();
     await open(engine, "tune-a");

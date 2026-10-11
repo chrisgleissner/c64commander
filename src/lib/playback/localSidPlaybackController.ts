@@ -138,7 +138,7 @@ export class LocalSidPlaybackController {
    */
   preload(): void {
     this.ensureEngine()
-      .load()
+      .preload()
       .catch((error: unknown) =>
         addLog("debug", "Local SID engine preload failed", {
           service: "local-sid",

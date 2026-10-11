@@ -414,6 +414,7 @@ export class LocalSidEngine {
   private readonly renderCache = new RenderedTuneCache(undefined, undefined, (tune) => this.releaseIfUnused(tune.pcm));
   private prerenderId = 0;
   private prerenderKey: string | null = null;
+  private prerenderRenderer: SidEmulationEngine = "residfp";
   /** Set while the running pre-render is only a lead-in, not the whole tune. */
   private prerenderPartialSeconds: number | null = null;
   /** Slices of the running pre-render, accumulated so the cache can grow as it goes. */
@@ -439,6 +440,7 @@ export class LocalSidEngine {
   private warmWorker: LocalSidWorkerLike | null = null;
   private warmId = 0;
   private warmKey: string | null = null;
+  private warmRenderer: SidEmulationEngine = "residfp";
   private readonly warmPcm = new PcmAccumulator();
   /**
    * A seek waiting for the pre-render to reach it.
@@ -585,8 +587,12 @@ export class LocalSidEngine {
     this.worker = null;
     this.seeksInFlight = 0;
     this.moduleReady = false;
+    // Settled, not just dropped: its timeout is cleared with it, and a timer left running would
+    // later discard whichever channel had replaced this one.
+    const load = this.loadPending;
     this.loadPending = null;
     this.loadInFlight = null;
+    load?.reject(new Error(`Local SID engine load abandoned: ${reason}`));
   }
 
   private createChannel(renderer: SidRendererId, role: RendererRole): LocalSidWorkerLike {
@@ -722,6 +728,19 @@ export class LocalSidEngine {
   }
 
   /**
+   * Load the renderer the next tune will use, so that tune opens without waiting for it. Left as
+   * it is while a tune plays, whose renderer cannot change mid-tune.
+   */
+  async preload(): Promise<void> {
+    if (!settleSidRendererAvailabilitySync()) await probeSidRenderers();
+    if (!this.scheduler) {
+      this.renderer = this.chosenEmulation();
+      setActiveRenderThroughputRenderer(this.renderer);
+    }
+    return this.load();
+  }
+
+  /**
    * Instantiate the WASM module in the worker.
    *
    * Idempotent for overlapping callers too, not just repeat ones. Two tracks
@@ -751,8 +770,9 @@ export class LocalSidEngine {
         return;
       }
       const timer = setTimeout(() => {
-        this.discardWorker("module load timed out");
         reject(new Error(`Local SID engine did not load within ${WORKER_REPLY_TIMEOUT_MS}ms`));
+        this.loadPending = null;
+        this.discardWorker("module load timed out");
       }, WORKER_REPLY_TIMEOUT_MS);
       this.loadPending = {
         resolve: () => {
@@ -981,6 +1001,7 @@ export class LocalSidEngine {
           const awaited = awaiting.targetSeconds;
           this.pendingSeek = null;
           this.cached = {
+            renderer: this.prerenderRenderer,
             partial: true,
             pcm: grown,
             sampleRate: message.sampleRate,
@@ -1002,6 +1023,7 @@ export class LocalSidEngine {
           // Playback is reading from this buffer as it grows. Republish the extended one, keeping
           // the cursor where it is — the slices already scheduled are a prefix of it.
           this.cached = {
+            renderer: this.prerenderRenderer,
             partial: true,
             pcm: grown,
             sampleRate: message.sampleRate,
@@ -1011,6 +1033,7 @@ export class LocalSidEngine {
           this.pump();
         }
         this.renderCache.set(this.prerenderKey, {
+          renderer: this.prerenderRenderer,
           // Still growing, so it must not be mistaken for the whole tune: running off the end has to
           // hand over to live rendering rather than fire "ended".
           partial: true,
@@ -1037,6 +1060,7 @@ export class LocalSidEngine {
         if (pcm.length === 0) this.releaseIfUnused(pcm);
         if (pcm.length > 0) {
           this.renderCache.set(this.prerenderKey, {
+            renderer: this.prerenderRenderer,
             partial,
             pcm,
             sampleRate: message.sampleRate,
@@ -1061,6 +1085,7 @@ export class LocalSidEngine {
             // means: a full render's end is the tune's end, a lead-in's end is where the live
             // renderer has to take over.
             this.cached = {
+              renderer: this.prerenderRenderer,
               partial,
               pcm,
               sampleRate: message.sampleRate,
@@ -1252,7 +1277,7 @@ export class LocalSidEngine {
     // the ring could still run dry a second or two in, heard as a single short pause right at the
     // beginning of a track. That is the worst possible moment for one: it is where a listener decides
     // whether the player is trustworthy.
-    const warmed = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    const warmed = this.currentKey ? this.cachedForThisRenderer(this.currentKey) : null;
     traceLocalSid("opened", {
       key: this.currentKey,
       warm: warmed ? +warmed.durationSeconds.toFixed(2) : null,
@@ -1322,7 +1347,7 @@ export class LocalSidEngine {
     // not restored until the new tune opens — which is the very wait this exists to get ahead of.
     const key = this.pendingCacheKey ?? this.currentKey;
     if (this.audio || !key) return;
-    const warmed = this.renderCache.get(key);
+    const warmed = this.cachedForThisRenderer(key);
     if (!warmed) return;
     this.currentKey = key;
     claimAudioOwnership(this);
@@ -1356,7 +1381,7 @@ export class LocalSidEngine {
     this.cachedCursor = 0;
     // Where the live renderer takes over when the cached opening runs out, held until `onOpened`, when the
     // worker has the tune. Not when this tune's pre-render is still growing the cache: playback follows it.
-    this.followingPrerender = Boolean(warmed.partial) && this.isPrerendering(key);
+    this.followingPrerender = Boolean(warmed.partial) && this.prerenderingForThisRenderer(key);
     this.prerenderedSeamSeconds = warmed.partial && !this.followingPrerender ? warmed.durationSeconds : null;
     traceLocalSid("started-from-prerendered-intro", {
       key,
@@ -1411,7 +1436,7 @@ export class LocalSidEngine {
 
     // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
     // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
-    const rendered = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    const rendered = this.currentKey ? this.cachedForThisRenderer(this.currentKey) : null;
     // A lead-in only covers the opening, so it can answer a seek that lands inside it and nothing
     // else. Serving one as though it were the whole tune is how fast-forward, rewind and the progress
     // bar all broke at once: the cursor clamped to the end of the cached span, so every seek past it
@@ -1422,7 +1447,7 @@ export class LocalSidEngine {
       this.cachedCursor = Math.min(rendered.pcm.length, Math.floor(target * rendered.sampleRate) * rendered.channels);
       // Landing inside a lead-in still has to leave the tune able to continue past it, so the live
       // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
-      this.followingPrerender = Boolean(rendered.partial) && this.isPrerendering(this.currentKey);
+      this.followingPrerender = Boolean(rendered.partial) && this.prerenderingForThisRenderer(this.currentKey);
       if (rendered.partial && !this.followingPrerender) this.scheduleHandoff(rendered.durationSeconds);
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
@@ -1439,7 +1464,7 @@ export class LocalSidEngine {
     // work twice and plays nothing while both run.
     this.cached = null;
     this.cachedCursor = 0;
-    if (this.prerenderFraction !== null && this.prerenderKey === this.currentKey) {
+    if (this.prerenderingForThisRenderer(this.currentKey)) {
       this.pendingSeek = {
         targetSeconds: target,
         renderedAtRequestSeconds: rendered?.durationSeconds ?? 0,
@@ -1558,7 +1583,14 @@ export class LocalSidEngine {
     if (this.isStalePendingSeek(pending)) return;
     const coveredSeconds = pcm.length / Math.max(1, channels) / Math.max(1, sampleRate);
     if (pcm.length > 0 && pending.targetSeconds < coveredSeconds) {
-      this.cached = { partial: false, pcm, sampleRate, channels, durationSeconds: seconds };
+      this.cached = {
+        renderer: this.prerenderRenderer,
+        partial: false,
+        pcm,
+        sampleRate,
+        channels,
+        durationSeconds: seconds,
+      };
       this.cachedCursor = Math.min(pcm.length, Math.floor(pending.targetSeconds * sampleRate) * channels);
       addLog("debug", "Local SID awaited seek served by the completed pre-render", {
         service: "local-sid",
@@ -1951,11 +1983,6 @@ export class LocalSidEngine {
     return this.muted;
   }
 
-  /** A fully-rendered tune, when this one has been cached. */
-  getRenderedTune(key: string): RenderedTune | null {
-    return this.renderCache.get(key);
-  }
-
   /**
    * Send the live renderer to where the cached opening ends, while that opening is still playing.
    *
@@ -2029,6 +2056,7 @@ export class LocalSidEngine {
     this.warmKey = key;
     this.releaseIfUnused(this.warmPcm.reset());
     const renderer = playbackSidEmulation();
+    this.warmRenderer = renderer;
     this.ensureWarmWorker(renderer).postMessage(
       {
         type: "prerender",
@@ -2169,6 +2197,7 @@ export class LocalSidEngine {
         // Always a partial: it is only the opening, so running off its end has to hand over to live
         // rendering rather than end the tune.
         this.renderCache.set(key, {
+          renderer: this.warmRenderer,
           partial: true,
           pcm,
           sampleRate: message.sampleRate,
@@ -2267,6 +2296,12 @@ export class LocalSidEngine {
     return this.seekPending !== null || this.activePendingSeek !== null;
   }
 
+  /** The cached render under `key`, provided the renderer playing this tune made it. */
+  private cachedForThisRenderer(key: string): RenderedTune | null {
+    const entry = this.renderCache.get(key);
+    return entry && entry.renderer === this.renderer ? entry : null;
+  }
+
   /**
    * Seconds of the tune now playing that are already rendered, or null when none are.
    *
@@ -2274,7 +2309,7 @@ export class LocalSidEngine {
    */
   getRenderedSeconds(): number | null {
     if (!this.currentKey) return null;
-    const entry = this.renderCache.get(this.currentKey);
+    const entry = this.cachedForThisRenderer(this.currentKey);
     return entry ? entry.durationSeconds : null;
   }
 
@@ -2285,6 +2320,10 @@ export class LocalSidEngine {
 
   private isPrerendering(key: string | null): boolean {
     return key !== null && this.prerenderKey === key && this.prerenderFraction !== null;
+  }
+
+  private prerenderingForThisRenderer(key: string | null): boolean {
+    return this.isPrerendering(key) && this.prerenderRenderer === this.renderer;
   }
 
   /**
@@ -2310,6 +2349,7 @@ export class LocalSidEngine {
     this.prerenderFraction = 0;
     this.releaseIfUnused(this.prerenderPcm.reset());
     const renderer = playbackSidEmulation();
+    this.prerenderRenderer = renderer;
     const romPayload =
       roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;
     this.ensurePrerenderWorker(renderer).postMessage(
