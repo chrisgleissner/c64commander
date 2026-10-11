@@ -988,6 +988,12 @@ jobs:
           end=$(date +%s)
           echo "- android tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      # The runner's system Python refuses pip installs (PEP 668), so the equivalence check gets its own.
+      - name: Set up Python for the renderer equivalence check
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       # libSidplayEZ has no tests upstream. These are the app's: the JNI session wrapper under
       # AddressSanitizer and ThreadSanitizer, the engine itself, and a comparison of every renderer's
       # output against reSIDfp on the repository's tunes.

@@ -99,11 +99,31 @@ def tolerances_for(tolerances: dict, engine: str, tune: str) -> dict:
     return merged
 
 
+INFORMATIONAL_ENGINES = {"residfp-phase"}
+
+
+def known_tune_stems() -> set[str]:
+    return {Path(path).stem for path, _, _ in FIXTURE_TUNES + HVSC_TUNES}
+
+
 def check_rows(rows: list[dict], tolerances: dict) -> list[str]:
-    """Every row and measure outside its tolerance, as readable lines. Silence is always a failure."""
+    """Every row and measure outside its tolerance, as readable lines. Silence is always a failure.
+
+    A row from an engine with no tolerances, or an override naming no tune in the matrix, is an
+    error too: either would otherwise let a renderer or a tune go unchecked without anyone noticing."""
     violations = []
+    stems = known_tune_stems()
+    for engine, spec in tolerances.items():
+        if not isinstance(spec, dict):
+            continue
+        for override in spec.get("overrides", []):
+            if override["tune"] not in stems:
+                violations.append(f"{engine}: override for {override['tune']} matches no tune in the matrix")
     for row in rows:
+        if row["engine"] in INFORMATIONAL_ENGINES:
+            continue
         if row["engine"] not in tolerances:
+            violations.append(f"{row['tune']}#{row['song']} {row['engine']}: no tolerances for this engine")
             continue
         limits = tolerances_for(tolerances, row["engine"], row["tune"])
         name = f"{row['tune']}#{row['song']} {row['engine']}"

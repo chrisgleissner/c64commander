@@ -38,6 +38,7 @@ const song = Number(songArg);
 const seconds = Number(secondsArg);
 const legacyOnly = flags.includes("--legacy-only");
 
+const run = `bench-${Date.now()}`;
 const pageScript = `(async () => {
   const P = window.Capacitor.Plugins;
   const RATE = 48000, CHUNK = 0.5, SECONDS = ${seconds};
@@ -183,10 +184,32 @@ const pageScript = `(async () => {
   return JSON.stringify(out);
 })()`;
 
-const raw = execFileSync("node", [path.join(REPO, "scripts", "bughunt-cdp.mjs"), "eval", pageScript], {
-  env: process.env,
-  maxBuffer: 1 << 24,
-  timeout: 15 * 60 * 1000,
-}).toString();
-const parsed = JSON.parse(raw.trim());
-console.log(typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2));
+// bughunt-cdp gives one evaluation 15 s, far less than a benchmark takes, so the page runs it in the
+// background and this polls for the result, keyed by run so a stale benchmark is never read as this one.
+const evaluate = (script) =>
+  execFileSync("node", [path.join(REPO, "scripts", "bughunt-cdp.mjs"), "eval", script], {
+    env: process.env,
+    maxBuffer: 1 << 24,
+    timeout: 60 * 1000,
+  })
+    .toString()
+    .trim();
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+evaluate(`(() => {
+  window.__sidBenchOutcome = { run: ${JSON.stringify(run)}, text: null };
+  const settle = (text) => { if (window.__sidBenchOutcome.run === ${JSON.stringify(run)}) window.__sidBenchOutcome.text = text; };
+  ${pageScript}.then(settle, (error) => settle(JSON.stringify({ error: String((error && error.stack) || error) })));
+  return "started";
+})()`);
+const deadline = Date.now() + 15 * 60 * 1000;
+let outcome = null;
+while (outcome === null) {
+  if (Date.now() > deadline) throw new Error("the benchmark did not finish within 15 minutes");
+  await sleep(2000);
+  const text = evaluate(
+    `String(window.__sidBenchOutcome.run === ${JSON.stringify(run)} && window.__sidBenchOutcome.text)`,
+  );
+  if (text !== "false" && text !== "null") outcome = text;
+}
+console.log(JSON.stringify(JSON.parse(outcome), null, 2));

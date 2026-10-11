@@ -160,3 +160,19 @@ def test_the_fixture_set_covers_every_probe_and_demo_tune():
 def test_reference_self_variation_rows_are_reported_but_not_held_to_a_tolerance():
     phase_row = row(engine="residfp-phase", envelope_corr=0.6, start_offset_ms=200.0)
     assert run_matrix.check_rows([phase_row], TOLERANCES) == []
+
+
+def test_a_row_from_an_engine_without_tolerances_fails():
+    violations = run_matrix.check_rows([row(engine="sidplayez-v2")], TOLERANCES)
+    assert violations == ["tests/fixtures/sid-engines/waveforms-8580.sid#1 sidplayez-v2: no tolerances for this engine"]
+
+
+def test_an_override_naming_no_tune_in_the_matrix_fails():
+    misspelt = {"sidplayez": {**TOLERANCES["sidplayez"], "overrides": [{"tune": "digi8580", "reason": "test"}]}}
+    violations = run_matrix.check_rows([row()], misspelt)
+    assert violations == ["sidplayez: override for digi8580 matches no tune in the matrix"]
+
+
+def test_the_shipped_overrides_all_name_a_tune_in_the_matrix():
+    shipped = json.loads((HERE.parent / "tolerances.json").read_text())
+    assert run_matrix.check_rows([], shipped) == []
