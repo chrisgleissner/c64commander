@@ -866,7 +866,7 @@ describe("DiagnosticsDialog", () => {
     });
   });
 
-  it("surfaces config drift and heat maps from the main diagnostics controls", () => {
+  it("surfaces config drift and heat maps from the main diagnostics controls", async () => {
     setViewportWidth(600);
 
     renderDialog();
@@ -877,7 +877,7 @@ describe("DiagnosticsDialog", () => {
 
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
-    expect(screen.getByTestId("heat-map-popup-rest")).toBeVisible();
+    expect(await screen.findByTestId("heat-map-popup-rest")).toBeVisible();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
@@ -885,14 +885,14 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
   });
 
-  it("opens the Config heat map without the cell the REST heat map had selected", () => {
+  it("opens the Config heat map without the cell the REST heat map had selected", async () => {
     setViewportWidth(600);
 
     renderDialog();
 
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
-    const restCell = within(screen.getByTestId("heat-map-popup-rest"))
+    const restCell = within(await screen.findByTestId("heat-map-popup-rest"))
       .getAllByRole("button")
       .find((button) => button.closest("[data-testid^='heat-cell-']") && !button.hasAttribute("disabled"));
     expect(restCell).toBeDefined();
@@ -907,14 +907,14 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("heat-cell-detail")).toBeNull();
   });
 
-  it("reopens the same heat map without the cell that was selected before it closed", () => {
+  it("reopens the same heat map without the cell that was selected before it closed", async () => {
     setViewportWidth(600);
 
     renderDialog();
 
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
-    const restCell = within(screen.getByTestId("heat-map-popup-rest"))
+    const restCell = within(await screen.findByTestId("heat-map-popup-rest"))
       .getAllByRole("button")
       .find((button) => button.closest("[data-testid^='heat-cell-']") && !button.hasAttribute("disabled"));
     fireEvent.click(restCell!);
@@ -928,13 +928,14 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("heat-cell-detail")).toBeNull();
   });
 
-  it("keeps showing the closing heat map's own variant while it closes", () => {
+  it("keeps showing the closing heat map's own variant while it closes", async () => {
     setViewportWidth(600);
 
     renderDialog();
 
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
+    await screen.findByTestId("heat-map-popup-config");
     heatMapPopupProps.calls.length = 0;
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
 

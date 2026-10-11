@@ -91,12 +91,19 @@ export const buildPaletteLUT = (
 /**
  * Decode a packed 4bpp frame into a 32-bit-per-pixel target using the LUT. `pixels`
  * must be a Uint32 view of the ImageData buffer (`VIC_PIXELS_PER_FRAME` long). Only
- * as many pixels as fit both buffers are written.
+ * as many pixels as fit both buffers are written, and only from frame byte `fromByte`
+ * up to (not including) `toByte`.
  */
-export const decodeVicFrameInto = (frame: Uint8Array, pixels: Uint32Array, lut: Uint32Array): void => {
-  const maxBytes = Math.min(frame.length, pixels.length >> 1);
-  let p = 0;
-  for (let i = 0; i < maxBytes; i += 1) {
+export const decodeVicFrameInto = (
+  frame: Uint8Array,
+  pixels: Uint32Array,
+  lut: Uint32Array,
+  fromByte = 0,
+  toByte = frame.length,
+): void => {
+  const maxBytes = Math.min(toByte, frame.length, pixels.length >> 1);
+  let p = fromByte * 2;
+  for (let i = fromByte; i < maxBytes; i += 1) {
     const byte = frame[i];
     pixels[p++] = lut[byte & 0x0f];
     pixels[p++] = lut[byte >> 4];

@@ -240,18 +240,22 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
     [entries],
   );
 
-  return {
-    entries,
-    entriesRef,
-    values,
-    pending,
-    replaceEntry,
-    restoreEntry,
-    clearEntry,
-    clearAll,
-    clearMatching,
-    resolveValue,
-  };
+  // One object per change of state, so the memoized config sections it is passed to skip renders that change nothing.
+  return useMemo(
+    () => ({
+      entries,
+      entriesRef,
+      values,
+      pending,
+      replaceEntry,
+      restoreEntry,
+      clearEntry,
+      clearAll,
+      clearMatching,
+      resolveValue,
+    }),
+    [entries, values, pending, replaceEntry, restoreEntry, clearEntry, clearAll, clearMatching, resolveValue],
+  );
 }
 
 /**

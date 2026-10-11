@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { addLog } from "@/lib/logging";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { subscribeGameModeRequest, type GameModeStartResult } from "@/lib/remoteInput/gameModeLaunch";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import type { RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
@@ -62,21 +63,23 @@ export const useRemoteInputGameMode = ({
   const openRef = useRef(open);
   openRef.current = open;
 
-  useEffect(
-    () =>
-      subscribeGameModeRequest((started) => {
-        // Accumulate rather than replace: a second launch that found the streams
-        // already running must not erase the record of the first one starting them.
-        launchedStreamsRef.current = {
-          startedVideo: launchedStreamsRef.current.startedVideo || started.startedVideo,
-          startedAudio: launchedStreamsRef.current.startedAudio || started.startedAudio,
-        };
-        if (!openRef.current) requestSheetOpenRef.current();
-        setOutputModeRef.current("joystick");
-        setImmersive(true);
-      }),
-    [],
-  );
+  // Home and Play each own a sheet and stay mounted behind the page on screen. Only the sheet on screen
+  // claims a request; one raised elsewhere stays pending until a host page is shown.
+  const pageActive = usePageActivity();
+  useEffect(() => {
+    if (!pageActive) return;
+    return subscribeGameModeRequest((started) => {
+      // Accumulate rather than replace: a second launch that found the streams
+      // already running must not erase the record of the first one starting them.
+      launchedStreamsRef.current = {
+        startedVideo: launchedStreamsRef.current.startedVideo || started.startedVideo,
+        startedAudio: launchedStreamsRef.current.startedAudio || started.startedAudio,
+      };
+      if (!openRef.current) requestSheetOpenRef.current();
+      setOutputModeRef.current("joystick");
+      setImmersive(true);
+    });
+  }, [pageActive]);
 
   // Game Mode is joystick-only; drop out of it if the joystick relay becomes
   // unavailable (tier downgrade) so the user is never stranded in a stripped

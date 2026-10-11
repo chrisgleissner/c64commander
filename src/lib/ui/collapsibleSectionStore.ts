@@ -176,7 +176,7 @@ export interface SectionOpenedDetail {
 /**
  * Asks every card currently on the page to open or close.
  *
- * Broadcast rather than scoped: only the current page's cards are mounted, so "every card" and
+ * Broadcast rather than scoped: a card answers only while its page is on screen, so "every card" and
  * "every card on this page" are the same set, and the caller (the Quick menu) does not have to know
  * which scope the page it is sitting on uses.
  */

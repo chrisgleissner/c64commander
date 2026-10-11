@@ -25,6 +25,7 @@ import { RemoteSidSeekController, type RemoteSeekLanding } from "@/lib/playback/
 import { probeRemoteTuneSeek, remoteSeekHeaderBlocker } from "@/lib/playback/remoteSeek/remoteTuneSeekProbe";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { toast } from "@/hooks/use-toast";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import {
   isPatchSeekUnsafe,
   markPatchSeekUnsafe,
@@ -172,13 +173,17 @@ export const useRemoteSidSeek = ({
     live.current.rebasePlaybackPosition(clampMs(tick.clockSeconds * 1000 + Date.now() - tick.tickAtMs));
   }, []);
 
+  // The probe, the clock reads and a seek's hold on the C64 lasted as long as the Play page did, which ended when another
+  // tab was opened. The page is now kept, so leaving it ends them the same way and coming back probes the tune again.
+  const pageActive = usePageActivity();
+  const seekable = active && pageActive;
   const itemId = item?.id ?? null;
   const songNr = item?.request.songNr ?? null;
   const deviceId = deviceInfo?.unique_id ?? null;
 
   useEffect(() => {
     probeDeferredRef.current = false;
-    if (!active || !item || item.category !== "sid" || !deviceInfo) return;
+    if (!seekable || !item || item.category !== "sid" || !deviceInfo) return;
     let current = true;
     const timer = setTimeout(() => {
       void (async () => {
@@ -276,7 +281,7 @@ export const useRemoteSidSeek = ({
       }
     };
     // `item` is read through its id: a new object for the same tune must not restart the probe.
-  }, [active, itemId, songNr, trackInstanceId, deviceId, probeRound, resetGestures, syncToClock]);
+  }, [seekable, itemId, songNr, trackInstanceId, deviceId, probeRound, resetGestures, syncToClock]);
 
   // The phone's timer and the C64's drift apart, and a resumed or rebased timeline can land between
   // two of the C64's seconds; following its clock now and then keeps them on the same second.
@@ -482,7 +487,7 @@ export const useRemoteSidSeek = ({
   );
 
   const handlers =
-    controller && active && !paused
+    controller && seekable && !paused
       ? {
           // The card only offers a hold when `onSeek` is set; the gesture itself runs through the scrub handlers.
           onSeek: () => undefined,

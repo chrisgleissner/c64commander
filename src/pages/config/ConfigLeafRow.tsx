@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { memo } from "react";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import type { NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { canonicalConfigKey, type AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
@@ -34,7 +35,7 @@ interface ConfigLeafRowProps {
  * authoritative store keyed by `canonicalConfigKey`, so alias leaves (same REST pointer
  * shown twice) reflect one another and same-named items across categories never collide.
  */
-export function ConfigLeafRow({
+export const ConfigLeafRow = memo(function ConfigLeafRow({
   category,
   item,
   label,
@@ -65,4 +66,4 @@ export function ConfigLeafRow({
       onValueChange={(next) => writeLeaf(category, item, next)}
     />
   );
-}
+});

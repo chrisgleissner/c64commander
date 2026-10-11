@@ -46,9 +46,14 @@ export const loadAutofireRateHz = (): number => {
 
 export const saveAutofireRateHz = (rateHz: number): void => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(AUTOFIRE_RATE_KEY, String(clampAutofireRateHz(rateHz)));
+  const clamped = clampAutofireRateHz(rateHz);
+  localStorage.setItem(AUTOFIRE_RATE_KEY, String(clamped));
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(AUTOFIRE_RATE_CHANGE_EVENT));
+    // The Remote Input sheet also sets the rate, and the Settings page reads it only when it is built.
+    window.dispatchEvent(
+      new CustomEvent("c64u-app-settings-updated", { detail: { key: AUTOFIRE_RATE_KEY, value: clamped } }),
+    );
   }
 };
 

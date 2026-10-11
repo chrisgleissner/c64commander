@@ -12,6 +12,7 @@
  * progress display lands where the C64 did.
  */
 
+import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
@@ -60,6 +61,7 @@ vi.mock("@/lib/playback/remoteSeek/activeRemoteSidSeek", async (importOriginal) 
 });
 
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { cancelRemoteSidSeek } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 
 const SEEKABLE = Uint8Array.from(readFileSync(path.resolve("playwright/fixtures/remote-seek/seekable.sid")));
@@ -881,5 +883,49 @@ describe("useRemoteSidSeek", () => {
     await advance(PROBED_MS);
     expect(addErrorLog).not.toHaveBeenCalled();
     expect(device.current!.player.heldKeys).toEqual([]);
+  });
+
+  it("stops seeking and reading the C64 while another tab is on screen, and probes the tune again when Play is back", async () => {
+    let playOnScreen = true;
+    const hook = renderHook(
+      () =>
+        useRemoteSidSeek({
+          item: item(),
+          active: true,
+          trackInstanceId: 1,
+          deviceInfo: DEVICE_INFO,
+          elapsedMs: 0,
+          durationMs: 180_000,
+          rebasePlaybackPosition: vi.fn(),
+        }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <ScreenActivityProvider active={playOnScreen}>{children}</ScreenActivityProvider>
+        ),
+      },
+    );
+    await advance(PROBED_MS);
+    act(() => {
+      hook.result.current.handlers?.onScrubStart?.();
+      hook.result.current.handlers?.onScrubStep?.(5);
+    });
+    await advance(PROBED_MS);
+    expect(device.current!.player.heldKeys).not.toEqual([]);
+
+    playOnScreen = false;
+    hook.rerender();
+    await advance(2000);
+    expect(hook.result.current.handlers).toBeNull();
+    expect(device.current!.player.heldKeys).toEqual([]);
+    expect(device.current!.settings["CPU Speed"]).toBe(" 1");
+    const reads = vi.spyOn(device.current!.api, "readMemory");
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(reads).not.toHaveBeenCalled();
+
+    playOnScreen = true;
+    hook.rerender();
+    await advance(PROBED_MS);
+    expect(reads).toHaveBeenCalled();
+    expect(hook.result.current.handlers?.onScrubStep).toBeTypeOf("function");
   });
 });

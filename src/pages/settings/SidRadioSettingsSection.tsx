@@ -44,6 +44,7 @@ import {
 } from "@/lib/sidRadio/sidcorrRelease";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useOnPageReturn } from "@/hooks/useOnPageLeft";
 import { LocalEngineRomsRow } from "./LocalEngineRomsRow";
 import { SettingsSection } from "./SettingsSection";
 
@@ -94,6 +95,9 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
   const { localEngineEnabled, engine: playbackEngine } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
   const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
+  // The Play page installs HVSC updates while Settings is kept out of sight.
+  const [hvscState, setHvscState] = useState(loadHvscState);
+  useOnPageReturn(() => setHvscState(loadHvscState()));
   const [sidModelFromDevice, setSidModelFromDevice] = useState(loadLocalSidModelFromDevice);
   const [sidModelFallback, setSidModelFallback] = useState<LocalSidModel>(loadLocalSidModel);
   // Read through the store rather than from the two pieces of local state: the chip in use may
@@ -325,7 +329,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             </p>
             <p className="text-muted-foreground">
               <span className="font-medium text-foreground">Installed HVSC:</span> baseline{" "}
-              {loadHvscState().installedBaselineVersion ?? "—"} + update {loadHvscState().installedVersion}
+              {hvscState.installedBaselineVersion ?? "—"} + update {hvscState.installedVersion}
             </p>
             <p className="text-muted-foreground">
               The two version lines are decoupled — HVSC self-updates; the corpus re-pins per release.

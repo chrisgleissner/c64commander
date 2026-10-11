@@ -151,7 +151,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   { session, onModeChange, rotation = 0, fill = false, heldJoystickInputs, className },
   ref,
 ) {
-  const { videoLive, video } = useAvMirror(session);
+  const { videoLive, video } = useAvMirror(session, { frameRate: true });
   // Watching a picture is the one flow with no touch input, so the display timeout would otherwise
   // lock the screen part-way through it.
   useScreenWakeLock(videoLive);

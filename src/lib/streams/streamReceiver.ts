@@ -8,8 +8,9 @@
 
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
-import { StreamUdp } from "@/lib/native/streamUdp";
+import { StreamUdp, type StreamUdpVideoFrameEvent } from "@/lib/native/streamUdp";
 import type { SenderFilterDiagnostics } from "./senderMismatch";
+import { VideoFrameDeltaDecoder, base64ToBytes } from "./videoFrameDelta";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 
 /**
@@ -210,13 +211,6 @@ export class WebSocketStreamReceiver implements StreamReceiver {
   }
 }
 
-const base64ToBytes = (base64: string): Uint8Array => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-};
-
 /** Native receiver: binds a UDP port through the StreamUdp plugin and forwards datagrams. */
 export class NativeUdpStreamReceiver implements StreamReceiver {
   private datagramHandler: ((data: Uint8Array, arrivalMs: number) => void) | null = null;
@@ -231,6 +225,7 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
       ) => void)
     | null = null;
   private static readonly EMPTY = new Uint8Array(0);
+  private readonly frameDelta = new VideoFrameDeltaDecoder();
   private stateHandler: ((state: StreamConnectionState) => void) | null = null;
   destination = "";
   private closed = false;
@@ -268,16 +263,17 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
         this.trackListener(
           "videoframe",
           StreamUdp.addListener("videoframe", (event) => {
-            if (event.name !== this.name || !this.frameHandler) return;
-            // Decimated frames (present=false) carry no payload — skip the base64 decode entirely.
-            const present = event.present !== false;
-            this.frameHandler(
-              present ? base64ToBytes(event.data) : NativeUdpStreamReceiver.EMPTY,
+            if (event.name !== this.name) return;
+            // Decimated frames (present=false) carry no payload. A presented one is rebuilt even with no
+            // handler yet, so the next span applies to the frame the native side last sent.
+            const frame = event.present === false ? null : this.rebuildFrame(event);
+            this.frameHandler?.(
+              frame ?? NativeUdpStreamReceiver.EMPTY,
               event.height,
               typeof event.t === "number" ? event.t : nowMs(),
               event.dropped ?? 0,
               event.lost ?? 0,
-              present,
+              frame !== null,
             );
           }),
         ),
@@ -306,6 +302,18 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
 
   ready(): Promise<void> {
     return this.readyPromise;
+  }
+
+  private rebuildFrame(event: StreamUdpVideoFrameEvent): Uint8Array | null {
+    try {
+      return this.frameDelta.apply(event);
+    } catch (error) {
+      addLog("warn", "Live View dropped a video frame it could not rebuild", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+      return null;
+    }
   }
 
   onDatagram(handler: (data: Uint8Array, arrivalMs: number) => void): void {

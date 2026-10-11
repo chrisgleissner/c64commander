@@ -11,6 +11,8 @@ import { act, renderHook } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
+
 const status = { isConnected: true, isConnecting: false };
 
 const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
@@ -395,6 +397,58 @@ describe("useAppConfigState", () => {
 
     getCategories.mockReset();
     getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
+  });
+
+  it("does not read the config snapshot while Home is hidden behind another tab, and does once Home is shown", async () => {
+    vi.useFakeTimers();
+    let active = false;
+    const Wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <ScreenActivityProvider active={active}>{children}</ScreenActivityProvider>
+      </QueryClientProvider>
+    );
+    const { rerender } = renderHook(() => useAppConfigState(), { wrapper: Wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+    expect(getCategories).not.toHaveBeenCalled();
+
+    active = true;
+    rerender();
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getCategories).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("stops a scheduled idle capture when Home is left before it runs", async () => {
+    vi.useFakeTimers();
+    let active = true;
+    const Wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <ScreenActivityProvider active={active}>{children}</ScreenActivityProvider>
+      </QueryClientProvider>
+    );
+    const { rerender } = renderHook(() => useAppConfigState(), { wrapper: Wrapper });
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    active = false;
+    rerender();
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+
+    expect(getCategories).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it("does not start idle initial snapshot capture while the app is hidden", async () => {

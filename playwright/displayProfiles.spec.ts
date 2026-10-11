@@ -466,6 +466,58 @@ test.describe("display profiles", () => {
     }
   });
 
+  test("compact appearance options sit side by side and keep every label whole at both text sizes", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+    const toggle = page.getByTestId("settings-section-toggle-appearance");
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+
+    const groups = {
+      theme: page.getByRole("group", { name: "Theme" }),
+      textSize: page.getByTestId("settings-text-size"),
+      displayProfile: page.getByTestId("settings-display-profile-override"),
+      orientation: page.getByTestId("settings-screen-orientation-mode"),
+    };
+    const rowsOf = (group: Locator) =>
+      group.locator("button").evaluateAll((buttons) => {
+        const tops = new Map<number, number>();
+        for (const button of buttons) {
+          const top = Math.round(button.getBoundingClientRect().top);
+          tops.set(top, (tops.get(top) ?? 0) + 1);
+        }
+        return [...tops.values()];
+      });
+    const clipped = (group: Locator) =>
+      group
+        .locator("button")
+        .evaluateAll((buttons) =>
+          buttons
+            .filter(
+              (button) => button.scrollWidth > button.clientWidth + 1 || button.getBoundingClientRect().height < 43.5,
+            )
+            .map((button) => button.textContent?.trim()),
+        );
+
+    await expect(groups.theme).toBeVisible();
+    expect(await rowsOf(groups.theme)).toEqual([3]);
+    expect(await rowsOf(groups.textSize)).toEqual([2]);
+    expect(await rowsOf(groups.displayProfile)).toEqual([2, 2]);
+    expect(await rowsOf(groups.orientation)).toEqual([2, 1]);
+    for (const group of Object.values(groups)) expect(await clipped(group)).toEqual([]);
+
+    await page.getByTestId("settings-text-size-large").click();
+    await expect(page.locator("html")).toHaveAttribute("data-text-scale", "large");
+    for (const group of Object.values(groups)) expect(await clipped(group)).toEqual([]);
+    expect(await rowsOf(groups.theme)).toEqual([3]);
+    expect(await rowsOf(groups.textSize)).toEqual([2]);
+
+    await page.getByTestId("settings-text-size-default").click();
+  });
+
   test("compact diagnostics CTA layout remains reachable when text size increases", async ({
     page,
   }: {

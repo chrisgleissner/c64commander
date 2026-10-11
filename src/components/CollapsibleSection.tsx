@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
 import { FittedText } from "@/components/ui/FittedText";
+import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { cn } from "@/lib/utils";
 import {
   SECTION_DESCRIPTIONS_KEY,
@@ -179,9 +180,15 @@ export const CollapsibleSection = ({
    * screen around whatever is open, and a reader who asked for every section is overriding it on
    * purpose. The choice is persisted like any other, so it survives leaving the page.
    */
+  // The request is for the page on screen; a visited page kept mounted behind it must not answer.
+  const onScreenRef = useRef(true);
+  const trackOnScreen = useCallback((onScreen: boolean) => {
+    onScreenRef.current = onScreen;
+  }, []);
   useEffect(
     () =>
       subscribeSectionsBulk((nextOpen) => {
+        if (!onScreenRef.current) return;
         setOpen((current) => {
           if (current === nextOpen) return current;
           writeSectionState(scope, id, nextOpen);
@@ -347,6 +354,7 @@ export const CollapsibleSection = ({
       data-force-closed={forceClosed ? "true" : undefined}
       data-section-label={sectionLabel ?? title}
     >
+      <ScreenActivityWatch onChange={trackOnScreen} />
       {/*
         On the compact profile a header carrying actions gives them their own row.
         Title, action and chevron cannot share 289 px at the largest text size: the toggle absorbs

@@ -334,6 +334,29 @@ describe("UnifiedHealthBadge", () => {
       expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
     });
 
+    it("says it once, under the badge of the page on screen, when kept pages hold badges of their own", () => {
+      vi.useFakeTimers();
+      mockState.currentProfile = "compact";
+      const pages = (shown: "first" | "second") => (
+        <>
+          <ScreenActivityProvider active={shown === "first"}>
+            <UnifiedHealthBadge />
+          </ScreenActivityProvider>
+          <ScreenActivityProvider active={shown === "second"}>
+            <UnifiedHealthBadge />
+          </ScreenActivityProvider>
+        </>
+      );
+      const view = render(pages("second"));
+
+      expect(screen.getAllByTestId("unified-health-badge-announcement")).toHaveLength(1);
+
+      view.rerender(pages("first"));
+      expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
+      view.rerender(pages("second"));
+      expect(screen.queryByTestId("unified-health-badge-announcement")).toBeNull();
+    });
+
     it("says so again after a switch to another device", () => {
       vi.useFakeTimers();
       mockState.currentProfile = "compact";
@@ -699,6 +722,32 @@ describe("UnifiedHealthBadge", () => {
     } finally {
       mockState.savedDevices.devices = originalDevices;
     }
+  });
+
+  it("runs saved-device health checks only for the badge of the page on screen, and again when it is shown", () => {
+    const { rerender } = render(
+      <ScreenActivityProvider active={false}>
+        <UnifiedHealthBadge />
+      </ScreenActivityProvider>,
+    );
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenLastCalledWith(
+      mockState.savedDevices.devices,
+      false,
+      expect.objectContaining({ context: "background-maintenance" }),
+      "device-office",
+    );
+
+    rerender(
+      <ScreenActivityProvider active>
+        <UnifiedHealthBadge />
+      </ScreenActivityProvider>,
+    );
+    expect(mockUseSavedDeviceHealthChecks).toHaveBeenLastCalledWith(
+      mockState.savedDevices.devices,
+      true,
+      expect.objectContaining({ context: "background-maintenance" }),
+      "device-office",
+    );
   });
 
   it("says there is nothing to switch to when # is pressed with one saved device", () => {

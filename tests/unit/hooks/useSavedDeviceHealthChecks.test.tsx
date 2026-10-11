@@ -335,6 +335,33 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
   });
 
+  it("stops background probing while disabled and probes at once when enabled again, as a badge on a page shown again needs", async () => {
+    const savedDevices = buildSavedDevices();
+    const { rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useSavedDeviceHealthChecks(
+          savedDevices,
+          enabled,
+          HEALTH_CHECK_CONTEXTS.backgroundMaintenance,
+          selectedDeviceId,
+        ),
+      { initialProps: { enabled: true } },
+    );
+    await flushAsyncWork();
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+
+    rerender({ enabled: false });
+    await act(async () => {
+      vi.advanceTimersByTime(5 * 60_000);
+    });
+    await flushAsyncWork();
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(1);
+
+    rerender({ enabled: true });
+    await flushAsyncWork();
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
+  });
+
   it("does not warn when the background probe times out behind other requests", async () => {
     const { addLog } = await import("@/lib/logging");
     mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("REST timed out after 3000ms"));

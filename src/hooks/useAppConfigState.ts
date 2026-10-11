@@ -22,6 +22,7 @@ import {
   loadAppConfigs,
 } from "@/lib/config/appConfigStore";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
@@ -363,8 +364,12 @@ export function useAppConfigState() {
     [initialSnapshot, resolvedBaseUrl, status.isConnected],
   );
 
+  // Home stays mounted while another tab is shown. Its idle capture reads every config category, so it runs
+  // only while Home is on screen, as when leaving Home unmounted it.
+  const pageActive = usePageActivity();
+
   useEffect(() => {
-    if (!status.isConnected) {
+    if (!status.isConnected || !pageActive) {
       if (idleCaptureTimeoutRef.current !== null) {
         clearTimeout(idleCaptureTimeoutRef.current);
         idleCaptureTimeoutRef.current = null;
@@ -447,7 +452,7 @@ export function useAppConfigState() {
       idleCaptureAbortControllerRef.current?.abort();
       idleCaptureAbortControllerRef.current = null;
     };
-  }, [captureIdleInitialSnapshot, hasChanges, initialSnapshot, resolvedBaseUrl, status.isConnected]);
+  }, [captureIdleInitialSnapshot, hasChanges, initialSnapshot, pageActive, resolvedBaseUrl, status.isConnected]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {

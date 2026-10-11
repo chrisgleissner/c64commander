@@ -68,3 +68,7 @@ export const resolveRunwayTranslatePercent = (direction: -1 | 0 | 1) => {
   if (direction === 1) return -(200 / 3);
   return -(100 / 3);
 };
+
+/** The pages kept built, with `index` added: every page visited since launch, in tab order. */
+export const rememberCachedPage = (cached: readonly number[], index: number): readonly number[] =>
+  cached.includes(index) ? cached : [...cached, index].sort((a, b) => a - b);

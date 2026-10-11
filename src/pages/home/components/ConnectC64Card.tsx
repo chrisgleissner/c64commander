@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useNavigate } from "react-router-dom";
+import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { Wifi } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
  * the offline arrangement puts the one thing there is to do in its place.
  */
 export const ConnectC64Card = () => {
-  const navigate = useNavigate();
+  const navigate = useStableNavigate();
   const { devices, selectedDeviceId } = useSavedDevices();
   // A device that has connected before is out of reach, not missing; the app connects to it again by itself.
   const knownDevice = Boolean(devices.find((device) => device.id === selectedDeviceId)?.lastSuccessfulConnectionAt);

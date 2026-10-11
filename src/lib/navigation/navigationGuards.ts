@@ -7,7 +7,7 @@
  */
 
 import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useStableNavigate } from "@/hooks/useStableNavigate";
 
 type NavigationGuard = () => boolean;
 
@@ -39,7 +39,7 @@ export const confirmNavigation = () => {
  * `confirmNavigation` directly for the same reason.
  */
 export const useGuardedNavigate = (): GuardedNavigate => {
-  const navigate = useNavigate();
+  const navigate = useStableNavigate();
   return useCallback<GuardedNavigate>(
     (path, options) => {
       if (!confirmNavigation()) return;

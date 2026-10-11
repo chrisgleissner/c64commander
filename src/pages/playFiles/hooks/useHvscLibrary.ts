@@ -48,6 +48,7 @@ import {
 } from "@/lib/hvsc";
 import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
 import { logHvscPreparationTransition } from "@/lib/hvsc/hvscPreparationTransitionLog";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { subscribeHvscDemoLibraryRemoved } from "@/lib/hvsc/hvscDemoLibraryCleanup";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 
@@ -409,8 +410,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     let removeListener: (() => Promise<void>) | null = null;
     let disposed = false;
     const registration = addHvscProgressListener((event) => {
-      // Only the canceled install is muted. Metadata hydration is a separate background run of the
-      // installed library and never comes from an install, so its progress still has to land.
+      // Only the canceled install is muted: metadata hydration never comes from an install, so its progress lands.
       if (hvscIgnoreProgressRef.current && event.stage !== "sid_metadata_hydration") return;
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
@@ -680,8 +680,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         description: (error as Error).message,
         error,
         context: { path },
-        // The automatic initial listing is a prefetch, not a user action;
-        // its failure must not toast (ERROR_POLICY §3).
+        // The automatic initial listing is a prefetch, not a user action: no toast (ERROR_POLICY §3).
         background: options?.background,
       });
     }
@@ -693,9 +692,10 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     void loadHvscFolder(selectedHvscFolder || "/", { background: true });
   }, [hvscStatus?.installedVersion, hvscFolders.length, hvscSongs.length, loadHvscFolder, selectedHvscFolder]);
 
+  // Once per visit to Play, which used to mount the page; the cadence check still decides whether a visit checks.
+  const pageActive = usePageActivity();
   useEffect(() => {
-    if (!hvscStatus?.installedVersion) return;
-    if (hvscStatus.ingestionState !== "ready") return;
+    if (!pageActive || !hvscStatus?.installedVersion || hvscStatus.ingestionState !== "ready") return;
     if (!shouldCheckForHvscUpdates()) return;
 
     let cancelled = false;
@@ -728,7 +728,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     return () => {
       cancelled = true;
     };
-  }, [hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
+  }, [hvscStatus?.ingestionState, hvscStatus?.installedVersion, pageActive]);
 
   const handleHvscInstall = useCallback(
     () =>

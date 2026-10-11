@@ -34,8 +34,14 @@ export interface StreamUdpDatagramEvent {
  */
 export interface StreamUdpVideoFrameEvent {
   name: string;
-  /** Base64 of the whole 52224-byte 4bpp VIC frame; EMPTY when `present` is false (decimated). */
+  /**
+   * Base64 of lines `firstLine` until `firstLine + lineCount` of the 52224-byte 4bpp VIC frame: the whole frame when
+   * `lineCount` is -1 or absent, nothing when it is 0 (unchanged since the previous presented frame). EMPTY when
+   * `present` is false (decimated).
+   */
   data: string;
+  firstLine?: number;
+  lineCount?: number;
   /** Wire-arrival timestamp (ms) of the frame's EARLIEST packet — the frame-start instant for A/V sync. */
   t?: number;
   /** Frame height in lines derived from the last packet (PAL 272 / NTSC 240). */

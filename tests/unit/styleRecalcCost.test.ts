@@ -81,3 +81,15 @@ describe("class attribute selectors in index.css", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("selectors on the document root", () => {
+  // html:has() is re-matched as the document changes and restyles every element when it is: with kept pages that was
+  // the whole app, 6218 elements and 600 ms on a Pixel 4 at half its CPU rate, per tab switch.
+  it("never use :has(), so a change inside the app cannot restyle the whole document", () => {
+    expect(css).not.toMatch(/(^|[\s,}])(html|:root)[^{,]*:has\(/m);
+  });
+
+  it("clears the launch background through a class the app sets once it is ready", () => {
+    expect(css).toMatch(/html\.app-launch-ready\s*,\s*html\.app-launch-ready\s+#root\s*\{/);
+  });
+});

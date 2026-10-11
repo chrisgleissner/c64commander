@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import type { AvMirrorSession, AvMirrorSnapshot } from "@/lib/streams/avMirrorSession";
 
 /** Minimal stand-in for the shared session; lets a test push snapshots / frames. */
@@ -30,8 +31,10 @@ class FakeSession {
     listener(this.snapshot);
     return () => this.listeners.delete(listener);
   }
+  private latestFrame: { frame: Uint8Array; height: number } | null = null;
   subscribeFrames(handler: (f: Uint8Array, h: number) => void) {
     this.frameListeners.add(handler);
+    if (this.latestFrame) handler(this.latestFrame.frame, this.latestFrame.height);
     return () => this.frameListeners.delete(handler);
   }
   push(snapshot: AvMirrorSnapshot) {
@@ -39,6 +42,7 @@ class FakeSession {
     this.listeners.forEach((l) => l(snapshot));
   }
   emitFrame(frame: Uint8Array, height: number) {
+    this.latestFrame = { frame, height };
     this.frameListeners.forEach((h) => h(frame, height));
   }
   get frameSubscriberCount() {
@@ -127,10 +131,10 @@ describe("useAvMirrorCanvas", () => {
       width: w,
       height: h,
     }));
-    const canvas = {
+    const canvas = Object.assign(new EventTarget(), {
       height: 0,
       getContext: vi.fn(() => ({ createImageData, putImageData })),
-    } as unknown as HTMLCanvasElement;
+    }) as unknown as HTMLCanvasElement;
     return { canvas, putImageData, createImageData };
   };
 
@@ -154,7 +158,10 @@ describe("useAvMirrorCanvas", () => {
 
   it("no-ops when the canvas has no 2d context (jsdom) and unsubscribes on unmount", () => {
     const fake = new FakeSession();
-    const canvas = { height: 0, getContext: vi.fn(() => null) } as unknown as HTMLCanvasElement;
+    const canvas = Object.assign(new EventTarget(), {
+      height: 0,
+      getContext: vi.fn(() => null),
+    }) as unknown as HTMLCanvasElement;
     const ref = { current: canvas };
     const { unmount } = renderHook(() => useAvMirrorCanvas(ref, asSession(fake)));
     expect(fake.frameSubscriberCount).toBe(1);
@@ -162,6 +169,34 @@ describe("useAvMirrorCanvas", () => {
     expect(canvas.height).toBe(0); // untouched
     unmount();
     expect(fake.frameSubscriberCount).toBe(0);
+  });
+
+  it("paints nothing while its page is hidden and paints the latest frame when the page is shown", () => {
+    const fake = new FakeSession();
+    const { canvas, putImageData } = makeStubCanvas();
+    const ref = { current: canvas };
+    const Surface = () => {
+      useAvMirrorCanvas(ref, asSession(fake));
+      return null;
+    };
+    const { rerender } = render(
+      <ScreenActivityProvider active={false}>
+        <Surface />
+      </ScreenActivityProvider>,
+    );
+
+    act(() => fake.emitFrame(new Uint8Array(384 * 272), 272));
+    act(() => fake.emitFrame(new Uint8Array(384 * 240), 240));
+    expect(putImageData).not.toHaveBeenCalled();
+    expect(fake.frameSubscriberCount).toBe(0);
+
+    rerender(
+      <ScreenActivityProvider active>
+        <Surface />
+      </ScreenActivityProvider>,
+    );
+    expect(putImageData).toHaveBeenCalledTimes(1);
+    expect(canvas.height).toBe(240);
   });
 
   it("no-ops when the ref is empty", () => {

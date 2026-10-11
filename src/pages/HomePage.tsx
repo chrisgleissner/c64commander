@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   RotateCcw,
@@ -33,7 +33,7 @@ import { AppBar } from "@/components/AppBar";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { Button } from "@/components/ui/button";
 
-import { remoteInputRequestBus } from "@/lib/input/latchedCommandBus";
+import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useArrangementPin } from "@/hooks/useArrangementPin";
 import { useOfflineArrangement } from "@/hooks/useOfflineArrangement";
 import { SystemInfo } from "./home/components/SystemInfo";
@@ -270,15 +270,7 @@ function HomePageContent() {
   const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
-  // "Open Remote Input" from search: Home and Play each own a sheet, so the request latches and
-  // whichever page mounts next claims it (spec.md 9.5).
-  useEffect(() => {
-    if (remoteInputRequestBus.takePending() !== null) setRemoteInputSheetOpen(true);
-    return remoteInputRequestBus.subscribe(() => {
-      remoteInputRequestBus.takePending();
-      setRemoteInputSheetOpen(true);
-    });
-  }, []);
+  useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
   const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
   const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
   const [reuTaskPending, setReuTaskPending] = useState(false);

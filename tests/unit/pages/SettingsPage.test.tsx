@@ -7,11 +7,14 @@
  */
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
+import { markHvscUpdateCheckAt } from "@/lib/hvsc/hvscReleaseService";
 import SettingsPage from "@/pages/SettingsPage";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import {
   FocusNavigationProvider,
   useFocusNavigationContext,
@@ -57,6 +60,7 @@ import {
   loadDiskAutostartMode,
   loadVolumeSliderPreviewIntervalMs,
   loadScreenOrientationMode,
+  loadHideNavigationBar,
 } from "@/lib/config/appSettings";
 import { FEATURE_FLAG_DEFINITIONS, type FeatureFlagId } from "@/lib/config/featureFlagsRegistry.generated";
 
@@ -808,6 +812,8 @@ beforeEach(() => {
   vi.mocked(requestDiagnosticsOpen).mockReset();
   mockPrimeDiagnosticsOverlaySuppression.mockReset();
 });
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 describe("SettingsPage", () => {
   vi.setConfig({ testTimeout: 20000 });
@@ -2158,6 +2164,77 @@ describe("SettingsPage", () => {
     expect(saveHideStatusBar).toHaveBeenCalledWith(true);
     fireEvent.click(within(section).getByTestId("settings-hide-navigation-bar"));
     expect(saveHideNavigationBar).toHaveBeenCalledWith(true);
+  });
+
+  it("re-reads the full-screen settings, whose defaults follow the display profile, when the Settings tab is shown again", () => {
+    let setActive: (active: boolean) => void = () => undefined;
+    const SettingsTab = () => {
+      const [active, setActiveState] = useState(true);
+      setActive = setActiveState;
+      return (
+        <ScreenActivityProvider active={active}>
+          <SettingsPage />
+        </ScreenActivityProvider>
+      );
+    };
+    withSectionsOpen(
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsTab />)}
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        />,
+      ),
+    );
+    const hideNavigationBar = () =>
+      within(screen.getByTestId("settings-full-screen")).getByTestId("settings-hide-navigation-bar");
+    expect(hideNavigationBar()).not.toBeChecked();
+
+    act(() => setActive(false));
+    vi.mocked(loadHideNavigationBar).mockReturnValueOnce(true);
+    expect(hideNavigationBar()).not.toBeChecked();
+
+    act(() => setActive(true));
+    expect(hideNavigationBar()).toBeChecked();
+  });
+
+  it("shows the HVSC update check the Play page ran while Settings was kept out of sight, once it is shown again", () => {
+    let setActive: (active: boolean) => void = () => undefined;
+    const SettingsTab = () => {
+      const [active, setActiveState] = useState(true);
+      setActive = setActiveState;
+      return (
+        <ScreenActivityProvider active={active}>
+          <SettingsPage />
+        </ScreenActivityProvider>
+      );
+    };
+    localStorage.removeItem("c64u_hvsc_last_update_check_at");
+    withSectionsOpen(
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsTab />)}
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        />,
+      ),
+    );
+    expect(screen.getByText(/Last automatic update check:\s*Never/)).toBeInTheDocument();
+
+    act(() => setActive(false));
+    const checkedAt = "2026-10-10T12:00:00.000Z";
+    markHvscUpdateCheckAt(checkedAt);
+    act(() => setActive(true));
+
+    expect(
+      screen.getByText(
+        new RegExp(`Last automatic update check:\\s*${escapeRegExp(new Date(checkedAt).toLocaleString())}`),
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows persisted SAF URIs after refresh", async () => {

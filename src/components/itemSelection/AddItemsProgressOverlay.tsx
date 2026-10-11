@@ -14,6 +14,7 @@ import {
   resolveInterstitialBackdropOpacity,
 } from "@/components/ui/interstitialStyles";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
+import { usePageActivity } from "@/hooks/usePageActivity";
 import { isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
 import { cn } from "@/lib/utils";
 import { useEffect } from "react";
@@ -60,7 +61,10 @@ export const AddItemsProgressOverlay = ({
   visible,
   onCancel,
 }: AddItemsProgressOverlayProps) => {
-  const isVisible = visible === true || (visible !== false && ACTIVE_PROGRESS_STATES.has(progress.status));
+  // Portalled to the body, so a page kept off screen would otherwise show it, and take its keys, over the one on screen.
+  const pageActive = usePageActivity();
+  const isVisible =
+    pageActive && (visible === true || (visible !== false && ACTIVE_PROGRESS_STATES.has(progress.status)));
   const layer = useRegisterInterstitial("progress", isVisible);
 
   // Android Back arrives as an Escape at whatever holds focus, which need not be inside the overlay,

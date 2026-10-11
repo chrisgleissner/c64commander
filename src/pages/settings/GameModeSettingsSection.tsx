@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -126,8 +127,16 @@ export const GameModeSettingsSection = () => {
     };
   }, [capturingSlot]);
 
+  // Leaving Settings used to unmount this, which ended a capture that would otherwise swallow keys on the next page.
+  const endCaptureWhenPageLeft = useCallback((onScreen: boolean) => {
+    if (onScreen) return;
+    setCapturingSlot(null);
+    setRejection(null);
+  }, []);
+
   return (
     <div className="space-y-4" data-testid="settings-game-mode-section">
+      <ScreenActivityWatch onChange={endCaptureWhenPageLeft} />
       <div className="space-y-2">
         <Label htmlFor="settings-joystick-key-layout" className="text-sm">
           Joystick keys
