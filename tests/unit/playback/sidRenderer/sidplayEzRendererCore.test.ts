@@ -24,9 +24,11 @@ vi.mock("@capacitor/core", async (importOriginal) => {
   };
 });
 
-import type { SidAudioPlugin, SidAudioPrerenderEvent } from "@/lib/native/sidAudio";
+import { SidAudio, type SidAudioPlugin, type SidAudioPrerenderEvent } from "@/lib/native/sidAudio";
+import { __setNativePcmReleasePluginForTests } from "@/lib/playback/sidRenderer/nativePcmRelease";
 import { SidplayEzRendererCore } from "@/lib/playback/sidRenderer/sidplayEzRendererCore";
 import { NativeRendererChannel } from "@/lib/playback/sidRenderer/nativeRendererChannel";
+import type { SidRendererCore } from "@/lib/playback/sidRenderer/sidRendererContract";
 import { defaultRendererChannelFactory, LocalSidUnavailableError } from "@/lib/playback/sidRenderer/rendererFactory";
 import {
   __setSidplayEzAvailabilityForTests,
@@ -270,6 +272,60 @@ describe("a native renderer channel", () => {
     await settle();
     expect(received.map((m) => m.type)).toEqual(["ready"]);
     expect(fake.calls.some((c) => c.method === "disposeRenderer")).toBe(true);
+  });
+});
+
+describe("a terminated native renderer channel", () => {
+  const released: number[][] = [];
+  beforeEach(() => {
+    released.length = 0;
+    __setNativePcmReleasePluginForTests({
+      releaseBuffers: async ({ bufferIds }: { bufferIds: number[] }) => void released.push(bufferIds),
+    } as unknown as SidAudioPlugin);
+  });
+  afterEach(() => __setNativePcmReleasePluginForTests(SidAudio));
+
+  it("gives back the buffer of a chunk that finished rendering after it was terminated", async () => {
+    const fake = fakePlugin();
+    const channel = new NativeRendererChannel(new SidplayEzRendererCore({ background: false }, fake.plugin));
+    let finish: (value: { bufferId: number; frames: number; renderMs: number }) => void = () => undefined;
+    vi.mocked(fake.plugin.render).mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    channel.postMessage({ type: "load" });
+    await settle();
+    channel.postMessage({ type: "render", id: 1, seconds: 0.5 });
+    await settle();
+    channel.terminate();
+    finish({ bufferId: 78, frames: 24000, renderMs: 4 });
+    await settle();
+    expect(released.flat()).toEqual([78]);
+  });
+
+  it("gives back a pre-render buffer the engine never saw, and leaves one it did to the engine", async () => {
+    let slice: (pcm: { kind: "native-pcm"; bufferId: number; startFrame: number; frames: number }) => void = () =>
+      undefined;
+    const core = {
+      load: async () => undefined,
+      open: async () => ({ sampleRate: 48000, channels: 2, tuneInfo: null }),
+      render: async () => null,
+      seek: async (seconds: number) => seconds,
+      prerender: (_request: unknown, onSlice: (s: unknown) => void) => {
+        slice = (pcm) => onSlice({ pcm, sampleRate: 48000, channels: 2, seconds: 1 });
+        return new Promise(() => undefined);
+      },
+      close: async () => undefined,
+      dispose: () => undefined,
+    } as unknown as SidRendererCore;
+    const channel = new NativeRendererChannel(core);
+    channel.addEventListener("message", () => undefined);
+    channel.postMessage({ ...request(), type: "prerender", id: 3, seconds: 12 });
+    await settle();
+    slice({ kind: "native-pcm", bufferId: 5, startFrame: 0, frames: 48000 });
+    await settle();
+    channel.terminate();
+    slice({ kind: "native-pcm", bufferId: 5, startFrame: 48000, frames: 48000 });
+    slice({ kind: "native-pcm", bufferId: 6, startFrame: 0, frames: 48000 });
+    await settle();
+    expect(released.flat()).toEqual([6]);
   });
 });
 

@@ -9,6 +9,8 @@
 import type { LocalSidWorkerLike } from "../localSidEngine";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "../localSidWorkerProtocol";
 import { createRendererDispatcher, type SidRendererCore } from "./sidRendererContract";
+import { releaseNativePcm } from "./nativePcmRelease";
+import { isNativePcm } from "./pcmPayload";
 
 type MessageHandler = (event: MessageEvent<LocalSidWorkerToMain>) => void;
 type ErrorHandler = (event: { message?: string }) => void;
@@ -19,23 +21,34 @@ type ErrorHandler = (event: { message?: string }) => void;
  *
  * This is what lets libSidplayEZ use the engine's orchestration unchanged. Replies are delivered
  * asynchronously, as a worker's are, so no engine code runs re-entrantly inside its own
- * `postMessage`. After `terminate` nothing more is delivered, as with a terminated worker.
+ * `postMessage`. After `terminate` nothing more is delivered, as with a terminated worker; a native
+ * buffer the engine never saw is given back, since nobody else knows it exists.
  */
 export class NativeRendererChannel implements LocalSidWorkerLike {
   private readonly messageHandlers = new Set<MessageHandler>();
   private readonly errorHandlers = new Set<ErrorHandler>();
   private terminated = false;
+  /** Pre-render buffers the engine has seen. It owns those, and may still hold one in its cache. */
+  private readonly deliveredBuffers = new Set<number>();
   private readonly dispatch: (message: LocalSidMainToWorker) => Promise<void>;
 
   constructor(private readonly core: SidRendererCore) {
     this.dispatch = createRendererDispatcher(core, (message) => {
-      if (this.terminated) return;
+      if (this.terminated) return this.discard(message);
       queueMicrotask(() => {
-        if (this.terminated) return;
+        if (this.terminated) return this.discard(message);
+        if (message.type === "prerender-chunk" && isNativePcm(message.pcm)) {
+          this.deliveredBuffers.add(message.pcm.bufferId);
+        }
         const event = { data: message } as MessageEvent<LocalSidWorkerToMain>;
         for (const handler of this.messageHandlers) handler(event);
       });
     });
+  }
+
+  private discard(message: LocalSidWorkerToMain): void {
+    if (message.type !== "chunk" && message.type !== "prerender-chunk") return;
+    if (isNativePcm(message.pcm) && !this.deliveredBuffers.has(message.pcm.bufferId)) releaseNativePcm(message.pcm);
   }
 
   postMessage(message: LocalSidMainToWorker): void {
