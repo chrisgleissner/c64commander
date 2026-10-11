@@ -3,6 +3,7 @@
 **Status:** Specification (convergence pass 2026-07-24). Implementation order & execution protocol: see `prompt.md`; live task board: `PLANS.md`; append-only history: `WORKLOG.md`.
 **Feature flags:** `sidRadioEnabled` (master), `sidRankingEnabled` (the Like / Not-for-me affordance), `localPlaybackEnabled` (the on-device engine — see §12). Canonical names & storage keys: **§0.4**.
 **Data dependency:** [`chrisgleissner/sidflow-data`](https://github.com/chrisgleissner/sidflow-data) — the **Tiny** `sidcorr-tiny-1` similarity export (~1.8 MB).
+**Collections:** stations built from STIL lists rather than similarity are specified in `stil-collections.md`.
 **Code dependency (§12):** [`libsidplayfp/libsidplayfp`](https://github.com/libsidplayfp/libsidplayfp) — GPL-2.0-**or-later** SID player, for on-device playback.
 
 > **Naming.** The user-facing name is **SID Radio**. The obvious "SID Station" is

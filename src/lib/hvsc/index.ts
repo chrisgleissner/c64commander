@@ -44,8 +44,17 @@ export {
 export { recoverStaleIngestionState } from "./hvscIngestionRuntime";
 export { decodeStilText, parseStil, primaryCredit, stilInfoForSubsong, stripSectionTimestamp } from "./stilParser";
 export type { StilCredit, StilEntry, StilInfo } from "./stilParser";
-export { clearStil, getStilEntry, getStilInfo, isStilInstalled, readStilManifest } from "./stilStore";
-export { ensureStilReady } from "./stilService";
+export {
+  clearStil,
+  getStilEntry,
+  getStilInfo,
+  isStilInstalled,
+  readStilCollections,
+  readStilManifest,
+} from "./stilStore";
+export { isStilCollectionId, STIL_COLLECTION_IDS, stilCollectionCounts } from "./stilCollections";
+export type { StilCollectionId, StilCollectionIndex, StilCollectionMember } from "./stilCollections";
+export { ensureStilReady, isStilFetchNeeded, stilUnavailableReason } from "./stilService";
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from "./hvscMediaIndex";
 export { describeHvscPreparationTransition, resolveHvscPreparationSnapshot } from "./hvscPreparationState";
 export type {

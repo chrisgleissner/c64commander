@@ -6,13 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shuffle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import type { StilCollectionId } from "@/lib/hvsc";
+import { sidRadioCollectionsFor } from "@/lib/sidRadio/stilCollectionCatalog";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import {
   SID_RADIO_STYLE_TILES,
@@ -44,6 +46,14 @@ export type SidRadioLauncherSheetProps = {
   hvscMissing?: boolean;
   /** Opens HVSC installation; absent where HVSC cannot be installed from here. */
   onInstallHvsc?: () => void;
+  /** Members per STIL collection; null while STIL is unread, which leaves every tile on offer. */
+  collectionCounts?: Record<StilCollectionId, number> | null;
+  /** Called each time the sheet opens, so the collection counts can be read. */
+  onLoadCollectionCounts?: () => void;
+  /** Absent hides the Collections section. */
+  onStartCollection?: (id: StilCollectionId) => void;
+  /** Decides which seasonal collections are offered; a seam for tests. */
+  today?: Date;
 };
 
 /**
@@ -57,6 +67,9 @@ const songMoodOptions: ReadonlyArray<{ bit: number | null; key: string | null; l
   { bit: null, key: null, label: "All moods" },
   ...SID_RADIO_STYLE_TILES.map((tile) => ({ bit: tile.bit, key: tile.key, label: tile.label })),
 ];
+
+/** The sheet's `data-[state=open]:duration-500` slide-in. */
+export const COLLECTION_COUNTS_DELAY_MS = 500;
 
 /**
  * The SID Radio launcher (spec §5.2). Composes seed × optional style: a grid of
@@ -79,8 +92,19 @@ export const SidRadioLauncherSheet = ({
   onStartSong,
   hvscMissing = false,
   onInstallHvsc,
+  collectionCounts = null,
+  onLoadCollectionCounts,
+  onStartCollection,
+  today,
 }: SidRadioLauncherSheetProps) => {
   const [fromLikes, setFromLikes] = useState(false);
+  useEffect(() => {
+    if (!open || !onLoadCollectionCounts) return;
+    // After the sheet's opening animation: reading the counts can derive the collections from the
+    // stored STIL, a few hundred milliseconds of work that would otherwise stall the slide-in.
+    const timer = window.setTimeout(onLoadCollectionCounts, COLLECTION_COUNTS_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, onLoadCollectionCounts]);
   const tasteUnlocked = likeCount >= SID_RADIO_TASTE_UNLOCK_LIKES;
   const close = () => onOpenChange(false);
 
@@ -89,7 +113,9 @@ export const SidRadioLauncherSheet = ({
       <SheetContent side="bottom" className="overflow-y-auto" data-testid="sid-radio-launcher-sheet">
         <SheetHeader>
           <SheetTitle>SID Radio</SheetTitle>
-          <SheetDescription>Endless stations of similar SIDs — pick a mood, your taste, or both.</SheetDescription>
+          <SheetDescription>
+            Endless stations of SIDs — pick a mood, your taste, or a collection from the HVSC tune notes.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-4 pt-3">
@@ -146,6 +172,10 @@ export const SidRadioLauncherSheet = ({
             </div>
           ) : null}
 
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-base font-medium">Moods</h3>
+            <p className="text-base text-muted-foreground">Tunes that sound like the mood you pick.</p>
+          </div>
           <label className="flex min-h-11 items-center gap-2 text-sm">
             <Checkbox
               data-testid="sid-radio-likes-toggle"
@@ -196,6 +226,48 @@ export const SidRadioLauncherSheet = ({
               );
             })}
           </div>
+
+          {onStartCollection ? (
+            <div className="flex flex-col gap-2" data-testid="sid-radio-collections">
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-base font-medium">Collections</h3>
+                <p className="text-base text-muted-foreground">
+                  Only tunes from the collection, as listed in the HVSC tune notes.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {sidRadioCollectionsFor(today ?? new Date()).map((collection) => {
+                  const count = collectionCounts?.[collection.id];
+                  const empty = count === 0;
+                  return (
+                    <Button
+                      key={collection.id}
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
+                      data-testid={`sid-radio-collection-${collection.id}`}
+                      disabled={hvscMissing || empty}
+                      onClick={() => {
+                        close();
+                        onStartCollection(collection.id);
+                      }}
+                    >
+                      <span className="text-sm font-medium">{collection.label}</span>
+                      <span className="text-xs text-muted-foreground">{collection.blurb}</span>
+                      {count !== undefined ? (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          data-testid={`sid-radio-collection-${collection.id}-size`}
+                        >
+                          {empty ? "None installed" : `${count.toLocaleString("en-US")} tunes`}
+                        </span>
+                      ) : null}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <Button

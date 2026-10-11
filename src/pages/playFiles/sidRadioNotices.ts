@@ -14,7 +14,10 @@ export type SidRadioNotice =
   | "no-radio"
   | "no-radio-for-style"
   | "no-hvsc"
+  | "no-radio-for-collection"
+  | "collection-notes-unavailable"
   | "station-ended"
+  | "collection-ended"
   | "start-failed"
   | "refill-failed";
 
@@ -23,7 +26,11 @@ export const SID_RADIO_NOTICE_TEXT: Record<SidRadioNotice, string> = {
   "no-radio": "No radio available yet — like a few tunes to seed one.",
   "no-radio-for-style": "No tunes found for this style — try another style or your likes.",
   "no-hvsc": "No HVSC music is installed yet. Install HVSC, then any station will play.",
+  "no-radio-for-collection": "None of this collection's tunes are in the installed HVSC library.",
+  "collection-notes-unavailable":
+    "Collections need the HVSC tune notes, which could not be downloaded. Check the connection and try again.",
   "station-ended": "This station has played everything it could find — pick another to keep going.",
+  "collection-ended": "You have heard every tune in this collection. Start it again for a new order.",
   "start-failed": "SID Radio could not start this station. The diagnostics log has the details.",
   "refill-failed": "SID Radio could not find more tunes for this station. The diagnostics log has the details.",
 };

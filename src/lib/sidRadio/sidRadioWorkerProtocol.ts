@@ -14,6 +14,7 @@
  * only holds the parsed bundle.
  */
 
+import type { CollectionPool } from "@/lib/sidRadio/collectionEngine";
 import type { StationCandidate, StationSeed } from "@/lib/sidRadio/stationEngine";
 
 /** main → worker: load and parse the bundle (fetch the bundled asset if none given). */
@@ -34,6 +35,8 @@ export interface StationRequest {
   /** Most recently played track ordinals, most recent first — the drifting query (order is load-bearing). */
   recent: number[];
   count: number;
+  /** A collection station's members; absent for every station the similarity walk computes. */
+  pool?: CollectionPool;
 }
 
 /** main → worker: compute the next candidate batch for a station request. */

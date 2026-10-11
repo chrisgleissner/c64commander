@@ -36,21 +36,39 @@ export const buildStilUrls = (release: number, baseUrl?: string): string[] => {
   return urls;
 };
 
+/** Long enough for 3.7 MB on a slow phone connection; a stalled download must still end. */
+export const STIL_FETCH_TIMEOUT_MS = 60_000;
+/** After a failed download, lookups that merely want notes wait this long before trying again. */
+export const STIL_FETCH_RETRY_AFTER_MS = 5 * 60_000;
+
 const fetchStilBytes = async (release: number, signal?: AbortSignal): Promise<Uint8Array | null> => {
-  for (const url of buildStilUrls(release)) {
-    try {
-      const response = await fetch(url, { cache: "no-store", ...(signal ? { signal } : {}) });
-      if (!response.ok) {
-        addLog("debug", "STIL not available at URL", { url, status: response.status });
-        continue;
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), STIL_FETCH_TIMEOUT_MS);
+  const forwardAbort = () => deadline.abort();
+  signal?.addEventListener("abort", forwardAbort, { once: true });
+  try {
+    for (const url of buildStilUrls(release)) {
+      try {
+        const response = await fetch(url, { cache: "no-store", signal: deadline.signal });
+        if (!response.ok) {
+          addLog("debug", "STIL not available at URL", { url, status: response.status });
+          continue;
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        if (deadline.signal.aborted) {
+          addLog("warn", "STIL download timed out", { url, timeoutMs: STIL_FETCH_TIMEOUT_MS });
+          return null;
+        }
+        addLog("debug", "STIL fetch failed", { url, error: (error as Error).message });
       }
-      return new Uint8Array(await response.arrayBuffer());
-    } catch (error) {
-      if ((error as Error)?.name === "AbortError") throw error;
-      addLog("debug", "STIL fetch failed", { url, error: (error as Error).message });
     }
+    return null;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", forwardAbort);
   }
-  return null;
 };
 
 /** Store STIL from bytes already in hand — the ingestion path, where nothing is downloaded. */
@@ -67,44 +85,74 @@ export const storeStilFromArchive = async (bytes: Uint8Array, release: number): 
 };
 
 let ensureInFlight: Promise<boolean> | null = null;
+let lastFailedFetchAt: number | null = null;
+
+/**
+ * The release STIL has to be downloaded for, or null when nothing should be downloaded.
+ *
+ * Nothing is downloaded without a library, or for Demo Mode's library: its tunes are invented and
+ * the published notes describe none of them.
+ */
+const releaseToFetch = async (): Promise<number | null> => {
+  if (hasMockedStil()) return null;
+  const state = loadHvscState();
+  if (state.installedVersion <= 0 || state.librarySource === "demo") return null;
+  const manifest = await readStilManifest();
+  return manifest && manifest.release >= state.installedVersion ? null : state.installedVersion;
+};
+
+/** Whether {@link ensureStilReady} would download, so a caller can say it is waiting on the network. */
+export const isStilFetchNeeded = async (): Promise<boolean> => (await releaseToFetch()) !== null;
+
+/** Why STIL is not available, for a caller that has to tell the listener. */
+export const stilUnavailableReason = (): "no-library" | "demo-library" | "not-downloaded" => {
+  const state = loadHvscState();
+  if (state.installedVersion <= 0) return "no-library";
+  return state.librarySource === "demo" ? "demo-library" : "not-downloaded";
+};
 
 /**
  * Make sure STIL is on disk, downloading it only if it is not.
  *
  * Coalesced and idempotent: several tunes asking at once produce one fetch, and a store that is
- * already current returns without touching the network. Returns whether anything is available to
- * look up afterwards.
+ * already current returns without touching the network. After a failed download, callers wait
+ * {@link STIL_FETCH_RETRY_AFTER_MS} before the next attempt unless they pass `retryNow`, which is for
+ * a listener's explicit request. Returns whether anything is available to look up afterwards.
  */
-export const ensureStilReady = async (options?: { signal?: AbortSignal }): Promise<boolean> => {
+export const ensureStilReady = async (options?: { signal?: AbortSignal; retryNow?: boolean }): Promise<boolean> => {
   // A test supplying STIL directly has already answered this; downloading over the top of it would
   // be both wrong and impossible offline. Deliberately not `isStilInstalled()`, which is also true
   // of a stored copy that is older than the installed release — that one has to be refreshed, and
   // short-circuiting on it meant a library updated to a new release kept the previous release's
   // notes for ever.
   if (hasMockedStil()) return true;
-  const state = loadHvscState();
-  if (state.installedVersion <= 0) return false;
-
-  const manifest = await readStilManifest();
-  if (manifest && manifest.release >= state.installedVersion) return true;
+  const release = await releaseToFetch();
+  if (release === null) return isStilInstalled();
+  const backingOff = lastFailedFetchAt !== null && Date.now() - lastFailedFetchAt < STIL_FETCH_RETRY_AFTER_MS;
+  if (backingOff && !options?.retryNow && !ensureInFlight) return isStilInstalled();
 
   ensureInFlight ??= (async () => {
     try {
-      const bytes = await fetchStilBytes(state.installedVersion, options?.signal);
+      const bytes = await fetchStilBytes(release, options?.signal);
       if (!bytes) {
-        addLog("warn", "STIL could not be fetched", { release: state.installedVersion });
+        lastFailedFetchAt = Date.now();
+        addLog("warn", "STIL could not be fetched", { release });
         // An older stored copy is still better than nothing.
         return isStilInstalled();
       }
-      const count = await ingestStilText(decodeStilText(bytes), state.installedVersion);
-      addLog("info", "STIL downloaded", {
-        release: state.installedVersion,
-        entries: count,
-        bytes: bytes.length,
-      });
-      return count > 0;
+      const count = await ingestStilText(decodeStilText(bytes), release);
+      if (count === 0) {
+        // A captive portal answers with a page that parses to nothing; that is a failed download too.
+        lastFailedFetchAt = Date.now();
+        addLog("warn", "STIL download held no entries", { release, bytes: bytes.length });
+        return isStilInstalled();
+      }
+      lastFailedFetchAt = null;
+      addLog("info", "STIL downloaded", { release, entries: count, bytes: bytes.length });
+      return true;
     } catch (error) {
-      addErrorLog("STIL preparation failed", { error: (error as Error).message });
+      lastFailedFetchAt = Date.now();
+      addErrorLog("STIL preparation failed", { release, error: (error as Error).message });
       return isStilInstalled();
     } finally {
       ensureInFlight = null;
@@ -117,4 +165,5 @@ export const ensureStilReady = async (options?: { signal?: AbortSignal }): Promi
 /** Test seam. */
 export const __resetStilServiceForTest = () => {
   ensureInFlight = null;
+  lastFailedFetchAt = null;
 };

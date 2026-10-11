@@ -114,7 +114,7 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
-import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
+import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
@@ -1654,13 +1654,7 @@ export default function PlayFilesPage() {
     ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
   });
 
-  const sidRadioWhyThisTune = sidRadio.station
-    ? sidRadio.station.seedKind === "song"
-      ? `Similar to ${sidRadio.station.seedLabel}`
-      : sidRadio.station.seedKind === "style"
-        ? `Matches ${sidRadio.station.seedLabel}`
-        : "From tunes you like"
-    : null;
+  const sidRadioWhyThisTune = sidRadio.station ? whyThisTuneFor(sidRadio.station) : null;
   /**
    * The tune the launcher's mood choices apply to.
    *
@@ -2534,6 +2528,8 @@ export default function PlayFilesPage() {
                     <SidRadioChip
                       station={sidRadio.station}
                       whyThisTune={sidRadioWhyThisTune}
+                      collectionProgress={sidRadio.collectionProgress}
+                      preparingCollection={sidRadio.preparingCollection}
                       onStop={stationHandover.requestStop}
                     />
                   ) : undefined
@@ -3016,6 +3012,9 @@ export default function PlayFilesPage() {
             onStartStyle={(bit, label, fromLikes) => void sidRadio.startStyleRadio(bit, label, fromLikes)}
             onStartTaste={() => void sidRadio.startTasteRadio()}
             onSurprise={() => void sidRadio.startSurpriseRadio()}
+            collectionCounts={sidRadio.collectionCounts}
+            onLoadCollectionCounts={sidRadio.ensureCollectionCounts}
+            onStartCollection={(id) => void sidRadio.startCollectionRadio(id)}
             songSeedLabel={sidRadioSongSeedLabel}
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
             onStartSong={startSidRadioSongMood}

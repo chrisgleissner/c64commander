@@ -143,7 +143,7 @@ export const DEFAULT_STATION_BALANCE: StationBalance = {
   maxHops: 8,
 };
 
-export type StationSeedKind = "song" | "style" | "taste";
+export type StationSeedKind = "song" | "style" | "taste" | "collection";
 
 export interface StationSeed {
   kind: StationSeedKind;
@@ -151,9 +151,11 @@ export interface StationSeed {
   md5_48?: string;
   /** Style seed: the style-mask bit to draw the broad seed pool from. */
   styleBit?: number;
+  /** Collection seed: which STIL collection the station plays (see `collectionEngine.ts`). */
+  collectionId?: string;
 }
 
-export type StationReason = "similar" | "style" | "taste" | "discovery";
+export type StationReason = "similar" | "style" | "taste" | "discovery" | "collection";
 
 export interface StationEngineOptions {
   bundle: SidcorrTinyBundle;
@@ -223,7 +225,7 @@ const hashSeed = (a: number, b: number): number => {
 };
 
 /** Deterministic per-(shuffleSeed, ordinal) uniform in (0,1). */
-const perOrdinalRandom = (shuffleSeed: number, ordinal: number): number => {
+export const perOrdinalRandom = (shuffleSeed: number, ordinal: number): number => {
   const t = (hashSeed(shuffleSeed, ordinal) + 0x6d2b79f5) >>> 0;
   let r = Math.imul(t ^ (t >>> 15), 1 | t);
   r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
@@ -276,6 +278,9 @@ const capFrontier = (frontier: Map<number, number>, cap: number): Map<number, nu
 
 export const computeStation = (options: StationEngineOptions): StationResult => {
   const { bundle, seed, shuffleSeed } = options;
+  if (seed.kind === "collection") {
+    throw new Error("A collection station is computed by computeCollectionStation, not by the similarity walk");
+  }
   const balance: StationBalance = { ...DEFAULT_STATION_BALANCE, ...options.balance };
   const styleFilter = options.styleFilter ?? null;
   const limit = options.limit ?? DEFAULT_LIMIT;
