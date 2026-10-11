@@ -104,14 +104,14 @@ class SidAudioPlugin : Plugin() {
       portError = "This WebView cannot deliver ArrayBuffer messages"
       return
     }
-    bridge.executeOnMainThread {
-      try {
-        WebViewCompat.addWebMessageListener(bridge.webView, SidAudioPort.JS_OBJECT_NAME, ALLOWED_ORIGINS, port)
-        portInstalled = true
-      } catch (error: Exception) {
-        portError = error.message ?: error.javaClass.simpleName
-        Log.w(TAG, "The binary PCM port could not be installed; PCM falls back to the Capacitor bridge", error)
-      }
+    // Registered here, synchronously, as Capacitor registers its own bridge listener: plugins load on
+    // the main thread before the page is requested, so the object exists in the first document.
+    try {
+      WebViewCompat.addWebMessageListener(bridge.webView, SidAudioPort.JS_OBJECT_NAME, bridge.allowedOriginRules, port)
+      portInstalled = true
+    } catch (error: Exception) {
+      portError = error.message ?: error.javaClass.simpleName
+      Log.w(TAG, "The binary PCM port could not be installed; PCM falls back to the Capacitor bridge", error)
     }
   }
 
@@ -462,8 +462,6 @@ class SidAudioPlugin : Plugin() {
 
   companion object {
     private const val TAG = "SidAudioPlugin"
-    /** The origins the app is served from (`androidScheme` is http; https kept for a scheme change). */
-    private val ALLOWED_ORIGINS = setOf("http://localhost", "https://localhost")
   }
 }
 

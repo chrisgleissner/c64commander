@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -212,10 +212,18 @@ describe("the native components section", () => {
     for (const name of ["Simon White", "Antti Lankila", "Leandro Nini", "Michael Hartmann", "Dag Lem", "VICE"]) {
       expect(text).toContain(name);
     }
-    expect(text).toContain("no upstream file is modified");
+    expect(text).toContain("It applies one patch to the upstream source");
     expect(text).toContain("Aladdin Enterprises");
     expect(text).toContain("Redistributions in binary form must reproduce the above copyright notice");
     expect(text).toContain("Yann Collet");
+  });
+
+  it("names every patch the build applies to libSidplayEZ", () => {
+    const text = renderNativeNotices(readNativePins(gradle));
+    const patchDir = path.resolve(process.cwd(), "android/app/src/main/cpp/sidplayez/patches");
+    const patches = readdirSync(patchDir).filter((name) => name.endsWith(".patch"));
+    expect(patches.length).toBeGreaterThan(0);
+    for (const patch of patches) expect(text).toContain(`patches/${patch}`);
   });
 
   it("is part of the committed notices file", () => {

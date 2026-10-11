@@ -107,6 +107,8 @@ describe("registerLocalSidProbe", () => {
     expect(result.firstPositionMs).not.toBeNull();
     expect(result.seekLatencyMs).toBeNull();
     expect(result.final).toMatchObject({ renderer: "fake", renderMsPerSec: 40 });
+    expect(result.eventLoopLagMs.max).toBeGreaterThanOrEqual(result.eventLoopLagMs.mean);
+    expect(result.eventLoopLagMs.p95).toBeLessThanOrEqual(result.eventLoopLagMs.max);
     expect(engine.disposed).toBe(true);
     expect(loadSidEmulationEngine()).toBe("residfp");
   });

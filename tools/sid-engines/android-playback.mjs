@@ -8,7 +8,7 @@
 
 // End-to-end on-device playback through each renderer, run in the app's WebView over CDP.
 //
-//   CDP_PORT=9333 node tools/sid-engines/android-playback.mjs <tune.sid> [songIndex] [seconds] [seekTo] [renderer,...]
+//   CDP_PORT=9333 node tools/sid-engines/android-playback.mjs <tune.sid> [songIndex] [seconds] [seekTo|none] [renderer,...]
 //
 // Calls `window.__localSidProbe` (src/lib/playback/localSidProbe.ts), which plays the tune through a
 // real LocalSidEngine — renderer, scheduler, sink, and on Android the native audio feed — at volume 0,
@@ -32,7 +32,7 @@ const request = {
   sid: readFileSync(tunePath).toString("base64"),
   songIndex: Number(songArg),
   seconds: Number(secondsArg),
-  seekTo: Number(seekArg),
+  ...(seekArg === "none" ? {} : { seekTo: Number(seekArg) }),
 };
 
 // bughunt-cdp.mjs gives each evaluation 15 s, so the probe is started in one evaluation and its

@@ -32,7 +32,12 @@ await engine.setSystemROMs(
 );
 await engine.loadSidBuffer(new Uint8Array(readFileSync(tunePath)), Number(songArg));
 const sidModel = modelArg === "6581" ? "MOS6581" : "MOS8580";
-if (engine.getEmulationConfig?.()?.sidModel !== sidModel) await engine.setEmulationConfig({ sidModel });
+// POWER_ON_DELAY renders the same tune from a different power-on state, which run_matrix.py uses
+// to measure how far reSIDfp's own output moves when nothing but the start-up phase changes.
+const powerOnDelay = process.env.POWER_ON_DELAY ? { powerOnDelay: Number(process.env.POWER_ON_DELAY) } : {};
+if (engine.getEmulationConfig?.()?.sidModel !== sidModel || process.env.POWER_ON_DELAY) {
+  await engine.setEmulationConfig({ sidModel, ...powerOnDelay });
+}
 const loadedAt = performance.now();
 const seconds = Number(secondsArg);
 const chunks = [];

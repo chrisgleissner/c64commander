@@ -23,20 +23,8 @@ namespace c64commander {
 
 namespace {
 
-// libSidplayEZ's own defaults for a tune no chip profile matches (ChipProfileSelector::settings),
-// applied in the order the facade applies them in libsidplayEZ::Player::setTuneNumber.
-constexpr double kNeutralUCox = 20.0;
-constexpr bool kNeutralOldCap = false;
-constexpr double kNeutralFilterCurve = 0.4;
-constexpr double kNeutralFilterGain = 0.92;
-constexpr double kNeutralSaturation = 1.0;
-constexpr double kNeutralResonance = 1.0;
-constexpr double kNeutralWaveDC = 0.5;
-constexpr double kNeutralExtInDC = 1.0;
-constexpr double kNeutralVoiceBias = 0.0;
-constexpr double kNeutralLeakageRate = 1.0;
-constexpr double kNeutralVoiceDrift = 0.0;
-constexpr float kNeutralCombinedThreshold = 1.0f;
+// The threshold libSidplayEZ applies with every combined-waveform strength.
+constexpr float kCombinedWaveformThreshold = 1.0f;
 
 /** Frames rendered per play() call while skipping; small enough to check for cancellation often. */
 constexpr int kSkipBlockFrames = 4800;
@@ -197,25 +185,34 @@ bool EzSession::reload(std::string& error) {
     tune_.reset();
     return false;
   }
-  applyNeutralProfile();
+  applyProfile();
   stereoPlacement_ = chooseStereoPlacement(player_->getNumChips(), info && info->hasSidChannels());
   ready_ = true;
   return true;
 }
 
-void EzSession::applyNeutralProfile() {
-  player_->set6581Filter_uCoxAndCap(kNeutralUCox, kNeutralOldCap);
-  player_->set6581FilterCurve(kNeutralFilterCurve);
-  player_->set6581FilterGain(kNeutralFilterGain);
-  player_->set6581FilterSaturation(kNeutralSaturation);
-  player_->set6581FilterResonance(kNeutralResonance);
-  player_->set6581WaveDCOffset(kNeutralWaveDC);
-  player_->set6581ExtInDC(kNeutralExtInDC);
-  player_->set6581VoiceDCBias(kNeutralVoiceBias);
-  player_->set6581LeakageRate(kNeutralLeakageRate);
-  player_->set6581VoiceDCDrift(kNeutralVoiceDrift);
-  player_->set6581CombinedWaveforms(reSIDfp::CombinedWaveforms::AVERAGE, kNeutralCombinedThreshold);
+void EzSession::setProfile(const AnalogueProfile& profile) {
+  profile_ = profile;
+  if (ready_) applyProfile();
+}
+
+void EzSession::applyProfile() {
+  player_->set6581Filter_uCoxAndCap(profile_.uCox, profile_.oldCap);
+  player_->set6581FilterCurve(profile_.filter6581Curve);
+  player_->set6581FilterGain(profile_.filter6581Gain);
+  player_->set6581FilterSaturation(profile_.filter6581Saturation);
+  player_->set6581FilterResonance(profile_.filter6581Resonance);
+  player_->set6581WaveDCOffset(profile_.waveDCOffset);
+  player_->set6581ExtInDC(profile_.extInDC);
+  player_->set6581VoiceDCBias(profile_.voiceDCBias);
+  player_->set6581LeakageRate(profile_.leakageRate);
+  player_->set6581VoiceDCDrift(profile_.voiceDCDrift);
+  player_->set6581CombinedWaveforms(reSIDfp::CombinedWaveforms::AVERAGE, kCombinedWaveformThreshold);
   player_->set6581SawPulseUltra(false);
+  player_->setDacLeakage(profile_.dacLeakage);
+  player_->setExternalFilterResistance(profile_.externalFilterOhms);
+  player_->set8580ExternalInput(static_cast<int16_t>(std::clamp(profile_.externalInput8580, -32768, 32767)));
+  player_->setStartupDeclick(profile_.startupDeclick);
 }
 
 StereoPlacement chooseStereoPlacement(int chips, bool tunePlacesChips) {

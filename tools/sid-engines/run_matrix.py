@@ -56,12 +56,18 @@ HVSC_TUNES = [
 ]
 
 
-def render_wasm(engine: str, tune: Path, song: int, seconds: float, out: Path, roms: Path | None) -> dict:
+# libSidplayEZ powers on 5002 cycles before the tune starts; the WASM build defaults to 8191.
+SELF_VARIATION_POWER_ON_DELAY = 5002
+
+
+def render_wasm(engine: str, tune: Path, song: int, seconds: float, out: Path, roms: Path | None,
+                power_on_delay: int | None = None) -> dict:
+    env = dict(os.environ, POWER_ON_DELAY=str(power_on_delay)) if power_on_delay is not None else None
     cmd = ["node", str(REPO / "tools/sid-engines/render-wasm.mjs"), engine, str(tune), str(song), str(seconds),
            str(RATE), "8580", str(out)]
     if roms:
         cmd += [str(roms / "kernal.901227-03.bin"), str(roms / "basic.901226-01.bin")]
-    return json.loads(subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=REPO).stdout)
+    return json.loads(subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=REPO, env=env).stdout)
 
 
 def render_ez(binary: Path, tune: Path, song: int, seconds: float, out: Path, roms: Path | None) -> dict:
@@ -97,6 +103,8 @@ def check_rows(rows: list[dict], tolerances: dict) -> list[str]:
     """Every row and measure outside its tolerance, as readable lines. Silence is always a failure."""
     violations = []
     for row in rows:
+        if row["engine"] not in tolerances:
+            continue
         limits = tolerances_for(tolerances, row["engine"], row["tune"])
         name = f"{row['tune']}#{row['song']} {row['engine']}"
         if row["silent"]:
@@ -145,11 +153,17 @@ def main() -> int:
             out = args.out / f"{stem}.{engine}.raw"
             timings[engine] = render_wasm(engine, tune, song, args.seconds, out, args.roms)
             renders[engine] = out
+        # reSIDfp against itself from another power-on state: the spread of the measures when only
+        # the start-up phase differs, against which the other engines' figures can be read.
+        out = args.out / f"{stem}.residfp-phase.raw"
+        timings["residfp-phase"] = render_wasm("residfp", tune, song, args.seconds, out, args.roms,
+                                               SELF_VARIATION_POWER_ON_DELAY)
+        renders["residfp-phase"] = out
         out = args.out / f"{stem}.sidplayez.raw"
         timings["sidplayez"] = render_ez(args.ez_render, tune, song, args.seconds, out, args.roms)
         renders["sidplayez"] = out
         reference = compare_engines.load_raw(str(renders["residfp"]))
-        for engine in ("sidplayez", "sidlite"):
+        for engine in ("residfp-phase", "sidplayez", "sidlite"):
             result = compare_engines.compare(reference, compare_engines.load_raw(str(renders[engine])), RATE,
                                              engine, "residfp")
             row = {"tune": str(tune.relative_to(args.hvsc) if args.hvsc in tune.parents else tune.relative_to(REPO)),

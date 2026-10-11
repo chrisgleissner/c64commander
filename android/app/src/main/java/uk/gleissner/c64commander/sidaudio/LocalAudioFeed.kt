@@ -608,10 +608,12 @@ internal class LocalAudioFeed(
   private fun observeSilence(session: Session, slice: ByteArray, frames: Int) {
     var lo = Int.MAX_VALUE
     var hi = Int.MIN_VALUE
+    // Music settles the question within a few samples, so the scan stops as soon as it is answered.
     for (i in 0 until frames * 2) {
       val v = readS16(slice, i * 2)
       if (v < lo) lo = v
       if (v > hi) hi = v
+      if (hi - lo >= SILENCE_PEAK_TO_PEAK) break
     }
     if (frames > 0 && hi - lo >= SILENCE_PEAK_TO_PEAK) session.silentSeconds = 0.0
     else session.silentSeconds += frames.toDouble() / session.settings.sampleRate

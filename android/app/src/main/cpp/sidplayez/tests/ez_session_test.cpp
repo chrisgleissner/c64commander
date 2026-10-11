@@ -323,6 +323,74 @@ void testOneSidIsLeftAlone() {
   CHECK(peakToPeak(pcm, 0) > 1000);
 }
 
+/** A PSID whose play routine toggles the master volume every frame: a 25 Hz volume-register digi. */
+std::vector<uint8_t> makeVolumeDigiPsid(Model model) {
+  std::vector<uint8_t> v(0x7c, 0);
+  std::memcpy(v.data(), "PSID", 4);
+  put16(v, 4, 2);
+  put16(v, 6, 0x7c);
+  put16(v, 10, 0x1000);
+  put16(v, 12, 0x1010);
+  put16(v, 14, 1);
+  put16(v, 16, 1);
+  v[0x77] = static_cast<uint8_t>((static_cast<int>(model) << 4) | 0x04);
+  std::vector<uint8_t> code(2 + 0x20, 0x60);
+  code[0] = 0x00;
+  code[1] = 0x10;
+  const uint8_t init[] = {0xa9, 0x00, 0x85, 0xfb, 0x60};
+  const uint8_t play[] = {0xa5, 0xfb, 0x49, 0x0f, 0x85, 0xfb, 0x8d, 0x18, 0xd4, 0x60};
+  std::memcpy(code.data() + 2, init, sizeof(init));
+  std::memcpy(code.data() + 2 + 0x10, play, sizeof(play));
+  v.insert(v.end(), code.begin(), code.end());
+  return v;
+}
+
+int digiPeakToPeak(int externalInput8580, Model model) {
+  const auto tune = makeVolumeDigiPsid(model);
+  EzSession session(kRate);
+  c64commander::AnalogueProfile profile;
+  profile.externalInput8580 = externalInput8580;
+  session.setProfile(profile);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  auto pcm = renderSeconds(session, 1.0);
+  pcm.erase(pcm.begin(), pcm.begin() + kRate);  // skip the first half second of settling
+  return peakToPeak(pcm, 0);
+}
+
+void testVolumeDigisAreAudibleOnAn8580ByDefault() {
+  // reSIDfp in libsidplayfp-wasm drives the 8580's EXT IN (digiBoost), so a volume-register digi
+  // is heard there; without the same input libSidplayEZ plays it far quieter.
+  const int boosted = digiPeakToPeak(c64commander::AnalogueProfile{}.externalInput8580, Model::M8580);
+  const int plain = digiPeakToPeak(0, Model::M8580);
+  CHECK(boosted > plain * 2);
+  CHECK(boosted > 4000);
+}
+
+void testVolumeStepsBeforeTheFirstNoteAreHeard() {
+  // libSidplayEZ's start-up declick would hold this tune, which never gates a voice, silent.
+  CHECK(digiPeakToPeak(c64commander::AnalogueProfile{}.externalInput8580, Model::M6581) > 4000);
+}
+
+void testExternalInputDoesNotTouchA6581() {
+  CHECK(digiPeakToPeak(-16700, Model::M6581) == digiPeakToPeak(0, Model::M6581));
+}
+
+void testProfileChangesApplyToTheOpenTune() {
+  const auto tune = makeVolumeDigiPsid(Model::M8580);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  renderSeconds(session, 0.5);
+  auto quiet = session.profile();
+  quiet.externalInput8580 = 0;
+  session.setProfile(quiet);
+  CHECK(session.profile().externalInput8580 == 0);
+  auto pcm = renderSeconds(session, 1.0);
+  pcm.erase(pcm.begin(), pcm.begin() + kRate);
+  CHECK(peakToPeak(pcm, 0) * 2 < digiPeakToPeak(-16700, Model::M8580));
+}
+
 void testRsidWithEndlessInit() {
   const auto tune = makePsid(1, Model::M6581, 0, true);
   EzSession session(kRate);
@@ -401,6 +469,10 @@ int main(int argc, char** argv) {
   testOneSidIsLeftAlone();
   testStereoPlacementFollowsReSidfp();
   testThreeSidsAreCentred();
+  testVolumeDigisAreAudibleOnAn8580ByDefault();
+  testExternalInputDoesNotTouchA6581();
+  testVolumeStepsBeforeTheFirstNoteAreHeard();
+  testProfileChangesApplyToTheOpenTune();
   testRsidWithEndlessInit();
   testRomsAreValidatedBySize();
   testConcurrentIndependentSessions(ladder);

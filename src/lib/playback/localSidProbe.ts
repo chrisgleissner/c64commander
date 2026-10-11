@@ -43,6 +43,8 @@ export interface LocalSidProbeResult {
   final: Record<string, unknown>;
   sink: Record<string, unknown> | null;
   jsHeapBytes: number | null;
+  /** How late a 50 ms timer fired on the page's thread while the tune played: what the UI feels. */
+  eventLoopLagMs: { mean: number; p95: number; max: number };
 }
 
 declare global {
@@ -52,6 +54,29 @@ declare global {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const LAG_TICK_MS = 50;
+
+/** Starts timing a 50 ms timer; the returned function stops it and summarises how late it fired. */
+const measureEventLoopLag = (): (() => LocalSidProbeResult["eventLoopLagMs"]) => {
+  const lags: number[] = [];
+  let expected = performance.now() + LAG_TICK_MS;
+  const timer = setInterval(() => {
+    const now = performance.now();
+    lags.push(Math.max(0, now - expected));
+    expected = now + LAG_TICK_MS;
+  }, LAG_TICK_MS);
+  return () => {
+    clearInterval(timer);
+    const sorted = [...lags].sort((a, b) => a - b);
+    const at = (fraction: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] ?? 0;
+    return {
+      mean: sorted.length ? sorted.reduce((sum, lag) => sum + lag, 0) / sorted.length : 0,
+      p95: at(0.95),
+      max: sorted[sorted.length - 1] ?? 0,
+    };
+  };
+};
 
 /**
  * Device harness for on-device playback, the counterpart of `window.__sidRadioProbe`.
@@ -80,6 +105,7 @@ export const registerLocalSidProbe = (): void => {
     const samples: LocalSidProbeSample[] = [];
     let firstPositionMs: number | null = null;
     let seekLatencyMs: number | null = null;
+    const stopLagMeasurement = measureEventLoopLag();
     try {
       const bytes = Uint8Array.from(atob(request.sid), (char) => char.charCodeAt(0));
       const key = `probe-${request.renderer}-${request.songIndex ?? 0}`;
@@ -121,8 +147,10 @@ export const registerLocalSidProbe = (): void => {
         final: { ...engine.getStats(), ...engine.debugState() },
         sink: sinkDebug?.() ?? null,
         jsHeapBytes: memory?.usedJSHeapSize ?? null,
+        eventLoopLagMs: stopLagMeasurement(),
       };
     } finally {
+      stopLagMeasurement();
       engine.dispose();
       saveSidEmulationEngine(previous);
       running = false;

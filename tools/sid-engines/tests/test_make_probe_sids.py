@@ -62,6 +62,7 @@ def test_headers_declare_the_format_chips_and_speed(tune):
         ("envelopes", probes.envelope_frames()),
         ("ntsc", probes.waveform_frames(probes.NTSC_CLOCK_HZ)),
         ("two-sid", probes.combine(probes.waveform_frames(), probes.filter_frames(0xD420))),
+        ("volume-steps-8580", probes.volume_step_frames()),
     ],
 )
 def test_the_script_player_writes_each_frame_once_per_call_and_loops(name, frames):

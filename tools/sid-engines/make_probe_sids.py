@@ -15,6 +15,8 @@ SID emulations are known to disagree, so a failing comparison names what broke:
     multispeed               a PSID whose init reprograms the CIA timer to 200 Hz
     digi-6581 / -8580        4-bit samples through the $D418 volume register at about 8 kHz
     rsid-irq                 an RSID that installs its own CIA interrupt handler with the ROMs banked out
+    volume-steps-6581/-8580  master volume stepped at frame rate with no note ever gated: the DC
+                             blocker, start-up handling and the 8580's EXT IN level
 
 Most tunes are a register script: a list of frames, each a list of (address, value) writes, played
 by one small routine per interrupt. The script loops when it ends.
@@ -276,6 +278,19 @@ def multispeed_frames(calls_per_second: int) -> list[Frame]:
     return frames
 
 
+def volume_step_frames() -> list[Frame]:
+    """Master volume toggled every 1, 2, 4 and 8 frames, then ramped, with no voice ever gated."""
+    frames: list[Frame] = []
+    for period in (1, 2, 4, 8):
+        for step in range(200 // period):
+            frames.append([(0xD418, 0x0F if step % 2 == 0 else 0x00)])
+            hold(frames, period - 1)
+    for level in list(range(16)) + list(range(15, -1, -1)):
+        frames.append([(0xD418, level)])
+        hold(frames, 5)
+    return frames
+
+
 def combine(*voices: list[Frame]) -> list[Frame]:
     """Play several scripts at once, frame by frame; the shorter ones hold their last state."""
     length = max(len(v) for v in voices)
@@ -391,6 +406,8 @@ def tunes() -> list[Tune]:
         script_tune("ntsc", "C64 Commander NTSC probe", waveform_frames(NTSC_CLOCK_HZ), FLAG_NTSC | FLAG_8580),
         script_tune("multispeed", "C64 Commander multispeed probe", multispeed_frames(200), FLAG_PAL | FLAG_8580,
                     cia_cycles=int(PAL_CLOCK_HZ / 200)),
+        script_tune("volume-steps-6581", "C64 Commander volume probe", volume_step_frames(), FLAG_PAL | FLAG_6581),
+        script_tune("volume-steps-8580", "C64 Commander volume probe", volume_step_frames(), FLAG_PAL | FLAG_8580),
         digi_tune(FLAG_6581, "digi-6581"),
         digi_tune(FLAG_8580, "digi-8580"),
         rsid_tune(),

@@ -700,20 +700,15 @@ internal class AudioPipeline(
       return
     }
 
-    copyFromRing(Math.ceil(fraction + renderFrames * ratio).toInt() + 1)
-    var pos = fraction
-    var o = 0
-    for (i in 0 until renderFrames) {
-      val idx = pos.toInt()
-      val t = pos - idx
-      val a = idx * CHANNELS
-      val b = a + CHANNELS
-      val left = srcScratch[a] + (srcScratch[b] - srcScratch[a]) * t
-      val right = srcScratch[a + 1] + (srcScratch[b + 1] - srcScratch[a + 1]) * t
-      putFrame(outScratch, o, left, right)
-      o += BYTES_PER_FRAME
-      pos += ratio
-    }
+    // On-device playback runs at the output rate with nothing to correct, and interpolating at a
+    // ratio of exactly 1 would reproduce every sample, at the cost of a conversion per sample.
+    val pos =
+        if (ratio == 1.0 && fraction == 0.0) {
+          copyFramesFromRing(renderFrames)
+          renderFrames.toDouble()
+        } else {
+          interpolateFromRing(renderFrames, ratio)
+        }
     val consumed = pos.toInt()
     val committed =
         synchronized(producerLock) {
@@ -797,6 +792,43 @@ internal class AudioPipeline(
       targetFrames = minOf(maxTargetFrames, targetFrames + msToFrames(sourceRate, CUSHION_GROW_MS))
     }
     writeBlocking(outScratch, outScratch.size)
+  }
+
+  /** Resample [renderFrames] output frames into [outScratch]; returns the source position reached. */
+  private fun interpolateFromRing(renderFrames: Int, ratio: Double): Double {
+    copyFromRing(Math.ceil(fraction + renderFrames * ratio).toInt() + 1)
+    var pos = fraction
+    var o = 0
+    for (i in 0 until renderFrames) {
+      val idx = pos.toInt()
+      val t = pos - idx
+      val a = idx * CHANNELS
+      val b = a + CHANNELS
+      val left = srcScratch[a] + (srcScratch[b] - srcScratch[a]) * t
+      val right = srcScratch[a + 1] + (srcScratch[b + 1] - srcScratch[a + 1]) * t
+      putFrame(outScratch, o, left, right)
+      o += BYTES_PER_FRAME
+      pos += ratio
+    }
+    return pos
+  }
+
+  /**
+   * Copy [count] frames from the read position straight into [outScratch], applying the master gain
+   * only while it is not unity. The same samples the interpolator produces when the ratio is 1.
+   */
+  private fun copyFramesFromRing(count: Int) {
+    val start = (readFrames % ringFrames).toInt()
+    val first = minOf(count, ringFrames - start)
+    System.arraycopy(ring, start * BYTES_PER_FRAME, outScratch, 0, first * BYTES_PER_FRAME)
+    if (count > first) System.arraycopy(ring, 0, outScratch, first * BYTES_PER_FRAME, (count - first) * BYTES_PER_FRAME)
+    if (appliedGain == 1.0 && targetGain * duckGain == 1.0) return
+    for (i in 0 until count) {
+      val at = i * BYTES_PER_FRAME
+      val left = ((outScratch[at].toInt() and 0xFF) or (outScratch[at + 1].toInt() shl 8)).toShort().toDouble()
+      val right = ((outScratch[at + 2].toInt() and 0xFF) or (outScratch[at + 3].toInt() shl 8)).toShort().toDouble()
+      putFrame(outScratch, at, left, right)
+    }
   }
 
   /** Linearise [count] source frames starting at the current read position into [srcScratch]. */

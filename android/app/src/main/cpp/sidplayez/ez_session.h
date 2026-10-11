@@ -26,17 +26,6 @@ namespace c64commander {
 /** Fallback chip for a tune whose header says UNKNOWN or ANY; never forced over a declared model. */
 enum class EzSidModel : int { Mos6581 = 0, Mos8580 = 1 };
 
-/**
- * One libSidplayEZ player and the tune it has open.
- *
- * Built on `libsidplayfp::Player` rather than the `libsidplayEZ::Player` facade. The facade forces
- * a 6581 default for undeclared chips and picks chip profiles from the tune's file path, so its
- * output depends on host-supplied CSV data. Here the fallback chip comes from the app's setting and
- * the 6581 analogue parameters are the facade's own defaults for an unprofiled tune.
- *
- * Not thread-safe. The JNI layer gives every session its own lock and the Kotlin layer runs each
- * session on one thread.
- */
 /** How the session places a tune's chips in stereo; see `chooseStereoPlacement`. */
 enum class StereoPlacement { AsRendered, BlendTwo, CentreThree };
 
@@ -46,6 +35,52 @@ enum class StereoPlacement { AsRendered, BlendTwo, CentreThree };
  */
 StereoPlacement chooseStereoPlacement(int chips, bool tunePlacesChips);
 
+/**
+ * libSidplayEZ's analogue model settings. The defaults bring its output closest to reSIDfp's in
+ * libsidplayfp-wasm, the app's "Accurate" renderer: they were chosen by a parameter sweep against
+ * reSIDfp renders of the 6581 probe tunes, the demo tunes and eight HVSC tunes (see "Equivalence
+ * of the renderers" in docs/internals/sid-playback-architecture.md). Where a parameter made no
+ * measurable difference it keeps libSidplayEZ's neutral value.
+ */
+struct AnalogueProfile {
+  double uCox = 20.0;
+  bool oldCap = false;
+  double filter6581Curve = 0.5;
+  double filter6581Gain = 1.0;
+  double filter6581Saturation = 1.0;
+  double filter6581Resonance = 1.0;
+  double waveDCOffset = 1.5;
+  double extInDC = 1.0;
+  double voiceDCBias = 0.0;
+  double leakageRate = 1.0;
+  double voiceDCDrift = 0.0;
+  double dacLeakage = 0.01;
+  double externalFilterOhms = 10e3;
+  /**
+   * The 8580's EXT IN level, which makes volume-register samples audible. reSIDfp in
+   * libsidplayfp-wasm turns this on (digiBoost, -32768); libSidplayEZ scales the input
+   * differently, and -16700 gives the same loudness on the digi-8580 probe tune.
+   */
+  int externalInput8580 = -16700;
+  /**
+   * libSidplayEZ's start-up declick, which until a tune's first note silences the steps its volume
+   * and filter writes make. Off: reSIDfp and the C64 play those steps, and the declick also
+   * silences a slow volume-register effect for up to 15 s when a tune never gates a voice.
+   */
+  bool startupDeclick = false;
+};
+
+/**
+ * One libSidplayEZ player and the tune it has open.
+ *
+ * Built on `libsidplayfp::Player` rather than the `libsidplayEZ::Player` facade. The facade forces
+ * a 6581 default for undeclared chips and picks chip profiles from the tune's file path, so its
+ * output depends on host-supplied CSV data. Here the fallback chip comes from the app's setting and
+ * the analogue parameters come from `AnalogueProfile`, chosen to match reSIDfp.
+ *
+ * Not thread-safe. The JNI layer gives every session its own lock and the Kotlin layer runs each
+ * session on one thread.
+ */
 class EzSession final {
 public:
   static constexpr int kChannels = 2;
@@ -58,6 +93,10 @@ public:
   static constexpr size_t kMaxSidBytes = 0x10000 + 0x7c + 2;
 
   explicit EzSession(int sampleRate);
+
+  /** Analogue settings for the tunes loaded from now on, and for the open one. */
+  void setProfile(const AnalogueProfile& profile);
+  const AnalogueProfile& profile() const { return profile_; }
   ~EzSession();
 
   EzSession(const EzSession&) = delete;
@@ -96,7 +135,7 @@ public:
   int chips() const;
 
 private:
-  void applyNeutralProfile();
+  void applyProfile();
 
   const int sampleRate_;
   std::unique_ptr<libsidplayfp::Player> player_;
@@ -110,6 +149,7 @@ private:
   EzSidModel fallbackModel_ = EzSidModel::Mos8580;
   int songIndex_ = 0;
   StereoPlacement stereoPlacement_ = StereoPlacement::AsRendered;
+  AnalogueProfile profile_;
   bool ready_ = false;
 };
 

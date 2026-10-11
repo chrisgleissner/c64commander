@@ -18,6 +18,9 @@ shift || true
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WRAPPER_DIR="$(cd "$HERE/../app/src/main/cpp/sidplayez" && pwd)"
+# This app's amendments to libSidplayEZ, applied in name order to the verified archive. Each is
+# described in THIRD_PARTY_NOTICES.md.
+PATCH_DIR="$WRAPPER_DIR/patches"
 
 usage() {
   sed -n '6,12p' "${BASH_SOURCE[0]}" >&2
@@ -40,11 +43,18 @@ fetch_source() {
     rm -f "$archive"
     exit 1
   fi
-  if [[ ! -f "$SRC_DIR/.source-sha256" || "$(cat "$SRC_DIR/.source-sha256")" != "$sha" ]]; then
+  # The extracted tree is keyed by the archive and the patches, so a changed patch re-extracts.
+  local tree_key
+  tree_key="$(printf '%s\n' "$sha"; cat "$PATCH_DIR"/*.patch | sha256sum | awk '{print $1}')"
+  if [[ ! -f "$SRC_DIR/.source-sha256" || "$(cat "$SRC_DIR/.source-sha256")" != "$tree_key" ]]; then
     rm -rf "$SRC_DIR"
     mkdir -p "$SRC_DIR"
     tar -xzf "$archive" -C "$SRC_DIR" --strip-components=1
-    printf '%s' "$sha" > "$SRC_DIR/.source-sha256"
+    local patch_file
+    for patch_file in "$PATCH_DIR"/*.patch; do
+      patch -d "$SRC_DIR" -p1 --batch --forward --silent < "$patch_file"
+    done
+    printf '%s' "$tree_key" > "$SRC_DIR/.source-sha256"
   fi
 }
 
@@ -104,7 +114,7 @@ android)
     {
       printf '%s\n' "$SOURCE_SHA256" "$REVISION" "$API_LEVEL" "${COMMON_CXXFLAGS[*]}" "${PAGE_FLAGS[*]}"
       "$TOOLCHAIN/clang" --version | head -n 1
-      sha256sum "${BASH_SOURCE[0]}" "$WRAPPER_DIR"/*.cpp "$WRAPPER_DIR"/*.h | awk '{print $1}'
+      sha256sum "${BASH_SOURCE[0]}" "$WRAPPER_DIR"/*.cpp "$WRAPPER_DIR"/*.h "$PATCH_DIR"/*.patch | awk '{print $1}'
     } | sha256sum | awk '{print $1}'
   )"
   STAMP="$OUTPUT_DIR/.libsidplayez-build-config-sha256"

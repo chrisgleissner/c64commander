@@ -154,4 +154,9 @@ def test_the_shipped_tolerances_cover_both_renderers_and_explain_every_override(
 def test_the_fixture_set_covers_every_probe_and_demo_tune():
     names = {Path(path).stem for path, _, _ in run_matrix.FIXTURE_TUNES}
     assert {"tone-ladder", "two-sid", "three-sid", "rsid-irq", "digi-6581", "digi-8580", "Kernal Panic"} <= names
-    assert len(run_matrix.PROBE_TUNES) == 12
+    assert len(run_matrix.PROBE_TUNES) == 14
+
+
+def test_reference_self_variation_rows_are_reported_but_not_held_to_a_tolerance():
+    phase_row = row(engine="residfp-phase", envelope_corr=0.6, start_offset_ms=200.0)
+    assert run_matrix.check_rows([phase_row], TOLERANCES) == []

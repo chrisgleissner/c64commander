@@ -714,6 +714,50 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun atTheOutputRateWithNothingToCorrectTheSpeakerGetsExactlyTheSamplesFed() {
+    // On-device playback runs the source at the device's rate, so the converter's ratio is exactly 1
+    // and the samples are copied rather than interpolated. The copy has to be what interpolation at
+    // a ratio of 1 produces: the very same samples, channel for channel, across the ring's wrap.
+    val rate = 48000
+    val speaker = FakeSpeaker(rate, record = true)
+    // A burst that does not divide the ring, so chunks straddle its end and the wrapped copy runs.
+    val pipeline = AudioPipeline(rate, 120, rate, 241, speaker.factory)
+    val random = java.util.Random(64)
+    val fed = java.io.ByteArrayOutputStream()
+    try {
+      pipeline.start()
+      val endAt = System.nanoTime() + 3_000_000_000L
+      val stepNanos = packetFrames * 1_000_000_000L / rate
+      var next = System.nanoTime()
+      while (System.nanoTime() < endAt) {
+        if (System.nanoTime() < next) {
+          Thread.sleep(1)
+          continue
+        }
+        val buf = ByteArray(packetFrames * bytesPerFrame).also { random.nextBytes(it) }
+        fed.write(buf)
+        pipeline.offer(buf, 0, buf.size)
+        next += stepNanos
+      }
+    } finally {
+      pipeline.close()
+    }
+    val input = fed.toByteArray()
+    val output = synchronized(speaker.played) { speaker.played.toByteArray() }
+    val probe = input.copyOfRange(rate * bytesPerFrame / 10, rate * bytesPerFrame / 10 + 256)
+    val at = (0..output.size - probe.size).firstOrNull { o -> (probe.indices).all { output[o + it] == probe[it] } }
+    assertTrue("the fed samples never reached the speaker unchanged", at != null)
+    val inputAt = rate * bytesPerFrame / 10
+    val overlap = minOf(input.size - inputAt, output.size - at!!)
+    assertTrue("too little audio to compare", overlap > rate * bytesPerFrame)
+    for (i in 0 until overlap) {
+      if (output[at + i] != input[inputAt + i]) {
+        throw AssertionError("byte ${i} after the match differs: fed ${input[inputAt + i]}, played ${output[at + i]}")
+      }
+    }
+  }
+
+  @Test
   fun duckingAttenuatesTheOutputAndUnduckingRestoresIt() {
     // HARD27-006: a navigation prompt or any other transient focus holder should hear the tune drop
     // under it, not stop. Ducking is separate from the volume gain so neither can wipe the other,
