@@ -1,0 +1,119 @@
+{
+  "about": "How far each renderer may sit from reSIDfp in tools/sid-engines/run_matrix.py --check. Renders are deterministic, so a measured value only moves when an engine or this app's use of it changes; the margins are there to let a harmless change through and stop a real one. Each override names the tune by file stem and says why it differs.",
+  "sidplayez": {
+    "default": {
+      "max_abs_offset_ms": 40,
+      "level_db": [-1.5, 1.5],
+      "min_envelope_corr": 0.85,
+      "min_chroma_sim": 0.85,
+      "max_band_db_mae": 2.0,
+      "max_abs_stereo_delta": 0.1
+    },
+    "overrides": [
+      {
+        "tune": "digi-6581",
+        "level_db": [0.5, 3.5],
+        "reason": "libSidplayEZ plays $D418 volume-register samples on a 6581 about 2 dB louder than reSIDfp."
+      },
+      {
+        "tune": "digi-8580",
+        "level_db": [-11.5, -7.0],
+        "reason": "On an 8580 libSidplayEZ plays $D418 volume-register samples about 9 dB quieter than reSIDfp; the real 8580 barely reproduces them, and which emulation is closer is not settled."
+      },
+      {
+        "tune": "tone-ladder",
+        "max_band_db_mae": 3.5,
+        "reason": "The ladder ramps $D418 to silence at the end of every note, so the same 8580 volume-register difference as digi-8580 shapes its spectrum."
+      },
+      {
+        "tune": "Commando",
+        "min_envelope_corr": 0.6,
+        "reason": "HVSC: reSIDfp's envelope differs on the fast arpeggios; chroma and band balance match closely."
+      },
+      {
+        "tune": "Cybernoid_II",
+        "min_envelope_corr": 0.75,
+        "reason": "HVSC: as Commando."
+      },
+      {
+        "tune": "Tusari",
+        "min_envelope_corr": 0.7,
+        "reason": "HVSC: as Commando; subsong 10 also starts 50 ms earlier, the start-up difference described in the architecture document.",
+        "max_abs_offset_ms": 60
+      },
+      {
+        "tune": "Storebror",
+        "level_db": [-2.5, 1.5],
+        "reason": "HVSC: an 8-bit digi, played about 1.7 dB quieter, the same register difference as digi-6581 in the other direction."
+      },
+      {
+        "tune": "A_Walk_in_the_Countryside_3SID",
+        "level_db": [-1.5, 2.5],
+        "reason": "HVSC: three chips. The wrapper plays them as a centred mono mix (see the architecture document), where reSIDfp's two sides correlate at 0.88 for this tune. The chips are correlated, so the mix also plays about 1.2 dB louder.",
+        "max_abs_stereo_delta": 0.15
+      },
+      {
+        "tune": "filter-6581",
+        "min_envelope_corr": 0.8,
+        "reason": "Filter sweeps at full resonance on a 6581: libSidplayEZ's tuned 6581 filter (gain, curve, leakage) swells differently from reSIDfp's; 0.88 over 20 s, 0.84 over 30 s."
+      }
+    ]
+  },
+  "sidlite": {
+    "default": {
+      "max_abs_offset_ms": 40,
+      "level_db": [-3.0, 3.0],
+      "min_envelope_corr": 0.65,
+      "min_chroma_sim": 0.78,
+      "max_band_db_mae": 3.2,
+      "max_abs_stereo_delta": 0.1
+    },
+    "overrides": [
+      {
+        "tune": "digi-8580",
+        "level_db": [2.5, 6.5],
+        "reason": "SIDLite plays 8580 volume-register samples about 4.5 dB louder than reSIDfp."
+      },
+      {
+        "tune": "Commando",
+        "min_envelope_corr": 0.45,
+        "reason": "HVSC: SIDLite is a cheaper approximation; its envelopes diverge most on fast arpeggios."
+      },
+      {
+        "tune": "Cybernoid_II",
+        "min_envelope_corr": 0.55,
+        "reason": "HVSC: as Commando."
+      },
+      {
+        "tune": "Tusari",
+        "min_envelope_corr": 0.6,
+        "reason": "HVSC: as Commando."
+      },
+      {
+        "tune": "Storebror",
+        "level_db": [-3.0, 4.5],
+        "reason": "HVSC: an 8-bit digi, played about 4 dB louder."
+      },
+      {
+        "tune": "Wizball",
+        "level_db": [-3.0, 3.6],
+        "reason": "HVSC: multispeed, played about 3 dB louder."
+      },
+      {
+        "tune": "Master_of_the_Lamps",
+        "min_chroma_sim": 0.88,
+        "reason": "HVSC: an NTSC RSID whose chroma similarity sits at 0.91."
+      },
+      {
+        "tune": "Polonaise_BASIC",
+        "max_abs_offset_ms": 60,
+        "reason": "HVSC: a BASIC tune; SIDLite starts it about 30 ms later."
+      },
+      {
+        "tune": "filter-6581",
+        "min_envelope_corr": 0.55,
+        "reason": "SIDLite's 6581 filter is a simpler approximation; 0.69 over 20 s, 0.59 over 30 s."
+      }
+    ]
+  }
+}

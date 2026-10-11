@@ -35,7 +35,10 @@ import numpy as np
 FRAME_SECONDS = 0.010
 HIGHPASS_HZ = 60.0
 THIRD_OCTAVE_CENTRES = [63 * 2 ** (i / 3) for i in range(0, 24)]
-MAX_LAG_SECONDS = 1.0
+# Real start-up differences between the engines are tens of milliseconds. A wider search lets a tune
+# whose loop is about a second long align one repetition early or late, which reads as a 970 ms
+# offset and wrecks every measure computed after it.
+MAX_LAG_SECONDS = 0.25
 SILENCE_DBFS = -70.0
 
 
@@ -82,7 +85,8 @@ def best_lag(ref_env: np.ndarray, env: np.ndarray) -> int:
     a = np.maximum(ref_env, SILENCE_DBFS) - SILENCE_DBFS
     b = np.maximum(env, SILENCE_DBFS) - SILENCE_DBFS
     best, best_score = 0, -np.inf
-    for lag in range(-max_lag, max_lag + 1):
+    # Nearest lags first, so of equally good alignments the smallest offset wins.
+    for lag in sorted(range(-max_lag, max_lag + 1), key=abs):
         if lag >= 0:
             x, y = a[: len(a) - lag], b[lag:]
         else:

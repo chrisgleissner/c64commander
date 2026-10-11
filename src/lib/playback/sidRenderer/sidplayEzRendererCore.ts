@@ -8,7 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 import { SidAudio, type SidAudioPlugin, type SidAudioPrerenderEvent } from "@/lib/native/sidAudio";
-import { uint8ToBase64 } from "@/lib/sid/sidUtils";
+import { bytesToBase64 } from "@/lib/encoding/base64";
 import type { NativePcmRef } from "./pcmPayload";
 import type {
   SidRendererChunk,
@@ -21,7 +21,7 @@ import type {
 
 const CHANNELS = 2;
 
-const base64Of = (buffer: ArrayBuffer): string => uint8ToBase64(new Uint8Array(buffer));
+const base64Of = (buffer: ArrayBuffer): string => bytesToBase64(new Uint8Array(buffer));
 
 /**
  * libSidplayEZ, through the `SidAudio` plugin.

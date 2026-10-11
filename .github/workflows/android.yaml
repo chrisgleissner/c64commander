@@ -921,6 +921,17 @@ jobs:
           path: android/app/build/generated/jniLibs/upstream7zip
           key: upstream-7zip-${{ runner.os }}-3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16
 
+      # The JVM tests load a host build of libSidplayEZ, built with clang together with its
+      # AddressSanitizer and ThreadSanitizer test programs.
+      - name: Install host C++ toolchain for libSidplayEZ
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends clang-18 libclang-rt-18-dev
+
+      - name: Cache libSidplayEZ built libraries
+        uses: actions/cache@v4
+        with:
+          path: android/app/build/generated/jniLibs/libsidplayez
+          key: libsidplayez-${{ runner.os }}-${{ hashFiles('android/scripts/build-libsidplayez.sh', 'android/app/src/main/cpp/sidplayez/**', 'android/app/build.gradle') }}
+
       - name: Verify Android assemble path (dry-run)
         run: |
           set -e
@@ -976,6 +987,30 @@ jobs:
           done
           end=$(date +%s)
           echo "- android tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      # libSidplayEZ has no tests upstream. These are the app's: the JNI session wrapper under
+      # AddressSanitizer and ThreadSanitizer, the engine itself, and a comparison of every renderer's
+      # output against reSIDfp on the repository's tunes.
+      - name: Run libSidplayEZ native tests and renderer equivalence
+        run: |
+          start=$(date +%s)
+          # ThreadSanitizer cannot map its shadow memory with the 32 bits of mmap randomisation
+          # the runner kernel uses by default.
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          python3 -m pip install numpy
+          cd android
+          ./gradlew :app:testLibSidplayEzNative :app:checkSidRendererEquivalence
+          end=$(date +%s)
+          echo "- libSidplayEZ native tests + equivalence: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          cat app/build/reports/sid-engines/matrix.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload renderer equivalence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sid-renderer-equivalence
+          path: android/app/build/reports/sid-engines/
+          if-no-files-found: ignore
 
       - name: List Android coverage artifacts
         if: always()
@@ -1046,7 +1081,7 @@ jobs:
         run: |
           start=$(date +%s)
           python3 -m pip install numpy
-          python3 -m pytest tools/hil/tests/
+          python3 -m pytest tools/hil/tests/ tools/sid-engines/tests/
           end=$(date +%s)
           echo "- hil analysis tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 

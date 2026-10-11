@@ -558,6 +558,24 @@ tasks.register('testLibSidplayEzNative') {
     dependsOn libsidplayezNativeTaskNames
 }
 
+// Renders the repository's tunes through libSidplayEZ, reSIDfp and SIDLite and fails when any
+// renderer drifts outside tools/sid-engines/tolerances.json. Needs node_modules and numpy.
+tasks.register('checkSidRendererEquivalence', Exec) {
+    group = 'verification'
+    description = 'Compares the output of every SID renderer the app ships against reSIDfp.'
+    dependsOn 'buildLibSidplayEzHost'
+    workingDir rootProject.file('..')
+    commandLine(
+        'python3',
+        'tools/sid-engines/run_matrix.py',
+        '--ez-render', new File(libsidplayezHostOutputDir, 'ez_render').absolutePath,
+        '--tunes', 'fixtures',
+        '--seconds', '20',
+        '--out', new File(buildDir, 'reports/sid-engines').absolutePath,
+        '--check', 'tools/sid-engines/tolerances.json',
+    )
+}
+
 tasks.withType(Test).configureEach {
     dependsOn 'buildLibSidplayEzHost'
     systemProperty 'c64c.sidplayez.hostLibrary', new File(libsidplayezHostOutputDir, 'libc64sidplayez.so').absolutePath

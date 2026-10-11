@@ -31,7 +31,7 @@ import { claimNativeTrack, isSuperseded, nextSerial, releaseNativeTrack } from "
 import { addLog } from "@/lib/logging";
 import { SidAudio, type SidAudioPlugin, type SidAudioSessionStats } from "@/lib/native/sidAudio";
 import { StreamUdp } from "@/lib/native/streamUdp";
-import { uint8ToBase64 } from "@/lib/sid/sidUtils";
+import { bytesToBase64 } from "@/lib/encoding/base64";
 import { traceLocalSid } from "./localSidTrace";
 import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
@@ -230,7 +230,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
           this.port.postMessage(pcmMessage(this.serial, seq, stereo));
         } else {
           const bytes = new Uint8Array(stereo.buffer, stereo.byteOffset, frames * 4);
-          await this.backend.feed.enqueuePcm({ serial: this.serial, seq, data: uint8ToBase64(bytes) });
+          await this.backend.feed.enqueuePcm({ serial: this.serial, seq, data: bytesToBase64(bytes) });
         }
       }
       this.sent += 1;

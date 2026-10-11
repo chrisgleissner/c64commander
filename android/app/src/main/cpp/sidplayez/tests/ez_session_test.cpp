@@ -10,6 +10,7 @@
 // plain, with AddressSanitizer + UBSan, and with ThreadSanitizer. Usage: ez_session_test <tone-ladder.sid>
 
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
@@ -245,6 +246,83 @@ void testTwoSids() {
   CHECK(session.tuneInfoJson().find("\"sidChipBases\":[54272,54304]") != std::string::npos);
 }
 
+double stereoCorrelation(const std::vector<int16_t>& pcm) {
+  double l = 0, r = 0, ll = 0, rr = 0, lr = 0;
+  const double n = static_cast<double>(pcm.size() / 2);
+  for (size_t i = 0; i + 1 < pcm.size(); i += 2) {
+    l += pcm[i];
+    r += pcm[i + 1];
+    ll += double(pcm[i]) * pcm[i];
+    rr += double(pcm[i + 1]) * pcm[i + 1];
+    lr += double(pcm[i]) * pcm[i + 1];
+  }
+  const double cov = lr / n - (l / n) * (r / n);
+  const double var = (ll / n - (l / n) * (l / n)) * (rr / n - (r / n) * (r / n));
+  return var > 0 ? cov / std::sqrt(var) : 1.0;
+}
+
+void testTwoChipStereoBlend() {
+  float left[] = {1.0f, 0.0f, 0.5f};
+  float right[] = {0.0f, 1.0f, 0.5f};
+  c64commander::blendTwoChipStereo(left, right, 3);
+  CHECK(std::fabs(left[0] - 0.70710678f) < 1e-6f && std::fabs(right[0] - 0.35355339f) < 1e-6f);
+  CHECK(std::fabs(left[1] - 0.35355339f) < 1e-6f && std::fabs(right[1] - 0.70710678f) < 1e-6f);
+  CHECK(std::fabs(left[2] - right[2]) < 1e-6f && std::fabs(left[2] - 0.53033009f) < 1e-6f);
+}
+
+void testTwoSidsAreBlendedLikeResidfp() {
+  // Hard-panned, the saw on the first chip and the square on the second correlate near zero across
+  // the two sides; reSIDfp's placement puts half of each chip on the other side.
+  const auto tune = makePsid(1, Model::M8580, 0x42);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(stereoCorrelation(renderSeconds(session, 0.5)) > 0.5);
+}
+
+void testStereoPlacementFollowsReSidfp() {
+  using c64commander::StereoPlacement;
+  using c64commander::chooseStereoPlacement;
+  CHECK(chooseStereoPlacement(1, false) == StereoPlacement::AsRendered);
+  CHECK(chooseStereoPlacement(2, false) == StereoPlacement::BlendTwo);
+  CHECK(chooseStereoPlacement(3, false) == StereoPlacement::CentreThree);
+  CHECK(chooseStereoPlacement(4, false) == StereoPlacement::AsRendered);
+  CHECK(chooseStereoPlacement(2, true) == StereoPlacement::AsRendered);
+  CHECK(chooseStereoPlacement(3, true) == StereoPlacement::AsRendered);
+  float mono[] = {0.8f, -0.4f};
+  float right[] = {0.0f, 0.0f};
+  c64commander::centreThreeChipMix(mono, right, 2);
+  CHECK(mono[0] == 0.4f && right[0] == 0.4f && mono[1] == -0.2f && right[1] == -0.2f);
+}
+
+void testThreeSidsAreCentred() {
+  // The test PSID has no third chip, so the header is given one at $D440 and the init writes there.
+  auto tune = makePsid(1, Model::M8580, 0x42);
+  put16(tune, 4, 4);
+  tune[0x7b] = 0x44;
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(session.chips() == 3);
+  const auto pcm = renderSeconds(session, 0.5);
+  CHECK(peakToPeak(pcm, 0) > 1000);
+  bool identical = true;
+  for (size_t i = 0; i + 1 < pcm.size() && identical; i += 2) identical = pcm[i] == pcm[i + 1];
+  CHECK(identical);
+}
+
+void testOneSidIsLeftAlone() {
+  const auto tune = makePsid(1, Model::M8580);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  const auto pcm = renderSeconds(session, 0.25);
+  bool identical = true;
+  for (size_t i = 0; i + 1 < pcm.size() && identical; i += 2) identical = pcm[i] == pcm[i + 1];
+  CHECK(identical);
+  CHECK(peakToPeak(pcm, 0) > 1000);
+}
+
 void testRsidWithEndlessInit() {
   const auto tune = makePsid(1, Model::M6581, 0, true);
   EzSession session(kRate);
@@ -318,6 +396,11 @@ int main(int argc, char** argv) {
   testSubsongsAndClamp();
   testFallbackModelIsNotForced();
   testTwoSids();
+  testTwoChipStereoBlend();
+  testTwoSidsAreBlendedLikeResidfp();
+  testOneSidIsLeftAlone();
+  testStereoPlacementFollowsReSidfp();
+  testThreeSidsAreCentred();
   testRsidWithEndlessInit();
   testRomsAreValidatedBySize();
   testConcurrentIndependentSessions(ladder);

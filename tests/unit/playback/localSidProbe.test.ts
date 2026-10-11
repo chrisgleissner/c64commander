@@ -8,54 +8,57 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const engines: FakeEngine[] = [];
+const { FakeEngine } = vi.hoisted(() => {
+  class FakeEngine {
+    static instances: FakeEngine[] = [];
+    volume = -1;
+    disposed = false;
+    position = 0;
+    seeks: number[] = [];
+    prerenders: Array<{ key: string; seconds: number }> = [];
+    opened: { bytes: Uint8Array; songIndex: number; key?: string } | null = null;
+    playResult = { started: true, romRequired: false, sampleRate: 48000, channels: 2, tuneInfo: null };
+    playError: Error | null = null;
 
-class FakeEngine {
-  volume = -1;
-  disposed = false;
-  position = 0;
-  seeks: number[] = [];
-  prerenders: Array<{ key: string; seconds: number }> = [];
-  opened: { bytes: Uint8Array; songIndex: number; key?: string } | null = null;
-  playResult = { started: true, romRequired: false, sampleRate: 48000, channels: 2, tuneInfo: null };
-  playError: Error | null = null;
+    constructor() {
+      FakeEngine.instances.push(this);
+    }
 
-  constructor() {
-    engines.push(this);
+    setVolume(value: number) {
+      this.volume = value;
+    }
+
+    async play(buffer: ArrayBuffer, songIndex: number, _callbacks: unknown, key?: string) {
+      if (this.playError) throw this.playError;
+      this.opened = { bytes: new Uint8Array(buffer), songIndex, key };
+      return this.playResult;
+    }
+
+    prerender(key: string, _buffer: ArrayBuffer, _songIndex: number, seconds: number) {
+      this.prerenders.push({ key, seconds });
+    }
+
+    async seekTo(seconds: number) {
+      this.seeks.push(seconds);
+      this.position = seconds + 0.5;
+    }
+
+    getStats() {
+      this.position += this.seeks.length ? 0 : 0.5;
+      return { positionSeconds: this.position, bufferedSeconds: 2, audioUnderruns: 0, renderMsPerSec: 40 };
+    }
+
+    debugState() {
+      return { renderer: "fake" };
+    }
+
+    dispose() {
+      this.disposed = true;
+    }
   }
-
-  setVolume(value: number) {
-    this.volume = value;
-  }
-
-  async play(buffer: ArrayBuffer, songIndex: number, _callbacks: unknown, key?: string) {
-    if (this.playError) throw this.playError;
-    this.opened = { bytes: new Uint8Array(buffer), songIndex, key };
-    return this.playResult;
-  }
-
-  prerender(key: string, _buffer: ArrayBuffer, _songIndex: number, seconds: number) {
-    this.prerenders.push({ key, seconds });
-  }
-
-  async seekTo(seconds: number) {
-    this.seeks.push(seconds);
-    this.position = seconds + 0.5;
-  }
-
-  getStats() {
-    this.position += this.seeks.length ? 0 : 0.5;
-    return { positionSeconds: this.position, bufferedSeconds: 2, audioUnderruns: 0, renderMsPerSec: 40 };
-  }
-
-  debugState() {
-    return { renderer: "fake" };
-  }
-
-  dispose() {
-    this.disposed = true;
-  }
-}
+  return { FakeEngine };
+});
+const engines = FakeEngine.instances;
 
 vi.mock("@/lib/playback/localSidEngine", () => ({ LocalSidEngine: FakeEngine }));
 

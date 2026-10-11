@@ -7,6 +7,7 @@
  */
 
 import { loadLocalEngineEnabled, saveSidEmulationEngine, loadSidEmulationEngine } from "@/lib/config/appSettings";
+import { LocalSidEngine } from "./localSidEngine";
 import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
 
 export interface LocalSidProbeRequest {
@@ -60,8 +61,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * and to land a seek, with the engine's own stats sampled every 500 ms. Used by
  * `tools/sid-engines/android-bench.mjs` over CDP to measure the three renderers end to end on a
  * device, without driving the UI. A separate engine instance, disposed afterwards; silent unless a
- * volume is given. Installed only while on-device playback is enabled; the engine is imported on
- * first use so the probe adds nothing to the startup bundle.
+ * volume is given. Installed only while on-device playback is enabled; `main.tsx` imports this
+ * module only then, so it adds nothing to the startup bundle.
  */
 export const registerLocalSidProbe = (): void => {
   if (typeof window === "undefined") return;
@@ -73,7 +74,6 @@ export const registerLocalSidProbe = (): void => {
     running = true;
     const previous = loadSidEmulationEngine();
     saveSidEmulationEngine(request.renderer);
-    const { LocalSidEngine } = await import("./localSidEngine");
     const engine = new LocalSidEngine();
     engine.setVolume(request.volume ?? 0);
     const startedAt = performance.now();

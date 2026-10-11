@@ -37,6 +37,15 @@ enum class EzSidModel : int { Mos6581 = 0, Mos8580 = 1 };
  * Not thread-safe. The JNI layer gives every session its own lock and the Kotlin layer runs each
  * session on one thread.
  */
+/** How the session places a tune's chips in stereo; see `chooseStereoPlacement`. */
+enum class StereoPlacement { AsRendered, BlendTwo, CentreThree };
+
+/**
+ * reSIDfp's placement for two or three chips, unless the tune names a side for each chip itself.
+ * Four chips or more are a libSidplayEZ extension reSIDfp cannot play, so they keep its placement.
+ */
+StereoPlacement chooseStereoPlacement(int chips, bool tunePlacesChips);
+
 class EzSession final {
 public:
   static constexpr int kChannels = 2;
@@ -100,8 +109,26 @@ private:
   std::vector<float> right_;
   EzSidModel fallbackModel_ = EzSidModel::Mos8580;
   int songIndex_ = 0;
+  StereoPlacement stereoPlacement_ = StereoPlacement::AsRendered;
   bool ready_ = false;
 };
+
+/**
+ * Place two chips in stereo the way reSIDfp's libsidplayfp mixer does, in place: each side carries
+ * its own chip and half of the other, scaled by 1/sqrt(2). libSidplayEZ pans them hard left and
+ * right, which made a 2SID tune sound different depending on the renderer chosen. Expects the left
+ * buffer to hold the first chip and the right one the second, as libSidplayEZ renders them.
+ */
+void blendTwoChipStereo(float* left, float* right, int frames);
+
+/**
+ * Three chips from libSidplayEZ's mono mix, the same on both sides at the level of reSIDfp's mix.
+ * reSIDfp puts the chips left, centre and right with half of each outer one on the far side, so its
+ * two sides correlate at about 0.97; libSidplayEZ puts the first two hard left and right with the
+ * third in the middle, and its sides cannot be remixed into reSIDfp's. The gain of 0.5 gives three
+ * uncorrelated chips the power reSIDfp gives each side.
+ */
+void centreThreeChipMix(float* mono, float* right, int frames);
 
 /** Saturating float-to-S16 conversion, matching libSidplayEZ's own 1/32768 scale. */
 int16_t floatToS16(float value);

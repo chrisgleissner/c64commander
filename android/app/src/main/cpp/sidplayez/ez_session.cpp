@@ -198,6 +198,7 @@ bool EzSession::reload(std::string& error) {
     return false;
   }
   applyNeutralProfile();
+  stereoPlacement_ = chooseStereoPlacement(player_->getNumChips(), info && info->hasSidChannels());
   ready_ = true;
   return true;
 }
@@ -217,15 +218,44 @@ void EzSession::applyNeutralProfile() {
   player_->set6581SawPulseUltra(false);
 }
 
+StereoPlacement chooseStereoPlacement(int chips, bool tunePlacesChips) {
+  if (tunePlacesChips) return StereoPlacement::AsRendered;
+  if (chips == 2) return StereoPlacement::BlendTwo;
+  if (chips == 3) return StereoPlacement::CentreThree;
+  return StereoPlacement::AsRendered;
+}
+
+void blendTwoChipStereo(float* left, float* right, int frames) {
+  constexpr float kOwn = 0.70710678f;
+  constexpr float kOther = 0.5f * kOwn;
+  for (int i = 0; i < frames; ++i) {
+    const float first = left[i];
+    const float second = right[i];
+    left[i] = first * kOwn + second * kOther;
+    right[i] = first * kOther + second * kOwn;
+  }
+}
+
+void centreThreeChipMix(float* mono, float* right, int frames) {
+  constexpr float kGain = 0.5f;
+  for (int i = 0; i < frames; ++i) {
+    mono[i] *= kGain;
+    right[i] = mono[i];
+  }
+}
+
 int EzSession::render(int16_t* out, int frames) {
   if (!ready_ || !out || frames <= 0 || player_->isJammed()) return 0;
   if (left_.size() < static_cast<size_t>(frames)) {
     left_.resize(frames);
     right_.resize(frames);
   }
-  const auto produced = static_cast<int>(player_->play(std::span<float>(left_.data(), frames),
-                                                       std::span<float>(right_.data(), frames), {}));
+  const bool mono = stereoPlacement_ == StereoPlacement::CentreThree;
+  const auto produced = static_cast<int>(player_->play(
+      std::span<float>(left_.data(), frames), mono ? std::span<float>() : std::span<float>(right_.data(), frames), {}));
   const int count = std::clamp(produced, 0, frames);
+  if (stereoPlacement_ == StereoPlacement::BlendTwo) blendTwoChipStereo(left_.data(), right_.data(), count);
+  if (mono) centreThreeChipMix(left_.data(), right_.data(), count);
   for (int i = 0; i < count; ++i) {
     out[i * 2] = floatToS16(left_[i]);
     out[i * 2 + 1] = floatToS16(right_[i]);

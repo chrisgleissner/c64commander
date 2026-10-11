@@ -8,7 +8,7 @@
 
 import type { LocalSidWorkerLike } from "../localSidEngine";
 import { NativeRendererChannel } from "./nativeRendererChannel";
-import { SidplayEzRendererCore } from "./sidplayEzRendererCore";
+import { lazyRendererCore } from "./lazyRendererCore";
 import { sidRendererRuntime, type SidRendererId } from "./sidRendererAvailability";
 import { ensureSidAudioAttached } from "./sidAudioAttach";
 
@@ -32,7 +32,10 @@ export class LocalSidUnavailableError extends Error {
 export const defaultRendererChannelFactory: RendererChannelFactory = (renderer, role) => {
   if (sidRendererRuntime(renderer) === "native") {
     return new NativeRendererChannel(
-      new SidplayEzRendererCore({ background: role !== "playback", beforeCreate: ensureSidAudioAttached }),
+      lazyRendererCore(async () => {
+        const { SidplayEzRendererCore } = await import("./sidplayEzRendererCore");
+        return new SidplayEzRendererCore({ background: role !== "playback", beforeCreate: ensureSidAudioAttached });
+      }),
     );
   }
   if (typeof Worker === "undefined") throw new LocalSidUnavailableError();

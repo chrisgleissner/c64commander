@@ -103,6 +103,7 @@ android)
   STAMP_CONTENT="$(
     {
       printf '%s\n' "$SOURCE_SHA256" "$REVISION" "$API_LEVEL" "${COMMON_CXXFLAGS[*]}" "${PAGE_FLAGS[*]}"
+      "$TOOLCHAIN/clang" --version | head -n 1
       sha256sum "${BASH_SOURCE[0]}" "$WRAPPER_DIR"/*.cpp "$WRAPPER_DIR"/*.h | awk '{print $1}'
     } | sha256sum | awk '{print $1}'
   )"
