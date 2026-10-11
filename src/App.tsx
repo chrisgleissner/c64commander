@@ -460,9 +460,21 @@ const StartupLaunchCoordinator = () => {
   );
 };
 
+/**
+ * Chromium reports a ResizeObserver whose callback changed layout as a window error. Nothing failed: the
+ * observer is called again on the next frame. On the Pixel 4 it surfaced as an error in the log during
+ * ordinary playback, so it is recorded as debug instead of as a fault.
+ */
+const isResizeObserverLoopNotice = (event: ErrorEvent) =>
+  !event.error && /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/.test(event.message);
+
 const GlobalErrorListener = () => {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
+      if (isResizeObserverLoopNotice(event)) {
+        addLog("debug", "ResizeObserver delivered its notifications on the next frame", { message: event.message });
+        return;
+      }
       const activeAction = getActiveAction();
       const error = event.error instanceof Error ? event.error : new Error(event.message || "Window error");
       if (activeAction) {
