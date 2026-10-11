@@ -90,6 +90,7 @@ import {
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
+import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
@@ -1425,66 +1426,35 @@ export function usePlaybackController({
     [],
   );
 
-  // Track B (LE2, §12.5): switching "Play on: C64 / This device" acts on the
-  // tune that is playing *now* — stop whichever engine owns it and restart it
-  // on the chosen one — instead of waiting for the next track. `playItem`
-  // re-reads the engine setting, so the restart lands on the new engine.
-  useEffect(() => {
-    const onSettingsUpdated = () => {
-      const nextEngine = loadPlaybackEngine();
-      if (nextEngine === selectedEngineRef.current) return;
-      selectedEngineRef.current = nextEngine;
-      // A tune playing here would only start again here, or not at all with the C64 out of reach; the next tune moves.
-      // The phone's engine is shared, so a page that remounted is playing on it without having started it.
-      const playsHere = currentPlaybackIsLocalRef.current || getLocalSidPlayback().isActive();
-      if (playsHere && (nextEngine === "local" || isDeviceOutOfReach())) return;
-      const index = currentIndexRef.current;
-      const item = playlistRef.current[index];
-      // Only a playing SID can move between engines; everything else is a
-      // no-op that takes effect on the next track, as before.
-      if (!isPlayingRef.current || !item || item.category !== "sid") return;
-      const startedAt = performance.now();
-      void (async () => {
-        if (playsHere) {
-          // getLocalSidPlayback(), never the raw ref: the ref is per-page and
-          // starts null, so a page that adopted an already-running session (a
-          // remount, or the transient second instance a tab switch creates)
-          // silently no-opped here and the tune kept playing after the user had
-          // switched engines.
-          getLocalSidPlayback().stop();
-          setCurrentPlaybackIsLocal(false);
-        } else {
-          try {
-            await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
-            markRemotePlaybackStopped();
-          } catch (error) {
-            addErrorLog("Stopping the C64 for a playback-engine switch failed", {
-              error: (error as Error).message,
-              item: item.label,
-            });
-          }
-        }
-        try {
-          await playItem(item, {
-            playlistIndex: index,
-            playlistSize: playlistRef.current.length,
-            origin: "auto",
-          });
-          // §12.6 `engineSwitchMs`: press → the tune is audible again.
-          updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
-        } catch (error) {
-          if (!isHandledUiError(error)) {
-            addErrorLog("Restarting the tune on the new playback engine failed", {
-              error: (error as Error).message,
-              item: item.label,
-            });
-          }
-        }
-      })();
-    };
-    window.addEventListener("c64u-app-settings-updated", onSettingsUpdated);
-    return () => window.removeEventListener("c64u-app-settings-updated", onSettingsUpdated);
-  }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS, getLocalSidPlayback]);
+  usePlaybackEngineSwitch({
+    selectedEngineRef,
+    currentPlaybackIsLocalRef,
+    currentIndexRef,
+    playlistRef,
+    isPlayingRef,
+    getLocalSidPlayback,
+    setCurrentPlaybackIsLocal,
+    enqueuePlayTransition,
+    playItem,
+    stopOnC64: async (item) => {
+      try {
+        await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+        markRemotePlaybackStopped();
+      } catch (error) {
+        addErrorLog("Stopping the C64 for a playback-engine switch failed", {
+          error: (error as Error).message,
+          item: item.label,
+        });
+      }
+    },
+    onRestartFailed: (error, item) => {
+      if (isHandledUiError(error)) return;
+      addErrorLog("Restarting the tune on the new playback engine failed", {
+        error: (error as Error).message,
+        item: item.label,
+      });
+    },
+  });
 
   const startPlaylist = useCallback(
     async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }): Promise<boolean> => {

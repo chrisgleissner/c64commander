@@ -109,6 +109,45 @@ describe("AvMirrorSession", () => {
     videoInstances.length = 0;
   });
 
+  describe("setAudioWanted", () => {
+    const wireStates = (audio: Captured) => {
+      const order: string[] = [];
+      audio.start.mockImplementation(async () => {
+        order.push("start");
+        audio.deps.onChange({ state: "live", error: null });
+      });
+      audio.stop.mockImplementation(async () => {
+        order.push("stop");
+        audio.deps.onChange({ state: "off", error: null });
+      });
+      return order;
+    };
+
+    it("ends live when a start is asked for behind a stop still queued", async () => {
+      const { session, audio } = makeSession();
+      const order = wireStates(audio);
+      await session.setAudioWanted(true);
+      order.length = 0;
+
+      const stopping = session.setAudioWanted(false);
+      const starting = session.setAudioWanted(true);
+      await Promise.all([stopping, starting]);
+
+      expect(order).toEqual(["stop", "start"]);
+      expect(session.audioLive).toBe(true);
+    });
+
+    it("sends nothing to the device when the feed is already as wanted", async () => {
+      const { session, audio } = makeSession();
+      const order = wireStates(audio);
+      await session.setAudioWanted(false);
+      await session.setAudioWanted(true);
+      await session.setAudioWanted(true);
+
+      expect(order).toEqual(["start"]);
+    });
+  });
+
   /**
    * `VideoMirrorController`'s drop-late queue only drops anything if presentation is DEFERRED: a
    * synchronous scheduler consumes `pending` before the next frame can supersede it, so the queue
