@@ -181,8 +181,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
         if (cancelled || this.closed) return;
         const frames = payloadFrames(pcm, channels);
         if (frames <= 0) return;
-        this.seq += 1;
-        void this.send(pcm, channels, this.seq, frames);
+        void this.send(pcm, channels, this.nextSeq(), frames);
         this.handedFrames += frames;
         this.endings.push({
           at: when + frames / this.sampleRate,
@@ -307,8 +306,20 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.playheadSec = 0;
     this.interpolateLimitSec = 0;
     this.playheadAtMs = performance.now();
-    const upToSeq = this.seq;
-    this.call("flush", () => this.backend.feed.flush({ serial: this.serial, upToSeq }));
+    const seq = this.nextSeq();
+    this.call("flush", () => this.backend.feed.flush({ serial: this.serial, seq }));
+  }
+
+  /**
+   * The next place in this session's stream. PCM and the commands that must take effect at a point
+   * in it (flush, fades, the crossfade hand-over, release) share one sequence, so the feed applies
+   * them in the order they were sent whichever channel each travelled on: PCM may take the binary
+   * port while commands take the Capacitor bridge. Taken when the command is issued, not when its
+   * call goes out, which may be later.
+   */
+  private nextSeq(): number {
+    this.seq += 1;
+    return this.seq;
   }
 
   suspend(): void {
@@ -331,12 +342,14 @@ class NativeLocalSidSink implements AudioScheduleSink {
   }
 
   fadeTo(target: number, ms: number): void {
-    this.call("fade", () => this.backend.feed.fade({ serial: this.serial, target, ms }));
+    const seq = this.nextSeq();
+    this.call("fade", () => this.backend.feed.fade({ serial: this.serial, seq, target, ms }));
   }
 
   fadeIn(ms: number, toGain: number): void {
     this.setMasterGain(toGain);
-    this.call("fade-in", () => this.backend.feed.fadeIn({ serial: this.serial, ms }));
+    const seq = this.nextSeq();
+    this.call("fade-in", () => this.backend.feed.fadeIn({ serial: this.serial, seq, ms }));
   }
 
   isSilentFault(): boolean {
@@ -354,15 +367,19 @@ class NativeLocalSidSink implements AudioScheduleSink {
 
   beginTailPlayout(seconds: number): void {
     if (this.closed) return;
-    this.call("starting the crossfade tail", () => this.backend.feed.beginTransition({ serial: this.serial, seconds }));
+    const seq = this.nextSeq();
+    this.call("starting the crossfade tail", () =>
+      this.backend.feed.beginTransition({ serial: this.serial, seq, seconds }),
+    );
     traceLocalSid("tail-playout-begin", { seconds });
   }
 
   takeTail(maxSeconds: number): NativeCrossfadeTail {
     const tailId = nextTailId++;
     this.endings = [];
+    const seq = this.nextSeq();
     this.call("handing over the crossfade tail", () =>
-      this.backend.feed.takeTail({ serial: this.serial, tailId, maxSeconds }),
+      this.backend.feed.takeTail({ serial: this.serial, seq, tailId, maxSeconds }),
     );
     return { tailId, frames: Math.round(maxSeconds * this.sampleRate) };
   }
@@ -370,8 +387,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
   adoptTail(tail: CrossfadeTail, seconds: number): void {
     const tailId = (tail as Partial<NativeCrossfadeTail>).tailId;
     if (typeof tailId !== "number" || seconds <= 0) return;
+    const seq = this.nextSeq();
     this.call("adopting the crossfade tail", () =>
-      this.backend.feed.adoptTail({ serial: this.serial, tailId, seconds }),
+      this.backend.feed.adoptTail({ serial: this.serial, seq, tailId, seconds }),
     );
   }
 
@@ -385,7 +403,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.closed = true;
     this.stopTicking();
     this.endings = [];
-    this.call("releasing the session", () => this.backend.feed.release({ serial: this.serial }));
+    const seq = this.nextSeq();
+    this.call("releasing the session", () => this.backend.feed.release({ serial: this.serial, seq }));
   }
 
   close(): void {

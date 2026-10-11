@@ -43,7 +43,11 @@ internal interface FeedOutput {
   /** The listener's level, 0..1, applied by the pipeline as samples leave its ring. */
   fun setGain(gain: Double)
 
+  /** Everything queued ahead of the speaker: the pipeline's ring and the track's own buffer. */
   fun bufferedMs(): Double
+
+  /** The ring alone: what a [flush] discards. The track's own buffer always plays out. */
+  fun ringMs(): Double
 
   fun underruns(): Int
 }
@@ -119,14 +123,28 @@ internal class LocalAudioFeed(
 
   private class Fade(val to: Double, val perFrame: Double)
 
-  private class Tail(val segments: ArrayDeque<Segment>, val frames: Long) {
+  private class Tail(val segments: ArrayDeque<Segment>, var frames: Long) {
     var frame = 0L
+  }
+
+  /**
+   * One step of a session's stream, in sequence order: audio, or a command that has to take effect
+   * at exactly that point in the audio (a flush, a fade, a crossfade hand-over).
+   */
+  private sealed interface Entry {
+    class Audio(val segment: Segment) : Entry
+
+    /** Nothing usable arrived for this sequence number; the order moves on. */
+    object Empty : Entry
+
+    /** [run] returns false to be retried: it is waiting for something another session produces. */
+    class Command(val name: String, val run: (Session) -> Boolean) : Entry
   }
 
   private class Session(val serial: Int, val settings: FeedTrackSettings) {
     val queue = ArrayDeque<Segment>()
-    /** Arrivals ahead of [nextSeq]; a null value marks a sequence number that carried nothing usable. */
-    val pending = TreeMap<Long, Segment?>()
+    /** Arrivals ahead of [nextSeq], and a command at [nextSeq] that is still waiting. */
+    val pending = TreeMap<Long, Entry>()
     var nextSeq = 1L
     var gapSinceNanos: Long? = null
     var fadeGain = 1.0
@@ -144,7 +162,7 @@ internal class LocalAudioFeed(
 
     fun hasWork(): Boolean = queue.isNotEmpty() || tail != null
 
-    fun queuedFrames(): Long = queue.sumOf { it.frames } + pending.values.sumOf { it?.frames ?: 0 }
+    fun queuedFrames(): Long = queue.sumOf { it.frames } + pending.values.sumOf { (it as? Entry.Audio)?.segment?.frames ?: 0 }
   }
 
   private val inbox = ConcurrentLinkedQueue<() -> Unit>()
@@ -177,7 +195,14 @@ internal class LocalAudioFeed(
                 {
                   Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
                   while (running) {
-                    val park = runOnce()
+                    val park =
+                        try {
+                          runOnce()
+                        } catch (error: Exception) {
+                          // One bad command or buffer must not take the app down with the thread.
+                          log.log(Log.ERROR, "Local audio: the feed failed a pass; carrying on", error)
+                          FAILED_PASS_NANOS
+                        }
                     if (park > 0 && inbox.isEmpty()) clock.park(park)
                   }
                 },
@@ -215,21 +240,40 @@ internal class LocalAudioFeed(
     val session = sessions[serial] ?: return@post
     if (session.closed || seq < session.nextSeq || session.pending.containsKey(seq)) return@post
     if (segment == null) session.missing += 1
-    session.pending[seq] = segment?.takeIf { it.frames > 0 }
+    session.pending[seq] = segment?.takeIf { it.frames > 0 }?.let { Entry.Audio(it) } ?: Entry.Empty
     drainPending(session)
     publish(session)
   }
 
-  fun flush(serial: Int, upToSeq: Long) = post {
+  /** Queue a command at [seq] in [serial]'s stream; it runs once everything before it has. */
+  private fun ordered(serial: Int, seq: Long, name: String, run: (Session) -> Boolean) = post {
     val session = sessions[serial] ?: return@post
-    session.queue.clear()
-    session.pending.headMap(upToSeq, true).clear()
-    session.nextSeq = maxOf(session.nextSeq, upToSeq + 1)
+    if (session.closed || seq < session.nextSeq || session.pending.containsKey(seq)) return@post
+    session.pending[seq] = Entry.Command(name, run)
     drainPending(session)
-    session.history.clear()
-    session.historyFrames = 0
-    session.writtenFrames = 0
-    if (!isSuperseded(session) && session.serial == activeSerial) output?.flush()
+    publish(session)
+  }
+
+  /**
+   * Discard everything [serial] was sent before [seq], at once, and flush the track if it is this
+   * session's. Audio sent after the flush is kept whichever channel brought it, and in whatever
+   * order it arrived. Earlier audio that has not arrived yet is not waited for.
+   */
+  fun flush(serial: Int, seq: Long) = post {
+    val session = sessions[serial] ?: return@post
+    if (session.closed || seq < session.nextSeq) return@post
+    session.pending.headMap(seq, false).clear()
+    session.nextSeq = seq
+    session.pending[seq] =
+        Entry.Command("flush") {
+          it.queue.clear()
+          it.history.clear()
+          it.historyFrames = 0
+          it.writtenFrames = 0
+          if (!isSuperseded(it) && it.serial == activeSerial) output?.flush()
+          true
+        }
+    drainPending(session)
     publish(session)
   }
 
@@ -247,15 +291,20 @@ internal class LocalAudioFeed(
     output?.resume()
   }
 
-  /** Move this session's crossfade gain to [target] over [ms] of its own audio. */
-  fun fade(serial: Int, target: Double, ms: Int) = post { sessions[serial]?.let { setFade(it, target, ms) } }
+  /** Move this session's crossfade gain to [target] over [ms] of its own audio, from [seq] on. */
+  fun fade(serial: Int, seq: Long, target: Double, ms: Int) =
+      ordered(serial, seq, "fade") {
+        setFade(it, target, ms)
+        true
+      }
 
-  /** Start this session from silence and raise it to unity over [ms] of its own audio. */
-  fun fadeIn(serial: Int, ms: Int) = post {
-    val session = sessions[serial] ?: return@post
-    if (ms > 0) setFade(session, 0.0, 0)
-    setFade(session, 1.0, ms)
-  }
+  /** Start this session from silence at [seq] and raise it to unity over [ms] of its own audio. */
+  fun fadeIn(serial: Int, seq: Long, ms: Int) =
+      ordered(serial, seq, "fade-in") {
+        if (ms > 0) setFade(it, 0.0, 0)
+        setFade(it, 1.0, ms)
+        true
+      }
 
   /** The listener's level for on-device playback; survives the track being re-opened. */
   fun setGain(gain: Double) = post {
@@ -275,14 +324,21 @@ internal class LocalAudioFeed(
    * keep playing it a fraction of a second at a time while the next tune opens. The track is flushed
    * with whichever write comes next, so the incoming tune is never queued behind seconds of this one.
    */
-  fun beginTransition(serial: Int, seconds: Double) = post {
-    val session = sessions[serial] ?: return@post
-    if (session.closed || session.transitioning) return@post
+  fun beginTransition(serial: Int, seq: Long, seconds: Double) =
+      ordered(serial, seq, "transition") { session ->
+        startTransition(session, seconds)
+        true
+      }
+
+  private fun startTransition(session: Session, seconds: Double) {
+    if (session.closed || session.transitioning) return
     session.transitioning = true
     val rate = session.settings.sampleRate
     val wanted = (seconds * rate).toLong().coerceAtLeast(0)
+    // The ring, not the track: the flush that follows empties the ring, while what the track holds
+    // still plays. Recovering that too would play it twice.
     val depthFrames =
-        if (session.serial == activeSerial) ((output?.bufferedMs() ?: 0.0) * rate / 1000).toLong() else 0L
+        if (session.serial == activeSerial) ((output?.ringMs() ?: 0.0) * rate / 1000).toLong() else 0L
     var unplayed = minOf(session.historyFrames, depthFrames)
     val recovered = ArrayDeque<Segment>()
     while (unplayed > 0 && session.history.isNotEmpty()) {
@@ -301,6 +357,9 @@ internal class LocalAudioFeed(
       capped.addLast(Segment(segment.source, segment.startFrame, take, processed = true))
       kept += take
     }
+    // Cut short, the recovered audio no longer reaches the queue's first segment, so playing on into
+    // the queue would jump ahead in the tune.
+    if (kept < recovered.sumOf { it.frames }) session.queue.clear()
     for (segment in capped.reversed()) session.queue.addFirst(segment)
     session.history.clear()
     session.historyFrames = 0
@@ -309,8 +368,13 @@ internal class LocalAudioFeed(
   }
 
   /** Hand what [serial] has queued, at most [maxSeconds] of it, to a tail a successor can adopt. */
-  fun takeTail(serial: Int, tailId: Int, maxSeconds: Double) = post {
-    val session = sessions[serial] ?: return@post
+  fun takeTail(serial: Int, seq: Long, tailId: Int, maxSeconds: Double) =
+      ordered(serial, seq, "take tail") { session ->
+        handOverTail(session, tailId, maxSeconds)
+        true
+      }
+
+  private fun handOverTail(session: Session, tailId: Int, maxSeconds: Double) {
     val maxFrames = (maxSeconds * session.settings.sampleRate).toLong()
     val segments = ArrayDeque<Segment>()
     var frames = 0L
@@ -325,28 +389,36 @@ internal class LocalAudioFeed(
     publish(session)
   }
 
-  /** Sum the tail under [serial]'s own audio, fading it away across [seconds] of that audio. */
-  fun adoptTail(serial: Int, tailId: Int, seconds: Double) = post {
-    val tail = tails.remove(tailId) ?: return@post
-    val session = sessions[serial] ?: return@post
-    val available = tail.segments.sumOf { it.frames }
-    val fadeFrames = minOf(available, (seconds * session.settings.sampleRate).toLong())
-    if (available == 0L || fadeFrames <= 0) return@post
-    session.tail = Tail(tail.segments, fadeFrames)
-    publish(session)
-  }
+  /**
+   * Sum the tail under [serial]'s own audio from [seq] on, fading it away across [seconds] of that
+   * audio. The outgoing session hands the tail over in its own stream, so it may not exist yet: the
+   * command then waits, holding back this session's audio, for at most the gap timeout.
+   */
+  fun adoptTail(serial: Int, seq: Long, tailId: Int, seconds: Double) =
+      ordered(serial, seq, "adopt tail") { session ->
+        val tail = tails.remove(tailId) ?: return@ordered false
+        val available = tail.segments.sumOf { it.frames }
+        val fadeFrames = minOf(available, (seconds * session.settings.sampleRate).toLong())
+        if (available > 0L && fadeFrames > 0) session.tail = Tail(tail.segments, fadeFrames)
+        true
+      }
 
-  /** Stop feeding without touching the track: the successor writes straight onto the end of it. */
-  fun release(serial: Int) = post {
-    val session = sessions.remove(serial) ?: return@post
-    session.closed = true
-  }
+  /**
+   * Stop feeding without touching the track, at [seq]: the successor writes straight onto the end
+   * of it. Ordered, because a hand-over of the tail just before it may still be waiting for audio.
+   */
+  fun release(serial: Int, seq: Long) =
+      ordered(serial, seq, "release") { session ->
+        sessions.remove(session.serial)
+        session.closed = true
+        true
+      }
 
-  /** Tear the session down, and the track with it unless a newer session owns the track now. */
+  /** Tear the session down, and the track with it when this session is the one writing to it. */
   fun close(serial: Int) = post {
     val session = sessions.remove(serial) ?: return@post
     session.closed = true
-    if (isSuperseded(session)) return@post
+    if (session.serial != activeSerial) return@post
     output?.let {
       it.flush()
       host.close(it)
@@ -440,9 +512,10 @@ internal class LocalAudioFeed(
     return try {
       val opened = host.open(session.settings)
       opened.setGain(masterGain)
+      // A pause that came while no track was open still holds.
+      if (paused) opened.pause()
       output = opened
       outputSettings = session.settings
-      paused = false
       opened
     } catch (error: Exception) {
       openFailures += 1
@@ -472,14 +545,26 @@ internal class LocalAudioFeed(
   }
 
   private fun drainPending(session: Session) {
+    var progressed = false
     while (true) {
       val head = session.pending.firstEntry() ?: break
       if (head.key != session.nextSeq) break
+      when (val entry = head.value) {
+        is Entry.Audio -> session.queue.addLast(entry.segment)
+        is Entry.Empty -> Unit
+        is Entry.Command -> if (!entry.run(session)) break
+      }
       session.pending.pollFirstEntry()
-      head.value?.let { session.queue.addLast(it) }
       session.nextSeq += 1
+      progressed = true
     }
-    session.gapSinceNanos = if (session.pending.isEmpty()) null else session.gapSinceNanos ?: clock.nanoTime()
+    // The timer measures how long the stream has been held up by its head, so any progress restarts it.
+    session.gapSinceNanos =
+        when {
+          session.pending.isEmpty() -> null
+          progressed || session.gapSinceNanos == null -> clock.nanoTime()
+          else -> session.gapSinceNanos
+        }
   }
 
   /** A sequence number that never arrives must not hold up everything after it for ever. */
@@ -489,9 +574,16 @@ internal class LocalAudioFeed(
       val since = session.gapSinceNanos ?: continue
       if (session.pending.isEmpty() || now - since < GAP_TIMEOUT_NANOS) continue
       val next = session.pending.firstKey()
-      log.log(Log.WARN, "Local audio: segments ${session.nextSeq}..${next - 1} never arrived; skipping them", null)
-      session.missing += (next - session.nextSeq).toInt()
-      session.nextSeq = next
+      if (next == session.nextSeq) {
+        // A command at the head still waiting (a crossfade tail that never came): give up on it.
+        val stuck = session.pending.pollFirstEntry().value
+        log.log(Log.WARN, "Local audio: ${(stuck as? Entry.Command)?.name ?: "entry"} ${session.nextSeq} waited too long; dropping it", null)
+        session.nextSeq += 1
+      } else {
+        log.log(Log.WARN, "Local audio: segments ${session.nextSeq}..${next - 1} never arrived; skipping them", null)
+        session.missing += (next - session.nextSeq).toInt()
+        session.nextSeq = next
+      }
       session.gapSinceNanos = null
       drainPending(session)
       publish(session)
@@ -527,7 +619,7 @@ internal class LocalAudioFeed(
       }
       return got
     }
-    val tailFrames = maxOf(1, session.settings.sampleRate / TAIL_SLICES_PER_SECOND)
+    val tailFrames = (session.settings.sampleRate / TAIL_SLICES_PER_SECOND).coerceIn(1, SLICE_FRAMES)
     java.util.Arrays.fill(scratch, 0, tailFrames * BYTES_PER_FRAME, 0)
     return mixTail(session, tailFrames, ownAudio = false)
   }
@@ -559,6 +651,15 @@ internal class LocalAudioFeed(
       if (tail.segments.isEmpty() || tail.frame >= tail.frames) {
         session.tail = null
         break
+      }
+      if (ownAudio && tail.frame == 0L) {
+        // Played on at full level while the incoming tune had nothing, the tail may be shorter now
+        // than the fade it was given; ramp over what is left, so it ends at silence, not part-way.
+        tail.frames = minOf(tail.frames, tail.segments.sumOf { it.frames })
+        if (tail.frames <= 0) {
+          session.tail = null
+          break
+        }
       }
       val segment = tail.segments.first()
       val room = if (ownAudio) minOf(frames - mixed, (tail.frames - tail.frame).toInt()) else frames - mixed
@@ -628,7 +729,9 @@ internal class LocalAudioFeed(
     if (now - lastDepthPollNanos < DEPTH_POLL_NANOS) return IDLE_NANOS
     lastDepthPollNanos = now
     publish(session)
-    val depth = current.bufferedMs()
+    // The ring, not the track: with nothing to play the pipeline keeps the track full of silence, so
+    // the track's depth holds steady on a healthy, idle track.
+    val depth = current.ringMs()
     val quiet = now - session.lastWriteNanos >= WRITE_QUIET_NANOS
     if (!quiet || depth <= 0) {
       depthStalledSinceNanos = null
@@ -698,6 +801,8 @@ internal class LocalAudioFeed(
     const val TAIL_SLICES_PER_SECOND = 20
     /** Below the depth at which the pipeline trims its own backlog, so nothing written is discarded. */
     const val HIGH_WATER_MS = 12_000.0
+    /** After a pass that threw, so a fault that repeats cannot spin the thread. */
+    const val FAILED_PASS_NANOS = 50_000_000L
     /** How shallow the track is kept during a track change, so the incoming tune is not queued behind. */
     const val TRANSITION_HIGH_WATER_MS = 250.0
     /** Deeper than [HIGH_WATER_MS], or recovering the unplayed audio would run off the end of it. */

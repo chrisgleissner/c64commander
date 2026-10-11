@@ -73,6 +73,8 @@ class SidAudioPluginTest {
 
     override fun bufferedMs(): Double = 0.0
 
+    override fun ringMs(): Double = 0.0
+
     override fun underruns(): Int = 0
   }
 
@@ -156,11 +158,11 @@ class SidAudioPluginTest {
   }
 
   @Test
-  fun `a flush names the last sequence number it covers`() {
+  fun `a flush takes its place in the stream and drops what was sent before it`() {
     openSession()
     plugin.enqueuePcm(call("enqueuePcm", "serial" to 1, "seq" to 1, "data" to base64Pcm(10, 1)))
     pump()
-    plugin.flush(call("flush", "serial" to 1, "upToSeq" to 3))
+    plugin.flush(call("flush", "serial" to 1, "seq" to 3))
     plugin.enqueuePcm(call("enqueuePcm", "serial" to 1, "seq" to 2, "data" to base64Pcm(10, 2)))
     plugin.enqueuePcm(call("enqueuePcm", "serial" to 1, "seq" to 4, "data" to base64Pcm(10, 4)))
     pump()

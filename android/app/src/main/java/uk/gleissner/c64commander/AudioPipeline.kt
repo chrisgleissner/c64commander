@@ -100,6 +100,15 @@ internal class AudioPipeline(
      * with twelve seconds sitting in a ring that was waiting for fifteen.
      */
     primeMs: Int = 0,
+    /**
+     * Whether to trim the conversion ratio to hold the ring at its target depth.
+     *
+     * The mirror needs it: its samples come from another machine's clock, which drifts against this
+     * DAC. On-device playback does not: its producer is this app, paced by the feed against the
+     * ring's depth, and a trimmed ratio would only shift the tune's pitch while the ring fills.
+     * Without it the ratio is the nominal one, and at equal rates every sample passes unchanged.
+     */
+    private val correctDrift: Boolean = true,
     /** Test seam: the player loop's time source, so tests can run it on virtual time. */
     private val clock: PipelineClock = PipelineClock.SYSTEM,
 ) {
@@ -679,9 +688,12 @@ internal class AudioPipeline(
     val authority = CushionDrift.authority(depth, floor, recoveryDepthFrames(), startupCeilingFrames)
     // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
     // fivefold at a threshold, which put an audible lurch in a held note.
-    val wanted = nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
+    val wanted =
+        if (correctDrift) nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
+        else nominalRatio()
     val ratio =
         when {
+          !correctDrift -> wanted
           appliedRatio <= 0.0 -> wanted
           wanted > appliedRatio -> minOf(wanted, appliedRatio + RATIO_SLEW_PER_CHUNK)
           else -> maxOf(wanted, appliedRatio - RATIO_SLEW_PER_CHUNK)

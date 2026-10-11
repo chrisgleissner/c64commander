@@ -103,17 +103,17 @@ export interface SidAudioPlugin {
   }): Promise<{ missing?: boolean }>;
   /** Fallback PCM path for a WebView without ArrayBuffer messages: base64 stereo S16LE. */
   enqueuePcm(options: { serial: number; seq: number; data: string }): Promise<void>;
-  flush(options: { serial: number; upToSeq: number }): Promise<void>;
+  flush(options: { serial: number; seq: number }): Promise<void>;
   pause(options: { serial: number }): Promise<void>;
   resume(options: { serial: number }): Promise<void>;
   setGain(options: { gain: number }): Promise<void>;
-  fade(options: { serial: number; target: number; ms: number }): Promise<void>;
-  fadeIn(options: { serial: number; ms: number }): Promise<void>;
+  fade(options: { serial: number; seq: number; target: number; ms: number }): Promise<void>;
+  fadeIn(options: { serial: number; seq: number; ms: number }): Promise<void>;
   resetSilence(options: { serial: number }): Promise<void>;
-  beginTransition(options: { serial: number; seconds: number }): Promise<void>;
-  takeTail(options: { serial: number; tailId: number; maxSeconds: number }): Promise<void>;
-  adoptTail(options: { serial: number; tailId: number; seconds: number }): Promise<void>;
-  release(options: { serial: number }): Promise<void>;
+  beginTransition(options: { serial: number; seq: number; seconds: number }): Promise<void>;
+  takeTail(options: { serial: number; seq: number; tailId: number; maxSeconds: number }): Promise<void>;
+  adoptTail(options: { serial: number; seq: number; tailId: number; seconds: number }): Promise<void>;
+  release(options: { serial: number; seq: number }): Promise<void>;
   close(options: { serial: number }): Promise<void>;
   stats(options: { serial: number }): Promise<SidAudioSessionStats>;
   releaseBuffers(options: { bufferIds: number[] }): Promise<{ held: number }>;

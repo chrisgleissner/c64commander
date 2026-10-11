@@ -402,10 +402,26 @@ class StreamUdpPlugin : Plugin() {
   }
 
   /** Replace the open pipeline and take focus: the mirror's and the on-device SID feed's one way in. */
-  internal fun openPipeline(sampleRate: Int, bufferMs: Int, maxRingMs: Int, trackBursts: Int, primeMs: Int): AudioPipeline =
+  internal fun openPipeline(
+      sampleRate: Int,
+      bufferMs: Int,
+      maxRingMs: Int,
+      trackBursts: Int,
+      primeMs: Int,
+      correctDrift: Boolean = true,
+  ): AudioPipeline =
       synchronized(audioLifecycleLock) {
         audioPipeline?.close()
-        AudioPipeline(sampleRate, bufferMs, nativeOutputRate(), nativeFramesPerBurst(), maxRingMs = maxRingMs, trackBursts = trackBursts, primeMs = primeMs)
+        AudioPipeline(
+                sampleRate,
+                bufferMs,
+                nativeOutputRate(),
+                nativeFramesPerBurst(),
+                maxRingMs = maxRingMs,
+                trackBursts = trackBursts,
+                primeMs = primeMs,
+                correctDrift = correctDrift,
+            )
             .also {
               it.start()
               audioPipeline = it

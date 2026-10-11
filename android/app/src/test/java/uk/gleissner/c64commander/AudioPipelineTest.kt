@@ -714,14 +714,18 @@ class AudioPipelineTest {
   }
 
   @Test
-  fun atTheOutputRateWithNothingToCorrectTheSpeakerGetsExactlyTheSamplesFed() {
+  fun withoutDriftCorrectionAtTheOutputRateTheSpeakerGetsExactlyTheSamplesFed() {
     // On-device playback runs the source at the device's rate, so the converter's ratio is exactly 1
     // and the samples are copied rather than interpolated. The copy has to be what interpolation at
     // a ratio of 1 produces: the very same samples, channel for channel, across the ring's wrap.
     val rate = 48000
     val speaker = FakeSpeaker(rate, record = true)
-    // A burst that does not divide the ring, so chunks straddle its end and the wrapped copy runs.
-    val pipeline = AudioPipeline(rate, 120, rate, 241, speaker.factory)
+    // On-device playback's own configuration: a deep target, a short prime, and no drift correction,
+    // which would otherwise slew the ratio off 1 while the ring fills and leave a fractional position
+    // behind for good. A burst that does not divide the ring, so chunks straddle its end and the
+    // wrapped copy runs.
+    val pipeline =
+        AudioPipeline(rate, 15000, rate, 241, speaker.factory, maxRingMs = 20000, trackBursts = 16, primeMs = 600, correctDrift = false)
     val random = java.util.Random(64)
     val fed = java.io.ByteArrayOutputStream()
     try {
@@ -739,6 +743,7 @@ class AudioPipelineTest {
         pipeline.offer(buf, 0, buf.size)
         next += stepNanos
       }
+      assertEquals("the ratio moved off 1", 1.0, pipeline.stats().driftCorrection, 0.0)
     } finally {
       pipeline.close()
     }

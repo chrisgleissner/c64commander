@@ -30,7 +30,12 @@ class LocalAudioFeedTest {
   }
 
   /** A track that drains at the sample rate on virtual time, and remembers every sample written. */
-  private class FakeOutput(private val clock: VirtualClock, private val rate: Int) : FeedOutput {
+  /**
+   * [trackMs] is the part of what is queued that sits in the track's own buffer: a flush empties
+   * the ring and leaves that to play out, as AudioPipeline's does.
+   */
+  private class FakeOutput(private val clock: VirtualClock, private val rate: Int, private val trackMs: Double = 0.0) :
+      FeedOutput {
     val written = ByteArrayOutputStream()
     var writtenFrames = 0L
     private var consumedAtResume = 0L
@@ -39,6 +44,8 @@ class LocalAudioFeedTest {
     var flushes = 0
     var lastGain = -1.0
     var offers = 0
+    /** As the pipeline does when its ring runs dry: the track stays full of concealed silence. */
+    var concealing = false
 
     private fun consumed(): Long {
       if (paused) return consumedAtResume
@@ -57,7 +64,8 @@ class LocalAudioFeedTest {
 
     override fun flush() {
       flushes += 1
-      consumedAtResume = writtenFrames
+      val trackFrames = (trackMs * rate / 1000).toLong()
+      consumedAtResume = maxOf(consumed(), writtenFrames - trackFrames)
       resumedAtNanos = clock.now
     }
 
@@ -75,7 +83,12 @@ class LocalAudioFeedTest {
       lastGain = gain
     }
 
-    override fun bufferedMs(): Double = (writtenFrames - consumed()) * 1000.0 / rate
+    override fun bufferedMs(): Double {
+      val queued = (writtenFrames - consumed()) * 1000.0 / rate
+      return if (concealing) maxOf(queued, trackMs) else queued
+    }
+
+    override fun ringMs(): Double = maxOf(0.0, bufferedMs() - trackMs)
 
     override fun underruns(): Int = 0
 
@@ -89,6 +102,8 @@ class LocalAudioFeedTest {
     val opened = mutableListOf<FakeOutput>()
     var current: FakeOutput? = null
     var failNextOpens = 0
+    var trackMs = 0.0
+    var concealing = false
     val closed = mutableListOf<FakeOutput>()
 
     override fun open(settings: FeedTrackSettings): FeedOutput {
@@ -96,7 +111,7 @@ class LocalAudioFeedTest {
         failNextOpens -= 1
         throw IllegalStateException("the platform refused the track")
       }
-      val output = FakeOutput(clock, rate)
+      val output = FakeOutput(clock, rate, trackMs).also { it.concealing = concealing }
       opened.add(output)
       current = output
       return output
@@ -202,9 +217,9 @@ class LocalAudioFeedTest {
     feed.enqueue(1, 1, segment(1000, 100))
     pump()
     feed.enqueue(1, 3, segment(1000, 300))
-    feed.flush(1, 3)
+    feed.flush(1, 4)
     feed.enqueue(1, 2, segment(1000, 200))
-    feed.enqueue(1, 4, segment(1000, 400))
+    feed.enqueue(1, 5, segment(1000, 400))
     pump()
     val output = host.current!!
     assertEquals(1, output.flushes)
@@ -212,6 +227,34 @@ class LocalAudioFeedTest {
     assertEquals(4000, samples.size)
     assertEquals(400, samples.last().toInt())
     assertEquals(1000L, feed.stats(1)!!.writtenFrames)
+  }
+
+  @Test
+  fun `audio sent after a flush is kept even when it arrives before the flush`() {
+    // PCM crosses on the binary port and the flush on the Capacitor bridge, so after a seek the new
+    // audio can overtake the flush that was sent before it. The flush used to clear it anyway.
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(1000, 100))
+    pump()
+    feed.enqueue(1, 3, segment(1000, 300))
+    feed.enqueue(1, 4, segment(1000, 400))
+    feed.flush(1, 2)
+    pump()
+    val samples = host.current!!.samples()
+    assertEquals(1, host.current!!.flushes)
+    assertEquals(listOf(100, 300, 400), samples.map { it.toInt() }.distinct())
+    assertEquals(2000L, feed.stats(1)!!.writtenFrames)
+  }
+
+  @Test
+  fun `a fade-in sent before the first audio applies to it whichever arrives first`() {
+    feed.openSession(1, settings)
+    feed.enqueue(1, 2, segment(rate / 5, 10000))
+    pump()
+    feed.fadeIn(1, 1, 100)
+    pump()
+    val left = host.current!!.samples().filterIndexed { i, _ -> i % 2 == 0 }
+    assertTrue("the first sample was ${left[0]}", left[0] < 300)
   }
 
   @Test
@@ -267,7 +310,7 @@ class LocalAudioFeedTest {
     feed.openSession(2, settings)
     feed.enqueue(2, 1, segment(1000, 222))
     pump()
-    feed.flush(1, 10)
+    feed.flush(1, 2)
     feed.close(1)
     pump()
     assertEquals(0, host.current!!.flushes)
@@ -311,8 +354,8 @@ class LocalAudioFeedTest {
   @Test
   fun `fades in from silence over the incoming tune's own audio`() {
     feed.openSession(1, settings)
-    feed.fadeIn(1, 100)
-    feed.enqueue(1, 1, segment(rate / 5, 10000))
+    feed.fadeIn(1, 1, 100)
+    feed.enqueue(1, 2, segment(rate / 5, 10000))
     pump()
     val left = host.current!!.samples().filterIndexed { i, _ -> i % 2 == 0 }
     assertTrue(left[0] < 300)
@@ -324,8 +367,8 @@ class LocalAudioFeedTest {
   @Test
   fun `a zero-length fade is an immediate level change`() {
     feed.openSession(1, settings)
-    feed.fade(1, 0.5, 0)
-    feed.enqueue(1, 1, segment(100, 10000))
+    feed.fade(1, 1, 0.5, 0)
+    feed.enqueue(1, 2, segment(100, 10000))
     pump()
     assertTrue(host.current!!.samples().all { it.toInt() == 5000 })
   }
@@ -336,12 +379,12 @@ class LocalAudioFeedTest {
     feed.enqueue(1, 1, segment(rate * 2, 8000))
     pump()
     advance(100)
-    feed.beginTransition(1, 4.0)
+    feed.beginTransition(1, 2, 4.0)
     feed.openSession(2, settings)
-    feed.takeTail(1, 7, 4.0)
-    feed.release(1)
-    feed.adoptTail(2, 7, 0.5)
-    feed.fadeIn(2, 500)
+    feed.takeTail(1, 3, 7, 4.0)
+    feed.release(1, 4)
+    feed.adoptTail(2, 1, 7, 0.5)
+    feed.fadeIn(2, 2, 500)
     advance(300)
     val output = host.current!!
     assertTrue(output.flushes >= 1)
@@ -349,7 +392,7 @@ class LocalAudioFeedTest {
     assertTrue(tailOnly.isNotEmpty())
     assertTrue(tailOnly.takeLast(100).all { it.toInt() == 8000 })
     val before = tailOnly.size
-    feed.enqueue(2, 1, segment(rate, 4000))
+    feed.enqueue(2, 3, segment(rate, 4000))
     advance(1000)
     val mixed = output.samples().drop(before).filterIndexed { i, _ -> i % 2 == 0 }
     assertTrue("starts with the outgoing tune near full level", mixed.first() in 7800..8100)
@@ -366,7 +409,7 @@ class LocalAudioFeedTest {
     pump()
     advance(1000)
     val played = feed.stats(1)!!.playedFrames
-    feed.beginTransition(1, 4.0)
+    feed.beginTransition(1, seq++, 4.0)
     pump()
     val output = host.current!!
     assertEquals(1, output.flushes)
@@ -380,12 +423,12 @@ class LocalAudioFeedTest {
     feed.openSession(1, settings)
     feed.enqueue(1, 1, segment(rate, 30000))
     pump()
-    feed.beginTransition(1, 2.0)
+    feed.beginTransition(1, 2, 2.0)
     feed.openSession(2, settings)
-    feed.takeTail(1, 1, 2.0)
-    feed.release(1)
-    feed.adoptTail(2, 1, 1.0)
-    feed.enqueue(2, 1, segment(rate / 10, 30000))
+    feed.takeTail(1, 3, 1, 2.0)
+    feed.release(1, 4)
+    feed.adoptTail(2, 1, 1, 1.0)
+    feed.enqueue(2, 2, segment(rate / 10, 30000))
     advance(400)
     assertTrue(host.current!!.samples().all { it.toInt() >= 0 })
     assertTrue(host.current!!.samples().any { it.toInt() == 32767 })
@@ -396,11 +439,11 @@ class LocalAudioFeedTest {
     feed.openSession(1, settings)
     feed.enqueue(1, 1, segment(rate / 10, 5000))
     pump()
-    feed.beginTransition(1, 1.0)
+    feed.beginTransition(1, 2, 1.0)
     feed.openSession(2, settings)
-    feed.takeTail(1, 1, 1.0)
-    feed.release(1)
-    feed.adoptTail(2, 1, 1.0)
+    feed.takeTail(1, 3, 1, 1.0)
+    feed.release(1, 4)
+    feed.adoptTail(2, 1, 1, 1.0)
     advance(2000)
     val samples = host.current!!.samples()
     assertTrue(samples.takeLast(20).all { it.toInt() == 5000 })
@@ -430,6 +473,110 @@ class LocalAudioFeedTest {
     advance(7000, step = 100)
     assertEquals(1, feed.stats(1)!!.reopens)
     assertTrue(logged.any { it.contains("stopped consuming") })
+  }
+
+  @Test
+  fun `leaves an idle track alone while the pipeline keeps it full of silence`() {
+    // With nothing left to play the pipeline conceals silence into the track, so the track's depth
+    // holds steady; read as "not draining" it closed a healthy track during every long seek.
+    host.trackMs = 80.0
+    host.concealing = true
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(100, 100))
+    pump()
+    advance(7000, step = 100)
+    assertEquals(0, feed.stats(1)!!.reopens)
+  }
+
+  @Test
+  fun `crossfade - recovers only what the ring holds, so the track's own buffer is not played twice`() {
+    host.trackMs = 100.0
+    feed.openSession(1, settings)
+    var seq = 1L
+    for (i in 0 until 20) feed.enqueue(1, seq++, segment(rate / 10, 100 + i))
+    pump()
+    advance(1000)
+    val played = feed.stats(1)!!.playedFrames
+    feed.beginTransition(1, seq++, 4.0)
+    pump()
+    val output = host.current!!
+    val firstRecovered = output.samples()[rate * 2 * 2].toInt()
+    val expected = 100 + ((played + rate / 10) / (rate / 10)).toInt()
+    assertEquals("recovery has to begin after the 100 ms the track still plays", expected, firstRecovered)
+  }
+
+  @Test
+  fun `closing a session that never wrote leaves its predecessor's track alone`() {
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(rate, 100))
+    pump()
+    feed.openSession(2, settings)
+    feed.close(2)
+    pump()
+    assertTrue(host.closed.isEmpty())
+    assertTrue(feed.stats(1)!!.active)
+  }
+
+  @Test
+  fun `a pause that arrives before the track opens holds once it does`() {
+    feed.openSession(1, settings)
+    feed.pause(1)
+    feed.enqueue(1, 1, segment(rate, 100))
+    pump()
+    assertTrue(host.current!!.paused)
+  }
+
+  @Test
+  fun `crossfade - a tail shorter than its fade ramps to silence over what is left`() {
+    feed.openSession(1, settings)
+    // One second of the outgoing tune, a two-second fade, and the incoming tune silent for the first
+    // 300 ms: the tail plays on at full level meanwhile, leaving well under the fade it was given.
+    feed.enqueue(1, 1, segment(rate, 8000))
+    pump()
+    feed.beginTransition(1, 2, 4.0)
+    feed.openSession(2, settings)
+    feed.takeTail(1, 3, 7, 4.0)
+    feed.release(1, 4)
+    feed.adoptTail(2, 1, 7, 2.0)
+    advance(300)
+    val output = host.current!!
+    val before = output.samples().size
+    feed.enqueue(2, 2, segment(rate, 0))
+    advance(1000)
+    val mixed = output.samples().drop(before).filterIndexed { i, _ -> i % 2 == 0 }.map { it.toInt() }
+    val tailLeft = mixed.indexOfFirst { it == 0 }
+    assertTrue("the tail ran on for ${tailLeft} frames", tailLeft in rate / 5..rate * 3 / 4)
+    assertTrue("the tail was cut at ${mixed[tailLeft - 1]}, not faded out", mixed[tailLeft - 1] < 300)
+  }
+
+  @Test
+  fun `a gap that opens after an earlier one was filled still gets its full wait`() {
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(100, 1))
+    feed.enqueue(1, 3, segment(100, 3))
+    feed.enqueue(1, 6, segment(100, 6))
+    pump()
+    advance(1500)
+    feed.enqueue(1, 2, segment(100, 2))
+    pump()
+    advance(800)
+    feed.enqueue(1, 4, segment(100, 4))
+    feed.enqueue(1, 5, segment(100, 5))
+    advance(200)
+    assertEquals(0, feed.stats(1)!!.missingSegments)
+    assertEquals(listOf(1, 2, 3, 4, 5, 6), host.current!!.samples().map { it.toInt() }.distinct())
+  }
+
+  @Test
+  fun `a tail that never comes holds the incoming tune back only for the gap timeout`() {
+    feed.openSession(2, settings)
+    feed.adoptTail(2, 1, 99, 1.0)
+    feed.enqueue(2, 2, segment(100, 5))
+    advance(1000)
+    assertTrue(host.current == null || host.current!!.samples().isEmpty())
+    advance(1500)
+    assertTrue(host.current!!.samples().any { it.toInt() == 5 })
+    assertTrue(logged.any { it.contains("adopt tail") })
   }
 
   @Test

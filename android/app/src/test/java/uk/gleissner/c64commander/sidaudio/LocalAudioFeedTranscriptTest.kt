@@ -84,6 +84,8 @@ class LocalAudioFeedTranscriptTest {
       return heldFrames * 1000.0 / rate
     }
 
+    override fun ringMs(): Double = bufferedMs()
+
     override fun underruns(): Int = 0
 
     fun leftChannel(): IntArray {
@@ -138,8 +140,8 @@ class LocalAudioFeedTranscriptTest {
       "openSession" ->
           feed.openSession(serial, FeedTrackSettings(e.getInt("sampleRate"), e.getInt("bufferMs"), e.getInt("maxRingMs"), e.getInt("trackBursts"), e.getInt("primeMs")))
       "setGain" -> feed.setGain(e.getDouble("gain"))
-      "fadeIn" -> feed.fadeIn(serial, e.getInt("ms"))
-      "fade" -> feed.fade(serial, e.getDouble("target"), e.getInt("ms"))
+      "fadeIn" -> feed.fadeIn(serial, e.getLong("seq"), e.getInt("ms"))
+      "fade" -> feed.fade(serial, e.getLong("seq"), e.getDouble("target"), e.getInt("ms"))
       "enqueuePcm" -> {
         val frames = e.getInt("frames")
         val value = e.getInt("value")
@@ -150,13 +152,13 @@ class LocalAudioFeedTranscriptTest {
         }
         feed.enqueue(serial, e.getLong("seq"), Segment(LocalAudioFeed.bytesSource(bytes), 0, frames.toLong()))
       }
-      "flush" -> feed.flush(serial, e.getLong("upToSeq"))
+      "flush" -> feed.flush(serial, e.getLong("seq"))
       "pause" -> feed.pause(serial)
       "resume" -> feed.resume(serial)
-      "beginTransition" -> feed.beginTransition(serial, e.getDouble("seconds"))
-      "takeTail" -> feed.takeTail(serial, e.getInt("tailId"), e.getDouble("maxSeconds"))
-      "adoptTail" -> feed.adoptTail(serial, e.getInt("tailId"), e.getDouble("seconds"))
-      "release" -> feed.release(serial)
+      "beginTransition" -> feed.beginTransition(serial, e.getLong("seq"), e.getDouble("seconds"))
+      "takeTail" -> feed.takeTail(serial, e.getLong("seq"), e.getInt("tailId"), e.getDouble("maxSeconds"))
+      "adoptTail" -> feed.adoptTail(serial, e.getLong("seq"), e.getInt("tailId"), e.getDouble("seconds"))
+      "release" -> feed.release(serial, e.getLong("seq"))
       "close" -> feed.close(serial)
       else -> throw IllegalArgumentException("Unknown recorded call ${e.getString("method")}")
     }

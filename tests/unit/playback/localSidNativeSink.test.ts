@@ -182,7 +182,7 @@ describe("the native sink controller", () => {
     expect(Array.from(new Int16Array(bytes.buffer))).toEqual([7, 7, 8, 8]);
   });
 
-  it("numbers chunks in order and flushes everything numbered so far, restarting the clock", async () => {
+  it("numbers chunks and commands in one sequence, and flushes at the next number, restarting the clock", async () => {
     const { sink, audio, of } = build();
     sink.createPcmSource!(ref(1, 0, RATE), 2).start(0);
     sink.createPcmSource!(ref(2, 0, RATE), 2).start(1);
@@ -190,8 +190,16 @@ describe("the native sink controller", () => {
     audio.flush!();
     await flush();
     expect(of("enqueueBuffer").map((o) => o.seq)).toEqual([1, 2]);
-    expect(of("flush")).toEqual([{ serial: expect.any(Number), upToSeq: 2 }]);
+    expect(of("flush")).toEqual([{ serial: expect.any(Number), seq: 3 }]);
     expect(sink.currentTime).toBe(0);
+    sink.createPcmSource!(ref(3, 0, RATE), 2).start(0);
+    await flush();
+    sink.fadeIn!(100, 1);
+    sink.releaseForHandover!();
+    await flush();
+    expect(of("enqueueBuffer").map((o) => o.seq)).toEqual([1, 2, 4]);
+    expect(of("fadeIn").map((o) => o.seq)).toEqual([5]);
+    expect(of("release").map((o) => o.seq)).toEqual([6]);
   });
 
   it("keeps the clock on the playhead the feed reports, and never past what it handed over", async () => {
@@ -267,7 +275,7 @@ describe("the native sink controller", () => {
     audio.fadeIn!(1500, 0.6);
     await flush();
     expect(of("setGain")).toEqual([{ gain: 0.6 }]);
-    expect(of("fadeIn")).toEqual([{ serial: expect.any(Number), ms: 1500 }]);
+    expect(of("fadeIn")).toEqual([{ serial: expect.any(Number), seq: expect.any(Number), ms: 1500 }]);
   });
 
   it("passes a crossfade tail from one session to the next by id, in the order the engine asks", async () => {

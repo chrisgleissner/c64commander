@@ -75,6 +75,8 @@ class SidAudioPlugin : Plugin() {
 
     override fun bufferedMs(): Double = pipeline.stats().bufferedMs
 
+    override fun ringMs(): Double = pipeline.stats().jitterBufferMs
+
     override fun underruns(): Int = pipeline.stats().underruns
   }
 
@@ -87,6 +89,8 @@ class SidAudioPlugin : Plugin() {
                 settings.maxRingMs,
                 settings.trackBursts,
                 settings.primeMs,
+                // The feed paces itself against the ring, on this device's clock: nothing to correct.
+                correctDrift = false,
             ),
         )
 
@@ -167,6 +171,9 @@ class SidAudioPlugin : Plugin() {
    */
   private fun PluginCall.wholeNumber(name: String): Long? = (data.opt(name) as? Number)?.toLong()
 
+  /** The command's place in its session's stream; see [LocalAudioFeed]. */
+  private fun PluginCall.seq(): Long? = wholeNumber("seq").also { if (it == null) reject("seq is required") }
+
   @PluginMethod
   fun openSession(call: PluginCall) {
     val serial = call.serial() ?: return
@@ -218,7 +225,7 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun flush(call: PluginCall) {
     val serial = call.serial() ?: return
-    feed.flush(serial, call.wholeNumber("upToSeq") ?: 0L)
+    feed.flush(serial, call.seq() ?: return)
     call.resolve(JSObject())
   }
 
@@ -243,14 +250,14 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun fade(call: PluginCall) {
     val serial = call.serial() ?: return
-    feed.fade(serial, call.getDouble("target") ?: 1.0, call.getInt("ms") ?: 0)
+    feed.fade(serial, call.seq() ?: return, call.getDouble("target") ?: 1.0, call.getInt("ms") ?: 0)
     call.resolve(JSObject())
   }
 
   @PluginMethod
   fun fadeIn(call: PluginCall) {
     val serial = call.serial() ?: return
-    feed.fadeIn(serial, call.getInt("ms") ?: 0)
+    feed.fadeIn(serial, call.seq() ?: return, call.getInt("ms") ?: 0)
     call.resolve(JSObject())
   }
 
@@ -263,29 +270,32 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun beginTransition(call: PluginCall) {
     val serial = call.serial() ?: return
-    feed.beginTransition(serial, call.getDouble("seconds") ?: 0.0)
+    feed.beginTransition(serial, call.seq() ?: return, call.getDouble("seconds") ?: 0.0)
     call.resolve(JSObject())
   }
 
   @PluginMethod
   fun takeTail(call: PluginCall) {
     val serial = call.serial() ?: return
+    val seq = call.seq() ?: return
     val tailId = call.getInt("tailId") ?: return call.reject("tailId is required")
-    feed.takeTail(serial, tailId, call.getDouble("maxSeconds") ?: 0.0)
+    feed.takeTail(serial, seq, tailId, call.getDouble("maxSeconds") ?: 0.0)
     call.resolve(JSObject())
   }
 
   @PluginMethod
   fun adoptTail(call: PluginCall) {
     val serial = call.serial() ?: return
+    val seq = call.seq() ?: return
     val tailId = call.getInt("tailId") ?: return call.reject("tailId is required")
-    feed.adoptTail(serial, tailId, call.getDouble("seconds") ?: 0.0)
+    feed.adoptTail(serial, seq, tailId, call.getDouble("seconds") ?: 0.0)
     call.resolve(JSObject())
   }
 
   @PluginMethod
   fun release(call: PluginCall) {
-    feed.release(call.serial() ?: return)
+    val serial = call.serial() ?: return
+    feed.release(serial, call.seq() ?: return)
     call.resolve(JSObject())
   }
 
