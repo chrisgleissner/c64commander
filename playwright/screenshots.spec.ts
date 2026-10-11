@@ -1064,6 +1064,32 @@ const seedStil = async (page: Page) => {
   });
 };
 
+/**
+ * Tune notes that give every SID Radio collection the size it has in the real STIL v85, so the
+ * manual's picture of the launcher shows the counts a listener will see rather than the handful the
+ * demo library could fill. The paths are invented and play nowhere; only the counts are shown.
+ */
+const STIL_V85_COLLECTION_SIZES = {
+  Winners: [423, { comment: "Won first place at the Demo Party music competition." }],
+  Screen: [1719, { credits: [{ title: "Theme [from the TV series]", artist: "Composer" }] }],
+  Games: [1888, { credits: [{ title: "Title [from the arcade game Demo]", artist: "Composer" }] }],
+  Pioneers: [895, { credits: [{ title: "Oxygene", artist: "Jean-Michel Jarre" }] }],
+  Synthpop: [759, { credits: [{ title: "Song", artist: "Depeche Mode" }] }],
+  Classical: [1328, { credits: [{ title: "Air", artist: "Johann Sebastian Bach" }] }],
+  Remixes: [501, { comment: "Covers /MUSICIANS/H/Hubbard_Rob/Commando.sid." }],
+  Christmas: [340, { credits: [{ title: "Jingle Bells", artist: "James Lord Pierpont" }] }],
+} as const;
+
+const seedStilCollections = async (page: Page) => {
+  await page.addInitScript((sizes) => {
+    const holder = window as unknown as { __stilMock__?: Record<string, unknown> };
+    const mock = (holder.__stilMock__ ??= {});
+    for (const [folder, [count, entry]] of Object.entries(sizes)) {
+      for (let index = 0; index < count; index += 1) mock[`/DEMOS/${folder}/Tune_${index}.sid`] = entry;
+    }
+  }, STIL_V85_COLLECTION_SIZES);
+};
+
 const waitForOverlaysToClear = async (page: Page) => {
   const notificationRegion = page.locator('[aria-label="Notifications (F8)"]');
   const openToasts = notificationRegion.locator('[data-state="open"], [role="status"]');
@@ -2946,6 +2972,7 @@ test.describe("App screenshots", () => {
       test.slow();
       await seedHvscBrowseIndex(page);
       await seedStil(page);
+      await seedStilCollections(page);
       await page.addInitScript(() => {
         localStorage.setItem(
           "c64u_recently_played:v1",
@@ -3058,6 +3085,19 @@ test.describe("App screenshots", () => {
         await captureScreenshot(page, testInfo, profileScreenshotPath("play/sid-radio", profileId, "02-stations.png"), {
           locator: sheet,
         });
+      }
+      // The collections sit below the moods, so each manual shows them in a picture of their own.
+      const collections = sheet.getByTestId("sid-radio-collections");
+      await expect(sheet.getByTestId("sid-radio-collection-winners-size")).toHaveText("423 tunes");
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await collections.evaluate((section) => section.scrollIntoView({ block: "start" }));
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("play/sid-radio", profileId, "06-collections.png"),
+          { locator: sheet },
+        );
       }
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);

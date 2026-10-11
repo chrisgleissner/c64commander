@@ -68,7 +68,7 @@ export interface SidRadioStats {
   engineThreadIsMain: boolean;
   memoryEstimateBytes: number;
   stationActive: boolean;
-  seedKind: "song" | "style" | "taste" | null;
+  seedKind: "song" | "style" | "taste" | "collection" | null;
   styleBit: number | null;
   shuffleSeed: number | null;
   /**

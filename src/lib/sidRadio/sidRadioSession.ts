@@ -17,7 +17,7 @@ import type { StationSeed } from "@/lib/sidRadio/stationEngine";
  * same tuple + the saved exclude set resumes exactly where the user left off.
  */
 export interface SidRadioSessionDescriptor {
-  seedKind: "song" | "style" | "taste";
+  seedKind: "song" | "style" | "taste" | "collection";
   seedLabel: string;
   seed: StationSeed;
   styleFilter: number | null;

@@ -13,6 +13,7 @@ import {
   parseStil,
   primaryCredit,
   stilInfoForSubsong,
+  sectionStartSeconds,
   stripSectionTimestamp,
 } from "@/lib/hvsc/stilParser";
 
@@ -198,6 +199,17 @@ COMMENT: Spaced    out    text
              and   more.
 `;
     expect(parseStil(text).get("/DEMOS/X/B.sid")?.comment).toBe("Spaced out text and more.");
+  });
+});
+
+describe("sectionStartSeconds", () => {
+  it.each([
+    ["Axel F [from the movie Beverly Hills Cop] (0:00-1:31)", 0],
+    ["Top Gun Anthem [from the movie] (0:30-0:45)", 30],
+    ["Bonanza [from the television series] (3:18)", 198],
+    ["Airwolf Theme [from the TV series]", null],
+  ])("reads where %j starts as %s", (title, seconds) => {
+    expect(sectionStartSeconds(title)).toBe(seconds);
   });
 });
 
