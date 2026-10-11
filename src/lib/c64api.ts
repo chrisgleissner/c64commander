@@ -3311,6 +3311,8 @@ export function updateC64APIConfig(
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
+  // A host the user enters is never the simulated device, so its token must not follow them there.
+  api.setMockToken(undefined);
   localStorage.removeItem("c64u_base_url");
   persistDeviceHostToStorage(resolvedDeviceHost);
   localStorage.removeItem("c64u_password");

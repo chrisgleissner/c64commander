@@ -1595,9 +1595,11 @@ describe("connectionManager", () => {
     startMockServer.mockResolvedValue({
       baseUrl: "http://127.0.0.1:8888",
       ftpPort: null,
-    });
+      token: "smoke-token",
+    } as never);
     getActiveMockBaseUrl.mockReturnValue("http://127.0.0.1:8888");
 
+    const { applyC64APIRuntimeConfig } = await import("../../../src/lib/c64api");
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -1606,6 +1608,12 @@ describe("connectionManager", () => {
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
     expect(startMockServer).toHaveBeenCalled();
+    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith(
+      "http://127.0.0.1:8888",
+      undefined,
+      expect.any(String),
+      { mockToken: "smoke-token" },
+    );
   });
 
   it("exports CONNECTION_CONSTANTS with expected values", async () => {
