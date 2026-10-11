@@ -562,6 +562,7 @@ export default function PlayFilesPage() {
     handlePlay,
     handleStop,
     handlePauseResume,
+    pauseShown,
     handleNext,
     handlePrevious,
     handleSeekBy,
@@ -2561,7 +2562,7 @@ export default function PlayFilesPage() {
                 hasPrev={hasPrev}
                 hasNext={hasNext}
                 isPlaying={isPlaying}
-                isPaused={isPaused}
+                isPaused={pauseShown}
                 hasPlaylist={hasPlaylist}
                 isPlaylistLoading={isPlaylistLoading}
                 canPause={canPause}

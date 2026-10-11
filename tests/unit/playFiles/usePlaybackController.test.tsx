@@ -1318,6 +1318,34 @@ describe("usePlaybackController", () => {
     expect(pauseMuteSnapshotRef.current).toEqual({ volumes: { "SID 1": "0 dB" }, enablement: {} });
   });
 
+  it("shows the button as paused from the tap, before the C64 has answered, and as it was if the pause fails", async () => {
+    // A button that changed only when the machine answered, a second or two later, drew a second tap that undid
+    // the first.
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    let answer!: (error?: Error) => void;
+    const machinePause = vi.fn(
+      () => new Promise<void>((resolve, reject) => (answer = (error) => (error ? reject(error) : resolve()))),
+    );
+    vi.mocked(getC64API).mockReturnValue({ machinePause } as any);
+    const { result } = renderPlaybackController(playlist, { isPlaying: true, isPaused: false });
+    expect(result.current.pauseShown).toBe(false);
+
+    let pausing!: Promise<void>;
+    act(() => {
+      pausing = result.current.handlePauseResume();
+    });
+    await waitFor(() => expect(machinePause).toHaveBeenCalled());
+    expect(result.current.pauseShown).toBe(true);
+
+    await act(async () => {
+      answer(new Error("pause failed"));
+      await pausing;
+    });
+    expect(result.current.pauseShown).toBe(false);
+  });
+
   it("restores the pause mute snapshot when machine pause fails after muting", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
@@ -3891,6 +3919,34 @@ describe("usePlaybackController", () => {
         // The C64 is stopped before the tune restarts on the device.
         await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
         expect(machineReset).toHaveBeenCalled();
+      });
+
+      // A reset does not unpause the Ultimate. A tune paused on the C64 and then moved here left the machine
+      // frozen with the tune in memory, and muted by Pause, while the phone played.
+      it("resumes a paused C64 before resetting it when the paused tune moves to the device", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const calls: string[] = [];
+        const machineResume = vi.fn(async () => void calls.push("resume"));
+        const machineReset = vi.fn(async () => void calls.push("reset"));
+        vi.mocked(getC64API).mockReturnValue({ machineReset, machineResume } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+          isPaused: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        calls.length = 0;
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(calls.slice(0, 2)).toEqual(["resume", "reset"]);
       });
 
       // The Play page remounts on every tab change, and the new instance has not started the tune the

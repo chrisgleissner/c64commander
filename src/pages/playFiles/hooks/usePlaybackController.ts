@@ -355,6 +355,9 @@ export function usePlaybackController({
   const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
   /** What the latest pause tap asked for while its transition runs; null when none runs. */
   const requestedPauseRef = useRef<boolean | null>(null);
+  // Shown on the button from the tap on: the machine takes a second or two to answer, and a button that had
+  // not changed by then drew a second tap, which undid the first.
+  const [requestedPause, setRequestedPause] = useState<boolean | null>(null);
   const pauseRequestRef = useRef(0);
   const localPauseChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
@@ -635,6 +638,26 @@ export function usePlaybackController({
       }
     },
     [withTimeout],
+  );
+
+  /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
+  const stopTuneOnC64 = useCallback(
+    async (api: ReturnType<typeof getC64API>, wasPaused: boolean, shouldReboot: boolean, itemId?: string) => {
+      const report = (title: string, error: unknown) =>
+        addErrorLog(title, {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          itemId,
+        });
+      if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
+      await stopMachineWithGracePeriod(api, shouldReboot);
+      await endPlayLaunchMounts(api);
+      // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
+      if (wasPaused && pauseMuteSnapshotRef.current) {
+        await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
+      }
+    },
+    [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
   );
 
   const resolveSidMetadata = useCallback(
@@ -1438,7 +1461,8 @@ export function usePlaybackController({
     playItem,
     stopOnC64: async (item) => {
       try {
-        await withTimeout(getC64API().machineReset(), STOP_MACHINE_TIMEOUT_MS, "Reset");
+        // A tune paused on the C64 and then moved here left the machine frozen and muted: a reset does not unpause it.
+        await stopTuneOnC64(getC64API(), isPausedRef.current, false, item.id);
         markRemotePlaybackStopped();
       } catch (error) {
         addErrorLog("Stopping the C64 for a playback-engine switch failed", {
@@ -1589,33 +1613,7 @@ export function usePlaybackController({
         setCurrentPlaybackIsLocal(false);
       } else {
         try {
-          const api = getC64API();
-          if (isPaused) {
-            try {
-              await resumeMachineWithRetry(api);
-            } catch (error) {
-              addErrorLog("Resume before stop failed", {
-                error: error instanceof Error ? error.message : String(error),
-                stack: error instanceof Error ? error.stack : undefined,
-                itemId: currentItem?.id,
-              });
-            }
-          }
-          await stopMachineWithGracePeriod(api, shouldReboot);
-          await endPlayLaunchMounts(api);
-          // Keep the resumed program muted until reset/reboot finishes, so Stop
-          // cannot replay a fragment. Restore Pause's snapshot only afterwards.
-          if (isPaused && pauseMuteSnapshotRef.current) {
-            try {
-              await unmuteAfterMachineResume();
-            } catch (error) {
-              addErrorLog("Pause mute restore after stop failed", {
-                error: error instanceof Error ? error.message : String(error),
-                stack: error instanceof Error ? error.stack : undefined,
-                itemId: currentItem?.id,
-              });
-            }
-          }
+          await stopTuneOnC64(getC64API(), isPaused, shouldReboot, currentItem?.id);
           markRemotePlaybackStopped();
         } catch (error) {
           reportUserError({
@@ -1815,9 +1813,12 @@ export function usePlaybackController({
       // From what was last asked for: a second tap read from a pause still under way repeated it.
       const target = (requestedPauseRef.current ?? isPaused) ? "running" : "paused";
       requestedPauseRef.current = target === "paused";
+      setRequestedPause(target === "paused");
       const request = ++pauseRequestRef.current;
       const settled = () => {
-        if (pauseRequestRef.current === request) requestedPauseRef.current = null;
+        if (pauseRequestRef.current !== request) return;
+        requestedPauseRef.current = null;
+        setRequestedPause(null);
       };
       if (currentPlaybackIsLocalRef.current || isLocalPlaybackActive()) {
         // In order: a resume finishing before the pause it follows would leave the tune paused.
@@ -2481,6 +2482,7 @@ export function usePlaybackController({
   });
 
   return {
+    pauseShown: requestedPause ?? isPaused,
     beginScrub,
     scrubBy,
     endScrub,
