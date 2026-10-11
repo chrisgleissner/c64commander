@@ -466,8 +466,7 @@ const StartupLaunchCoordinator = () => {
  * ordinary playback, so it is recorded as debug instead of as a fault.
  */
 const isResizeObserverLoopNotice = (event: ErrorEvent) =>
-  !event.error &&
-  /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/.test(event.message ?? "");
+  !event.error && /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/.test(event.message);
 
 const GlobalErrorListener = () => {
   useEffect(() => {
