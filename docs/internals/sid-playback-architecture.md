@@ -138,13 +138,16 @@ Copies that remain, and why:
   applying the fade and mixing the crossfade tail in the same pass, then `AudioPipeline.offer`
   copies it into the ring. The audio thread then resamples out of the ring into the track buffer.
   At 192 KB/s these are memcpys of a few kilobytes and cost microseconds.
-- **libSidplayEZ render.** The JNI wrapper renders into its own scratch and copies into the Java
-  array with one `SetByteArrayRegion`, rather than holding a `GetPrimitiveArrayCritical` section for
-  the tens of milliseconds a render takes, which would stall the collector.
+- **libSidplayEZ render.** `PcmStore` blocks are direct `ByteBuffer`s, so the JNI wrapper renders
+  into them in place (`nativeRenderDirect`), with no scratch buffer and no copy. The byte-array
+  entry point (`nativeRender`) renders into a scratch buffer and copies it out with one
+  `SetByteArrayRegion`, rather than holding a `GetPrimitiveArrayCritical` section for the tens of
+  milliseconds a render takes, which would stall the collector.
 
-Data and control can travel on different channels (the binary port and Capacitor). Every segment
-carries its session's sequence number, the feed writes a session's segments in sequence order, and a
-flush names the last sequence number it covers, so nothing can be reordered by the channel it took.
+Data and control can travel on different channels (the binary port and Capacitor). Every segment,
+and every command that acts on queued audio (flush, fade, fade-in, transition, tail hand-over and
+release), carries its session's sequence number. The feed applies them in sequence order, so a
+command can neither overtake nor fall behind the audio it was issued after.
 A sequence number that never arrives is skipped after two seconds and logged.
 
 ## The native audio feed
@@ -165,6 +168,11 @@ JavaScript and the WASM renderers get the same handling:
   rises; the ramp advances only on the incoming tune's own frames, so the two never meet in a gap.
 - **Level.** The listener's gain is the pipeline's master gain, kept by the feed so a re-opened
   track keeps it. Fades are per session and per frame.
+- **Clock.** The pipeline runs with `correctDrift = false` for local playback. The A/V mirror
+  resamples to follow the Ultimate's clock; a local renderer has no remote clock to follow, and
+  drift correction would only bend the pitch.
+- **Depth.** The watchdog and the crossfade recovery judge what the feed's own ring holds
+  (`FeedOutput.ringMs()`), not the track's buffer, which the platform sizes and drains on its own.
 - **Silence.** A session counts consecutive flat seconds (peak-to-peak below 64) of what it wrote;
   it is a fault once that, less what is still queued in the track, reaches 12 s.
 - **Stall watchdog.** A track that holds audio, is not paused, has not been written to for a second
@@ -198,12 +206,16 @@ order make the output bit-identical between work directories. The Gradle task
 as the 7-Zip library (release: `armeabi-v7a`, `arm64-v8a`, or what the variant names).
 
 One patch is applied to the verified archive before compiling,
-`android/app/src/main/cpp/sidplayez/patches/0001-match-residfp-output.patch`. It adds two
-`libsidplayfp::Player` settings and changes no existing behaviour: the 8580's EXT IN level
-(`set8580ExternalInput`, the input libsidplayfp's `digiBoost` drives) and a switch for the start-up
-declick (`setStartupDeclick`, on by default as upstream). The extracted tree is keyed by the
-archive's checksum and the patches, so a changed patch re-extracts. The third-party notices name
-every patch, and a unit test fails when one is not named.
+`android/app/src/main/cpp/sidplayez/patches/0001-match-residfp-output.patch`. It adds three
+`libsidplayfp::Player` entry points and changes no existing behaviour: the 8580's EXT IN level
+(`set8580ExternalInput`, the input libsidplayfp's `digiBoost` drives), a switch for the start-up
+declick (`setStartupDeclick`, on by default as upstream), and a hook that configures each chip as
+`sidCreate` makes it (`setChipSetup`), so the analogue profile is in place before the power-on
+warm-up and the first sample. Each modified file carries a dated notice naming the change, as GPL
+section 5(a) requires. The extracted tree is keyed by the archive's checksum and the patches, so a
+changed patch re-extracts. The third-party notices name every patch, and a unit test fails when
+one is not named. Upstream's licence, author and credit files are kept in the repository under
+`android/app/src/main/nativeLicenses/public/licenses/libsidplayez/` and packaged into the app with the notices.
 
 ```bash
 android/scripts/build-libsidplayez.sh android "$ANDROID_NDK_HOME" /tmp/ez-work /tmp/ez-out \
@@ -250,8 +262,8 @@ session happen on one thread. Long work (seek, pre-render) checks a generation c
 **Semantics that differ from libsidplayfp-wasm**, measured in [Equivalence](#equivalence-of-the-renderers):
 
 - Start-up: libSidplayEZ discards the audio produced while the tune's init routine runs and lets
-  its volume pokes settle before the first sample, so a tune starts 10-50 ms earlier than in the
-  WASM build. Song lengths are unaffected.
+  its volume pokes settle before the first sample, so most tunes start 10–50 ms earlier than in the
+  WASM build (a few start at the same time or 10 ms later). Song lengths are unaffected.
 - 6581 analogue model: libSidplayEZ's author tuned it by ear (filter gain, leakage, DC model, a 1 kΩ
   external filter). The notes, timing and spectral balance match reSIDfp closely; the timbre of
   filter-heavy 6581 tunes differs most.
@@ -283,7 +295,11 @@ for every variant). The previous release stored a two-way fidelity choice under
 
 Render throughput is learned per renderer (`renderThroughput.ts`), so the start-up buffer and the
 slow-device fallback are judged on the renderer that is playing. The choice is made when a tune
-opens and never changes during it; a change in Settings applies from the next tune. A stored
+opens and never changes during it; a change in Settings applies from the next tune. Pre-renders
+and lead-ins record the renderer that made them, and a tune plays cached audio only from its own
+renderer: a cache key built before the native probe answered names reSIDfp even where the tune then
+opens on libSidplayEZ. `preload()` waits for the probe, so the renderer it loads is the one the
+first tune uses. A stored
 preference for an unavailable renderer is kept, and Settings shows what will play here.
 
 Settings (`SidRadioSettingsSection.tsx`) offers Fast & accurate only where libSidplayEZ runs.
@@ -320,7 +336,8 @@ the reference here:
   (cost: band error + 4 × (1 − envelope r) + 4 × (1 − chroma) + 0.5 × |level|, averaged). The
   facade's neutral profile scored 0.981; filter curve 0.5, filter gain 1.0 and waveform DC offset
   1.5 score 0.553, and no other parameter moved the score by more than 0.002, so those keep their
-  neutral values. The 6581 filter probe's band error fell from 1.58 dB to 0.05 dB.
+  neutral values. The 6581 filter probe's band error, over the sweep's 20 s renders, fell from 1.58 dB to
+  0.05 dB (0.09 dB over the 30 s renders below).
 - **External filter.** reSIDfp's DC blocker is 10 kΩ into 10 µF (1.6 Hz); libSidplayEZ defaults to
   1 kΩ (15.9 Hz). The session uses 10 kΩ.
 - **8580 volume-register samples.** libsidplayfp-wasm enables `digiBoost`, which drives the 8580's
@@ -346,7 +363,8 @@ and timbre.
 
 Differences that remain, and why:
 
-- libSidplayEZ discards the audio of a tune's init routine, so tunes start 10–50 ms earlier.
+- libSidplayEZ discards the audio of a tune's init routine, so most tunes start 10–50 ms earlier;
+  of the 36 rows below, three start at the same time and two 10 ms later.
 - Three chips play as a centred mix (stereo r 1.00 against reSIDfp's 0.88–0.97).
 - Notes retriggered faster than their envelope completes differ in their first samples (the
   envelope probe's chroma is 0.86 against reSIDfp's self-variation of 0.98).
