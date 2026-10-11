@@ -501,6 +501,93 @@ const DATA_NOTICES = [
   '',
 ].join('\n');
 
+// Native libraries compiled from source by the Android build and packaged into the APK. They are in
+// no lockfile, so they are described here, with their pins read from android/app/build.gradle so
+// this file cannot name a different revision from the one that is built.
+const BSD_3_CLAUSE_TEXT = [
+  '> Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:',
+  '>',
+  '> 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.',
+  '> 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.',
+  '> 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.',
+  '>',
+  '> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.',
+];
+
+export const readNativePins = (gradleText) => {
+  const value = (name) => {
+    const match = new RegExp(`def ${name} = "([^"]+)"`).exec(gradleText);
+    if (!match)
+      throw new Error(`android/app/build.gradle does not define ${name}`);
+    return match[1];
+  };
+  const revision = value('libsidplayezRevision');
+  return {
+    libsidplayez: {
+      revision,
+      url: value('libsidplayezSourceUrl').replace(
+        '${libsidplayezRevision}',
+        revision,
+      ),
+      sha256: value('libsidplayezSourceSha256'),
+    },
+    sevenZip: {
+      url: value('upstream7zipSourceUrl'),
+      sha256: value('upstream7zipSourceSha256'),
+    },
+  };
+};
+
+export const renderNativeNotices = ({ libsidplayez, sevenZip }) => {
+  const sevenZipVersion =
+    (/7z(\d{2})(\d{2})-src/.exec(sevenZip.url) ?? []).slice(1).join('.') ||
+    'pinned';
+  return [
+    '## Native components (Android)',
+    '',
+    "The Android build compiles these from pinned, checksum-verified source archives and packages the resulting libraries into the app. Their license texts are packaged too, under `licenses/` in the app's web assets. They are not part of the web or iOS builds.",
+    '',
+    '| Component | Version | Source (SHA-256 of the archive) | License |',
+    '| --- | --- | --- | --- |',
+    `| libSidplayEZ (\`libc64sidplayez.so\`), the "Fast & accurate" SID renderer | commit ${libsidplayez.revision.slice(0, 12)} | [${libsidplayez.url}](${libsidplayez.url}) (\`${libsidplayez.sha256}\`) | [GPL-2.0-or-later](https://spdx.org/licenses/GPL-2.0-or-later.html) |`,
+    `| 7-Zip (\`lib7zz.so\`), used to unpack the HVSC archive | ${sevenZipVersion} | [${sevenZip.url}](${sevenZip.url}) (\`${sevenZip.sha256}\`) | [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), with BSD-3-Clause and BSD-2-Clause parts |`,
+    '| LLVM libc++ and libc++abi, linked statically into both libraries by the Android NDK | NDK r27 | [https://github.com/llvm/llvm-project](https://github.com/llvm/llvm-project) | [Apache-2.0 WITH LLVM-exception](https://spdx.org/licenses/LLVM-exception.html) |',
+    '',
+    '### libSidplayEZ',
+    '',
+    "libSidplayEZ is Michael Hartmann's modified version of libsidplayfp, the C64 music player library by Leandro Nini, which integrates the reSIDfp SID chip emulation into a cycle-based C64 emulator. Copyright (c) 2000-2001 Simon White, Copyright (c) 2007-2010 Antti Lankila, Copyright (c) 2010-2026 Leandro Nini, Copyright (c) 2023-2026 Michael Hartmann. Its `AUTHORS` file credits, in order of contribution: Dag Lem (reSID), Michael Schwendt (SidTune library, MD5 wrapper), Simon White (libsidplay2), Antti Lankila (reSID-fp), Leandro Nini (libsidplayfp), André Fachat (reloc65) and Michael Hartmann (libSidplayEZ); the VIC-II, CIA and CPU-port emulation is based on VICE code, and CIA serial port and interrupt handling on the Denise emulator. It is GPL-2.0-or-later, compatible with this application's GPL-3.0-or-later license.",
+    '',
+    "What this application changes: no upstream file is modified. The build compiles every file under `src/` except `src/EZ/*.cpp`, the ultraSID application layer (chip profiles selected by file path, SID player identification, digi selection), which this application does not use. It drives `libsidplayfp::Player` through its own JNI wrapper (`android/app/src/main/cpp/sidplayez/`, GPL-3.0-or-later), which chooses the fallback SID model from the application's setting, applies libSidplayEZ's own defaults for an unprofiled tune, and converts the engine's float output to 16-bit samples.",
+    '',
+    `Corresponding source: the archive above, of upstream commit \`${libsidplayez.revision}\` (also at [https://github.com/chrisgleissner/libSidplayEZ/tree/${libsidplayez.revision}](https://github.com/chrisgleissner/libSidplayEZ/tree/${libsidplayez.revision})), together with this application\'s source at the matching release tag; \`android/scripts/build-libsidplayez.sh\` rebuilds the library from them.`,
+    '',
+    'The MD5 implementation in libSidplayEZ (`src/MD5/`) was derived by Michael Schwendt from code by L. Peter Deutsch, under this notice:',
+    '',
+    '> Copyright (C) 1999 Aladdin Enterprises. All rights reserved.',
+    '>',
+    "> This software is provided 'as-is', without any express or implied warranty. In no event will the authors be held liable for any damages arising from the use of this software.",
+    '>',
+    '> Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:',
+    '>',
+    '> 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.',
+    '> 2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.',
+    '> 3. This notice may not be removed or altered from any source distribution.',
+    '>',
+    '> L. Peter Deutsch, ghost@aladdin.com',
+    '',
+    '### 7-Zip',
+    '',
+    `7-Zip Copyright (C) 1999-2026 Igor Pavlov, licensed under the GNU LGPL 2.1 or later. The library is built with \`DISABLE_RAR=1\`, so the RAR code and its unRAR license restriction are not part of it. The build script removes \`-Werror\` from 7-Zip\'s \`7zip_gcc.mak\`; no source file is changed. Corresponding source: the archive above, rebuilt by \`android/scripts/build-upstream-7zip.sh\`.`,
+    '',
+    "Its LZFSE decoder (derived from Apple's LZFSE library; Copyright (c) 2015-2016, Apple Inc. All rights reserved.) and Zstandard decoder (developed with reference to Facebook's zstd decoder; Copyright (c) Facebook, Inc. All rights reserved.), Copyright (c) 2023-2026 Igor Pavlov, are under the BSD 3-Clause License:",
+    '',
+    ...BSD_3_CLAUSE_TEXT,
+    '',
+    "Its XXH64 code (derived from Yann Collet's; Copyright (c) 2012-2021 Yann Collet, Copyright (c) 2023-2026 Igor Pavlov) is under the BSD 2-Clause License, whose terms are the first two conditions and the disclaimer above.",
+    '',
+  ].join('\n');
+};
+
 const parseArgs = () => {
   const args = process.argv.slice(2);
   return {
@@ -566,6 +653,14 @@ const main = async () => {
     renderNotices(allEntries),
     '',
     ...(needsLicenseNotes ? [LICENSE_NOTES, ''] : []),
+    renderNativeNotices(
+      readNativePins(
+        await fs.readFile(
+          path.join(rootDir, 'android', 'app', 'build.gradle'),
+          'utf8',
+        ),
+      ),
+    ),
     DATA_NOTICES,
   ].join('\n');
 

@@ -37,10 +37,10 @@ import uk.gleissner.c64commander.sidplayez.SidplayEzNative
  */
 @CapacitorPlugin(name = "SidAudio")
 class SidAudioPlugin : Plugin() {
-  private val store = PcmStore()
+  internal val store = PcmStore()
   private val renderers = ConcurrentHashMap<Int, SidplayEzRenderer>()
   private val nextRendererId = AtomicInteger(1)
-  private lateinit var feed: LocalAudioFeed
+  internal lateinit var feed: LocalAudioFeed
   private val port = SidAudioPort(this::onPortSegment)
   @Volatile private var portInstalled = false
   @Volatile private var portError: String? = null
@@ -160,6 +160,13 @@ class SidAudioPlugin : Plugin() {
 
   private fun PluginCall.serial(): Int? = getInt("serial").also { if (it == null) reject("serial is required") }
 
+  /**
+   * A whole number from the call, whatever width JSON parsing gave it. `PluginCall.getLong` answers
+   * only for values parsed as `Long`, and a number JavaScript sends that fits in 32 bits is parsed
+   * as an `Integer` — so sequence numbers and buffer ids read as missing.
+   */
+  private fun PluginCall.wholeNumber(name: String): Long? = (data.opt(name) as? Number)?.toLong()
+
   @PluginMethod
   fun openSession(call: PluginCall) {
     val serial = call.serial() ?: return
@@ -181,8 +188,8 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun enqueueBuffer(call: PluginCall) {
     val serial = call.serial() ?: return
-    val seq = call.getLong("seq") ?: return call.reject("seq is required")
-    val bufferId = call.getLong("bufferId") ?: return call.reject("bufferId is required")
+    val seq = call.wholeNumber("seq") ?: return call.reject("seq is required")
+    val bufferId = call.wholeNumber("bufferId") ?: return call.reject("bufferId is required")
     val buffer = store.take(bufferId)
     if (buffer == null) {
       Log.w(TAG, "Enqueued PCM buffer $bufferId no longer exists; the segment is skipped")
@@ -190,8 +197,8 @@ class SidAudioPlugin : Plugin() {
       call.resolve(JSObject().put("missing", true))
       return
     }
-    val start = (call.getLong("startFrame") ?: 0L).coerceAtLeast(0)
-    val frames = (call.getLong("frames") ?: (buffer.frames - start)).coerceIn(0, (buffer.frames - start).coerceAtLeast(0))
+    val start = (call.wholeNumber("startFrame") ?: 0L).coerceAtLeast(0)
+    val frames = (call.wholeNumber("frames") ?: (buffer.frames - start)).coerceIn(0, (buffer.frames - start).coerceAtLeast(0))
     feed.enqueue(serial, seq, Segment(LocalAudioFeed.bufferSource(buffer), start, frames))
     call.resolve(JSObject())
   }
@@ -200,7 +207,7 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun enqueuePcm(call: PluginCall) {
     val serial = call.serial() ?: return
-    val seq = call.getLong("seq") ?: return call.reject("seq is required")
+    val seq = call.wholeNumber("seq") ?: return call.reject("seq is required")
     val data = call.getString("data") ?: return call.reject("data is required")
     val bytes = Base64.decode(data, Base64.NO_WRAP)
     val frames = bytes.size / LocalAudioFeed.BYTES_PER_FRAME
@@ -211,7 +218,7 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun flush(call: PluginCall) {
     val serial = call.serial() ?: return
-    feed.flush(serial, call.getLong("upToSeq") ?: 0L)
+    feed.flush(serial, call.wholeNumber("upToSeq") ?: 0L)
     call.resolve(JSObject())
   }
 

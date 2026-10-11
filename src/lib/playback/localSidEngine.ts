@@ -2202,6 +2202,7 @@ export class LocalSidEngine {
    */
   debugState(): Record<string, unknown> {
     return {
+      renderer: this.renderer,
       seekPending: this.seekPending?.id ?? null,
       inFlightRenders: this.inFlightRenders,
       endReceived: this.endReceived,

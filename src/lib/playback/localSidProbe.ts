@@ -1,0 +1,131 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { loadLocalEngineEnabled, saveSidEmulationEngine, loadSidEmulationEngine } from "@/lib/config/appSettings";
+import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
+
+export interface LocalSidProbeRequest {
+  /** Base64 of the PSID/RSID file. */
+  sid: string;
+  songIndex?: number;
+  renderer: SidRendererId;
+  /** How long to play, in seconds. */
+  seconds: number;
+  /** Seek here halfway through, and time how long until the position passes it. */
+  seekTo?: number;
+  /** Pre-render this many seconds of the tune alongside, as the Play page does. */
+  prerenderSeconds?: number;
+  /** Output level, 0..1. 0 by default, so a probe is silent. */
+  volume?: number;
+}
+
+export interface LocalSidProbeSample {
+  atMs: number;
+  positionSeconds: number;
+  bufferedSeconds: number;
+  audioUnderruns: number;
+  renderMsPerSec: number;
+}
+
+export interface LocalSidProbeResult {
+  renderer: SidRendererId;
+  started: boolean;
+  openMs: number;
+  firstPositionMs: number | null;
+  seekLatencyMs: number | null;
+  samples: LocalSidProbeSample[];
+  final: Record<string, unknown>;
+  sink: Record<string, unknown> | null;
+  jsHeapBytes: number | null;
+}
+
+declare global {
+  interface Window {
+    __localSidProbe?: (request: LocalSidProbeRequest) => Promise<LocalSidProbeResult>;
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Device harness for on-device playback, the counterpart of `window.__sidRadioProbe`.
+ *
+ * Plays a tune through a real `LocalSidEngine` — the chosen renderer, the scheduler, the sink and,
+ * on Android, the native audio feed — and reports how long it took to open, to reach the speaker
+ * and to land a seek, with the engine's own stats sampled every 500 ms. Used by
+ * `tools/sid-engines/android-bench.mjs` over CDP to measure the three renderers end to end on a
+ * device, without driving the UI. A separate engine instance, disposed afterwards; silent unless a
+ * volume is given. Installed only while on-device playback is enabled; the engine is imported on
+ * first use so the probe adds nothing to the startup bundle.
+ */
+export const registerLocalSidProbe = (): void => {
+  if (typeof window === "undefined") return;
+  if (!loadLocalEngineEnabled()) return;
+  let running = false;
+  window.__localSidProbe = async (request) => {
+    // Two probes at once would each take the speaker from the other, and report the wreckage.
+    if (running) throw new Error("A local SID probe is already running");
+    running = true;
+    const previous = loadSidEmulationEngine();
+    saveSidEmulationEngine(request.renderer);
+    const { LocalSidEngine } = await import("./localSidEngine");
+    const engine = new LocalSidEngine();
+    engine.setVolume(request.volume ?? 0);
+    const startedAt = performance.now();
+    const samples: LocalSidProbeSample[] = [];
+    let firstPositionMs: number | null = null;
+    let seekLatencyMs: number | null = null;
+    try {
+      const bytes = Uint8Array.from(atob(request.sid), (char) => char.charCodeAt(0));
+      const key = `probe-${request.renderer}-${request.songIndex ?? 0}`;
+      const result = await engine.play(bytes.slice().buffer, request.songIndex ?? 0, {}, key);
+      const openMs = performance.now() - startedAt;
+      if (request.prerenderSeconds) {
+        engine.prerender(key, bytes.slice().buffer, request.songIndex ?? 0, request.prerenderSeconds);
+      }
+      let seekRequestedAt: number | null = null;
+      for (let elapsed = 0; elapsed < request.seconds * 1000; elapsed += 500) {
+        await sleep(500);
+        const stats = engine.getStats();
+        const atMs = performance.now() - startedAt;
+        if (firstPositionMs === null && stats.positionSeconds > 0) firstPositionMs = atMs;
+        if (request.seekTo !== undefined && seekRequestedAt === null && elapsed >= (request.seconds * 1000) / 2) {
+          seekRequestedAt = performance.now();
+          void engine.seekTo(request.seekTo);
+        } else if (seekRequestedAt !== null && seekLatencyMs === null && stats.positionSeconds > request.seekTo!) {
+          seekLatencyMs = performance.now() - seekRequestedAt;
+        }
+        samples.push({
+          atMs,
+          positionSeconds: stats.positionSeconds,
+          bufferedSeconds: stats.bufferedSeconds,
+          audioUnderruns: stats.audioUnderruns,
+          renderMsPerSec: stats.renderMsPerSec,
+        });
+      }
+      const sinkDebug = (globalThis as Record<string, unknown>).__localSinkDebug as
+        (() => Record<string, unknown>) | undefined;
+      const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+      return {
+        renderer: request.renderer,
+        started: result.started,
+        openMs,
+        firstPositionMs,
+        seekLatencyMs,
+        samples,
+        final: { ...engine.getStats(), ...engine.debugState() },
+        sink: sinkDebug?.() ?? null,
+        jsHeapBytes: memory?.usedJSHeapSize ?? null,
+      };
+    } finally {
+      engine.dispose();
+      saveSidEmulationEngine(previous);
+      running = false;
+    }
+  };
+};
