@@ -603,5 +603,20 @@ describe("AvMirrorSession", () => {
         expect(audio.stop).toHaveBeenCalled();
       });
     });
+
+    it("logs an eviction stop that failed with something other than an Error, as text", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      audio.stop.mockRejectedValueOnce("streams:stop refused");
+      vi.mocked(addLog).mockClear();
+
+      claimPhoneAudio("local-sid", {}, vi.fn(), { pause: vi.fn(), resume: vi.fn() });
+      await vi.waitFor(() => {
+        expect(addLog).toHaveBeenCalledWith("warn", "A/V mirror: stopping audio during eviction failed", {
+          service: "streams",
+          error: "streams:stop refused",
+        });
+      });
+    });
   });
 });

@@ -4008,6 +4008,90 @@ describe("usePlaybackController", () => {
         expect(calls).toEqual(["pause", "resume", "reset"]);
       });
 
+      it("logs a C64 that could not be stopped for the move, and still starts the tune on the device", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        const machineReset = vi.fn().mockRejectedValue(new Error("Host unreachable"));
+        vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        vi.mocked(addErrorLog).mockClear();
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Stopping the C64 for a playback-engine switch failed",
+          expect.objectContaining({ error: expect.stringContaining("Host unreachable") }),
+        );
+      });
+
+      it("does not log a restart failure that was already reported to the listener", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        const reported = Object.assign(new Error("already shown"), { c64uHandled: true });
+        controller.play.mockRejectedValueOnce(reported);
+        vi.mocked(addErrorLog).mockClear();
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        // The first play went to the C64; the one here is the restart, which fails.
+        await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        });
+        expect(addErrorLog).not.toHaveBeenCalledWith(
+          "Restarting the tune on the new playback engine failed",
+          expect.anything(),
+        );
+      });
+
+      it("logs a tune that could not be started on its new output", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        const controller = fakeController();
+        vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        controller.play.mockRejectedValueOnce(new Error("worker gone"));
+        vi.mocked(addErrorLog).mockClear();
+
+        await act(async () => {
+          savePlaybackEngine("local");
+        });
+
+        await waitFor(() =>
+          expect(addErrorLog).toHaveBeenCalledWith(
+            "Restarting the tune on the new playback engine failed",
+            expect.objectContaining({ error: expect.stringContaining("worker gone") }),
+          ),
+        );
+      });
+
       // The Play page remounts on every tab change, and the new instance has not started the tune the
       // phone is playing. Moving it to the C64 reset the C64 and left the phone playing, so both sounded.
       it("stops the phone's tune, not the C64, when a remounted page moves it to the C64", async () => {

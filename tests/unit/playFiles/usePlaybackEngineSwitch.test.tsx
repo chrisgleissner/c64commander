@@ -64,6 +64,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     markRemotePlaybackStopped();
   });
   const stopCountRef = { current: 0 };
+  const onRestartFailed = vi.fn();
   renderHook(() =>
     usePlaybackEngineSwitch({
       selectedEngineRef: { current: initialEngine },
@@ -79,7 +80,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
       enqueuePlayTransition,
       playItem,
       stopOnC64,
-      onRestartFailed: vi.fn(),
+      onRestartFailed,
     }),
   );
   const choose = (engine: PlaybackEngine) => {
@@ -102,6 +103,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     wait,
     playItem,
     stopOnC64,
+    onRestartFailed,
     stopCountRef,
     currentPlaybackIsLocalRef,
     soundsHere: () => localSounding,
@@ -192,5 +194,15 @@ describe("usePlaybackEngineSwitch", () => {
 
     expect(h.soundsHere()).toBe(true);
     expect(h.playItem).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a restart that failed, with the tune it was moving", async () => {
+    const h = harness("c64");
+    const failure = new Error("open failed");
+    h.playItem.mockRejectedValueOnce(failure);
+    h.choose("local");
+    await h.settle();
+
+    expect(h.onRestartFailed).toHaveBeenCalledWith(failure, tune);
   });
 });

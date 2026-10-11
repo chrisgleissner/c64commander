@@ -197,4 +197,17 @@ describe("keeping the page awake during background playback", () => {
       expect.objectContaining({ error: "context closed" }),
     );
   });
+
+  it("logs a release that failed with something other than an Error, as text", async () => {
+    const { addLog } = await import("@/lib/logging");
+    vi.mocked(addLog).mockClear();
+    startWebViewKeepAlive();
+    audio.contexts[0].suspend.mockRejectedValueOnce("closed");
+
+    stopWebViewKeepAlive();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(addLog).toHaveBeenCalledWith("warn", expect.stringContaining("could not release"), { error: "closed" });
+  });
 });

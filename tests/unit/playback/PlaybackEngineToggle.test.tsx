@@ -276,6 +276,22 @@ describe("PlaybackEngineToggle listen targets", () => {
     );
   });
 
+  it("logs a stop that failed with something other than an Error, as text", async () => {
+    mirror.session.setAudioWanted.mockRejectedValueOnce("bridge down");
+    vi.mocked(addLog).mockClear();
+    renderChooser();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("playback-engine-local"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not stop"),
+      expect.objectContaining({ error: "bridge down" }),
+    );
+  });
+
   it("labels the options Here, C64, Both, in that order", () => {
     // The row reads as a progression from this device outwards. "Remote" rather than the device's
     // name: the header already says which device is connected, so repeating it here spent the row's
