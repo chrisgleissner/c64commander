@@ -984,21 +984,9 @@ export class LocalSidEngine {
           Math.ceil(message.seconds * message.sampleRate * message.channels),
           message.channels,
         );
-        // A seek is waiting on this: hand playback the buffer the moment coverage reaches the target,
-        // rather than leaving it silent while a second render of the same audio catches up.
-        //
-        // Only for a target that is still the outstanding one. A pending seek from a previous track
-        // instance, or one a newer seek has already superseded, must be discarded rather than
-        // applied — applying it would jump the tune now playing to a position somebody asked for in
-        // a different one.
-        // Wait for a cushion past the target, not merely for the target.
-        //
-        // The chunk that crosses the target leaves nothing after it, so resuming exactly there
-        // starts playback with no headroom at all: the speaker consumes one second per second and
-        // the renderer is only just ahead. The same question — how much has to be in hand before
-        // starting so it cannot run dry — is what the measured start-up buffer already answers, so
-        // it answers this one too. It costs a fraction of a second more waiting on a wait that is
-        // measured in tens of them.
+        // A seek still outstanding for this tune (not a stale or superseded one) is answered once the
+        // pre-render covers its target plus the start-up cushion: resuming exactly at the target would
+        // start with no headroom, while a second render of the same audio would only arrive later.
         const cushion = startupBufferSeconds(this.renderer);
         const awaiting = this.activePendingSeek;
         if (awaiting !== null && message.seconds > awaiting.targetSeconds + cushion) {
@@ -1117,23 +1105,12 @@ export class LocalSidEngine {
         return;
       }
       case "chunk": {
-        // The budget is settled first, before any of the reasons this chunk might be thrown away.
-        //
-        // `pump()` counts a render when it posts one and refuses to post more at
-        // `MAX_IN_FLIGHT_RENDERS`. That count is a record of work outstanding in the worker, not of
-        // audio worth keeping: the render has finished either way, and the slot belongs back in the
-        // budget either way. Returning above the decrement — which all three discards below used to
-        // do — spent a slot permanently every time a chunk was dropped. Skipping is what made it
-        // add up, because every render still in flight when the next tune opens comes back with the
-        // previous tune's id and is dropped; once the budget was gone `pump()` could never ask for
-        // audio again and the tune went silent with the clock still running.
+        // Settled before any discard below: the render has finished either way, and a discarded chunk
+        // that kept its `MAX_IN_FLIGHT_RENDERS` slot eventually left `pump()` unable to ask for audio.
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
-        // Three reasons to throw a chunk away. It belongs to a tune that has been replaced. It was
-        // rendered before the "seeked" reply, so for the position just left. Or a seek is waiting on
-        // the pre-render: that path never repositions the live renderer (so it does not pay for a
-        // second re-render), so everything the live renderer produces is the old position, and
-        // scheduling it plays what the listener seeked away from while the bar shows the target.
-        // A libSidplayEZ chunk also holds a native buffer that nothing else will give back.
+        // Discarded: a replaced tune's chunk, one rendered before the "seeked" reply, or any while a
+        // seek waits on the pre-render (the live renderer is still at the old position). A
+        // libSidplayEZ chunk's native buffer is given back, as nothing else will.
         if (message.id !== this.activeId || this.seekPending || this.activePendingSeek) {
           releaseNativePcm(message.pcm);
           return;
@@ -1617,12 +1594,8 @@ export class LocalSidEngine {
     this.lastAudioAtMs = Date.now();
     if (this.watchdogTimer !== null) return;
     this.watchdogTimer = setInterval(() => {
-      // Published from the engine's own cadence, not from whoever happens to be asking for stats.
-      // It used to ride along inside getStats(), whose only regular caller is the Play page's
-      // interval — and that interval is removed on tab navigation while this engine deliberately
-      // keeps playing. So a listener who left Play for Live View froze the governor on the last
-      // sample it happened to see: later starvation could not demote video, and an old low-buffer
-      // reading could keep it demoted for good. This timer lives as long as the tune does.
+      // On the engine's own cadence, not inside getStats(): the Play page's polling stops when the
+      // listener leaves the page, which froze the Live View governor on its last sample.
       this.publishAudioHealth();
       this.checkLiveness();
     }, WATCHDOG_TICK_MS);
@@ -1673,23 +1646,11 @@ export class LocalSidEngine {
   private checkLiveness(): void {
     if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
     if (this.openPending || this.seekPending) return;
+    // A wait for the pre-render to reach a seek target is quiet on purpose, and lasts as long as
+    // that render: restarting the worker here would restart the render being waited on.
     if (this.activePendingSeek !== null) return;
-    // Waiting for the pre-render to reach a seek target is quiet for a reason too, and this timer is
-    // the wrong judge of it: no worker call is outstanding, the buffer is deliberately empty, and the
-    // wait lasts exactly as long as the rendering does — which for a position deep into a tune is far
-    // longer than the stall timeout. Killing the worker here would restart the very render being
-    // waited on, and the progress bar is already telling the listener what is happening.
-    // Silence that the listener did not ask for.
-    //
-    // Everything above this line asks whether audio is being *produced*. This asks whether any of
-    // it can be *heard*, which is the thing the listener actually cares about and the one condition
-    // none of the other counters can see: a tune rendering a flat line keeps the buffer full, the
-    // frames flowing and the clock advancing, and sounds like nothing at all. Muting is excluded
-    // because a muted tune is silent on purpose — that is the listener's desired state, and this
-    // exists to restore theirs, not to override it.
-    //
-    // The recovery is the same one a stall gets: re-open the tune once, and if it happens again let
-    // the playlist move on. That keeps one mechanism rather than two.
+    // Audio produced but not heard: a flat line keeps every other counter healthy. Muting is the
+    // listener's choice, so excluded. Recovered as a stall is: re-open once, then move on.
     if (!this.muted && this.volume > 0 && this.audio?.isSilentFault?.()) {
       addErrorLog("Local SID playback is silent", {
         service: "local-sid",
@@ -1937,12 +1898,8 @@ export class LocalSidEngine {
     // The buffer drained while the clock was suspended; give the pipeline the same grace a fresh
     // start gets rather than judging it on how long the pause lasted.
     this.lastAudioAtMs = Date.now();
-    // The silence accumulator gets the same grace, and for the same reason. It counts seconds of
-    // flat audio handed to the speaker, and nothing is handed over while paused — so it freezes at
-    // whatever it had reached and the watchdog carries on judging from there the moment playback
-    // resumes. A tune paused eleven seconds into a quiet passage would then cross the twelve-second
-    // tolerance about a second after the listener pressed play, and `recoverFromStall` would throw
-    // the worker away and re-open the tune: an audible jump caused by the pause, not by a fault.
+    // The silence accumulator too: frozen during a pause, it would otherwise carry a quiet passage's
+    // count across it and re-open the tune moments after resume, an audible jump caused by the pause.
     this.audio?.resetSilence?.();
     await this.audio?.resume?.();
   }
@@ -2387,24 +2344,13 @@ export class LocalSidEngine {
     // demoted for the rest of the session.
     clearLocalAudioHealth();
     releaseAudioOwnership(this);
-    // Reopen the seek gate. `seekPending` suppresses every "chunk" and "end" so audio rendered for
-    // the position we just left is never scheduled, and it is cleared only by a `seeked` reply whose
-    // id still matches. A reply that is lost — or superseded by a newer seek — therefore left it
-    // shut, and because a stop never reopened it the silence outlived the tune: the NEXT tune's
-    // chunks were discarded too, and re-opening in a fresh worker could not help either, because the
-    // gate is engine state and not the worker's. Scrubbing posts a seek every 350 ms, so this was
-    // easy to meet, and it is the whole of the "local SID playback stalled" report.
+    // Reopen the seek gate. Only a matching `seeked` reply clears it otherwise, so a lost or
+    // superseded reply left it shut, and the next tune's chunks were discarded too: the gate is
+    // engine state, so a fresh worker did not help ("local SID playback stalled").
     this.seekPending?.resolve();
     this.seekPending = null;
-    // `isActive()` flips here, so this is where the app is told.
-    //
-    // NOT the only place the app needs telling: a tune that simply runs out does
-    // NOT come through here. It fires `onEnded` (see maybeFireEnded, which
-    // notifies separately) and leaves the scheduler in place, so `isActive()`
-    // stays true until something explicitly stops or replaces the tune. Wiring
-    // end-of-tune teardown is a wider change than this one — auto-advance is
-    // driven by the songlength clock in PlayFilesPage, not by `onEnded`, which
-    // no caller currently installs.
+    // `isActive()` flips here, so this is where the app is told. A tune that runs out does not come
+    // through here: it fires `onEnded` (maybeFireEnded notifies separately) and keeps its scheduler.
     const wasActive = this.scheduler !== null;
     const fadeMs = options.crossfadeMs ?? 0;
     const outgoing = this.audio;
@@ -2446,12 +2392,8 @@ export class LocalSidEngine {
     this.currentTune = null;
     // Settle an open that this stop just cancelled, rather than dropping its resolver.
     //
-    // `onOpened` only answers a reply whose id is still `activeId`, and the line above has just
-    // cleared that, so nothing else can ever settle this promise — its caller is an `await` in the
-    // middle of starting a track and would wait forever. `play()` calls `stopPlayback` before
-    // registering its own open, so skipping quickly through a playlist walks straight into it: an
-    // ordinary second press on Next, not a corner case. Resolving is honest — this open was
-    // cancelled before anything started, which is what the result says.
+    // Nothing else can settle it now that `activeId` is cleared, and a quick second press on Next
+    // would leave its caller awaiting forever. It was cancelled before anything started, as it says.
     this.openPending?.resolve({
       romRequired: false,
       started: false,

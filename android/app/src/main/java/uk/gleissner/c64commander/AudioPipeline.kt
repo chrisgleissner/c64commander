@@ -72,22 +72,14 @@ internal class AudioPipeline(
     /** Test seam: builds the real `AudioTrack` (mocked in unit tests). */
     trackFactory: (Int, Int) -> AudioTrack = ::buildAudioTrack,
     /**
-     * Ceiling on the jitter ring, in ms.
-     *
-     * The default suits a live stream, where depth is latency and latency is the point. On-device
-     * playback is not live — nothing is waiting on it — so it can afford a far deeper ring, and wants
-     * one: the samples come from a WASM engine on the JS thread, and that thread also runs the UI. A
-     * shallow ring turns any scheduling hiccup there into an audible cut.
+     * Ceiling on the jitter ring, in ms. The default suits a live stream, where depth is latency.
+     * On-device playback has nothing waiting on it, and a deep ring absorbs scheduling hiccups.
      */
     maxRingMs: Int = 0,
     /**
-     * How many HAL bursts the `AudioTrack`'s own buffer holds.
-     *
-     * The default is sized for the live mirror, where every millisecond in this buffer is a
-     * millisecond of input latency. On-device playback has no such constraint, and a deeper track
-     * buffer is what stops the OS reporting underruns when the player thread is descheduled — those
-     * were still accruing at roughly one every four seconds with a two-second ring behind them,
-     * because the ring cannot help once the audio has been handed to the track.
+     * How many HAL bursts the `AudioTrack`'s own buffer holds. The mirror keeps it small (it is input
+     * latency); on-device playback needs it deep, or a descheduled player thread underruns the track
+     * however full the ring is (about one underrun every 4 s with a 2 s ring).
      */
     trackBursts: Int = 0,
     /**
@@ -101,12 +93,9 @@ internal class AudioPipeline(
      */
     primeMs: Int = 0,
     /**
-     * Whether to trim the conversion ratio to hold the ring at its target depth.
-     *
-     * The mirror needs it: its samples come from another machine's clock, which drifts against this
-     * DAC. On-device playback does not: its producer is this app, paced by the feed against the
-     * ring's depth, and a trimmed ratio would only shift the tune's pitch while the ring fills.
-     * Without it the ratio is the nominal one, and at equal rates every sample passes unchanged.
+     * Whether to trim the conversion ratio to hold the ring at its target depth: the mirror follows
+     * another machine's clock; on-device playback has none to follow, and a trimmed ratio would only
+     * shift the tune's pitch.
      */
     private val correctDrift: Boolean = true,
     /** Test seam: the player loop's time source, so tests can run it on virtual time. */
@@ -712,8 +701,7 @@ internal class AudioPipeline(
       return
     }
 
-    // On-device playback runs at the output rate with nothing to correct, and interpolating at a
-    // ratio of exactly 1 would reproduce every sample, at the cost of a conversion per sample.
+    // At a ratio of exactly 1 interpolation reproduces every sample, so copy them instead.
     val pos =
         if (ratio == 1.0 && fraction == 0.0) {
           copyFramesFromRing(renderFrames)
