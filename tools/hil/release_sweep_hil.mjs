@@ -701,8 +701,18 @@ const screenOff = async () => {
   }
 
   // `svc power stayon usb` keeps the screen lit while the phone is on USB, which is how this stage
-  // came to pass without ever putting the screen out. It is cleared before the screen is slept.
+  // came to pass without ever putting the screen out. It is cleared before the screen is slept, and
+  // put back afterwards: left cleared, the phone dozed during whatever ran next and froze its timers.
+  const stayOn = (await shell("settings get global stay_on_while_plugged_in")).trim();
   await shell("svc power stayon false");
+  try {
+    await sleepAndGrade(before);
+  } finally {
+    if (/^\d+$/.test(stayOn)) await shell(`settings put global stay_on_while_plugged_in ${stayOn}`);
+  }
+};
+
+const sleepAndGrade = async (before) => {
   await shell("input keyevent KEYCODE_SLEEP");
   await sleep(3000);
   const wakefulness = (await shell("dumpsys power | grep -m1 mWakefulness")).trim();

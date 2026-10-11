@@ -110,7 +110,9 @@ const cpuSeconds = async (device) => {
   const out = await device.shell([
     "sh",
     "-c",
-    `for p in $(pidof ${PACKAGE}) $(pgrep -f sandboxed_process); do echo "$p $(cat /proc/$p/stat)"; done`,
+    // The WebView renderer is named after the WebView package; matching on names, not command lines,
+    // keeps this shell out of the list.
+    `for p in $(pidof ${PACKAGE}) $(ps -A -o PID=,NAME= | awk '$2 ~ /webview:sandboxed_process/ {print $1}'); do echo "$p $(cat /proc/$p/stat)"; done`,
   ]);
   let ticks = 0;
   const processes = [];
@@ -138,7 +140,7 @@ const measured = async (device, request) => {
 const main = async () => {
   mkdirSync(OUT, { recursive: true });
   const device = await createDroidDevice();
-  await device.forwardWebview(PACKAGE, process.env.CDP_PORT ?? "9333");
+  await device.forwardWebview(PACKAGE, Number(process.env.CDP_PORT ?? 9333));
   const rows = [];
   for (const tune of TUNES) {
     const sid = readFileSync(tune.path).toString("base64");
