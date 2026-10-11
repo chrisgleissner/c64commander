@@ -323,6 +323,63 @@ describe("an engine with three renderers", () => {
     engine.dispose();
   });
 
+  it("gives back pre-render and lead-in slices that arrive for work already replaced", async () => {
+    const engine = makeEngine();
+    await open(engine, "tune");
+    engine.prerender("tune", new ArrayBuffer(8), 0, 4);
+    const prerender = channels.find((c) => c.role === "prerender")!;
+    const id = prerender.last("prerender").id;
+    prerender.emit({
+      type: "prerender-chunk",
+      id: id + 7,
+      pcm: ref(61, 0, RATE),
+      sampleRate: RATE,
+      channels: 2,
+      seconds: 1,
+    });
+    prerender.emit({ type: "prerendered", id: id + 7, sampleRate: RATE, channels: 2, seconds: 1 });
+    engine.warmLeadIn("next", new ArrayBuffer(8), 0, 2);
+    const warm = channels.find((c) => c.role !== "playback" && c.role !== "prerender")!;
+    const warmId = warm.last("prerender").id;
+    warm.emit({
+      type: "prerender-chunk",
+      id: warmId + 3,
+      pcm: ref(62, 0, RATE),
+      sampleRate: RATE,
+      channels: 2,
+      seconds: 1,
+    });
+    await settle();
+    expect(released).toEqual(expect.arrayContaining([61, 62]));
+    engine.dispose();
+  });
+
+  it("moves on to the next queued lead-in when one fails to render", async () => {
+    const engine = makeEngine();
+    await open(engine, "tune");
+    engine.warmLeadIn("next", new ArrayBuffer(8), 0, 2);
+    engine.warmLeadIn("previous", new ArrayBuffer(8), 0, 2);
+    const warm = channels.find((c) => c.role !== "playback" && c.role !== "prerender")!;
+    const first = warm.last("prerender").id;
+    warm.emit({ type: "error", id: first, code: "prerender", message: "render failed" });
+    await settle();
+    expect(warm.last("prerender").id).toBeGreaterThan(first);
+    engine.dispose();
+  });
+
+  it("closes a native pre-render channel when the pre-render moves to a WASM renderer", async () => {
+    const engine = makeEngine();
+    await open(engine, "tune");
+    engine.prerender("tune", new ArrayBuffer(8), 0, 4);
+    const native = channels.find((c) => c.role === "prerender")!;
+    expect(native.renderer).toBe("sidplayez");
+    saveSidEmulationEngine("residfp");
+    engine.prerender("other", new ArrayBuffer(8), 0, 4);
+    expect(native.terminated).toBe(true);
+    expect(channels.filter((c) => c.role === "prerender").at(-1)!.renderer).toBe("residfp");
+    engine.dispose();
+  });
+
   it("does not give back a buffer that playback is still reading from when the cache evicts it", async () => {
     const engine = makeEngine();
     await open(engine, "tune-a");

@@ -15,7 +15,11 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 import { claimNativeTrack, isSuperseded, nextSerial } from "@/lib/audio/nativeTrackOwnership";
-import { createNativeLocalSidSink, type NativeLocalAudioBackend } from "@/lib/playback/localSidNativeSink";
+import {
+  createNativeLocalSidSink,
+  defaultNativeLocalAudioBackend,
+  type NativeLocalAudioBackend,
+} from "@/lib/playback/localSidNativeSink";
 import type { SidAudioSessionStats } from "@/lib/native/sidAudio";
 import type { NativePcmRef } from "@/lib/playback/sidRenderer/pcmPayload";
 import { PCM_HEADER_BYTES, PCM_HEADER_SAMPLES } from "@/lib/playback/sidRenderer/nativePcmPort";
@@ -139,6 +143,49 @@ describe("the native sink controller", () => {
     expect(seam.__localSinkDebug).toBeTypeOf("function");
     second.audio.close();
     expect(seam.__localSinkDebug).toBeUndefined();
+  });
+
+  it("logs a session it could not open, and each command that then fails, without throwing", async () => {
+    const made = makeBackend();
+    const feed = made.backend.feed as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+    feed.openSession = () => Promise.reject(new Error("no track"));
+    feed.fade = () => Promise.reject(new Error("feed gone"));
+    const audio = createNativeLocalSidSink(RATE, made.backend, "sidplayez")!;
+    await flush();
+    audio.fadeOut!(200);
+    await flush();
+    expect(logs.map((entry) => entry.message)).toEqual(
+      expect.arrayContaining(["Native audio: opening the local audio session failed", "Native audio: fade failed"]),
+    );
+  });
+
+  it("keeps running when the feed's stats cannot be read", async () => {
+    const { audio, setStats } = build();
+    await flush();
+    setStats(() => {
+      throw new Error("stats unavailable");
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(audio.sink.currentTime).toBeGreaterThanOrEqual(0);
+  });
+
+  it("refuses float buffers, which are for Web Audio only", () => {
+    const { sink } = build();
+    expect(() => sink.createSource({} as AudioBuffer)).toThrow(/takes S16 PCM directly/);
+  });
+
+  it("reports what it has handed over for diagnosis", () => {
+    const { sink } = build();
+    const debug = (sink as unknown as { debug: () => Record<string, number> }).debug();
+    expect(debug).toMatchObject({ seq: 0, sent: 0, handedSec: 0, endings: 0 });
+  });
+
+  it("builds the default backend from the SID audio and stream plugins", () => {
+    const backend = defaultNativeLocalAudioBackend();
+    expect(backend.feed).toBeDefined();
+    expect(backend.trackOwner).toBeDefined();
+    expect(typeof backend.binaryPort).toBe("function");
+    expect(typeof backend.attach).toBe("function");
   });
 
   it("is unavailable without a backend, so the engine falls back to Web Audio", () => {

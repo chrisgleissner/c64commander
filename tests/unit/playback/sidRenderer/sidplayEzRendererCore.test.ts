@@ -244,6 +244,49 @@ describe("the libSidplayEZ renderer core", () => {
   });
 });
 
+describe("the libSidplayEZ renderer core's other operations", () => {
+  it("seeks the native renderer and reports where it landed", async () => {
+    const { plugin } = fakePlugin();
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+    await core.open(request());
+    expect(await core.seek(42)).toBe(42);
+  });
+
+  it("closes the open tune, and does nothing before a renderer exists", async () => {
+    const { plugin } = fakePlugin();
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+    await core.close();
+    expect(plugin.closeTune).not.toHaveBeenCalled();
+    await core.open(request());
+    await core.close();
+    expect(plugin.closeTune).toHaveBeenCalledWith({ renderer: 40 });
+  });
+
+  it("rejects a pre-render the native side refuses to start", async () => {
+    const { plugin } = fakePlugin();
+    vi.mocked(plugin.prerender).mockRejectedValueOnce(new Error("no renderer thread"));
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+    await expect(
+      core.prerender(
+        { ...request(), seconds: 4 },
+        () => undefined,
+        () => false,
+      ),
+    ).rejects.toThrow("no renderer thread");
+  });
+
+  it("logs a renderer that could not be disposed", async () => {
+    const { plugin } = fakePlugin();
+    vi.mocked(plugin.disposeRenderer).mockRejectedValueOnce(new Error("already gone"));
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+    await core.load();
+    logs.length = 0;
+    core.dispose();
+    await settle();
+    expect(logs).toContain("libSidplayEZ dispose failed");
+  });
+});
+
 describe("a native renderer channel", () => {
   it("speaks the worker protocol, delivering replies asynchronously", async () => {
     const fake = fakePlugin();
