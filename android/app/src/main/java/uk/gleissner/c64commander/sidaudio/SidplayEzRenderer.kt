@@ -193,6 +193,9 @@ internal class SidplayEzRenderer(
 
     fun done(bufferId: Long, frames: Long, seconds: Double)
 
+    /** Superseded part-way. The buffer is kept: the web layer may already be playing from it. */
+    fun cancelled(bufferId: Long, frames: Long, seconds: Double)
+
     fun failed(error: Exception)
   }
 
@@ -225,7 +228,7 @@ internal class SidplayEzRenderer(
           listener.chunk(buffer.id, buffer.frames, buffer.frames.toDouble() / rate)
         }
         if (superseded()) {
-          store.release(buffer.id)
+          listener.cancelled(buffer.id, buffer.frames, buffer.frames.toDouble() / rate)
           return@submit
         }
         listener.done(buffer.id, buffer.frames, buffer.frames.toDouble() / rate)
@@ -233,6 +236,11 @@ internal class SidplayEzRenderer(
         native.nativeDestroy(offline)
       }
     }
+  }
+
+  /** Stop a running pre-render at its next block; it reports [PrerenderListener.cancelled]. */
+  fun cancelPrerender() {
+    generation.incrementAndGet()
   }
 
   fun close(callbacks: EzCallbacks<Unit>) {

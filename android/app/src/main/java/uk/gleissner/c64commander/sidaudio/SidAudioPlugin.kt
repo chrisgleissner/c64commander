@@ -407,6 +407,9 @@ class SidAudioPlugin : Plugin() {
 
           override fun done(bufferId: Long, frames: Long, seconds: Double) = emitPrerender(rendererId, requestId, "done", bufferId, frames, seconds, null)
 
+          override fun cancelled(bufferId: Long, frames: Long, seconds: Double) =
+              emitPrerender(rendererId, requestId, "cancelled", bufferId, frames, seconds, null)
+
           override fun failed(error: Exception) {
             Log.w(TAG, "libSidplayEZ pre-render $requestId failed", error)
             emitPrerender(rendererId, requestId, "error", 0, 0, 0.0, error.message ?: error.javaClass.simpleName)
@@ -428,6 +431,13 @@ class SidAudioPlugin : Plugin() {
             .put("seconds", seconds)
             .put("error", error),
     )
+  }
+
+  @PluginMethod
+  fun cancelPrerender(call: PluginCall) {
+    val renderer = call.renderer() ?: return
+    renderer.cancelPrerender()
+    call.resolve(JSObject())
   }
 
   @PluginMethod
