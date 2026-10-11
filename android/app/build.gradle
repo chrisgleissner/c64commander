@@ -227,13 +227,16 @@ android {
             manifest.srcFile selectedAndroidManifest
         }
         debug {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug"), new File(libsidplayezGeneratedJniLibsBaseDir, "debug")]
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("debug")]
+            jniLibs.srcDirs += [new File(libsidplayezGeneratedJniLibsBaseDir, "debug")]
         }
         minifiedDebug {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("minifiedDebug"), new File(libsidplayezGeneratedJniLibsBaseDir, "minifiedDebug")]
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("minifiedDebug")]
+            jniLibs.srcDirs += [new File(libsidplayezGeneratedJniLibsBaseDir, "minifiedDebug")]
         }
         release {
-            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("release"), new File(libsidplayezGeneratedJniLibsBaseDir, "release")]
+            jniLibs.srcDirs += [upstream7zipGeneratedJniLibsDirForVariant("release")]
+            jniLibs.srcDirs += [new File(libsidplayezGeneratedJniLibsBaseDir, "release")]
         }
         androidTest {
             assets.srcDirs += ['src/test/fixtures']
@@ -489,22 +492,34 @@ tasks.register('buildLibSidplayEzHost', Exec) {
     }
 }
 
-['none', 'address', 'thread'].each { sanitizer ->
-    tasks.register("testLibSidplayEzNative${sanitizer.capitalize()}", Exec) {
-        group = 'verification'
-        description = "Runs the libSidplayEZ wrapper's C++ tests (${sanitizer} sanitizer)."
-        dependsOn 'buildLibSidplayEzHost'
-        commandLine(
-            new File(libsidplayezHostOutputDir, "ez_session_test-${sanitizer}").absolutePath,
-            rootProject.file("../tests/fixtures/tone-ladder.sid").absolutePath,
-        )
+// Two suites: the app's JNI session wrapper (ez_session_test, also under ThreadSanitizer because it
+// runs players concurrently) and the libSidplayEZ engine itself (engine_test), which upstream ships
+// without tests of its own.
+def libsidplayezNativeSuites = [
+    [name: 'Wrapper', binary: 'ez_session_test', sanitizers: ['none', 'address', 'thread']],
+    [name: 'Engine', binary: 'engine_test', sanitizers: ['none', 'address']],
+]
+def libsidplayezNativeTaskNames = []
+libsidplayezNativeSuites.each { suite ->
+    suite.sanitizers.each { sanitizer ->
+        def taskName = "testLibSidplayEz${suite.name}${sanitizer.capitalize()}"
+        libsidplayezNativeTaskNames << taskName
+        tasks.register(taskName, Exec) {
+            group = 'verification'
+            description = "Runs the libSidplayEZ ${suite.name.toLowerCase()} C++ tests (${sanitizer} sanitizer)."
+            dependsOn 'buildLibSidplayEzHost'
+            commandLine(
+                new File(libsidplayezHostOutputDir, "${suite.binary}-${sanitizer}").absolutePath,
+                rootProject.file("../tests/fixtures/tone-ladder.sid").absolutePath,
+            )
+        }
     }
 }
 
 tasks.register('testLibSidplayEzNative') {
     group = 'verification'
-    description = "Runs the libSidplayEZ wrapper's C++ tests under every sanitizer configuration."
-    dependsOn 'testLibSidplayEzNativeNone', 'testLibSidplayEzNativeAddress', 'testLibSidplayEzNativeThread'
+    description = "Runs every libSidplayEZ C++ test suite under every sanitizer configuration it supports."
+    dependsOn libsidplayezNativeTaskNames
 }
 
 tasks.withType(Test).configureEach {

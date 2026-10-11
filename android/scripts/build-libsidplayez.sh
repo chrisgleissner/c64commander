@@ -173,6 +173,13 @@ host)
     # shellcheck disable=SC2086
     "$CXX" -std=c++2b -O1 -g "${HOST_ARCH[@]}" "${SAN_FLAGS[@]}" -I"$WRAPPER_DIR" -o "$OUTPUT_DIR/ez_session_test-$SAN" \
       "$TEST_SRC" $objects -lpthread
+    # The engine suite is single-threaded, so ThreadSanitizer adds nothing to it; the wrapper suite
+    # above is the one that runs players concurrently.
+    if [[ "$SAN" != thread ]]; then
+      # shellcheck disable=SC2086
+      "$CXX" -std=c++2b -O1 -g -w "${HOST_ARCH[@]}" "${SAN_FLAGS[@]}" -I"$SRC_DIR/src" -o "$OUTPUT_DIR/engine_test-$SAN" \
+        "$WRAPPER_DIR/tests/engine_test.cpp" $objects -lpthread
+    fi
   done
   ;;
 *)

@@ -578,42 +578,6 @@ class StreamUdpPluginTest {
   }
 
   @Test
-  fun writeAudioTrackReturnsBufferStatsForTheGovernor() {
-    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
-
-    // 4 stereo S16 frames of PCM (16 bytes), base64-framed as the JS sink sends it.
-    val pcm = ByteArray(16) { it.toByte() }
-    val (writeCall, resolvedWrite) =
-        resolvingCall { `when`(it.getString("data")).thenReturn(Base64.encodeToString(pcm, Base64.NO_WRAP)) }
-    plugin.writeAudioTrack(writeCall)
-    verify(writeCall).resolve(any())
-    // The governor reads these back each write: buffer depth (>= 0) + a non-negative underrun count.
-    assertTrue(resolvedWrite()!!.getDouble("bufferedMs") >= 0.0)
-    assertTrue(resolvedWrite()!!.getInteger("underruns")!! >= 0)
-
-    plugin.closeAudioTrack(resolvingCall {}.first)
-  }
-
-  @Test
-  fun writeAudioTrackRejectsMissingData() {
-    val call = mock(PluginCall::class.java)
-    `when`(call.getString("data")).thenReturn(null)
-    plugin.writeAudioTrack(call)
-    verify(call).reject("data is required")
-  }
-
-  @Test
-  fun writeAudioTrackIsANoOpWhenNoTrackIsOpen() {
-    // No openAudioTrack first: the write must resolve with zeroed stats, never crash.
-    val (call, resolved) =
-        resolvingCall { `when`(it.getString("data")).thenReturn(Base64.encodeToString(ByteArray(8), Base64.NO_WRAP)) }
-    plugin.writeAudioTrack(call)
-    verify(call).resolve(any())
-    assertEquals(0.0, resolved()!!.getDouble("bufferedMs"), 0.0)
-    assertEquals(0, resolved()!!.getInteger("underruns"))
-  }
-
-  @Test
   fun closeAudioTrackIsSafeWhenNoneOpen() {
     val (call, _) = resolvingCall {}
     plugin.closeAudioTrack(call)

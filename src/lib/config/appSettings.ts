@@ -633,10 +633,10 @@ const isSidEmulationEngine = (value: unknown): value is SidEmulationEngine =>
  * defaults to the cheap one — none does, because sounding like a C64 is the point of playing a SID,
  * and the keypad variant's handset cannot be measured yet.
  */
-export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine = isSidEmulationEngine(
-  variant.runtime.defaultSidEmulationEngine as string,
-)
-  ? (variant.runtime.defaultSidEmulationEngine as SidEmulationEngine)
+const VARIANT_SID_EMULATION_ENGINE: unknown = variant.runtime.defaultSidEmulationEngine;
+
+export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine = isSidEmulationEngine(VARIANT_SID_EMULATION_ENGINE)
+  ? VARIANT_SID_EMULATION_ENGINE
   : "sidplayez";
 
 /**

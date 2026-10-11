@@ -169,7 +169,7 @@ export class SidplayEzRendererCore implements SidRendererCore {
       });
       handle
         .then(() => this.plugin.prerender({ ...this.tuneRequest(renderer, request), id, seconds: request.seconds }))
-        .catch((error: unknown) => finish(() => reject(error as Error)));
+        .catch((error: unknown) => finish(() => reject(error)));
     });
   }
 

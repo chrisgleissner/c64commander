@@ -223,7 +223,7 @@ const normalize = (transcript: TranscriptEntry[]): TranscriptEntry[] => {
 /** Compare with the committed transcript, or write it when regenerating. */
 const checkGolden = (name: string, scenario: { transcript: TranscriptEntry[] } & Record<string, unknown>) => {
   const path = resolve(FIXTURE_DIR, `${name}.json`);
-  const text = `${JSON.stringify({ ...scenario, transcript: normalize(scenario.transcript) }, null, 1)}\n`;
+  const text = `${JSON.stringify({ ...scenario, transcript: normalize(scenario.transcript) }, null, 2)}\n`;
   if (process.env.UPDATE_LOCAL_AUDIO_TRANSCRIPTS === "1") {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, text);

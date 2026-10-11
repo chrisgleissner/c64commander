@@ -35,7 +35,7 @@ import { uint8ToBase64 } from "@/lib/sid/sidUtils";
 import { traceLocalSid } from "./localSidTrace";
 import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
-import type { CrossfadeTail, LocalSidAudioSink } from "./localSidEngine";
+import type { CrossfadeTail, LocalSidAudioSink } from "./localSidAudioSink";
 import { isNativePcm, payloadFrames, type PcmPayload } from "./sidRenderer/pcmPayload";
 import { confirmedPcmPort, pcmMessage, PCM_HEADER_SAMPLES } from "./sidRenderer/nativePcmPort";
 import { ensureSidAudioAttached } from "./sidRenderer/sidAudioAttach";

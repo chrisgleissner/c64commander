@@ -75,7 +75,7 @@ export interface StreamUdpArrivalStats {
   lostPackets: number;
 }
 
-/** Live buffer/underrun stats returned by each {@link StreamUdpPlugin.writeAudioTrack} write. */
+/** Live buffer/underrun stats of the native audio pipeline, from {@link StreamUdpPlugin.readAudioStats}. */
 export interface StreamUdpAudioStats {
   /** PCM still queued ahead of the AudioTrack playback head (ms) — the native player buffer depth. */
   bufferedMs: number;
@@ -205,26 +205,6 @@ export interface StreamUdpPlugin {
     /** Ring depth before the first sound. Keeps start-up instant on a deep ring. */
     primeMs?: number;
   }): Promise<{ sampleRate: number; bufferMs: number }>;
-  /**
-   * Queue one chunk of base64 interleaved-stereo-S16LE PCM into the native pipeline.
-   *
-   * The A/V mirror does not use this — its packets are handed over natively, without a bridge hop.
-   * The on-device SID engine does: it is the point at which a locally rendered tune joins the same
-   * ring buffer, the same player thread and the same DAC pacing as a mirrored one, instead of being
-   * scheduled chunk-by-chunk from the JS thread. No-op (zeroed stats) if no pipeline is open.
-   */
-  writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
-  /** Drop queued-but-unplayed audio, so a seek is immediate despite a deep ring. */
-  flushAudioTrack(options?: Record<string, never>): Promise<void>;
-  /**
-   * Hold the speaker for a listener's pause, keeping the ring and the track's own buffer intact.
-   *
-   * Distinct from {@link flushAudioTrack}, which is for a seek: a seek invalidates the queued audio,
-   * a pause does not, and discarding it on a pause is heard as a jump forward on resume.
-   */
-  pauseAudioTrack(options?: Record<string, never>): Promise<void>;
-  /** Continue a {@link pauseAudioTrack} from the sample it stopped on. */
-  resumeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**
    * Read the pipeline's live depth, underruns and arrival evenness — the governor's audio-headroom
    * signal, polled periodically since native (not JS) drives playback. Zeroed if none is open.
