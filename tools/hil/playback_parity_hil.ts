@@ -527,7 +527,10 @@ const play=row?.querySelector('button[aria-label^="Play "]');if(!play)return fal
       : touch(testId),
   hold: (testId, ms) => touch(testId, 0.5, ms),
   tapBar: (fraction) => touch("playback-progress-seek", fraction),
-  waitingForRender: () => js<boolean>(`!!document.querySelector('[data-testid="playback-pending-status"]')`),
+  renderWaitProgress: () =>
+    js<number | null>(
+      `(()=>{const s=document.querySelector('[data-testid="playback-pending-status"]');return s?Number(s.getAttribute("data-pending-progress")??0):null})()`,
+    ),
   async shownSeconds() {
     const state = await js<{
       waiting: boolean;

@@ -100,7 +100,11 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
       const { box } = await center("playback-progress-seek");
       await page.mouse.click(box.x + box.width * fraction, box.y + box.height / 2);
     },
-    waitingForRender: async () => (await page.getByTestId("playback-pending-status").count()) > 0,
+    renderWaitProgress: async () => {
+      const status = page.getByTestId("playback-pending-status");
+      if (!(await status.count())) return null;
+      return Number((await status.getAttribute("data-pending-progress")) ?? 0);
+    },
     async shownSeconds() {
       // A seek on the C64 shows its target with ⏵; one on the phone shows that it waits to continue.
       if (await page.locator('[aria-label^="Waiting to continue at"]').count()) return null;

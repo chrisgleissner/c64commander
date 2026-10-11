@@ -21,6 +21,12 @@ export interface LocalSidProbeRequest {
   seekTo?: number;
   /** Pre-render this many seconds of the tune alongside, as the Play page does. */
   prerenderSeconds?: number;
+  /** End as soon as the pre-render has finished, with `seconds` as the limit. */
+  untilPrerendered?: boolean;
+  /** Once the pre-render has finished, seek here and time the landing, which the cache answers. */
+  seekAfterPrerender?: number;
+  /** Then open this tune on the same engine, as a skip does, and time it. */
+  next?: { sid: string; songIndex?: number };
   /** Output level, 0..1. 0 by default, so a probe is silent. */
   volume?: number;
 }
@@ -39,6 +45,11 @@ export interface LocalSidProbeResult {
   openMs: number;
   firstPositionMs: number | null;
   seekLatencyMs: number | null;
+  /** From starting the pre-render to its last slice, or null when it did not finish. */
+  prerenderMs: number | null;
+  cachedSeekLatencyMs: number | null;
+  nextOpenMs: number | null;
+  nextFirstPositionMs: number | null;
   samples: LocalSidProbeSample[];
   final: Record<string, unknown>;
   sink: Record<string, unknown> | null;
@@ -56,6 +67,10 @@ declare global {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const LAG_TICK_MS = 50;
+/** How often the probe checks for a landing or a finished pre-render; samples are kept every 500 ms. */
+const TICK_MS = 100;
+const SAMPLE_MS = 500;
+const NEXT_TUNE_LIMIT_MS = 15_000;
 
 /** Starts timing a 50 ms timer; the returned function stops it and summarises how late it fired. */
 const measureEventLoopLag = (): (() => LocalSidProbeResult["eventLoopLagMs"]) => {
@@ -103,18 +118,24 @@ export const registerLocalSidProbe = (): void => {
     const samples: LocalSidProbeSample[] = [];
     let firstPositionMs: number | null = null;
     let seekLatencyMs: number | null = null;
+    let prerenderMs: number | null = null;
+    let cachedSeekLatencyMs: number | null = null;
+    let nextOpenMs: number | null = null;
+    let nextFirstPositionMs: number | null = null;
     const stopLagMeasurement = measureEventLoopLag();
     try {
       const bytes = Uint8Array.from(atob(request.sid), (char) => char.charCodeAt(0));
       const key = `probe-${request.renderer}-${request.songIndex ?? 0}`;
       const result = await engine.play(bytes.slice().buffer, request.songIndex ?? 0, {}, key);
       const openMs = performance.now() - startedAt;
+      const prerenderStartedAt = performance.now();
       if (request.prerenderSeconds) {
         engine.prerender(key, bytes.slice().buffer, request.songIndex ?? 0, request.prerenderSeconds);
       }
       let seekRequestedAt: number | null = null;
-      for (let elapsed = 0; elapsed < request.seconds * 1000; elapsed += 500) {
-        await sleep(500);
+      let cachedSeekRequestedAt: number | null = null;
+      for (let elapsed = 0; elapsed < request.seconds * 1000; elapsed += TICK_MS) {
+        await sleep(TICK_MS);
         const stats = engine.getStats();
         const atMs = performance.now() - startedAt;
         if (firstPositionMs === null && stats.positionSeconds > 0) firstPositionMs = atMs;
@@ -124,13 +145,43 @@ export const registerLocalSidProbe = (): void => {
         } else if (seekRequestedAt !== null && seekLatencyMs === null && stats.positionSeconds > request.seekTo!) {
           seekLatencyMs = performance.now() - seekRequestedAt;
         }
-        samples.push({
-          atMs,
-          positionSeconds: stats.positionSeconds,
-          bufferedSeconds: stats.bufferedSeconds,
-          audioUnderruns: stats.audioUnderruns,
-          renderMsPerSec: stats.renderMsPerSec,
-        });
+        const prerendered =
+          request.prerenderSeconds !== undefined &&
+          engine.getPrerenderProgress() === null &&
+          (engine.getRenderedSeconds() ?? 0) >= request.prerenderSeconds - 1;
+        if (prerendered && prerenderMs === null) prerenderMs = performance.now() - prerenderStartedAt;
+        const cachedTarget = request.seekAfterPrerender;
+        if (prerendered && cachedTarget !== undefined && cachedSeekRequestedAt === null) {
+          cachedSeekRequestedAt = performance.now();
+          void engine.seekTo(cachedTarget);
+        } else if (
+          cachedSeekRequestedAt !== null &&
+          cachedSeekLatencyMs === null &&
+          stats.positionSeconds > cachedTarget!
+        ) {
+          cachedSeekLatencyMs = performance.now() - cachedSeekRequestedAt;
+        }
+        if (elapsed % SAMPLE_MS === 0) {
+          samples.push({
+            atMs,
+            positionSeconds: stats.positionSeconds,
+            bufferedSeconds: stats.bufferedSeconds,
+            audioUnderruns: stats.audioUnderruns,
+            renderMsPerSec: stats.renderMsPerSec,
+          });
+        }
+        const seekSettled = cachedTarget === undefined || cachedSeekLatencyMs !== null;
+        if (request.untilPrerendered && prerendered && seekSettled) break;
+      }
+      if (request.next) {
+        const nextBytes = Uint8Array.from(atob(request.next.sid), (char) => char.charCodeAt(0));
+        const nextAt = performance.now();
+        await engine.play(nextBytes.buffer, request.next.songIndex ?? 0, {}, `${key}-next`);
+        nextOpenMs = performance.now() - nextAt;
+        for (let waited = 0; waited < NEXT_TUNE_LIMIT_MS && nextFirstPositionMs === null; waited += TICK_MS) {
+          await sleep(TICK_MS);
+          if (engine.getStats().positionSeconds > 0) nextFirstPositionMs = performance.now() - nextAt;
+        }
       }
       const sinkDebug = (globalThis as Record<string, unknown>).__localSinkDebug as
         (() => Record<string, unknown>) | undefined;
@@ -141,6 +192,10 @@ export const registerLocalSidProbe = (): void => {
         openMs,
         firstPositionMs,
         seekLatencyMs,
+        prerenderMs,
+        cachedSeekLatencyMs,
+        nextOpenMs,
+        nextFirstPositionMs,
         samples,
         final: { ...engine.getStats(), ...engine.debugState() },
         sink: sinkDebug?.() ?? null,

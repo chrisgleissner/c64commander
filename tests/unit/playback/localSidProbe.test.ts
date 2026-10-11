@@ -36,6 +36,25 @@ const { FakeEngine } = vi.hoisted(() => {
 
     prerender(key: string, _buffer: ArrayBuffer, _songIndex: number, seconds: number) {
       this.prerenders.push({ key, seconds });
+      this.prerenderTarget = seconds;
+    }
+
+    /** Pre-renders finish after this many progress reads. */
+    ticksToPrerender = 10;
+    prerenderTarget = 0;
+    prerenderTicks = 0;
+    renderedSeconds: number | null = null;
+
+    getPrerenderProgress() {
+      if (!this.prerenderTarget || this.renderedSeconds !== null) return null;
+      this.prerenderTicks += 1;
+      if (this.prerenderTicks < this.ticksToPrerender) return this.prerenderTicks / this.ticksToPrerender;
+      this.renderedSeconds = this.prerenderTarget;
+      return null;
+    }
+
+    getRenderedSeconds() {
+      return this.renderedSeconds;
     }
 
     async seekTo(seconds: number) {
@@ -126,6 +145,46 @@ describe("registerLocalSidProbe", () => {
     expect(engine.prerenders).toEqual([{ key: "probe-sidplayez-0", seconds: 60 }]);
     expect(engine.seeks).toEqual([30]);
     expect(result.seekLatencyMs).not.toBeNull();
+  });
+
+  it("times a whole pre-render, a seek the finished pre-render answers, and stops there", async () => {
+    saveLocalEngineEnabled(true);
+    registerLocalSidProbe();
+    const result = await run({
+      sid,
+      renderer: "sidplayez",
+      seconds: 30,
+      prerenderSeconds: 180,
+      untilPrerendered: true,
+      seekAfterPrerender: 120,
+    });
+    const engine = engines[0];
+    expect(engine.prerenders).toEqual([{ key: "probe-sidplayez-0", seconds: 180 }]);
+    expect(engine.seeks).toEqual([120]);
+    expect(result.prerenderMs).toBeGreaterThan(0);
+    expect(result.cachedSeekLatencyMs).not.toBeNull();
+    // Ended at the seek's landing, long before the 30 s limit.
+    expect(result.samples.length).toBeLessThan(10);
+  });
+
+  it("reports no pre-render time when the pre-render did not finish within the limit", async () => {
+    saveLocalEngineEnabled(true);
+    registerLocalSidProbe();
+    const pending = window.__localSidProbe!({ sid, renderer: "residfp", seconds: 1, prerenderSeconds: 180 });
+    engines[0].ticksToPrerender = 1000;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect((await pending).prerenderMs).toBeNull();
+  });
+
+  it("opens the next tune on the same engine, as a skip does, and times it", async () => {
+    saveLocalEngineEnabled(true);
+    registerLocalSidProbe();
+    const result = await run({ sid, renderer: "sidlite", seconds: 1, next: { sid, songIndex: 2 } });
+    const engine = engines[0];
+    expect(engines).toHaveLength(1);
+    expect(engine.opened).toMatchObject({ songIndex: 2, key: "probe-sidlite-0-next" });
+    expect(result.nextOpenMs).not.toBeNull();
+    expect(result.nextFirstPositionMs).not.toBeNull();
   });
 
   it("refuses a second probe while one runs, and accepts one once it has finished", async () => {

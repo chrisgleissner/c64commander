@@ -9,7 +9,7 @@
 // The on-device playback HIL suites, run once per SID renderer.
 //
 //   node tools/hil/renderer_feature_matrix.mjs [--host c64u] [--cdp-port 9333]
-//     [--renderers sidplayez,residfp,sidlite] [--suites gate,parity,sweep] [--out artifacts/renderer-matrix]
+//     [--renderers sidplayez,residfp,sidlite (repeat a name to run it again)] [--suites gate,parity,sweep] [--out artifacts/renderer-matrix]
 //
 // For each renderer: select it in the app, then run
 //   gate    tools/hil/merge_gate.mjs --only preflight,sid-local,crossfade (pitch, continuity, crossfade)
@@ -153,9 +153,9 @@ const main = async () => {
   const debugBefore = await js(`String(localStorage.getItem("c64u_debug_logging_enabled"))`);
   const results = [];
   try {
-    for (const renderer of RENDERERS) {
+    for (const [round, renderer] of RENDERERS.entries()) {
       for (const suite of SUITES) {
-        const dir = path.join(OUT, renderer, suite);
+        const dir = path.join(OUT, `${String(round + 1).padStart(2, "0")}-${renderer}`, suite);
         mkdirSync(dir, { recursive: true });
         const since = await selectRenderer(renderer);
         console.log(`\n[matrix] ${renderer} / ${suite}`);
