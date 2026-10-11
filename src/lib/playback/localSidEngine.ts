@@ -1177,6 +1177,7 @@ export class LocalSidEngine {
       // attributed instead of guessed at.
       addLog("debug", "Local SID engine opened", {
         service: "local-sid",
+        renderer: this.renderer,
         ...message.openTiming,
         totalMs:
           message.openTiming.moduleMs +

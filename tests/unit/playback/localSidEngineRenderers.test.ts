@@ -23,7 +23,8 @@ import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from 
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
 import { __resetPhoneAudioOwnership } from "@/lib/audio/phoneAudioOwnership";
-import { saveSidEmulationEngine } from "@/lib/config/appSettings";
+import { saveDebugLoggingEnabled, saveSidEmulationEngine } from "@/lib/config/appSettings";
+import { clearLogs, getLogs } from "@/lib/logging";
 import {
   __setSidplayEzAvailabilityForTests,
   type SidRendererId,
@@ -151,6 +152,28 @@ describe("an engine with three renderers", () => {
     const { channel } = await open(engine);
     expect(channel.renderer).toBe("sidplayez");
     expect(channel.last("open").engine).toBe("sidplayez");
+    engine.dispose();
+  });
+
+  it("names the renderer in the log of every tune it opens", async () => {
+    saveDebugLoggingEnabled(true);
+    clearLogs();
+    const engine = makeEngine();
+    const started = engine.play(new ArrayBuffer(8), 0, {});
+    await settle();
+    const channel = playback();
+    channel.emit({
+      type: "opened",
+      id: channel.last("open").id,
+      sampleRate: RATE,
+      channels: 2,
+      tuneInfo: null,
+      romRequired: false,
+      openTiming: { moduleMs: 1, constructMs: 1, romsMs: 0, loadMs: 1 },
+    });
+    await started;
+    const opened = getLogs().find((entry) => entry.message === "Local SID engine opened");
+    expect(opened?.details).toMatchObject({ renderer: "sidplayez" });
     engine.dispose();
   });
 
