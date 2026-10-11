@@ -30,7 +30,7 @@
  * players are counted from `dumpsys audio`, filtered to the app's pid, so another app's player is never
  * counted as ours.
  *
- *   node tools/hil/listen_on_soak_hil.mjs --serial 9B081FFAZ001WX --host 192.168.1.146 \
+ *   node tools/hil/listen_on_soak_hil.mjs --serial <adb serial> --host c64u --iface <this host's LAN ip> \
  *     --switches 200 --transport 200 --throttle 2.5 --small-screen --json artifacts/listen-on-soak.json
  *
  * --small-screen sets the phone to 480x640 at 240 dpi (320x427 CSS px, the smallest supported screen) and
