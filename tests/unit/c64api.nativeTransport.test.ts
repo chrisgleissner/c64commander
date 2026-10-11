@@ -182,6 +182,17 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     await expect(api.readMemory("0400", 4, { timeoutMs: 1500, __c64uIntent: "system" } as never)).rejects.toThrow();
   });
 
+  it("logs a failed memory read as a read, not as an upload", async () => {
+    const { clearLogs, getLogs } = await import("@/lib/logging");
+    clearLogs();
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(new Error("Host unreachable"));
+    const api = new C64API(DEVICE_BASE, undefined, "192.0.2.50");
+    await expect(api.readMemory("DD00", 1, { timeoutMs: 1500, __c64uIntent: "user" } as never)).rejects.toThrow();
+    const messages = getLogs().map((entry) => entry.message);
+    expect(messages).toContain("C64 API memory read failed");
+    expect(messages).not.toContain("C64 API upload failed");
+  });
+
   it("does NOT reroute body-carrying writes — writeMemoryBlock stays on the patched fetch", async () => {
     // Guard the conservative scope: only bodyless readMemory uses CapacitorHttp.request.
     // Binary-body marshalling must remain on the battle-tested fetch path.

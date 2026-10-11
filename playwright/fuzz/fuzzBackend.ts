@@ -64,7 +64,10 @@ export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
   if (/^(RAM_DUMP_FOLDER_SELECT|BROWSE|CONFIG_UPDATE): /.test(msg)) return true;
   if (msg.includes("FTP listing failed")) return true;
   if (msg.includes("Source browse failed")) return true;
-  if (msg.includes("C64 API request failed") || msg.includes("C64 API upload failed")) return true;
+  if (
+    ["C64 API request failed", "C64 API upload failed", "C64 API memory read failed"].some((text) => msg.includes(text))
+  )
+    return true;
   if (msg.includes("RAM operation retry")) return true;
   if (msg.includes("Failed to resume machine after clear-memory error")) return true;
   if (msg.includes("HVSC paged folder listing failed")) return true;

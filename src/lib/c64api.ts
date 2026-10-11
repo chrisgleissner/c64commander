@@ -2228,7 +2228,8 @@ export class C64API {
               // Always log as error so the entry is captured when the diagnostics
               // overlay is open. The transient flag marks recoverable upload failures.
               addErrorLog(
-                "C64 API upload failed",
+                // This path also carries readMemory, whose failures are reads, not uploads.
+                nativeArrayBufferResponse ? "C64 API memory read failed" : "C64 API upload failed",
                 transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
               );
             }
