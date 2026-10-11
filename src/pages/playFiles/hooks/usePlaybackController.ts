@@ -1242,14 +1242,14 @@ export function usePlaybackController({
           // Bring the tune to this device's speakers too, unless the listener chose otherwise: the preference
           // check is what makes "Listen on: <device>" mean anything. Best-effort, as a device that will not
           // stream must not stop the tune from playing.
+          // Queued, not judged from `audioLive`: a stop still queued read as live, and Both played on the C64 alone.
           if (
             featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
             loadMirrorC64Audio() &&
             // An Ultimate II+L has no /v1/streams: asking it answered 404, logged twice as an error.
-            identifiedDeviceStreams(getConnectionSnapshot().deviceInfo) &&
-            !avMirrorSession.audioLive
+            identifiedDeviceStreams(getConnectionSnapshot().deviceInfo)
           ) {
-            void avMirrorSession.startAudio().catch((error) => {
+            void avMirrorSession.setAudioWanted(true).catch((error) => {
               addLog("warn", "Playback: could not start Live View audio for C64 playback", {
                 service: "playback",
                 error: error instanceof Error ? error.message : String(error),

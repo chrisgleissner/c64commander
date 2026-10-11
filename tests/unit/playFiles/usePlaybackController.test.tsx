@@ -114,6 +114,7 @@ vi.mock("@/lib/streams/avMirrorSession", () => ({
     audioLive: false,
     startAudio: vi.fn(() => Promise.resolve()),
     stopAudio: vi.fn(() => Promise.resolve()),
+    setAudioWanted: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -1669,7 +1670,7 @@ describe("usePlaybackController", () => {
   it("leaves no tune recorded as playing and starts no mirror when Stop overtakes a C64 launch", async () => {
     const machineReset = vi.fn().mockResolvedValue(undefined);
     vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     let finishLaunch!: () => void;
     vi.mocked(executePlayPlan).mockImplementationOnce(
       () => new Promise<void>((resolve) => (finishLaunch = () => resolve())),
@@ -1683,7 +1684,7 @@ describe("usePlaybackController", () => {
     await launch;
 
     expect(isRemotePlaybackActive()).toBe(false);
-    expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    expect(avMirrorSession.setAudioWanted).not.toHaveBeenCalled();
     expect(machineReset).toHaveBeenCalledTimes(2);
   });
 
@@ -4353,19 +4354,33 @@ describe("playback and the Listen-on choice", () => {
     createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" });
 
   it("starts the mirror by default, so a tune is audible from the phone", async () => {
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
-    expect(avMirrorSession.startAudio).toHaveBeenCalled();
+    expect(avMirrorSession.setAudioWanted).toHaveBeenCalledWith(true);
+  });
+
+  it("asks for the mirror even while a stop it has not yet run makes it read as live", async () => {
+    // The phone's engine taking the speaker queues a stop. Judged from `audioLive`, which still read true, the
+    // start was skipped, the stop then ran, and Both played on the C64 alone.
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
+    (avMirrorSession as { audioLive: boolean }).audioLive = true;
+    try {
+      const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
+      await result.current.handlePlay();
+      expect(avMirrorSession.setAudioWanted).toHaveBeenCalledWith(true);
+    } finally {
+      (avMirrorSession as { audioLive: boolean }).audioLive = false;
+    }
   });
 
   it("does not ask a device that cannot stream to start the mirror", async () => {
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     deviceInfoOverride.current = { product: "Ultimate II+L", firmware_version: "3.15" };
     try {
       const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
       await result.current.handlePlay();
-      expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+      expect(avMirrorSession.setAudioWanted).not.toHaveBeenCalled();
     } finally {
       deviceInfoOverride.current = undefined;
     }
@@ -4374,11 +4389,11 @@ describe("playback and the Listen-on choice", () => {
   it("leaves the mirror alone once the C64's own speakers have been chosen", async () => {
     // Without the preference check this switches the mirror straight back on, which is the defect:
     // the listener turned phone audio off and the very next track turned it back on.
-    vi.mocked(avMirrorSession.startAudio).mockClear();
+    vi.mocked(avMirrorSession.setAudioWanted).mockClear();
     saveMirrorC64Audio(false);
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
-    expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    expect(avMirrorSession.setAudioWanted).not.toHaveBeenCalled();
   });
 });
 
