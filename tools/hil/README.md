@@ -612,3 +612,31 @@ measured instead of the app. `--profiles <dir>` takes the CPU profiles in their 
 Somebody who has used a real device before is not offered Demo Mode on an offline launch; the harness then enters it
 the way the app offers it, through the health badge and "Use the simulated device".
 
+
+## Output and transport soak
+
+`listen_on_soak_hil.mjs` drives the Play page with random bursts of real touches and checks, after every burst, that
+the tune sounds where the listener last asked. Bursts are one to six taps with gaps from 30 ms to 1.5 s, in three
+phases: output switches (Here, C64, Both), transport (next, previous, pause, seek, volume, mute), and both mixed.
+
+```bash
+node tools/hil/listen_on_soak_hil.mjs --serial <adb serial> --host <c64u ip> --iface <this host's LAN ip> \
+  --switches 80 --transport 60 --chaos 200 --throttle 2.5 --small-screen --volume 4 --json artifacts/soak.json
+```
+
+| Check                  | Read from                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| The phone plays        | A started `AudioTrack` of the app's pid in `dumpsys audio`; the keep-awake Web Audio stream is not counted |
+| The C64 runs a tune    | The IRQ vector at $0314, which every playing PSID replaces and a reset puts back to $EA31          |
+| The C64 streams to the phone | Packets on 239.0.1.65:11001 from this host (`--iface`); Both needs them, Here and C64 need none |
+| The tune is playing    | The Pause button is not showing Resume, and the clock moves over 1.5 s                              |
+
+Each check waits up to 12 s and then holds for 1.5 s, so a launch still in flight cannot pass as a single output.
+A failure records the last 25 s of the app log and any page error with its stack. `--small-screen` sets the phone
+to 480x640 at 240 dpi (320x427 CSS px) and puts it back afterwards, also on Ctrl-C; `--throttle` slows the WebView
+through DevTools. The media volume is set with `cmd audio set-volume` (on the Pixel 4, `cmd media_session volume
+--set` does not take effect) and the run refuses to start above 5 of 25.
+
+Two harness traps found while writing it: a control scrolled to the "nearest" edge sits under the sticky app bar,
+where a touch lands on the bar, so every tap is centred and hit-tested first; and the output to expect is the last
+one tapped, not what the chooser shows while a switch is still under way.
