@@ -121,17 +121,12 @@ const main = async () => {
     });
     return new Uint8Array(await response.arrayBuffer());
   };
-  /**
-   * Whether the C64 runs a tune, and whether its CPU is running at all. A paused machine keeps the tune's IRQ
-   * vector but freezes memory, so the zero page read twice tells a paused tune from a playing one.
-   */
+  /** Whether the C64 runs a tune: a playing PSID or machine-code RSID replaces the IRQ vector at $0314. */
   const c64State = async () => {
     const vector = await readC64("0314", 2);
     const tune = !(vector[0] === 0x31 && vector[1] === 0xea);
-    const first = await readC64("0000", 256);
-    await sleep(120);
-    const second = await readC64("0000", 256);
-    return { tune, running: first.some((byte, index) => byte !== second[index]) };
+    // Only the vector: every extra read slows the C64's answers to the app itself, which the soak is measuring.
+    return { tune };
   };
   const ui = (expression) => cdp.evaluate(expression, 30_000);
   const appLogCursor = async () => ui(`JSON.parse(localStorage.getItem("c64u_app_logs") || "[]").length`);
@@ -189,12 +184,30 @@ const main = async () => {
     })()`);
 
   const audioPackets = [];
+  const audioLevels = [];
+  /** RMS of the C64's streamed audio over the last second, in dBFS, or null when nothing arrived. */
+  const streamedDbfs = () => {
+    const recent = audioLevels.filter((entry) => entry.at >= Date.now() - 1000);
+    if (!recent.length) return null;
+    const meanSquare = recent.reduce((total, entry) => total + entry.meanSquare, 0) / recent.length;
+    return Math.round(10 * Math.log10(meanSquare / 32768 ** 2 + 1e-12));
+  };
   const listenForStreamedAudio = () =>
     new Promise((resolve) => {
       if (!args.iface) return resolve(null);
       const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
-      socket.on("message", (_message, remote) => {
-        if (!args.ignoreSenders.includes(remote.address)) audioPackets.push(Date.now());
+      socket.on("message", (message, remote) => {
+        if (args.ignoreSenders.includes(remote.address)) return;
+        // A 2-byte sequence number, then signed 16-bit little-endian stereo samples.
+        let sum = 0;
+        let count = 0;
+        for (let offset = 2; offset + 1 < message.length; offset += 2, count += 1) {
+          const sample = message.readInt16LE(offset);
+          sum += sample * sample;
+        }
+        audioPackets.push(Date.now());
+        audioLevels.push({ at: Date.now(), meanSquare: count ? sum / count : 0 });
+        if (audioLevels.length > 20_000) audioLevels.splice(0, 10_000);
         if (audioPackets.length > 20_000) audioPackets.splice(0, 10_000);
       });
       socket.bind(11001, () => {
@@ -212,15 +225,21 @@ const main = async () => {
   /** Where the tune must sound for `target`, and that it is actually playing rather than loaded or frozen. */
   const matches = (target, { players, c64, ui: shown }) => {
     if (!shown || shown.paused) return false;
-    // `c64.running` is recorded but not required: many players never touch the zero page it samples.
     const streamed = c64.streamed;
     if (target === "here") return players >= 1 && !c64.tune && (streamed === null || streamed === 0);
     if (target === "c64") return players === 0 && c64.tune && (streamed === null || streamed === 0);
-    return players >= 1 && c64.tune && (streamed === null || streamed > 0);
+    // An RSID can leave $0314 alone, so in Both the C64 audibly sending its own audio counts as playing too.
+    const audible = c64.streamedDbfs !== null && c64.streamedDbfs > -60;
+    return players >= 1 && (c64.tune || audible) && (streamed === null || streamed > 0);
   };
   const observe = async () => {
     const [players, c64, chooser, shown] = await Promise.all([appPlayers(), c64State(), chooserState(), playback()]);
-    return { players, c64: { ...c64, streamed: streamedLastSecond() }, chooser, ui: shown };
+    return {
+      players,
+      c64: { ...c64, streamed: streamedLastSecond(), streamedDbfs: streamedDbfs() },
+      chooser,
+      ui: shown,
+    };
   };
   const recentAppLog = () =>
     ui(`(() => {
@@ -262,7 +281,17 @@ const main = async () => {
       }
       await sleep(POLL_MS);
     }
-    return { ok: false, settleMs: null, ...last, log: await recentAppLog(), pageErrors: await pageErrors() };
+    const localTrace = await ui(
+      `JSON.stringify((globalThis.__localSidTrace?.() ?? []).slice(-40).map((e) => [Math.round(e.atMs ?? e.at ?? 0), e.event, JSON.stringify(e.detail ?? {}).slice(0, 120)]))`,
+    );
+    return {
+      ok: false,
+      settleMs: null,
+      ...last,
+      log: await recentAppLog(),
+      pageErrors: await pageErrors(),
+      localTrace,
+    };
   };
 
   const pageErrors = () => ui(`JSON.stringify(window.__soakErrs || [])`);
