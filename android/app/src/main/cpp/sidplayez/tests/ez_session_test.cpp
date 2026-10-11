@@ -441,6 +441,72 @@ void testRsidWithEndlessInit() {
   CHECK(peakToPeak(renderSeconds(session, 0.5), 0) > 1000);
 }
 
+/**
+ * A PSID whose init sets voice 1 up with the volume at 0 and then busy-waits `outerLoops` times
+ * 327,680 cycles (0 = forever) before returning; play turns the volume up. So the tone is heard
+ * only once play has been called, which the driver does only after init returns.
+ */
+std::vector<uint8_t> makeSlowInitPsid(uint8_t outerLoops) {
+  std::vector<uint8_t> v(0x7c, 0);
+  std::memcpy(v.data(), "PSID", 4);
+  put16(v, 4, 2);
+  put16(v, 6, 0x7c);
+  put16(v, 10, 0x1000);
+  put16(v, 12, 0x1040);
+  put16(v, 14, 1);
+  put16(v, 16, 1);
+  v[0x77] = static_cast<uint8_t>((static_cast<int>(Model::M8580) << 4) | 0x04);
+  std::vector<uint8_t> code = {
+      0x00, 0x10,                   // load address $1000
+      0xa9, 0x00, 0x8d, 0x18, 0xd4, // volume 0
+      0xa9, 0x00, 0x8d, 0x05, 0xd4, // AD
+      0xa9, 0xf0, 0x8d, 0x06, 0xd4, // SR
+      0xa9, 0x20, 0x8d, 0x01, 0xd4, // pitch
+      0xa9, 0x21, 0x8d, 0x04, 0xd4, // saw + gate
+  };
+  if (outerLoops == 0) {
+    const uint16_t self = static_cast<uint16_t>(0x1000 + code.size() - 2);
+    code.insert(code.end(), {0x4c, static_cast<uint8_t>(self & 0xff), static_cast<uint8_t>(self >> 8)});
+  } else {
+    code.insert(code.end(), {
+                                0xa9, outerLoops, 0x85, 0xfb, // LDA #n; STA $FB
+                                0xa2, 0x00,                   // outer: LDX #0
+                                0xa0, 0x00,                   // middle: LDY #0
+                                0x88, 0xd0, 0xfd,             // inner: DEY; BNE inner
+                                0xca, 0xd0, 0xf8,             // DEX; BNE middle
+                                0xc6, 0xfb, 0xd0, 0xf2,       // DEC $FB; BNE outer
+                                0x60,                         // RTS
+                            });
+  }
+  while (code.size() < 2 + 0x40) code.push_back(0xea);
+  code.insert(code.end(), {0xa9, 0x0f, 0x8d, 0x18, 0xd4, 0x60}); // play at $1040: volume 15
+  v.insert(v.end(), code.begin(), code.end());
+  return v;
+}
+
+void testAPsidWhoseInitNeverReturnsStillLoads() {
+  // Upstream waited about 935 emulated seconds for the init to return and then failed the load;
+  // libsidplayfp loads it and plays whatever init does.
+  const auto tune = makeSlowInitPsid(0);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(renderSeconds(session, 0.5).size() == static_cast<size_t>(kRate) / 2 * 2);
+}
+
+void testAnInitThatReturnsLateStillStartsThePlayRoutine() {
+  // 48 x 327,680 cycles is about 16 emulated seconds, past the wait, so the load returns while init
+  // is still running. The tone sounds only if the driver calls play once init returns.
+  const auto tune = makeSlowInitPsid(48);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  const auto early = renderSeconds(session, 1.0);
+  CHECK(peakToPeak(early, 0) < 1000);
+  renderSeconds(session, 9.0);
+  CHECK(peakToPeak(renderSeconds(session, 1.0), 0) > 4000);
+}
+
 void testRomsAreValidatedBySize() {
   EzSession session(kRate);
   std::vector<uint8_t> kernal(EzSession::kKernalBytes, 0xea), shortBasic(100, 0);
@@ -518,6 +584,8 @@ int main(int argc, char** argv) {
   testASilentTuneStartsSilent();
   testACallAfterADestroyIsRefused();
   testRsidWithEndlessInit();
+  testAPsidWhoseInitNeverReturnsStillLoads();
+  testAnInitThatReturnsLateStillStartsThePlayRoutine();
   testRomsAreValidatedBySize();
   testConcurrentIndependentSessions(ladder);
   testRepeatedCreateAndDestroy(ladder);

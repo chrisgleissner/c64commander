@@ -207,11 +207,13 @@ as the 7-Zip library (release: `armeabi-v7a`, `arm64-v8a`, or what the variant n
 
 One patch is applied to the verified archive before compiling,
 `android/app/src/main/cpp/sidplayez/patches/0001-match-residfp-output.patch`. It adds three
-`libsidplayfp::Player` entry points and changes no existing behaviour: the 8580's EXT IN level
-(`set8580ExternalInput`, the input libsidplayfp's `digiBoost` drives), a switch for the start-up
-declick (`setStartupDeclick`, on by default as upstream), and a hook that configures each chip as
-`sidCreate` makes it (`setChipSetup`), so the analogue profile is in place before the power-on
-warm-up and the first sample. Each modified file carries a dated notice naming the change, as GPL
+`libsidplayfp::Player` entry points: the 8580's EXT IN level (`set8580ExternalInput`, the input
+libsidplayfp's `digiBoost` drives), a switch for the start-up declick (`setStartupDeclick`, on by
+default as upstream), and a hook that configures each chip as `sidCreate` makes it
+(`setChipSetup`), so the analogue profile is in place before the power-on warm-up and the first
+sample. It changes one behaviour: a PSID whose init routine has not returned after about 10
+emulated seconds plays on, as in libsidplayfp, instead of failing to load after about 935 (see D3
+below). Each modified file carries a dated notice naming the change, as GPL
 section 5(a) requires. The extracted tree is keyed by the archive's checksum and the patches, so a
 changed patch re-extracts. The third-party notices name every patch, and a unit test fails when
 one is not named. Upstream's licence, author and credit files are kept in the repository under
@@ -272,10 +274,11 @@ session happen on one thread. Long work (seek, pre-render) checks a generation c
   is offered by the app's local playback.
 - Upstream defects documented in the
   [fork review](https://github.com/chrisgleissner/libSidplayEZ/blob/benchmark-tooling/docs/performance-and-upstream-comparison.md)
-  are not patched. The one that matters operationally is D3: a PSID whose init routine never
-  returns runs about 935 emulated seconds before loading fails (measured at 78 s on a desktop CPU;
-  a phone takes longer). The engine's 15 s open timeout disposes the renderer and retries on a fresh
-  one, and the busy thread exits when the init budget runs out.
+  are not patched, except D3: upstream waits about 935 emulated seconds for a PSID's init routine
+  to return and then fails the load, which kept a core busy for 118 s on a desktop CPU and longer
+  on a phone. The patch waits about 10 emulated seconds, as upstream's comment states, and then
+  lets the tune play on with the handshake left so that the play routine starts if init returns
+  later; libsidplayfp does not wait at all.
 
 ## Renderer selection and fallback
 
@@ -587,8 +590,7 @@ native suites, the equivalence check and the tool tests together; the equivalenc
 - A WebView without ArrayBuffer `postMessage` support falls back to base64 for WASM PCM.
 - WASM PCM still crosses the main thread once per chunk, because the binary port is bound to the
   page and not to workers.
-- libSidplayEZ upstream defects are documented, not patched (see above); the one patch the build
-  applies adds two settings and a chip-setup hook and changes no existing behaviour.
+- libSidplayEZ upstream defects are documented and, except D3, not patched (see above).
 - The keypad handset the `c64u-remote` variant targets is not available; the Pixel 4 stands in.
 
 ## Troubleshooting
