@@ -470,6 +470,21 @@ class LocalAudioFeedTest {
   }
 
   @Test
+  fun `a transition refills the ring at once even while the track is deeper than the transition high water`() {
+    // The flush empties the ring and leaves the track full. With 400 ms in the track the feed waited for it
+    // to drain under 250 ms, and the pipeline's player, finding the ring empty, wrote silence instead.
+    host.trackMs = 400.0
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(rate * 2, 8000))
+    pump()
+    advance(200)
+    val output = host.current!!
+    feed.beginTransition(1, 2, 4.0)
+    feed.runOnce()
+    assertTrue("the ring was left empty after the flush: ${output.ringMs()} ms", output.ringMs() > 0.0)
+  }
+
+  @Test
   fun `a cut fades the outgoing tune to silence in 10 ms and the next tune writes onto the same track`() {
     // With the crossfade off, a track change closed the track. The next tune opened a new one and waited
     // for its prime, 26 to 990 ms of silence on a Pixel 4, and the outgoing tune stopped on a step.

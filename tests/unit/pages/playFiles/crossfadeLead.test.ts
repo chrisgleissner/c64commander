@@ -16,9 +16,13 @@ describe("the crossfade lead", () => {
     expect(crossfadeLeadMs(180_000, true, 1500)).toBe(1500 + CROSSFADE_START_MARGIN_MS);
   });
 
-  it("is nothing with the crossfade off, or for a tune on the C64", () => {
-    expect(crossfadeLeadMs(180_000, true, 0)).toBe(0);
+  it("is the start margin alone with the crossfade off, so the cut still has audio to ramp out", () => {
+    expect(crossfadeLeadMs(180_000, true, 0)).toBe(CROSSFADE_START_MARGIN_MS);
+  });
+
+  it("is nothing for a tune on the C64", () => {
     expect(crossfadeLeadMs(180_000, false, 4000)).toBe(0);
+    expect(crossfadeLeadMs(180_000, false, 0)).toBe(0);
   });
 
   it("never takes more than half of a short tune", () => {

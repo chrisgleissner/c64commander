@@ -3625,7 +3625,7 @@ describe("usePlaybackController", () => {
       expect(dueInMs).toBeLessThanOrEqual(120_000 - 1500 - CROSSFADE_START_MARGIN_MS + 1000);
     });
 
-    it("keeps the next tune due at the songlength when the crossfade is off", async () => {
+    it("starts the next tune the start margin before the songlength when the crossfade is off", async () => {
       enableLocal();
       const controller = fakeController();
       const autoAdvanceGuardRef = { current: null as { dueAtMs: number } | null };
@@ -3640,7 +3640,9 @@ describe("usePlaybackController", () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
 
-      expect(autoAdvanceGuardRef.current!.dueAtMs - before).toBeGreaterThanOrEqual(120_000);
+      const dueInMs = autoAdvanceGuardRef.current!.dueAtMs - before;
+      expect(dueInMs).toBeGreaterThan(120_000 - CROSSFADE_START_MARGIN_MS - 1000);
+      expect(dueInMs).toBeLessThanOrEqual(120_000 - CROSSFADE_START_MARGIN_MS + 1000);
     });
 
     it("lets the last tune play to its songlength when it was due early for a crossfade", async () => {

@@ -484,7 +484,10 @@ internal class LocalAudioFeed(
     }
     val inTransition = session.transitioning || (session.tail != null && session.queue.isEmpty())
     val highWater = if (inTransition) TRANSITION_HIGH_WATER_MS else HIGH_WATER_MS
-    if (current.bufferedMs() >= highWater) {
+    // Never with the ring itself near empty, however deep the track is. A transition's flush leaves the
+    // ring empty with the track still full; parked then, the player ran dry within 8 ms and wrote a burst
+    // of silence into the middle of the outgoing tune.
+    if (current.bufferedMs() >= highWater && current.ringMs() >= RING_FLOOR_MS) {
       publish(session)
       return FULL_NANOS
     }
@@ -826,6 +829,8 @@ internal class LocalAudioFeed(
     const val FAILED_PASS_NANOS = 50_000_000L
     /** How shallow the track is kept during a track change, so the incoming tune is not queued behind. */
     const val TRANSITION_HIGH_WATER_MS = 250.0
+    /** The ring is kept at least this deep whenever there is audio for it, so the player never starves. */
+    const val RING_FLOOR_MS = 60.0
     /** Deeper than [HIGH_WATER_MS], or recovering the unplayed audio would run off the end of it. */
     const val TAIL_HISTORY_SECONDS = 14
     const val SILENCE_PEAK_TO_PEAK = 64
