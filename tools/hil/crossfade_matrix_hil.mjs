@@ -265,10 +265,9 @@ localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossf
     heard.faults = heard.faults.filter((fault) => !/dipped|fell away|rose in/.test(fault));
     heard.verdict = heard.faults.length ? "FAULTY" : heard.verdict === "NO TRANSITION" ? "NO TRANSITION" : "SMOOTH";
   }
-  // A crossfade plays both tunes through one track, so its count must not move. A clean cut opens a
-  // new track with a count of its own, which is reported; the microphone judges that cut.
-  const ranDry = crossfadeMs > 0 ? underrunsAfter - underrunsBefore : 0;
-  const newTrackUnderruns = crossfadeMs > 0 ? null : underrunsAfter;
+  // Every transition plays through one track, so its underrun count must not move. A count that went down
+  // belongs to a track the stats call no longer reports and is not an underrun.
+  const ranDry = Math.max(0, underrunsAfter - underrunsBefore);
   const landed = after.includes(HIGH.title);
   const passed = shape.verdict === "SMOOTH" && landed && heard?.verdict === "SMOOTH" && ranDry === 0;
   return {
@@ -279,7 +278,6 @@ localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossf
     shape,
     heard,
     underruns: ranDry,
-    newTrackUnderruns,
     landed,
     after,
     actions: actions.length,
@@ -314,7 +312,12 @@ crossfade:localStorage.getItem("c64u_playback_crossfade_ms"),duration:document.q
             result = await trial(device, renderer, crossfadeMs, scenario, dir);
           } catch (error) {
             result = { renderer, crossfadeMs, scenario, passed: false, error: error.message };
-            await click("playlist-pause").catch(() => null);
+            await click("playlist-pause").catch((pauseError) => {
+              console.error(
+                `could not pause after ${renderer} ${crossfadeMs} ${scenario} failed (${error.message}): ${pauseError.stack}`,
+              );
+              throw pauseError;
+            });
           }
           results.push(result);
           writeFileSync(path.join(OUT, "results.json"), JSON.stringify(results, null, 2));
@@ -326,7 +329,7 @@ crossfade:localStorage.getItem("c64u_playback_crossfade_ms"),duration:document.q
               String(crossfadeMs).padStart(4),
               scenario.padEnd(11),
               result.error ??
-                `out ${shape.fade_out_ms ?? "-"} in ${shape.fade_in_ms ?? "-"} ms, steepest ${shape.fade_out_steepest_x ?? "-"}/${shape.fade_in_steepest_x ?? "-"}x, gap ${shape.gap_ms}, click ${shape.click_db} dB, dip ${shape.dip_db} dB, underruns ${result.underruns}${result.newTrackUnderruns !== null && result.newTrackUnderruns !== undefined ? ` (new track ${result.newTrackUnderruns})` : ""}, mic ${result.heard?.verdict} fall ${result.heard?.fall_ms}/rise ${result.heard?.rise_ms} ms gap ${result.heard?.gap_ms}${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].length ? ` | ${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].join("; ")}` : ""}${result.landed ? "" : ` | ended on "${result.after}"`}`,
+                `out ${shape.fade_out_ms ?? "-"} in ${shape.fade_in_ms ?? "-"} ms, steepest ${shape.fade_out_steepest_x ?? "-"}/${shape.fade_in_steepest_x ?? "-"}x, gap ${shape.gap_ms}, click ${shape.click_db} dB, dip ${shape.dip_db} dB, underruns ${result.underruns}, mic ${result.heard?.verdict} fall ${result.heard?.fall_ms}/rise ${result.heard?.rise_ms} ms gap ${result.heard?.gap_ms}${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].length ? ` | ${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].join("; ")}` : ""}${result.landed ? "" : ` | ended on "${result.after}"`}`,
             ].join("  "),
           );
           await sleep(1500);
