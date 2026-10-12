@@ -11,7 +11,7 @@ import { dirname, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CROSSFADE_MS_MAX } from "@/lib/config/appSettings";
-import { LocalSidEngine } from "@/lib/playback/localSidEngine";
+import { CUT_DECLICK_MS, LocalSidEngine } from "@/lib/playback/localSidEngine";
 import { createNativeLocalSidSink, type NativeLocalAudioBackend } from "@/lib/playback/localSidNativeSink";
 
 /**
@@ -302,7 +302,9 @@ describe("one continuous stream of samples across a track change", () => {
     checkGolden("crossfade-1500-slow-open", { sampleRate: RATE, fadeMs: 1500, transcript });
   });
 
-  it("cuts straight over when no crossfade is configured: the old session closes, nothing is handed over", async () => {
+  // Closing the old session closed the track, and the next tune waited for a new one to prime: 26 to 990 ms
+  // of silence on a Pixel 4, after a step. The cut now ramps out over a declick on the track it was on.
+  it("cuts over a 10 ms declick on the same track when no crossfade is configured", async () => {
     localStorage.setItem("c64u_playback_crossfade_ms", "0");
     const { backend, transcript } = createRecordingFeed();
     const engine = buildEngine(backend);
@@ -310,11 +312,12 @@ describe("one continuous stream of samples across a track change", () => {
     const changeAt = transcript.length;
     await playSettled(engine, 1);
     const change = transcript.slice(changeAt);
-    expect(change.some((e) => e.method === "takeTail" || e.method === "beginTransition")).toBe(false);
     const outgoing = transcript.find((e) => e.method === "openSession")!.serial;
-    expect(change.findIndex((e) => e.method === "close" && e.serial === outgoing)).toBeLessThan(
-      change.findIndex((e) => e.method === "openSession"),
-    );
+    const cut = change.find((e) => e.method === "beginTransition");
+    expect(cut).toMatchObject({ serial: outgoing, seconds: CUT_DECLICK_MS / 1000, rampOut: true });
+    expect(change.some((e) => e.method === "close" && e.serial === outgoing)).toBe(false);
+    expect(change.findIndex((e) => e.method === "release" && e.serial === outgoing)).toBeGreaterThan(-1);
+    expect(change.some((e) => e.method === "fadeIn")).toBe(false);
     checkGolden("cut", { sampleRate: RATE, fadeMs: 0, transcript });
   });
 });

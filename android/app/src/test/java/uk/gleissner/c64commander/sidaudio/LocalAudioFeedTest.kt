@@ -470,6 +470,33 @@ class LocalAudioFeedTest {
   }
 
   @Test
+  fun `a cut fades the outgoing tune to silence in 10 ms and the next tune writes onto the same track`() {
+    // With the crossfade off, a track change closed the track. The next tune opened a new one and waited
+    // for its prime, 26 to 990 ms of silence on a Pixel 4, and the outgoing tune stopped on a step.
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(rate * 2, 8000))
+    pump()
+    advance(200)
+    val output = host.current!!
+    val before = output.samples().size / 2
+    feed.beginTransition(1, 2, 0.01, rampOut = true)
+    feed.openSession(2, settings)
+    feed.takeTail(1, 3, 9, 0.01)
+    feed.release(1, 4)
+    feed.adoptTail(2, 1, 9, 0.01)
+    feed.enqueue(2, 2, segment(rate / 10, 3000))
+    advance(300)
+    assertEquals("the next tune reopened the track", 1, host.opened.size)
+    val after = output.samples().filterIndexed { i, _ -> i % 2 == 0 }.drop(before)
+    // The next tune's own audio (3000) is already there; what is left on top of it is the outgoing one.
+    val outgoing = after.take(rate / 100).map { it - 3000 }
+    assertTrue("the cut starts near full level: ${outgoing.first()}", outgoing.first() > 7000)
+    assertTrue("the cut ends near silence: ${outgoing.last()}", outgoing.last() < 200)
+    assertTrue("the cut only falls", outgoing.zipWithNext().all { (a, b) -> b <= a })
+    assertEquals("only the next tune after the ramp", 3000, after[rate / 100 + 10].toInt())
+  }
+
+  @Test
   fun `crossfade - clamps rather than wraps when both tunes peak together`() {
     feed.openSession(1, settings)
     feed.enqueue(1, 1, segment(rate, 30000))

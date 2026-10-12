@@ -69,6 +69,10 @@ import { localSidPlaybackSupported } from "./localSidSupport";
  * transition; too large only costs a little memory.
  */
 const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
+/** How long a track change with the crossfade off takes to silence the outgoing tune: a declick, not a fade. */
+export const CUT_DECLICK_MS = 10;
+/** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
+const CUT_CLOSE_MARGIN_MS = 30;
 import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
@@ -888,7 +892,7 @@ export class LocalSidEngine {
     // hard cut, and so is leaving a paused tune: faded out, it came back and held the next tune in a paused track.
     const crossfadeMs = this.paused ? 0 : loadPlaybackCrossfadeMs();
     this.pendingCrossfadeMs = crossfadeMs;
-    this.stopPlayback({ crossfadeMs });
+    this.stopPlayback({ crossfadeMs, declick: !this.paused });
     this.callbacks = callbacks;
     const worker = this.ensureWorker();
     const id = this.nextId;
@@ -2332,7 +2336,21 @@ export class LocalSidEngine {
    * Silence and tear down this engine's audio. Not private: the audio-ownership
    * registry calls it to evict a stale owner (see claimAudioOwnership).
    */
-  stopPlayback(options: { crossfadeMs?: number } = {}): void {
+  /**
+   * A backstop only. `onOpened` closes the outgoing sink as soon as the next tune has its tail, and a
+   * tune that never opens must not leave the previous one holding the track forever.
+   */
+  private closeIfNeverHandedOver(outgoing: LocalSidAudioSink, afterMs: number): void {
+    setTimeout(() => {
+      // Only if the handover never happened. Once it has, this sink has already been released and
+      // closing it here would flush the track the next tune is playing through.
+      if (this.crossfadeOut !== outgoing) return;
+      this.crossfadeOut = null;
+      outgoing.close();
+    }, afterMs);
+  }
+
+  stopPlayback(options: { crossfadeMs?: number; declick?: boolean } = {}): void {
     // Stop asking the mirror to protect audio that is no longer playing, or Live View would stay
     // demoted for the rest of the session.
     clearLocalAudioHealth();
@@ -2346,11 +2364,24 @@ export class LocalSidEngine {
     // through here: it fires `onEnded` (maybeFireEnded notifies separately) and keeps its scheduler.
     const wasActive = this.scheduler !== null;
     const fadeMs = options.crossfadeMs ?? 0;
+    // A track change with the crossfade off still must not end on a step: the outgoing tune is silenced
+    // over a declick, on the same track, so the next tune need not open a new one and wait for its prime.
+    const declickMs = fadeMs === 0 && options.declick ? CUT_DECLICK_MS : 0;
     const outgoing = this.audio;
-    this.scheduler?.stopAll(fadeMs > 0 ? { keepSourcesFor: fadeMs } : undefined);
+    const keepMs = fadeMs || declickMs;
+    this.scheduler?.stopAll(keepMs > 0 ? { keepSourcesFor: keepMs } : undefined);
     this.scheduler = null;
     this.audio = null;
-    if (outgoing && fadeMs > 0 && outgoing.beginCrossfadeTailPlayout) {
+    if (outgoing && declickMs > 0 && outgoing.beginCutPlayout) {
+      this.crossfadeOut = outgoing;
+      this.crossfadeSeconds = declickMs / 1000;
+      outgoing.beginCutPlayout(declickMs / 1000);
+      traceLocalSid("cut-playout", { declickMs });
+      this.closeIfNeverHandedOver(outgoing, CROSSFADE_TAIL_BUDGET_SECONDS * 1000 + 500);
+    } else if (outgoing && declickMs > 0 && outgoing.fadeOut) {
+      outgoing.fadeOut(declickMs);
+      setTimeout(() => outgoing.close(), declickMs + CUT_CLOSE_MARGIN_MS);
+    } else if (outgoing && fadeMs > 0 && outgoing.beginCrossfadeTailPlayout) {
       // The outgoing tune keeps sounding, from JS, until the next one can be heard.
       //
       // Its audio is not taken here. Nothing has opened the next tune yet — on a Pixel 4 that costs
@@ -2364,18 +2395,7 @@ export class LocalSidEngine {
       this.crossfadeSeconds = fadeMs / 1000;
       outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000);
       traceLocalSid("crossfade-tail-playout", { fadeMs });
-      // A backstop only. `onOpened` closes it as soon as the next tune has the tail, and a tune that
-      // never opens must not leave the previous one playing forever.
-      setTimeout(
-        () => {
-          // Only if the handover never happened. Once it has, this sink has already been released and
-          // closing it here would flush the track the next tune is playing through.
-          if (this.crossfadeOut !== outgoing) return;
-          this.crossfadeOut = null;
-          outgoing.close();
-        },
-        (CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000) * 1000 + 500,
-      );
+      this.closeIfNeverHandedOver(outgoing, (CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000) * 1000 + 500);
     } else {
       outgoing?.close();
     }

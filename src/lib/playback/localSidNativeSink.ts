@@ -365,13 +365,13 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return this.maxUnderruns;
   }
 
-  beginTailPlayout(seconds: number): void {
+  beginTailPlayout(seconds: number, rampOut = false): void {
     if (this.closed) return;
     const seq = this.nextSeq();
     this.call("starting the crossfade tail", () =>
-      this.backend.feed.beginTransition({ serial: this.serial, seq, seconds }),
+      this.backend.feed.beginTransition({ serial: this.serial, seq, seconds, rampOut }),
     );
-    traceLocalSid("tail-playout-begin", { seconds });
+    traceLocalSid("tail-playout-begin", { seconds, rampOut });
   }
 
   takeTail(maxSeconds: number): NativeCrossfadeTail {
@@ -482,6 +482,7 @@ export const createNativeLocalSidSink = (
     isSilentFault: () => sink.isSilentFault(),
     takeCrossfadeTail: (seconds: number) => sink.takeTail(seconds),
     beginCrossfadeTailPlayout: (seconds: number) => sink.beginTailPlayout(seconds),
+    beginCutPlayout: (seconds: number) => sink.beginTailPlayout(seconds, true),
     releaseForHandover: () => sink.releaseForHandover(),
     adoptCrossfadeTail: (tail: CrossfadeTail, seconds: number) => sink.adoptTail(tail, seconds),
     resetSilence: () => sink.resetSilence(),

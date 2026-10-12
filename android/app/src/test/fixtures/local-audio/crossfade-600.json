@@ -226,7 +226,8 @@
       "method": "beginTransition",
       "serial": 1,
       "seq": 26,
-      "seconds": 4.6
+      "seconds": 4.6,
+      "rampOut": false
     },
     {
       "t": 8000,

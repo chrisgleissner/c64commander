@@ -19,7 +19,12 @@ vi.mock("@/lib/playback/sidRenderer/nativePcmRelease", () => ({
   },
 }));
 
-import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
+import {
+  CUT_DECLICK_MS,
+  LocalSidEngine,
+  type LocalSidAudioSink,
+  type LocalSidWorkerLike,
+} from "@/lib/playback/localSidEngine";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
 import { __resetPhoneAudioOwnership } from "@/lib/audio/phoneAudioOwnership";
@@ -415,6 +420,42 @@ describe("an engine with three renderers", () => {
     await open(engine, "b");
     expect(closes[0]).toHaveBeenCalled();
     engine.dispose();
+  });
+
+  it("cuts a Web Audio sink over a declick, closing it only once the fade has played", async () => {
+    vi.useFakeTimers();
+    try {
+      const fades: Array<ReturnType<typeof vi.fn>> = [];
+      const closes: Array<ReturnType<typeof vi.fn>> = [];
+      channels = [];
+      sinks = [];
+      const engine = new LocalSidEngine({
+        rendererFactory: (renderer, role) => {
+          const channel = new FakeChannel(renderer, role);
+          channels.push(channel);
+          return channel;
+        },
+        audioSinkFactory: (): LocalSidAudioSink => {
+          const made = makeSink();
+          sinks.push(made);
+          const fadeOut = vi.fn();
+          const close = vi.fn();
+          fades.push(fadeOut);
+          closes.push(close);
+          return { sink: made.sink, resume: vi.fn(), close, fadeOut };
+        },
+      });
+      const first = await open(engine, "a");
+      first.channel.emit({ type: "chunk", id: first.id, pcm: ref(71, 0, RATE), samples: RATE * 2, renderMs: 1 });
+      await open(engine, "b");
+      expect(fades[0]).toHaveBeenCalledWith(CUT_DECLICK_MS);
+      expect(closes[0]).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(CUT_DECLICK_MS + 50);
+      expect(closes[0]).toHaveBeenCalled();
+      engine.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("answers a seek from the pre-render once that pre-render completes past the target", async () => {
