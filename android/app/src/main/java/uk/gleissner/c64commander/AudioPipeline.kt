@@ -201,17 +201,8 @@ internal class AudioPipeline(
   private var totalFramesWritten: Long = 0
   private var player: Thread? = null
 
-  /**
-   * Diagnostics only: a copy of exactly what was handed to the speaker.
-   *
-   * The end-to-end check that matters plays a known stimulus on the C64 and grades what a microphone
-   * hears from the phone, which covers everything including the room. This covers everything up to
-   * the room — network, jitter buffer, resampler, concealment — and needs no microphone, so it can
-   * grade the app's own contribution when the handset is not somewhere a microphone can reach it.
-   * Null unless a capture has been armed, so the hot path costs one reference read.
-   */
-  @Volatile private var capture: ByteArray? = null
-  @Volatile private var captureUsed = 0
+  /** Where a diagnostic capture of what reaches the track is recorded; see [OutputCapture]. */
+  @Volatile var outputCapture: OutputCapture? = null
 
   init {
     val burst = if (framesPerBurst > 0) framesPerBurst else defaultBurstFrames(outputRate)
@@ -489,19 +480,6 @@ internal class AudioPipeline(
         }
       }
     }
-  }
-
-  /** Arm a capture of the next [seconds] of output. Replaces any capture already running. */
-  fun startCapture(seconds: Int) {
-    captureUsed = 0
-    capture = ByteArray(msToFrames(outputRate, seconds.coerceIn(1, 60) * 1000) * BYTES_PER_FRAME)
-  }
-
-  /** The captured PCM so far (interleaved stereo S16LE at [outputRate]), and disarm. */
-  fun takeCapture(): ByteArray {
-    val buffer = capture ?: return ByteArray(0)
-    capture = null
-    return buffer.copyOf(captureUsed)
   }
 
   fun stats(): Stats {
@@ -874,13 +852,7 @@ internal class AudioPipeline(
   private fun writeBlocking(data: ByteArray, length: Int) {
     val written = track.write(data, 0, length, AudioTrack.WRITE_BLOCKING)
     if (written > 0) totalFramesWritten += (written / BYTES_PER_FRAME).toLong()
-    capture?.let { buffer ->
-      val room = minOf(maxOf(written, 0), buffer.size - captureUsed)
-      if (room > 0) {
-        System.arraycopy(data, 0, buffer, captureUsed, room)
-        captureUsed += room
-      }
-    }
+    outputCapture?.record(data, written)
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
       if (written <= 0) clock.park(POLL_NANOS)

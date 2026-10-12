@@ -396,6 +396,29 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun oneCaptureRecordsWhatEachSuccessivePipelineHandedTheTrack() {
+    // A hard cut between local tunes closes the pipeline and opens a new one. A capture owned by the
+    // pipeline went with the first and read back empty, so the cut itself could never be graded.
+    val capture = OutputCapture()
+    capture.arm(4, sampleRate)
+    for (round in 0 until 2) {
+      val speaker = FakeSpeaker(sampleRate, record = true)
+      val pipeline = AudioPipeline(sampleRate, 200, trackFactory = speaker.factory)
+      pipeline.outputCapture = capture
+      pipeline.start()
+      try {
+        feedEven(pipeline, 1, 1.0)
+        Thread.sleep(300)
+      } finally {
+        pipeline.close()
+      }
+    }
+    val captured = capture.take()
+    assertTrue("the capture missed the second pipeline: ${captured.size} bytes", captured.size > sampleRate * bytesPerFrame)
+    assertEquals("a capture is read once", 0, capture.take().size)
+  }
+
+  @Test
   fun anEvenStreamPlaysWithoutDefects() {
     // The control. With no burstiness there is nothing to absorb, so any defect here would mean the
     // pipeline itself is broken rather than the link.

@@ -110,6 +110,7 @@ class StreamUdpPlugin : Plugin() {
    * gives; the pipeline's own internals are thread-safe.
    */
   @Volatile private var audioPipeline: AudioPipeline? = null
+  private val outputCapture = OutputCapture()
 
   /** Serialises open/close against each other (never against the receive path). */
   private val audioLifecycleLock = Any()
@@ -423,6 +424,7 @@ class StreamUdpPlugin : Plugin() {
                 correctDrift = correctDrift,
             )
             .also {
+              it.outputCapture = outputCapture
               it.start()
               audioPipeline = it
               requestPlaybackAudioFocus()
@@ -535,7 +537,7 @@ class StreamUdpPlugin : Plugin() {
    */
   @PluginMethod
   fun startAudioCapture(call: PluginCall) {
-    audioPipeline?.startCapture(call.getInt("seconds") ?: 10)
+    outputCapture.arm(call.getInt("seconds") ?: 10, audioPipeline?.stats()?.trackSampleRate ?: nativeOutputRate())
     call.resolve(JSObject())
   }
 
@@ -549,9 +551,8 @@ class StreamUdpPlugin : Plugin() {
    */
   @PluginMethod
   fun readAudioCapture(call: PluginCall) {
-    val pipeline = audioPipeline
-    val pcm = pipeline?.takeCapture() ?: ByteArray(0)
-    val rate = pipeline?.stats()?.trackSampleRate ?: 0
+    val pcm = outputCapture.take()
+    val rate = outputCapture.sampleRate
     val result = JSObject()
     result.put("bytes", pcm.size)
     result.put("sampleRate", rate)
