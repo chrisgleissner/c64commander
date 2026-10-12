@@ -62,12 +62,29 @@ class LocalAudioFeedTest {
       offers += 1
     }
 
+    /** Frames the pipeline's player commits to the track between a depth reading and a separate flush. */
+    var raceFrames = 0L
+
     override fun flush() {
       flushes += 1
       val trackFrames = (trackMs * rate / 1000).toLong()
-      consumedAtResume = maxOf(consumed(), writtenFrames - trackFrames)
+      heardAtFlush = minOf(writtenFrames, consumed() + raceFrames)
+      consumedAtResume = maxOf(heardAtFlush, writtenFrames - trackFrames)
       resumedAtNanos = clock.now
     }
+
+    /** One step, as the pipeline does it under its lock: no block can slip into the track in between. */
+    override fun flushRing(rate: Int): Long {
+      val ring = ((ringMs() * rate) / 1000).toLong()
+      val saved = raceFrames
+      raceFrames = 0
+      flush()
+      raceFrames = saved
+      return ring
+    }
+
+    /** How many frames of [samples] had reached the speaker when the last flush discarded the rest. */
+    var heardAtFlush = 0L
 
     override fun pause() {
       consumedAtResume = consumed()
@@ -104,6 +121,7 @@ class LocalAudioFeedTest {
     var failNextOpens = 0
     var trackMs = 0.0
     var concealing = false
+    var racingFrames = 0L
     val closed = mutableListOf<FakeOutput>()
 
     override fun open(settings: FeedTrackSettings): FeedOutput {
@@ -111,7 +129,11 @@ class LocalAudioFeedTest {
         failNextOpens -= 1
         throw IllegalStateException("the platform refused the track")
       }
-      val output = FakeOutput(clock, rate, trackMs).also { it.concealing = concealing }
+      val output =
+          FakeOutput(clock, rate, trackMs).also {
+            it.concealing = concealing
+            it.raceFrames = racingFrames
+          }
       opened.add(output)
       current = output
       return output
@@ -416,6 +438,35 @@ class LocalAudioFeedTest {
     val firstRecovered = output.samples()[rate * 2 * 2].toInt()
     val playingSlice = 100 + (played / (rate / 10)).toInt()
     assertTrue("recovery resumed at $firstRecovered, the playhead was in $playingSlice", firstRecovered == playingSlice)
+  }
+
+  @Test
+  fun `crossfade - the recovered audio carries on from the last frame heard, even while the player commits a block`() {
+    // On a Pixel 4 the player committed one 192-frame block to the track between the transition reading
+    // the ring's depth and flushing it. That block was played and recovered as well: a click at the start
+    // of every crossfade, a phase jump of 192 frames in the outgoing tune.
+    host.racingFrames = 192
+    feed.openSession(1, settings)
+    var seq = 1L
+    val counting = ByteArray(rate * 2 * 4)
+    for (i in 0 until rate * 2) {
+      val value = i % 30000
+      counting[i * 4] = (value and 0xFF).toByte()
+      counting[i * 4 + 1] = ((value shr 8) and 0xFF).toByte()
+      counting[i * 4 + 2] = counting[i * 4]
+      counting[i * 4 + 3] = counting[i * 4 + 1]
+    }
+    feed.enqueue(1, seq++, Segment(LocalAudioFeed.bytesSource(counting), 0, (rate * 2).toLong()))
+    pump()
+    advance(500)
+    val output = host.current!!
+    val writtenBefore = output.samples().size / 2
+    feed.beginTransition(1, seq++, 4.0)
+    pump()
+    val left = output.samples().filterIndexed { i, _ -> i % 2 == 0 }
+    val lastHeard = left[(output.heardAtFlush - 1).toInt()].toInt()
+    val firstRecovered = left[writtenBefore].toInt()
+    assertEquals("the recovered audio repeats or skips what was heard", (lastHeard + 1) % 30000, firstRecovered)
   }
 
   @Test

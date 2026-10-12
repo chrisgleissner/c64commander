@@ -279,11 +279,20 @@ internal class AudioPipeline(
    * is already queued, for as long as the ring is deep. Flushing makes those immediate again.
    */
   fun flush() {
-    synchronized(producerLock) {
-      readFrames = writeFrames
-      flushSeq += 1
-    }
+    flushRing()
   }
+
+  /**
+   * [flush], returning how many source frames the ring held. One step under the lock the player commits
+   * under: measured first and flushed after, a chunk committed in between was played and recovered too.
+   */
+  fun flushRing(): Long =
+      synchronized(producerLock) {
+        val discarded = (writeFrames - readFrames).coerceAtLeast(0)
+        readFrames = writeFrames
+        flushSeq += 1
+        discarded
+      }
 
   /**
    * Stop the speaker without discarding anything, which is what a listener's pause has to be.

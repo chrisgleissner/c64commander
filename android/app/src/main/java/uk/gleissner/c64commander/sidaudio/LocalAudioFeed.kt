@@ -49,6 +49,13 @@ internal interface FeedOutput {
   /** The ring alone: what a [flush] discards. The track's own buffer always plays out. */
   fun ringMs(): Double
 
+  /** [flush] and say how many frames at [rate] it discarded; the pipeline does both in one step. */
+  fun flushRing(rate: Int): Long {
+    val frames = (ringMs() * rate / 1000).toLong()
+    flush()
+    return frames
+  }
+
   fun underruns(): Int
 }
 
@@ -335,10 +342,11 @@ internal class LocalAudioFeed(
     session.transitioning = true
     val rate = session.settings.sampleRate
     val wanted = (seconds * rate).toLong().coerceAtLeast(0)
-    // The ring, not the track: the flush that follows empties the ring, while what the track holds
-    // still plays. Recovering that too would play it twice.
-    val depthFrames =
-        if (session.serial == activeSerial) ((output?.ringMs() ?: 0.0) * rate / 1000).toLong() else 0L
+    // The ring, not the track: what the track holds still plays, and recovering it too would play it twice.
+    // Flushed now and counted in the same step: read first and flushed later, a block the player wrote
+    // in between was heard twice, a click at the start of every crossfade.
+    val active = session.serial == activeSerial
+    val depthFrames = if (active) output?.flushRing(rate) ?: 0L else 0L
     var unplayed = minOf(session.historyFrames, depthFrames)
     val recovered = ArrayDeque<Segment>()
     while (unplayed > 0 && session.history.isNotEmpty()) {
@@ -363,7 +371,7 @@ internal class LocalAudioFeed(
     for (segment in capped.reversed()) session.queue.addFirst(segment)
     session.history.clear()
     session.historyFrames = 0
-    pendingTransitionFlush = true
+    pendingTransitionFlush = !active || output == null
     publish(session)
   }
 

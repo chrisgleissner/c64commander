@@ -67,6 +67,8 @@ class SidAudioPlugin : Plugin() {
 
     override fun flush() = pipeline.flush()
 
+    override fun flushRing(rate: Int): Long = pipeline.flushRing()
+
     override fun pause() = pipeline.pause()
 
     override fun resume() = pipeline.resume()

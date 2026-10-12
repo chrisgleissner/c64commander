@@ -396,6 +396,18 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun flushRingEmptiesTheRingAndReportsWhatItHeld() {
+    val speaker = FakeSpeaker(sampleRate)
+    val pipeline = AudioPipeline(sampleRate, 200, trackFactory = speaker.factory)
+    val frames = 4800
+    pipeline.offer(ByteArray(frames * bytesPerFrame), 0, frames * bytesPerFrame)
+    assertEquals(frames.toLong(), pipeline.flushRing())
+    assertEquals(0.0, pipeline.stats().jitterBufferMs, 0.0)
+    assertEquals(0L, pipeline.flushRing())
+    pipeline.close()
+  }
+
+  @Test
   fun oneCaptureRecordsWhatEachSuccessivePipelineHandedTheTrack() {
     // A hard cut between local tunes closes the pipeline and opens a new one. A capture owned by the
     // pipeline went with the first and read back empty, so the cut itself could never be graded.
