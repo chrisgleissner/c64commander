@@ -46,6 +46,8 @@ export type AutoAdvanceDurationChangeInput = {
   durationMs: number | undefined;
   trackStartedAtMs: number | null;
   currentDueAtMs: number | undefined;
+  /** How far ahead of the songlength the next tune starts; see `crossfadeLeadMs`. */
+  leadMs?: number;
 };
 
 /**
@@ -62,11 +64,12 @@ export const resolveAutoAdvanceDueAtMsOnDurationChange = ({
   durationMs,
   trackStartedAtMs,
   currentDueAtMs,
+  leadMs = 0,
 }: AutoAdvanceDurationChangeInput): number | null => {
   if (!isPlaying || isPaused) return null;
   if (typeof durationMs !== "number") return null;
   if (trackStartedAtMs === null) return null;
-  const nextDueAtMs = trackStartedAtMs + durationMs;
+  const nextDueAtMs = trackStartedAtMs + durationMs - leadMs;
   if (nextDueAtMs === currentDueAtMs) return null;
   return nextDueAtMs;
 };

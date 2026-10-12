@@ -10,6 +10,29 @@ import { addLog } from "@/lib/logging";
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 describe("playbackGuards resolveAutoAdvanceDueAtMsOnDurationChange", () => {
+  it("keeps a crossfade lead when the duration changes mid-track", () => {
+    expect(
+      resolveAutoAdvanceDueAtMsOnDurationChange({
+        isPlaying: true,
+        isPaused: false,
+        durationMs: 60_000,
+        trackStartedAtMs: 1_000,
+        currentDueAtMs: 1_000 + 60_000,
+        leadMs: 2_250,
+      }),
+    ).toBe(1_000 + 60_000 - 2_250);
+    expect(
+      resolveAutoAdvanceDueAtMsOnDurationChange({
+        isPlaying: true,
+        isPaused: false,
+        durationMs: 60_000,
+        trackStartedAtMs: 1_000,
+        currentDueAtMs: 1_000 + 60_000 - 2_250,
+        leadMs: 2_250,
+      }),
+    ).toBeNull();
+  });
+
   it("recomputes dueAtMs from the new duration while playing", () => {
     expect(
       resolveAutoAdvanceDueAtMsOnDurationChange({
