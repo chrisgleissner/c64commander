@@ -54,8 +54,8 @@ export const NATIVE_PCM_HEADER_SAMPLES = PCM_HEADER_SAMPLES;
 const TARGET_BUFFER_MS = 15000;
 const MAX_RING_MS = 20000;
 
-/** HAL bursts in the AudioTrack's own buffer; deeper than the mirror's 4, to absorb descheduling. */
-const TRACK_BURSTS = 16;
+/** HAL bursts in the AudioTrack's own buffer; deeper than the mirror's 4, to absorb descheduling under UI load. */
+const TRACK_BURSTS = 48;
 
 /** How often chunk completions are checked against the playhead. */
 const TICK_MS = 50;

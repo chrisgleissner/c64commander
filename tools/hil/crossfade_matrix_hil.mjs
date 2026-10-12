@@ -212,10 +212,12 @@ const trial = async (device, renderer, crossfadeMs, scenario, dir) => {
 localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossfadeMs))});return 1})()`);
   const atEnd = scenario.startsWith("end");
   await playRow(LOW.title);
-  // Into the tune far enough that the first second's start-up is behind the capture.
+  // Into the tune far enough that the first second's start-up is behind the capture. The capture holds
+  // the samples written, and the deep ring writes a tune well ahead of what is heard, so at a natural
+  // end it starts close to the change or it ends before the next tune is written.
   // At the natural end the change comes a crossfade's lead before the songlength.
   const endsAtSeconds = TUNE_SECONDS - leadMs(crossfadeMs) / 1000;
-  const reached = await waitForClock(atEnd ? Math.floor(endsAtSeconds) - 4 : 2, 45_000);
+  const reached = await waitForClock(atEnd ? Math.floor(endsAtSeconds) - 2 : 2, 45_000);
   // A capture holds the samples written, not wall time: a gap or an underrun between writes is not in
   // it. The microphone hears both, and the track's own underrun count says whether it ran dry.
   const captureSeconds = Math.ceil(10 + crossfadeMs / 1000);

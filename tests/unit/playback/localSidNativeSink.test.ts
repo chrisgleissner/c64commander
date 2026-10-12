@@ -130,7 +130,7 @@ describe("the native sink controller", () => {
     const [open] = of("openSession");
     expect(open.bufferMs).toBe(15000);
     expect(open.maxRingMs).toBe(20000);
-    expect(open.trackBursts).toBe(16);
+    expect(open.trackBursts).toBe(48);
     expect(open.primeMs as number).toBeLessThan(5000);
     expect(open.sampleRate).toBe(RATE);
   });
