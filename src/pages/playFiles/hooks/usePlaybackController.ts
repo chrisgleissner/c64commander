@@ -95,7 +95,7 @@ import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngi
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
-import { autoAdvanceDelayMs, crossfadeLeadMs } from "@/pages/playFiles/crossfadeLead";
+import { autoAdvanceDelayMs, crossfadeLeadMs, deferralToTuneEndMs } from "@/pages/playFiles/crossfadeLead";
 import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
 import {
@@ -136,6 +136,7 @@ type AutoAdvanceGuard = {
   dueAtMs: number;
   autoFired: boolean;
   userCancelled: boolean;
+  deferredToEnd?: boolean;
 };
 
 type PendingUserSkip = {
@@ -940,12 +941,6 @@ export function usePlaybackController({
             });
           }
         }
-        // Track B (LE2): decide whether this SID plays on the device. The
-        // pre-route only knows category/engine/support; ROM-dependent (RSID)
-        // tunes need ship-forbidden C64 ROMs, so peek the (tiny) SID header and
-        // route those back to the C64 with a one-time notice. Gated on
-        // `c64u_local_engine_enabled` — off by default, so the whole block is a
-        // no-op and playback is byte-for-byte the C64 path.
         let routeToLocal = false;
         // Against the simulated device, or with no device at all, the on-device engine is the only
         // thing that can make a sound, so this block runs whatever the local-engine flag says. The
@@ -988,10 +983,6 @@ export function usePlaybackController({
           if (selection.route === "local" && effectiveRequest.file) {
             try {
               const sidBytes = new Uint8Array(await effectiveRequest.file.arrayBuffer());
-              // Ask BOTH questions: does this tune drive the kernal, and do we hold the ROM images at
-              // all. The engine needs them either way — without them it renders silence — and nothing
-              // fetches them unprompted, so a fresh install answering only the first question sent
-              // every tune to an engine that could not make a sound, without saying so.
               const romsReady = hasCompleteRomSet();
               const decision = romFallbackDecision(detectRomRequired(sidBytes), romsReady);
               if (decision.route === "local") {
@@ -1747,6 +1738,7 @@ export function usePlaybackController({
           autoAdvanceGuardRef.current.dueAtMs =
             now + autoAdvanceDelayMs(currentDurationMs, currentElapsedMs, currentPlaybackIsLocalRef.current);
           autoAdvanceGuardRef.current.autoFired = false;
+          autoAdvanceGuardRef.current.deferredToEnd = false;
           autoAdvanceGuardRef.current.userCancelled = false;
           setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
         }
@@ -1808,6 +1800,7 @@ export function usePlaybackController({
             autoAdvanceGuardRef.current.dueAtMs =
               now + autoAdvanceDelayMs(durationMs, elapsedMs, currentPlaybackIsLocalRef.current);
             autoAdvanceGuardRef.current.autoFired = false;
+            autoAdvanceGuardRef.current.deferredToEnd = false;
             autoAdvanceGuardRef.current.userCancelled = false;
             setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
           }
@@ -1867,6 +1860,7 @@ export function usePlaybackController({
                 autoAdvanceGuardRef.current.dueAtMs =
                   now + autoAdvanceDelayMs(durationMs, elapsedMs, currentPlaybackIsLocalRef.current);
                 autoAdvanceGuardRef.current.autoFired = false;
+                autoAdvanceGuardRef.current.deferredToEnd = false;
                 autoAdvanceGuardRef.current.userCancelled = false;
                 setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
               }
@@ -2172,14 +2166,15 @@ export function usePlaybackController({
         // Advanced early to crossfade into a next tune that does not exist: let this one play to its end.
         const durationNowMs = durationMsRef.current ?? 0;
         const endsAtMs = (trackStartedAtRef.current ?? now) + durationNowMs;
-        if (
-          nextIndex === null &&
-          endsAtMs > now &&
-          crossfadeLeadMs(durationNowMs, currentPlaybackIsLocalRef.current) > 0
-        ) {
+        const deferredDueAtMs =
+          nextIndex === null && crossfadeLeadMs(durationNowMs, currentPlaybackIsLocalRef.current) > 0
+            ? deferralToTuneEndMs(guard.deferredToEnd === true, now, endsAtMs)
+            : null;
+        if (deferredDueAtMs !== null) {
           guard.autoFired = false;
-          guard.dueAtMs = endsAtMs;
-          setAutoAdvanceDueAtMs(endsAtMs);
+          guard.deferredToEnd = true;
+          guard.dueAtMs = deferredDueAtMs;
+          setAutoAdvanceDueAtMs(deferredDueAtMs);
           return;
         }
         playedClockRef.current.pause(now);

@@ -45,6 +45,7 @@ import {
 
 const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
 const deviceInfoOverride = vi.hoisted(() => ({ current: undefined as Record<string, string> | undefined }));
+const storedRomsAvailable = vi.hoisted(() => ({ current: false }));
 vi.mock("@/lib/connection/connectionManager", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/connection/connectionManager")>();
   return {
@@ -74,6 +75,11 @@ vi.mock("@/lib/archive/execution", () => ({
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
 }));
+
+vi.mock("@/lib/roms/romStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/roms/romStore")>();
+  return { ...actual, hasCompleteRomSet: () => storedRomsAvailable.current };
+});
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
   PlaybackLaunchOvertakenError: class extends Error {},
@@ -297,6 +303,7 @@ const renderPlaybackController = (
 describe("usePlaybackController", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    storedRomsAvailable.current = false;
     clearArchivePlaybackCacheForTests();
     pollingPauseRegistry.__resetForTest();
     // "Is anything playing" is app-wide module state that outlives any page —
@@ -3701,7 +3708,40 @@ describe("usePlaybackController", () => {
       expect(autoAdvanceGuardRef.current!.dueAtMs).toBe(trackStartedAtRef.current! + 120_000);
     });
 
-    it("falls a ROM-dependent RSID back to the C64", async () => {
+    it("ends the last tune when it comes due again after being deferred once, as when its playhead has stalled", async () => {
+      enableLocal();
+      localStorage.setItem("c64u_playback_crossfade_ms", "1500");
+      const controller = fakeController();
+      const trackInstanceIdRef = { current: 0 };
+      const trackStartedAtRef = { current: null as number | null };
+      const autoAdvanceGuardRef = { current: null as { dueAtMs: number; autoFired: boolean } | null };
+      const setIsPlaying = vi.fn();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        trackInstanceIdRef,
+        trackStartedAtRef,
+        autoAdvanceGuardRef,
+        setIsPlaying,
+        durationMs: 120_000,
+      } as any);
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+      trackStartedAtRef.current = Date.now() - 30_000;
+      setIsPlaying.mockClear();
+
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+
+      expect(setIsPlaying).toHaveBeenCalledWith(false);
+    });
+
+    it("falls a ROM-dependent RSID back to the C64 when its ROMs are unavailable", async () => {
       enableLocal();
       const controller = fakeController();
       const playlist = [sidItem(rsid)];
@@ -3713,8 +3753,52 @@ describe("usePlaybackController", () => {
       expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
     });
 
-    // With "This device" selected, an RSID falls back to the C64 and the next PSID plays here: the C64
-    // kept looping the RSID underneath, and Stop skipped it because the current tune was local.
+    it("restarts a searched HVSC RSID here after switching from the C64 when its ROMs are stored", async () => {
+      storedRomsAvailable.current = true;
+      localStorage.setItem("c64u_local_engine_enabled", "1");
+      localStorage.setItem("c64u_playback_engine", "c64");
+      vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+      const controller = fakeController();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      const buildHvscLocalPlayFile = vi.fn(() => ({
+        name: "Giana_2.sid",
+        lastModified: 0,
+        arrayBuffer: vi.fn(async () => rsid()),
+      }));
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const playlist = [
+        createPlaylistItem({
+          id: "hvsc-giana-2",
+          category: "sid",
+          label: "Giana_2.sid",
+          path: "/MUSICIANS/G/Galway_M/Giana_2.sid",
+          durationMs: 120_000,
+          request: { source: "hvsc", path: "/MUSICIANS/G/Galway_M/Giana_2.sid" } as any,
+        }),
+      ];
+      const { result } = renderPlaybackController(playlist, {
+        buildHvscLocalPlayFile,
+        isPlaying: true,
+        localSidPlaybackController: controller,
+      });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        savePlaybackEngine("local");
+      });
+
+      await waitFor(() => expect(controller.play).toHaveBeenCalledTimes(1));
+      expect(buildHvscLocalPlayFile).toHaveBeenCalledWith("/MUSICIANS/G/Galway_M/Giana_2.sid", "Giana_2.sid");
+      expect(machineReset).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+
+      await result.current.handleStop();
+      expect(controller.stop).toHaveBeenCalled();
+    });
+
+    // An RSID without its required ROMs falls back to the C64; the next local tune must stop it first.
     it("stops the C64 tune when the next tune plays on this device", async () => {
       enableLocal();
       const controller = fakeController();
