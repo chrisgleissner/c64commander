@@ -9,10 +9,11 @@
 import { loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
 
 /**
- * Time from the auto-advance firing to the next tune's first sound on the phone: resolving the item,
- * reading its bytes and opening it. Measured at about 400 ms on a Pixel 4.
+ * How much earlier than its crossfade the next tune is started, to cover two delays measured on a Pixel 4:
+ * the clock starts about 0.4 s after a tune's first audio, and resolving, reading and opening the next
+ * tune takes 0.4-0.6 s. With 0.75 s a natural-end crossfade of 0.6 s was cut to a quarter.
  */
-export const CROSSFADE_START_MARGIN_MS = 750;
+export const CROSSFADE_START_MARGIN_MS = 1500;
 
 /**
  * How long before a tune's songlength the next one is started on the phone.
