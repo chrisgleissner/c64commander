@@ -13,6 +13,10 @@ import {
 } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { CROSSFADE_START_MARGIN_MS } from "@/pages/playFiles/crossfadeLead";
+import {
+  __setSidplayEzAvailabilityForTests,
+  probeSidRenderers,
+} from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
@@ -119,6 +123,11 @@ vi.mock("@/lib/streams/avMirrorSession", () => ({
     setAudioWanted: vi.fn(() => Promise.resolve()),
   },
 }));
+
+vi.mock("@/lib/playback/sidRenderer/sidRendererAvailability", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/playback/sidRenderer/sidRendererAvailability")>();
+  return { ...actual, probeSidRenderers: vi.fn(actual.probeSidRenderers) };
+});
 
 vi.mock("@/lib/config/applyConfigFileReference", () => ({
   applyConfigFileReference: vi.fn(async () => undefined),
@@ -3314,6 +3323,20 @@ describe("usePlaybackController", () => {
 
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(controller.play.mock.calls[0][1]).toBe(2);
+    });
+
+    it("keys the pre-render by the renderer the probe settles on, not the one assumed before it answers", async () => {
+      enableLocal();
+      __setSidplayEzAvailabilityForTests(null);
+      vi.mocked(probeSidRenderers).mockImplementationOnce(async () => __setSidplayEzAvailabilityForTests(true));
+      const controller = fakeController();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect((controller.play.mock.calls[0][3] as { prerenderKey: string }).prerenderKey).toMatch(/\/sidplayez(\/|$)/);
+      __setSidplayEzAvailabilityForTests(false);
     });
 
     it("keys the pre-render by the tune the engine was asked to render", async () => {

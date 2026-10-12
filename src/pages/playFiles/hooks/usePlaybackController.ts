@@ -73,6 +73,7 @@ import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
 import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
+import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
 import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
@@ -1221,6 +1222,9 @@ export function usePlaybackController({
           // On-device engine: render the SID here, no C64 (spec §12). The
           // songlength clock + auto-advance below run identically to the C64
           // path, so playlist/SID-Radio behaviour is engine-agnostic.
+          // The pre-render key names the renderer, so it waits for the probe: keyed before it answered,
+          // the first tune after a launch was pre-rendered under reSIDfp's key and never found again.
+          await probeSidRenderers();
           await getLocalSidPlayback().play(
             effectiveRequest.file!,
             // `songNr` is one-based everywhere it is stored, shown or looked up; the engine's

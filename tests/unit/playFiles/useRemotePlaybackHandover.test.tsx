@@ -154,6 +154,32 @@ describe("useRemotePlaybackHandover", () => {
     );
   });
 
+  it("keys the carried-on tune's pre-render by the renderer the probe settles on", async () => {
+    // Keyed before the probe answered, the pre-render was stored under reSIDfp's key and the tune carried
+    // on with libSidplayEZ never found it.
+    const availability = await import("@/lib/playback/sidRenderer/sidRendererAvailability");
+    availability.__setSidplayEzAvailabilityForTests(null);
+    const probe = vi
+      .spyOn(availability, "probeSidRenderers")
+      .mockImplementation(async () => availability.__setSidplayEzAvailabilityForTests(true));
+    try {
+      const { engine } = renderHandover([ultimateSid("one")], Date.now());
+      await waitFor(() => expect(engine.prerender).toHaveBeenCalled());
+      expect(engine.prerender).toHaveBeenCalledWith(
+        expect.stringMatching(/\/sidplayez(\/|$)/),
+        expect.anything(),
+        0,
+        180,
+      );
+      expect(rememberRemoteTune).toHaveBeenLastCalledWith(
+        expect.objectContaining({ renderKey: expect.stringMatching(/\/sidplayez(\/|$)/) }),
+      );
+    } finally {
+      probe.mockRestore();
+      availability.__setSidplayEzAvailabilityForTests(false);
+    }
+  });
+
   it("reads a tune added from another Ultimate, and the ones after it, from the device each came from", async () => {
     const withOrigin = (id: string) => {
       const item = ultimateSid(id);
