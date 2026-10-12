@@ -79,4 +79,14 @@ describe("usePlaybackTimelineTicks", () => {
     vi.advanceTimersByTime(10_000);
     expect(tick).toHaveBeenCalledTimes(1);
   });
+
+  it("runs the timeline at the moment the tune is due, not at the next second, while the Play page is on screen", () => {
+    const dueAtMs = START_MS + 7_500;
+    const { tick } = renderTicks({ pageActive: true, autoAdvanceDueAtMs: dueAtMs });
+    vi.advanceTimersByTime(7_499);
+    const ticksBeforeDue = tick.mock.calls.length;
+    vi.advanceTimersByTime(1);
+    expect(tick).toHaveBeenCalledTimes(ticksBeforeDue + 1);
+    expect(tick).toHaveBeenLastCalledWith(dueAtMs);
+  });
 });

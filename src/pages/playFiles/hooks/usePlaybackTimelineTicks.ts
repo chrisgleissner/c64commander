@@ -20,8 +20,10 @@ type PlaybackTimelineTicks = {
 
 /**
  * The Play page's timeline: re-rendered as each second turns while the page is on screen. While another tab is, the
- * page is kept but not shown, so it is not re-rendered every second; the timeline is brought up to date once, when the
- * tune is due to end, so the playlist still moves on, and again at once when the page is shown.
+ * page is kept but not shown, so it is not re-rendered every second; the timeline is brought up to date again at once
+ * when the page is shown. In both cases it is brought up to date at the moment the next tune is due, not at the next
+ * second: a crossfade at the natural end needs the next tune started on time, and a tick up to a second late shortened
+ * the outgoing tune's fade.
  */
 export const usePlaybackTimelineTicks = ({
   tick,
@@ -31,5 +33,5 @@ export const usePlaybackTimelineTicks = ({
 }: PlaybackTimelineTicks) => {
   const pageActive = usePageActivity();
   useSecondAlignedTicks(tick, running && pageActive, startedAtRef);
-  useRunAtTime(() => tick(Date.now()), running && !pageActive ? autoAdvanceDueAtMs : null);
+  useRunAtTime(() => tick(Date.now()), running ? autoAdvanceDueAtMs : null);
 };
