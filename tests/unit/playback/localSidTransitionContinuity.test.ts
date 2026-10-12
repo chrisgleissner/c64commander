@@ -302,22 +302,62 @@ describe("one continuous stream of samples across a track change", () => {
     checkGolden("crossfade-1500-slow-open", { sampleRate: RATE, fadeMs: 1500, transcript });
   });
 
-  // Closing the old session closed the track, and the next tune waited for a new one to prime: 26 to 990 ms
-  // of silence on a Pixel 4, after a step. The cut now ramps out over a declick on the track it was on.
-  it("cuts over a 10 ms declick on the same track when no crossfade is configured", async () => {
+  it.each([50, 800])(
+    "keeps the outgoing tune unsilenced after a declick stop until the next tune opens in %i ms",
+    async (openDelayMs) => {
+      localStorage.setItem("c64u_playback_crossfade_ms", "0");
+      const { backend, transcript } = createRecordingFeed();
+      const engine = buildEngine(backend);
+      await playSettled(engine, 0);
+      const outgoing = transcript.find((e) => e.method === "openSession")!.serial;
+      const changeAt = transcript.length;
+      engine.stopPlayback({ declick: true });
+      FakeWorker.openDelayMs = openDelayMs;
+      const next = engine.play(new ArrayBuffer(8), 1, {});
+      await settle(60, openDelayMs - 1);
+      const waiting = transcript.slice(changeAt);
+      expect(waiting.find((e) => e.method === "beginTransition")).toMatchObject({
+        serial: outgoing,
+        seconds: 4 + CUT_DECLICK_MS / 1000,
+      });
+      expect(waiting.some((e) => e.rampOut === true)).toBe(false);
+      expect(
+        waiting.some((e) => ["fade", "close", "release", "takeTail", "adoptTail", "openSession"].includes(e.method)),
+      ).toBe(false);
+      await settle(60, 1);
+      await next;
+      const change = transcript.slice(changeAt);
+      const take = change.find((e) => e.method === "takeTail")!;
+      expect(take).toMatchObject({ serial: outgoing, maxSeconds: 4 + CUT_DECLICK_MS / 1000 });
+      const incoming = change.find((e) => e.method === "openSession")!.serial;
+      expect(change.find((e) => e.method === "adoptTail")).toMatchObject({
+        serial: incoming,
+        tailId: take.tailId,
+        seconds: CUT_DECLICK_MS / 1000,
+      });
+      expect(change.some((e) => e.method === "close" && e.serial === outgoing)).toBe(false);
+      engine.dispose();
+    },
+  );
+
+  it("records a slow open with crossfade Off, keeping the tail playing until the 10 ms handoff", async () => {
     localStorage.setItem("c64u_playback_crossfade_ms", "0");
     const { backend, transcript } = createRecordingFeed();
     const engine = buildEngine(backend);
     await playSettled(engine, 0);
     const changeAt = transcript.length;
+    FakeWorker.openDelayMs = 800;
     await playSettled(engine, 1);
     const change = transcript.slice(changeAt);
     const outgoing = transcript.find((e) => e.method === "openSession")!.serial;
-    const cut = change.find((e) => e.method === "beginTransition");
-    expect(cut).toMatchObject({ serial: outgoing, seconds: CUT_DECLICK_MS / 1000, rampOut: true });
+    expect(change.find((e) => e.method === "beginTransition")).toMatchObject({
+      serial: outgoing,
+      seconds: 4 + CUT_DECLICK_MS / 1000,
+    });
     expect(change.some((e) => e.method === "close" && e.serial === outgoing)).toBe(false);
     expect(change.findIndex((e) => e.method === "release" && e.serial === outgoing)).toBeGreaterThan(-1);
+    expect(change.find((e) => e.method === "adoptTail")!.seconds).toBe(CUT_DECLICK_MS / 1000);
     expect(change.some((e) => e.method === "fadeIn")).toBe(false);
-    checkGolden("cut", { sampleRate: RATE, fadeMs: 0, transcript });
+    checkGolden("cut", { sampleRate: RATE, fadeMs: CUT_DECLICK_MS, transcript });
   });
 });

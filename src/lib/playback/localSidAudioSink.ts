@@ -67,8 +67,6 @@ export interface LocalSidAudioSink {
    * under it — because this is the only audio there is until the next tune renders a sample.
    */
   beginCrossfadeTailPlayout?: (seconds: number) => void;
-  /** Start a track change with no crossfade: the unplayed audio fades to silence over `seconds`, on the same track. */
-  beginCutPlayout?: (seconds: number) => void;
   /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
   releaseForHandover?: () => void;
   /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */

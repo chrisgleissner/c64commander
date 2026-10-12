@@ -331,13 +331,13 @@ internal class LocalAudioFeed(
    * keep playing it a fraction of a second at a time while the next tune opens. The track is flushed
    * with whichever write comes next, so the incoming tune is never queued behind seconds of this one.
    */
-  fun beginTransition(serial: Int, seq: Long, seconds: Double, rampOut: Boolean = false) =
+  fun beginTransition(serial: Int, seq: Long, seconds: Double) =
       ordered(serial, seq, "transition") { session ->
-        startTransition(session, seconds, rampOut)
+        startTransition(session, seconds)
         true
       }
 
-  private fun startTransition(session: Session, seconds: Double, rampOut: Boolean) {
+  private fun startTransition(session: Session, seconds: Double) {
     if (session.closed || session.transitioning) return
     session.transitioning = true
     val rate = session.settings.sampleRate
@@ -367,25 +367,12 @@ internal class LocalAudioFeed(
     }
     // Cut short, the recovered audio no longer reaches the queue's first segment, so playing on into
     // the queue would jump ahead in the tune.
-    if (kept < recovered.sumOf { it.frames } || rampOut) session.queue.clear()
-    if (rampOut) {
-      // A cut rather than a crossfade: what was recovered fades to silence and nothing follows it.
-      if (kept > 0) session.queue.addFirst(rampedToSilence(capped, kept.toInt()))
-    } else {
-      for (segment in capped.reversed()) session.queue.addFirst(segment)
-    }
+    if (kept < recovered.sumOf { it.frames }) session.queue.clear()
+    for (segment in capped.reversed()) session.queue.addFirst(segment)
     session.history.clear()
     session.historyFrames = 0
     pendingTransitionFlush = !active || output == null
     publish(session)
-  }
-
-  private fun rampedToSilence(segments: ArrayDeque<Segment>, frames: Int): Segment {
-    val out = ByteArray(frames * BYTES_PER_FRAME)
-    var at = 0
-    for (segment in segments) at += segment.source.read(segment.startFrame, out, at * BYTES_PER_FRAME, segment.frames.toInt())
-    for (i in 0 until at) scaleFrame(out, i * BYTES_PER_FRAME, 1.0 - (i + 1).toDouble() / at)
-    return Segment(bytesSource(out), 0, at.toLong(), processed = true)
   }
 
   /** Hand what [serial] has queued, at most [maxSeconds] of it, to a tail a successor can adopt. */

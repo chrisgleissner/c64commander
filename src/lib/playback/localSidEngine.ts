@@ -2369,38 +2369,21 @@ export class LocalSidEngine {
     // through here: it fires `onEnded` (maybeFireEnded notifies separately) and keeps its scheduler.
     const wasActive = this.scheduler !== null;
     const fadeMs = options.crossfadeMs ?? 0;
-    // A track change with the crossfade off still must not end on a step: the outgoing tune is silenced
-    // over a declick, on the same track, so the next tune need not open a new one and wait for its prime.
     const declickMs = fadeMs === 0 && options.declick ? CUT_DECLICK_MS : 0;
     const outgoing = this.audio;
     const keepMs = fadeMs || declickMs;
     this.scheduler?.stopAll(keepMs > 0 ? { keepSourcesFor: keepMs } : undefined);
     this.scheduler = null;
     this.audio = null;
-    if (outgoing && declickMs > 0 && outgoing.beginCutPlayout) {
+    if (outgoing && keepMs > 0 && outgoing.beginCrossfadeTailPlayout) {
       this.crossfadeOut = outgoing;
-      this.crossfadeSeconds = declickMs / 1000;
-      outgoing.beginCutPlayout(declickMs / 1000);
-      traceLocalSid("cut-playout", { declickMs });
-      this.closeIfNeverHandedOver(outgoing, CROSSFADE_TAIL_BUDGET_SECONDS * 1000 + 500);
+      this.crossfadeSeconds = keepMs / 1000;
+      outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds);
+      traceLocalSid("crossfade-tail-playout", { fadeMs: keepMs });
+      this.closeIfNeverHandedOver(outgoing, (CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds) * 1000 + 500);
     } else if (outgoing && declickMs > 0 && outgoing.fadeOut) {
       outgoing.fadeOut(declickMs);
       setTimeout(() => outgoing.close(), declickMs + CUT_CLOSE_MARGIN_MS);
-    } else if (outgoing && fadeMs > 0 && outgoing.beginCrossfadeTailPlayout) {
-      // The outgoing tune keeps sounding, from JS, until the next one can be heard.
-      //
-      // Its audio is not taken here. Nothing has opened the next tune yet — on a Pixel 4 that costs
-      // about 2.6 s — and audio handed over now would simply sit idle while the listener heard
-      // nothing. Instead the sink recovers what it had queued and plays it a fraction of a second at
-      // a time; `onOpened` then takes whatever is left and gives it to the incoming tune to mix.
-      //
-      // The fade budget is deliberately larger than the fade: it has to cover opening the next tune
-      // as well, and this is the only audio there is until that finishes.
-      this.crossfadeOut = outgoing;
-      this.crossfadeSeconds = fadeMs / 1000;
-      outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000);
-      traceLocalSid("crossfade-tail-playout", { fadeMs });
-      this.closeIfNeverHandedOver(outgoing, (CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000) * 1000 + 500);
     } else {
       outgoing?.close();
     }
