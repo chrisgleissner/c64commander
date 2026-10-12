@@ -6,12 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  LocalSidEngine,
-  type LocalSidPlayCallbacks,
-  type LocalSidPlayResult,
-  type LocalSidStats,
-} from "./localSidEngine";
+import type { LocalSidEngine, LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngine";
+import { localSidPlaybackSupported } from "./localSidSupport";
 import { traceLocalSid } from "./localSidTrace";
 import { addLog } from "@/lib/logging";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
@@ -21,8 +17,9 @@ import type { PendingSeekState } from "./pendingSeekStatus";
  * Thin lifecycle wrapper the playback controller (LE2) holds in a ref to route
  * SID playback onto the device. It owns a single {@link LocalSidEngine},
  * reading the SID bytes from the same `LocalPlayFile` the C64 path uses, so the
- * controller stays engine-agnostic. The engine is lazily created (no worker /
- * WASM cost until the Local engine is actually used) and injected in tests.
+ * controller stays engine-agnostic. The engine is loaded and created on first use, so neither its
+ * code nor a worker or WASM module costs anything until the Local engine is actually used, and it
+ * is injected in tests.
  */
 
 /** The slice of `LocalPlayFile` we need — just the raw bytes. */
@@ -31,7 +28,10 @@ export interface SidByteSource {
   name?: string;
 }
 
-export type LocalSidEngineFactory = () => LocalSidEngine;
+export type LocalSidEngineFactory = () => LocalSidEngine | Promise<LocalSidEngine>;
+
+/** Out of the startup bundle: the engine and its renderers are loaded the first time one is needed. */
+const loadDefaultEngine = async (): Promise<LocalSidEngine> => new (await import("./localSidEngine")).LocalSidEngine();
 
 /**
  * The one on-device playback engine for the whole app.
@@ -65,18 +65,59 @@ export const resetSharedLocalSidPlaybackController = (): void => {
 
 export class LocalSidPlaybackController {
   private engine: LocalSidEngine | null = null;
+  private loading: Promise<LocalSidEngine> | null = null;
+  private disposed = false;
+  /** The level and mute asked for before the engine existed, applied when it does. */
+  private heldVolume: number | null = null;
+  private heldMuted: boolean | null = null;
   private readonly seekListeners = new Set<() => void>();
 
-  constructor(private readonly engineFactory: LocalSidEngineFactory = () => new LocalSidEngine()) {}
+  constructor(private readonly engineFactory: LocalSidEngineFactory = loadDefaultEngine) {}
 
   /** True when on-device playback (Web Worker + Web Audio) is available. */
   static isSupported(): boolean {
-    return LocalSidEngine.isSupported();
+    return localSidPlaybackSupported();
   }
 
-  private ensureEngine(): LocalSidEngine {
-    if (!this.engine) this.engine = this.engineFactory();
-    return this.engine;
+  private ensureEngine(): Promise<LocalSidEngine> {
+    if (this.engine) return Promise.resolve(this.engine);
+    this.disposed = false;
+    this.loading ??= Promise.resolve()
+      .then(() => this.engineFactory())
+      .then(
+        (engine) => {
+          this.loading = null;
+          if (this.disposed) {
+            engine.dispose();
+            throw new Error("The local SID player was disposed while its engine was loading");
+          }
+          if (this.heldVolume !== null) engine.setVolume(this.heldVolume);
+          if (this.heldMuted !== null) engine.setMuted(this.heldMuted);
+          this.engine = engine;
+          return engine;
+        },
+        (error: unknown) => {
+          this.loading = null;
+          throw new Error(`Loading the local SID engine failed: ${(error as Error)?.message ?? String(error)}`, {
+            cause: error,
+          });
+        },
+      );
+    return this.loading;
+  }
+
+  /** Run `use` on the engine now if it exists, else once it has loaded; a load failure is logged. */
+  private withEngine(operation: string, use: (engine: LocalSidEngine) => void): void {
+    if (this.engine) {
+      use(this.engine);
+      return;
+    }
+    this.ensureEngine().then(use, (error: unknown) =>
+      addLog("warn", `Local SID ${operation} skipped: the engine did not load`, {
+        service: "local-sid",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   /**
@@ -90,7 +131,7 @@ export class LocalSidPlaybackController {
     callbacks: LocalSidPlayCallbacks = {},
     options?: { prerenderKey?: string; durationSeconds?: number },
   ): Promise<LocalSidPlayResult> {
-    const engine = this.ensureEngine();
+    const engine = await this.ensureEngine();
     // Timed separately from the engine open: opening measures 23-48 ms on a
     // Pixel 4 while a skip can take seconds, so the difference is upstream of
     // the engine and reading the bytes is the first suspect.
@@ -130,7 +171,7 @@ export class LocalSidPlaybackController {
    * `key` identifies the tune+subsong; the cache keeps previous/current/next.
    */
   prerender(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
-    this.ensureEngine().prerender(key, sidBytes, songIndex, seconds);
+    this.withEngine("pre-render", (engine) => engine.prerender(key, sidBytes, songIndex, seconds));
   }
 
   /**
@@ -139,7 +180,7 @@ export class LocalSidPlaybackController {
    */
   preload(): void {
     this.ensureEngine()
-      .preload()
+      .then((engine) => engine.preload())
       .catch((error: unknown) =>
         addLog("debug", "Local SID engine preload failed", {
           service: "local-sid",
@@ -155,7 +196,7 @@ export class LocalSidPlaybackController {
    * removes the short pause a second or two into a fresh tune.
    */
   warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
-    this.ensureEngine().warmLeadIn(key, sidBytes, songIndex, seconds);
+    this.withEngine("lead-in", (engine) => engine.warmLeadIn(key, sidBytes, songIndex, seconds));
   }
 
   /** Position playback is waiting for the renderer to reach, or null. Drives the "catching up" state. */
@@ -195,11 +236,13 @@ export class LocalSidPlaybackController {
 
   /** Output level for on-device playback, 0..1 (see LocalSidEngine.setVolume). */
   setVolume(value: number): void {
-    this.ensureEngine().setVolume(value);
+    this.heldVolume = value;
+    this.engine?.setVolume(value);
   }
 
   setMuted(muted: boolean): void {
-    this.ensureEngine().setMuted(muted);
+    this.heldMuted = muted;
+    this.engine?.setMuted(muted);
   }
 
   /**
@@ -210,11 +253,11 @@ export class LocalSidPlaybackController {
    * the answer is the level a new one would start at.
    */
   volume(): number {
-    return this.engine?.getVolume() ?? 1;
+    return this.engine?.getVolume() ?? this.heldVolume ?? 1;
   }
 
   muted(): boolean {
-    return this.engine?.getMuted() ?? false;
+    return this.engine?.getMuted() ?? this.heldMuted ?? false;
   }
 
   /** True while this device is actually rendering a tune. */
@@ -299,6 +342,7 @@ export class LocalSidPlaybackController {
 
   /** Tear down the engine + worker entirely (release WASM memory). */
   dispose(): void {
+    if (this.loading) this.disposed = true;
     this.engine?.dispose();
     this.engine = null;
   }

@@ -59,6 +59,7 @@ import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/loc
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
 import { traceLocalSid } from "./localSidTrace";
+import { localSidPlaybackSupported } from "./localSidSupport";
 
 /**
  * How far beyond the fade the outgoing tune is kept available, in seconds.
@@ -566,11 +567,7 @@ export class LocalSidEngine {
 
   /** True when the engine can run off-main-thread with audio in this environment. */
   static isSupported(): boolean {
-    return (
-      typeof Worker !== "undefined" &&
-      (typeof AudioContext !== "undefined" ||
-        typeof (globalThis as { webkitAudioContext?: unknown }).webkitAudioContext !== "undefined")
-    );
+    return localSidPlaybackSupported();
   }
 
   /**
