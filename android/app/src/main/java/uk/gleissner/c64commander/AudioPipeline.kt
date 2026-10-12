@@ -746,15 +746,28 @@ internal class AudioPipeline(
     windowStartNanos = now
   }
 
+  /** How long the track plays on from what it holds, two bursts short: each blocking write leaves it full. */
+  private fun trackCoverNanos(): Long {
+    val heldNanos = (trackBufferFrames - 2L * writeFramesPerChunk) * 1_000_000_000L / outputRate
+    return heldNanos - (clock.nanoTime() - lastWriteNanos)
+  }
+
   /** Depth above which the ring is far too deep — see [CushionDrift.authority]. */
   private fun recoveryDepthFrames(): Long = targetFrames + maxTargetFrames / 4L
 
   private fun nominalRatio(): Double = sourceRate.toDouble() / outputRate.toDouble()
 
-  /** Spin briefly for a late packet. Returns true if it arrived and the caller should retry. */
+  /**
+   * Spin for late audio. Returns true if it arrived and the caller should retry.
+   *
+   * For as long as the track can cover the wait on what it already holds, not just 8 ms: silence written
+   * then lands behind real audio. A track change on the phone empties the ring with the track full, and
+   * the handover took a few ms longer than that, so every crossfade began with a burst of silence.
+   */
   private fun waitForFrames(needed: Int): Boolean {
     var waited = 0L
-    while (waited < STARVE_LIMIT_NANOS && running) {
+    val limit = maxOf(STARVE_LIMIT_NANOS, trackCoverNanos())
+    while (waited < limit && running) {
       clock.park(POLL_NANOS)
       waited += POLL_NANOS
       if ((writeFrames - readFrames) >= needed) return true
@@ -860,6 +873,7 @@ internal class AudioPipeline(
    */
   private fun writeBlocking(data: ByteArray, length: Int) {
     val written = track.write(data, 0, length, AudioTrack.WRITE_BLOCKING)
+    lastWriteNanos = clock.nanoTime()
     if (written > 0) totalFramesWritten += (written / BYTES_PER_FRAME).toLong()
     outputCapture?.record(data, written)
     if (written < length) {
@@ -897,6 +911,7 @@ internal class AudioPipeline(
   }
 
   private var lastStatsReadNanos = 0L
+  private var lastWriteNanos = 0L
 
   internal companion object {
     private const val TAG = "AudioPipeline"

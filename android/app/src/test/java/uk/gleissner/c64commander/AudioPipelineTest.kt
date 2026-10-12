@@ -396,6 +396,30 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun aShortWaitAfterAFlushIsCoveredByTheTrackRatherThanConcealedAsSilence() {
+    // On-device playback's configuration, as a track change leaves it: the ring flushed, the track full,
+    // and the next audio 25 ms away. Concealing after 8 ms wrote silence behind real audio.
+    val rate = 48000
+    val speaker = FakeSpeaker(rate)
+    val pipeline =
+        AudioPipeline(rate, 15000, rate, 192, speaker.factory, maxRingMs = 20000, trackBursts = 16, primeMs = 600, correctDrift = false)
+    pipeline.start()
+    try {
+      val second = ByteArray(rate * bytesPerFrame)
+      pipeline.offer(second, 0, second.size)
+      Thread.sleep(800)
+      val concealedBefore = pipeline.stats().concealedMs
+      pipeline.flushRing()
+      Thread.sleep(25)
+      pipeline.offer(second, 0, second.size)
+      Thread.sleep(200)
+      assertEquals("silence was written while the track still held audio", concealedBefore, pipeline.stats().concealedMs, 0.0)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
   fun flushRingEmptiesTheRingAndReportsWhatItHeld() {
     val speaker = FakeSpeaker(sampleRate)
     val pipeline = AudioPipeline(sampleRate, 200, trackFactory = speaker.factory)
