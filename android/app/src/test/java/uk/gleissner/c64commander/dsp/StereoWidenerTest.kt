@@ -62,7 +62,7 @@ class StereoWidenerTest {
     var side = 0.0
     var peak = 0.0f
     for (i in 4800 until frames) {
-      side += ((left[i] - right[i]) * 0.5).toDouble().let { it * it }
+      side += ((left[i] - right[i]) * 0.5).let { it * it }
       peak = maxOf(peak, Math.abs(left[i]), Math.abs(right[i]))
     }
     assertTrue("no side signal was added", Math.sqrt(side / (frames - 4800)) > 0.05)
