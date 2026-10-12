@@ -419,7 +419,12 @@ export class LocalSidEngine {
   private endedFired = false;
   private chunksEnded = 0;
   /** Fully-rendered tunes (previous/current/next), so a seek is a buffer offset. */
-  private readonly renderCache = new RenderedTuneCache(undefined, undefined, (tune) => this.releaseIfUnused(tune.pcm));
+  private readonly renderCache = new RenderedTuneCache(
+    undefined,
+    undefined,
+    (tune) => this.releaseIfUnused(tune.pcm),
+    (tune) => tune.renderer !== (this.fixedRenderer ?? playbackSidEmulation()),
+  );
   private prerenderId = 0;
   private prerenderKey: string | null = null;
   private prerenderRenderer: SidEmulationEngine = "residfp";

@@ -47,7 +47,7 @@ const OUT = path.resolve(
 const VOLUME = 3;
 const TUNE_SECONDS = 20;
 /** As `crossfadeLeadMs` in the app: on the phone the next tune starts this long before the songlength. */
-const CROSSFADE_START_MARGIN_MS = 1500;
+const CROSSFADE_START_MARGIN_MS = 2500;
 const leadMs = (crossfadeMs) => Math.min(crossfadeMs + CROSSFADE_START_MARGIN_MS, (TUNE_SECONDS * 1000) / 2);
 const LOW = { title: "Tone-Low", hz: 550 };
 const HIGH = { title: "Tone-High", hz: 900 };
@@ -257,9 +257,10 @@ localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossf
   };
   const shape = await grade(pcmFile, []);
   const heard = micResult.ok ? await grade(micFile, ["--mic"]) : null;
-  // The volume stress changes the level on purpose; at the microphone that is a dip, not a fault.
+  // The volume stress changes the level on purpose; at the microphone that is a dip and a ramp of the
+  // wrong length, not a fault. The shape of the fades is graded on the pipeline's PCM, which volume does not touch.
   if (heard && scenario.endsWith("-volume")) {
-    heard.faults = heard.faults.filter((fault) => !/dipped/.test(fault));
+    heard.faults = heard.faults.filter((fault) => !/dipped|fell away|rose in/.test(fault));
     heard.verdict = heard.faults.length ? "FAULTY" : heard.verdict === "NO TRANSITION" ? "NO TRANSITION" : "SMOOTH";
   }
   // A crossfade plays both tunes through one track, so its count must not move. A clean cut opens a
