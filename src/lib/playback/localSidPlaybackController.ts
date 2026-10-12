@@ -106,13 +106,13 @@ export class LocalSidPlaybackController {
     return this.loading;
   }
 
-  /** Run `use` on the engine now if it exists, else once it has loaded; a load failure is logged. */
-  private withEngine(operation: string, use: (engine: LocalSidEngine) => void): void {
+  /** Apply `apply` to the engine now if it exists, else once it has loaded; a load failure is logged. */
+  private withEngine(operation: string, apply: (engine: LocalSidEngine) => void): void {
     if (this.engine) {
-      use(this.engine);
+      apply(this.engine);
       return;
     }
-    this.ensureEngine().then(use, (error: unknown) =>
+    this.ensureEngine().then(apply, (error: unknown) =>
       addLog("warn", `Local SID ${operation} skipped: the engine did not load`, {
         service: "local-sid",
         error: error instanceof Error ? error.message : String(error),
