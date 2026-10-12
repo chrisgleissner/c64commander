@@ -328,6 +328,11 @@ MIC_DIP_DB = -6.0
 #: most, while an underrun's own edges are broadband and would hide it from the clean-window test.
 MIC_DEEP_DIP_DB = -10.0
 MIC_TOP_DB = -3.0
+#: A dip in a tone's narrow bin counts only when everything the speaker plays between 300 and 6000 Hz fell
+#: with it: room interference can cancel one bin by 10 dB while the level at the microphone barely moves.
+MIC_BAND_CONFIRM_DB = -4.5
+#: A ramp this much shorter than asked at the microphone is a cut-off, not room movement; a milder shortfall is a warning.
+MIC_RAMP_CUT_FRACTION = 0.15
 MIC_GONE_DB = -15.0
 #: The longest both tones may be gone at once on a clean cut.
 MIC_CUT_MAX_GAP_MS = 100.0
@@ -345,6 +350,18 @@ def mic_levels(samples: np.ndarray, rate: int, hz: float) -> np.ndarray:
     near = np.abs(freqs - hz) <= max(20.0, hz * 0.06)
     return np.array(
         [np.abs(np.fft.rfft(samples[i : i + window] * taper))[near].max() for i in range(0, len(samples) - window, hop)]
+    )
+
+
+def mic_band(samples: np.ndarray, rate: int) -> np.ndarray:
+    """Per window, the RMS of everything between 300 and 6000 Hz, the band a phone speaker reproduces."""
+    window = int(rate * MIC_WINDOW_SECONDS)
+    hop = int(rate * MIC_HOP_SECONDS)
+    taper = np.hanning(window)
+    freqs = np.fft.rfftfreq(window, 1.0 / rate)
+    keep = (freqs >= 300) & (freqs <= 6000)
+    return np.array(
+        [np.sqrt((np.abs(np.fft.rfft(samples[i : i + window] * taper))[keep] ** 2).mean()) for i in range(0, len(samples) - window, hop)]
     )
 
 
@@ -374,14 +391,27 @@ def grade_mic(path: str, crossfade_ms: int, low_hz: float, high_hz: float) -> di
     hop_ms = MIC_HOP_SECONDS * 1000.0
     db = lambda levels: 20 * np.log10(levels / max(np.percentile(levels, 95), 1e-12) + 1e-9)  # noqa: E731
     low, high = db(mic_levels(samples, rate, low_hz)), db(mic_levels(samples, rate, high_hz))
-    result: dict = {"file": path, "crossfade_ms": crossfade_ms, "faults": []}
-    faults = result["faults"]
+    result: dict = {"file": path, "crossfade_ms": crossfade_ms, "faults": [], "warnings": []}
+    faults, warnings = result["faults"], result["warnings"]
+    # The ramp length at the microphone is a warning: the capture of the pipeline's own output measures it
+    # exactly, while the narrow band at the microphone moves with the room and the speaker's own limiter.
     # Where each ramp lies, from envelopes with taps and room clatter filtered out; the dips below are
     # judged on the raw envelopes, where a dip cannot be the room's doing.
     smooth = lambda levels: np.array([np.median(levels[max(0, i - 2) : i + 3]) for i in range(len(levels))])  # noqa: E731
     low_s, high_s = smooth(low), smooth(high)
     sustained = int(0.15 / MIC_HOP_SECONDS)
-    low_gone = [i for i in range(len(low_s) - sustained) if (low_s[i : i + sustained] < MIC_GONE_DB).all()]
+    first_full = next(
+        (i for i in range(len(low_s) - sustained + 1) if (low_s[i : i + sustained] >= MIC_TOP_DB).all()),
+        None,
+    )
+    if first_full is None:
+        result["verdict"] = "NO TRANSITION"
+        faults.append("the microphone did not hear the outgoing tune at full level")
+        return result
+    low_gone = [
+        i for i in range(first_full + sustained, len(low_s) - sustained)
+        if (low_s[i : i + sustained] < MIC_GONE_DB).all()
+    ]
     high_gone = [i for i in range(sustained, len(high_s)) if (high_s[i - sustained : i] < MIC_GONE_DB).all()]
     if not low_gone or not high_gone:
         result["verdict"] = "NO TRANSITION"
@@ -399,19 +429,25 @@ def grade_mic(path: str, crossfade_ms: int, low_hz: float, high_hz: float) -> di
     # The first windows hold arecord's own start-up.
     loud[:2] = True
     result["loud_room_share"] = round(float(loud.mean()), 2)
-    clean_low = np.where(loud, 0.0, low)
-    clean_high = np.where(loud, 0.0, high)
+    levels = mic_band(samples, rate)
+    band = 20 * np.log10(levels / max(np.median(levels), 1e-12) + 1e-9)
+    unconfirmed = band >= MIC_BAND_CONFIRM_DB
+    clean_low = np.where(loud | unconfirmed, 0.0, low)
+    clean_high = np.where(loud | unconfirmed, 0.0, high)
+    low_raw = np.where(unconfirmed, 0.0, low)
+    high_raw = np.where(unconfirmed, 0.0, high)
+    outgoing_start = max(2, first_full)
     for key, label, clean, raw, offset in (
-        ("outgoing_dip_db", "first tune dipped", clean_low[: fall_start + 1], low[2 : fall_start + 1], 0),
-        ("incoming_dip_db", "second tune dipped", clean_high[rise_end:], high[rise_end:], rise_end),
+        ("outgoing_dip_db", "first tune dipped", clean_low[outgoing_start : fall_start + 1], low_raw[outgoing_start : fall_start + 1], outgoing_start),
+        ("incoming_dip_db", "second tune dipped", clean_high[rise_end:], high_raw[rise_end:], rise_end),
     ):
         result[key] = round(float(clean.min()), 1) if len(clean) else 0.0
         deep = round(float(raw.min()), 1) if len(raw) else 0.0
-        where = "before its fade" if offset == 0 else "after its rise"
+        where = "before its fade" if key == "outgoing_dip_db" else "after its rise"
         if result[key] < MIC_DIP_DB:
             faults.append(f"the {label} {result[key]} dB at {(offset + int(np.argmin(clean))) * hop_ms:.0f} ms, {where}")
         elif deep < MIC_DEEP_DIP_DB:
-            at = (offset + int(np.argmin(raw)) + (2 if offset == 0 else 0)) * hop_ms
+            at = (offset + int(np.argmin(raw))) * hop_ms
             faults.append(f"the {label} {deep} dB at {at:.0f} ms, {where}")
     span = slice(fall_start, rise_end + 1)
     gone = (low[span] < MIC_GONE_DB) & (high[span] < MIC_GONE_DB) & ~loud[span]
@@ -428,7 +464,7 @@ def grade_mic(path: str, crossfade_ms: int, low_hz: float, high_hz: float) -> di
         least = crossfade_ms * MIC_RAMP_FRACTION * MIC_RAMP_FLOOR
         for name, label in (("fall_ms", "first tune fell away"), ("rise_ms", "second tune rose")):
             if result[name] is not None and result[name] < least:
-                faults.append(f"the {label} in {result[name]} ms at the speaker; a {crossfade_ms} ms fade takes about {crossfade_ms * MIC_RAMP_FRACTION:.0f}")
+                (faults if result[name] < least * MIC_RAMP_CUT_FRACTION else warnings).append(f"the {label} in {result[name]} ms at the speaker; a {crossfade_ms} ms fade takes about {crossfade_ms * MIC_RAMP_FRACTION:.0f}")
     result["verdict"] = "SMOOTH" if not faults else "FAULTY"
     return result
 
@@ -547,11 +583,20 @@ def self_test() -> int:
         signal[int(rate * at_s) : int(rate * (at_s + ms / 1000))] = 0.0
         return signal
 
+    def cancel_tone(signal, rate):
+        # Room interference: a 550 Hz component in antiphase for 120 ms during the steady first tune.
+        at = int(rate * 2.0)
+        n = int(rate * 0.12)
+        t = np.arange(n) / rate
+        signal[at : at + n] -= 0.9 * 0.2 * np.sin(2 * np.pi * 550.0 * t)
+        return signal
+
     mic_cases = [
         ("the speaker: a 1.5 s crossfade", 1500, {}, None, "SMOOTH"),
         ("the speaker: a clean cut", 0, {}, None, "SMOOTH"),
         ("the speaker: a 1.5 s crossfade under typing", 1500, {}, typing, "SMOOTH"),
         ("the speaker: an underrun after the rise", 1500, {}, underrun, "FAULTY"),
+        ("the speaker: one tone's bin cancelled by the room", 1500, {}, cancel_tone, "SMOOTH"),
         ("the speaker: an underrun under typing", 3000, {}, lambda s, r: typing(underrun(s, r, 7.5, 80), r), "FAULTY"),
         ("the speaker: the tail cut at 70%", 3000, {"truncate": 0.7}, None, "FAULTY"),
         ("the speaker: a clean cut with a long gap", 0, {"gap_ms": 400}, None, "FAULTY"),

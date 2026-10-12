@@ -27,6 +27,7 @@ import { variant } from "../src/generated/variant";
 // Load full YAML config for tests
 import "../tests/mocks/setupMockConfigForTests";
 import { seedUiMocks } from "./uiMocks";
+import { installAudioFxMock, installLiveViewAudioStub, startPhoneSoundAndOpenPlay } from "./audioFxMock";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 import {
   allowVisualOverflow,
@@ -2964,6 +2965,31 @@ test.describe("App screenshots", () => {
 
     await expect(getActiveMain(page).getByTestId("hvsc-controls")).toBeVisible();
   });
+
+  test(
+    "capture spectrum screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installAudioFxMock(page);
+      await installLiveViewAudioStub(page);
+      await page.goto("/");
+      await waitForConnected(page);
+      await startPhoneSoundAndOpenPlay(page);
+      for (const profileId of ["compact", "medium"] as const) {
+        await applyDisplayProfileViewport(page, profileId);
+        const card = getActiveMain(page).getByTestId("play-section-spectrum");
+        await expect(card).toBeVisible();
+        if ((await card.getAttribute("data-open")) !== "true") {
+          await card.getByTestId("play-section-toggle-spectrum").click();
+        }
+        await expect(card.getByTestId("spectrum-canvas")).toBeVisible();
+        await expect(card.getByTestId("spectrum-rms")).not.toHaveText("");
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play/spectrum", profileId, "01-spectrum.png"), {
+          locator: card,
+        });
+      }
+    },
+  );
 
   test(
     "capture sid radio screenshots",

@@ -1,0 +1,197 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import type { SpectrumBallisticsState } from "@/lib/audio/spectrum/spectrumBallistics";
+import { colorAtLevel, type SpectrumPalette } from "@/lib/audio/spectrum/spectrumColors";
+import {
+  SPECTRUM_DISPLAY_MAX_DB,
+  SPECTRUM_DISPLAY_MIN_DB,
+  frequencyToUnit,
+  levelToUnit,
+} from "@/lib/audio/spectrum/spectrumBands";
+import type { SpectrumTier } from "@/lib/audio/spectrum/spectrumQuality";
+
+export type SpectrumContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+export const MAX_DEVICE_PIXEL_RATIO = 2;
+export const GRID_LEVELS_DB = [-60, -40, -20, 0] as const;
+const MAJOR_FREQUENCIES: readonly (readonly [number, string])[] = [
+  [100, "100"],
+  [1000, "1k"],
+  [10000, "10k"],
+];
+const MINOR_FREQUENCIES: readonly (readonly [number, string])[] = [
+  [50, "50"],
+  [500, "500"],
+  [5000, "5k"],
+];
+/** Plot width at which the minor frequency labels fit between the major ones. */
+export const MINOR_LABELS_MIN_PLOT_PX = 400;
+const CAP_HEIGHT_PX = 2;
+
+export interface SpectrumLayout {
+  width: number;
+  height: number;
+  plotLeft: number;
+  plotRight: number;
+  plotTop: number;
+  plotBottom: number;
+  showMinorLabels: boolean;
+}
+
+/** Splits the canvas into the plot and the margins that hold the level and frequency labels. */
+export const computeLayout = (width: number, height: number, fontPx: number): SpectrumLayout => {
+  const plotLeft = Math.ceil(fontPx * 2.3);
+  const plotRight = width - 6;
+  const plotTop = Math.ceil(fontPx / 2) + 1;
+  const plotBottom = height - Math.ceil(fontPx * 1.5);
+  return {
+    width,
+    height,
+    plotLeft,
+    plotRight,
+    plotTop,
+    plotBottom,
+    showMinorLabels: plotRight - plotLeft >= MINOR_LABELS_MIN_PLOT_PX,
+  };
+};
+
+export const devicePixelRatioFor = (raw: number): number => Math.min(MAX_DEVICE_PIXEL_RATIO, Math.max(1, raw || 1));
+
+const levelY = (layout: SpectrumLayout, db: number): number =>
+  layout.plotBottom - levelToUnit(db) * (layout.plotBottom - layout.plotTop);
+
+const frequencyX = (layout: SpectrumLayout, hz: number): number =>
+  layout.plotLeft + frequencyToUnit(hz) * (layout.plotRight - layout.plotLeft);
+
+const alignToDevicePixel = (value: number, ratio: number): number => Math.round(value * ratio) / ratio;
+
+/**
+ * Draws everything that does not move: panel, gridlines and labels. It is rendered once per size or
+ * theme into an offscreen canvas and copied underneath every frame.
+ */
+export const drawStaticLayer = (
+  ctx: SpectrumContext,
+  layout: SpectrumLayout,
+  palette: SpectrumPalette,
+  ratio: number,
+): void => {
+  const { width, height } = layout;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = palette.panel;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.lineWidth = 1;
+  for (const db of GRID_LEVELS_DB) {
+    ctx.strokeStyle = db === 0 ? palette.gridZero : palette.grid;
+    const y = alignToDevicePixel(levelY(layout, db), ratio) + 0.5 / ratio;
+    ctx.beginPath();
+    ctx.moveTo(layout.plotLeft, y);
+    ctx.lineTo(layout.plotRight, y);
+    ctx.stroke();
+  }
+  const frequencies = layout.showMinorLabels ? [...MAJOR_FREQUENCIES, ...MINOR_FREQUENCIES] : MAJOR_FREQUENCIES;
+  ctx.strokeStyle = palette.grid;
+  for (const [hz] of frequencies) {
+    const x = alignToDevicePixel(frequencyX(layout, hz), ratio) + 0.5 / ratio;
+    ctx.beginPath();
+    ctx.moveTo(x, layout.plotTop);
+    ctx.lineTo(x, layout.plotBottom);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = palette.label;
+  ctx.font = `${palette.fontPx}px ${palette.fontFamily}`;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "right";
+  for (const db of GRID_LEVELS_DB) {
+    const y = Math.max(palette.fontPx / 2, levelY(layout, db));
+    ctx.fillText(String(db), layout.plotLeft - 5, y);
+  }
+  ctx.textAlign = "center";
+  const labelY = layout.plotBottom + palette.fontPx * 0.9;
+  for (const [hz, text] of frequencies) {
+    ctx.fillText(text, frequencyX(layout, hz), labelY);
+  }
+};
+
+export const createBarGradient = (ctx: SpectrumContext, layout: SpectrumLayout, palette: SpectrumPalette) => {
+  const gradient = ctx.createLinearGradient(0, layout.plotBottom, 0, layout.plotTop);
+  for (const step of palette.steps) gradient.addColorStop(levelToUnit(step.db), step.color);
+  return gradient;
+};
+
+export interface FrameDrawOptions {
+  layout: SpectrumLayout;
+  palette: SpectrumPalette;
+  tier: SpectrumTier;
+  gradient: CanvasGradient | null;
+  glow: boolean;
+  ratio: number;
+}
+
+/** Colour steps used by the lowest tier, which skips the gradient to save fill cost. */
+const FLAT_STEPS_DB = [SPECTRUM_DISPLAY_MIN_DB, -48, -30, -14, -4, SPECTRUM_DISPLAY_MAX_DB] as const;
+
+const drawFlatBar = (
+  ctx: SpectrumContext,
+  options: FrameDrawOptions,
+  x: number,
+  width: number,
+  levelDb: number,
+): void => {
+  const { layout, palette } = options;
+  const top = levelY(layout, levelDb);
+  for (let step = 0; step < FLAT_STEPS_DB.length - 1; step++) {
+    const lower = levelY(layout, FLAT_STEPS_DB[step]);
+    const upper = Math.max(top, levelY(layout, FLAT_STEPS_DB[step + 1]));
+    if (lower <= top) break;
+    ctx.fillStyle = colorAtLevel(palette.steps, FLAT_STEPS_DB[step]);
+    ctx.fillRect(x, upper, width, lower - upper);
+  }
+};
+
+/**
+ * Draws the bars and peak caps for one frame over the static layer. Allocation-free: it reads the
+ * ballistics arrays directly and creates no objects.
+ */
+export const drawBars = (ctx: SpectrumContext, options: FrameDrawOptions, state: SpectrumBallisticsState): void => {
+  const { layout, palette, tier, gradient, glow, ratio } = options;
+  const bars = state.levels.length;
+  const pitch = (layout.plotRight - layout.plotLeft) / bars;
+  const gap = bars <= 12 ? 3 : bars <= 24 ? 2 : 1;
+  const plotHeight = layout.plotBottom - layout.plotTop;
+
+  if (tier.gradient && gradient) ctx.fillStyle = gradient;
+  if (glow) {
+    ctx.globalAlpha = 0.2;
+    for (let i = 0; i < bars; i++) {
+      const h = levelToUnit(state.levels[i]) * plotHeight;
+      if (h < 2) continue;
+      ctx.fillRect(layout.plotLeft + i * pitch - 1.5, layout.plotBottom - h - 3, pitch - gap + 3, h + 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+  for (let i = 0; i < bars; i++) {
+    const x = alignToDevicePixel(layout.plotLeft + i * pitch, ratio);
+    const width = alignToDevicePixel(layout.plotLeft + (i + 1) * pitch, ratio) - x - gap;
+    const h = levelToUnit(state.levels[i]) * plotHeight;
+    if (h < 1) continue;
+    if (tier.gradient && gradient) ctx.fillRect(x, layout.plotBottom - h, width, h);
+    else drawFlatBar(ctx, options, x, width, state.levels[i]);
+  }
+  ctx.fillStyle = palette.cap;
+  for (let i = 0; i < bars; i++) {
+    const unit = levelToUnit(state.peaks[i]);
+    if (unit < 0.02) continue;
+    const x = alignToDevicePixel(layout.plotLeft + i * pitch, ratio);
+    const width = alignToDevicePixel(layout.plotLeft + (i + 1) * pitch, ratio) - x - gap;
+    const y = Math.max(layout.plotTop, layout.plotBottom - unit * plotHeight - CAP_HEIGHT_PX);
+    ctx.fillRect(x, y, width, CAP_HEIGHT_PX);
+  }
+};

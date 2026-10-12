@@ -331,13 +331,13 @@ internal class LocalAudioFeed(
    * keep playing it a fraction of a second at a time while the next tune opens. The track is flushed
    * with whichever write comes next, so the incoming tune is never queued behind seconds of this one.
    */
-  fun beginTransition(serial: Int, seq: Long, seconds: Double, rampOut: Boolean = false) =
+  fun beginTransition(serial: Int, seq: Long, seconds: Double) =
       ordered(serial, seq, "transition") { session ->
-        startTransition(session, seconds, rampOut)
+        startTransition(session, seconds)
         true
       }
 
-  private fun startTransition(session: Session, seconds: Double, rampOut: Boolean) {
+  private fun startTransition(session: Session, seconds: Double) {
     if (session.closed || session.transitioning) return
     session.transitioning = true
     val rate = session.settings.sampleRate
@@ -367,25 +367,12 @@ internal class LocalAudioFeed(
     }
     // Cut short, the recovered audio no longer reaches the queue's first segment, so playing on into
     // the queue would jump ahead in the tune.
-    if (kept < recovered.sumOf { it.frames } || rampOut) session.queue.clear()
-    if (rampOut) {
-      // A cut rather than a crossfade: what was recovered fades to silence and nothing follows it.
-      if (kept > 0) session.queue.addFirst(rampedToSilence(capped, kept.toInt()))
-    } else {
-      for (segment in capped.reversed()) session.queue.addFirst(segment)
-    }
+    if (kept < recovered.sumOf { it.frames }) session.queue.clear()
+    for (segment in capped.reversed()) session.queue.addFirst(segment)
     session.history.clear()
     session.historyFrames = 0
     pendingTransitionFlush = !active || output == null
     publish(session)
-  }
-
-  private fun rampedToSilence(segments: ArrayDeque<Segment>, frames: Int): Segment {
-    val out = ByteArray(frames * BYTES_PER_FRAME)
-    var at = 0
-    for (segment in segments) at += segment.source.read(segment.startFrame, out, at * BYTES_PER_FRAME, segment.frames.toInt())
-    for (i in 0 until at) scaleFrame(out, i * BYTES_PER_FRAME, 1.0 - (i + 1).toDouble() / at)
-    return Segment(bytesSource(out), 0, at.toLong(), processed = true)
   }
 
   /** Hand what [serial] has queued, at most [maxSeconds] of it, to a tail a successor can adopt. */
@@ -480,7 +467,9 @@ internal class LocalAudioFeed(
     // flush that lets the transition write anything at all.
     if (pendingTransitionFlush) {
       pendingTransitionFlush = false
-      current.flush()
+      // This is a continuation hand-off, not a seek.  Keep effect delay/filter history while
+      // dropping the queued ring, just as the active transition path above does.
+      current.flushRing(session.settings.sampleRate)
     }
     val inTransition = session.transitioning || (session.tail != null && session.queue.isEmpty())
     val highWater = if (inTransition) TRANSITION_HIGH_WATER_MS else HIGH_WATER_MS
@@ -600,7 +589,9 @@ internal class LocalAudioFeed(
       val next = session.pending.firstKey()
       if (next == session.nextSeq) {
         // A command at the head still waiting (a crossfade tail that never came): give up on it.
-        val stuck = session.pending.pollFirstEntry().value
+        val stuck = checkNotNull(session.pending.pollFirstEntry()) {
+          "Local audio pending head vanished while recovering session ${session.serial} gap"
+        }.value
         log.log(Log.WARN, "Local audio: ${(stuck as? Entry.Command)?.name ?: "entry"} ${session.nextSeq} waited too long; dropping it", null)
         session.nextSeq += 1
       } else {
@@ -790,7 +781,7 @@ internal class LocalAudioFeed(
   private fun publish(session: Session) {
     val current = output
     val active = session.serial == activeSerial && current != null
-    val buffered = if (active) current!!.bufferedMs() else 0.0
+    val buffered = if (active) current.bufferedMs() else 0.0
     val queuedSec = buffered / 1000
     val stats =
         FeedSessionStats(
@@ -799,7 +790,7 @@ internal class LocalAudioFeed(
             playedFrames = playedFrames(session, current),
             bufferedMs = buffered,
             queuedFrames = session.queuedFrames(),
-            underruns = if (active) current!!.underruns() else 0,
+            underruns = if (active) current.underruns() else 0,
             silentSeconds = session.silentSeconds,
             silentFault = session.silentSeconds - queuedSec >= SILENCE_TOLERANCE_SECONDS,
             reopens = reopens,

@@ -14,13 +14,18 @@ import { usePlaybackTimelineTicks } from "@/pages/playFiles/hooks/usePlaybackTim
 
 const START_MS = 100_000;
 
-const renderTicks = (options: { pageActive: boolean; autoAdvanceDueAtMs: number | null }) => {
+const renderTicks = (options: { pageActive: boolean; autoAdvanceDueAtMs: number | null; running?: boolean }) => {
   let pageActive = options.pageActive;
   const tick = vi.fn();
   const startedAtRef = { current: START_MS - 2_300 };
   const rendered = renderHook(
     () =>
-      usePlaybackTimelineTicks({ tick, running: true, startedAtRef, autoAdvanceDueAtMs: options.autoAdvanceDueAtMs }),
+      usePlaybackTimelineTicks({
+        tick,
+        running: options.running ?? true,
+        startedAtRef,
+        autoAdvanceDueAtMs: options.autoAdvanceDueAtMs,
+      }),
     {
       wrapper: ({ children }: { children: React.ReactNode }) => (
         <ScreenActivityProvider active={pageActive}>{children}</ScreenActivityProvider>
@@ -78,5 +83,21 @@ describe("usePlaybackTimelineTicks", () => {
     expect(tick).toHaveBeenLastCalledWith(dueAtMs);
     vi.advanceTimersByTime(10_000);
     expect(tick).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the timeline at the moment the tune is due, not at the next second, while the Play page is on screen", () => {
+    const dueAtMs = START_MS + 7_500;
+    const { tick } = renderTicks({ pageActive: true, autoAdvanceDueAtMs: dueAtMs });
+    vi.advanceTimersByTime(7_499);
+    const ticksBeforeDue = tick.mock.calls.length;
+    vi.advanceTimersByTime(1);
+    expect(tick).toHaveBeenCalledTimes(ticksBeforeDue + 1);
+    expect(tick).toHaveBeenLastCalledWith(dueAtMs);
+  });
+
+  it("schedules nothing at the due time when playback is not running", () => {
+    const { tick } = renderTicks({ pageActive: true, autoAdvanceDueAtMs: START_MS + 2_500, running: false });
+    vi.advanceTimersByTime(10_000);
+    expect(tick).not.toHaveBeenCalled();
   });
 });

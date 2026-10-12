@@ -148,6 +148,32 @@ export interface StreamUdpAudioFocusEvent {
   change: StreamUdpAudioFocusChange;
 }
 
+/** Optional processing applied to everything the phone plays. Every field at its default is a bit-exact bypass. */
+export interface StreamUdpAudioProcessing {
+  levelling: boolean;
+  bassDb: number;
+  midDb: number;
+  trebleDb: number;
+  stereoWidth: number;
+  reverb: number;
+}
+
+/** One analysis frame of the sound leaving the phone, from {@link StreamUdpPlugin.readSpectrum}. */
+export interface StreamUdpSpectrumFrame {
+  enabled: boolean;
+  /** A pipeline is producing audio right now. */
+  active: boolean;
+  /** Increments for each new analysis frame, so a poller can skip a frame it already drew. */
+  sequence: number;
+  sampleRate: number;
+  /** Integer dBFS per band (0 is a full-scale sine in that band, floor -100). See `spectrumBands.ts` for the layout. */
+  bands: number[];
+  peakDb: number;
+  rmsDb: number;
+  /** True when a sample reached full scale within the last second. */
+  clipped: boolean;
+}
+
 /**
  * Native UDP receiver bridge (Android `StreamUdpPlugin`). Only used on native platforms —
  * the web/Docker build receives streams through the server's UDP -> WebSocket bridge instead.
@@ -241,6 +267,11 @@ export interface StreamUdpPlugin {
    * off again when the last one leaves, so the cost is paid only while a measurement is running.
    */
   setAudioAnalysis(options: { enabled: boolean }): Promise<void>;
+  /** Set the optional processing chain. Applies to the open pipeline and to pipelines opened later. */
+  setAudioProcessing(options: StreamUdpAudioProcessing): Promise<Record<string, never>>;
+  /** Switch the spectrum analyser on or off. It costs nothing while off. */
+  setSpectrumEnabled(options: { enabled: boolean }): Promise<Record<string, never>>;
+  readSpectrum(): Promise<StreamUdpSpectrumFrame>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "audiofocus",

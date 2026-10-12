@@ -155,7 +155,7 @@ class LocalAudioFeedTranscriptTest {
       "flush" -> feed.flush(serial, e.getLong("seq"))
       "pause" -> feed.pause(serial)
       "resume" -> feed.resume(serial)
-      "beginTransition" -> feed.beginTransition(serial, e.getLong("seq"), e.getDouble("seconds"), e.optBoolean("rampOut", false))
+      "beginTransition" -> feed.beginTransition(serial, e.getLong("seq"), e.getDouble("seconds"))
       "takeTail" -> feed.takeTail(serial, e.getLong("seq"), e.getInt("tailId"), e.getDouble("maxSeconds"))
       "adoptTail" -> feed.adoptTail(serial, e.getLong("seq"), e.getInt("tailId"), e.getDouble("seconds"))
       "release" -> feed.release(serial, e.getLong("seq"))
@@ -191,18 +191,5 @@ class LocalAudioFeedTranscriptTest {
 
   @Test fun `the outgoing tune covers a slow open and still fades under the next`() = assertSeamlessCrossfade("crossfade-1500-slow-open")
 
-  @Test
-  fun `a cut fades the outgoing tune out over its declick on the same track, then plays the new one alone`() {
-    val replay = replay("cut")
-    assertEquals("one track for both tunes", 1, replay.host.outputs.size)
-    val samples = replay.host.outputs.single().leftChannel()
-    val change = samples.indexOfFirst { it != 8000 && samples.indexOf(8000) in 0 until samples.indexOf(it) }
-    assertTrue("the outgoing tune played and then changed", samples.indexOf(8000) >= 0 && change > 0)
-    val declickFrames = replay.rate / 100
-    val ramp = samples.copyOfRange(change, change + declickFrames).map { if (it >= 12000) it - 12000 else it }
-    assertTrue("the outgoing tune only falls during the cut", ramp.zipWithNext().all { (a, b) -> b <= a + 1 })
-    val after = samples.copyOfRange(change + declickFrames + 1, samples.size)
-    assertTrue("the new tune plays at its own level", after.any { it == 12000 })
-    assertTrue("nothing of the outgoing tune after the cut", after.all { it == 0 || it == 12000 })
-  }
+  @Test fun `crossfade Off keeps the outgoing tune sounding through a slow open then blends for 10 ms`() = assertSeamlessCrossfade("cut")
 }

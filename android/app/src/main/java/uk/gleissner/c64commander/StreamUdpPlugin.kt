@@ -34,6 +34,7 @@ import java.net.MulticastSocket
 import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import uk.gleissner.c64commander.dsp.AudioFxHub
 
 /**
  * Native UDP receiver for the A/V mirror (Content Explorer). The C64 Ultimate streams raw
@@ -98,24 +99,15 @@ class StreamUdpPlugin : Plugin() {
   /** Held for the life of a stream so Wi-Fi stops batching our real-time packets — see [acquireLowLatencyWifi]. */
   private var wifiLock: WifiManager.WifiLock? = null
 
-  /**
-   * The native audio path: ring buffer, player thread and speaker track, all in Kotlin (see
-   * [AudioPipeline]). JS only opens it, closes it and reads its stats — every PCM byte, whether it
-   * came off the UDP socket or out of the on-device SID engine, is paced natively.
-   *
-   * `@Volatile` rather than lock-guarded on purpose. The receive thread reads this field for every
-   * packet, and the previous design had it take the same lock that a JS stats poll held while
-   * calling into AudioFlinger — a bridge poll could therefore stall packet reception. Publication of
-   * a fully-constructed pipeline is all the receive thread needs, and that is exactly what volatile
-   * gives; the pipeline's own internals are thread-safe.
-   */
+  /** Published without the receive-path lock so packet handling never waits on AudioFlinger. */
   @Volatile private var audioPipeline: AudioPipeline? = null
+  internal var fxHub: AudioFxHub = AudioFxHub.shared
+  private val audioProcessingBridge = AudioProcessingBridge { fxHub }
   private val outputCapture = OutputCapture()
 
   /** Serialises open/close against each other (never against the receive path). */
   private val audioLifecycleLock = Any()
 
-  /** Arrival evenness of the audio stream as this device sees it (see [StreamArrivalMonitor]). */
   private val audioArrivals = StreamArrivalMonitor()
 
   /** Test seam: monotonic clock (nanoseconds) stamped at socket receive. Default: `System.nanoTime`. */
@@ -422,6 +414,7 @@ class StreamUdpPlugin : Plugin() {
                 trackBursts = trackBursts,
                 primeMs = primeMs,
                 correctDrift = correctDrift,
+                fxHub = fxHub,
             )
             .also {
               it.outputCapture = outputCapture
@@ -575,7 +568,6 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(result)
   }
 
-  /** A 44-byte canonical WAV header for interleaved stereo S16LE. */
   private fun wavHeader(dataBytes: Int, rate: Int): ByteArray {
     val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN)
     header.put("RIFF".toByteArray())
@@ -591,6 +583,21 @@ class StreamUdpPlugin : Plugin() {
     header.put("data".toByteArray())
     header.putInt(dataBytes)
     return header.array()
+  }
+
+  @PluginMethod
+  fun setAudioProcessing(call: PluginCall) {
+    audioProcessingBridge.setProcessing(call)
+  }
+
+  @PluginMethod
+  fun setSpectrumEnabled(call: PluginCall) {
+    audioProcessingBridge.setSpectrumEnabled(call)
+  }
+
+  @PluginMethod
+  fun readSpectrum(call: PluginCall) {
+    audioProcessingBridge.readSpectrum(call)
   }
 
   @PluginMethod

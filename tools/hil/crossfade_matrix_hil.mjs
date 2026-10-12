@@ -47,7 +47,7 @@ const OUT = path.resolve(
 const VOLUME = 3;
 const TUNE_SECONDS = 20;
 /** As `crossfadeLeadMs` in the app: on the phone the next tune starts this long before the songlength. */
-const CROSSFADE_START_MARGIN_MS = 1500;
+const CROSSFADE_START_MARGIN_MS = 2500;
 const leadMs = (crossfadeMs) => Math.min(crossfadeMs + CROSSFADE_START_MARGIN_MS, (TUNE_SECONDS * 1000) / 2);
 const LOW = { title: "Tone-Low", hz: 550 };
 const HIGH = { title: "Tone-High", hz: 900 };
@@ -212,10 +212,12 @@ const trial = async (device, renderer, crossfadeMs, scenario, dir) => {
 localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossfadeMs))});return 1})()`);
   const atEnd = scenario.startsWith("end");
   await playRow(LOW.title);
-  // Into the tune far enough that the first second's start-up is behind the capture.
+  // Into the tune far enough that the first second's start-up is behind the capture. The capture holds
+  // the samples written, and the deep ring writes a tune well ahead of what is heard, so at a natural
+  // end it starts close to the change or it ends before the next tune is written.
   // At the natural end the change comes a crossfade's lead before the songlength.
   const endsAtSeconds = TUNE_SECONDS - leadMs(crossfadeMs) / 1000;
-  const reached = await waitForClock(atEnd ? Math.floor(endsAtSeconds) - 4 : 2, 45_000);
+  const reached = await waitForClock(atEnd ? Math.floor(endsAtSeconds) - 2 : 2, 45_000);
   // A capture holds the samples written, not wall time: a gap or an underrun between writes is not in
   // it. The microphone hears both, and the track's own underrun count says whether it ran dry.
   const captureSeconds = Math.ceil(10 + crossfadeMs / 1000);
@@ -257,15 +259,15 @@ localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossf
   };
   const shape = await grade(pcmFile, []);
   const heard = micResult.ok ? await grade(micFile, ["--mic"]) : null;
-  // The volume stress changes the level on purpose; at the microphone that is a dip, not a fault.
+  // The volume stress changes the level on purpose; at the microphone that is a dip and a ramp of the
+  // wrong length, not a fault. The shape of the fades is graded on the pipeline's PCM, which volume does not touch.
   if (heard && scenario.endsWith("-volume")) {
-    heard.faults = heard.faults.filter((fault) => !/dipped/.test(fault));
+    heard.faults = heard.faults.filter((fault) => !/dipped|fell away|rose in/.test(fault));
     heard.verdict = heard.faults.length ? "FAULTY" : heard.verdict === "NO TRANSITION" ? "NO TRANSITION" : "SMOOTH";
   }
-  // A crossfade plays both tunes through one track, so its count must not move. A clean cut opens a
-  // new track with a count of its own, which is reported; the microphone judges that cut.
-  const ranDry = crossfadeMs > 0 ? underrunsAfter - underrunsBefore : 0;
-  const newTrackUnderruns = crossfadeMs > 0 ? null : underrunsAfter;
+  // Every transition plays through one track, so its underrun count must not move. A count that went down
+  // belongs to a track the stats call no longer reports and is not an underrun.
+  const ranDry = Math.max(0, underrunsAfter - underrunsBefore);
   const landed = after.includes(HIGH.title);
   const passed = shape.verdict === "SMOOTH" && landed && heard?.verdict === "SMOOTH" && ranDry === 0;
   return {
@@ -276,7 +278,6 @@ localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(crossf
     shape,
     heard,
     underruns: ranDry,
-    newTrackUnderruns,
     landed,
     after,
     actions: actions.length,
@@ -311,7 +312,12 @@ crossfade:localStorage.getItem("c64u_playback_crossfade_ms"),duration:document.q
             result = await trial(device, renderer, crossfadeMs, scenario, dir);
           } catch (error) {
             result = { renderer, crossfadeMs, scenario, passed: false, error: error.message };
-            await click("playlist-pause").catch(() => null);
+            await click("playlist-pause").catch((pauseError) => {
+              console.error(
+                `could not pause after ${renderer} ${crossfadeMs} ${scenario} failed (${error.message}): ${pauseError.stack}`,
+              );
+              throw pauseError;
+            });
           }
           results.push(result);
           writeFileSync(path.join(OUT, "results.json"), JSON.stringify(results, null, 2));
@@ -323,7 +329,7 @@ crossfade:localStorage.getItem("c64u_playback_crossfade_ms"),duration:document.q
               String(crossfadeMs).padStart(4),
               scenario.padEnd(11),
               result.error ??
-                `out ${shape.fade_out_ms ?? "-"} in ${shape.fade_in_ms ?? "-"} ms, steepest ${shape.fade_out_steepest_x ?? "-"}/${shape.fade_in_steepest_x ?? "-"}x, gap ${shape.gap_ms}, click ${shape.click_db} dB, dip ${shape.dip_db} dB, underruns ${result.underruns}${result.newTrackUnderruns !== null && result.newTrackUnderruns !== undefined ? ` (new track ${result.newTrackUnderruns})` : ""}, mic ${result.heard?.verdict} fall ${result.heard?.fall_ms}/rise ${result.heard?.rise_ms} ms gap ${result.heard?.gap_ms}${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].length ? ` | ${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].join("; ")}` : ""}${result.landed ? "" : ` | ended on "${result.after}"`}`,
+                `out ${shape.fade_out_ms ?? "-"} in ${shape.fade_in_ms ?? "-"} ms, steepest ${shape.fade_out_steepest_x ?? "-"}/${shape.fade_in_steepest_x ?? "-"}x, gap ${shape.gap_ms}, click ${shape.click_db} dB, dip ${shape.dip_db} dB, underruns ${result.underruns}, mic ${result.heard?.verdict} fall ${result.heard?.fall_ms}/rise ${result.heard?.rise_ms} ms gap ${result.heard?.gap_ms}${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].length ? ` | ${[...(shape.faults ?? []), ...(result.heard?.faults ?? [])].join("; ")}` : ""}${result.landed ? "" : ` | ended on "${result.after}"`}`,
             ].join("  "),
           );
           await sleep(1500);

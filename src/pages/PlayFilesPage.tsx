@@ -100,6 +100,7 @@ import {
 } from "@/pages/playFiles/playbackVolumeBinding";
 import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { PlaybackSpectrumCard } from "@/components/playback/SpectrumCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
@@ -174,6 +175,7 @@ import { usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedP
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import {
+  deferSleepTimerToTuneEnd,
   planPlaylistItemRemoval,
   resolveAutoAdvanceDueAtMsOnDurationChange,
   runClaimedLaunch,
@@ -234,6 +236,7 @@ export default function PlayFilesPage() {
     dueAtMs: number;
     autoFired: boolean;
     userCancelled: boolean;
+    deferredToEnd?: boolean;
   };
 
   type ConfigPickerState =
@@ -691,6 +694,17 @@ export default function PlayFilesPage() {
    */
   const advanceOnTrackEnd = useCallback(
     (trackInstanceId?: number) => {
+      const endDueAtMs = deferSleepTimerToTuneEnd(
+        autoAdvanceGuardRef.current,
+        sleepTimerRef.current.mode,
+        Date.now(),
+        trackStartedAtRef.current,
+        currentDurationMsRef.current,
+      );
+      if (endDueAtMs !== null) {
+        setAutoAdvanceDueAtMs(endDueAtMs);
+        return Promise.resolve();
+      }
       if (sleepTimerRef.current.notifyTuneEnded(trackInstanceId)) return Promise.resolve();
       return handleNextRef.current("auto", trackInstanceId);
     },
@@ -1499,6 +1513,7 @@ export default function PlayFilesPage() {
             const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
             guard.dueAtMs = dueAtMs;
             guard.autoFired = false;
+            guard.deferredToEnd = false;
             setAutoAdvanceDueAtMs(dueAtMs);
           }
         }
@@ -2512,6 +2527,7 @@ export default function PlayFilesPage() {
               onOpenContextLens={openContextLens}
             />
           ) : null}
+          <PlaybackSpectrumCard paused={isPaused} />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div
               className="bg-card border border-border rounded-panel p-4 space-y-4"

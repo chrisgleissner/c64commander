@@ -7,7 +7,12 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { autoAdvanceDelayMs, CROSSFADE_START_MARGIN_MS, crossfadeLeadMs } from "@/pages/playFiles/crossfadeLead";
+import {
+  autoAdvanceDelayMs,
+  CROSSFADE_START_MARGIN_MS,
+  crossfadeLeadMs,
+  deferralToTuneEndMs,
+} from "@/pages/playFiles/crossfadeLead";
 
 describe("the crossfade lead", () => {
   afterEach(() => localStorage.clear());
@@ -39,5 +44,11 @@ describe("the crossfade lead", () => {
     expect(autoAdvanceDelayMs(60_000, 20_000, true)).toBe(40_000 - 600 - CROSSFADE_START_MARGIN_MS);
     expect(autoAdvanceDelayMs(60_000, 20_000, false)).toBe(40_000);
     expect(autoAdvanceDelayMs(60_000, 59_900, true)).toBe(0);
+  });
+
+  it("defers an early advance to the tune's end once, and not again", () => {
+    expect(deferralToTuneEndMs(false, 116_000, 120_000)).toBe(120_000);
+    expect(deferralToTuneEndMs(true, 116_000, 120_000)).toBeNull();
+    expect(deferralToTuneEndMs(false, 120_000, 120_000)).toBeNull();
   });
 });

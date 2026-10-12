@@ -50,6 +50,19 @@ or talks to an Ultimate on its own; the gate stages that call them do.
 | `symbolize_cpuprofile.mjs`   | Self and total time per original function for a `.cpuprofile`, with `--group` and `--stacks` |
 | `search_latency_profile.mjs` | Search keystroke latency with typing and idle CPU profiles, plus the counts that can grow with session age (trace events, fibers, query cache, listeners, heap, localStorage) |
 
+## Crossfade matrix
+
+`crossfade_matrix_hil.mjs` captures app PCM and microphone audio across renderer, fade-length and
+transition scenarios. It needs the merge gate's Tone-Low and Tone-High playlist entries.
+
+```bash
+ANDROID_SERIAL=<Pixel serial> node tools/hil/crossfade_matrix_hil.mjs --renderers sidplayez --crossfades 0,1500 --scenarios skip,end --out artifacts/crossfade-matrix
+```
+
+`crossfade_curve.py` grades both captures. The microphone grader begins tracking the outgoing tune
+only after hearing it at full level, so recorder startup silence is not mistaken for a transition.
+Dropouts after either tune starts and recordings missing either tune still fail grading.
+
 ## Release sweep
 
 `release_sweep_hil.mjs` answers a different question from the merge gate. The gate measures what

@@ -9,7 +9,7 @@
       "sampleRate": 48000,
       "bufferMs": 15000,
       "maxRingMs": 20000,
-      "trackBursts": 16,
+      "trackBursts": 48,
       "primeMs": 1200
     },
     {
@@ -226,8 +226,7 @@
       "method": "beginTransition",
       "serial": 1,
       "seq": 26,
-      "seconds": 8,
-      "rampOut": false
+      "seconds": 8
     },
     {
       "t": 8000,
@@ -236,7 +235,7 @@
       "sampleRate": 48000,
       "bufferMs": 15000,
       "maxRingMs": 20000,
-      "trackBursts": 16,
+      "trackBursts": 48,
       "primeMs": 1200
     },
     {

@@ -9,11 +9,11 @@
 import { loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
 
 /**
- * How much earlier than its crossfade the next tune is started, to cover two delays measured on a Pixel 4:
- * the clock starts about 0.4 s after a tune's first audio, and resolving, reading and opening the next
- * tune takes 0.4-0.6 s. With 0.75 s a natural-end crossfade of 0.6 s was cut to a quarter.
+ * How much earlier than its crossfade the next tune is started. It covers the delays measured on a Pixel 4:
+ * the clock starts 0.4 s (1.4 s on a cold worker) after a tune's first audio, resolving and opening the next
+ * tune takes 0.4-0.8 s, and the due time fires up to 0.4 s late. With 1.5 s a cold-start crossfade was cut short.
  */
-export const CROSSFADE_START_MARGIN_MS = 1500;
+export const CROSSFADE_START_MARGIN_MS = 2500;
 
 /**
  * How long before a tune's songlength the next one is started on the phone.
@@ -30,3 +30,11 @@ export const crossfadeLeadMs = (durationMs: number, onPhone: boolean, crossfadeM
 /** Milliseconds from now until the next tune is due, `elapsedMs` into a tune of `durationMs`. */
 export const autoAdvanceDelayMs = (durationMs: number, elapsedMs: number, onPhone: boolean) =>
   Math.max(0, durationMs - elapsedMs - crossfadeLeadMs(durationMs, onPhone));
+
+/**
+ * The new due time when an advance made early must wait for the tune's real end, or null when it may go ahead:
+ * the end has come, or it was already deferred once. Deferring only once keeps a stalled playhead, which moves
+ * the end further away on every reconciliation, from postponing the advance for ever.
+ */
+export const deferralToTuneEndMs = (alreadyDeferred: boolean, nowMs: number, endsAtMs: number) =>
+  alreadyDeferred || endsAtMs <= nowMs ? null : endsAtMs;

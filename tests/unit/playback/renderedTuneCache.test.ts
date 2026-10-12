@@ -37,6 +37,19 @@ describe("RenderedTuneCache", () => {
     expect(cache.has("d")).toBe(true);
   });
 
+  it("lets go of audio from a renderer the listener has left before audio they can still reach", () => {
+    const cache = new RenderedTuneCache(3, undefined, undefined, (entry) => entry.renderer !== "sidplayez");
+    cache.set("next", { ...tune(1), renderer: "sidplayez" });
+    cache.set("old-a", tune(1));
+    cache.set("old-b", tune(1));
+
+    cache.set("current", { ...tune(1), renderer: "sidplayez" });
+
+    expect(cache.has("next")).toBe(true);
+    expect(cache.has("old-a")).toBe(false);
+    expect(cache.has("old-b")).toBe(true);
+  });
+
   it("treats a read as use, so the current tune is not evicted by its neighbours", () => {
     const cache = new RenderedTuneCache();
     for (const key of ["a", "b", "c"]) cache.set(key, tune(1));

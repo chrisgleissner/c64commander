@@ -1,6 +1,6 @@
 {
   "sampleRate": 48000,
-  "fadeMs": 0,
+  "fadeMs": 10,
   "transcript": [
     {
       "t": 0,
@@ -9,7 +9,7 @@
       "sampleRate": 48000,
       "bufferMs": 15000,
       "maxRingMs": 20000,
-      "trackBursts": 16,
+      "trackBursts": 48,
       "primeMs": 1200
     },
     {
@@ -150,21 +150,20 @@
       "method": "beginTransition",
       "serial": 1,
       "seq": 17,
-      "seconds": 0.01,
-      "rampOut": true
+      "seconds": 4.01
     },
     {
-      "t": 4000,
+      "t": 4800,
       "method": "openSession",
       "serial": 2,
       "sampleRate": 48000,
       "bufferMs": 15000,
       "maxRingMs": 20000,
-      "trackBursts": 16,
+      "trackBursts": 48,
       "primeMs": 1200
     },
     {
-      "t": 4000,
+      "t": 4800,
       "method": "takeTail",
       "serial": 1,
       "seq": 18,
@@ -172,18 +171,18 @@
       "maxSeconds": 4.01
     },
     {
-      "t": 4000,
+      "t": 4800,
       "method": "release",
       "serial": 1,
       "seq": 19
     },
     {
-      "t": 4000,
+      "t": 4800,
       "method": "setGain",
       "gain": 1
     },
     {
-      "t": 4000,
+      "t": 4800,
       "method": "adoptTail",
       "serial": 2,
       "seq": 1,
@@ -191,7 +190,7 @@
       "seconds": 0.01
     },
     {
-      "t": 4001,
+      "t": 4801,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 2,
@@ -199,7 +198,7 @@
       "frames": 24000
     },
     {
-      "t": 4001,
+      "t": 4801,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 3,
@@ -207,7 +206,7 @@
       "frames": 24000
     },
     {
-      "t": 4001,
+      "t": 4801,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 4,
@@ -215,7 +214,7 @@
       "frames": 24000
     },
     {
-      "t": 4001,
+      "t": 4801,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 5,
@@ -223,7 +222,7 @@
       "frames": 24000
     },
     {
-      "t": 4002,
+      "t": 4802,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 6,
@@ -231,7 +230,7 @@
       "frames": 24000
     },
     {
-      "t": 4002,
+      "t": 4802,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 7,
@@ -239,7 +238,7 @@
       "frames": 24000
     },
     {
-      "t": 4002,
+      "t": 4802,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 8,
@@ -247,7 +246,7 @@
       "frames": 24000
     },
     {
-      "t": 4002,
+      "t": 4802,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 9,
@@ -255,7 +254,7 @@
       "frames": 24000
     },
     {
-      "t": 4652,
+      "t": 5452,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 10,
@@ -263,7 +262,7 @@
       "frames": 24000
     },
     {
-      "t": 4653,
+      "t": 5453,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 11,
@@ -271,7 +270,7 @@
       "frames": 24000
     },
     {
-      "t": 5652,
+      "t": 6452,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 12,
@@ -279,7 +278,7 @@
       "frames": 24000
     },
     {
-      "t": 5653,
+      "t": 6453,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 13,
@@ -287,7 +286,7 @@
       "frames": 24000
     },
     {
-      "t": 6202,
+      "t": 7002,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 14,
@@ -295,26 +294,10 @@
       "frames": 24000
     },
     {
-      "t": 6702,
+      "t": 7502,
       "method": "enqueuePcm",
       "serial": 2,
       "seq": 15,
-      "value": 12000,
-      "frames": 24000
-    },
-    {
-      "t": 7652,
-      "method": "enqueuePcm",
-      "serial": 2,
-      "seq": 16,
-      "value": 12000,
-      "frames": 24000
-    },
-    {
-      "t": 7653,
-      "method": "enqueuePcm",
-      "serial": 2,
-      "seq": 17,
       "value": 12000,
       "frames": 24000
     }

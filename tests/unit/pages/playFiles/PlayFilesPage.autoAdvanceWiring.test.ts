@@ -79,6 +79,23 @@ describe("PlayFilesPage auto-advance wiring", () => {
     );
     expect(unmountCleanup).toContain("return;");
   });
+
+  it("defers an after-this-tune final crossfade only to the real end, then permits a legitimate re-arm", () => {
+    const trackEndHandlerStart = pageSource.indexOf("const advanceOnTrackEnd = useCallback(");
+    const trackEndHandlerEnd = pageSource.indexOf("const advanceOnTrackEndRef", trackEndHandlerStart);
+    const trackEndHandler = pageSource.slice(trackEndHandlerStart, trackEndHandlerEnd);
+    const rearmStart = pageSource.indexOf("if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current)");
+    const rearmEnd = pageSource.indexOf("setPlayedMs(playedClockRef.current.current(now));", rearmStart);
+    const rearm = pageSource.slice(rearmStart, rearmEnd);
+
+    expect(trackEndHandler).toContain("deferSleepTimerToTuneEnd(");
+    expect(trackEndHandler).toContain("sleepTimerRef.current.mode,");
+    expect(trackEndHandler).toContain("setAutoAdvanceDueAtMs(endDueAtMs);");
+    expect(trackEndHandler.indexOf("setAutoAdvanceDueAtMs(endDueAtMs);")).toBeLessThan(
+      trackEndHandler.indexOf("sleepTimerRef.current.notifyTuneEnded(trackInstanceId)"),
+    );
+    expect(rearm).toContain("guard.deferredToEnd = false;");
+  });
 });
 
 /*

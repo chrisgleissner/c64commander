@@ -203,6 +203,12 @@ Build playlists from local files, C64 Ultimate storage, HVSC, or CommoServe. Use
   </tr>
 </table>
 
+#### Spectrum
+
+On Android, the Spectrum card on Play draws the sound your phone is playing as it plays, from bass on the left to treble on the right. Each bar is colored by its level, a small cap marks each pitch's recent peak, and Level, Peak and Clip readouts show the overall loudness. It covers tunes played on the phone and your C64's sound when Live View plays it there. Under Settings > Audio processing you can also normalize volume, adjust bass, mid and treble, widen the stereo image and add reverb.
+
+<img src="docs/img/app/play/spectrum/profiles/medium/01-spectrum.png" alt="Spectrum card on Play: colored bars from bass to treble with peak caps and Level, Peak and Clip readouts" width="360"/>
+
 ### SID Radio
 
 Create an endless playlist of similar SID tunes from HVSC. Start with the current song, choose a mood, or build from your liked tunes. Use ♥ and ✕ to shape future selections. A station never repeats a tune, and never plays two pieces from the same SID file back to back.

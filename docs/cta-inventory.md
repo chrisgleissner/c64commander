@@ -462,6 +462,14 @@ Listed below in the order they are rendered and walked by the focus ring.
   `sleep-timer-m15`, `sleep-timer-m30`, `sleep-timer-m45`, `sleep-timer-m60` — R✅ I✅ — state is
   always stated in `sleep-timer-state`; **This tune** `[disabled: nothing is playing]`
 
+**Spectrum card** _(Android only: it exists only where the native plugin can analyse the phone's sound)_
+
+- Spectrum — section toggle — `play-section-toggle-spectrum` (`play-section-spectrum`) — R✅ I✅ — a
+  collapsible card above the playback controls; its state is remembered, and it is open on a first
+  visit when the tune is playing on the phone. While it is closed, off screen or the document is hidden,
+  the native analyser is switched off. The body holds only display elements (`spectrum-canvas`,
+  `spectrum-rms`, `spectrum-peak`, `spectrum-clip`, `spectrum-message`), so it adds one control to the page.
+
 ### 4.3 Disks (`/disks`)
 
 Per drive (A / B / Soft-IEC):
@@ -646,6 +654,14 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]` ; Read them
   automatically — checkbox — `settings-roms-auto` — on by default, because without the
   ROMs accurate local playback is silent
+- **Audio processing** (`settings-audio-processing`, Android only; every control off by default, and an
+  effect that is off leaves the samples untouched): Normalize volume — switch —
+  `settings-audio-levelling` — R✅ I✅ ; Equalizer (`settings-audio-eq`): Bass / Mid / Treble — slider ×3 —
+  `settings-audio-eq-bass|mid|treble` (−12 to +12 dB in 1 dB steps; Left/Right step it, readout
+  `settings-audio-eq-<band>-value`) — R✅ I✅ ; Reset — button — `settings-audio-eq-reset` — R✅ I✅
+  `[disabled: all three at 0 dB]` ; Stereo width — button group —
+  `settings-audio-stereo-off|subtle|wide` (stored as 0 / 35 / 70) — R✅ I✅ ; Reverb — button group —
+  `settings-audio-reverb-off|room|hall` (stored as 0 / 25 / 55) — R✅ I✅
 - **Play and disk lists**: Items shown before View all — number — `#listPreviewLimit`
   (no testid; it commits on blur and on Enter) ; Friendly SID names — checkbox —
   `settings-friendly-sid-names`

@@ -131,6 +131,8 @@ export class RenderedTuneCache {
      * replaced by a grown version of the same buffer is not let go of.
      */
     private readonly onDrop: (tune: RenderedTune) => void = () => undefined,
+    /** Audio of a renderer the listener has moved away from is let go of before anything they can still reach. */
+    private readonly isStale: (tune: RenderedTune) => boolean = () => false,
   ) {}
 
   get size(): number {
@@ -197,10 +199,11 @@ export class RenderedTuneCache {
 
   private evict(): void {
     while (this.entries.size > this.maxTunes || this.bytes > this.maxBytes) {
-      const oldest = this.entries.keys().next();
-      if (oldest.done) return;
-      const entry = this.entries.get(oldest.value);
-      this.entries.delete(oldest.value);
+      const stale = [...this.entries].find(([, entry]) => this.isStale(entry));
+      const victim = stale ? stale[0] : this.entries.keys().next().value;
+      if (victim === undefined) return;
+      const entry = this.entries.get(victim);
+      this.entries.delete(victim);
       if (entry) this.onDrop(entry);
     }
   }
