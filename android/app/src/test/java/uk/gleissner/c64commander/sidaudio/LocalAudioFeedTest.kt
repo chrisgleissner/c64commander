@@ -42,6 +42,7 @@ class LocalAudioFeedTest {
     private var resumedAtNanos = clock.now
     var paused = false
     var flushes = 0
+    var continuationFlushes = 0
     var lastGain = -1.0
     var offers = 0
     /** As the pipeline does when its ring runs dry: the track stays full of concealed silence. */
@@ -75,6 +76,7 @@ class LocalAudioFeedTest {
 
     /** One step, as the pipeline does it under its lock: no block can slip into the track in between. */
     override fun flushRing(rate: Int): Long {
+      continuationFlushes += 1
       val ring = ((ringMs() * rate) / 1000).toLong()
       val saved = raceFrames
       raceFrames = 0
@@ -216,6 +218,19 @@ class LocalAudioFeedTest {
     feed.enqueue(1, 1, null)
     pump()
     assertEquals(100L, host.current!!.writtenFrames)
+  }
+
+  @Test
+  fun `a deferred transition flush preserves the output DSP continuation path`() {
+    // Starting a transition before a track exists leaves its ring flush pending until the incoming
+    // session opens. That flush must use flushRing, not the discontinuity-resetting flush method.
+    feed.openSession(1, settings)
+    feed.beginTransition(1, 1, 0.1)
+    feed.enqueue(1, 2, segment(240, 1000))
+    pump()
+    val output = host.current!!
+    assertEquals(1, output.continuationFlushes)
+    assertEquals(1, output.flushes)
   }
 
   @Test

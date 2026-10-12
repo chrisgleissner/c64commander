@@ -13,6 +13,8 @@ import android.media.AudioTrack
 import android.os.Build
 import android.os.Process
 import android.util.Log
+import uk.gleissner.c64commander.dsp.AudioFx
+import uk.gleissner.c64commander.dsp.AudioFxHub
 
 /**
  * The audio path from a PCM producer to the speaker, entirely in Kotlin.
@@ -100,6 +102,8 @@ internal class AudioPipeline(
     private val correctDrift: Boolean = true,
     /** Test seam: the player loop's time source, so tests can run it on virtual time. */
     private val clock: PipelineClock = PipelineClock.SYSTEM,
+    /** The listener's processing settings and the spectrum tap; tests pass their own. */
+    private val fxHub: AudioFxHub = AudioFxHub.shared,
 ) {
   data class Stats(
       /** PCM queued ahead of the speaker (ring + track), i.e. the current output latency. */
@@ -170,9 +174,12 @@ internal class AudioPipeline(
    * the chunk it had already converted.
    */
   @Volatile private var flushSeq: Long = 0
+  @Volatile private var resetFxAtFlushSeq: Long = 0
 
   /** The last [flushSeq] the player has acted on, so it can reset its own interpolator state once. */
   private var seenFlushSeq: Long = 0
+  /** Last discontinuity whose DSP reset the player applied. Continuation flushes must not erase it. */
+  private var seenFxResetFlushSeq: Long = 0
 
   @Volatile private var refusedBytes: Long = 0
   @Volatile private var discardedBytes: Long = 0
@@ -201,8 +208,11 @@ internal class AudioPipeline(
   private var totalFramesWritten: Long = 0
   private var player: Thread? = null
 
-  /** Where a diagnostic capture of what reaches the track is recorded; see [OutputCapture]. */
   @Volatile var outputCapture: OutputCapture? = null
+
+  private val fx = AudioFx(sourceRate, outputRate, fxHub)
+
+  private var deferMasterGain = false
 
   init {
     val burst = if (framesPerBurst > 0) framesPerBurst else defaultBurstFrames(outputRate)
@@ -249,6 +259,8 @@ internal class AudioPipeline(
     ringFrames = hardMaxFrames * 2
     ring = ByteArray(ringFrames * BYTES_PER_FRAME)
     pitchPeriod = RingPitchPeriod(ring, ringFrames, sourceRate)
+    fx.ensureCapacity(maxOf(writeFramesPerChunk, trackBufferFrames))
+    fxHub.analyzer.prepare(outputRate)
   }
 
   /** Output latency this pipeline targets once primed (ms) — ring target plus the track's buffer. */
@@ -271,26 +283,18 @@ internal class AudioPipeline(
    * (a long stall, or no speaker at all), so the audio is counted and discarded rather than blocking
    * the producer: for a live stream, being late is worse than being short.
    */
-  /**
-   * Drop everything queued but not yet played.
-   *
-   * On-device playback runs a deep ring — a second or two — so that a busy JS thread cannot starve
-   * the speaker. The cost of that depth is that pausing or seeking would otherwise keep playing what
-   * is already queued, for as long as the ring is deep. Flushing makes those immediate again.
-   */
+  /** Drop a discontinuous passage and reset its DSP history before replacement audio. */
   fun flush() {
-    flushRing()
+    flushRing(discontinuous = true)
   }
 
-  /**
-   * [flush], returning how many source frames the ring held. One step under the lock the player commits
-   * under: measured first and flushed after, a chunk committed in between was played and recovered too.
-   */
-  fun flushRing(): Long =
+  /** Drop queued frames; continuations preserve DSP history unless [discontinuous] is true. */
+  fun flushRing(discontinuous: Boolean = false): Long =
       synchronized(producerLock) {
         val discarded = (writeFrames - readFrames).coerceAtLeast(0)
         readFrames = writeFrames
         flushSeq += 1
+        if (discontinuous) resetFxAtFlushSeq = flushSeq
         discarded
       }
 
@@ -390,19 +394,10 @@ internal class AudioPipeline(
       val idx = ((realStart + i) % ringFrames).toInt() * BYTES_PER_FRAME
       val tail = i * BYTES_PER_FRAME
       for (o in 0 until CHANNELS * 2 step 2) {
-        val prior = readSample(blendTail, tail + o) * gainTail
-        writeSample(ring, idx + o, readSample(ring, idx + o) * gainFresh + prior)
+        val prior = PcmS16.read(blendTail, tail + o) * gainTail
+        PcmS16.write(ring, idx + o, PcmS16.read(ring, idx + o) * gainFresh + prior)
       }
     }
-  }
-
-  private fun readSample(buf: ByteArray, at: Int): Int =
-      ((buf[at].toInt() and 0xFF) or (buf[at + 1].toInt() shl 8)).toShort().toInt()
-
-  private fun writeSample(buf: ByteArray, at: Int, value: Double) {
-    val v = value.toInt().coerceIn(-32768, 32767)
-    buf[at] = (v and 0xFF).toByte()
-    buf[at + 1] = ((v shr 8) and 0xFF).toByte()
   }
 
   /** The concealment's continuation past the hole, held for the cross-fade back into real audio. */
@@ -557,10 +552,7 @@ internal class AudioPipeline(
   /** Fractional read position within the ring, in source frames past [readFrames]. */
   private var fraction = 0.0
 
-  /** Scratch: source frames pulled out of the ring, linearised so the converter can index them. */
   private lateinit var srcScratch: ShortArray
-
-  /** Scratch: converted output frames, handed to the track. */
   private lateinit var outScratch: ByteArray
 
   /** Low-water mark of the ring within the current adaptation window (source frames). */
@@ -579,22 +571,17 @@ internal class AudioPipeline(
   /** One pass of the player loop. Public to tests, which drive it on virtual time instead of a thread. */
   internal fun step() {
     if (!::outScratch.isInitialized) {
-      outScratch = ByteArray(outFrames * BYTES_PER_FRAME)
-      // Worst case source frames for one output chunk, plus one for the interpolator's right-hand
-      // sample and a little slack for the ratio's excursion.
+      val scratchFrames = maxOf(outFrames, trackBufferFrames)
+      outScratch = ByteArray(scratchFrames * BYTES_PER_FRAME)
       val maxRatio = nominalRatio() * (1 + CushionDrift.REBUILD_DRIFT)
-      srcScratch = ShortArray(((outFrames * maxRatio + 2).toInt() + 2) * CHANNELS)
+      srcScratch = ShortArray(((scratchFrames * maxRatio + 2).toInt() + 2) * CHANNELS)
     }
     try {
       if (paused) {
-        // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
-        // the audio the listener paused on would be gone by the time they came back to it.
         clock.park(POLL_NANOS)
         return
       }
       if (!started) {
-        // Prime for BOTH buffers: the first writes fill the speaker track out of the ring, so
-        // priming to the cushion alone starts the session on a thin cushion it never rebuilds.
         if ((writeFrames - readFrames) < primeFrames) {
           clock.park(POLL_NANOS)
           return
@@ -649,21 +636,22 @@ internal class AudioPipeline(
    * absorbed continuously instead of accumulating until something has to be dropped or concealed.
    */
   private fun renderChunk(outFrames: Int) {
-    // Taken before anything is read out of the ring, and checked again before the result is
-    // committed. A flush that lands in between has thrown away the audio this chunk was built from,
-    // so the chunk is dropped rather than written — and the interpolator's sub-sample position is
-    // reset, because it describes a place in a ring that no longer holds what it did.
     val flushAtStart = flushSeq
     if (flushAtStart != seenFlushSeq) {
       seenFlushSeq = flushAtStart
       fraction = 0.0
+      // A continuation flush can arrive after a discontinuous one but before this writer observes
+      // either.  Equality with the newest flush would lose the required reset in that ordering.
+      val resetSeq = resetFxAtFlushSeq
+      if (resetSeq > seenFxResetFlushSeq) {
+        fx.onFlush(readFrames)
+        seenFxResetFlushSeq = resetSeq
+      }
     }
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS).toLong()
     val authority = CushionDrift.authority(depth, floor, recoveryDepthFrames(), startupCeilingFrames)
-    // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
-    // fivefold at a threshold, which put an audible lurch in a held note.
     val wanted =
         if (correctDrift) nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
         else nominalRatio()
@@ -676,19 +664,18 @@ internal class AudioPipeline(
         }
     appliedRatio = ratio
 
-    // Output frames the ring supports (keeping the interpolator's look-ahead frame). A SHORT chunk is
-    // the answer to a shallow ring; concealing a whole chunk for one missing frame was the crackle.
     val usable = ((depth - 1) - fraction) / ratio
     val renderFrames = minOf(outFrames.toLong(), Math.floor(usable).toLong()).toInt()
     if (renderFrames <= 0) {
-      // Genuinely nothing to play. Wait briefly first — the track's own buffer covers a short wait —
-      // and conceal only once the wait exceeds what the track can cover.
       if (waitForFrames(2)) return
       concealSilence(outFrames)
       return
     }
 
-    // At a ratio of exactly 1 interpolation reproduces every sample, so copy them instead.
+    val chunkStartFrame = readFrames
+    deferMasterGain = fx.prepare(chunkStartFrame)
+    if (deferMasterGain) fx.analyseAhead(ring, ringFrames, chunkStartFrame, writeFrames)
+
     val pos =
         if (ratio == 1.0 && fraction == 0.0) {
           copyFramesFromRing(renderFrames)
@@ -707,11 +694,15 @@ internal class AudioPipeline(
             true
           }
         }
-    // Written after the commit so flushed audio never plays; outside the lock so the producer never
-    // waits on the AudioTrack.
     if (!committed) {
       fraction = 0.0
       return
+    }
+    if (deferMasterGain) {
+      val masterStart = appliedGain
+      advanceGain(renderFrames)
+      fx.process(outScratch, renderFrames, chunkStartFrame, masterStart, appliedGain)
+      deferMasterGain = false
     }
     writeBlocking(outScratch, renderFrames * BYTES_PER_FRAME)
   }
@@ -791,7 +782,7 @@ internal class AudioPipeline(
     if (targetFrames < maxTargetFrames) {
       targetFrames = minOf(maxTargetFrames, targetFrames + msToFrames(sourceRate, CUSHION_GROW_MS))
     }
-    writeBlocking(outScratch, outScratch.size)
+    writeBlocking(outScratch, outFrames * BYTES_PER_FRAME)
   }
 
   /** Resample [renderFrames] output frames into [outScratch]; returns the source position reached. */
@@ -822,6 +813,10 @@ internal class AudioPipeline(
     val first = minOf(count, ringFrames - start)
     System.arraycopy(ring, start * BYTES_PER_FRAME, outScratch, 0, first * BYTES_PER_FRAME)
     if (count > first) System.arraycopy(ring, 0, outScratch, first * BYTES_PER_FRAME, (count - first) * BYTES_PER_FRAME)
+    if (!deferMasterGain) applyGainInPlace(count)
+  }
+
+  private fun applyGainInPlace(count: Int) {
     if (appliedGain == 1.0 && targetGain * duckGain == 1.0) return
     for (i in 0 until count) {
       val at = i * BYTES_PER_FRAME
@@ -831,7 +826,15 @@ internal class AudioPipeline(
     }
   }
 
-  /** Linearise [count] source frames starting at the current read position into [srcScratch]. */
+  private fun advanceGain(frames: Int) {
+    val target = targetGain * duckGain
+    repeat(frames) {
+      if (appliedGain == target) return
+      val step = 1.0 / GAIN_RAMP_FRAMES
+      appliedGain = if (appliedGain < target) minOf(target, appliedGain + step) else maxOf(target, appliedGain - step)
+    }
+  }
+
   private fun copyFromRing(count: Int) {
     var index = (readFrames % ringFrames).toInt()
     var out = 0
@@ -846,15 +849,12 @@ internal class AudioPipeline(
   }
 
   private fun putFrame(dst: ByteArray, offset: Int, left: Double, right: Double) {
-    // Ramp towards the requested level rather than jumping to it. `GAIN_RAMP_FRAMES` is a whole
-    // number of frames at the output rate, so the slew is the same wall-clock duration whatever the
-    // device resamples to.
     val target = targetGain * duckGain
-    if (appliedGain != target) {
+    if (!deferMasterGain && appliedGain != target) {
       val step = 1.0 / GAIN_RAMP_FRAMES
       appliedGain = if (appliedGain < target) minOf(target, appliedGain + step) else maxOf(target, appliedGain - step)
     }
-    val gain = appliedGain
+    val gain = if (deferMasterGain) 1.0 else appliedGain
     val l = (left * gain).toInt().coerceIn(-32768, 32767)
     val r = (right * gain).toInt().coerceIn(-32768, 32767)
     dst[offset] = (l and 0xFF).toByte()
@@ -876,6 +876,7 @@ internal class AudioPipeline(
     lastWriteNanos = clock.nanoTime()
     if (written > 0) totalFramesWritten += (written / BYTES_PER_FRAME).toLong()
     outputCapture?.record(data, written)
+    if (fxHub.spectrumEnabled) fxHub.analyzer.feed(data, maxOf(written, 0) / BYTES_PER_FRAME, outputRate)
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
       if (written <= 0) clock.park(POLL_NANOS)

@@ -156,9 +156,9 @@ describe("SpectrumView", () => {
     expect(internal.drawOptions).toBe(options);
     expect(drawBars.mock.calls.every(([, drawOptions]) => drawOptions === options)).toBe(true);
     expect(report).toHaveBeenCalled();
-    expect(report.mock.calls.every(([nowMs, costMs, intervalMs]) => [nowMs, costMs, intervalMs].every(Number.isFinite))).toBe(
-      true,
-    );
+    expect(
+      report.mock.calls.every(([nowMs, costMs, intervalMs]) => [nowMs, costMs, intervalMs].every(Number.isFinite)),
+    ).toBe(true);
   });
 
   it("switches the native analyser on when visible and off when hidden, the document is hidden or it is disposed", async () => {
@@ -237,7 +237,11 @@ describe("SpectrumView", () => {
     expect(addLog).toHaveBeenCalledWith(
       "warn",
       "Spectrum: frame poll failed",
-      expect.objectContaining({ service: "audio-fx", idle: false, error: expect.stringContaining("bridge unavailable") }),
+      expect.objectContaining({
+        service: "audio-fx",
+        idle: false,
+        error: expect.stringContaining("bridge unavailable"),
+      }),
     );
     expect(failedRead.mock.calls.length).toBeGreaterThan(1);
   });

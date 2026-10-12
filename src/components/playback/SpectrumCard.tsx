@@ -12,6 +12,8 @@ import { AudioWaveform } from "lucide-react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useActivePlayback } from "@/hooks/useActivePlayback";
+import { useAvMirror } from "@/hooks/useAvMirror";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { SpectrumView, type SpectrumReadout } from "@/lib/audio/spectrum/spectrumView";
 import { cn } from "@/lib/utils";
@@ -87,8 +89,8 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
   }, [profile, writeReadout]);
 
   useEffect(() => {
-    viewRef.current?.setState({ visible: onScreen, paused });
-  }, [onScreen, paused, profile]);
+    viewRef.current?.setState({ visible: onScreen && soundOnPhone, paused });
+  }, [onScreen, soundOnPhone, paused, profile]);
 
   const message = active
     ? null
@@ -170,5 +172,17 @@ export const SpectrumCard = ({ soundOnPhone, paused }: SpectrumCardProps) => {
     >
       <SpectrumPanel soundOnPhone={soundOnPhone} paused={paused} profile={profile} />
     </CollapsibleSection>
+  );
+};
+
+/** Follow the source actually playing on the phone, including Live View audio. */
+export const PlaybackSpectrumCard = ({ paused }: { paused: boolean }) => {
+  const playback = useActivePlayback();
+  const mirror = useAvMirror();
+  return (
+    <SpectrumCard
+      soundOnPhone={playback.local || mirror.audioLive}
+      paused={playback.local && !mirror.audioLive && paused}
+    />
   );
 };

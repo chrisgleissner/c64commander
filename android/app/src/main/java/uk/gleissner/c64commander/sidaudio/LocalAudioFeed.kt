@@ -467,7 +467,9 @@ internal class LocalAudioFeed(
     // flush that lets the transition write anything at all.
     if (pendingTransitionFlush) {
       pendingTransitionFlush = false
-      current.flush()
+      // This is a continuation hand-off, not a seek.  Keep effect delay/filter history while
+      // dropping the queued ring, just as the active transition path above does.
+      current.flushRing(session.settings.sampleRate)
     }
     val inTransition = session.transitioning || (session.tail != null && session.queue.isEmpty())
     val highWater = if (inTransition) TRANSITION_HIGH_WATER_MS else HIGH_WATER_MS
@@ -587,7 +589,9 @@ internal class LocalAudioFeed(
       val next = session.pending.firstKey()
       if (next == session.nextSeq) {
         // A command at the head still waiting (a crossfade tail that never came): give up on it.
-        val stuck = session.pending.pollFirstEntry().value
+        val stuck = checkNotNull(session.pending.pollFirstEntry()) {
+          "Local audio pending head vanished while recovering session ${session.serial} gap"
+        }.value
         log.log(Log.WARN, "Local audio: ${(stuck as? Entry.Command)?.name ?: "entry"} ${session.nextSeq} waited too long; dropping it", null)
         session.nextSeq += 1
       } else {
@@ -777,7 +781,7 @@ internal class LocalAudioFeed(
   private fun publish(session: Session) {
     val current = output
     val active = session.serial == activeSerial && current != null
-    val buffered = if (active) current!!.bufferedMs() else 0.0
+    val buffered = if (active) current.bufferedMs() else 0.0
     val queuedSec = buffered / 1000
     val stats =
         FeedSessionStats(
@@ -786,7 +790,7 @@ internal class LocalAudioFeed(
             playedFrames = playedFrames(session, current),
             bufferedMs = buffered,
             queuedFrames = session.queuedFrames(),
-            underruns = if (active) current!!.underruns() else 0,
+            underruns = if (active) current.underruns() else 0,
             silentSeconds = session.silentSeconds,
             silentFault = session.silentSeconds - queuedSec >= SILENCE_TOLERANCE_SECONDS,
             reopens = reopens,

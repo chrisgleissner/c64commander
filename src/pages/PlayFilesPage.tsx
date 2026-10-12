@@ -100,7 +100,7 @@ import {
 } from "@/pages/playFiles/playbackVolumeBinding";
 import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
-import { SpectrumCard } from "@/components/playback/SpectrumCard";
+import { PlaybackSpectrumCard } from "@/components/playback/SpectrumCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
@@ -223,7 +223,6 @@ import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlay
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
 import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
-import { useAvMirror } from "@/hooks/useAvMirror";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
   "scanning",
@@ -1916,10 +1915,7 @@ export default function PlayFilesPage() {
   }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
 
   const activePlayback = useActivePlayback();
-  const mirror = useAvMirror();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
-  const spectrumHasPhoneAudio = localEngineActive || mirror.audioLive;
-  const spectrumPaused = localEngineActive && !mirror.audioLive && isPaused;
   const remoteSeek = useRemoteSidSeek({
     item: currentItem,
     active: !localEngineActive && (isPlaying || activePlayback.any),
@@ -2531,7 +2527,7 @@ export default function PlayFilesPage() {
               onOpenContextLens={openContextLens}
             />
           ) : null}
-          <SpectrumCard soundOnPhone={spectrumHasPhoneAudio} paused={spectrumPaused} />
+          <PlaybackSpectrumCard paused={isPaused} />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div
               className="bg-card border border-border rounded-panel p-4 space-y-4"
