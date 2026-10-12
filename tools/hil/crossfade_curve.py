@@ -400,7 +400,18 @@ def grade_mic(path: str, crossfade_ms: int, low_hz: float, high_hz: float) -> di
     smooth = lambda levels: np.array([np.median(levels[max(0, i - 2) : i + 3]) for i in range(len(levels))])  # noqa: E731
     low_s, high_s = smooth(low), smooth(high)
     sustained = int(0.15 / MIC_HOP_SECONDS)
-    low_gone = [i for i in range(len(low_s) - sustained) if (low_s[i : i + sustained] < MIC_GONE_DB).all()]
+    first_full = next(
+        (i for i in range(len(low_s) - sustained + 1) if (low_s[i : i + sustained] >= MIC_TOP_DB).all()),
+        None,
+    )
+    if first_full is None:
+        result["verdict"] = "NO TRANSITION"
+        faults.append("the microphone did not hear the outgoing tune at full level")
+        return result
+    low_gone = [
+        i for i in range(first_full + sustained, len(low_s) - sustained)
+        if (low_s[i : i + sustained] < MIC_GONE_DB).all()
+    ]
     high_gone = [i for i in range(sustained, len(high_s)) if (high_s[i - sustained : i] < MIC_GONE_DB).all()]
     if not low_gone or not high_gone:
         result["verdict"] = "NO TRANSITION"
@@ -425,17 +436,18 @@ def grade_mic(path: str, crossfade_ms: int, low_hz: float, high_hz: float) -> di
     clean_high = np.where(loud | unconfirmed, 0.0, high)
     low_raw = np.where(unconfirmed, 0.0, low)
     high_raw = np.where(unconfirmed, 0.0, high)
+    outgoing_start = max(2, first_full)
     for key, label, clean, raw, offset in (
-        ("outgoing_dip_db", "first tune dipped", clean_low[: fall_start + 1], low_raw[2 : fall_start + 1], 0),
+        ("outgoing_dip_db", "first tune dipped", clean_low[outgoing_start : fall_start + 1], low_raw[outgoing_start : fall_start + 1], outgoing_start),
         ("incoming_dip_db", "second tune dipped", clean_high[rise_end:], high_raw[rise_end:], rise_end),
     ):
         result[key] = round(float(clean.min()), 1) if len(clean) else 0.0
         deep = round(float(raw.min()), 1) if len(raw) else 0.0
-        where = "before its fade" if offset == 0 else "after its rise"
+        where = "before its fade" if key == "outgoing_dip_db" else "after its rise"
         if result[key] < MIC_DIP_DB:
             faults.append(f"the {label} {result[key]} dB at {(offset + int(np.argmin(clean))) * hop_ms:.0f} ms, {where}")
         elif deep < MIC_DEEP_DIP_DB:
-            at = (offset + int(np.argmin(raw)) + (2 if offset == 0 else 0)) * hop_ms
+            at = (offset + int(np.argmin(raw))) * hop_ms
             faults.append(f"the {label} {deep} dB at {at:.0f} ms, {where}")
     span = slice(fall_start, rise_end + 1)
     gone = (low[span] < MIC_GONE_DB) & (high[span] < MIC_GONE_DB) & ~loud[span]
