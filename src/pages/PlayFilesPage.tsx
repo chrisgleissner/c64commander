@@ -178,6 +178,7 @@ import {
   resolveAutoAdvanceDueAtMsOnDurationChange,
   runClaimedLaunch,
 } from "@/pages/playFiles/playbackGuards";
+import { autoAdvanceDelayMs, crossfadeLeadMs } from "@/pages/playFiles/crossfadeLead";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
@@ -1495,7 +1496,7 @@ export default function PlayFilesPage() {
         if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current) {
           const guard = autoAdvanceGuardRef.current;
           if (guard && !guard.userCancelled) {
-            const dueAtMs = now + Math.max(0, currentDurationMsRef.current - anchor.elapsedMs);
+            const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
             guard.dueAtMs = dueAtMs;
             guard.autoFired = false;
             setAutoAdvanceDueAtMs(dueAtMs);
@@ -2356,6 +2357,10 @@ export default function PlayFilesPage() {
       durationMs,
       trackStartedAtMs: trackStartedAtRef.current,
       currentDueAtMs: guard?.dueAtMs,
+      leadMs:
+        typeof durationMs === "number"
+          ? crossfadeLeadMs(durationMs, getSharedLocalSidPlaybackController().isActive())
+          : 0,
     });
     if (nextDueAtMs === null || !guard) return;
     guard.dueAtMs = nextDueAtMs;

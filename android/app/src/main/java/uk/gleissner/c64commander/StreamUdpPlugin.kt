@@ -110,6 +110,7 @@ class StreamUdpPlugin : Plugin() {
    * gives; the pipeline's own internals are thread-safe.
    */
   @Volatile private var audioPipeline: AudioPipeline? = null
+  private val outputCapture = OutputCapture()
 
   /** Serialises open/close against each other (never against the receive path). */
   private val audioLifecycleLock = Any()
@@ -390,10 +391,29 @@ class StreamUdpPlugin : Plugin() {
     // Depth to reach before the first sound. Kept small on a deep ring so playback starts promptly.
     val primeMs = call.getInt("primeMs") ?: 0
     try {
+      val pipeline = openPipeline(sampleRate, bufferMs, maxRingMs, trackBursts, primeMs)
+      val result = JSObject()
+      result.put("sampleRate", sampleRate)
+      result.put("bufferMs", pipeline.bufferCapacityMs)
+      call.resolve(result)
+    } catch (error: Exception) {
+      Log.w(logTag, "openAudioTrack failed (rate=$sampleRate)", error)
+      call.reject("openAudioTrack failed: ${error.message}", error)
+    }
+  }
+
+  /** Replace the open pipeline and take focus: the mirror's and the on-device SID feed's one way in. */
+  internal fun openPipeline(
+      sampleRate: Int,
+      bufferMs: Int,
+      maxRingMs: Int,
+      trackBursts: Int,
+      primeMs: Int,
+      correctDrift: Boolean = true,
+  ): AudioPipeline =
       synchronized(audioLifecycleLock) {
         audioPipeline?.close()
-        val pipeline =
-            AudioPipeline(
+        AudioPipeline(
                 sampleRate,
                 bufferMs,
                 nativeOutputRate(),
@@ -401,68 +421,33 @@ class StreamUdpPlugin : Plugin() {
                 maxRingMs = maxRingMs,
                 trackBursts = trackBursts,
                 primeMs = primeMs,
+                correctDrift = correctDrift,
             )
-        pipeline.start()
-        audioPipeline = pipeline
-        requestPlaybackAudioFocus()
-        nativeAudioOwnsPlayback = true
-        audioArrivals.reset()
-        val result = JSObject()
-        result.put("sampleRate", sampleRate)
-        result.put("bufferMs", pipeline.bufferCapacityMs)
-        call.resolve(result)
+            .also {
+              it.outputCapture = outputCapture
+              it.start()
+              audioPipeline = it
+              requestPlaybackAudioFocus()
+              nativeAudioOwnsPlayback = true
+              audioArrivals.reset()
+            }
       }
-    } catch (error: Exception) {
-      Log.w(logTag, "openAudioTrack failed (rate=$sampleRate)", error)
-      call.reject("openAudioTrack failed: ${error.message}", error)
-    }
-  }
 
-  /**
-   * Feed PCM from JS — the on-device SID engine's path to the speaker.
-   *
-   * It lands in the same [AudioPipeline] the A/V mirror feeds, so a rendered tune is paced by the
-   * DAC through the same ring and the same blocking writer as a mirrored one. Before this the two
-   * sounded different because they *were* different: the mirror had a native sink while the engine
-   * scheduled a Web Audio `BufferSource` per chunk from the JS thread.
-   */
-  @PluginMethod
-  fun writeAudioTrack(call: PluginCall) {
-    val data = call.getString("data")
-    if (data == null) {
-      call.reject("data is required")
-      return
-    }
-    val pcm = Base64.decode(data, Base64.NO_WRAP)
-    val pipeline = audioPipeline
-    pipeline?.offer(pcm, 0, pcm.size)
-    call.resolve(audioStatsPayload(pipeline?.stats() ?: AudioPipeline.Stats.ZERO))
-  }
+  internal fun isCurrentPipeline(pipeline: AudioPipeline): Boolean = audioPipeline === pipeline
 
-  /**
-   * Hold the speaker where it is, keeping every queued sample, for a listener's pause.
-   *
-   * Distinct from [flushAudioTrack], which exists for a seek: a seek invalidates the queued audio,
-   * a pause does not.
-   */
-  @PluginMethod
-  fun pauseAudioTrack(call: PluginCall) {
-    audioPipeline?.pause()
-    call.resolve(JSObject())
-  }
-
-  /** Continue a [pauseAudioTrack] from the sample it stopped on. */
-  @PluginMethod
-  fun resumeAudioTrack(call: PluginCall) {
-    audioPipeline?.resume()
-    call.resolve(JSObject())
-  }
-
-  /** Drop queued-but-unplayed audio, so a pause or a seek takes effect at once. */
-  @PluginMethod
-  fun flushAudioTrack(call: PluginCall) {
-    audioPipeline?.flush()
-    call.resolve(JSObject())
+  /** A pipeline someone else has since replaced is left alone. */
+  internal fun closePipelineIfCurrent(pipeline: AudioPipeline) {
+    val closed =
+        synchronized(audioLifecycleLock) {
+          (audioPipeline === pipeline).also {
+            if (it) {
+              nativeAudioOwnsPlayback = false
+              pipeline.close()
+              audioPipeline = null
+            }
+          }
+        }
+    if (closed) abandonPlaybackAudioFocus()
   }
 
   @PluginMethod
@@ -552,7 +537,7 @@ class StreamUdpPlugin : Plugin() {
    */
   @PluginMethod
   fun startAudioCapture(call: PluginCall) {
-    audioPipeline?.startCapture(call.getInt("seconds") ?: 10)
+    outputCapture.arm(call.getInt("seconds") ?: 10, audioPipeline?.stats()?.trackSampleRate ?: nativeOutputRate())
     call.resolve(JSObject())
   }
 
@@ -566,9 +551,8 @@ class StreamUdpPlugin : Plugin() {
    */
   @PluginMethod
   fun readAudioCapture(call: PluginCall) {
-    val pipeline = audioPipeline
-    val pcm = pipeline?.takeCapture() ?: ByteArray(0)
-    val rate = pipeline?.stats()?.trackSampleRate ?: 0
+    val pcm = outputCapture.take()
+    val rate = outputCapture.sampleRate
     val result = JSObject()
     result.put("bytes", pcm.size)
     result.put("sampleRate", rate)
@@ -613,23 +597,6 @@ class StreamUdpPlugin : Plugin() {
   fun setAudioAnalysis(call: PluginCall) {
     // Turning this on re-enables the per-packet bridge hop for audio (A/V-sync analyser only).
     audioAnalysisEnabled = call.getBoolean("enabled", false) == true
-    call.resolve(JSObject())
-  }
-
-  /**
-   * Set the on-device playback attenuation, 0.0 (silent) to 1.0 (unchanged).
-   *
-   * Applied on the player thread as samples leave the ring, not where they are produced: the sink
-   * keeps up to twenty seconds scheduled ahead, so attenuating at production means the listener
-   * hears the change twenty seconds after moving the slider. The device's media volume is never
-   * touched — this only scales the samples this app is about to play.
-   */
-  @PluginMethod
-  fun setAudioTrackGain(call: PluginCall) {
-    val gain = call.getDouble("gain") ?: 1.0
-    synchronized(audioLifecycleLock) {
-      audioPipeline?.setGain(gain)
-    }
     call.resolve(JSObject())
   }
 

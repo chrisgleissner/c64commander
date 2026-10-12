@@ -73,6 +73,7 @@ import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
 import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
+import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
 import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
@@ -94,6 +95,7 @@ import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngi
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
+import { autoAdvanceDelayMs, crossfadeLeadMs } from "@/pages/playFiles/crossfadeLead";
 import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
 import {
@@ -1220,6 +1222,9 @@ export function usePlaybackController({
           // On-device engine: render the SID here, no C64 (spec §12). The
           // songlength clock + auto-advance below run identically to the C64
           // path, so playlist/SID-Radio behaviour is engine-agnostic.
+          // The pre-render key names the renderer, so it waits for the probe: keyed before it answered,
+          // the first tune after a launch was pre-rendered under reSIDfp's key and never found again.
+          await probeSidRenderers();
           await getLocalSidPlayback().play(
             effectiveRequest.file!,
             // `songNr` is one-based everywhere it is stored, shown or looked up; the engine's
@@ -1337,7 +1342,7 @@ export function usePlaybackController({
         if (typeof resolvedDuration === "number") {
           autoAdvanceGuardRef.current = {
             trackInstanceId: nextTrackInstanceId,
-            dueAtMs: now + resolvedDuration,
+            dueAtMs: now + autoAdvanceDelayMs(resolvedDuration, 0, routeToLocal),
             autoFired: false,
             userCancelled: false,
           };
@@ -1739,7 +1744,8 @@ export function usePlaybackController({
         setPlayedMs(playedClockRef.current.current(now));
         const currentDurationMs = durationMsRef.current;
         if (autoAdvanceGuardRef.current && typeof currentDurationMs === "number") {
-          autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, currentDurationMs - currentElapsedMs);
+          autoAdvanceGuardRef.current.dueAtMs =
+            now + autoAdvanceDelayMs(currentDurationMs, currentElapsedMs, currentPlaybackIsLocalRef.current);
           autoAdvanceGuardRef.current.autoFired = false;
           autoAdvanceGuardRef.current.userCancelled = false;
           setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
@@ -1799,7 +1805,8 @@ export function usePlaybackController({
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
           if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
-            autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
+            autoAdvanceGuardRef.current.dueAtMs =
+              now + autoAdvanceDelayMs(durationMs, elapsedMs, currentPlaybackIsLocalRef.current);
             autoAdvanceGuardRef.current.autoFired = false;
             autoAdvanceGuardRef.current.userCancelled = false;
             setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
@@ -1857,7 +1864,8 @@ export function usePlaybackController({
               playedClockRef.current.resume(now);
               setPlayedMs(playedClockRef.current.current(now));
               if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
-                autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
+                autoAdvanceGuardRef.current.dueAtMs =
+                  now + autoAdvanceDelayMs(durationMs, elapsedMs, currentPlaybackIsLocalRef.current);
                 autoAdvanceGuardRef.current.autoFired = false;
                 autoAdvanceGuardRef.current.userCancelled = false;
                 setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
@@ -2161,6 +2169,19 @@ export function usePlaybackController({
         const activeIndex = currentIndexRef.current;
         const { nextIndex, reachableIndex } = resolveReachableNextIndex(activePlaylist, activeIndex);
         const now = Date.now();
+        // Advanced early to crossfade into a next tune that does not exist: let this one play to its end.
+        const durationNowMs = durationMsRef.current ?? 0;
+        const endsAtMs = (trackStartedAtRef.current ?? now) + durationNowMs;
+        if (
+          nextIndex === null &&
+          endsAtMs > now &&
+          crossfadeLeadMs(durationNowMs, currentPlaybackIsLocalRef.current) > 0
+        ) {
+          guard.autoFired = false;
+          guard.dueAtMs = endsAtMs;
+          setAutoAdvanceDueAtMs(endsAtMs);
+          return;
+        }
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
         const currentItem = activePlaylist[activeIndex];
@@ -2292,7 +2313,7 @@ export function usePlaybackController({
       const guard = autoAdvanceGuardRef.current;
       const durationMs = durationMsRef.current;
       if (!guard || !durationMs) return;
-      const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs);
+      const dueAtMs = Date.now() + autoAdvanceDelayMs(durationMs, positionMs, currentPlaybackIsLocalRef.current);
       guard.dueAtMs = dueAtMs;
       guard.autoFired = false;
       setAutoAdvanceDueAtMs(dueAtMs);

@@ -13,6 +13,7 @@ import { isRemotePlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
+import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import {
   noteTuneHandedOver,
   registerPageHandover,
@@ -90,10 +91,25 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
       try {
         const bytes = await readBytes();
         if (cancelled || !bytes) return;
+        // Keyed again once the renderer is known: before the probe answers, the key names reSIDfp.
+        await probeSidRenderers();
+        if (cancelled) return;
+        const knownKey = buildRenderedTuneKey(item.id, tuneIndex);
+        if (knownKey !== renderKey) {
+          rememberRemoteTune({
+            itemId: item.id,
+            label: item.label,
+            tuneIndex,
+            renderKey: knownKey,
+            startedAt,
+            durationMs,
+            readBytes,
+          });
+        }
         const engine = current.getLocalSidPlayback();
         // Loaded as well as rendered: a first load at the moment the device goes is 1.7 s of silence on a Pixel 4.
         engine.preload();
-        engine.prerender(renderKey, bytes, tuneIndex, durationMs / 1000);
+        engine.prerender(knownKey, bytes, tuneIndex, durationMs / 1000);
         let index: number | null = currentIndex;
         for (let ahead = 0; ahead < TRACKS_READ_AHEAD && index !== null && !cancelled; ahead += 1) {
           index = current.resolveNextIndex(index);

@@ -93,13 +93,14 @@ variants:
       # full padding, page dimmed behind it). Screen size decides the layout; the variant does not.
       default_display_profile: auto
       default_t9_input_enabled: true
-      # SIDLite, because the handset this edition targets is not expected to render reSIDfp in real time.
-      # A Pixel 4 spends 495 ms of one Cortex-A76 core per second of reSIDfp audio, about 2x real time.
-      # That handset's fastest cores are Cortex-A75 at 2.0 GHz on 12 nm, projected 1.6-3x slower: 0.7-1.3x
-      # real time, against the 1.15x the engine needs before it falls back on its own. Starting on reSIDfp
-      # there would mean a stall on the first tune and then SIDLite anyway. Listeners can still pick
-      # reSIDfp in Settings; measure on the handset (gate L1) and revisit once it can be tested.
-      default_sid_emulation_engine: sidlite
+      # libSidplayEZ ("Fast & accurate"), the default of every edition. main defaulted this edition to
+      # SIDLite because its handset is projected unable to render reSIDfp in real time (a Pixel 4 needs
+      # 495 ms of one Cortex-A76 core per second of reSIDfp audio, and that handset's fastest cores are
+      # projected 1.6-3x slower). libSidplayEZ renders the same notes natively at about 103 ms per second
+      # on a Pixel 4, about 10x real time, so the same projection leaves it 3-6x real time there; and on
+      # the Pixel it used a similar share of the CPU as SIDLite (10.8 s against 9.3 s for the same 50 s
+      # of audio), with the accuracy of reSIDfp. Where libSidplayEZ cannot run, the engine falls back on
+      # its own. Measure on the handset (gate L1) once it can be tested.
       # Keypad-first appliance UX: the compact handset this variant targets has no physical
       # navigation buttons, so hiding Android's on-screen ones there loses nothing. This default
       # only takes effect at the compact display profile — the same APK run on a phone or tablet

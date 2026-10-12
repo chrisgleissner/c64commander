@@ -181,14 +181,27 @@ const UNREACHABLE_DEVICE_PATTERN =
 // a fault, whichever of the many call sites reports it: it is still logged, as info.
 const isDeviceUnreachableWhileOffline = (details: unknown) => {
   if (!isNetworkKnownOffline() || !details || typeof details !== "object") return false;
-  const { error, description } = details as { error?: unknown; description?: unknown };
-  const errorText = typeof error === "string" ? error : (error as { message?: unknown } | null)?.message;
-  return [errorText, description].some((text) => typeof text === "string" && UNREACHABLE_DEVICE_PATTERN.test(text));
+  const { description } = details as { description?: unknown };
+  return [errorTextOf(details), description].some(
+    (text) => typeof text === "string" && UNREACHABLE_DEVICE_PATTERN.test(text),
+  );
+};
+
+// ECONNABORTED and ENETUNREACH come from the phone's own network going away mid-request, and arrive
+// seconds before the network watch reports it offline. Not a device fault, so a warning.
+const PHONE_NETWORK_LOST_PATTERN = /software caused connection abort|network is unreachable|econnaborted|enetunreach/i;
+
+const errorTextOf = (details: unknown) => {
+  if (!details || typeof details !== "object") return null;
+  const { error } = details as { error?: unknown };
+  const text = typeof error === "string" ? error : (error as { message?: unknown } | null)?.message;
+  return typeof text === "string" ? text : null;
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return;
   if ((level === "warn" || level === "error") && isDeviceUnreachableWhileOffline(details)) level = "info";
+  if (level === "error" && PHONE_NETWORK_LOST_PATTERN.test(errorTextOf(details) ?? "")) level = "warn";
   if (shouldSuppressDiagnosticsSideEffects() && level !== "error") return;
   if (level === "debug" && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {

@@ -12,6 +12,11 @@ import {
   tryFetchUltimateSidBlob,
 } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { CROSSFADE_START_MARGIN_MS } from "@/pages/playFiles/crossfadeLead";
+import {
+  __setSidplayEzAvailabilityForTests,
+  probeSidRenderers,
+} from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
@@ -118,6 +123,11 @@ vi.mock("@/lib/streams/avMirrorSession", () => ({
     setAudioWanted: vi.fn(() => Promise.resolve()),
   },
 }));
+
+vi.mock("@/lib/playback/sidRenderer/sidRendererAvailability", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/playback/sidRenderer/sidRendererAvailability")>();
+  return { ...actual, probeSidRenderers: vi.fn(actual.probeSidRenderers) };
+});
 
 vi.mock("@/lib/config/applyConfigFileReference", () => ({
   applyConfigFileReference: vi.fn(async () => undefined),
@@ -3315,6 +3325,20 @@ describe("usePlaybackController", () => {
       expect(controller.play.mock.calls[0][1]).toBe(2);
     });
 
+    it("keys the pre-render by the renderer the probe settles on, not the one assumed before it answers", async () => {
+      enableLocal();
+      __setSidplayEzAvailabilityForTests(null);
+      vi.mocked(probeSidRenderers).mockImplementationOnce(async () => __setSidplayEzAvailabilityForTests(true));
+      const controller = fakeController();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect((controller.play.mock.calls[0][3] as { prerenderKey: string }).prerenderKey).toMatch(/\/sidplayez(\/|$)/);
+      __setSidplayEzAvailabilityForTests(false);
+    });
+
     it("keys the pre-render by the tune the engine was asked to render", async () => {
       enableLocal();
       const controller = fakeController();
@@ -3599,6 +3623,82 @@ describe("usePlaybackController", () => {
 
       expect(controller.stop).toHaveBeenCalled();
       expect(setIsPlaying).toHaveBeenCalledWith(false);
+    });
+
+    // A tune played from its whole-tune pre-render has no audio past its songlength. Advancing at the
+    // songlength left nothing to fade: the first tune stopped dead and the next faded in from silence.
+    it("starts the next tune a crossfade and a margin before the songlength on the phone", async () => {
+      enableLocal();
+      localStorage.setItem("c64u_playback_crossfade_ms", "1500");
+      const controller = fakeController();
+      const autoAdvanceGuardRef = { current: null as { dueAtMs: number } | null };
+      const playlist = [sidItem(psid), sidItem(psid, 1, "sid-2")];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        autoAdvanceGuardRef,
+      } as any);
+      const before = Date.now();
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      const dueInMs = autoAdvanceGuardRef.current!.dueAtMs - before;
+      expect(dueInMs).toBeGreaterThan(120_000 - 1500 - CROSSFADE_START_MARGIN_MS - 1000);
+      expect(dueInMs).toBeLessThanOrEqual(120_000 - 1500 - CROSSFADE_START_MARGIN_MS + 1000);
+    });
+
+    it("starts the next tune the start margin before the songlength when the crossfade is off", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const autoAdvanceGuardRef = { current: null as { dueAtMs: number } | null };
+      const playlist = [sidItem(psid), sidItem(psid, 1, "sid-2")];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        autoAdvanceGuardRef,
+      } as any);
+      const before = Date.now();
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      const dueInMs = autoAdvanceGuardRef.current!.dueAtMs - before;
+      expect(dueInMs).toBeGreaterThan(120_000 - CROSSFADE_START_MARGIN_MS - 1000);
+      expect(dueInMs).toBeLessThanOrEqual(120_000 - CROSSFADE_START_MARGIN_MS + 1000);
+    });
+
+    it("lets the last tune play to its songlength when it was due early for a crossfade", async () => {
+      enableLocal();
+      localStorage.setItem("c64u_playback_crossfade_ms", "1500");
+      const controller = fakeController();
+      const trackInstanceIdRef = { current: 0 };
+      const trackStartedAtRef = { current: null as number | null };
+      const autoAdvanceGuardRef = { current: null as { dueAtMs: number; autoFired: boolean } | null };
+      const setIsPlaying = vi.fn();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        trackInstanceIdRef,
+        trackStartedAtRef,
+        autoAdvanceGuardRef,
+        setIsPlaying,
+        durationMs: 120_000,
+      } as any);
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      controller.stop.mockClear();
+      setIsPlaying.mockClear();
+
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+
+      expect(controller.stop).not.toHaveBeenCalled();
+      expect(setIsPlaying).not.toHaveBeenCalledWith(false);
+      expect(autoAdvanceGuardRef.current!.autoFired).toBe(false);
+      expect(autoAdvanceGuardRef.current!.dueAtMs).toBe(trackStartedAtRef.current! + 120_000);
     });
 
     it("falls a ROM-dependent RSID back to the C64", async () => {

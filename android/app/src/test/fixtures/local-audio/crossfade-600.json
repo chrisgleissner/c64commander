@@ -1,0 +1,410 @@
+{
+  "sampleRate": 48000,
+  "fadeMs": 600,
+  "transcript": [
+    {
+      "t": 0,
+      "method": "openSession",
+      "serial": 1,
+      "sampleRate": 48000,
+      "bufferMs": 15000,
+      "maxRingMs": 20000,
+      "trackBursts": 16,
+      "primeMs": 1200
+    },
+    {
+      "t": 0,
+      "method": "setGain",
+      "gain": 1
+    },
+    {
+      "t": 0,
+      "method": "setGain",
+      "gain": 1
+    },
+    {
+      "t": 0,
+      "method": "fadeIn",
+      "serial": 1,
+      "seq": 1,
+      "ms": 600
+    },
+    {
+      "t": 1,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 2,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 1,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 3,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 1,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 4,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 1,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 5,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 2,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 6,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 2,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 7,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 2,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 8,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 2,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 9,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 10,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 11,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 1652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 12,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 1653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 13,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 2652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 14,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 2653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 15,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 3652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 16,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 3653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 17,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 4652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 18,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 4653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 19,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 5652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 20,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 5653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 21,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 6652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 22,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 6653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 23,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 7652,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 24,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 7653,
+      "method": "enqueuePcm",
+      "serial": 1,
+      "seq": 25,
+      "value": 8000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "beginTransition",
+      "serial": 1,
+      "seq": 26,
+      "seconds": 4.6,
+      "rampOut": false
+    },
+    {
+      "t": 8000,
+      "method": "openSession",
+      "serial": 2,
+      "sampleRate": 48000,
+      "bufferMs": 15000,
+      "maxRingMs": 20000,
+      "trackBursts": 16,
+      "primeMs": 1200
+    },
+    {
+      "t": 8000,
+      "method": "takeTail",
+      "serial": 1,
+      "seq": 27,
+      "tailId": 1,
+      "maxSeconds": 4.6
+    },
+    {
+      "t": 8000,
+      "method": "release",
+      "serial": 1,
+      "seq": 28
+    },
+    {
+      "t": 8000,
+      "method": "setGain",
+      "gain": 1
+    },
+    {
+      "t": 8000,
+      "method": "setGain",
+      "gain": 1
+    },
+    {
+      "t": 8000,
+      "method": "fadeIn",
+      "serial": 2,
+      "seq": 1,
+      "ms": 600
+    },
+    {
+      "t": 8000,
+      "method": "adoptTail",
+      "serial": 2,
+      "seq": 2,
+      "tailId": 1,
+      "seconds": 0.6
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 3,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 4,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 5,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 6,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 7,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 8,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 9,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8000,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 10,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 8650,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 11,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 9150,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 12,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 9650,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 13,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 10200,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 14,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 10200,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 15,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 10700,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 16,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 11650,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 17,
+      "value": 12000,
+      "frames": 24000
+    },
+    {
+      "t": 12200,
+      "method": "enqueuePcm",
+      "serial": 2,
+      "seq": 18,
+      "value": 12000,
+      "frames": 24000
+    }
+  ]
+}

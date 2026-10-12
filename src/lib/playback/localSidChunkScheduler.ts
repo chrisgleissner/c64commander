@@ -20,6 +20,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { isNativePcm, payloadFrames, type PcmPayload } from "./sidRenderer/pcmPayload";
 
 /** A minimal audio buffer — the channel-planar float sink. */
 export interface AudioScheduleBuffer {
@@ -43,6 +44,15 @@ export interface AudioScheduleSink {
   createBuffer(channels: number, frames: number, sampleRate: number): AudioScheduleBuffer;
   /** Create a source bound to `buffer`, connected to the destination. */
   createSource(buffer: AudioScheduleBuffer): AudioScheduleSource;
+  /**
+   * Create a source straight from interleaved S16 PCM, skipping the float buffer.
+   *
+   * The native sink takes this path: its samples go to the native feed as S16, so converting them
+   * to planar floats and back would be two passes over every sample for nothing. It is also the only
+   * path for PCM that lives natively (libSidplayEZ), which a float buffer cannot hold. A sink without
+   * it (Web Audio) gets the float buffer.
+   */
+  createPcmSource?(pcm: PcmPayload, channels: number): AudioScheduleSource;
 }
 
 /** Int16 full-scale — divisor to normalise to Web Audio's [-1, 1] floats. */
@@ -119,9 +129,9 @@ export class LocalSidChunkScheduler {
    * Schedule one interleaved Int16 chunk gaplessly after the previous one.
    * Returns the absolute context time the chunk is scheduled to finish.
    */
-  schedule(pcm: Int16Array, channels: number): number {
+  schedule(pcm: PcmPayload, channels: number): number {
     const chans = Math.max(1, channels);
-    const frames = Math.floor(pcm.length / chans);
+    const frames = payloadFrames(pcm, chans);
     if (frames <= 0) return this.nextStartTime;
 
     const { currentTime, sampleRate } = this.sink;
@@ -130,22 +140,13 @@ export class LocalSidChunkScheduler {
       this.firstStartTime = this.nextStartTime;
       this.started = true;
     } else if (this.nextStartTime < currentTime) {
-      // The previously scheduled audio already ran out before this chunk was
-      // ready: an audible gap. Count it and resync to "now".
       this.underruns += 1;
       this.nextStartTime = currentTime;
     }
 
-    const buffer = this.sink.createBuffer(chans, frames, sampleRate);
-    // Deinterleave Int16 → planar Float32 in [-1, 1).
-    for (let c = 0; c < chans; c += 1) {
-      const out = buffer.getChannelData(c);
-      for (let f = 0; f < frames; f += 1) {
-        out[f] = pcm[f * chans + c] / INT16_SCALE;
-      }
-    }
-
-    const source = this.sink.createSource(buffer);
+    const source = this.sink.createPcmSource
+      ? this.sink.createPcmSource(pcm, chans)
+      : this.floatSource(pcm, chans, frames);
     const startAt = this.nextStartTime;
     source.onended = () => {
       this.live.delete(source);
@@ -160,6 +161,20 @@ export class LocalSidChunkScheduler {
     this.chunksScheduled += 1;
     this.chunksSinceReset += 1;
     return this.nextStartTime;
+  }
+
+  private floatSource(pcm: PcmPayload, chans: number, frames: number): AudioScheduleSource {
+    if (isNativePcm(pcm)) {
+      throw new Error("PCM held natively can only be scheduled on the native audio sink");
+    }
+    const buffer = this.sink.createBuffer(chans, frames, this.sink.sampleRate);
+    for (let c = 0; c < chans; c += 1) {
+      const out = buffer.getChannelData(c);
+      for (let f = 0; f < frames; f += 1) {
+        out[f] = pcm[f * chans + c] / INT16_SCALE;
+      }
+    }
+    return this.sink.createSource(buffer);
   }
 
   /** Seconds of audio scheduled beyond the current clock (drives prefetch). */

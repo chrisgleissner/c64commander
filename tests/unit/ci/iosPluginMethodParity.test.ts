@@ -105,7 +105,7 @@ export const KNOWN_IOS_METHOD_GAPS = new Map<string, Map<string, string>>([
 ]);
 
 /* TypeScript contracts with no Swift plugin at all. These are documented in the parity matrix. */
-export const ANDROID_ONLY_PLUGINS = new Set(["StreamUdp", "DeviceRotation", "SafeArea", "LibraryInstall"]);
+export const ANDROID_ONLY_PLUGINS = new Set(["StreamUdp", "DeviceRotation", "SafeArea", "LibraryInstall", "SidAudio"]);
 
 export const findParityGaps = (
   swift: Map<string, SwiftPlugin>,

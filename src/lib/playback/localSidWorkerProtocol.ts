@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { SidRendererId } from "./sidRenderer/sidRendererAvailability";
+import type { PcmPayload } from "./sidRenderer/pcmPayload";
+
 /**
  * Typed message contract for the Local SID engine Web Worker (spec §12.2, Track
  * B / LE1). The WASM synth (`libsidplayfp-wasm`'s `SidAudioEngine`) runs
@@ -32,14 +35,24 @@ export type EngineSidModel = "MOS6581" | "MOS8580";
 export const toEngineSidModel = (model: "6581" | "8580"): EngineSidModel => (model === "6581" ? "MOS6581" : "MOS8580");
 
 /**
- * Which SID emulation renders a tune: `residfp` (accurate, the default) or `sidlite` (much cheaper).
- * They are separate WASM artifacts shipped side by side.
+ * Which renderer renders a tune: `sidplayez` (libSidplayEZ, native, Android), `residfp` (reSIDfp in
+ * WASM) or `sidlite` (SIDLite in WASM, much cheaper). The two WASM ones are separate artifacts
+ * loaded by the same worker; libSidplayEZ is spoken to through the same messages by
+ * `NativeRendererChannel`. See `sidRenderer/sidRendererContract.ts`.
  */
-export type LocalSidEmulation = "residfp" | "sidlite";
+export type LocalSidEmulation = SidRendererId;
 
 /** main → worker: instantiate the WASM module (idempotent). */
 export interface LocalSidLoadMessage {
   type: "load";
+  /**
+   * Samples of free space to leave in front of every live chunk's PCM, in the same buffer.
+   *
+   * On Android the chunk travels to the native audio feed as one binary message whose header goes
+   * in front of the samples. Reserving the space where the chunk is produced, off the main thread,
+   * means the main thread writes a few header bytes in place instead of copying every chunk.
+   */
+  pcmHeadroomSamples?: number;
 }
 
 /** main → worker: open a SID tune and select a song, ready to render. */
@@ -206,7 +219,8 @@ export interface LocalSidPrerenderMessage {
 export interface LocalSidPrerenderChunkMessage {
   type: "prerender-chunk";
   id: number;
-  pcm: Int16Array;
+  /** This slice: the samples, or for a native renderer the slice's frame range in its buffer. */
+  pcm: PcmPayload;
   sampleRate: number;
   channels: number;
   /** Seconds rendered so far, this slice included. */
@@ -232,8 +246,8 @@ export interface LocalSidPrerenderedMessage {
 export interface LocalSidChunkMessage {
   type: "chunk";
   id: number;
-  /** Interleaved signed 16-bit PCM (ownership transferred back). */
-  pcm: Int16Array;
+  /** Interleaved signed 16-bit PCM (ownership transferred back), or a native buffer reference. */
+  pcm: PcmPayload;
   /** Total interleaved sample count (`frames * channels`). */
   samples: number;
   /** Wall-clock ms spent rendering this chunk (`renderMsPerSec` telemetry). */

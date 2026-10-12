@@ -39,6 +39,7 @@ const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
 const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
 const SID_EMULATION_ENGINE_KEY = "c64u_sid_emulation_engine";
+const SID_RENDERER_KEY = "c64u_sid_renderer";
 const LOCAL_SID_MODEL_KEY = "c64u_local_sid_model";
 const LOCAL_SID_MODEL_FROM_DEVICE_KEY = "c64u_local_sid_model_from_device";
 const LEARNED_DEVICE_SID_MODEL_KEY = "c64u_learned_device_sid_model";
@@ -608,31 +609,35 @@ export const loadPlaybackEngine = (): PlaybackEngine =>
 export const savePlaybackEngine = (engine: PlaybackEngine) => writeString(PLAYBACK_ENGINE_KEY, engine);
 
 /**
- * Which SID emulation the on-device engine uses (Track B).
+ * Which SID renderer the on-device engine uses.
  *
- * The vendored WASM ships both, side by side: `reSIDfp` is libsidplayfp's
- * cycle-accurate analogue model, `SIDLite` a lightweight approximation derived
- * from cRSID. They are not close substitutes — measured on a Pixel 4 against a
- * real C64 Ultimate (docs/plans/sid-station/AUDIO-FIDELITY-TEST.md):
+ * Three exist, and they differ in cost more than in sound:
  *
- *   reSIDfp   envelope correlation 0.55 vs hardware, ~715 ms/sec p99 to render
- *   SIDLite   audibly not a C64 (DC offset, wrong timbre), ~69 ms/sec
+ *   sidplayez  libSidplayEZ, native on Android. reSIDfp-based; about a third of the CPU of the
+ *              WASM reSIDfp for the same tunes (tools/sid-engines, docs/internals/sid-playback-
+ *              architecture.md). Shown as "Fast & accurate".
+ *   residfp    libsidplayfp's reSIDfp in WASM, on every platform. Shown as "Accurate".
+ *   sidlite    libsidplayfp's SIDLite in WASM. Much cheaper, audibly not a C64. Shown as "Light".
  *
- * So this is a fidelity-for-CPU dial worth ~5.5x. The default is per-variant —
- * see DEFAULT_SID_EMULATION_ENGINE.
+ * This is the listener's preference. Whether it can be honoured on this device is decided in the
+ * playback layer (`playbackSidEmulation`), which falls back deterministically when it cannot.
  */
-export type SidEmulationEngine = "residfp" | "sidlite";
+export type SidEmulationEngine = "sidplayez" | "residfp" | "sidlite";
+
+const isSidEmulationEngine = (value: unknown): value is SidEmulationEngine =>
+  value === "sidplayez" || value === "residfp" || value === "sidlite";
 
 /**
- * Variant-driven: the general edition defaults to reSIDfp, and an edition whose target hardware is
- * projected unable to render reSIDfp in real time defaults to SIDLite (`default_sid_emulation_engine`
- * in variants.yaml, which records the reasoning).
+ * Variant-driven. Every edition prefers libSidplayEZ: where it does not exist (web, iOS) the
+ * playback layer uses reSIDfp, which renders the same notes. An edition whose target hardware cannot
+ * render even libSidplayEZ in real time names `sidlite` (`default_sid_emulation_engine` in
+ * variants.yaml, which records the reasoning).
  */
-export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =
-  // Compared as a plain string: the generated variant narrows this to whichever
-  // literal the ACTIVE variant declares, so a direct comparison against the other
-  // value is a type error whenever every variant happens to agree.
-  (variant.runtime.defaultSidEmulationEngine as string) === "sidlite" ? "sidlite" : "residfp";
+const VARIANT_SID_EMULATION_ENGINE: unknown = variant.runtime.defaultSidEmulationEngine;
+
+export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine = isSidEmulationEngine(VARIANT_SID_EMULATION_ENGINE)
+  ? VARIANT_SID_EMULATION_ENGINE
+  : "sidplayez";
 
 /**
  * Read the C64's KERNAL and BASIC from the machine you are connected to, without being asked.
@@ -717,10 +722,22 @@ export const saveLocalEngineAutoRoms = (enabled: boolean) => writeBoolean(LOCAL_
  */
 export const effectiveSidEmulationEngine = (_romsAvailable: boolean): SidEmulationEngine => loadSidEmulationEngine();
 
-export const loadSidEmulationEngine = (): SidEmulationEngine =>
-  readRawString(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;
+/**
+ * The stored preference.
+ *
+ * Kept under a new key. The previous one held a two-way fidelity choice, "residfp" for accurate and
+ * "sidlite" for light, and "residfp" now names one specific accurate renderer. A listener who chose
+ * accurate before meant the accurate class, not that library, so the old value carries over by
+ * meaning: "sidlite" stays light, and "residfp" (or nothing) takes the default, which is the
+ * fastest accurate renderer this device has.
+ */
+export const loadSidEmulationEngine = (): SidEmulationEngine => {
+  const stored = readRawString(SID_RENDERER_KEY);
+  if (isSidEmulationEngine(stored)) return stored;
+  return readRawString(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;
+};
 
-export const saveSidEmulationEngine = (engine: SidEmulationEngine) => writeString(SID_EMULATION_ENGINE_KEY, engine);
+export const saveSidEmulationEngine = (engine: SidEmulationEngine) => writeString(SID_RENDERER_KEY, engine);
 
 /**
  * A SID revision, as the two chips are universally named. The engine models exactly these two.

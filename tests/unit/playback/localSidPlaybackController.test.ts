@@ -35,6 +35,7 @@ const fakeEngine = (overrides: Partial<Record<keyof LocalSidEngine, unknown>> = 
     getStats: vi.fn(() => STATS),
     dispose: vi.fn(),
     load: vi.fn(async () => {}),
+    preload: vi.fn(async () => {}),
     ...overrides,
   };
   return engine as unknown as LocalSidEngine & typeof engine;
@@ -50,22 +51,21 @@ describe("LocalSidPlaybackController", () => {
     expect(LocalSidPlaybackController.isSupported()).toBe(false);
   });
 
-  it("lazily creates the engine only on first play", () => {
+  it("lazily creates the engine only on first play, and only once", async () => {
     const factory = vi.fn(() => fakeEngine());
     const controller = new LocalSidPlaybackController(factory);
     expect(factory).not.toHaveBeenCalled();
-    void controller.play(byteSource(), 0);
+    await Promise.all([controller.play(byteSource(), 0), controller.play(byteSource(), 0)]);
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
   it("loads the engine ahead of a play, and a failed load does not reject into the caller", async () => {
-    const engine = fakeEngine({ load: vi.fn(async () => Promise.reject(new Error("module load timed out"))) });
+    const engine = fakeEngine({ preload: vi.fn(async () => Promise.reject(new Error("module load timed out"))) });
     const controller = new LocalSidPlaybackController(() => engine);
 
     expect(() => controller.preload()).not.toThrow();
-    await Promise.resolve();
 
-    expect(engine.load).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(engine.preload).toHaveBeenCalledTimes(1));
     expect(engine.play).not.toHaveBeenCalled();
   });
 
@@ -73,7 +73,7 @@ describe("LocalSidPlaybackController", () => {
     const { getLogs } = await import("@/lib/logging");
     localStorage.setItem("c64u_debug_logging_enabled", "1");
     try {
-      const engine = fakeEngine({ load: vi.fn(() => Promise.reject("worker refused")) });
+      const engine = fakeEngine({ preload: vi.fn(() => Promise.reject("worker refused")) });
       new LocalSidPlaybackController(() => engine).preload();
 
       await vi.waitFor(() =>
@@ -143,5 +143,94 @@ describe("LocalSidPlaybackController", () => {
     // After dispose the next play builds a fresh engine.
     await controller.play(byteSource(), 0);
     expect(engine.play).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("LocalSidPlaybackController seek announcements", () => {
+  const playing = async () => {
+    let accepted = false;
+    const engine = fakeEngine({
+      seekTo: vi.fn(() => {
+        accepted = true;
+        return new Promise<void>(() => undefined);
+      }),
+    });
+    const controller = new LocalSidPlaybackController(() => engine);
+    await controller.play(byteSource(), 0);
+    return { controller, engine, isAccepted: () => accepted };
+  };
+
+  it("announces a seek once the engine has accepted it and before it lands", async () => {
+    const { controller, isAccepted } = await playing();
+    const seen: boolean[] = [];
+    controller.onSeek(() => seen.push(isAccepted()));
+    void controller.seekTo(90);
+    void controller.seekBy(-5);
+    expect(seen).toEqual([true, true]);
+  });
+
+  it("stops announcing to a listener that unsubscribed", async () => {
+    const { controller } = await playing();
+    const listener = vi.fn();
+    const unsubscribe = controller.onSeek(listener);
+    unsubscribe();
+    void controller.seekTo(10);
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("LocalSidPlaybackController engine loading", () => {
+  it("applies a level and mute set before the engine existed once it loads", async () => {
+    const engine = fakeEngine({ setVolume: vi.fn(), setMuted: vi.fn() });
+    const controller = new LocalSidPlaybackController(async () => engine);
+    controller.setVolume(0.25);
+    controller.setMuted(true);
+    expect(controller.volume()).toBe(0.25);
+    expect(controller.muted()).toBe(true);
+    await controller.play(byteSource(), 0);
+    expect(engine.setVolume).toHaveBeenCalledWith(0.25);
+    expect(engine.setMuted).toHaveBeenCalledWith(true);
+  });
+
+  it("queues a pre-render and a lead-in asked for before the engine has loaded", async () => {
+    const engine = fakeEngine({ prerender: vi.fn(), warmLeadIn: vi.fn() });
+    const controller = new LocalSidPlaybackController(async () => engine);
+    controller.prerender("a", new ArrayBuffer(4), 0, 30);
+    controller.warmLeadIn("b", new ArrayBuffer(4), 0, 6);
+    await vi.waitFor(() => expect(engine.warmLeadIn).toHaveBeenCalledWith("b", expect.any(ArrayBuffer), 0, 6));
+    expect(engine.prerender).toHaveBeenCalledWith("a", expect.any(ArrayBuffer), 0, 30);
+  });
+
+  it("rejects a play whose engine failed to load, logs a queued request, and tries again next time", async () => {
+    const { getLogs } = await import("@/lib/logging");
+    const engine = fakeEngine();
+    const factory = vi
+      .fn<() => Promise<typeof engine>>()
+      .mockRejectedValueOnce(new Error("chunk missing"))
+      .mockRejectedValueOnce("offline")
+      .mockResolvedValue(engine);
+    const controller = new LocalSidPlaybackController(factory);
+    await expect(controller.play(byteSource(), 0)).rejects.toThrow(
+      "Loading the local SID engine failed: chunk missing",
+    );
+    controller.prerender("a", new ArrayBuffer(4), 0, 30);
+    await vi.waitFor(() =>
+      expect(getLogs().some((entry) => entry.message === "Local SID pre-render skipped: the engine did not load")).toBe(
+        true,
+      ),
+    );
+    await expect(controller.play(byteSource(), 0)).resolves.toBeDefined();
+  });
+
+  it("disposes an engine that finishes loading after the player was disposed", async () => {
+    const engine = fakeEngine();
+    let finish: (value: typeof engine) => void = () => undefined;
+    const controller = new LocalSidPlaybackController(() => new Promise((resolve) => (finish = resolve)));
+    const playing = controller.play(byteSource(), 0);
+    await Promise.resolve();
+    controller.dispose();
+    finish(engine);
+    await expect(playing).rejects.toThrow(/disposed while its engine was loading/);
+    expect(engine.dispose).toHaveBeenCalled();
   });
 });

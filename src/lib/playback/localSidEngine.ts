@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
+import { LocalSidChunkScheduler } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { toEngineSidModel } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
@@ -16,13 +16,42 @@ import {
   resolveLocalSidModel,
   type SidEmulationEngine,
 } from "@/lib/config/appSettings";
-import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   createNativeLocalSidSink,
+  defaultNativeLocalAudioBackend,
+  NATIVE_PCM_HEADER_SAMPLES,
   nativeLocalAudioAvailable,
-  type NativeLocalAudioBackend,
 } from "./localSidNativeSink";
-import { recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
+import {
+  recordRenderMeasurement,
+  renderRatio,
+  setActiveRenderThroughputRenderer,
+  startupBufferSeconds,
+} from "./renderThroughput";
+import {
+  defaultRendererChannelFactory,
+  LocalSidUnavailableError,
+  type RendererChannelFactory,
+  type RendererRole,
+} from "./sidRenderer/rendererFactory";
+import {
+  isSidRendererAvailable,
+  probeSidRenderers,
+  settleSidRendererAvailabilitySync,
+  sidplayEzUnavailableReason,
+  sidRendererRuntime,
+  type SidRendererId,
+} from "./sidRenderer/sidRendererAvailability";
+import {
+  isNativeCachedPcm,
+  isNativePcm,
+  NativePcmBuffer,
+  payloadSamples,
+  type CachedPcm,
+  type PcmPayload,
+} from "./sidRenderer/pcmPayload";
+import { releaseNativePcm } from "./sidRenderer/nativePcmRelease";
+import { PcmAccumulator } from "./sidRenderer/pcmAccumulator";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
@@ -30,6 +59,7 @@ import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/loc
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
 import { traceLocalSid } from "./localSidTrace";
+import { localSidPlaybackSupported } from "./localSidSupport";
 
 /**
  * How far beyond the fade the outgoing tune is kept available, in seconds.
@@ -39,6 +69,10 @@ import { traceLocalSid } from "./localSidTrace";
  * transition; too large only costs a little memory.
  */
 const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
+/** How long a track change with the crossfade off takes to silence the outgoing tune: a declick, not a fade. */
+export const CUT_DECLICK_MS = 10;
+/** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
+const CUT_CLOSE_MARGIN_MS = 30;
 import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
@@ -68,79 +102,13 @@ export interface LocalSidWorkerLike {
 
 export type LocalSidWorkerFactory = () => LocalSidWorkerLike;
 
-/** An audio sink instance plus its teardown. */
-export interface LocalSidAudioSink {
-  sink: AudioScheduleSink;
-
-  /**
-   * Cumulative underruns the OUTPUT itself reported, where the sink can see them.
-   *
-   * The chunk scheduler counts a chunk handed over after the previous one finished, which is the
-   * right measure for the Web Audio sink because there the schedule *is* the output. The native sink
-   * writes into a ring the speaker drains on its own thread, so the ring can run dry while every
-   * chunk was handed over on time — the scheduler sees nothing and the listener hears a gap. That is
-   * the shape of defect this repo has already been caught by once (AGENTS.md, "Diagnostics that
-   * cannot report the fault"), so the pinned `audioUnderruns` budget takes the worse of the two.
-   */
-  audioUnderruns?: () => number;
-  /** Resume a suspended context (browsers start suspended until a gesture). */
-  resume?: () => Promise<void> | void;
-  /** Suspend the audio clock, freezing the schedule where it stands. */
-  suspend?: () => Promise<void> | void;
-  /** Ramp output down over `ms`, for an opt-in crossfade. */
-  fadeOut?: (ms: number) => void;
-  /**
-   * Ramp output up over `ms`, for an opt-in crossfade.
-   *
-   * `toGain` is where the ramp ENDS. It is not optional in practice: ramping to
-   * a hardcoded 1 wiped whatever level the listener had chosen, so the volume
-   * control worked until the next crossfade and then jumped back to full.
-   */
-  fadeIn?: (ms: number, toGain?: number) => void;
-  /** Set output level, 0..1. Used by the Play page's volume control. */
-  setGain?: (value: number) => void;
-  /**
-   * Whether the speaker has been handed a flat signal for long enough to be a fault.
-   *
-   * The invariant is "no silent playback unless the listener asked for silence". Every other
-   * counter here describes supply and demand — frames written, buffer depth, underruns — and all of
-   * them look perfectly healthy while a tune renders a flat line. See `SilenceDetector`.
-   */
-  isSilentFault?: () => boolean;
-  /** Judge the next stretch afresh: a new tune, a resume, or a recovery just attempted. */
-  resetSilence?: () => void;
-  /**
-   * Hand over audio rendered but not yet played, so the next tune can fade it out underneath itself.
-   *
-   * A crossfade needs both tunes sounding at once and there is only one output. Two sinks writing to
-   * it interleave rather than mix, and a sink's gain ramp is applied when a slice is converted, so it
-   * cannot reach audio already converted. The incoming sink therefore does the mixing.
-   */
-  takeCrossfadeTail?: (seconds: number) => Int16Array[];
-  /**
-   * Start a track change: recover this tune's unplayed audio and keep playing it from JS.
-   *
-   * `seconds` is the whole budget — long enough to cover opening the next tune and then to fade
-   * under it — because this is the only audio there is until the next tune renders a sample.
-   */
-  beginCrossfadeTailPlayout?: (seconds: number) => void;
-  /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
-  releaseForHandover?: () => void;
-  /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
-  adoptCrossfadeTail?: (slices: Int16Array[], seconds: number) => void;
-  /**
-   * Throw away audio already handed to the output, for a seek.
-   *
-   * Web Audio needs nothing here — stopping the scheduled sources is enough. A native sink does:
-   * it holds seconds of audio the speaker has not reached yet, so without this a seek would go on
-   * playing the old position for as long as that buffer is deep. That is what broke fast-forward,
-   * rewind and the progress bar when on-device playback moved to the native path.
-   */
-  flush?: () => void;
-  close: () => void;
-}
-
-export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink;
+import {
+  webAudioSinkFactory,
+  type CrossfadeTail,
+  type LocalSidAudioSink,
+  type LocalSidAudioSinkFactory,
+} from "./localSidAudioSink";
+export type { CrossfadeTail, LocalSidAudioSink, LocalSidAudioSinkFactory } from "./localSidAudioSink";
 
 /**
  * How long to wait for the worker to answer a module load or a tune open.
@@ -254,130 +222,13 @@ const releaseAudioOwnership = (engine: object): void => {
 /** Test seam: is on-device audio currently owned by anyone? */
 export const __hasLocalSidAudioOwner = (): boolean => phoneAudioOwner() !== null;
 
-export class LocalSidUnavailableError extends Error {
-  constructor(message = "Local SID engine requires Web Workers and Web Audio") {
-    super(message);
-    this.name = "LocalSidUnavailableError";
-  }
-}
-
-const defaultWorkerFactory: LocalSidWorkerFactory = () => {
-  if (typeof Worker === "undefined") throw new LocalSidUnavailableError();
-  // Vite compiles this into a module-worker chunk for both the web build and
-  // the Capacitor WebView.
-  return new Worker(new URL("./localSid.worker.ts", import.meta.url), { type: "module" });
-};
-
-/**
- * The native track, when this platform has one.
- *
- * Preferred over Web Audio because the two do not sound the same. Web Audio inside the WebView lands
- * on a direct output that bypasses the mixer's effect chain — on a Pixel 4 that chain is the
- * speaker's own EQ, and without it on-device playback measured 7.5 dB quieter with a thirtieth of the
- * energy in 120-300 Hz, against the identical PCM sent through the mirror's native track. See
- * `localSidNativeSink` for the measurements. Null on the web build and on iOS, where the plugin does
- * not exist ([[streamudp-android-only]]): those fall back to Web Audio, which is all they have.
- */
-const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
-  // The same predicate the buffer sizes are chosen from, so the two can never disagree about which
-  // sink this platform is going to get.
-  if (!nativeLocalAudioAvailable()) return null;
-  return StreamUdp;
-};
-
-/**
- * A gain ramp that could not be scheduled has already been replaced by a direct assignment, so the
- * listener still hears the right level — but the CLICK the ramp existed to avoid is now audible,
- * and a fade that silently became a step is exactly the kind of thing that gets blamed on the SID
- * engine. Logged at debug: it is recoverable, and on a busy AudioContext it can repeat.
- */
-const reportGainSchedulingFailure = (operation: string, error: unknown): void => {
-  addLog("debug", "Local SID audio: gain ramp could not be scheduled, set directly instead", {
-    service: "local-sid",
-    operation,
-    error: (error as Error)?.message ?? String(error),
-  });
-};
-
-const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
-  const Ctor =
-    typeof AudioContext !== "undefined"
-      ? AudioContext
-      : (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Ctor) throw new LocalSidUnavailableError("No AudioContext in this environment");
-  const context = new Ctor({ sampleRate });
-  // Everything plays through one gain node so a switchover can fade the whole
-  // output, rather than each buffer source having to be faded individually.
-  const master = context.createGain();
-  master.gain.value = 1;
-  master.connect(context.destination);
-  const sink: AudioScheduleSink = {
-    get currentTime() {
-      return context.currentTime;
-    },
-    get sampleRate() {
-      return context.sampleRate;
-    },
-    createBuffer: (channels, frames, rate) => context.createBuffer(channels, frames, rate),
-    createSource: (buffer) => {
-      const source = context.createBufferSource();
-      source.buffer = buffer as AudioBuffer;
-      source.connect(master);
-      // AudioBufferSourceNode satisfies the narrow AudioScheduleSource slice we
-      // use (start/stop/onended); the DOM onended signature differs only in its
-      // (ignored) event arg.
-      return source as unknown as AudioScheduleSource;
-    },
-  };
-  return {
-    sink,
-    resume: () => context.resume(),
-    suspend: () => context.suspend(),
-    fadeOut: (ms: number) => {
-      // Ramp to (near) zero, then let the caller close once the ramp has run.
-      // linearRampToValueAtTime needs a starting event to ramp from, hence the
-      // explicit setValueAtTime at "now".
-      const now = context.currentTime;
-      try {
-        master.gain.cancelScheduledValues(now);
-        master.gain.setValueAtTime(master.gain.value, now);
-        master.gain.linearRampToValueAtTime(0.0001, now + ms / 1000);
-      } catch (error) {
-        reportGainSchedulingFailure("fadeOut", error);
-        master.gain.value = 0;
-      }
-    },
-    setGain: (value: number) => {
-      const clamped = Math.min(1, Math.max(0, value));
-      try {
-        master.gain.cancelScheduledValues(context.currentTime);
-        // A short ramp rather than a step: an abrupt gain change on a running
-        // buffer is an audible click.
-        master.gain.setValueAtTime(master.gain.value, context.currentTime);
-        master.gain.linearRampToValueAtTime(clamped, context.currentTime + 0.02);
-      } catch (error) {
-        reportGainSchedulingFailure("setGain", error);
-        master.gain.value = clamped;
-      }
-    },
-    fadeIn: (ms: number, toGain = 1) => {
-      const now = context.currentTime;
-      const target = Math.min(1, Math.max(0.0001, toGain));
-      try {
-        master.gain.cancelScheduledValues(now);
-        master.gain.setValueAtTime(0.0001, now);
-        master.gain.linearRampToValueAtTime(target, now + ms / 1000);
-      } catch (error) {
-        reportGainSchedulingFailure("fadeIn", error);
-        master.gain.value = target;
-      }
-    },
-    close: () => void context.close(),
-  };
-};
+export { LocalSidUnavailableError };
 
 export interface LocalSidEngineOptions {
+  /** One factory for every renderer and role; tests use it to inject a fake worker. */
   workerFactory?: LocalSidWorkerFactory;
+  /** Builds the channel for a renderer and role; defaults to a Web Worker or a native renderer. */
+  rendererFactory?: RendererChannelFactory;
   audioSinkFactory?: LocalSidAudioSinkFactory;
   /** Seconds of audio rendered per chunk (D6 chunked pre-render). */
   chunkSeconds?: number;
@@ -385,6 +236,8 @@ export interface LocalSidEngineOptions {
   targetBufferSeconds?: number;
   /** Requested output sample rate (engine may override). */
   sampleRate?: number;
+  /** Render with this one whatever Settings says, with no fallback: the device probe's choice. */
+  renderer?: SidEmulationEngine;
 }
 
 export interface LocalSidPlayCallbacks {
@@ -455,12 +308,15 @@ interface OpenPending {
  * path the A/V mirror uses, which is the whole point: "Listen on: this device" and "Both" should
  * reach the speaker through identical processing.
  */
-const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =>
-  createNativeLocalSidSink(sampleRate, nativeAudioBackend()) ?? webAudioSinkFactory(sampleRate);
+const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number, renderer?: SidRendererId) =>
+  createNativeLocalSidSink(
+    sampleRate,
+    nativeLocalAudioAvailable() ? defaultNativeLocalAudioBackend() : null,
+    renderer,
+  ) ?? webAudioSinkFactory(sampleRate);
 
 const RENDER_RATE_SAMPLES = 4096;
 
-const EMPTY_PCM = new Int16Array(0);
 const DEFAULT_CHUNK_SECONDS = 0.5;
 /**
  * How far ahead of the audio clock to keep the schedule.
@@ -506,13 +362,23 @@ const DEFAULT_SAMPLE_RATE = 48000;
 const MAX_IN_FLIGHT_RENDERS = Math.max(4, Math.ceil(DEFAULT_TARGET_BUFFER_SECONDS / DEFAULT_CHUNK_SECONDS / 5));
 
 export class LocalSidEngine {
-  private readonly workerFactory: LocalSidWorkerFactory;
+  private readonly channelFactory: RendererChannelFactory;
   private readonly audioSinkFactory: LocalSidAudioSinkFactory;
+  private readonly fixedRenderer: SidEmulationEngine | null;
   private readonly chunkSeconds: number;
   private readonly targetBufferSeconds: number;
   private readonly requestedSampleRate: number;
 
   private worker: LocalSidWorkerLike | null = null;
+  /**
+   * Which runtime each channel speaks to. The WASM renderers share a worker, so moving between
+   * reSIDfp and SIDLite keeps it; moving to or from libSidplayEZ needs a different channel.
+   */
+  private workerRuntime: "native" | "wasm" | null = null;
+  private prerenderRuntime: "native" | "wasm" | null = null;
+  private warmRuntime: "native" | "wasm" | null = null;
+  /** The renderer of the tune being opened or played, for throughput learning and channel choice. */
+  private renderer: SidRendererId = "residfp";
   private announcedSlowDeviceFallback = false;
   private loadPending: { resolve: () => void; reject: (e: Error) => void } | null = null;
   /** Shared in-flight module load, so overlapping callers cannot displace each other's resolver. */
@@ -553,9 +419,10 @@ export class LocalSidEngine {
   private endedFired = false;
   private chunksEnded = 0;
   /** Fully-rendered tunes (previous/current/next), so a seek is a buffer offset. */
-  private readonly renderCache = new RenderedTuneCache();
+  private readonly renderCache = new RenderedTuneCache(undefined, undefined, (tune) => this.releaseIfUnused(tune.pcm));
   private prerenderId = 0;
   private prerenderKey: string | null = null;
+  private prerenderRenderer: SidEmulationEngine = "residfp";
   /** Set while the running pre-render is only a lead-in, not the whole tune. */
   private prerenderPartialSeconds: number | null = null;
   /** Slices of the running pre-render, accumulated so the cache can grow as it goes. */
@@ -568,8 +435,7 @@ export class LocalSidEngine {
    * a 250 ms dropout. Writing each chunk into a buffer sized up front is O(n), and the cache is
    * handed a `subarray` view of the filled prefix rather than a fresh copy.
    */
-  private prerenderAccumulated: Int16Array = EMPTY_PCM;
-  private prerenderFilled = 0;
+  private readonly prerenderPcm = new PcmAccumulator();
   /**
    * A second offline renderer, for the tracks either side of the one playing.
    *
@@ -582,7 +448,8 @@ export class LocalSidEngine {
   private warmWorker: LocalSidWorkerLike | null = null;
   private warmId = 0;
   private warmKey: string | null = null;
-  private warmAccumulated: Int16Array = EMPTY_PCM;
+  private warmRenderer: SidEmulationEngine = "residfp";
+  private readonly warmPcm = new PcmAccumulator();
   /**
    * A seek waiting for the pre-render to reach it.
    *
@@ -629,7 +496,33 @@ export class LocalSidEngine {
    * cache mid-playback would splice a separately-rendered copy into audio that
    * is already sounding, and the two renders need not be sample-identical.
    */
-  private cached: RenderedTune | null = null;
+  private cachedTune: RenderedTune | null = null;
+
+  private get cached(): RenderedTune | null {
+    return this.cachedTune;
+  }
+
+  /** Moving playback off a native buffer may be the last thing holding it, so it is checked here. */
+  private set cached(next: RenderedTune | null) {
+    const previous = this.cachedTune;
+    this.cachedTune = next;
+    if (previous && previous.pcm !== next?.pcm) this.releaseIfUnused(previous.pcm);
+  }
+
+  /**
+   * Give a native PCM buffer back once nothing here holds it: not the cache, not the buffer playback
+   * is reading from, not a render still growing it. A JS buffer is left to the garbage collector.
+   */
+  private releaseIfUnused(pcm: CachedPcm | PcmPayload | null | undefined): void {
+    if (!pcm) return;
+    const id = isNativePcm(pcm) ? pcm.bufferId : pcm instanceof NativePcmBuffer ? pcm.bufferId : null;
+    if (id === null) return;
+    const probe = new NativePcmBuffer(id, 0);
+    if (this.cachedTune && isNativeCachedPcm(this.cachedTune.pcm) && this.cachedTune.pcm.bufferId === id) return;
+    if (this.prerenderPcm.nativeBuffer?.bufferId === id || this.warmPcm.nativeBuffer?.bufferId === id) return;
+    if (this.renderCache.holds(probe)) return;
+    releaseNativePcm(probe);
+  }
   private cachedCursor = 0;
   /**
    * Playback is being fed from the pre-render's buffer while that pre-render is still growing it.
@@ -653,7 +546,7 @@ export class LocalSidEngine {
   /** Crossfade length to apply to the tune currently being opened (0 = cut). */
   private pendingCrossfadeMs = 0;
   /** The outgoing tune's audio, waiting for the incoming sink to fade it out underneath itself. */
-  private crossfadeTail: Int16Array[] | null = null;
+  private crossfadeTail: CrossfadeTail | null = null;
   /** The tune being faded out, still playing from JS while the next one opens. */
   private crossfadeOut: LocalSidAudioSink | null = null;
   /** Where the live renderer takes over from a pre-rendered opening, once the worker has the tune. */
@@ -667,8 +560,10 @@ export class LocalSidEngine {
   private renderRates: number[] = [];
 
   constructor(options: LocalSidEngineOptions = {}) {
-    this.workerFactory = options.workerFactory ?? defaultWorkerFactory;
+    const injected = options.workerFactory;
+    this.channelFactory = injected ? () => injected() : (options.rendererFactory ?? defaultRendererChannelFactory);
     this.audioSinkFactory = options.audioSinkFactory ?? defaultAudioSinkFactory;
+    this.fixedRenderer = options.renderer ?? null;
     this.chunkSeconds = options.chunkSeconds ?? DEFAULT_CHUNK_SECONDS;
     this.targetBufferSeconds = options.targetBufferSeconds ?? DEFAULT_TARGET_BUFFER_SECONDS;
     this.requestedSampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
@@ -676,11 +571,7 @@ export class LocalSidEngine {
 
   /** True when the engine can run off-main-thread with audio in this environment. */
   static isSupported(): boolean {
-    return (
-      typeof Worker !== "undefined" &&
-      (typeof AudioContext !== "undefined" ||
-        typeof (globalThis as { webkitAudioContext?: unknown }).webkitAudioContext !== "undefined")
-    );
+    return localSidPlaybackSupported();
   }
 
   /**
@@ -701,13 +592,26 @@ export class LocalSidEngine {
     this.worker = null;
     this.seeksInFlight = 0;
     this.moduleReady = false;
+    // Settled, not just dropped: its timeout is cleared with it, and a timer left running would
+    // later discard whichever channel had replaced this one.
+    const load = this.loadPending;
     this.loadPending = null;
     this.loadInFlight = null;
+    load?.reject(new Error(`Local SID engine load abandoned: ${reason}`));
   }
 
-  private ensureWorker(): LocalSidWorkerLike {
+  private createChannel(renderer: SidRendererId, role: RendererRole): LocalSidWorkerLike {
+    return this.channelFactory(renderer, role);
+  }
+
+  private ensureWorker(renderer: SidRendererId = this.renderer): LocalSidWorkerLike {
+    const runtime = sidRendererRuntime(renderer);
+    if (this.worker && this.workerRuntime !== runtime) {
+      this.discardWorker(`switching to the ${runtime} renderer`, "info");
+    }
     if (!this.worker) {
-      this.worker = this.workerFactory();
+      this.worker = this.createChannel(renderer, "playback");
+      this.workerRuntime = runtime;
       this.worker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onMessage(event.data),
       );
@@ -738,9 +642,15 @@ export class LocalSidEngine {
    *
    * Separate workers are separate threads, and a phone has cores to spare.
    */
-  private ensurePrerenderWorker(): LocalSidWorkerLike {
+  private ensurePrerenderWorker(renderer: SidRendererId): LocalSidWorkerLike {
+    const runtime = sidRendererRuntime(renderer);
+    if (this.prerenderWorker && this.prerenderRuntime !== runtime) {
+      this.prerenderWorker.terminate();
+      this.prerenderWorker = null;
+    }
     if (!this.prerenderWorker) {
-      this.prerenderWorker = this.workerFactory();
+      this.prerenderWorker = this.createChannel(renderer, "prerender");
+      this.prerenderRuntime = runtime;
       // Routed into the same handler: pre-render replies are matched on
       // `prerenderId`, which is independent of the playback ids.
       this.prerenderWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
@@ -799,6 +709,7 @@ export class LocalSidEngine {
     this.prerenderKey = null;
     this.prerenderWorker?.terminate();
     this.prerenderWorker = null;
+    this.releaseIfUnused(this.prerenderPcm.reset());
   }
 
   /**
@@ -822,6 +733,19 @@ export class LocalSidEngine {
   }
 
   /**
+   * Load the renderer the next tune will use, so that tune opens without waiting for it. Left as
+   * it is while a tune plays, whose renderer cannot change mid-tune.
+   */
+  async preload(): Promise<void> {
+    if (!settleSidRendererAvailabilitySync()) await probeSidRenderers();
+    if (!this.scheduler) {
+      this.renderer = this.chosenEmulation();
+      setActiveRenderThroughputRenderer(this.renderer);
+    }
+    return this.load();
+  }
+
+  /**
    * Instantiate the WASM module in the worker.
    *
    * Idempotent for overlapping callers too, not just repeat ones. Two tracks
@@ -832,6 +756,9 @@ export class LocalSidEngine {
    * one in-flight load fixes both.
    */
   load(): Promise<void> {
+    if (this.worker && this.workerRuntime !== sidRendererRuntime(this.renderer)) {
+      this.discardWorker(`switching to the ${sidRendererRuntime(this.renderer)} renderer`, "info");
+    }
     if (this.moduleReady) return Promise.resolve();
     if (this.loadInFlight) return this.loadInFlight;
     // One promise, not a chained `.catch` — the memo must settle on exactly the
@@ -848,8 +775,9 @@ export class LocalSidEngine {
         return;
       }
       const timer = setTimeout(() => {
-        this.discardWorker("module load timed out");
         reject(new Error(`Local SID engine did not load within ${WORKER_REPLY_TIMEOUT_MS}ms`));
+        this.loadPending = null;
+        this.discardWorker("module load timed out");
       }, WORKER_REPLY_TIMEOUT_MS);
       this.loadPending = {
         resolve: () => {
@@ -864,7 +792,7 @@ export class LocalSidEngine {
       };
       // The emulation is not chosen here: every open names its own, so a change in Settings applies
       // to the next tune on this same worker.
-      worker.postMessage({ type: "load" });
+      worker.postMessage({ type: "load", pcmHeadroomSamples: this.pcmHeadroomSamples() });
     });
     return this.loadInFlight;
   }
@@ -955,12 +883,16 @@ export class LocalSidEngine {
     if (this.seekPending || this.seeksInFlight > 0) {
       this.discardWorker("a new tune superseded an unfinished seek", "info");
     }
+    // Whether libSidplayEZ runs here is a question for the native side, asked once and bounded.
+    if (!settleSidRendererAvailabilitySync()) await probeSidRenderers();
+    this.renderer = this.chosenEmulation();
+    setActiveRenderThroughputRenderer(this.renderer);
     await this.load();
     // A switchover ALWAYS starts from silence unless the listener has asked for a crossfade. Zero (the default) is a
     // hard cut, and so is leaving a paused tune: faded out, it came back and held the next tune in a paused track.
     const crossfadeMs = this.paused ? 0 : loadPlaybackCrossfadeMs();
     this.pendingCrossfadeMs = crossfadeMs;
-    this.stopPlayback({ crossfadeMs });
+    this.stopPlayback({ crossfadeMs, declick: !this.paused });
     this.callbacks = callbacks;
     const worker = this.ensureWorker();
     const id = this.nextId;
@@ -1010,7 +942,7 @@ export class LocalSidEngine {
           // Read per-play, like the ROMs above and for the same reason: changing the chip in
           // Settings then applies from the very next tune rather than after a restart.
           sidModel: toEngineSidModel(resolveLocalSidModel()),
-          engine: this.chosenEmulation(),
+          engine: this.renderer,
         },
         transfer,
       );
@@ -1043,45 +975,26 @@ export class LocalSidEngine {
         // Accumulate as it arrives, and publish the growing buffer to the cache each time. That is
         // what makes a seek into the part already rendered instant instead of waiting for the whole
         // tune, and it is what the progress bar's pre-render fill reads.
-        if (message.id !== this.prerenderId || !this.prerenderKey) return;
-        // Size the destination from what the worker was asked to render. A render that overruns
-        // the estimate grows the buffer once rather than failing — the estimate comes from a
-        // declared duration and can be short.
-        const needed = this.prerenderFilled + message.pcm.length;
-        if (this.prerenderAccumulated.length < needed) {
-          // `Math.max` with a non-finite estimate is non-finite, and `new Int16Array(NaN)` is an
-          // array of length ZERO — which then throws "offset is out of bounds" on the very next
-          // write. A chunk that does not carry a usable rate or channel count sizes to what this
-          // write needs and nothing more.
-          const planned = Math.ceil(message.seconds * message.sampleRate * message.channels);
-          const sized = new Int16Array(Number.isFinite(planned) ? Math.max(planned, needed) : needed);
-          sized.set(this.prerenderAccumulated.subarray(0, this.prerenderFilled), 0);
-          this.prerenderAccumulated = sized;
+        if (message.id !== this.prerenderId || !this.prerenderKey) {
+          this.releaseIfUnused(message.pcm);
+          return;
         }
-        this.prerenderAccumulated.set(message.pcm, this.prerenderFilled);
-        this.prerenderFilled += message.pcm.length;
-        const grown = this.prerenderAccumulated.subarray(0, this.prerenderFilled);
-        // A seek is waiting on this: hand playback the buffer the moment coverage reaches the target,
-        // rather than leaving it silent while a second render of the same audio catches up.
-        //
-        // Only for a target that is still the outstanding one. A pending seek from a previous track
-        // instance, or one a newer seek has already superseded, must be discarded rather than
-        // applied — applying it would jump the tune now playing to a position somebody asked for in
-        // a different one.
-        // Wait for a cushion past the target, not merely for the target.
-        //
-        // The chunk that crosses the target leaves nothing after it, so resuming exactly there
-        // starts playback with no headroom at all: the speaker consumes one second per second and
-        // the renderer is only just ahead. The same question — how much has to be in hand before
-        // starting so it cannot run dry — is what the measured start-up buffer already answers, so
-        // it answers this one too. It costs a fraction of a second more waiting on a wait that is
-        // measured in tens of them.
-        const cushion = startupBufferSeconds();
+        // Sized from what the worker was asked to render; an overrun grows the buffer once.
+        const grown = this.prerenderPcm.append(
+          message.pcm,
+          Math.ceil(message.seconds * message.sampleRate * message.channels),
+          message.channels,
+        );
+        // A seek still outstanding for this tune (not a stale or superseded one) is answered once the
+        // pre-render covers its target plus the start-up cushion: resuming exactly at the target would
+        // start with no headroom, while a second render of the same audio would only arrive later.
+        const cushion = startupBufferSeconds(this.renderer);
         const awaiting = this.activePendingSeek;
         if (awaiting !== null && message.seconds > awaiting.targetSeconds + cushion) {
           const awaited = awaiting.targetSeconds;
           this.pendingSeek = null;
           this.cached = {
+            renderer: this.prerenderRenderer,
             partial: true,
             pcm: grown,
             sampleRate: message.sampleRate,
@@ -1103,6 +1016,7 @@ export class LocalSidEngine {
           // Playback is reading from this buffer as it grows. Republish the extended one, keeping
           // the cursor where it is — the slices already scheduled are a prefix of it.
           this.cached = {
+            renderer: this.prerenderRenderer,
             partial: true,
             pcm: grown,
             sampleRate: message.sampleRate,
@@ -1112,6 +1026,7 @@ export class LocalSidEngine {
           this.pump();
         }
         this.renderCache.set(this.prerenderKey, {
+          renderer: this.prerenderRenderer,
           // Still growing, so it must not be mistaken for the whole tune: running off the end has to
           // hand over to live rendering rather than fire "ended".
           partial: true,
@@ -1123,20 +1038,22 @@ export class LocalSidEngine {
         return;
       }
       case "prerendered": {
-        if (message.id !== this.prerenderId || !this.prerenderKey) return;
+        if (message.id !== this.prerenderId || !this.prerenderKey) {
+          this.releaseIfUnused(this.prerenderPcm.reset());
+          return;
+        }
         this.prerenderFraction = null;
         // Only a lead-in was asked for, so what is cached remains a partial even though the render
         // finished. A full render becomes authoritative: seeks inside it are pure buffer offsets and
         // running off its end really is the end of the tune.
         const partial = this.prerenderPartialSeconds !== null;
         this.prerenderPartialSeconds = null;
-        // Copied so a cache entry never pins a buffer larger than the audio it holds.
-        const pcm = this.prerenderAccumulated.subarray(0, this.prerenderFilled).slice();
-        this.prerenderAccumulated = EMPTY_PCM;
-        this.prerenderFilled = 0;
+        const pcm = this.prerenderPcm.finish();
         queueMicrotask(() => this.drainPendingWarms());
+        if (pcm.length === 0) this.releaseIfUnused(pcm);
         if (pcm.length > 0) {
           this.renderCache.set(this.prerenderKey, {
+            renderer: this.prerenderRenderer,
             partial,
             pcm,
             sampleRate: message.sampleRate,
@@ -1161,6 +1078,7 @@ export class LocalSidEngine {
             // means: a full render's end is the tune's end, a lead-in's end is where the live
             // renderer has to take over.
             this.cached = {
+              renderer: this.prerenderRenderer,
               partial,
               pcm,
               sampleRate: message.sampleRate,
@@ -1188,31 +1106,16 @@ export class LocalSidEngine {
         return;
       }
       case "chunk": {
-        // The budget is settled first, before any of the reasons this chunk might be thrown away.
-        //
-        // `pump()` counts a render when it posts one and refuses to post more at
-        // `MAX_IN_FLIGHT_RENDERS`. That count is a record of work outstanding in the worker, not of
-        // audio worth keeping: the render has finished either way, and the slot belongs back in the
-        // budget either way. Returning above the decrement — which all three discards below used to
-        // do — spent a slot permanently every time a chunk was dropped. Skipping is what made it
-        // add up, because every render still in flight when the next tune opens comes back with the
-        // previous tune's id and is dropped; once the budget was gone `pump()` could never ask for
-        // audio again and the tune went silent with the clock still running.
+        // Settled before any discard below: the render has finished either way, and a discarded chunk
+        // that kept its `MAX_IN_FLIGHT_RENDERS` slot eventually left `pump()` unable to ask for audio.
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
-        if (message.id !== this.activeId) return; // stale tune
-        // The worker handles messages in order, so anything still arriving
-        // before the "seeked" reply was rendered for the position we just left.
-        // Scheduling it would play the wrong part of the tune.
-        if (this.seekPending) return;
-        // The same is true for a seek waiting on the pre-render, and for a less obvious reason: that
-        // path never repositions the live renderer at all, precisely so it does not pay for a second
-        // re-render. So the live worker is still sitting at the position the listener just left, and
-        // every chunk it produces is that old audio. Scheduling it plays the part of the tune the
-        // listener seeked AWAY from while the bar, the clock and the status all describe the target —
-        // the exact "heard the old position while the bar showed the new one" failure the wait exists
-        // to avoid. Flushing the queued audio was not enough on its own, because the renderer kept
-        // refilling it.
-        if (this.activePendingSeek) return;
+        // Discarded: a replaced tune's chunk, one rendered before the "seeked" reply, or any while a
+        // seek waits on the pre-render (the live renderer is still at the old position). A
+        // libSidplayEZ chunk's native buffer is given back, as nothing else will.
+        if (message.id !== this.activeId || this.seekPending || this.activePendingSeek) {
+          releaseNativePcm(message.pcm);
+          return;
+        }
         this.recordRender(message.renderMs, message.samples);
         // Learn how fast this device renders, so the next tune knows how much to buffer before it
         // starts. Only real renders count — a chunk served from the cache took no time and would
@@ -1220,6 +1123,7 @@ export class LocalSidEngine {
         recordRenderMeasurement(
           message.samples / Math.max(1, this.channels) / this.requestedSampleRate,
           message.renderMs,
+          this.renderer,
         );
         this.scheduler?.schedule(message.pcm, this.channels);
         this.emitPosition();
@@ -1274,6 +1178,7 @@ export class LocalSidEngine {
       // attributed instead of guessed at.
       addLog("debug", "Local SID engine opened", {
         service: "local-sid",
+        renderer: this.renderer,
         ...message.openTiming,
         totalMs:
           message.openTiming.moduleMs +
@@ -1325,16 +1230,16 @@ export class LocalSidEngine {
     }
     claimAudioOwnership(this);
     try {
-      this.audio = this.audioSinkFactory(message.sampleRate);
+      this.audio = this.audioSinkFactory(message.sampleRate, this.renderer);
     } catch (error) {
       releaseAudioOwnership(this);
       pending?.reject(error as Error);
       return;
     }
     void this.audio.resume?.();
-    // Carry the listener's level onto the new tune's sink.
+    // Always, full volume included: on Android it is the feed's master gain, which outlives a sink.
     const level = this.muted ? 0 : this.volume;
-    if (this.volume !== 1 || this.muted) this.audio.setGain?.(level);
+    this.audio.setGain?.(level);
     // Fade UP TO the listener's level. `fadeIn` cancels whatever `setGain` just
     // scheduled, so a fade to a hardcoded 1 would undo the line above and the
     // volume control would silently reset on every crossfade.
@@ -1355,7 +1260,7 @@ export class LocalSidEngine {
     // the ring could still run dry a second or two in, heard as a single short pause right at the
     // beginning of a track. That is the worst possible moment for one: it is where a listener decides
     // whether the player is trustworthy.
-    const warmed = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    const warmed = this.currentKey ? this.cachedForThisRenderer(this.currentKey) : null;
     traceLocalSid("opened", {
       key: this.currentKey,
       warm: warmed ? +warmed.durationSeconds.toFixed(2) : null,
@@ -1398,13 +1303,10 @@ export class LocalSidEngine {
       if (fadingOut.releaseForHandover) fadingOut.releaseForHandover();
       else fadingOut.close();
     }
-    if (this.crossfadeTail?.length && this.audio) {
+    if (this.crossfadeTail && this.audio) {
       this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
     }
-    traceLocalSid("crossfade-tail-adopted", {
-      slices: this.crossfadeTail?.length ?? 0,
-      frames: (this.crossfadeTail ?? []).reduce((n, slice) => n + slice.length / 2, 0),
-    });
+    traceLocalSid("crossfade-tail-adopted", { frames: this.crossfadeTail?.frames ?? 0 });
     this.crossfadeTail = null;
   }
 
@@ -1428,12 +1330,12 @@ export class LocalSidEngine {
     // not restored until the new tune opens — which is the very wait this exists to get ahead of.
     const key = this.pendingCacheKey ?? this.currentKey;
     if (this.audio || !key) return;
-    const warmed = this.renderCache.get(key);
+    const warmed = this.cachedForThisRenderer(key);
     if (!warmed) return;
     this.currentKey = key;
     claimAudioOwnership(this);
     try {
-      this.audio = this.audioSinkFactory(warmed.sampleRate);
+      this.audio = this.audioSinkFactory(warmed.sampleRate, this.renderer);
     } catch (error) {
       // No sink is not fatal here: the ordinary open follows and builds one, so the tune still
       // plays — it just starts from the worker rather than from the cached opening, which costs the
@@ -1450,7 +1352,7 @@ export class LocalSidEngine {
     }
     void this.audio.resume?.();
     const level = this.muted ? 0 : this.volume;
-    if (this.volume !== 1 || this.muted) this.audio.setGain?.(level);
+    this.audio.setGain?.(level);
     if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs, level);
     this.pendingCrossfadeMs = 0;
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
@@ -1462,7 +1364,7 @@ export class LocalSidEngine {
     this.cachedCursor = 0;
     // Where the live renderer takes over when the cached opening runs out, held until `onOpened`, when the
     // worker has the tune. Not when this tune's pre-render is still growing the cache: playback follows it.
-    this.followingPrerender = Boolean(warmed.partial) && this.isPrerendering(key);
+    this.followingPrerender = Boolean(warmed.partial) && this.prerenderingForThisRenderer(key);
     this.prerenderedSeamSeconds = warmed.partial && !this.followingPrerender ? warmed.durationSeconds : null;
     traceLocalSid("started-from-prerendered-intro", {
       key,
@@ -1517,7 +1419,7 @@ export class LocalSidEngine {
 
     // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
     // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
-    const rendered = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    const rendered = this.currentKey ? this.cachedForThisRenderer(this.currentKey) : null;
     // A lead-in only covers the opening, so it can answer a seek that lands inside it and nothing
     // else. Serving one as though it were the whole tune is how fast-forward, rewind and the progress
     // bar all broke at once: the cursor clamped to the end of the cached span, so every seek past it
@@ -1528,7 +1430,7 @@ export class LocalSidEngine {
       this.cachedCursor = Math.min(rendered.pcm.length, Math.floor(target * rendered.sampleRate) * rendered.channels);
       // Landing inside a lead-in still has to leave the tune able to continue past it, so the live
       // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
-      this.followingPrerender = Boolean(rendered.partial) && this.isPrerendering(this.currentKey);
+      this.followingPrerender = Boolean(rendered.partial) && this.prerenderingForThisRenderer(this.currentKey);
       if (rendered.partial && !this.followingPrerender) this.scheduleHandoff(rendered.durationSeconds);
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
@@ -1538,14 +1440,11 @@ export class LocalSidEngine {
       return;
     }
 
-    // Nothing cached can answer this one yet. Before falling back to a worker seek — which re-renders
-    // the tune from the start with the audio gated shut, fifteen to twenty seconds of silence measured
-    // on a Pixel 4 — check whether the pre-render is already on its way there. It usually is: it began
-    // when the tune did, and it is rendering exactly the audio this seek needs. Racing it does the same
-    // work twice and plays nothing while both run.
+    // Nothing cached answers it yet. Wait for a pre-render already on its way there rather than a
+    // worker seek, which re-renders from the start with the audio gated (15-20 s on a Pixel 4).
     this.cached = null;
     this.cachedCursor = 0;
-    if (this.prerenderFraction !== null && this.prerenderKey === this.currentKey) {
+    if (this.prerenderingForThisRenderer(this.currentKey)) {
       this.pendingSeek = {
         targetSeconds: target,
         renderedAtRequestSeconds: rendered?.durationSeconds ?? 0,
@@ -1553,10 +1452,8 @@ export class LocalSidEngine {
         generation: epoch,
         trackInstanceId: this.trackInstanceId,
       };
-      // Held at the target, not drifting on from where it was. Letting playback carry on meant the
-      // listener heard the old position while the bar showed the new one, which is worse than a pause:
-      // there is no way to tell whether the drag did anything. Silence with a visibly advancing
-      // pre-render fill says exactly what is happening.
+      // Held silent at the target rather than playing on from the old position, which would sound
+      // as though the seek did nothing; the pre-render fill shows the wait.
       this.audio?.flush?.();
       addLog("debug", "Local SID seek waiting for the pre-render to reach it", {
         service: "local-sid",
@@ -1653,7 +1550,7 @@ export class LocalSidEngine {
    * sitting silent on a tune that has nothing left to render.
    */
   private resolvePendingSeekAgainstCompletedRender(
-    pcm: Int16Array,
+    pcm: CachedPcm,
     sampleRate: number,
     channels: number,
     seconds: number,
@@ -1664,7 +1561,14 @@ export class LocalSidEngine {
     if (this.isStalePendingSeek(pending)) return;
     const coveredSeconds = pcm.length / Math.max(1, channels) / Math.max(1, sampleRate);
     if (pcm.length > 0 && pending.targetSeconds < coveredSeconds) {
-      this.cached = { partial: false, pcm, sampleRate, channels, durationSeconds: seconds };
+      this.cached = {
+        renderer: this.prerenderRenderer,
+        partial: false,
+        pcm,
+        sampleRate,
+        channels,
+        durationSeconds: seconds,
+      };
       this.cachedCursor = Math.min(pcm.length, Math.floor(pending.targetSeconds * sampleRate) * channels);
       addLog("debug", "Local SID awaited seek served by the completed pre-render", {
         service: "local-sid",
@@ -1687,12 +1591,8 @@ export class LocalSidEngine {
     this.lastAudioAtMs = Date.now();
     if (this.watchdogTimer !== null) return;
     this.watchdogTimer = setInterval(() => {
-      // Published from the engine's own cadence, not from whoever happens to be asking for stats.
-      // It used to ride along inside getStats(), whose only regular caller is the Play page's
-      // interval — and that interval is removed on tab navigation while this engine deliberately
-      // keeps playing. So a listener who left Play for Live View froze the governor on the last
-      // sample it happened to see: later starvation could not demote video, and an old low-buffer
-      // reading could keep it demoted for good. This timer lives as long as the tune does.
+      // On the engine's own cadence, not inside getStats(): the Play page's polling stops when the
+      // listener leaves the page, which froze the Live View governor on its last sample.
       this.publishAudioHealth();
       this.checkLiveness();
     }, WATCHDOG_TICK_MS);
@@ -1743,23 +1643,11 @@ export class LocalSidEngine {
   private checkLiveness(): void {
     if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
     if (this.openPending || this.seekPending) return;
+    // A wait for the pre-render to reach a seek target is quiet on purpose, and lasts as long as
+    // that render: restarting the worker here would restart the render being waited on.
     if (this.activePendingSeek !== null) return;
-    // Waiting for the pre-render to reach a seek target is quiet for a reason too, and this timer is
-    // the wrong judge of it: no worker call is outstanding, the buffer is deliberately empty, and the
-    // wait lasts exactly as long as the rendering does — which for a position deep into a tune is far
-    // longer than the stall timeout. Killing the worker here would restart the very render being
-    // waited on, and the progress bar is already telling the listener what is happening.
-    // Silence that the listener did not ask for.
-    //
-    // Everything above this line asks whether audio is being *produced*. This asks whether any of
-    // it can be *heard*, which is the thing the listener actually cares about and the one condition
-    // none of the other counters can see: a tune rendering a flat line keeps the buffer full, the
-    // frames flowing and the clock advancing, and sounds like nothing at all. Muting is excluded
-    // because a muted tune is silent on purpose — that is the listener's desired state, and this
-    // exists to restore theirs, not to override it.
-    //
-    // The recovery is the same one a stall gets: re-open the tune once, and if it happens again let
-    // the playlist move on. That keeps one mechanism rather than two.
+    // Audio produced but not heard: a flat line keeps every other counter healthy. Muting is the
+    // listener's choice, so excluded. Recovered as a stall is: re-open once, then move on.
     if (!this.muted && this.volume > 0 && this.audio?.isSilentFault?.()) {
       addErrorLog("Local SID playback is silent", {
         service: "local-sid",
@@ -1861,10 +1749,10 @@ export class LocalSidEngine {
           return;
         }
         const end = Math.min(pcm.length, this.cachedCursor + chunkSamples);
-        // A copy, because the scheduler hands the buffer to Web Audio.
+        // A copy for a JS buffer, because the scheduler hands it to the sink; a range for a native one.
         const slice = pcm.slice(this.cachedCursor, end);
         this.cachedCursor = end;
-        this.recordRender(0, slice.length);
+        this.recordRender(0, payloadSamples(slice, channels));
         this.scheduler.schedule(slice, channels);
         this.emitPosition();
       }
@@ -2007,12 +1895,8 @@ export class LocalSidEngine {
     // The buffer drained while the clock was suspended; give the pipeline the same grace a fresh
     // start gets rather than judging it on how long the pause lasted.
     this.lastAudioAtMs = Date.now();
-    // The silence accumulator gets the same grace, and for the same reason. It counts seconds of
-    // flat audio handed to the speaker, and nothing is handed over while paused — so it freezes at
-    // whatever it had reached and the watchdog carries on judging from there the moment playback
-    // resumes. A tune paused eleven seconds into a quiet passage would then cross the twelve-second
-    // tolerance about a second after the listener pressed play, and `recoverFromStall` would throw
-    // the worker away and re-open the tune: an audible jump caused by the pause, not by a fault.
+    // The silence accumulator too: frozen during a pause, it would otherwise carry a quiet passage's
+    // count across it and re-open the tune moments after resume, an audible jump caused by the pause.
     this.audio?.resetSilence?.();
     await this.audio?.resume?.();
   }
@@ -2055,11 +1939,6 @@ export class LocalSidEngine {
 
   getMuted(): boolean {
     return this.muted;
-  }
-
-  /** A fully-rendered tune, when this one has been cached. */
-  getRenderedTune(key: string): RenderedTune | null {
-    return this.renderCache.get(key);
   }
 
   /**
@@ -2133,8 +2012,10 @@ export class LocalSidEngine {
     }
     this.warmId += 1;
     this.warmKey = key;
-    this.warmAccumulated = EMPTY_PCM;
-    this.ensureWarmWorker().postMessage(
+    this.releaseIfUnused(this.warmPcm.reset());
+    const renderer = this.fixedRenderer ?? playbackSidEmulation();
+    this.warmRenderer = renderer;
+    this.ensureWarmWorker(renderer).postMessage(
       {
         type: "prerender",
         id: this.warmId,
@@ -2147,7 +2028,7 @@ export class LocalSidEngine {
             ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
             : undefined,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-        engine: playbackSidEmulation(),
+        engine: renderer,
       },
       [sidBytes],
     );
@@ -2172,21 +2053,42 @@ export class LocalSidEngine {
    * taken because a tune that pauses is worse than a tune that sounds a little different.
    */
   private chosenEmulation(): SidEmulationEngine {
+    if (this.fixedRenderer) return this.fixedRenderer;
     const chosen = playbackSidEmulation();
-    const fallingBack = chosen !== effectiveSidEmulationEngine(hasCompleteRomSet());
+    const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
+    const fallingBack = chosen !== preferred;
     if (fallingBack && !this.announcedSlowDeviceFallback) {
-      addLog("warn", "Falling back to SIDLite: this device cannot render reSIDfp in real time", {
-        service: "local-sid",
-        renderRatio: +renderRatio().toFixed(2),
-      });
+      addLog(
+        "warn",
+        chosen === "sidlite"
+          ? `Falling back to SIDLite: this device cannot render ${preferred} in real time`
+          : `Using ${chosen}: ${preferred} is not available on this device`,
+        {
+          service: "local-sid",
+          preferred,
+          chosen,
+          renderRatio: +renderRatio(isSidRendererAvailable(preferred) ? preferred : "residfp").toFixed(2),
+          unavailableReason: preferred === "sidplayez" ? sidplayEzUnavailableReason() : null,
+        },
+      );
     }
     this.announcedSlowDeviceFallback = fallingBack;
     return chosen;
   }
 
-  private ensureWarmWorker(): LocalSidWorkerLike {
+  /** Room for the native feed's message header in front of each live WASM chunk, on Android. */
+  private pcmHeadroomSamples(): number | undefined {
+    return sidRendererRuntime(this.renderer) === "wasm" && nativeLocalAudioAvailable()
+      ? NATIVE_PCM_HEADER_SAMPLES
+      : undefined;
+  }
+
+  private ensureWarmWorker(renderer: SidRendererId): LocalSidWorkerLike {
+    const runtime = sidRendererRuntime(renderer);
+    if (this.warmWorker && this.warmRuntime !== runtime) this.discardWarmWorker();
     if (!this.warmWorker) {
-      this.warmWorker = this.workerFactory();
+      this.warmWorker = this.createChannel(renderer, "warm");
+      this.warmRuntime = runtime;
       this.warmWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onWarmMessage(event.data),
       );
@@ -2221,7 +2123,7 @@ export class LocalSidEngine {
     this.warmWorker?.terminate();
     this.warmWorker = null;
     this.warmKey = null;
-    this.warmAccumulated = EMPTY_PCM;
+    this.releaseIfUnused(this.warmPcm.reset());
     this.drainPendingWarms();
   }
 
@@ -2233,23 +2135,28 @@ export class LocalSidEngine {
    */
   private onWarmMessage(message: LocalSidWorkerToMain): void {
     if (message.type === "prerender-chunk") {
-      if (message.id !== this.warmId || !this.warmKey) return;
-      const grown = new Int16Array(this.warmAccumulated.length + message.pcm.length);
-      grown.set(this.warmAccumulated, 0);
-      grown.set(message.pcm, this.warmAccumulated.length);
-      this.warmAccumulated = grown;
+      if (message.id !== this.warmId || !this.warmKey) {
+        this.releaseIfUnused(message.pcm);
+        return;
+      }
+      this.warmPcm.append(
+        message.pcm,
+        Math.ceil(message.seconds * message.sampleRate * message.channels),
+        message.channels,
+      );
       return;
     }
     if (message.type === "prerendered") {
       if (message.id !== this.warmId || !this.warmKey) return;
       const key = this.warmKey;
-      const pcm = this.warmAccumulated;
+      const pcm = this.warmPcm.finish();
       this.warmKey = null;
-      this.warmAccumulated = EMPTY_PCM;
+      if (pcm.length === 0) this.releaseIfUnused(pcm);
       if (pcm.length > 0) {
         // Always a partial: it is only the opening, so running off its end has to hand over to live
         // rendering rather than end the tune.
         this.renderCache.set(key, {
+          renderer: this.warmRenderer,
           partial: true,
           pcm,
           sampleRate: message.sampleRate,
@@ -2269,7 +2176,7 @@ export class LocalSidEngine {
     if (message.type === "error" && message.id === this.warmId) {
       addLog("debug", "Local SID lead-in warm failed", { service: "local-sid", error: message.message });
       this.warmKey = null;
-      this.warmAccumulated = EMPTY_PCM;
+      this.releaseIfUnused(this.warmPcm.reset());
       this.drainPendingWarms();
     }
   }
@@ -2283,6 +2190,7 @@ export class LocalSidEngine {
    */
   debugState(): Record<string, unknown> {
     return {
+      renderer: this.renderer,
       seekPending: this.seekPending?.id ?? null,
       inFlightRenders: this.inFlightRenders,
       endReceived: this.endReceived,
@@ -2347,6 +2255,12 @@ export class LocalSidEngine {
     return this.seekPending !== null || this.activePendingSeek !== null;
   }
 
+  /** The cached render under `key`, provided the renderer playing this tune made it. */
+  private cachedForThisRenderer(key: string): RenderedTune | null {
+    const entry = this.renderCache.get(key);
+    return entry && entry.renderer === this.renderer ? entry : null;
+  }
+
   /**
    * Seconds of the tune now playing that are already rendered, or null when none are.
    *
@@ -2354,7 +2268,7 @@ export class LocalSidEngine {
    */
   getRenderedSeconds(): number | null {
     if (!this.currentKey) return null;
-    const entry = this.renderCache.get(this.currentKey);
+    const entry = this.cachedForThisRenderer(this.currentKey);
     return entry ? entry.durationSeconds : null;
   }
 
@@ -2365,6 +2279,10 @@ export class LocalSidEngine {
 
   private isPrerendering(key: string | null): boolean {
     return key !== null && this.prerenderKey === key && this.prerenderFraction !== null;
+  }
+
+  private prerenderingForThisRenderer(key: string | null): boolean {
+    return this.isPrerendering(key) && this.prerenderRenderer === this.renderer;
   }
 
   /**
@@ -2388,11 +2306,12 @@ export class LocalSidEngine {
     this.prerenderId += 1;
     this.prerenderKey = key;
     this.prerenderFraction = 0;
-    this.prerenderAccumulated = EMPTY_PCM;
-    this.prerenderFilled = 0;
+    this.releaseIfUnused(this.prerenderPcm.reset());
+    const renderer = this.fixedRenderer ?? playbackSidEmulation();
+    this.prerenderRenderer = renderer;
     const romPayload =
       roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;
-    this.ensurePrerenderWorker().postMessage(
+    this.ensurePrerenderWorker(renderer).postMessage(
       {
         type: "prerender",
         id: this.prerenderId,
@@ -2402,7 +2321,7 @@ export class LocalSidEngine {
         seconds,
         roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-        engine: playbackSidEmulation(),
+        engine: renderer,
       },
       romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
     );
@@ -2417,36 +2336,52 @@ export class LocalSidEngine {
    * Silence and tear down this engine's audio. Not private: the audio-ownership
    * registry calls it to evict a stale owner (see claimAudioOwnership).
    */
-  stopPlayback(options: { crossfadeMs?: number } = {}): void {
+  /**
+   * A backstop only. `onOpened` closes the outgoing sink as soon as the next tune has its tail, and a
+   * tune that never opens must not leave the previous one holding the track forever.
+   */
+  private closeIfNeverHandedOver(outgoing: LocalSidAudioSink, afterMs: number): void {
+    setTimeout(() => {
+      // Only if the handover never happened. Once it has, this sink has already been released and
+      // closing it here would flush the track the next tune is playing through.
+      if (this.crossfadeOut !== outgoing) return;
+      this.crossfadeOut = null;
+      outgoing.close();
+    }, afterMs);
+  }
+
+  stopPlayback(options: { crossfadeMs?: number; declick?: boolean } = {}): void {
     // Stop asking the mirror to protect audio that is no longer playing, or Live View would stay
     // demoted for the rest of the session.
     clearLocalAudioHealth();
     releaseAudioOwnership(this);
-    // Reopen the seek gate. `seekPending` suppresses every "chunk" and "end" so audio rendered for
-    // the position we just left is never scheduled, and it is cleared only by a `seeked` reply whose
-    // id still matches. A reply that is lost — or superseded by a newer seek — therefore left it
-    // shut, and because a stop never reopened it the silence outlived the tune: the NEXT tune's
-    // chunks were discarded too, and re-opening in a fresh worker could not help either, because the
-    // gate is engine state and not the worker's. Scrubbing posts a seek every 350 ms, so this was
-    // easy to meet, and it is the whole of the "local SID playback stalled" report.
+    // Reopen the seek gate. Only a matching `seeked` reply clears it otherwise, so a lost or
+    // superseded reply left it shut, and the next tune's chunks were discarded too: the gate is
+    // engine state, so a fresh worker did not help ("local SID playback stalled").
     this.seekPending?.resolve();
     this.seekPending = null;
-    // `isActive()` flips here, so this is where the app is told.
-    //
-    // NOT the only place the app needs telling: a tune that simply runs out does
-    // NOT come through here. It fires `onEnded` (see maybeFireEnded, which
-    // notifies separately) and leaves the scheduler in place, so `isActive()`
-    // stays true until something explicitly stops or replaces the tune. Wiring
-    // end-of-tune teardown is a wider change than this one — auto-advance is
-    // driven by the songlength clock in PlayFilesPage, not by `onEnded`, which
-    // no caller currently installs.
+    // `isActive()` flips here, so this is where the app is told. A tune that runs out does not come
+    // through here: it fires `onEnded` (maybeFireEnded notifies separately) and keeps its scheduler.
     const wasActive = this.scheduler !== null;
     const fadeMs = options.crossfadeMs ?? 0;
+    // A track change with the crossfade off still must not end on a step: the outgoing tune is silenced
+    // over a declick, on the same track, so the next tune need not open a new one and wait for its prime.
+    const declickMs = fadeMs === 0 && options.declick ? CUT_DECLICK_MS : 0;
     const outgoing = this.audio;
-    this.scheduler?.stopAll(fadeMs > 0 ? { keepSourcesFor: fadeMs } : undefined);
+    const keepMs = fadeMs || declickMs;
+    this.scheduler?.stopAll(keepMs > 0 ? { keepSourcesFor: keepMs } : undefined);
     this.scheduler = null;
     this.audio = null;
-    if (outgoing && fadeMs > 0 && outgoing.beginCrossfadeTailPlayout) {
+    if (outgoing && declickMs > 0 && outgoing.beginCutPlayout) {
+      this.crossfadeOut = outgoing;
+      this.crossfadeSeconds = declickMs / 1000;
+      outgoing.beginCutPlayout(declickMs / 1000);
+      traceLocalSid("cut-playout", { declickMs });
+      this.closeIfNeverHandedOver(outgoing, CROSSFADE_TAIL_BUDGET_SECONDS * 1000 + 500);
+    } else if (outgoing && declickMs > 0 && outgoing.fadeOut) {
+      outgoing.fadeOut(declickMs);
+      setTimeout(() => outgoing.close(), declickMs + CUT_CLOSE_MARGIN_MS);
+    } else if (outgoing && fadeMs > 0 && outgoing.beginCrossfadeTailPlayout) {
       // The outgoing tune keeps sounding, from JS, until the next one can be heard.
       //
       // Its audio is not taken here. Nothing has opened the next tune yet — on a Pixel 4 that costs
@@ -2460,18 +2395,7 @@ export class LocalSidEngine {
       this.crossfadeSeconds = fadeMs / 1000;
       outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000);
       traceLocalSid("crossfade-tail-playout", { fadeMs });
-      // A backstop only. `onOpened` closes it as soon as the next tune has the tail, and a tune that
-      // never opens must not leave the previous one playing forever.
-      setTimeout(
-        () => {
-          // Only if the handover never happened. Once it has, this sink has already been released and
-          // closing it here would flush the track the next tune is playing through.
-          if (this.crossfadeOut !== outgoing) return;
-          this.crossfadeOut = null;
-          outgoing.close();
-        },
-        (CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000) * 1000 + 500,
-      );
+      this.closeIfNeverHandedOver(outgoing, (CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000) * 1000 + 500);
     } else {
       outgoing?.close();
     }
@@ -2481,12 +2405,8 @@ export class LocalSidEngine {
     this.currentTune = null;
     // Settle an open that this stop just cancelled, rather than dropping its resolver.
     //
-    // `onOpened` only answers a reply whose id is still `activeId`, and the line above has just
-    // cleared that, so nothing else can ever settle this promise — its caller is an `await` in the
-    // middle of starting a track and would wait forever. `play()` calls `stopPlayback` before
-    // registering its own open, so skipping quickly through a playlist walks straight into it: an
-    // ordinary second press on Next, not a corner case. Resolving is honest — this open was
-    // cancelled before anything started, which is what the result says.
+    // Nothing else can settle it now that `activeId` is cleared, and a quick second press on Next
+    // would leave its caller awaiting forever. It was cancelled before anything started, as it says.
     this.openPending?.resolve({
       romRequired: false,
       started: false,
@@ -2528,8 +2448,9 @@ export class LocalSidEngine {
     this.warmWorker?.terminate();
     this.warmWorker = null;
     this.warmKey = null;
-    this.warmAccumulated = EMPTY_PCM;
+    this.releaseIfUnused(this.warmPcm.reset());
     this.pendingWarms.clear();
+    this.renderCache.clear();
     this.stopWatchdog();
     this.worker?.terminate();
     this.worker = null;

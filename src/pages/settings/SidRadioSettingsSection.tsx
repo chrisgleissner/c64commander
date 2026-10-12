@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Radio } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,11 @@ import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useLearnedDeviceSidModel, useLocalSidModel } from "@/lib/playback/useLocalSidModel";
+import {
+  isSidRendererAvailable,
+  probeSidRenderers,
+  subscribeSidRendererAvailability,
+} from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import {
   SIDCORR_BUNDLE_SHA256,
   SIDCORR_EXPECTED,
@@ -95,6 +100,16 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
   const { localEngineEnabled, engine: playbackEngine } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
   const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
+  const [sidplayEzAvailable, setSidplayEzAvailable] = useState(() => isSidRendererAvailable("sidplayez"));
+  useEffect(() => {
+    const update = () => setSidplayEzAvailable(isSidRendererAvailable("sidplayez"));
+    const unsubscribe = subscribeSidRendererAvailability(update);
+    void probeSidRenderers().then(update);
+    return unsubscribe;
+  }, []);
+  // A stored preference for a renderer this device lacks is kept, so another device can honour it,
+  // but the control shows what will actually play here.
+  const shownSidEngine: SidEmulationEngine = sidEngine === "sidplayez" && !sidplayEzAvailable ? "residfp" : sidEngine;
   // The Play page installs HVSC updates while Settings is kept out of sight.
   const [hvscState, setHvscState] = useState(loadHvscState);
   useOnPageReturn(() => setHvscState(loadHvscState()));
@@ -188,35 +203,47 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
           <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-engine">
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
-              <strong>Accurate</strong> models the chip cycle-by-cycle for best fidelity. <strong>Light</strong> needs
-              about a third of the CPU and saves battery, though it is not an exact match for a real C64. Takes effect
-              next track.
+              {sidplayEzAvailable ? (
+                <>
+                  <strong>Fast & accurate</strong> (libSidplayEZ) and <strong>Accurate</strong> (reSIDfp) sound alike;
+                  Fast & accurate needs about a third of the CPU and saves battery. <strong>Light</strong> (SIDLite) is
+                  similarly light on the CPU, though it is not an exact match for a real C64. Takes effect next track.
+                </>
+              ) : (
+                <>
+                  <strong>Accurate</strong> (reSIDfp) models the chip cycle by cycle for best fidelity.{" "}
+                  <strong>Light</strong> (SIDLite) needs about a third of the CPU and saves battery, though it is not an
+                  exact match for a real C64. Takes effect next track.
+                </>
+              )}
             </p>
-            {/* Wraps rather than shrinks: both labels are set nowrap, so on the
-                smallest screen the two buttons squeezed each other and each label was
-                cut off inside its own button. On a second line they are both whole. */}
+            {/* Wraps rather than shrinks: the labels are set nowrap, so on the smallest screen the
+                buttons squeezed each other and each label was cut off inside its own button. */}
             <div className="flex flex-wrap gap-2">
               {(
                 [
-                  ["residfp", "Accurate (reSIDfp)"],
-                  ["sidlite", "Light (SIDLite)"],
+                  ["sidplayez", "Fast & accurate"],
+                  ["residfp", "Accurate"],
+                  ["sidlite", "Light"],
                 ] as const
-              ).map(([value, label]) => (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant={sidEngine === value ? "default" : "outline"}
-                  data-testid={`settings-sid-engine-${value}`}
-                  aria-pressed={sidEngine === value}
-                  onClick={() => {
-                    setSidEngine(value);
-                    saveSidEmulationEngine(value);
-                  }}
-                >
-                  {label}
-                </Button>
-              ))}
+              )
+                .filter(([value]) => value !== "sidplayez" || sidplayEzAvailable)
+                .map(([value, label]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={shownSidEngine === value ? "default" : "outline"}
+                    data-testid={`settings-sid-engine-${value}`}
+                    aria-pressed={shownSidEngine === value}
+                    onClick={() => {
+                      setSidEngine(value);
+                      saveSidEmulationEngine(value);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
             </div>
           </div>
         ) : null}

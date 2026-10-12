@@ -390,6 +390,49 @@ describe("LocalSidEngine — overlapping seeks", () => {
  * on rc4 as shipped: five back-to-back hold-to-seek gestures, then Stop/Play, and Play/Pause were
  * both `disabled` until relaunch. Bounding the waits turns that into an ordinary reported failure.
  */
+describe("LocalSidEngine — preload", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("loads the renderer the next tune will use, not the one an engine starts with", async () => {
+    // The engine's renderer field starts as reSIDfp and was only set when a tune opened, so a
+    // preload loaded a WASM worker that the first libSidplayEZ tune then threw away.
+    const roles: Array<{ renderer: string; role: string }> = [];
+    const worker = new FakeWorker();
+    const engine = new LocalSidEngine({
+      rendererFactory: (renderer, role) => {
+        roles.push({ renderer, role });
+        return worker as never;
+      },
+    });
+    saveSidEmulationEngine("sidlite");
+    const loading = engine.preload();
+    await Promise.resolve();
+    worker.emit({ type: "ready" });
+    await loading;
+    expect(roles).toEqual([{ renderer: "sidlite", role: "playback" }]);
+  });
+
+  it("settles a load in flight when its worker is discarded, so its timer cannot fire later", async () => {
+    vi.useFakeTimers();
+    try {
+      const workers = [new FakeWorker(), new FakeWorker()];
+      let built = 0;
+      const engine = new LocalSidEngine({ workerFactory: () => workers[Math.min(built++, 1)] });
+      const first = engine.load();
+      const settled = expect(first).rejects.toThrow(/abandoned/);
+      (engine as unknown as { discardWorker: (reason: string) => void }).discardWorker("switching renderer");
+      await settled;
+      const second = engine.load();
+      workers[1].emit({ type: "ready" });
+      await second;
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(workers[1].terminated).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("LocalSidEngine — an unanswered worker", () => {
   it("rejects the load instead of waiting forever", async () => {
     vi.useFakeTimers();

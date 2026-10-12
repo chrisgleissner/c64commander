@@ -18,6 +18,7 @@
 | DeviceRotationPlugin      | Locks/unlocks the activity orientation                                    | Not registered — orientation stays under iOS control                                                                                                            | **Android only** |
 | SafeAreaPlugin            | Reports display cutout and system bar insets                              | Not registered — the web `env(safe-area-inset-*)` values are used instead                                                                                       | **Android only** |
 | LibraryInstallPlugin      | Foreground service keeping an HVSC install alive across a leave            | Not registered — the install runs in the foreground only, and is abandoned if iOS suspends the app                                                              | **Android only** |
+| SidAudioPlugin            | Native on-device SID audio feed, PCM store and libSidplayEZ renderers      | Not registered — on-device playback renders with the WASM engines (reSIDfp, SIDLite) and plays through Web Audio; libSidplayEZ is not offered | **Android only** |
 
 > **Method-level parity is enforced by a test.** `tests/unit/ci/iosPluginMethodParity.test.ts`
 > reads each Swift plugin's `pluginMethods` array and each TypeScript `registerPlugin` contract in

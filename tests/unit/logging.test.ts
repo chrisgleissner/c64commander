@@ -552,6 +552,24 @@ describe("device failures while the phone has no network", () => {
     expect(getLogs()[0].level).toBe("error");
   });
 
+  it("logs the phone's own network dropping mid-request as a warning before the network is known down", async () => {
+    const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+    recordNetworkStatus({ online: true, supported: true });
+
+    addErrorLog("FTP readFile failed", {
+      origin: "native",
+      error: { name: "SocketException", message: "Software caused connection abort" },
+    });
+    addErrorLog("FTP file read failed", { path: "/Flash/data/default.vpl", error: "Network is unreachable" });
+    addErrorLog("FTP file read failed", { path: "/Flash/data/default.vpl", error: "Connection refused" });
+
+    expect(getLogs().map((entry) => [entry.level, entry.details])).toEqual([
+      ["error", expect.objectContaining({ error: "Connection refused" })],
+      ["warn", expect.objectContaining({ error: "Network is unreachable" })],
+      ["warn", expect.objectContaining({ error: expect.objectContaining({ name: "SocketException" }) })],
+    ]);
+  });
+
   it("keeps the level of an unrelated error while the network is down", async () => {
     const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
     recordNetworkStatus({ online: false, supported: true });

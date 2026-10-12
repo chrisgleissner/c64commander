@@ -396,6 +396,65 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun aShortWaitAfterAFlushIsCoveredByTheTrackRatherThanConcealedAsSilence() {
+    // On-device playback's configuration, as a track change leaves it: the ring flushed, the track full,
+    // and the next audio 25 ms away. Concealing after 8 ms wrote silence behind real audio.
+    val rate = 48000
+    val speaker = FakeSpeaker(rate)
+    val pipeline =
+        AudioPipeline(rate, 15000, rate, 192, speaker.factory, maxRingMs = 20000, trackBursts = 16, primeMs = 600, correctDrift = false)
+    pipeline.start()
+    try {
+      val second = ByteArray(rate * bytesPerFrame)
+      pipeline.offer(second, 0, second.size)
+      Thread.sleep(800)
+      val concealedBefore = pipeline.stats().concealedMs
+      pipeline.flushRing()
+      Thread.sleep(25)
+      pipeline.offer(second, 0, second.size)
+      Thread.sleep(200)
+      assertEquals("silence was written while the track still held audio", concealedBefore, pipeline.stats().concealedMs, 0.0)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun flushRingEmptiesTheRingAndReportsWhatItHeld() {
+    val speaker = FakeSpeaker(sampleRate)
+    val pipeline = AudioPipeline(sampleRate, 200, trackFactory = speaker.factory)
+    val frames = 4800
+    pipeline.offer(ByteArray(frames * bytesPerFrame), 0, frames * bytesPerFrame)
+    assertEquals(frames.toLong(), pipeline.flushRing())
+    assertEquals(0.0, pipeline.stats().jitterBufferMs, 0.0)
+    assertEquals(0L, pipeline.flushRing())
+    pipeline.close()
+  }
+
+  @Test
+  fun oneCaptureRecordsWhatEachSuccessivePipelineHandedTheTrack() {
+    // A hard cut between local tunes closes the pipeline and opens a new one. A capture owned by the
+    // pipeline went with the first and read back empty, so the cut itself could never be graded.
+    val capture = OutputCapture()
+    capture.arm(4, sampleRate)
+    for (round in 0 until 2) {
+      val speaker = FakeSpeaker(sampleRate, record = true)
+      val pipeline = AudioPipeline(sampleRate, 200, trackFactory = speaker.factory)
+      pipeline.outputCapture = capture
+      pipeline.start()
+      try {
+        feedEven(pipeline, 1, 1.0)
+        Thread.sleep(300)
+      } finally {
+        pipeline.close()
+      }
+    }
+    val captured = capture.take()
+    assertTrue("the capture missed the second pipeline: ${captured.size} bytes", captured.size > sampleRate * bytesPerFrame)
+    assertEquals("a capture is read once", 0, capture.take().size)
+  }
+
+  @Test
   fun anEvenStreamPlaysWithoutDefects() {
     // The control. With no burstiness there is nothing to absorb, so any defect here would mean the
     // pipeline itself is broken rather than the link.
@@ -710,6 +769,55 @@ class AudioPipelineTest {
       assertEquals("channels diverged through the resampler", rms, rms(right), 200.0)
     } finally {
       pipeline.close()
+    }
+  }
+
+  @Test
+  fun withoutDriftCorrectionAtTheOutputRateTheSpeakerGetsExactlyTheSamplesFed() {
+    // On-device playback runs the source at the device's rate, so the converter's ratio is exactly 1
+    // and the samples are copied rather than interpolated. The copy has to be what interpolation at
+    // a ratio of 1 produces: the very same samples, channel for channel, across the ring's wrap.
+    val rate = 48000
+    val speaker = FakeSpeaker(rate, record = true)
+    // On-device playback's own configuration: a deep target, a short prime, and no drift correction,
+    // which would otherwise slew the ratio off 1 while the ring fills and leave a fractional position
+    // behind for good. A burst that does not divide the ring, so chunks straddle its end and the
+    // wrapped copy runs.
+    val pipeline =
+        AudioPipeline(rate, 15000, rate, 241, speaker.factory, maxRingMs = 20000, trackBursts = 16, primeMs = 600, correctDrift = false)
+    val random = java.util.Random(64)
+    val fed = java.io.ByteArrayOutputStream()
+    try {
+      pipeline.start()
+      val endAt = System.nanoTime() + 3_000_000_000L
+      val stepNanos = packetFrames * 1_000_000_000L / rate
+      var next = System.nanoTime()
+      while (System.nanoTime() < endAt) {
+        if (System.nanoTime() < next) {
+          Thread.sleep(1)
+          continue
+        }
+        val buf = ByteArray(packetFrames * bytesPerFrame).also { random.nextBytes(it) }
+        fed.write(buf)
+        pipeline.offer(buf, 0, buf.size)
+        next += stepNanos
+      }
+      assertEquals("the ratio moved off 1", 1.0, pipeline.stats().driftCorrection, 0.0)
+    } finally {
+      pipeline.close()
+    }
+    val input = fed.toByteArray()
+    val output = synchronized(speaker.played) { speaker.played.toByteArray() }
+    val probe = input.copyOfRange(rate * bytesPerFrame / 10, rate * bytesPerFrame / 10 + 256)
+    val at = (0..output.size - probe.size).firstOrNull { o -> (probe.indices).all { output[o + it] == probe[it] } }
+    assertTrue("the fed samples never reached the speaker unchanged", at != null)
+    val inputAt = rate * bytesPerFrame / 10
+    val overlap = minOf(input.size - inputAt, output.size - at!!)
+    assertTrue("too little audio to compare", overlap > rate * bytesPerFrame)
+    for (i in 0 until overlap) {
+      if (output[at + i] != input[inputAt + i]) {
+        throw AssertionError("byte ${i} after the match differs: fed ${input[inputAt + i]}, played ${output[at + i]}")
+      }
     }
   }
 

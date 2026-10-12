@@ -15,6 +15,7 @@ const engine = vi.hoisted(() => ({
   pending: null as PendingSeekState | null,
   rendered: null as number | null,
   reads: 0,
+  seekListeners: new Set<() => void>(),
 }));
 
 vi.mock("@/lib/playback/localSidPlaybackController", () => ({
@@ -25,6 +26,10 @@ vi.mock("@/lib/playback/localSidPlaybackController", () => ({
     },
     pendingSeek: () => (engine.pending ? { ...engine.pending } : null),
     debugState: () => ({}),
+    onSeek: (listener: () => void) => {
+      engine.seekListeners.add(listener);
+      return () => engine.seekListeners.delete(listener);
+    },
   }),
 }));
 
@@ -45,6 +50,7 @@ describe("useLocalPendingSeek", () => {
     engine.pending = null;
     engine.rendered = 10;
     engine.reads = 0;
+    engine.seekListeners.clear();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -62,6 +68,25 @@ describe("useLocalPendingSeek", () => {
     const first = result.current.pendingSeekState;
     act(() => vi.advanceTimersByTime(AWAITING_POLL_MS * 3));
     expect(result.current.pendingSeekState).toBe(first);
+  });
+
+  it("shows a seek that has to wait as soon as it is made, not on the next poll", () => {
+    // Until the poll, the page showed the target as reached while the engine sat silent: the parity
+    // HIL read that as a landing and listened through the whole wait.
+    const { result } = renderHook(() => useLocalPendingSeek(true, "tune", vi.fn()));
+    expect(result.current.pendingSeekState).toBeNull();
+    engine.pending = waiting;
+    act(() => engine.seekListeners.forEach((listener) => listener()));
+    expect(result.current.pendingSeekState).toEqual(waiting);
+  });
+
+  it("stops listening for seeks once the engine is no longer playing here", () => {
+    const { rerender } = renderHook(({ active }) => useLocalPendingSeek(active, "tune", vi.fn()), {
+      initialProps: { active: true },
+    });
+    expect(engine.seekListeners.size).toBe(1);
+    rerender({ active: false });
+    expect(engine.seekListeners.size).toBe(0);
   });
 
   it("polls quickly only while a seek waits", () => {

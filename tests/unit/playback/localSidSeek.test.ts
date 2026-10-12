@@ -199,7 +199,7 @@ describe("auto-advance follows a seek", () => {
     const calls = hook.match(/rebasePlaybackPosition\(positionMs\)/g) ?? [];
     expect(calls.length).toBeGreaterThanOrEqual(2);
     // Deadline is derived from the tune's duration and the NEW position.
-    expect(hook).toContain("const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs)");
+    expect(hook).toMatch(/const dueAtMs = Date\.now\(\) \+ autoAdvanceDelayMs\(durationMs, positionMs, /);
     // A rescheduled track must be allowed to fire again.
     expect(hook).toContain("guard.autoFired = false");
   });
@@ -237,7 +237,9 @@ describe("auto-advance follows a seek", () => {
     const { readFileSync } = await import("node:fs");
     const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
     expect(page).toContain("resolvePlayheadAnchor({");
-    expect(page).toContain("const dueAtMs = now + Math.max(0, currentDurationMsRef.current - anchor.elapsedMs);");
+    expect(page).toContain(
+      "const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);",
+    );
     // Only when it moved: this deadline is mirrored to the native background watchdog.
     expect(page).toContain("if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current)");
     expect(page).not.toContain("holdAutoAdvanceWhilePending");

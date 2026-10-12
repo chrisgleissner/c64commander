@@ -364,7 +364,7 @@ describe("a seek waiting for the pre-render to reach it", () => {
 
     // The accumulated buffer was taken away before the completion arrived — a second pre-render
     // starting for another tune does exactly this.
-    (engine as unknown as { prerenderAccumulated: Int16Array }).prerenderAccumulated = new Int16Array(0);
+    (engine as unknown as { prerenderPcm: { reset: () => void } }).prerenderPcm.reset();
     prerenderWorker.emit({
       type: "prerendered",
       id: prerenderId(engine),

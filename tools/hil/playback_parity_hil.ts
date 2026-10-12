@@ -68,16 +68,23 @@ const run = (command: string, args: string[]) =>
     child.on("close", (code) => resolve({ ok: code === 0, out }));
   });
 
+/** A request to the Ultimate, failing with the request and how long it ran rather than a bare abort. */
+const ultimateFetch = async (host: string, route: string, method = "GET") => {
+  const started = Date.now();
+  try {
+    return await fetch(`http://${host}${route}`, { method, signal: AbortSignal.timeout(8000) });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`${method} ${route} on ${host} failed after ${Date.now() - started} ms: ${reason}`);
+  }
+};
 const rest = async (host: string, route: string, method = "GET") => {
-  const response = await fetch(`http://${host}${route}`, { method, signal: AbortSignal.timeout(8000) });
+  const response = await ultimateFetch(host, route, method);
   if (!response.ok) throw new Error(`${method} ${route} on ${host}: HTTP ${response.status}`);
   return response;
 };
 const configValue = async (host: string, category: string, item: string): Promise<string | null> => {
-  const response = await fetch(
-    `http://${host}/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`,
-    { signal: AbortSignal.timeout(8000) },
-  );
+  const response = await ultimateFetch(host, `/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`);
   if (!response.ok) return null;
   const body = (await response.json()) as Record<string, Record<string, { current?: string }>>;
   return body[category]?.[item]?.current ?? null;
@@ -520,7 +527,10 @@ const play=row?.querySelector('button[aria-label^="Play "]');if(!play)return fal
       : touch(testId),
   hold: (testId, ms) => touch(testId, 0.5, ms),
   tapBar: (fraction) => touch("playback-progress-seek", fraction),
-  waitingForRender: () => js<boolean>(`!!document.querySelector('[data-testid="playback-pending-status"]')`),
+  renderWaitProgress: () =>
+    js<number | null>(
+      `(()=>{const s=document.querySelector('[data-testid="playback-pending-status"]');return s?Number(s.getAttribute("data-pending-progress")??0):null})()`,
+    ),
   async shownSeconds() {
     const state = await js<{
       waiting: boolean;
@@ -557,7 +567,7 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
       const now = await configValue(host, category, item);
       if (now !== baseline[key]) changed.push(`${item} ${JSON.stringify(now)}, was ${JSON.stringify(baseline[key])}`);
     }
-    const input = await fetch(`http://${host}/v1/machine:input`, { signal: AbortSignal.timeout(8000) });
+    const input = await ultimateFetch(host, "/v1/machine:input");
     if (input.ok) {
       const held = ((await input.json()) as { keyboard?: { inputs?: string[] } }).keyboard?.inputs ?? [];
       if (held.length) changed.push(`keys held: ${held.join(",")}`);

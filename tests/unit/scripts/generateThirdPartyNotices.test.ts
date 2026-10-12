@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -8,6 +8,9 @@ import {
   detectLicenseFromFiles,
   isUnresolvedLicense,
   normalizeLicense,
+  readNativeNotices,
+  readNativePins,
+  renderNativeNotices,
   resolveLicenseUrl,
 } from "../../../scripts/generate-third-party-notices.mjs";
 
@@ -189,5 +192,70 @@ describe("third-party notice licence resolution", () => {
       expect(resolveLicenseUrl("UNKNOWN")).toBe("-");
       expect(resolveLicenseUrl("SEE LICENSE IN License.txt")).toBe("-");
     });
+  });
+});
+
+describe("the native components section", () => {
+  const gradle = readFileSync(path.resolve(process.cwd(), "android/app/build.gradle"), "utf8");
+
+  it("names the exact pins the Android build compiles, read from build.gradle", () => {
+    const pins = readNativePins(gradle);
+    expect(pins.libsidplayez.revision).toMatch(/^[0-9a-f]{40}$/);
+    expect(pins.libsidplayez.url).toContain(pins.libsidplayez.revision);
+    const text = renderNativeNotices(pins);
+    expect(text).toContain(pins.libsidplayez.sha256);
+    expect(text).toContain(pins.sevenZip.sha256);
+    expect(text).toContain("| 26.00 |");
+  });
+
+  it("leaves the native components out where the Android project is not present, as in the web image", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "notices-no-android-"));
+    tempDirs.push(dir);
+    expect(await readNativeNotices(path.join(dir, "android", "app", "build.gradle"))).toBe("");
+    expect(await readNativeNotices(path.resolve(process.cwd(), "android/app/build.gradle"))).toBe(
+      renderNativeNotices(readNativePins(gradle)),
+    );
+  });
+
+  it("credits libSidplayEZ's authors, states what the app changes, and reproduces the notices it must", () => {
+    const text = renderNativeNotices(readNativePins(gradle));
+    for (const name of ["Simon White", "Antti Lankila", "Leandro Nini", "Michael Hartmann", "Dag Lem", "VICE"]) {
+      expect(text).toContain(name);
+    }
+    expect(text).toContain("On 2026-10-11 Christian Gleissner modified four upstream files");
+    expect(text).toContain("each modified file carries a notice saying so");
+    for (const holder of ["Dag Lem", "VICE Project", "Michael Schwendt", "André Fachat", "Ken Händel"]) {
+      expect(text).toContain(holder);
+    }
+    expect(text).toContain("Aladdin Enterprises");
+    expect(text).toContain("Redistributions in binary form must reproduce the above copyright notice");
+    expect(text).toContain("Yann Collet");
+  });
+
+  it("names every patch the build applies to libSidplayEZ, and every patched file carries a dated notice", () => {
+    const text = renderNativeNotices(readNativePins(gradle));
+    const patchDir = path.resolve(process.cwd(), "android/app/src/main/cpp/sidplayez/patches");
+    const patches = readdirSync(patchDir).filter((name) => name.endsWith(".patch"));
+    expect(patches.length).toBeGreaterThan(0);
+    for (const patch of patches) {
+      expect(text).toContain(`patches/${patch}`);
+      const body = readFileSync(path.join(patchDir, patch), "utf8");
+      const files = [...body.matchAll(/^\+\+\+ b\/(\S+)/gm)].map((match) => match[1]);
+      expect(files.length).toBeGreaterThan(0);
+      for (const file of files) {
+        const hunk = body.slice(body.indexOf(`+++ b/${file}`));
+        expect(hunk, file).toMatch(/^\+\/\/ Modified for C64 Commander on \d{4}-\d{2}-\d{2}/m);
+        expect(text, file).toContain(`\`${file}\``);
+      }
+    }
+  });
+
+  it("is part of the committed notices file", () => {
+    const committed = readFileSync(path.resolve(process.cwd(), "THIRD_PARTY_NOTICES.md"), "utf8");
+    expect(committed).toContain(renderNativeNotices(readNativePins(gradle)));
+  });
+
+  it("fails loudly when build.gradle stops defining a pin", () => {
+    expect(() => readNativePins('def libsidplayezRevision = "abc"')).toThrow(/does not define/);
   });
 });

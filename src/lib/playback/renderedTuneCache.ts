@@ -10,15 +10,24 @@ import { addLog } from "@/lib/logging";
 import { effectiveSidEmulationEngine, resolveLocalSidModel, type SidEmulationEngine } from "@/lib/config/appSettings";
 import { hasCompleteRomSet } from "@/lib/roms/romStore";
 import { accurateEngineViable } from "./renderThroughput";
+import { isSidRendererAvailable } from "./sidRenderer/sidRendererAvailability";
+import type { CachedPcm } from "./sidRenderer/pcmPayload";
 
 /**
- * The emulation a tune renders with: the listener's choice, or SIDLite on a device measured too slow for
- * reSIDfp. Live playback, the pre-render, the lead-in and the cache key all take it from here, so cached
- * audio is never spliced into live audio of the other emulation.
+ * The renderer a tune renders with. Live playback, the pre-render, the lead-in and the cache key all
+ * take it from here, so cached audio is never spliced into live audio of another renderer.
+ *
+ * The listener's choice where this device has it. libSidplayEZ exists only on Android, so elsewhere
+ * (or when its library did not load) a preference for it falls back to reSIDfp, which renders the
+ * same notes in WASM. Either accurate renderer falls back to SIDLite on a device measured too slow
+ * for it — not from libSidplayEZ to reSIDfp, which is the slower of the two. The stored preference
+ * is never rewritten, so moving to a device that has the renderer brings it back.
  */
 export const playbackSidEmulation = (): SidEmulationEngine => {
   const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
-  return preferred === "residfp" && !accurateEngineViable() ? "sidlite" : preferred;
+  const runnable: SidEmulationEngine = isSidRendererAvailable(preferred) ? preferred : "residfp";
+  if (runnable === "sidlite") return runnable;
+  return accurateEngineViable(runnable) ? runnable : "sidlite";
 };
 
 /**
@@ -71,8 +80,16 @@ export const buildRenderedTuneKey = (itemId: string, tuneIndex: number): string 
  */
 
 export interface RenderedTune {
-  /** Interleaved stereo Int16 PCM for the whole tune. */
-  pcm: Int16Array;
+  /**
+   * Interleaved stereo Int16 PCM for the whole tune: in JavaScript for the WASM renderers, in a
+   * native buffer for libSidplayEZ. Either is sliced the same way.
+   */
+  pcm: CachedPcm;
+  /**
+   * The renderer that produced it. A key built before the native probe answered names reSIDfp on a
+   * device that then plays libSidplayEZ, so the key alone cannot keep the two apart.
+   */
+  renderer: SidEmulationEngine;
   sampleRate: number;
   channels: number;
   /** Rendered length in seconds (pcm.length / channels / sampleRate). */
@@ -109,6 +126,11 @@ export class RenderedTuneCache {
   constructor(
     private readonly maxTunes: number = DEFAULT_MAX_TUNES,
     private readonly maxBytes: number = DEFAULT_MAX_BYTES,
+    /**
+     * Told about every entry the cache lets go of, so a native buffer can be given back. An entry
+     * replaced by a grown version of the same buffer is not let go of.
+     */
+    private readonly onDrop: (tune: RenderedTune) => void = () => undefined,
   ) {}
 
   get size(): number {
@@ -135,6 +157,7 @@ export class RenderedTuneCache {
   }
 
   set(key: string, tune: RenderedTune): void {
+    const previous = this.entries.get(key);
     // A single tune larger than the whole budget is refused rather than
     // evicting everything else to make room for something that still will not
     // fit alongside anything.
@@ -145,26 +168,48 @@ export class RenderedTuneCache {
         bytes: tune.pcm.byteLength,
         maxBytes: this.maxBytes,
       });
+      this.onDrop(tune);
       return;
     }
     this.entries.delete(key);
     this.entries.set(key, tune);
+    if (previous && !samePcmStorage(previous.pcm, tune.pcm)) this.onDrop(previous);
     this.evict();
   }
 
   delete(key: string): void {
+    const entry = this.entries.get(key);
     this.entries.delete(key);
+    if (entry) this.onDrop(entry);
   }
 
   clear(): void {
+    const dropped = [...this.entries.values()];
     this.entries.clear();
+    for (const entry of dropped) this.onDrop(entry);
+  }
+
+  /** Whether any entry holds this storage — the engine asks before releasing a native buffer. */
+  holds(pcm: CachedPcm): boolean {
+    for (const entry of this.entries.values()) if (samePcmStorage(entry.pcm, pcm)) return true;
+    return false;
   }
 
   private evict(): void {
     while (this.entries.size > this.maxTunes || this.bytes > this.maxBytes) {
       const oldest = this.entries.keys().next();
       if (oldest.done) return;
+      const entry = this.entries.get(oldest.value);
       this.entries.delete(oldest.value);
+      if (entry) this.onDrop(entry);
     }
   }
 }
+
+/** Whether two cache payloads are views of the same storage (one JS buffer, or one native buffer). */
+export const samePcmStorage = (a: CachedPcm, b: CachedPcm): boolean => {
+  if (a instanceof Int16Array || b instanceof Int16Array) {
+    return a instanceof Int16Array && b instanceof Int16Array && a.buffer === b.buffer;
+  }
+  return a.bufferId === b.bufferId;
+};

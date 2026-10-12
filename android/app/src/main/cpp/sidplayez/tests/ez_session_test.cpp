@@ -1,0 +1,599 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+// Host tests for the libSidplayEZ session wrapper, built three times by build-libsidplayez.sh:
+// plain, with AddressSanitizer + UBSan, and with ThreadSanitizer. Usage: ez_session_test <tone-ladder.sid>
+
+#include <algorithm>
+#include <cmath>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <limits>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "ez_session.h"
+#include "session_handle.h"
+
+using c64commander::EzSession;
+using c64commander::EzSidModel;
+
+namespace {
+
+int failures = 0;
+
+#define CHECK(condition)                                                                                               \
+  do {                                                                                                                 \
+    if (!(condition)) {                                                                                                \
+      std::fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #condition);                             \
+      ++failures;                                                                                                      \
+    }                                                                                                                  \
+  } while (0)
+
+constexpr int kRate = 48000;
+
+std::vector<uint8_t> readFile(const char* path) {
+  std::ifstream in(path, std::ios::binary);
+  return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+void put16(std::vector<uint8_t>& v, size_t at, uint16_t value) {
+  v[at] = static_cast<uint8_t>(value >> 8);
+  v[at + 1] = static_cast<uint8_t>(value & 0xff);
+}
+
+enum class Model { Unknown = 0, M6581 = 1, M8580 = 2 };
+
+/**
+ * A minimal PSID: init plays a sawtooth on voice 1 whose pitch depends on the song number in A, on
+ * the first SID and (when `secondSid` is set) a square wave on the second SID; play does nothing.
+ */
+std::vector<uint8_t> makePsid(uint16_t songs, Model model, uint8_t secondSid = 0, bool rsid = false) {
+  std::vector<uint8_t> v(0x7c, 0);
+  std::memcpy(v.data(), rsid ? "RSID" : "PSID", 4);
+  put16(v, 4, secondSid ? 3 : 2);
+  put16(v, 6, 0x7c);
+  put16(v, 8, 0);       // load address comes from the data
+  put16(v, 10, 0x1000); // init
+  put16(v, 12, rsid ? 0 : 0x1040); // play
+  put16(v, 14, songs);
+  put16(v, 16, 1);
+  std::memcpy(v.data() + 0x16, "ez session test", 15);
+  v[0x77] = static_cast<uint8_t>((static_cast<int>(model) << 4) | 0x04); // PAL
+  v[0x7a] = secondSid;
+  std::vector<uint8_t> code = {
+      0x00, 0x10,             // load address $1000
+      0x18, 0x69, 0x10,       // CLC; ADC #$10      pitch high byte from the song number
+      0x8d, 0x01, 0xd4,       // STA $D401
+      0xa9, 0x00, 0x8d, 0x00, 0xd4, // LDA #0; STA $D400
+      0xa9, 0x00, 0x8d, 0x05, 0xd4, // AD
+      0xa9, 0xf0, 0x8d, 0x06, 0xd4, // SR
+      0xa9, 0x21, 0x8d, 0x04, 0xd4, // saw + gate
+      0xa9, 0x0f, 0x8d, 0x18, 0xd4, // volume
+  };
+  if (secondSid) {
+    const uint8_t hi = static_cast<uint8_t>(0xd0 | (secondSid >> 4));
+    const uint8_t lo = static_cast<uint8_t>(secondSid << 4);
+    const std::vector<uint8_t> second = {
+        0xa9, 0x08, 0x8d, static_cast<uint8_t>(lo + 0x03), hi, // pulse width high
+        0xa9, 0x30, 0x8d, static_cast<uint8_t>(lo + 0x01), hi, // pitch
+        0xa9, 0x00, 0x8d, static_cast<uint8_t>(lo + 0x05), hi,
+        0xa9, 0xf0, 0x8d, static_cast<uint8_t>(lo + 0x06), hi,
+        0xa9, 0x41, 0x8d, static_cast<uint8_t>(lo + 0x04), hi, // pulse + gate
+        0xa9, 0x0f, 0x8d, static_cast<uint8_t>(lo + 0x18), hi,
+    };
+    code.insert(code.end(), second.begin(), second.end());
+  }
+  if (rsid) {
+    code.push_back(0x4c); // JMP * : an RSID whose init never returns is legal
+    const uint16_t self = static_cast<uint16_t>(0x1000 + code.size() - 3);
+    code.push_back(static_cast<uint8_t>(self & 0xff));
+    code.push_back(static_cast<uint8_t>(self >> 8));
+  } else {
+    code.push_back(0x60); // RTS
+  }
+  while (code.size() < 2 + 0x40) code.push_back(0xea);
+  code.push_back(0x60); // play at $1040: RTS
+  v.insert(v.end(), code.begin(), code.end());
+  return v;
+}
+
+std::vector<int16_t> renderSeconds(EzSession& session, double seconds) {
+  const int frames = static_cast<int>(seconds * session.sampleRate());
+  std::vector<int16_t> out(static_cast<size_t>(frames) * EzSession::kChannels);
+  int done = 0;
+  while (done < frames) {
+    const int got = session.render(out.data() + static_cast<size_t>(done) * 2, std::min(4800, frames - done));
+    if (got <= 0) break;
+    done += got;
+  }
+  out.resize(static_cast<size_t>(done) * 2);
+  return out;
+}
+
+int peakToPeak(const std::vector<int16_t>& pcm, size_t channel) {
+  int lo = 0, hi = 0;
+  for (size_t i = channel; i < pcm.size(); i += 2) {
+    lo = std::min<int>(lo, pcm[i]);
+    hi = std::max<int>(hi, pcm[i]);
+  }
+  return hi - lo;
+}
+
+void testConversion() {
+  CHECK(c64commander::floatToS16(0.0f) == 0);
+  CHECK(c64commander::floatToS16(1.0f) == 32767);
+  CHECK(c64commander::floatToS16(-1.0f) == -32768);
+  CHECK(c64commander::floatToS16(4.0f) == 32767);
+  CHECK(c64commander::floatToS16(-4.0f) == -32768);
+  CHECK(c64commander::floatToS16(0.5f) == 16384);
+  CHECK(c64commander::floatToS16(1000.0f / 32768.0f) == 1000);
+  CHECK(c64commander::floatToS16(std::numeric_limits<float>::quiet_NaN()) == -32768 ||
+        c64commander::floatToS16(std::numeric_limits<float>::quiet_NaN()) == 0);
+}
+
+void testRejectsInvalidInput() {
+  EzSession session(kRate);
+  std::string error;
+  CHECK(!session.load(nullptr, 0, 0, EzSidModel::Mos8580, error));
+  CHECK(!error.empty());
+  const uint8_t garbage[64] = {1, 2, 3, 4};
+  error.clear();
+  CHECK(!session.load(garbage, sizeof garbage, 0, EzSidModel::Mos8580, error));
+  CHECK(!error.empty());
+  std::vector<uint8_t> huge(EzSession::kMaxSidBytes + 1, 0);
+  CHECK(!session.load(huge.data(), huge.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(!session.hasTune());
+  int16_t out[16] = {};
+  CHECK(session.render(out, 8) == 0);
+  CHECK(session.render(nullptr, 8) == 0);
+  CHECK(session.skip(1000, nullptr) == 0);
+  CHECK(session.tuneInfoJson() == "null");
+  std::string reloadError;
+  CHECK(!session.reload(reloadError));
+}
+
+void testToneLadder(const std::vector<uint8_t>& ladder) {
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(ladder.data(), ladder.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(session.chips() == 1);
+  const auto pcm = renderSeconds(session, 2.0);
+  CHECK(pcm.size() == static_cast<size_t>(2 * kRate * 2));
+  CHECK(peakToPeak(pcm, 0) > 1000);
+  // One SID in a stereo output is mirrored onto both channels.
+  bool same = true;
+  for (size_t i = 0; i < pcm.size(); i += 2) same = same && pcm[i] == pcm[i + 1];
+  CHECK(same);
+  const auto info = session.tuneInfoJson();
+  CHECK(info.find("\"songs\":1") != std::string::npos);
+  CHECK(info.find("\"engine\":\"libSidplayEZ\"") != std::string::npos);
+
+  // Deterministic: a second session and a reload both reproduce the same samples.
+  EzSession other(kRate);
+  CHECK(other.load(ladder.data(), ladder.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(renderSeconds(other, 2.0) == pcm);
+  CHECK(session.reload(error));
+  CHECK(renderSeconds(session, 2.0) == pcm);
+
+  // Skipping is rendering with the output thrown away, so a skip followed by a render matches
+  // the same span of a straight render.
+  CHECK(session.reload(error));
+  CHECK(session.skip(kRate, nullptr) == kRate);
+  const auto tail = renderSeconds(session, 1.0);
+  CHECK(std::equal(tail.begin(), tail.end(), pcm.begin() + kRate * 2));
+
+  std::atomic<bool> cancel{true};
+  CHECK(session.skip(kRate, &cancel) == 0);
+}
+
+void testSubsongsAndClamp() {
+  const auto tune = makePsid(3, Model::M8580);
+  std::string error;
+  EzSession a(kRate), b(kRate), c(kRate);
+  CHECK(a.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(b.load(tune.data(), tune.size(), 2, EzSidModel::Mos8580, error));
+  CHECK(c.load(tune.data(), tune.size(), 99, EzSidModel::Mos8580, error));
+  CHECK(a.songIndex() == 0);
+  CHECK(b.songIndex() == 2);
+  CHECK(c.songIndex() == 2);
+  const auto first = renderSeconds(a, 0.5);
+  const auto third = renderSeconds(b, 0.5);
+  CHECK(peakToPeak(first, 0) > 1000);
+  CHECK(first != third);
+  CHECK(renderSeconds(c, 0.5) == third);
+  CHECK(a.tuneInfoJson().find("\"currentSong\":1") != std::string::npos);
+  CHECK(b.tuneInfoJson().find("\"currentSong\":3") != std::string::npos);
+}
+
+void testFallbackModelIsNotForced() {
+  std::string error;
+  const auto undeclared = makePsid(1, Model::Unknown);
+  EzSession u6581(kRate), u8580(kRate);
+  CHECK(u6581.load(undeclared.data(), undeclared.size(), 0, EzSidModel::Mos6581, error));
+  CHECK(u8580.load(undeclared.data(), undeclared.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(renderSeconds(u6581, 0.5) != renderSeconds(u8580, 0.5));
+
+  const auto declared = makePsid(1, Model::M8580);
+  EzSession d6581(kRate), d8580(kRate);
+  CHECK(d6581.load(declared.data(), declared.size(), 0, EzSidModel::Mos6581, error));
+  CHECK(d8580.load(declared.data(), declared.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(renderSeconds(d6581, 0.5) == renderSeconds(d8580, 0.5));
+}
+
+void testTwoSids() {
+  const auto tune = makePsid(1, Model::M8580, 0x42);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(session.chips() == 2);
+  const auto pcm = renderSeconds(session, 0.5);
+  CHECK(peakToPeak(pcm, 0) > 1000);
+  CHECK(peakToPeak(pcm, 1) > 1000);
+  bool differs = false;
+  for (size_t i = 0; i < pcm.size() && !differs; i += 2) differs = pcm[i] != pcm[i + 1];
+  CHECK(differs);
+  CHECK(session.tuneInfoJson().find("\"sidChipBases\":[54272,54304]") != std::string::npos);
+}
+
+double stereoCorrelation(const std::vector<int16_t>& pcm) {
+  double l = 0, r = 0, ll = 0, rr = 0, lr = 0;
+  const double n = static_cast<double>(pcm.size() / 2);
+  for (size_t i = 0; i + 1 < pcm.size(); i += 2) {
+    l += pcm[i];
+    r += pcm[i + 1];
+    ll += double(pcm[i]) * pcm[i];
+    rr += double(pcm[i + 1]) * pcm[i + 1];
+    lr += double(pcm[i]) * pcm[i + 1];
+  }
+  const double cov = lr / n - (l / n) * (r / n);
+  const double var = (ll / n - (l / n) * (l / n)) * (rr / n - (r / n) * (r / n));
+  return var > 0 ? cov / std::sqrt(var) : 1.0;
+}
+
+void testTwoChipStereoBlend() {
+  float left[] = {1.0f, 0.0f, 0.5f};
+  float right[] = {0.0f, 1.0f, 0.5f};
+  c64commander::blendTwoChipStereo(left, right, 3);
+  CHECK(std::fabs(left[0] - 0.70710678f) < 1e-6f && std::fabs(right[0] - 0.35355339f) < 1e-6f);
+  CHECK(std::fabs(left[1] - 0.35355339f) < 1e-6f && std::fabs(right[1] - 0.70710678f) < 1e-6f);
+  CHECK(std::fabs(left[2] - right[2]) < 1e-6f && std::fabs(left[2] - 0.53033009f) < 1e-6f);
+}
+
+void testTwoSidsAreBlendedLikeResidfp() {
+  // Hard-panned, the saw on the first chip and the square on the second correlate near zero across
+  // the two sides; reSIDfp's placement puts half of each chip on the other side.
+  const auto tune = makePsid(1, Model::M8580, 0x42);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(stereoCorrelation(renderSeconds(session, 0.5)) > 0.5);
+}
+
+void testStereoPlacementFollowsReSidfp() {
+  using c64commander::StereoPlacement;
+  using c64commander::chooseStereoPlacement;
+  CHECK(chooseStereoPlacement(1, false) == StereoPlacement::AsRendered);
+  CHECK(chooseStereoPlacement(2, false) == StereoPlacement::BlendTwo);
+  CHECK(chooseStereoPlacement(3, false) == StereoPlacement::CentreThree);
+  CHECK(chooseStereoPlacement(4, false) == StereoPlacement::AsRendered);
+  CHECK(chooseStereoPlacement(2, true) == StereoPlacement::AsRendered);
+  CHECK(chooseStereoPlacement(3, true) == StereoPlacement::AsRendered);
+  float mono[] = {0.8f, -0.4f};
+  float right[] = {0.0f, 0.0f};
+  c64commander::centreThreeChipMix(mono, right, 2);
+  CHECK(mono[0] == 0.4f && right[0] == 0.4f && mono[1] == -0.2f && right[1] == -0.2f);
+}
+
+void testThreeSidsAreCentred() {
+  // The test PSID has no third chip, so the header is given one at $D440 and the init writes there.
+  auto tune = makePsid(1, Model::M8580, 0x42);
+  put16(tune, 4, 4);
+  tune[0x7b] = 0x44;
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(session.chips() == 3);
+  const auto pcm = renderSeconds(session, 0.5);
+  CHECK(peakToPeak(pcm, 0) > 1000);
+  bool identical = true;
+  for (size_t i = 0; i + 1 < pcm.size() && identical; i += 2) identical = pcm[i] == pcm[i + 1];
+  CHECK(identical);
+}
+
+void testOneSidIsLeftAlone() {
+  const auto tune = makePsid(1, Model::M8580);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  const auto pcm = renderSeconds(session, 0.25);
+  bool identical = true;
+  for (size_t i = 0; i + 1 < pcm.size() && identical; i += 2) identical = pcm[i] == pcm[i + 1];
+  CHECK(identical);
+  CHECK(peakToPeak(pcm, 0) > 1000);
+}
+
+/** A PSID whose play routine toggles the master volume every frame: a 25 Hz volume-register digi. */
+std::vector<uint8_t> makeVolumeDigiPsid(Model model) {
+  std::vector<uint8_t> v(0x7c, 0);
+  std::memcpy(v.data(), "PSID", 4);
+  put16(v, 4, 2);
+  put16(v, 6, 0x7c);
+  put16(v, 10, 0x1000);
+  put16(v, 12, 0x1010);
+  put16(v, 14, 1);
+  put16(v, 16, 1);
+  v[0x77] = static_cast<uint8_t>((static_cast<int>(model) << 4) | 0x04);
+  std::vector<uint8_t> code(2 + 0x20, 0x60);
+  code[0] = 0x00;
+  code[1] = 0x10;
+  const uint8_t init[] = {0xa9, 0x00, 0x85, 0xfb, 0x60};
+  const uint8_t play[] = {0xa5, 0xfb, 0x49, 0x0f, 0x85, 0xfb, 0x8d, 0x18, 0xd4, 0x60};
+  std::memcpy(code.data() + 2, init, sizeof(init));
+  std::memcpy(code.data() + 2 + 0x10, play, sizeof(play));
+  v.insert(v.end(), code.begin(), code.end());
+  return v;
+}
+
+int digiPeakToPeak(int externalInput8580, Model model) {
+  const auto tune = makeVolumeDigiPsid(model);
+  EzSession session(kRate);
+  c64commander::AnalogueProfile profile;
+  profile.externalInput8580 = externalInput8580;
+  session.setProfile(profile);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  auto pcm = renderSeconds(session, 1.0);
+  pcm.erase(pcm.begin(), pcm.begin() + kRate);  // skip the first half second of settling
+  return peakToPeak(pcm, 0);
+}
+
+void testVolumeDigisAreAudibleOnAn8580ByDefault() {
+  // reSIDfp in libsidplayfp-wasm drives the 8580's EXT IN (digiBoost), so a volume-register digi
+  // is heard there; without the same input libSidplayEZ plays it far quieter.
+  const int boosted = digiPeakToPeak(c64commander::AnalogueProfile{}.externalInput8580, Model::M8580);
+  const int plain = digiPeakToPeak(0, Model::M8580);
+  CHECK(boosted > plain * 2);
+  CHECK(boosted > 4000);
+}
+
+void testVolumeStepsBeforeTheFirstNoteAreHeard() {
+  // libSidplayEZ's start-up declick would hold this tune, which never gates a voice, silent.
+  CHECK(digiPeakToPeak(c64commander::AnalogueProfile{}.externalInput8580, Model::M6581) > 4000);
+}
+
+void testExternalInputDoesNotTouchA6581() {
+  CHECK(digiPeakToPeak(-16700, Model::M6581) == digiPeakToPeak(0, Model::M6581));
+}
+
+void testProfileChangesApplyToTheOpenTune() {
+  const auto tune = makeVolumeDigiPsid(Model::M8580);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  renderSeconds(session, 0.5);
+  auto quiet = session.profile();
+  quiet.externalInput8580 = 0;
+  session.setProfile(quiet);
+  CHECK(session.profile().externalInput8580 == 0);
+  auto pcm = renderSeconds(session, 1.0);
+  pcm.erase(pcm.begin(), pcm.begin() + kRate);
+  CHECK(peakToPeak(pcm, 0) * 2 < digiPeakToPeak(-16700, Model::M8580));
+}
+
+/** A PSID that writes nothing to the SID: its output is whatever the analogue model settles to. */
+std::vector<uint8_t> makeSilentPsid(Model model) {
+  auto tune = makeVolumeDigiPsid(model);
+  tune[0x7c + 2 + 0x10] = 0x60;  // play returns at once
+  return tune;
+}
+
+int startPeak(Model model) {
+  const auto tune = makeSilentPsid(model);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  const auto pcm = renderSeconds(session, 0.3);
+  int peak = 0;
+  for (const auto sample : pcm) peak = std::max(peak, std::abs(static_cast<int>(sample)));
+  return peak;
+}
+
+void testASilentTuneStartsSilent() {
+  // The analogue settings move the output's DC level. Applied after the power-on warm-up they
+  // reached the speaker as a step at the start of every tune (about 3700 on an 8580, 2300 on a 6581);
+  // applied as each chip is created, the warm-up absorbs it. reSIDfp starts these at 815 and 46.
+  CHECK(startPeak(Model::M8580) < 1500);
+  CHECK(startPeak(Model::M6581) < 1500);
+}
+
+void testACallAfterADestroyIsRefused() {
+  // The state a call finds when a destroy emptied the handle between the lookup and the lock.
+  c64commander::SessionHandle emptied;
+  bool ran = false;
+  const int result = c64commander::runLocked(emptied, [] { return -1; }, [&](EzSession&) {
+    ran = true;
+    return 1;
+  });
+  CHECK(result == -1);
+  CHECK(!ran);
+  c64commander::SessionHandle live;
+  live.session = std::make_unique<EzSession>(kRate);
+  CHECK(c64commander::runLocked(live, [] { return -1; }, [](EzSession& s) { return s.sampleRate(); }) == kRate);
+}
+
+void testRsidWithEndlessInit() {
+  const auto tune = makePsid(1, Model::M6581, 0, true);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(peakToPeak(renderSeconds(session, 0.5), 0) > 1000);
+}
+
+/**
+ * A PSID whose init sets voice 1 up with the volume at 0 and then busy-waits `outerLoops` times
+ * 327,680 cycles (0 = forever) before returning; play turns the volume up. So the tone is heard
+ * only once play has been called, which the driver does only after init returns.
+ */
+std::vector<uint8_t> makeSlowInitPsid(uint8_t outerLoops) {
+  std::vector<uint8_t> v(0x7c, 0);
+  std::memcpy(v.data(), "PSID", 4);
+  put16(v, 4, 2);
+  put16(v, 6, 0x7c);
+  put16(v, 10, 0x1000);
+  put16(v, 12, 0x1040);
+  put16(v, 14, 1);
+  put16(v, 16, 1);
+  v[0x77] = static_cast<uint8_t>((static_cast<int>(Model::M8580) << 4) | 0x04);
+  std::vector<uint8_t> code = {
+      0x00, 0x10,                   // load address $1000
+      0xa9, 0x00, 0x8d, 0x18, 0xd4, // volume 0
+      0xa9, 0x00, 0x8d, 0x05, 0xd4, // AD
+      0xa9, 0xf0, 0x8d, 0x06, 0xd4, // SR
+      0xa9, 0x20, 0x8d, 0x01, 0xd4, // pitch
+      0xa9, 0x21, 0x8d, 0x04, 0xd4, // saw + gate
+  };
+  if (outerLoops == 0) {
+    const uint16_t self = static_cast<uint16_t>(0x1000 + code.size() - 2);
+    code.insert(code.end(), {0x4c, static_cast<uint8_t>(self & 0xff), static_cast<uint8_t>(self >> 8)});
+  } else {
+    code.insert(code.end(), {
+                                0xa9, outerLoops, 0x85, 0xfb, // LDA #n; STA $FB
+                                0xa2, 0x00,                   // outer: LDX #0
+                                0xa0, 0x00,                   // middle: LDY #0
+                                0x88, 0xd0, 0xfd,             // inner: DEY; BNE inner
+                                0xca, 0xd0, 0xf8,             // DEX; BNE middle
+                                0xc6, 0xfb, 0xd0, 0xf2,       // DEC $FB; BNE outer
+                                0x60,                         // RTS
+                            });
+  }
+  while (code.size() < 2 + 0x40) code.push_back(0xea);
+  code.insert(code.end(), {0xa9, 0x0f, 0x8d, 0x18, 0xd4, 0x60}); // play at $1040: volume 15
+  v.insert(v.end(), code.begin(), code.end());
+  return v;
+}
+
+void testAPsidWhoseInitNeverReturnsStillLoads() {
+  // Upstream waited about 935 emulated seconds for the init to return and then failed the load;
+  // libsidplayfp loads it and plays whatever init does.
+  const auto tune = makeSlowInitPsid(0);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  CHECK(renderSeconds(session, 0.5).size() == static_cast<size_t>(kRate) / 2 * 2);
+}
+
+void testAnInitThatReturnsLateStillStartsThePlayRoutine() {
+  // 48 x 327,680 cycles is about 16 emulated seconds, past the wait, so the load returns while init
+  // is still running. The tone sounds only if the driver calls play once init returns.
+  const auto tune = makeSlowInitPsid(48);
+  EzSession session(kRate);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+  const auto early = renderSeconds(session, 1.0);
+  CHECK(peakToPeak(early, 0) < 1000);
+  renderSeconds(session, 9.0);
+  CHECK(peakToPeak(renderSeconds(session, 1.0), 0) > 4000);
+}
+
+void testRomsAreValidatedBySize() {
+  EzSession session(kRate);
+  std::vector<uint8_t> kernal(EzSession::kKernalBytes, 0xea), shortBasic(100, 0);
+  session.setRoms(kernal.data(), kernal.size(), shortBasic.data(), shortBasic.size(), nullptr, 0);
+  const auto tune = makePsid(1, Model::M8580);
+  std::string error;
+  CHECK(session.load(tune.data(), tune.size(), 0, EzSidModel::Mos8580, error));
+}
+
+void testConcurrentIndependentSessions(const std::vector<uint8_t>& ladder) {
+  EzSession reference(kRate);
+  std::string error;
+  CHECK(reference.load(ladder.data(), ladder.size(), 0, EzSidModel::Mos8580, error));
+  const auto expected = renderSeconds(reference, 1.0);
+  constexpr int kThreads = 4;
+  std::vector<std::vector<int16_t>> results(kThreads);
+  std::vector<std::thread> threads;
+  for (int t = 0; t < kThreads; ++t) {
+    threads.emplace_back([&, t] {
+      for (int round = 0; round < 3; ++round) {
+        EzSession session(kRate);
+        std::string threadError;
+        if (!session.load(ladder.data(), ladder.size(), 0, EzSidModel::Mos8580, threadError)) return;
+        results[t] = renderSeconds(session, 1.0);
+      }
+    });
+  }
+  for (auto& thread : threads) thread.join();
+  for (const auto& result : results) CHECK(result == expected);
+}
+
+void testRepeatedCreateAndDestroy(const std::vector<uint8_t>& ladder) {
+  for (int i = 0; i < 20; ++i) {
+    EzSession session(i % 2 ? 44100 : kRate);
+    std::string error;
+    CHECK(session.load(ladder.data(), ladder.size(), 0, EzSidModel::Mos6581, error));
+    int16_t out[2 * 256];
+    CHECK(session.render(out, 256) == 256);
+  }
+}
+
+void testSampleRateIsClamped() {
+  EzSession low(100), high(1'000'000);
+  CHECK(low.sampleRate() == EzSession::kMinSampleRate);
+  CHECK(high.sampleRate() == EzSession::kMaxSampleRate);
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    std::fprintf(stderr, "usage: %s <tone-ladder.sid>\n", argv[0]);
+    return 2;
+  }
+  const auto ladder = readFile(argv[1]);
+  if (ladder.empty()) {
+    std::fprintf(stderr, "could not read %s\n", argv[1]);
+    return 2;
+  }
+  testConversion();
+  testRejectsInvalidInput();
+  testToneLadder(ladder);
+  testSubsongsAndClamp();
+  testFallbackModelIsNotForced();
+  testTwoSids();
+  testTwoChipStereoBlend();
+  testTwoSidsAreBlendedLikeResidfp();
+  testOneSidIsLeftAlone();
+  testStereoPlacementFollowsReSidfp();
+  testThreeSidsAreCentred();
+  testVolumeDigisAreAudibleOnAn8580ByDefault();
+  testExternalInputDoesNotTouchA6581();
+  testVolumeStepsBeforeTheFirstNoteAreHeard();
+  testProfileChangesApplyToTheOpenTune();
+  testASilentTuneStartsSilent();
+  testACallAfterADestroyIsRefused();
+  testRsidWithEndlessInit();
+  testAPsidWhoseInitNeverReturnsStillLoads();
+  testAnInitThatReturnsLateStillStartsThePlayRoutine();
+  testRomsAreValidatedBySize();
+  testConcurrentIndependentSessions(ladder);
+  testRepeatedCreateAndDestroy(ladder);
+  testSampleRateIsClamped();
+  if (failures) {
+    std::fprintf(stderr, "%d check(s) failed\n", failures);
+    return 1;
+  }
+  std::printf("ez_session_test: all checks passed (revision %s)\n", c64commander::libraryRevision());
+  return 0;
+}

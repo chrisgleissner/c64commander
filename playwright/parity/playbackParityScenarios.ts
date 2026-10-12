@@ -32,8 +32,11 @@ export type ParityDriver = {
   tapBar(fraction: number): Promise<void>;
   /** The elapsed time the page shows, or null while it shows where a seek is heading instead. */
   shownSeconds(): Promise<number | null>;
-  /** The phone is still rendering up to a seek's target, so nothing at the new position sounds yet. */
-  waitingForRender?: () => Promise<boolean>;
+  /**
+   * How far the phone has rendered toward a seek's target, in percent, or null when no seek waits
+   * for the render. While one waits nothing at the new position sounds yet.
+   */
+  renderWaitProgress?: () => Promise<number | null>;
   durationSeconds(): Promise<number>;
   /** "playing", "paused" or "stopped", as the transport shows it. */
   transportState(): Promise<"playing" | "paused" | "stopped">;
@@ -68,6 +71,12 @@ const check = (condition: boolean, message: string) => {
 /** Seeks land within this much of their target, on either route. */
 const LANDING_TOLERANCE_SECONDS = 4;
 const LANDING_TIMEOUT_MS = 30_000;
+/**
+ * A seek waiting for the phone's render may take longer than a landing, as long as the render keeps
+ * moving: the slowest renderer reached 1:29 of a tune from a cold start in 31 s on a Pixel 4.
+ */
+const RENDER_WAIT_LIMIT_MS = 180_000;
+const RENDER_STALL_MS = 15_000;
 
 /**
  * After a gesture: wait for the seek to show (a target instead of a position) or for the position to
@@ -93,12 +102,30 @@ const waitForTransport = async (driver: ParityDriver, state: "playing" | "paused
 
 /** Wait until the page shows a position again rather than a seek target, and return it. */
 export const landedSeconds = async (driver: ParityDriver): Promise<number> => {
-  for (let waited = 0; waited < LANDING_TIMEOUT_MS; waited += 250) {
+  let sinceProgress = 0;
+  let lastProgress: number | null = null;
+  for (let waited = 0; waited < RENDER_WAIT_LIMIT_MS; waited += 250) {
     const shown = await driver.shownSeconds();
     if (shown !== null) return shown;
+    const progress = (await driver.renderWaitProgress?.()) ?? null;
+    sinceProgress = progress !== null && progress !== lastProgress ? 0 : sinceProgress + 250;
+    lastProgress = progress;
+    if (progress === null && waited >= LANDING_TIMEOUT_MS) break;
+    if (progress !== null && sinceProgress >= RENDER_STALL_MS) {
+      throw new ParityFailure(`the render toward the seek target stopped at ${progress}% for ${RENDER_STALL_MS} ms`);
+    }
     await driver.wait(250);
   }
-  throw new ParityFailure(`no landing within ${LANDING_TIMEOUT_MS} ms`);
+  throw new ParityFailure(
+    lastProgress === null
+      ? `no landing within ${LANDING_TIMEOUT_MS} ms`
+      : `no landing within ${RENDER_WAIT_LIMIT_MS} ms of waiting for the render`,
+  );
+};
+
+/** Wait while a seek waits for the phone's render, as long as that render is visibly moving. */
+const waitOutRender = async (driver: ParityDriver) => {
+  if ((await driver.renderWaitProgress?.()) != null) await landedSeconds(driver);
 };
 
 /** The page agrees with the tune, where the driver knows where the tune is. */
@@ -240,12 +267,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       let tappedAt = 0;
       let landedAt = 0;
       // On the phone a jump far into a tune waits for the render to reach it, silently, as designed.
-      for (
-        let waited = 0;
-        driver.waitingForRender && (await driver.waitingForRender()) && waited < 60_000;
-        waited += 500
-      )
-        await driver.wait(500);
+      await waitOutRender(driver);
       const trace = await driver.listen!(async () => {
         await driver.wait(1500);
         tappedAt = Date.now();

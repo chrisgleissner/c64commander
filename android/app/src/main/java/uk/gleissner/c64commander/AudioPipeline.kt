@@ -72,22 +72,14 @@ internal class AudioPipeline(
     /** Test seam: builds the real `AudioTrack` (mocked in unit tests). */
     trackFactory: (Int, Int) -> AudioTrack = ::buildAudioTrack,
     /**
-     * Ceiling on the jitter ring, in ms.
-     *
-     * The default suits a live stream, where depth is latency and latency is the point. On-device
-     * playback is not live — nothing is waiting on it — so it can afford a far deeper ring, and wants
-     * one: the samples come from a WASM engine on the JS thread, and that thread also runs the UI. A
-     * shallow ring turns any scheduling hiccup there into an audible cut.
+     * Ceiling on the jitter ring, in ms. The default suits a live stream, where depth is latency.
+     * On-device playback has nothing waiting on it, and a deep ring absorbs scheduling hiccups.
      */
     maxRingMs: Int = 0,
     /**
-     * How many HAL bursts the `AudioTrack`'s own buffer holds.
-     *
-     * The default is sized for the live mirror, where every millisecond in this buffer is a
-     * millisecond of input latency. On-device playback has no such constraint, and a deeper track
-     * buffer is what stops the OS reporting underruns when the player thread is descheduled — those
-     * were still accruing at roughly one every four seconds with a two-second ring behind them,
-     * because the ring cannot help once the audio has been handed to the track.
+     * How many HAL bursts the `AudioTrack`'s own buffer holds. The mirror keeps it small (it is input
+     * latency); on-device playback needs it deep, or a descheduled player thread underruns the track
+     * however full the ring is (about one underrun every 4 s with a 2 s ring).
      */
     trackBursts: Int = 0,
     /**
@@ -100,6 +92,12 @@ internal class AudioPipeline(
      * with twelve seconds sitting in a ring that was waiting for fifteen.
      */
     primeMs: Int = 0,
+    /**
+     * Whether to trim the conversion ratio to hold the ring at its target depth: the mirror follows
+     * another machine's clock; on-device playback has none to follow, and a trimmed ratio would only
+     * shift the tune's pitch.
+     */
+    private val correctDrift: Boolean = true,
     /** Test seam: the player loop's time source, so tests can run it on virtual time. */
     private val clock: PipelineClock = PipelineClock.SYSTEM,
 ) {
@@ -203,17 +201,8 @@ internal class AudioPipeline(
   private var totalFramesWritten: Long = 0
   private var player: Thread? = null
 
-  /**
-   * Diagnostics only: a copy of exactly what was handed to the speaker.
-   *
-   * The end-to-end check that matters plays a known stimulus on the C64 and grades what a microphone
-   * hears from the phone, which covers everything including the room. This covers everything up to
-   * the room — network, jitter buffer, resampler, concealment — and needs no microphone, so it can
-   * grade the app's own contribution when the handset is not somewhere a microphone can reach it.
-   * Null unless a capture has been armed, so the hot path costs one reference read.
-   */
-  @Volatile private var capture: ByteArray? = null
-  @Volatile private var captureUsed = 0
+  /** Where a diagnostic capture of what reaches the track is recorded; see [OutputCapture]. */
+  @Volatile var outputCapture: OutputCapture? = null
 
   init {
     val burst = if (framesPerBurst > 0) framesPerBurst else defaultBurstFrames(outputRate)
@@ -290,11 +279,20 @@ internal class AudioPipeline(
    * is already queued, for as long as the ring is deep. Flushing makes those immediate again.
    */
   fun flush() {
-    synchronized(producerLock) {
-      readFrames = writeFrames
-      flushSeq += 1
-    }
+    flushRing()
   }
+
+  /**
+   * [flush], returning how many source frames the ring held. One step under the lock the player commits
+   * under: measured first and flushed after, a chunk committed in between was played and recovered too.
+   */
+  fun flushRing(): Long =
+      synchronized(producerLock) {
+        val discarded = (writeFrames - readFrames).coerceAtLeast(0)
+        readFrames = writeFrames
+        flushSeq += 1
+        discarded
+      }
 
   /**
    * Stop the speaker without discarding anything, which is what a listener's pause has to be.
@@ -493,19 +491,6 @@ internal class AudioPipeline(
     }
   }
 
-  /** Arm a capture of the next [seconds] of output. Replaces any capture already running. */
-  fun startCapture(seconds: Int) {
-    captureUsed = 0
-    capture = ByteArray(msToFrames(outputRate, seconds.coerceIn(1, 60) * 1000) * BYTES_PER_FRAME)
-  }
-
-  /** The captured PCM so far (interleaved stereo S16LE at [outputRate]), and disarm. */
-  fun takeCapture(): ByteArray {
-    val buffer = capture ?: return ByteArray(0)
-    capture = null
-    return buffer.copyOf(captureUsed)
-  }
-
   fun stats(): Stats {
     val ringDepth = (writeFrames - readFrames).coerceAtLeast(0)
     val jitterMs = ringDepth * 1000.0 / sourceRate
@@ -679,9 +664,12 @@ internal class AudioPipeline(
     val authority = CushionDrift.authority(depth, floor, recoveryDepthFrames(), startupCeilingFrames)
     // Slew-limited, never stepped: the correction is a pitch change, and the authority can change
     // fivefold at a threshold, which put an audible lurch in a held note.
-    val wanted = nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
+    val wanted =
+        if (correctDrift) nominalRatio() * (1.0 + authority * CushionDrift.cushionError(depth, targetFrames))
+        else nominalRatio()
     val ratio =
         when {
+          !correctDrift -> wanted
           appliedRatio <= 0.0 -> wanted
           wanted > appliedRatio -> minOf(wanted, appliedRatio + RATIO_SLEW_PER_CHUNK)
           else -> maxOf(wanted, appliedRatio - RATIO_SLEW_PER_CHUNK)
@@ -700,20 +688,14 @@ internal class AudioPipeline(
       return
     }
 
-    copyFromRing(Math.ceil(fraction + renderFrames * ratio).toInt() + 1)
-    var pos = fraction
-    var o = 0
-    for (i in 0 until renderFrames) {
-      val idx = pos.toInt()
-      val t = pos - idx
-      val a = idx * CHANNELS
-      val b = a + CHANNELS
-      val left = srcScratch[a] + (srcScratch[b] - srcScratch[a]) * t
-      val right = srcScratch[a + 1] + (srcScratch[b + 1] - srcScratch[a + 1]) * t
-      putFrame(outScratch, o, left, right)
-      o += BYTES_PER_FRAME
-      pos += ratio
-    }
+    // At a ratio of exactly 1 interpolation reproduces every sample, so copy them instead.
+    val pos =
+        if (ratio == 1.0 && fraction == 0.0) {
+          copyFramesFromRing(renderFrames)
+          renderFrames.toDouble()
+        } else {
+          interpolateFromRing(renderFrames, ratio)
+        }
     val consumed = pos.toInt()
     val committed =
         synchronized(producerLock) {
@@ -764,15 +746,28 @@ internal class AudioPipeline(
     windowStartNanos = now
   }
 
+  /** How long the track plays on from what it holds, two bursts short: each blocking write leaves it full. */
+  private fun trackCoverNanos(): Long {
+    val heldNanos = (trackBufferFrames - 2L * writeFramesPerChunk) * 1_000_000_000L / outputRate
+    return heldNanos - (clock.nanoTime() - lastWriteNanos)
+  }
+
   /** Depth above which the ring is far too deep — see [CushionDrift.authority]. */
   private fun recoveryDepthFrames(): Long = targetFrames + maxTargetFrames / 4L
 
   private fun nominalRatio(): Double = sourceRate.toDouble() / outputRate.toDouble()
 
-  /** Spin briefly for a late packet. Returns true if it arrived and the caller should retry. */
+  /**
+   * Spin for late audio. Returns true if it arrived and the caller should retry.
+   *
+   * For as long as the track can cover the wait on what it already holds, not just 8 ms: silence written
+   * then lands behind real audio. A track change on the phone empties the ring with the track full, and
+   * the handover took a few ms longer than that, so every crossfade began with a burst of silence.
+   */
   private fun waitForFrames(needed: Int): Boolean {
     var waited = 0L
-    while (waited < STARVE_LIMIT_NANOS && running) {
+    val limit = maxOf(STARVE_LIMIT_NANOS, trackCoverNanos())
+    while (waited < limit && running) {
       clock.park(POLL_NANOS)
       waited += POLL_NANOS
       if ((writeFrames - readFrames) >= needed) return true
@@ -797,6 +792,43 @@ internal class AudioPipeline(
       targetFrames = minOf(maxTargetFrames, targetFrames + msToFrames(sourceRate, CUSHION_GROW_MS))
     }
     writeBlocking(outScratch, outScratch.size)
+  }
+
+  /** Resample [renderFrames] output frames into [outScratch]; returns the source position reached. */
+  private fun interpolateFromRing(renderFrames: Int, ratio: Double): Double {
+    copyFromRing(Math.ceil(fraction + renderFrames * ratio).toInt() + 1)
+    var pos = fraction
+    var o = 0
+    for (i in 0 until renderFrames) {
+      val idx = pos.toInt()
+      val t = pos - idx
+      val a = idx * CHANNELS
+      val b = a + CHANNELS
+      val left = srcScratch[a] + (srcScratch[b] - srcScratch[a]) * t
+      val right = srcScratch[a + 1] + (srcScratch[b + 1] - srcScratch[a + 1]) * t
+      putFrame(outScratch, o, left, right)
+      o += BYTES_PER_FRAME
+      pos += ratio
+    }
+    return pos
+  }
+
+  /**
+   * Copy [count] frames from the read position straight into [outScratch], applying the master gain
+   * only while it is not unity. The same samples the interpolator produces when the ratio is 1.
+   */
+  private fun copyFramesFromRing(count: Int) {
+    val start = (readFrames % ringFrames).toInt()
+    val first = minOf(count, ringFrames - start)
+    System.arraycopy(ring, start * BYTES_PER_FRAME, outScratch, 0, first * BYTES_PER_FRAME)
+    if (count > first) System.arraycopy(ring, 0, outScratch, first * BYTES_PER_FRAME, (count - first) * BYTES_PER_FRAME)
+    if (appliedGain == 1.0 && targetGain * duckGain == 1.0) return
+    for (i in 0 until count) {
+      val at = i * BYTES_PER_FRAME
+      val left = ((outScratch[at].toInt() and 0xFF) or (outScratch[at + 1].toInt() shl 8)).toShort().toDouble()
+      val right = ((outScratch[at + 2].toInt() and 0xFF) or (outScratch[at + 3].toInt() shl 8)).toShort().toDouble()
+      putFrame(outScratch, at, left, right)
+    }
   }
 
   /** Linearise [count] source frames starting at the current read position into [srcScratch]. */
@@ -841,14 +873,9 @@ internal class AudioPipeline(
    */
   private fun writeBlocking(data: ByteArray, length: Int) {
     val written = track.write(data, 0, length, AudioTrack.WRITE_BLOCKING)
+    lastWriteNanos = clock.nanoTime()
     if (written > 0) totalFramesWritten += (written / BYTES_PER_FRAME).toLong()
-    capture?.let { buffer ->
-      val room = minOf(maxOf(written, 0), buffer.size - captureUsed)
-      if (room > 0) {
-        System.arraycopy(data, 0, buffer, captureUsed, room)
-        captureUsed += room
-      }
-    }
+    outputCapture?.record(data, written)
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
       if (written <= 0) clock.park(POLL_NANOS)
@@ -884,6 +911,7 @@ internal class AudioPipeline(
   }
 
   private var lastStatsReadNanos = 0L
+  private var lastWriteNanos = 0L
 
   internal companion object {
     private const val TAG = "AudioPipeline"
