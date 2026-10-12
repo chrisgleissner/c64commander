@@ -56,6 +56,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { requestTourStart } from "@/lib/tour/tourState";
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
+import { AudioProcessingSettingsSection } from "@/pages/settings/AudioProcessingSettingsSection";
 import { Slider } from "@/components/ui/slider";
 import {
   loadAutofireRateHz,
@@ -2675,6 +2676,7 @@ export default function SettingsPage() {
               — which decides what the radio will even offer — has to be reachable by the people using
               it. The controls inside it that are still developer-only stay gated there. */}
           <SidRadioSettingsSection developerMode={isDeveloperModeEnabled} />
+          <AudioProcessingSettingsSection />
 
           {/* 6. HVSC (hidden when the HVSC feature is disabled for the variant) */}
           {hvscEnabled && (

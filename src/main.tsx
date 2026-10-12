@@ -23,6 +23,7 @@ import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { applyStoredTextScale } from "./lib/uiPreferences";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { silenceLeftoverNativeAudio } from "./lib/streams/silenceLeftoverNativeAudio";
+import { installAudioProcessingSync } from "./lib/audio/audioProcessingSync";
 import { stopLeftoverDeviceStreams } from "./lib/streams/leftoverDeviceStreams";
 import { addErrorLog } from "./lib/logging";
 import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
@@ -122,6 +123,7 @@ applyStoredTextScale();
 // reload leaves it playing while the fresh JavaScript believes nothing is —
 // and the next local tune then starts underneath it.
 void silenceLeftoverNativeAudio();
+installAudioProcessingSync();
 registerServiceWorker();
 applyFullScreenFromSettings();
 applyScreenOrientationFromSettings();

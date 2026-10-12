@@ -100,6 +100,7 @@ import {
 } from "@/pages/playFiles/playbackVolumeBinding";
 import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { SpectrumCard } from "@/components/playback/SpectrumCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
@@ -2512,6 +2513,7 @@ export default function PlayFilesPage() {
               onOpenContextLens={openContextLens}
             />
           ) : null}
+          <SpectrumCard soundOnPhone={localEngineActive} paused={isPaused} />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div
               className="bg-card border border-border rounded-panel p-4 space-y-4"
