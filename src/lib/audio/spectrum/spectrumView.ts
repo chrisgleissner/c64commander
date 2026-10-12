@@ -30,6 +30,7 @@ import {
   drawBars,
   drawStaticLayer,
   type SpectrumContext,
+  type FrameDrawOptions,
   type SpectrumLayout,
 } from "@/lib/audio/spectrum/spectrumRenderer";
 
@@ -39,6 +40,8 @@ export const CLIP_LAMP_HOLD_MS = 1500;
 export const SPECTRUM_STALE_AFTER_MS = 500;
 /** How often the view asks whether sound has started while it has nothing to draw. */
 export const SPECTRUM_IDLE_POLL_MS = 400;
+/** The longest a pending bridge read may keep the animation loop awake. */
+export const SPECTRUM_READ_WAIT_MS = 1000;
 /** Never integrate more than this much time in one step, so a stalled tab does not jump. */
 const MAX_STEP_MS = 100;
 /** A frame is drawn when at least this share of its slot has passed, which lets a 60 Hz display carry 30 fps. */
@@ -82,9 +85,13 @@ const defaultCreateLayer = (widthPx: number, heightPx: number): SpectrumLayer | 
   return context ? { canvas, context } : null;
 };
 
+const reducedMotionQuery =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+
 const defaultReducedMotion = (): boolean =>
-  document.documentElement.classList.contains("c64-motion-reduced") ||
-  (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  document.documentElement.classList.contains("c64-motion-reduced") || reducedMotionQuery?.matches === true;
 
 const defaultDeviceSignals = () => {
   const nav = navigator as Navigator & { deviceMemory?: number };
@@ -122,6 +129,7 @@ export class SpectrumView {
   private layout: SpectrumLayout | null = null;
   private palette: SpectrumPalette | null = null;
   private gradient: CanvasGradient | null = null;
+  private drawOptions: FrameDrawOptions | null = null;
   private ratio = 1;
   private cssWidth = 0;
   private cssHeight = 0;
@@ -134,6 +142,7 @@ export class SpectrumView {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private clipTimer: ReturnType<typeof setTimeout> | null = null;
   private pollInFlight = false;
+  private readGeneration = 0;
   private answered = false;
   private lastPollAt = 0;
   private lastDrawAt = 0;
@@ -193,7 +202,7 @@ export class SpectrumView {
     this.drawOnce();
   }
 
-  /** Whether the view is on screen, and whether the tune is paused. The native analyser follows `visible`. */
+  /** Whether the view is on screen, and whether the tune is paused. The native analyser follows audible playback. */
   setState(state: { visible: boolean; paused: boolean }): void {
     this.visible = state.visible;
     this.paused = state.paused;
@@ -215,22 +224,33 @@ export class SpectrumView {
     return this.visible && this.documentShowing && !this.disposed;
   }
 
+  private get shouldEnableNative(): boolean {
+    return this.shouldAnalyse && !this.paused;
+  }
+
   private apply(): void {
-    const analyse = this.shouldAnalyse;
-    if (analyse !== this.nativeEnabled) {
-      this.nativeEnabled = analyse;
-      void this.setEnabled(analyse);
+    this.readGeneration += 1;
+    const enableNative = this.shouldEnableNative;
+    if (enableNative !== this.nativeEnabled) {
+      this.nativeEnabled = enableNative;
+      void this.setEnabled(enableNative).catch((error: unknown) => {
+        addLog("warn", "Spectrum: changing analyser state failed", {
+          service: "audio-fx",
+          enabled: enableNative,
+          error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+        });
+      });
     }
     this.cancelLoops();
-    if (!analyse) {
-      this.pollInFlight = false;
+    if (!this.shouldAnalyse) {
+      this.setActive(false);
       return;
     }
     this.controller.restart(this.now());
     this.answered = false;
     this.lastDrawAt = 0;
     this.lastNewFrameAt = this.now();
-    if (this.paused) this.active = false;
+    if (this.paused) this.setActive(false);
     this.startFrameLoop();
   }
 
@@ -260,6 +280,21 @@ export class SpectrumView {
       drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio);
     }
     this.gradient = createBarGradient(this.ctx, this.layout, this.palette);
+    if (this.drawOptions) {
+      this.drawOptions.layout = this.layout;
+      this.drawOptions.palette = this.palette;
+      this.drawOptions.gradient = this.gradient;
+      this.drawOptions.ratio = this.ratio;
+    } else {
+      this.drawOptions = {
+        layout: this.layout,
+        palette: this.palette,
+        tier: this.tier,
+        gradient: this.gradient,
+        glow: false,
+        ratio: this.ratio,
+      };
+    }
   }
 
   private applyTier(next: SpectrumTier): void {
@@ -271,6 +306,7 @@ export class SpectrumView {
       foldBands(previous.peaks, this.ballistics.peaks);
     }
     this.folded = new Float32Array(next.bars);
+    if (this.drawOptions) this.drawOptions.tier = next;
     this.options.onTierChange?.(next);
     addLog("info", "Spectrum: quality tier changed", { service: "audio-fx", tier: next.index });
   }
@@ -278,12 +314,32 @@ export class SpectrumView {
   private pollIfDue(nowMs: number): void {
     if (this.pollInFlight || nowMs - this.lastPollAt < 1000 / this.tier.dataHz) return;
     this.lastPollAt = nowMs;
+    this.read(false);
+  }
+
+  private read(idle: boolean): void {
+    if (this.pollInFlight || !this.shouldEnableNative) return;
     this.pollInFlight = true;
+    const generation = this.readGeneration;
     void this.readFrame()
-      .then((frame) => this.receive(frame))
+      .then((frame) => {
+        if (generation === this.readGeneration) this.receive(frame);
+      })
+      .catch((error: unknown) => {
+        addLog("warn", "Spectrum: frame poll failed", {
+          service: "audio-fx",
+          idle,
+          error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+        });
+      })
       .finally(() => {
         this.pollInFlight = false;
+        if (generation !== this.readGeneration) {
+          if (this.shouldEnableNative) this.startFrameLoop();
+          return;
+        }
         this.answered = true;
+        if (idle && this.shouldEnableNative && !this.isSounding(this.now())) this.scheduleIdlePoll();
       });
   }
 
@@ -338,7 +394,11 @@ export class SpectrumView {
     if (this.lastDrawAt === 0 || nowMs - this.lastDrawAt >= slotMs * SLOT_TOLERANCE) {
       this.drawFrame(nowMs);
     }
-    if (this.isSounding(nowMs) || !this.isSettled() || (!this.paused && !this.answered)) {
+    if (
+      this.isSounding(nowMs) ||
+      !this.isSettled() ||
+      (!this.paused && !this.answered && nowMs - this.lastPollAt < SPECTRUM_READ_WAIT_MS)
+    ) {
       this.startFrameLoop();
       return;
     }
@@ -363,19 +423,7 @@ export class SpectrumView {
     if (this.idleTimer !== null) return;
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null;
-      if (!this.shouldAnalyse || this.paused) return;
-      void this.readFrame()
-        .then((frame) => {
-          this.receive(frame);
-          if (!this.isSounding(this.now())) this.scheduleIdlePoll();
-        })
-        .catch((error: unknown) => {
-          addLog("warn", "Spectrum: idle poll failed", {
-            service: "audio-fx",
-            error: error instanceof Error ? (error.stack ?? error.message) : String(error),
-          });
-          this.scheduleIdlePoll();
-        });
+      this.read(true);
     }, SPECTRUM_IDLE_POLL_MS);
   }
 
@@ -393,11 +441,7 @@ export class SpectrumView {
     this.framesDrawn += 1;
     this.emitReadout(nowMs, false);
     if (previousDrawAt === 0) return;
-    const changed = this.controller.report({
-      nowMs,
-      costMs: this.now() - started,
-      intervalMs: nowMs - previousDrawAt,
-    });
+    const changed = this.controller.report(nowMs, this.now() - started, nowMs - previousDrawAt);
     if (changed) this.applyTier(changed);
   }
 
@@ -405,18 +449,10 @@ export class SpectrumView {
     const { ctx, layout, palette } = this;
     if (!ctx || !layout || !palette) return;
     if (this.layer) ctx.drawImage(this.layer.canvas, 0, 0, this.cssWidth, this.cssHeight);
-    drawBars(
-      ctx,
-      {
-        layout,
-        palette,
-        tier: this.tier,
-        gradient: this.gradient,
-        glow: this.tier.glow && !reducedMotion,
-        ratio: this.ratio,
-      },
-      this.ballistics,
-    );
+    const options = this.drawOptions;
+    if (!options) return;
+    options.glow = this.tier.glow && !reducedMotion;
+    drawBars(ctx, options, this.ballistics);
   }
 
   private drawOnce(): void {

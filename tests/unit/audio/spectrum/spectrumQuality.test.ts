@@ -25,7 +25,7 @@ const feed = (
 ) => {
   let changed = null;
   for (let t = fromMs; t <= toMs; t += intervalMs) {
-    changed = controller.report({ nowMs: t, costMs, intervalMs }) ?? changed;
+    changed = controller.report(t, costMs, intervalMs) ?? changed;
   }
   return changed;
 };
@@ -66,7 +66,7 @@ describe("spectrum quality tiers", () => {
     let heavy = false;
     for (let t = 16; t < 3000; t += 16.7) {
       heavy = !heavy;
-      controller.report({ nowMs: t, costMs: heavy ? 2 : 2, intervalMs: 16.7 });
+      controller.report(t, 2, 16.7);
     }
     expect(controller.tier.index).toBe(0);
   });
@@ -116,7 +116,7 @@ describe("spectrum quality tiers", () => {
       const started = now;
       while (now - started < limitMs && controller.tier.index !== 0) {
         now += 33;
-        controller.report({ nowMs: now, costMs: 1, intervalMs: 33 });
+        controller.report(now, 1, 33);
       }
       return now - started;
     };

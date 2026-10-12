@@ -55,26 +55,17 @@ export const initialSpectrumTier = (signals: SpectrumDeviceSignals): SpectrumTie
   return SPECTRUM_TIERS[signals.profile === "compact" || fewCores || littleMemory ? 1 : 0];
 };
 
-export interface SpectrumFrameSample {
-  /** Timestamp of the frame, in milliseconds. */
-  nowMs: number;
-  /** How long drawing the frame took. */
-  costMs: number;
-  /** Time since the previous frame was drawn. */
-  intervalMs: number;
-}
-
 export interface SpectrumTierController {
   readonly tier: SpectrumTier;
   /** Feeds one drawn frame. Returns the new tier when it changed, otherwise null. */
-  report(sample: SpectrumFrameSample): SpectrumTier | null;
+  report(nowMs: number, costMs: number, intervalMs: number): SpectrumTier | null;
   /** Forget what was measured, for example after the card was hidden for a while. */
   restart(nowMs: number): void;
 }
 
-const isOverBudget = (tier: SpectrumTier, sample: SpectrumFrameSample) => {
+const isOverBudget = (tier: SpectrumTier, costMs: number, intervalMs: number) => {
   const slotMs = 1000 / tier.drawFps;
-  return sample.costMs > slotMs * COST_BUDGET_SHARE || sample.intervalMs > slotMs * LATE_FRAME_RATIO;
+  return costMs > slotMs * COST_BUDGET_SHARE || intervalMs > slotMs * LATE_FRAME_RATIO;
 };
 
 /**
@@ -118,16 +109,16 @@ export const createSpectrumTierController = (start: SpectrumTier, startMs = 0): 
       resetWindow(nowMs);
       lastChangeMs = nowMs;
     },
-    report(sample) {
+    report(nowMs, costMs, intervalMs) {
       windowFrames += 1;
-      windowCostMs += sample.costMs;
-      if (isOverBudget(current, sample)) windowOver += 1;
-      if (sample.nowMs - windowStartMs < SPECTRUM_DEMOTE_AFTER_MS) return null;
+      windowCostMs += costMs;
+      if (isOverBudget(current, costMs, intervalMs)) windowOver += 1;
+      if (nowMs - windowStartMs < SPECTRUM_DEMOTE_AFTER_MS) return null;
 
       const overShare = windowOver / windowFrames;
       const meanCostMs = windowCostMs / windowFrames;
       const heavy = overShare >= 0.5;
-      const windowEndedMs = sample.nowMs;
+      const windowEndedMs = nowMs;
       resetWindow(windowEndedMs);
 
       if (heavy && current.index < LOWEST_SPECTRUM_TIER) {

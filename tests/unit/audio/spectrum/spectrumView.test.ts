@@ -13,11 +13,14 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 import {
   CLIP_LAMP_HOLD_MS,
   SPECTRUM_IDLE_POLL_MS,
+  SPECTRUM_READ_WAIT_MS,
   SPECTRUM_STALE_AFTER_MS,
   SpectrumView,
   type SpectrumReadout,
 } from "@/lib/audio/spectrum/spectrumView";
 import type { SpectrumFrame } from "@/lib/native/audioFx";
+import { addLog } from "@/lib/logging";
+import * as spectrumRenderer from "@/lib/audio/spectrum/spectrumRenderer";
 
 const makeContext = () => {
   const fills: Array<{ x: number; y: number; w: number; h: number }> = [];
@@ -51,7 +54,9 @@ const frame = (overrides: Partial<SpectrumFrame> = {}): SpectrumFrame => ({
   ...overrides,
 });
 
-const setup = (options: { profile?: string; frames?: () => SpectrumFrame | null } = {}) => {
+const setup = (
+  options: { profile?: string; frames?: () => SpectrumFrame | null; read?: () => Promise<SpectrumFrame | null> } = {},
+) => {
   const ctx = makeContext();
   const layerCtx = makeContext();
   const canvas = document.createElement("canvas");
@@ -71,6 +76,7 @@ const setup = (options: { profile?: string; frames?: () => SpectrumFrame | null 
     onTierChange: (t) => tiers.push(t.index),
     read: async () => {
       reads.push(nowMs);
+      if (options.read) return options.read();
       return options.frames ? options.frames() : frame({ sequence: reads.length });
     },
     setEnabled,
@@ -117,6 +123,7 @@ const setup = (options: { profile?: string; frames?: () => SpectrumFrame | null 
 describe("SpectrumView", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.mocked(addLog).mockClear();
   });
 
   it("draws the fixed layer once per size and the bars every frame", async () => {
@@ -131,6 +138,27 @@ describe("SpectrumView", () => {
     expect(t.ctx.drawImage.mock.calls.length).toBeGreaterThan(10);
     expect(t.ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
     expect(t.ctx.fills.some((f) => f.h > 20)).toBe(true);
+  });
+
+  it("reuses draw options and reports frame timing as primitives", async () => {
+    const t = setup();
+    t.view.resize(300, 150, 1);
+    const internal = t.view as unknown as {
+      controller: { report: (nowMs: number, costMs: number, intervalMs: number) => unknown };
+      drawOptions: object;
+    };
+    const options = internal.drawOptions;
+    const report = vi.spyOn(internal.controller, "report");
+    const drawBars = vi.spyOn(spectrumRenderer, "drawBars");
+    drawBars.mockClear();
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(100);
+    expect(internal.drawOptions).toBe(options);
+    expect(drawBars.mock.calls.every(([, drawOptions]) => drawOptions === options)).toBe(true);
+    expect(report).toHaveBeenCalled();
+    expect(report.mock.calls.every(([nowMs, costMs, intervalMs]) => [nowMs, costMs, intervalMs].every(Number.isFinite))).toBe(
+      true,
+    );
   });
 
   it("switches the native analyser on when visible and off when hidden, the document is hidden or it is disposed", async () => {
@@ -183,12 +211,14 @@ describe("SpectrumView", () => {
     expect(loud.length).toBeGreaterThan(0);
   });
 
-  it("lets the bars fall and then stops the frame loop when the tune is paused", async () => {
+  it("disables the native analyser on pause while allowing the bars to decay without further reads", async () => {
     const t = setup();
     t.view.resize(300, 150, 1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(400);
     t.view.setState({ visible: true, paused: true });
+    expect(t.setEnabled.mock.calls.map((call) => call[0])).toEqual([true, false]);
+    expect(t.active.at(-1)).toBe(false);
     await t.advance(6000);
     expect(t.hasFrameScheduled()).toBe(false);
     const readsAfterPause = t.reads.length;
@@ -196,6 +226,59 @@ describe("SpectrumView", () => {
     expect(t.reads.length).toBe(readsAfterPause);
     t.view.setState({ visible: true, paused: false });
     expect(t.hasFrameScheduled()).toBe(true);
+  });
+
+  it("logs a rejected frame poll and continues polling without an unhandled rejection", async () => {
+    const failedRead = vi.fn(async () => Promise.reject(new Error("bridge unavailable")));
+    const t = setup({ read: failedRead });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(100);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Spectrum: frame poll failed",
+      expect.objectContaining({ service: "audio-fx", idle: false, error: expect.stringContaining("bridge unavailable") }),
+    );
+    expect(failedRead.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("keeps a pending read single-flight across visibility changes and ignores its stale reply", async () => {
+    let resolvePending: ((value: SpectrumFrame | null) => void) | undefined;
+    const read = vi.fn(
+      () =>
+        new Promise<SpectrumFrame | null>((resolve) => {
+          resolvePending = resolve;
+        }),
+    );
+    const t = setup({ read });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(40);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    t.view.setState({ visible: false, paused: false });
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(200);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    resolvePending?.(frame({ active: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(t.active).toEqual([]);
+    await t.advance(40);
+    expect(read).toHaveBeenCalledTimes(2);
+    t.view.dispose();
+  });
+
+  it("stops waiting for a hung bridge read without starting an overlapping replacement", async () => {
+    const read = vi.fn(() => new Promise<SpectrumFrame | null>(() => undefined));
+    const t = setup({ read });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(SPECTRUM_READ_WAIT_MS + 200);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(t.hasFrameScheduled()).toBe(false);
+    t.view.dispose();
   });
 
   it("treats a source that stops delivering new frames as silent", async () => {
