@@ -373,10 +373,65 @@ describe("an engine with three renderers", () => {
     engine.prerender("tune", new ArrayBuffer(8), 0, 4);
     const native = channels.find((c) => c.role === "prerender")!;
     expect(native.renderer).toBe("sidplayez");
+    // Finished, so its channel is kept for the next pre-render rather than abandoned.
+    const done = native.last("prerender").id;
+    native.emit({
+      type: "prerender-chunk",
+      id: done,
+      pcm: ref(81, 0, RATE * 4),
+      sampleRate: RATE,
+      channels: 2,
+      seconds: 4,
+    });
+    native.emit({ type: "prerendered", id: done, sampleRate: RATE, channels: 2, seconds: 4 });
     saveSidEmulationEngine("residfp");
     engine.prerender("other", new ArrayBuffer(8), 0, 4);
     expect(native.terminated).toBe(true);
     expect(channels.filter((c) => c.role === "prerender").at(-1)!.renderer).toBe("residfp");
+    engine.dispose();
+  });
+
+  it("closes the outgoing sink in a crossfade when that sink cannot hand its tail over", async () => {
+    localStorage.setItem("c64u_playback_crossfade_ms", "1500");
+    const closes: Array<ReturnType<typeof vi.fn>> = [];
+    channels = [];
+    sinks = [];
+    const engine = new LocalSidEngine({
+      rendererFactory: (renderer, role) => {
+        const channel = new FakeChannel(renderer, role);
+        channels.push(channel);
+        return channel;
+      },
+      audioSinkFactory: (): LocalSidAudioSink => {
+        const made = makeSink();
+        sinks.push(made);
+        const close = vi.fn();
+        closes.push(close);
+        return { sink: made.sink, resume: vi.fn(), close, fadeOut: vi.fn(), beginCrossfadeTailPlayout: vi.fn() };
+      },
+    });
+    const first = await open(engine, "a");
+    first.channel.emit({ type: "chunk", id: first.id, pcm: ref(71, 0, RATE), samples: RATE * 2, renderMs: 1 });
+    await open(engine, "b");
+    expect(closes[0]).toHaveBeenCalled();
+    engine.dispose();
+  });
+
+  it("answers a seek from the pre-render once that pre-render completes past the target", async () => {
+    __setSidplayEzAvailabilityForTests(false);
+    const engine = makeEngine();
+    await open(engine, "tune");
+    engine.prerender("tune", new ArrayBuffer(8), 0, 300);
+    const prerender = channels.find((c) => c.role === "prerender")!;
+    const id = prerender.last("prerender").id;
+    const slice = (seconds: number) => new Int16Array(RATE * 2 * seconds);
+    prerender.emit({ type: "prerender-chunk", id, pcm: slice(2), sampleRate: RATE, channels: 2, seconds: 2 });
+    void engine.seekTo(3);
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 3 });
+    prerender.emit({ type: "prerender-chunk", id, pcm: slice(1.5), sampleRate: RATE, channels: 2, seconds: 3.5 });
+    prerender.emit({ type: "prerendered", id, sampleRate: RATE, channels: 2, seconds: 3.5 });
+    expect(engine.getPendingSeek()).toBeNull();
+    expect(engine.getStats().positionSeconds).toBeCloseTo(3, 1);
     engine.dispose();
   });
 

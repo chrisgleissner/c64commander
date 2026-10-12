@@ -159,14 +159,26 @@ describe("the native sink controller", () => {
     );
   });
 
-  it("keeps running when the feed's stats cannot be read", async () => {
-    const { audio, setStats } = build();
+  it("keeps playing when the feed's stats cannot be read", async () => {
+    const { sink, of, setStats } = build();
     await flush();
     setStats(() => {
       throw new Error("stats unavailable");
     });
+    sink.createPcmSource!(ref(1, 0, RATE), 2).start(0);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(audio.sink.currentTime).toBeGreaterThanOrEqual(0);
+    expect(of("stats").length).toBeGreaterThan(0);
+    setStats(() => ({ playedFrames: RATE / 2, bufferedMs: 500, active: true }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sink.currentTime).toBeGreaterThan(0);
+  });
+
+  it("hands back the end handler a chunk was given", () => {
+    const { sink } = build();
+    const source = sink.createPcmSource!(ref(1, 0, RATE), 2);
+    const handler = () => undefined;
+    source.onended = handler;
+    expect(source.onended).toBe(handler);
   });
 
   it("refuses float buffers, which are for Web Audio only", () => {
