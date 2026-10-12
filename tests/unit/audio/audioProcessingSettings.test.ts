@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { renderHook, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const setAudioProcessing = vi.hoisted(() => vi.fn(async () => true));
@@ -21,6 +22,7 @@ import {
   isAudioProcessingActive,
   loadAudioProcessing,
   nearestPreset,
+  useAudioProcessing,
   resetAudioEq,
   saveAudioEqBand,
   saveAudioLevelling,
@@ -86,10 +88,57 @@ describe("audio processing settings", () => {
     expect(nearestPreset(REVERB_PRESETS, 41).id).toBe("hall");
   });
 
+  it("reads defaults and ignores writes when storage is unavailable", () => {
+    vi.stubGlobal("localStorage", undefined);
+    try {
+      expect(loadAudioProcessing()).toEqual(DEFAULT_AUDIO_PROCESSING);
+      expect(() => saveAudioLevelling(true)).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(localStorage.getItem("c64u_audio_levelling")).toBeNull();
+  });
+
+  it("stores levelling off as 0", () => {
+    saveAudioLevelling(true);
+    saveAudioLevelling(false);
+    expect(localStorage.getItem("c64u_audio_levelling")).toBe("0");
+    expect(loadAudioProcessing().levelling).toBe(false);
+  });
+
+  it("treats an empty stored value as zero", () => {
+    localStorage.setItem("c64u_audio_reverb", "");
+    expect(loadAudioProcessing().reverb).toBe(0);
+  });
+
   it("formats the equalizer readout with a sign", () => {
     expect(formatEqDb(3)).toBe("+3 dB");
     expect(formatEqDb(-12)).toBe("-12 dB");
     expect(formatEqDb(0)).toBe("0 dB");
+  });
+});
+
+describe("useAudioProcessing", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("follows setting changes and keeps the same object when nothing relevant changed", () => {
+    const { result } = renderHook(() => useAudioProcessing());
+    expect(result.current).toEqual(DEFAULT_AUDIO_PROCESSING);
+    act(() => saveAudioReverb(55));
+    expect(result.current.reverb).toBe(55);
+    const before = result.current;
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: "other" } }));
+    });
+    expect(result.current).toBe(before);
+  });
+
+  it("stops listening after unmount", () => {
+    const remove = vi.spyOn(window, "removeEventListener");
+    const { unmount } = renderHook(() => useAudioProcessing());
+    unmount();
+    expect(remove).toHaveBeenCalledWith("c64u-app-settings-updated", expect.any(Function));
+    remove.mockRestore();
   });
 });
 
@@ -117,6 +166,26 @@ describe("audio processing sync", () => {
     expect(setAudioProcessing).toHaveBeenCalledTimes(1);
     expect(setAudioProcessing).toHaveBeenCalledWith({ ...DEFAULT_AUDIO_PROCESSING, bassDb: 4 });
     stop();
+  });
+
+  it("pushes the stored settings on demand and ignores an event without a string key", () => {
+    saveAudioReverb(25);
+    const stop = installAudioProcessingSync();
+    setAudioProcessing.mockClear();
+    window.dispatchEvent(new CustomEvent("c64u-app-settings-updated"));
+    window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: 5 } }));
+    vi.advanceTimersByTime(500);
+    expect(setAudioProcessing).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("cancels a pending push when stopped", () => {
+    const stop = installAudioProcessingSync();
+    setAudioProcessing.mockClear();
+    saveAudioReverb(55);
+    stop();
+    vi.advanceTimersByTime(500);
+    expect(setAudioProcessing).not.toHaveBeenCalled();
   });
 
   it("ignores unrelated settings and stops listening when stopped", () => {

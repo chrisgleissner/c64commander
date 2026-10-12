@@ -134,4 +134,69 @@ describe("audio fx bridge", () => {
     expect(await readSpectrum()).toBeNull();
     expect(addLog).toHaveBeenCalledTimes(1);
   });
+
+  it("resolves no backend when test probes are on but no override is installed", async () => {
+    isNativePlatform.mockReturnValue(false);
+    (window as unknown as Record<string, unknown>).__c64uTestProbeEnabled = true;
+    expect(isAudioFxAvailable()).toBe(false);
+    expect(await readSpectrum()).toBeNull();
+    delete (window as unknown as Record<string, unknown>).__c64uTestProbeEnabled;
+  });
+
+  it("reports false and logs once when setAudioProcessing fails for a reason other than unimplemented", async () => {
+    plugin.setAudioProcessing.mockRejectedValue(new Error("bridge down"));
+    expect(await setAudioProcessing(params)).toBe(false);
+    expect(await setAudioProcessing(params)).toBe(false);
+    expect(addLog).toHaveBeenCalledTimes(1);
+    expect(addLog.mock.calls[0][1]).toBe("Audio fx: setAudioProcessing failed");
+    expect(isAudioFxAvailable()).toBe(true);
+    plugin.setAudioProcessing.mockResolvedValue({});
+    expect(await setAudioProcessing(params)).toBe(true);
+    expect(addLog.mock.calls[1][1]).toContain("setAudioProcessing recovered after 2");
+  });
+
+  it("reports false and logs once when setSpectrumEnabled fails for a reason other than unimplemented", async () => {
+    plugin.setSpectrumEnabled.mockRejectedValue("string failure");
+    expect(await setSpectrumEnabled(true)).toBe(false);
+    expect(addLog).toHaveBeenCalledTimes(1);
+    expect((addLog.mock.calls[0][2] as { error: string }).error).toBe("string failure");
+    plugin.setSpectrumEnabled.mockResolvedValue({});
+    expect(await setSpectrumEnabled(false)).toBe(true);
+    expect(addLog.mock.calls[1][1]).toContain("setSpectrumEnabled recovered after 1");
+  });
+
+  it("latches unavailable when setSpectrumEnabled is unimplemented and stops every later call", async () => {
+    plugin.setSpectrumEnabled.mockRejectedValue(Object.assign(new Error("nope"), { code: "UNIMPLEMENTED" }));
+    expect(await setSpectrumEnabled(true)).toBe(false);
+    expect(isAudioFxAvailable()).toBe(false);
+    expect(await setSpectrumEnabled(true)).toBe(false);
+    expect(await readSpectrum()).toBeNull();
+    expect(plugin.setSpectrumEnabled).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([null, undefined, 5, { bands: [], sequence: 1 }, { bands: [], sequence: "1", active: true }])(
+    "rejects the malformed frame %j",
+    async (bad) => {
+      plugin.readSpectrum.mockResolvedValue(bad);
+      expect(await readSpectrum()).toBeNull();
+      expect(addLog).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("logs the message when a failing Error carries no stack", async () => {
+    const error = new Error("no stack here");
+    error.stack = undefined;
+    plugin.readSpectrum.mockRejectedValue(error);
+    expect(await readSpectrum()).toBeNull();
+    expect((addLog.mock.calls[0][2] as { error: string }).error).toBe("no stack here");
+  });
+
+  it("resolves no test backend where there is no window", () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      expect(isAudioFxAvailable()).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

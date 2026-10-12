@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DARK_PANEL_STOPS,
@@ -14,6 +14,7 @@ import {
   colorAtLevel,
   levelColorSteps,
   oklchToHex,
+  readSpectrumPalette,
   tokenLightness,
 } from "@/lib/audio/spectrum/spectrumColors";
 
@@ -61,5 +62,106 @@ describe("spectrum colours", () => {
   it("reads the lightness of a theme token", () => {
     expect(tokenLightness("237 35% 10%")).toBeCloseTo(0.1, 9);
     expect(tokenLightness("rgb(1,2,3)")).toBeNull();
+  });
+
+  describe("reading the palette from the theme", () => {
+    const setTokens = (element: HTMLElement, tokens: Record<string, string>) => {
+      for (const [name, value] of Object.entries(tokens)) element.style.setProperty(name, value);
+    };
+
+    afterEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it("turns HSL theme tokens into colours and detects a dark theme from the background lightness", () => {
+      const element = document.createElement("div");
+      document.body.append(element);
+      setTokens(element, {
+        "--background": "237 35% 10%",
+        "--foreground": "210 20% 90%",
+        "--muted-foreground": "215 15% 60%",
+        "--border": "230 20% 20%",
+      });
+      const palette = readSpectrumPalette(element);
+      expect(palette.dark).toBe(true);
+      expect(palette.panel).toBe("hsl(237 35% 10%)");
+      expect(palette.border).toBe("hsl(230 20% 20%)");
+      expect(palette.grid).toBe("hsl(210 20% 90% / 0.12)");
+      expect(palette.gridZero).toBe("hsl(210 20% 90% / 0.32)");
+      expect(palette.label).toBe("hsl(215 15% 60%)");
+      expect(palette.cap).toBe("hsl(210 20% 90%)");
+      expect(palette.steps).toEqual(levelColorSteps(true));
+    });
+
+    it("passes through a token that is not written as HSL components", () => {
+      const element = document.createElement("div");
+      document.body.append(element);
+      setTokens(element, { "--background": "#fafafa", "--foreground": "rgb(10, 20, 30)" });
+      const palette = readSpectrumPalette(element);
+      expect(palette.dark).toBe(false);
+      expect(palette.panel).toBe("#fafafa");
+      expect(palette.cap).toBe("rgb(10, 20, 30)");
+    });
+
+    it("falls back to light colours when the theme defines nothing", () => {
+      const element = document.createElement("div");
+      document.body.append(element);
+      const palette = readSpectrumPalette(element);
+      expect(palette.dark).toBe(false);
+      expect(palette.panel).toBe("#f4f5f8");
+      expect(palette.border).toBe("#d7dae3");
+      expect(palette.grid).toBe("rgba(30,34,52,.12)");
+      expect(palette.gridZero).toBe("rgba(30,34,52,.32)");
+      expect(palette.label).toBe("#667085");
+      expect(palette.cap).toBe("#1e2234");
+      expect(palette.steps).toEqual(levelColorSteps(false));
+      expect(palette.fontPx).toBeGreaterThanOrEqual(14);
+    });
+
+    it("falls back to dark colours for the tokens a dark theme leaves out", () => {
+      const element = document.createElement("div");
+      document.body.append(element);
+      setTokens(element, { "--background": "237 35% 10%" });
+      const palette = readSpectrumPalette(element);
+      expect(palette.dark).toBe(true);
+      expect(palette.border).toBe("#2a2f45");
+      expect(palette.grid).toBe("rgba(230,232,240,.12)");
+      expect(palette.gridZero).toBe("rgba(230,232,240,.32)");
+      expect(palette.label).toBe("#a7adc0");
+      expect(palette.cap).toBe("#e6e8f0");
+    });
+
+    it("scales the label size with the root font size and keeps the element font family", () => {
+      const element = document.createElement("div");
+      element.style.fontFamily = "Inter, sans-serif";
+      document.body.append(element);
+      document.documentElement.style.fontSize = "24px";
+      try {
+        const palette = readSpectrumPalette(element);
+        expect(palette.fontPx).toBe(21);
+        expect(palette.fontFamily).toContain("Inter");
+      } finally {
+        document.documentElement.style.fontSize = "";
+      }
+    });
+
+    it("uses the 14 px floor and sans-serif when the root font size cannot be read", () => {
+      const element = document.createElement("div");
+      document.body.append(element);
+      const original = window.getComputedStyle;
+      const spy = vi.spyOn(window, "getComputedStyle").mockImplementation((target: Element) => {
+        const style = original(target);
+        return target === document.documentElement
+          ? ({ fontSize: "", getPropertyValue: () => "" } as unknown as CSSStyleDeclaration)
+          : style;
+      });
+      try {
+        const palette = readSpectrumPalette(element);
+        expect(palette.fontPx).toBe(14);
+        expect(palette.fontFamily).toBeTruthy();
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 });

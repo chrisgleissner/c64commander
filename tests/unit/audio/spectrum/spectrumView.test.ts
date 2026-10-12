@@ -9,6 +9,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+vi.mock("@/lib/native/audioFx", () => ({
+  readSpectrum: vi.fn(async () => null),
+  setSpectrumEnabled: vi.fn(async () => true),
+}));
 
 import {
   CLIP_LAMP_HOLD_MS,
@@ -20,6 +24,7 @@ import {
 } from "@/lib/audio/spectrum/spectrumView";
 import type { SpectrumFrame } from "@/lib/native/audioFx";
 import { addLog } from "@/lib/logging";
+import { readSpectrum, setSpectrumEnabled } from "@/lib/native/audioFx";
 import * as spectrumRenderer from "@/lib/audio/spectrum/spectrumRenderer";
 
 const makeContext = () => {
@@ -55,7 +60,15 @@ const frame = (overrides: Partial<SpectrumFrame> = {}): SpectrumFrame => ({
 });
 
 const setup = (
-  options: { profile?: string; frames?: () => SpectrumFrame | null; read?: () => Promise<SpectrumFrame | null> } = {},
+  options: {
+    profile?: string;
+    frames?: () => SpectrumFrame | null;
+    read?: () => Promise<SpectrumFrame | null>;
+    reducedMotion?: boolean;
+    createLayer?: () => null;
+    setEnabled?: () => Promise<boolean>;
+    keepCancelledFrame?: boolean;
+  } = {},
 ) => {
   const ctx = makeContext();
   const layerCtx = makeContext();
@@ -67,7 +80,7 @@ const setup = (
   const readouts: SpectrumReadout[] = [];
   const active: boolean[] = [];
   const tiers: number[] = [];
-  const setEnabled = vi.fn(async () => true);
+  const setEnabled = vi.fn(options.setEnabled ?? (async () => true));
   const view = new SpectrumView({
     canvas,
     profile: options.profile ?? "medium",
@@ -86,10 +99,12 @@ const setup = (
       return 1;
     },
     cancelFrame: () => {
-      pending = null;
+      if (!options.keepCancelledFrame) pending = null;
     },
-    createLayer: () => ({ canvas: {} as CanvasImageSource, context: layerCtx as unknown as CanvasRenderingContext2D }),
-    reducedMotion: () => false,
+    createLayer:
+      options.createLayer ??
+      (() => ({ canvas: {} as CanvasImageSource, context: layerCtx as unknown as CanvasRenderingContext2D })),
+    reducedMotion: () => options.reducedMotion ?? false,
     deviceSignals: () => ({ hardwareConcurrency: 8, deviceMemory: 8 }),
   });
   const advance = async (ms: number, step = 17) => {
@@ -346,5 +361,261 @@ describe("SpectrumView", () => {
     t.view.setState({ visible: true, paused: false });
     await t.advance(300);
     expect(t.readouts.every((r) => r.rmsDb === null)).toBe(true);
+  });
+
+  it("logs a rejected analyser switch, whether it rejects with an Error or a bare value", async () => {
+    const failing = setup({ setEnabled: async () => Promise.reject(new Error("plugin gone")) });
+    failing.view.setState({ visible: true, paused: false });
+    await Promise.resolve();
+    await Promise.resolve();
+    const bare = setup({ setEnabled: () => Promise.reject("refused") });
+    bare.view.setState({ visible: true, paused: false });
+    await Promise.resolve();
+    await Promise.resolve();
+    const errors = vi
+      .mocked(addLog)
+      .mock.calls.filter(([, message]) => message === "Spectrum: changing analyser state failed")
+      .map(([, , details]) => (details as { error: string; enabled: boolean }).error);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toContain("plugin gone");
+    expect(errors[1]).toBe("refused");
+  });
+
+  it("logs a frame poll that rejects with a bare value", async () => {
+    const t = setup({ read: () => Promise.reject("bridge down") });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(60);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Spectrum: frame poll failed",
+      expect.objectContaining({ error: "bridge down" }),
+    );
+  });
+
+  it("logs the message of a failure that carries no stack trace", async () => {
+    const stackless = () => Object.assign(new Error("no stack here"), { stack: undefined });
+    const t = setup({ read: () => Promise.reject(stackless()), setEnabled: () => Promise.reject(stackless()) });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(60);
+    const messages = vi
+      .mocked(addLog)
+      .mock.calls.filter(([, message]) => /changing analyser state failed|frame poll failed/.test(String(message)))
+      .map(([, , details]) => (details as { error: string }).error);
+    expect(messages.length).toBeGreaterThanOrEqual(2);
+    expect(messages.every((m) => m === "no stack here")).toBe(true);
+  });
+
+  it("does not report activity for an empty reply", async () => {
+    const t = setup({ frames: () => null });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(200);
+    expect(t.reads.length).toBeGreaterThan(1);
+    expect(t.active).toEqual([]);
+    expect(t.readouts.every((r) => r.rmsDb === null)).toBe(true);
+  });
+
+  it("builds the fixed layer once per size and again when the size changes, updating the shared draw options", async () => {
+    const t = setup();
+    const drawBars = vi.spyOn(spectrumRenderer, "drawBars");
+    drawBars.mockClear();
+    t.view.refreshTheme();
+    expect(t.layerCtx.fillText).not.toHaveBeenCalled();
+    t.view.resize(300, 150, 1);
+    const firstContextCalls = t.layerCtx.fillText.mock.calls.length;
+    t.view.resize(300, 150, 1);
+    expect(t.layerCtx.fillText.mock.calls.length).toBe(firstContextCalls);
+    t.view.refreshTheme();
+    expect(t.layerCtx.fillText.mock.calls.length).toBe(firstContextCalls * 2);
+    t.view.resize(420, 200, 2);
+    const lastOptions = drawBars.mock.calls.at(-1)?.[1];
+    expect(lastOptions?.layout.width).toBe(420);
+    expect(lastOptions?.layout.height).toBe(200);
+    expect(lastOptions?.ratio).toBe(2);
+  });
+
+  it("still draws bars when the offscreen layer cannot be created", () => {
+    const t = setup({ createLayer: () => null });
+    t.view.resize(300, 150, 1);
+    expect(t.ctx.drawImage).not.toHaveBeenCalled();
+    expect(t.layerCtx.fillText).not.toHaveBeenCalled();
+  });
+
+  it("draws nothing and still polls while the canvas has no size yet", async () => {
+    const t = setup();
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(200);
+    expect(t.ctx.drawImage).not.toHaveBeenCalled();
+    expect(t.reads.length).toBeGreaterThan(0);
+  });
+
+  it("keeps the glow off for reduced motion and on otherwise at the highest tier", async () => {
+    const glows: boolean[][] = [];
+    for (const reducedMotion of [false, true]) {
+      const seen: boolean[] = [];
+      const spy = vi.spyOn(spectrumRenderer, "drawBars").mockImplementation((_ctx, options) => {
+        seen.push(options.glow);
+      });
+      const t = setup({ reducedMotion });
+      t.view.resize(300, 150, 1);
+      seen.length = 0;
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(200);
+      glows.push(seen);
+      spy.mockRestore();
+      t.view.dispose();
+    }
+    expect(glows[0].length).toBeGreaterThan(0);
+    expect(glows[0].every((g) => g)).toBe(true);
+    expect(glows[1].length).toBeGreaterThan(0);
+    expect(glows[1].every((g) => !g)).toBe(true);
+  });
+
+  it("ignores a frame callback that fires after the view was hidden", async () => {
+    const t = setup({ keepCancelledFrame: true });
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    t.view.setState({ visible: false, paused: false });
+    const readsBefore = t.reads.length;
+    await t.advance(100);
+    expect(t.reads.length).toBe(readsBefore);
+    expect(t.hasFrameScheduled()).toBe(false);
+  });
+
+  describe("with timers", () => {
+    const silentAfterClip = () => {
+      let n = 0;
+      return () => {
+        n += 1;
+        return frame({ sequence: n, active: n === 1, clipped: n === 1, bands: new Array(48).fill(-100) });
+      };
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it("releases the clip lamp at the end of its hold even when the animation has gone idle", async () => {
+      const t = setup({ frames: silentAfterClip() });
+      t.view.resize(300, 150, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(400);
+      expect(t.readouts.at(-1)?.clipped).toBe(true);
+      expect(t.hasFrameScheduled()).toBe(false);
+      t.setNow(t.nowMs + CLIP_LAMP_HOLD_MS + 100);
+      vi.advanceTimersByTime(CLIP_LAMP_HOLD_MS + 100);
+      expect(t.readouts.at(-1)?.clipped).toBe(false);
+      t.view.dispose();
+    });
+
+    it("cancels the pending clip release and idle poll when the view is hidden", async () => {
+      const t = setup({ frames: silentAfterClip() });
+      t.view.resize(300, 150, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(400);
+      const readsBefore = t.reads.length;
+      t.view.setState({ visible: false, paused: false });
+      t.setNow(t.nowMs + CLIP_LAMP_HOLD_MS + 100);
+      const readoutsBefore = t.readouts.length;
+      vi.advanceTimersByTime(CLIP_LAMP_HOLD_MS + 100);
+      expect(t.readouts.length).toBe(readoutsBefore);
+      expect(t.reads.length).toBe(readsBefore);
+    });
+
+    it("clears the idle poll timer when the view is disposed", async () => {
+      const read = vi.fn(() => new Promise<SpectrumFrame | null>(() => undefined));
+      const t = setup({ read });
+      t.view.resize(300, 150, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(SPECTRUM_READ_WAIT_MS + 200);
+      expect(vi.getTimerCount()).toBe(1);
+      t.view.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("does not start a second idle read while the first is still pending", async () => {
+      const read = vi.fn(() => new Promise<SpectrumFrame | null>(() => undefined));
+      const t = setup({ read });
+      t.view.resize(300, 150, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(SPECTRUM_READ_WAIT_MS + 200);
+      vi.advanceTimersByTime(SPECTRUM_IDLE_POLL_MS * 3);
+      expect(read).toHaveBeenCalledTimes(1);
+      t.view.dispose();
+    });
+  });
+
+  describe("with the default collaborators", () => {
+    it("uses the bridge, the window animation frame, the root motion class and the navigator signals", async () => {
+      const callbacks: Array<(timeMs: number) => void> = [];
+      const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => callbacks.push(cb));
+      const caf = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+      const drawing = makeContext();
+      const created: HTMLCanvasElement[] = [];
+      const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
+        this: HTMLCanvasElement,
+      ) {
+        created.push(this);
+        return drawing as unknown as CanvasRenderingContext2D;
+      });
+      const hardwareConcurrency = vi.spyOn(navigator, "hardwareConcurrency", "get").mockReturnValue(2);
+      vi.mocked(readSpectrum).mockResolvedValue(frame());
+      document.documentElement.classList.add("c64-motion-reduced");
+      try {
+        const canvas = document.createElement("canvas");
+        const view = new SpectrumView({ canvas, profile: "medium" });
+        expect(view.currentTier.index).toBe(1);
+        view.resize(300, 150, 1);
+        expect(created.length).toBe(2);
+        expect(created[0]).toBe(canvas);
+        expect(created[1]).not.toBe(canvas);
+        view.setState({ visible: true, paused: false });
+        expect(setSpectrumEnabled).toHaveBeenLastCalledWith(true);
+        expect(raf).toHaveBeenCalledTimes(1);
+        callbacks[0](16);
+        await Promise.resolve();
+        expect(readSpectrum).toHaveBeenCalled();
+        expect(view.framesDrawn).toBe(1);
+        view.setState({ visible: false, paused: false });
+        expect(caf).toHaveBeenCalled();
+        expect(setSpectrumEnabled).toHaveBeenLastCalledWith(false);
+      } finally {
+        document.documentElement.classList.remove("c64-motion-reduced");
+        hardwareConcurrency.mockRestore();
+        getContext.mockRestore();
+        raf.mockRestore();
+        caf.mockRestore();
+      }
+    });
+
+    it("draws nothing when the canvas gives no 2D context at all", () => {
+      const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+      try {
+        const view = new SpectrumView({ canvas: document.createElement("canvas"), profile: "medium" });
+        expect(() => view.resize(300, 150, 1)).not.toThrow();
+        expect(() => view.refreshTheme()).not.toThrow();
+        expect(getContext).toHaveBeenCalledTimes(1);
+      } finally {
+        getContext.mockRestore();
+      }
+    });
+
+    it("creates no offscreen layer when the browser gives no 2D context", () => {
+      const drawing = makeContext();
+      let calls = 0;
+      const getContext = vi
+        .spyOn(HTMLCanvasElement.prototype, "getContext")
+        .mockImplementation(() => (calls++ === 0 ? (drawing as unknown as CanvasRenderingContext2D) : null));
+      try {
+        const view = new SpectrumView({ canvas: document.createElement("canvas"), profile: "medium" });
+        view.resize(300, 150, 1);
+        expect(calls).toBe(2);
+        expect(drawing.setTransform).toHaveBeenCalledTimes(1);
+      } finally {
+        getContext.mockRestore();
+      }
+    });
   });
 });

@@ -516,6 +516,59 @@ describe("an engine with three renderers", () => {
     engine.dispose();
   });
 
+  describe("rendered-tune cache eviction by renderer", () => {
+    type Seedable = {
+      renderCache: { set: (key: string, tune: unknown) => void; has: (key: string) => boolean };
+    };
+    const tuneOf = (renderer: SidRendererId) => ({
+      renderer,
+      pcm: new Int16Array(RATE * 2),
+      sampleRate: RATE,
+      channels: 2,
+      durationSeconds: 1,
+    });
+    const fill = (engine: LocalSidEngine, renderers: [string, SidRendererId][]) => {
+      const cache = (engine as unknown as Seedable).renderCache;
+      for (const [key, renderer] of renderers) cache.set(key, tuneOf(renderer));
+      return cache;
+    };
+
+    it("evicts audio from a renderer other than the one in use before the oldest reachable tune", () => {
+      __setSidplayEzAvailabilityForTests(false);
+      const engine = makeEngine();
+      const cache = fill(engine, [
+        ["oldest", "residfp"],
+        ["left-behind", "sidlite"],
+        ["b", "residfp"],
+        ["newest", "residfp"],
+      ]);
+      expect(cache.has("left-behind")).toBe(false);
+      expect(cache.has("oldest")).toBe(true);
+      engine.dispose();
+    });
+
+    it("judges staleness against the renderer the engine is fixed to", () => {
+      channels = [];
+      const engine = new LocalSidEngine({
+        renderer: "sidlite",
+        rendererFactory: (renderer, role) => {
+          const channel = new FakeChannel(renderer, role);
+          channels.push(channel);
+          return channel;
+        },
+      });
+      const cache = fill(engine, [
+        ["oldest", "sidlite"],
+        ["other-renderer", "residfp"],
+        ["b", "sidlite"],
+        ["newest", "sidlite"],
+      ]);
+      expect(cache.has("other-renderer")).toBe(false);
+      expect(cache.has("oldest")).toBe(true);
+      engine.dispose();
+    });
+  });
+
   it("asks a WASM worker for header room in front of its chunks only when the native feed takes them", async () => {
     __setSidplayEzAvailabilityForTests(false);
     const engine = makeEngine();
