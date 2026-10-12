@@ -30,3 +30,11 @@ export const crossfadeLeadMs = (durationMs: number, onPhone: boolean, crossfadeM
 /** Milliseconds from now until the next tune is due, `elapsedMs` into a tune of `durationMs`. */
 export const autoAdvanceDelayMs = (durationMs: number, elapsedMs: number, onPhone: boolean) =>
   Math.max(0, durationMs - elapsedMs - crossfadeLeadMs(durationMs, onPhone));
+
+/**
+ * The new due time when an advance made early must wait for the tune's real end, or null when it may go ahead:
+ * the end has come, or it was already deferred once. Deferring only once keeps a stalled playhead, which moves
+ * the end further away on every reconciliation, from postponing the advance for ever.
+ */
+export const deferralToTuneEndMs = (alreadyDeferred: boolean, nowMs: number, endsAtMs: number) =>
+  alreadyDeferred || endsAtMs <= nowMs ? null : endsAtMs;

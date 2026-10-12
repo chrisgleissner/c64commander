@@ -7,6 +7,8 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { shouldStopAfterTune, type SleepTimerMode } from "@/lib/playback/sleepTimer";
+import { deferralToTuneEndMs } from "./crossfadeLead";
 import type { PlaylistItem } from "./types";
 
 export type BooleanRef = { current: boolean };
@@ -105,4 +107,20 @@ export const planPlaylistItemRemoval = (
     nextCurrentIndex,
     shouldStopDevice: removingPlayingItem && (isPlaying || isPaused),
   };
+};
+
+export const deferSleepTimerToTuneEnd = (
+  guard: { dueAtMs: number; deferredToEnd?: boolean } | null,
+  mode: SleepTimerMode,
+  nowMs: number,
+  trackStartedAtMs: number | null,
+  durationMs: number | undefined,
+): number | null => {
+  if (!guard || typeof durationMs !== "number" || !shouldStopAfterTune(mode)) return null;
+  const endsAtMs = (trackStartedAtMs ?? nowMs) + durationMs;
+  const dueAtMs = deferralToTuneEndMs(guard.deferredToEnd === true, nowMs, endsAtMs);
+  if (dueAtMs === null) return null;
+  guard.deferredToEnd = true;
+  guard.dueAtMs = dueAtMs;
+  return dueAtMs;
 };

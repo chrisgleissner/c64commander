@@ -175,6 +175,7 @@ import { usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedP
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import {
+  deferSleepTimerToTuneEnd,
   planPlaylistItemRemoval,
   resolveAutoAdvanceDueAtMsOnDurationChange,
   runClaimedLaunch,
@@ -235,6 +236,7 @@ export default function PlayFilesPage() {
     dueAtMs: number;
     autoFired: boolean;
     userCancelled: boolean;
+    deferredToEnd?: boolean;
   };
 
   type ConfigPickerState =
@@ -692,6 +694,17 @@ export default function PlayFilesPage() {
    */
   const advanceOnTrackEnd = useCallback(
     (trackInstanceId?: number) => {
+      const endDueAtMs = deferSleepTimerToTuneEnd(
+        autoAdvanceGuardRef.current,
+        sleepTimerRef.current.mode,
+        Date.now(),
+        trackStartedAtRef.current,
+        currentDurationMsRef.current,
+      );
+      if (endDueAtMs !== null) {
+        setAutoAdvanceDueAtMs(endDueAtMs);
+        return Promise.resolve();
+      }
       if (sleepTimerRef.current.notifyTuneEnded(trackInstanceId)) return Promise.resolve();
       return handleNextRef.current("auto", trackInstanceId);
     },
@@ -1500,6 +1513,7 @@ export default function PlayFilesPage() {
             const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
             guard.dueAtMs = dueAtMs;
             guard.autoFired = false;
+            guard.deferredToEnd = false;
             setAutoAdvanceDueAtMs(dueAtMs);
           }
         }
