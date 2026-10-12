@@ -14,7 +14,13 @@ import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { enableKeypad, ringFocus } from "./focusRing";
-import { audioFxCalls, installAudioFxMock, setAudioFxActive, setAudioFxClipped } from "./audioFxMock";
+import {
+  audioFxCalls,
+  installAudioFxMock,
+  installLiveViewAudioStub,
+  setAudioFxClipped,
+  startPhoneSoundAndOpenPlay,
+} from "./audioFxMock";
 
 /**
  * The Spectrum card on Play and the Audio processing section in Settings, against a mocked native
@@ -149,14 +155,16 @@ test.describe("Spectrum card and audio processing", () => {
       page,
     }) => {
       await installAudioFxMock(page);
+      await installLiveViewAudioStub(page);
       await page.addInitScript((value) => localStorage.setItem("c64u_theme", value), theme);
       await page.addInitScript(
         (override) => localStorage.setItem("c64u_display_profile_override", override),
         profile.override,
       );
       await page.setViewportSize(profile.viewport);
-      await page.goto("/play", { waitUntil: "domcontentloaded" });
+      await page.goto("/", { waitUntil: "domcontentloaded" });
       await settle(page, profile.id);
+      await startPhoneSoundAndOpenPlay(page);
 
       const card = page.getByTestId("play-section-spectrum");
       await expect(card).toBeVisible();
@@ -187,10 +195,12 @@ test.describe("Spectrum card and audio processing", () => {
 
   test("collapsing the card switches the analyser off and opening it switches it on", async ({ page }) => {
     await installAudioFxMock(page);
+    await installLiveViewAudioStub(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
-    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await settle(page, "compact");
+    await startPhoneSoundAndOpenPlay(page);
 
     const toggle = page.getByTestId("play-section-toggle-spectrum");
     const card = page.getByTestId("play-section-spectrum");
@@ -208,7 +218,8 @@ test.describe("Spectrum card and audio processing", () => {
   });
 
   test("it says what is needed when no sound is playing on the phone", async ({ page }) => {
-    await installAudioFxMock(page, { active: false });
+    await installAudioFxMock(page);
+    await installLiveViewAudioStub(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
     await page.goto("/play", { waitUntil: "domcontentloaded" });
@@ -221,17 +232,21 @@ test.describe("Spectrum card and audio processing", () => {
     const measured = await measureErgonomics(page.getByTestId("play-section-spectrum"));
     expect(measured.bodyOffenders).toEqual([]);
     await keepShot(page.getByTestId("play-section-spectrum"), "spectrum-compact-idle");
+    expect((await audioFxCalls(page)).filter((c) => c.method === "setSpectrumEnabled" && c.enabled)).toEqual([]);
 
-    await setAudioFxActive(page, true);
+    await page.getByTestId("tab-home").click();
+    await startPhoneSoundAndOpenPlay(page);
     await expect(page.getByTestId("spectrum-message")).toHaveCount(0, { timeout: 5000 });
   });
 
   test("the clip lamp lights while the plugin reports clipping and releases afterwards", async ({ page }) => {
     await installAudioFxMock(page);
+    await installLiveViewAudioStub(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
-    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await settle(page, "compact");
+    await startPhoneSoundAndOpenPlay(page);
     if ((await page.getByTestId("play-section-spectrum").getAttribute("data-open")) !== "true")
       await page.getByTestId("play-section-toggle-spectrum").click();
     const lamp = page.getByTestId("spectrum-clip");

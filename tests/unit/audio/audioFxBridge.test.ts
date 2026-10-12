@@ -91,12 +91,12 @@ describe("audio fx bridge", () => {
   });
 
   it("latches an unimplemented method, logs it once and stops calling the plugin", async () => {
-    plugin.setSpectrumEnabled.mockRejectedValue(Object.assign(new Error("not implemented"), { code: "UNIMPLEMENTED" }));
+    plugin.readSpectrum.mockRejectedValue(Object.assign(new Error("not implemented"), { code: "UNIMPLEMENTED" }));
     expect(await probeAudioFx()).toBe(false);
     expect(isAudioFxAvailable()).toBe(false);
     expect(await readSpectrum()).toBeNull();
     expect(await setAudioProcessing(params)).toBe(false);
-    expect(plugin.readSpectrum).not.toHaveBeenCalled();
+    expect(plugin.readSpectrum).toHaveBeenCalledTimes(1);
     expect(plugin.setAudioProcessing).not.toHaveBeenCalled();
     expect(addLog).toHaveBeenCalledTimes(1);
     expect(addLog.mock.calls[0][0]).toBe("info");
@@ -105,8 +105,14 @@ describe("audio fx bridge", () => {
   it("probes once and keeps the plugin when the probe call succeeds", async () => {
     expect(await probeAudioFx()).toBe(true);
     expect(await probeAudioFx()).toBe(true);
+    expect(plugin.readSpectrum).toHaveBeenCalledTimes(1);
+  });
+
+  it("probes without changing the analyser, so a probe landing after the view enabled it cannot switch it off", async () => {
+    expect(await setSpectrumEnabled(true)).toBe(true);
+    expect(await probeAudioFx()).toBe(true);
     expect(plugin.setSpectrumEnabled).toHaveBeenCalledTimes(1);
-    expect(plugin.setSpectrumEnabled).toHaveBeenCalledWith({ enabled: false });
+    expect(plugin.setSpectrumEnabled).toHaveBeenLastCalledWith({ enabled: true });
   });
 
   it("logs the first failure of a streak with its stack, then only the recovery", async () => {

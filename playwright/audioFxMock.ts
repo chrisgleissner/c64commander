@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { openAllCards } from "./cards";
 
 export type AudioFxCall =
   | { method: "setAudioProcessing"; params: Record<string, unknown> }
@@ -81,3 +82,64 @@ export const setAudioFxClipped = (page: Page, clipped: boolean) =>
   page.evaluate((value) => {
     (window as AudioFxWindow).__c64uAudioFxClipped = value;
   }, clipped);
+
+/**
+ * Lets the Live View audio mirror stay live in a browser: stream sockets open, the audio socket
+ * delivers silent packets so the arrival watchdog stays satisfied, and the device accepts the start.
+ */
+export const installLiveViewAudioStub = async (page: Page) => {
+  await page.addInitScript(() => {
+    const RealWebSocket = window.WebSocket;
+    class StubStreamWebSocket {
+      url: string;
+      binaryType = "blob";
+      readyState = 0;
+      onopen: ((e?: unknown) => void) | null = null;
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      onclose: ((e?: unknown) => void) | null = null;
+      onerror: ((e?: unknown) => void) | null = null;
+      constructor(url: string) {
+        this.url = String(url);
+        if (!this.url.includes("/streams/")) return new RealWebSocket(url) as unknown as StubStreamWebSocket;
+        const isAudio = this.url.endsWith("/streams/audio");
+        setTimeout(() => {
+          this.readyState = 1;
+          this.onopen?.({});
+          if (!isAudio) return;
+          let seq = 0;
+          const tick = () => {
+            if (this.readyState !== 1) return;
+            const packet = new Uint8Array(2 + 192 * 4);
+            packet[0] = seq & 0xff;
+            packet[1] = (seq >> 8) & 0xff;
+            seq = (seq + 1) & 0xffff;
+            this.onmessage?.({ data: packet.buffer });
+            setTimeout(tick, 4);
+          };
+          tick();
+        }, 15);
+      }
+      send() {}
+      close() {
+        this.readyState = 3;
+        this.onclose?.({});
+      }
+    }
+    window.WebSocket = StubStreamWebSocket as unknown as typeof WebSocket;
+  });
+  await page.route("**/v1/streams/**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ errors: [] }) }),
+  );
+};
+
+/** Turns Live View audio on from Home and moves to Play, so the app is playing sound on the phone. */
+export const startPhoneSoundAndOpenPlay = async (page: Page) => {
+  const liveView = page.locator('[data-slot-active="true"]').getByTestId("live-view-card");
+  await liveView.scrollIntoViewIfNeeded();
+  await openAllCards(liveView);
+  const toggle = liveView.getByTestId("av-audio-toggle");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Play", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
+};

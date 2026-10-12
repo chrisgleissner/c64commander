@@ -27,7 +27,7 @@ import { variant } from "../src/generated/variant";
 // Load full YAML config for tests
 import "../tests/mocks/setupMockConfigForTests";
 import { seedUiMocks } from "./uiMocks";
-import { installAudioFxMock } from "./audioFxMock";
+import { installAudioFxMock, installLiveViewAudioStub, startPhoneSoundAndOpenPlay } from "./audioFxMock";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 import {
   allowVisualOverflow,
@@ -2971,44 +2971,10 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await installAudioFxMock(page);
-      await page.addInitScript(() => {
-        const RealWebSocket = window.WebSocket;
-        class StubStreamWebSocket {
-          url: string;
-          binaryType = "blob";
-          readyState = 0;
-          onopen: ((e?: unknown) => void) | null = null;
-          onmessage: ((e: { data: unknown }) => void) | null = null;
-          onclose: ((e?: unknown) => void) | null = null;
-          onerror: ((e?: unknown) => void) | null = null;
-          constructor(url: string) {
-            this.url = String(url);
-            if (!this.url.includes("/streams/")) return new RealWebSocket(url) as unknown as StubStreamWebSocket;
-            setTimeout(() => {
-              this.readyState = 1;
-              this.onopen?.({});
-            }, 15);
-          }
-          send() {}
-          close() {
-            this.readyState = 3;
-            this.onclose?.({});
-          }
-        }
-        window.WebSocket = StubStreamWebSocket as unknown as typeof WebSocket;
-      });
-      await page.route("**/v1/streams/**", (route) =>
-        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ errors: [] }) }),
-      );
+      await installLiveViewAudioStub(page);
       await page.goto("/");
       await waitForConnected(page);
-      const liveView = getActiveMain(page).getByTestId("live-view-card");
-      await liveView.scrollIntoViewIfNeeded();
-      await openAllCards(liveView);
-      await liveView.getByTestId("av-audio-toggle").click();
-      await expect(liveView.getByTestId("av-audio-toggle")).toHaveAttribute("aria-pressed", "true");
-      await page.getByRole("button", { name: "Play", exact: true }).first().click();
-      await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
+      await startPhoneSoundAndOpenPlay(page);
       for (const profileId of ["compact", "medium"] as const) {
         await applyDisplayProfileViewport(page, profileId);
         const card = getActiveMain(page).getByTestId("play-section-spectrum");

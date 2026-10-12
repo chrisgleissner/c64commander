@@ -139,12 +139,12 @@ export const readSpectrum = async (): Promise<SpectrumFrame | null> => {
 let probe: Promise<boolean> | null = null;
 
 /**
- * Asks the plugin once, with a harmless call, whether it has the audio calls. An older build
+ * Asks the plugin once, with a read that changes nothing, whether it has the audio calls. An older build
  * answers "not implemented", which {@link isAudioFxAvailable} then reports as false.
  */
 export const probeAudioFx = (): Promise<boolean> => {
   if (resolveBackend() === null) return Promise.resolve(false);
-  probe ??= setSpectrumEnabled(false).then(isAudioFxAvailable);
+  probe ??= readSpectrum().then(isAudioFxAvailable);
   return probe;
 };
 
