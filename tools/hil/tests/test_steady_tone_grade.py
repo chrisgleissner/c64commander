@@ -115,3 +115,31 @@ def test_the_recording_that_a_synthetic_sawtooth_does_not_reproduce() -> None:
     assert verdict_for(result) == "clean"
     assert result["present_fraction"] == pytest.approx(1.0, abs=0.01)
     assert result["peak_dbfs"] > -60
+
+
+CHIRP_FIXTURE = Path(__file__).parent / "fixtures" / "tone-low-beside-a-2khz-chirp.wav"
+
+
+def test_a_steady_tone_beside_another_sound_in_the_room_is_still_present() -> None:
+    """Two seconds of SIDLite's Tone-Low, off the Pixel's speaker, with a chirp near 2.05 kHz in the room.
+
+    The 550 Hz level holds within 1 dB throughout. Measured against the noise of the whole band,
+    the chirp failed 27% of these windows and the merge gate reported a dropout that never happened.
+    """
+    result = grade(str(CHIRP_FIXTURE), HZ)
+    assert verdict_for(result) == "clean"
+    assert result["present_fraction"] >= 0.9
+
+
+NEAR_FIXTURE = Path(__file__).parent / "fixtures" / "tone-low-beside-room-sound-near-the-tone.wav"
+
+
+def test_a_steady_tone_beside_room_sound_near_its_pitch_is_still_present() -> None:
+    """Two seconds of SIDLite's Tone-Low with room sound bursting between 300 and 825 Hz.
+
+    The 550 Hz level never falls; the room rises around it. Judged against each window's own
+    noise, these bursts read as 300 ms dropouts in a tone that never stopped.
+    """
+    result = grade(str(NEAR_FIXTURE), HZ)
+    assert verdict_for(result) == "clean"
+    assert result["present_fraction"] >= 0.9

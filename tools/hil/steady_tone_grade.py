@@ -79,6 +79,12 @@ DEFAULT_MAX_CENTS = 50.0
 
 BAND = (300.0, 6000.0)
 
+#: The noise the tone is judged against lies within this fraction of the pitch, and is the room's floor
+#: across the recording (this percentile of the windows) rather than each window's own. A dropout is the
+#: tone falling, not the room rising: judged per window, room sound failed 22% of a steady 550 Hz take.
+NOISE_SPAN = 0.5
+NOISE_FLOOR_PERCENTILE = 20
+
 
 def harmonics_of(freqs: np.ndarray, hz: float) -> np.ndarray:
     """Bins belonging to the tone's own overtones, which are the tone rather than the room.
@@ -137,14 +143,14 @@ def grade(path: str, hz: float) -> dict:
         near = np.abs(freqs - hz) <= max(15.0, hz * 0.06)
         tone_mag[i] = spectrum[near].max() if near.any() else 0.0
         peak_hz[i] = freqs[near][spectrum[near].argmax()] if near.any() else 0.0
-        rest = in_band & ~near & ~harmonics_of(freqs, hz)
+        rest = in_band & (np.abs(freqs - hz) <= hz * NOISE_SPAN) & ~near & ~harmonics_of(freqs, hz)
         noise_mag[i] = np.sqrt((spectrum[rest] ** 2).mean()) if rest.any() else 0.0
 
     peak = tone_mag.max()
     if peak <= 0:
         raise SystemExit(f"{path}: nothing at {hz:g} Hz at all — was anything playing?")
     floor = peak * PRESENT_FRACTION
-    snr_ok = tone_mag > noise_mag * (10 ** (SNR_MARGIN_DB / 20.0))
+    snr_ok = tone_mag > np.percentile(noise_mag, NOISE_FLOOR_PERCENTILE) * (10 ** (SNR_MARGIN_DB / 20.0))
     present = (tone_mag >= floor) & snr_ok
 
     # The longest run of absent windows: one long hole is a dropout, scattered single windows are
@@ -251,6 +257,8 @@ def self_test() -> int:
     freqs = np.fft.rfftfreq(len(white), 1.0 / rate)
     spectrum[(freqs < 300) | (freqs > 3000)] = 0
     room = np.fft.irfft(spectrum, n=len(white))
+    bursts = np.where((t % 0.8) < 0.3, 6000 * np.sin(2 * np.pi * 700 * t) + 4 * room, 0.0)
+    chirps = np.where((t % 0.5) < 0.25, 20000 * np.sin(2 * np.pi * (2040 + 100 * (t % 0.5)) * t), 0.0)
 
     cases = [
         ("a clean tone", 8000 * np.sin(2 * np.pi * hz * t) + room, "clean"),
@@ -264,6 +272,14 @@ def self_test() -> int:
         (
             "a tone that stops half way",
             np.concatenate([8000 * np.sin(2 * np.pi * hz * t[: len(t) // 2]), room[len(t) // 2 :]]),
+            "DEFECTIVE",
+        ),
+        # Another sound in the room, near the tone or well away from it, does not take the tone away.
+        ("a clean tone beside bursts at 700 Hz", 8000 * np.sin(2 * np.pi * hz * t) + room + bursts, "clean"),
+        ("a clean tone beside a 2 kHz chirp", 8000 * np.sin(2 * np.pi * hz * t) + room + chirps, "clean"),
+        (
+            "a tone that stops half way beside a 2 kHz chirp",
+            np.concatenate([8000 * np.sin(2 * np.pi * hz * t[: len(t) // 2]), room[len(t) // 2 :]]) + chirps,
             "DEFECTIVE",
         ),
     ]

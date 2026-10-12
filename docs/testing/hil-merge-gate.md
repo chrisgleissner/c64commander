@@ -136,6 +136,12 @@ cents sharp". A silent room was graded as a quiet, slightly detuned tune, and th
 investigation after the wrong thing. The margin is now 12 dB and the same recordings grade as
 `NO TONE` at 0.5% presence.
 
+The margin is measured against the room's noise floor across the whole take: the 20th percentile of
+each window's noise within half the pitch either side of the tone (300–825 Hz for the 550 Hz tune).
+A dropout is the tone falling, not the room rising. Judged against each window's own noise over the
+whole band, chirps and bursts of room sound failed 14–22% of steady 550 Hz takes whose own level never
+fell, and the gate reported dropouts that had not happened.
+
 ## Audio discipline
 
 This runs next to somebody. The rules are enforced by the runner, not left to judgement:
