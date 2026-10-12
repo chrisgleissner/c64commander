@@ -558,6 +558,8 @@ There is no playlist to build, and nothing downloads while you listen. Once the 
 
 On an Android phone, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, from teal for quiet through green and amber to red near the loudest, and the small cap above a bar is that pitch's recent peak. **Level** and **Peak** give the overall loudness in dB, and the **Clip** lamp lights for a moment when the sound reaches the top of its range. It covers every sound your phone plays: a tune playing on it, and your C64's sound when Live View plays it here. It does not show sound that comes out of the C64 itself.
 
+![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/compact/01-spectrum.png)
+
 Open and close the card from its header. While it is closed, or you are on another page, the app does no work for it. On a small or slow screen the picture simplifies itself, with fewer and plainer bars, to stay smooth.
 
 **Settings → Audio processing** changes how the sound from your phone is played. Everything starts off, and with an effect off the sound is left exactly as it was. **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening. **Equalizer** raises or lowers **Bass**, **Mid** and **Treble** by up to 12 dB, with **Reset** to put them back. **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers, and **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.

@@ -27,6 +27,7 @@ import { variant } from "../src/generated/variant";
 // Load full YAML config for tests
 import "../tests/mocks/setupMockConfigForTests";
 import { seedUiMocks } from "./uiMocks";
+import { installAudioFxMock } from "./audioFxMock";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 import {
   allowVisualOverflow,
@@ -1971,6 +1972,72 @@ const seedDiagnosticsLogsForDeviceFiltering = async (page: Page) => {
   );
 };
 
+const seedFeaturedSidSession = async (page: Page) => {
+  // GA defaults these on; set them explicitly + enable dev mode for the Settings capture.
+  await page.addInitScript((seed: typeof FEATURED_SID) => {
+    localStorage.setItem("c64u_sid_radio_enabled", "1");
+    localStorage.setItem("c64u_sid_ranking_enabled", "1");
+    localStorage.setItem("c64u_local_engine_enabled", "1");
+    localStorage.setItem("c64u_dev_mode_enabled", "1");
+    // Play the tune on this device, so the card shows the on-device route
+    // rather than the C64 one.
+    localStorage.setItem("c64u_playback_engine", "local");
+
+    // A real tune, mid-play, rather than an empty transport.
+    //
+    // The card is the app's main screen and the manual leans on this
+    // capture, so it should look like something someone is actually
+    // listening to: Rob Hubbard's "Commando", which is about as
+    // recognisable as HVSC gets, a few seconds in and running on this
+    // device. An idle transport showed none of the state the surrounding
+    // prose describes — no title, no elapsed time, no progress.
+    const playlistKey = seed.playlistKey;
+    const payload = {
+      items: [
+        {
+          source: "hvsc",
+          path: seed.path,
+          name: seed.name,
+          durationMs: seed.durationMs,
+          // The header declares 19 tunes; carrying the count here is what makes
+          // the card say "Tune 1 of 19" rather than leaving that field out.
+          subsongCount: seed.songCount,
+          songNr: 1,
+        },
+      ],
+      currentIndex: 0,
+    };
+    localStorage.setItem(playlistKey, JSON.stringify(payload));
+    localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
+    localStorage.setItem("c64u_last_device_id", seed.deviceId);
+
+    // Restored as an active session. `currentItemId` is left null on purpose:
+    // the restore falls back to `currentIndex` when it cannot match an id,
+    // which keeps this seed independent of how playlist item ids are built.
+    // `updatedAt` has to be now — a session older than the staleness window is
+    // deliberately downgraded to paused (HARD9-064).
+    sessionStorage.setItem(
+      seed.sessionKey,
+      JSON.stringify({
+        playlistKey,
+        currentItemId: null,
+        currentItemLabel: seed.name,
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: seed.elapsedMs,
+        playedMs: seed.elapsedMs,
+        durationMs: seed.durationMs,
+        autoAdvanceDueAtMs: null,
+        shuffleEnabled: false,
+        repeatEnabled: false,
+        randomSeed: 1,
+        updatedAt: seed.nowIso,
+      }),
+    );
+  }, FEATURED_SID);
+};
+
 test.describe("App screenshots", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -2966,6 +3033,65 @@ test.describe("App screenshots", () => {
   });
 
   test(
+    "capture spectrum screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installAudioFxMock(page);
+      await page.addInitScript(() => {
+        const RealWebSocket = window.WebSocket;
+        class StubStreamWebSocket {
+          url: string;
+          binaryType = "blob";
+          readyState = 0;
+          onopen: ((e?: unknown) => void) | null = null;
+          onmessage: ((e: { data: unknown }) => void) | null = null;
+          onclose: ((e?: unknown) => void) | null = null;
+          onerror: ((e?: unknown) => void) | null = null;
+          constructor(url: string) {
+            this.url = String(url);
+            if (!this.url.includes("/streams/")) return new RealWebSocket(url) as unknown as StubStreamWebSocket;
+            setTimeout(() => {
+              this.readyState = 1;
+              this.onopen?.({});
+            }, 15);
+          }
+          send() {}
+          close() {
+            this.readyState = 3;
+            this.onclose?.({});
+          }
+        }
+        window.WebSocket = StubStreamWebSocket as unknown as typeof WebSocket;
+      });
+      await page.route("**/v1/streams/**", (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ errors: [] }) }),
+      );
+      await page.goto("/");
+      await waitForConnected(page);
+      const liveView = getActiveMain(page).getByTestId("live-view-card");
+      await liveView.scrollIntoViewIfNeeded();
+      await openAllCards(liveView);
+      await liveView.getByTestId("av-audio-toggle").click();
+      await expect(liveView.getByTestId("av-audio-toggle")).toHaveAttribute("aria-pressed", "true");
+      await page.getByRole("button", { name: "Play", exact: true }).first().click();
+      await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
+      for (const profileId of ["compact", "medium"] as const) {
+        await applyDisplayProfileViewport(page, profileId);
+        const card = getActiveMain(page).getByTestId("play-section-spectrum");
+        await expect(card).toBeVisible();
+        if ((await card.getAttribute("data-open")) !== "true") {
+          await card.getByTestId("play-section-toggle-spectrum").click();
+        }
+        await expect(card.getByTestId("spectrum-canvas")).toBeVisible();
+        await expect(card.getByTestId("spectrum-rms")).not.toHaveText("");
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play/spectrum", profileId, "01-spectrum.png"), {
+          locator: card,
+        });
+      }
+    },
+  );
+
+  test(
     "capture sid radio screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -2994,69 +3120,7 @@ test.describe("App screenshots", () => {
           ]),
         );
       });
-      // GA defaults these on; set them explicitly + enable dev mode for the Settings capture.
-      await page.addInitScript((seed: typeof FEATURED_SID) => {
-        localStorage.setItem("c64u_sid_radio_enabled", "1");
-        localStorage.setItem("c64u_sid_ranking_enabled", "1");
-        localStorage.setItem("c64u_local_engine_enabled", "1");
-        localStorage.setItem("c64u_dev_mode_enabled", "1");
-        // Play the tune on this device, so the card shows the on-device route
-        // rather than the C64 one.
-        localStorage.setItem("c64u_playback_engine", "local");
-
-        // A real tune, mid-play, rather than an empty transport.
-        //
-        // The card is the app's main screen and the manual leans on this
-        // capture, so it should look like something someone is actually
-        // listening to: Rob Hubbard's "Commando", which is about as
-        // recognisable as HVSC gets, a few seconds in and running on this
-        // device. An idle transport showed none of the state the surrounding
-        // prose describes — no title, no elapsed time, no progress.
-        const playlistKey = seed.playlistKey;
-        const payload = {
-          items: [
-            {
-              source: "hvsc",
-              path: seed.path,
-              name: seed.name,
-              durationMs: seed.durationMs,
-              // The header declares 19 tunes; carrying the count here is what makes
-              // the card say "Tune 1 of 19" rather than leaving that field out.
-              subsongCount: seed.songCount,
-              songNr: 1,
-            },
-          ],
-          currentIndex: 0,
-        };
-        localStorage.setItem(playlistKey, JSON.stringify(payload));
-        localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
-        localStorage.setItem("c64u_last_device_id", seed.deviceId);
-
-        // Restored as an active session. `currentItemId` is left null on purpose:
-        // the restore falls back to `currentIndex` when it cannot match an id,
-        // which keeps this seed independent of how playlist item ids are built.
-        // `updatedAt` has to be now — a session older than the staleness window is
-        // deliberately downgraded to paused (HARD9-064).
-        sessionStorage.setItem(
-          seed.sessionKey,
-          JSON.stringify({
-            playlistKey,
-            currentItemId: null,
-            currentItemLabel: seed.name,
-            currentIndex: 0,
-            isPlaying: true,
-            isPaused: false,
-            elapsedMs: seed.elapsedMs,
-            playedMs: seed.elapsedMs,
-            durationMs: seed.durationMs,
-            autoAdvanceDueAtMs: null,
-            shuffleEnabled: false,
-            repeatEnabled: false,
-            randomSeed: 1,
-            updatedAt: seed.nowIso,
-          }),
-        );
-      }, FEATURED_SID);
+      await seedFeaturedSidSession(page);
       await installListPreviewLimit(page, 3);
       await page.goto("/play");
       await waitForConnected(page);

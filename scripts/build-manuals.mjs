@@ -1421,6 +1421,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} plays: a tune playing on it, and your C64's sound when Live View plays it here. It does not show sound that comes out of the C64 itself.`,
     "",
+    image(
+      "The Spectrum card while a tune plays on the phone",
+      profile,
+      "play/spectrum/profiles/{profile}/01-spectrum.png",
+    ),
+    "",
     "Open and close the card from its header. While it is closed, or you are on another page, the app does no work for it. On a small or slow screen the picture simplifies itself, with fewer and plainer bars, to stay smooth.",
     "",
     `**Settings → Audio processing** changes how the sound from your ${appDeviceName(
