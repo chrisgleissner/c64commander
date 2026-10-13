@@ -55,8 +55,8 @@ const ROUTE_KEYS = arg("routes", "1,2,3,4,5,6")
 const MAX_STEPS = Number(arg("max-steps", "140"));
 const OUT = arg("out", "");
 
-/** Android key codes. The Callback's keypad produces exactly these. */
-const KEY = { UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, CENTER: 23, BACK: 4, DIGIT: (d) => 7 + d };
+/** Android key codes as the target keypad produces them: its OK key arrives as ENTER, not D-pad Center. */
+const KEY = { UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, CENTER: 66, BACK: 4, DIGIT: (d) => 7 + d };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const device = await createDroidDevice();
