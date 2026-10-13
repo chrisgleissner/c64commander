@@ -63,6 +63,12 @@ export interface RemoteInputPhysicalKeys {
  * these keys are free to be reinterpreted as joystick input with no conflict
  * against the focus ring.
  */
+const CONTROL_SELECTOR =
+  'button, a[href], input, select, textarea, [role="button"], [role="switch"], [role="tab"], [role="checkbox"]';
+
+const isFocusedControl = (event: ReactKeyboardEvent<HTMLElement>): boolean =>
+  event.target !== event.currentTarget && event.target instanceof Element && event.target.matches(CONTROL_SELECTOR);
+
 export const useRemoteInputPhysicalKeys = ({
   outputMode,
   heldJoystickInputs,
@@ -190,6 +196,9 @@ export const useRemoteInputPhysicalKeys = ({
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
+      // OK on a control the focus ring was moved to presses that control, as the keypad bar
+      // says; it reached the C64 as fire, so no header button could be pressed by keypad.
+      if ((action === "center" || action === "enter") && isFocusedControl(event)) return;
       if (handleMirrorKey(event, action)) return;
       if (action === "hash" && onHashKey) {
         event.preventDefault();
