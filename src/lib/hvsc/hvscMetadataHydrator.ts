@@ -121,6 +121,7 @@ export const hydrateHvscMetadata = async ({
         addLog("warn", "HVSC metadata hydration failed for song", {
           virtualPath,
           error: (error as Error).message,
+          stack: (error as Error).stack,
         });
       } finally {
         processedCount += 1;

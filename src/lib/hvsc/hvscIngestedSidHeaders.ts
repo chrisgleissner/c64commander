@@ -6,7 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Directory, Filesystem } from "@capacitor/filesystem";
 import { addLog } from "@/lib/logging";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
@@ -16,13 +15,16 @@ import {
   updateHvscBrowseSong,
   type HvscBrowseIndexSnapshot,
 } from "./hvscBrowseIndexStore";
-import { readDataFileText } from "./hvscFilesystem";
+import { deleteDataFileIfPresent, readDataFileText } from "./hvscFilesystem";
 import { hydrateBrowseSongFromSidHeader } from "./hvscMetadataHydrator";
 
 /** Virtual path to the song's raw SID header, base64-encoded, as the native ingest writes it. */
 export type SidHeaderIndex = Record<string, string>;
 
-const SONGS_PER_UI_YIELD = 500;
+/** Where the Android ingest writes the header index (`SID_HEADER_INDEX_PATH` in `HvscSidHeaderIndex.kt`). */
+export const INGESTED_SID_HEADER_INDEX_PATH = "hvsc/index/ingested-sid-headers.json";
+
+const SONGS_PER_CHUNK = 500;
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -38,7 +40,7 @@ export const applySidHeaderIndex = async (snapshot: HvscBrowseIndexSnapshot, hea
   let visited = 0;
   for (const [virtualPath, headerBase64] of Object.entries(headers)) {
     visited += 1;
-    if (visited % SONGS_PER_UI_YIELD === 0) await yieldToUi();
+    if (visited % SONGS_PER_CHUNK === 0) await yieldToUi();
     if (!snapshot.songs[normalizePath(virtualPath)]) {
       notIndexed += 1;
       continue;
@@ -53,6 +55,7 @@ export const applySidHeaderIndex = async (snapshot: HvscBrowseIndexSnapshot, hea
         virtualPath,
         source: "ingested SID header",
         error: (error as Error).message,
+        stack: (error as Error).stack,
       });
     }
   }
@@ -62,16 +65,21 @@ export const applySidHeaderIndex = async (snapshot: HvscBrowseIndexSnapshot, hea
 /**
  * Takes the header metadata of the songs an Android ingest just wrote from the index it left beside
  * the library, so they reach the browse index hydrated and metadata hydration has nothing to re-read.
- * Any failure leaves those songs to metadata hydration, which reads each one from its file instead.
+ * Any failure leaves those songs to metadata hydration, which reads each one from its file instead. The index is left on disk for {@link discardIngestedSidHeaderIndex}.
  */
 export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string) => {
   try {
     const text = await readDataFileText(sidHeaderIndexPath);
-    const snapshot = text === null ? null : await loadHvscBrowseIndexSnapshot();
-    if (text === null || snapshot === null) {
-      addLog("warn", "HVSC SID header index not applied; metadata hydration will read each song", {
+    if (text === null) {
+      addLog("warn", "HVSC SID header index missing; metadata hydration will read each song", {
         sidHeaderIndexPath,
-        indexMissing: text === null,
+      });
+      return;
+    }
+    const snapshot = await loadHvscBrowseIndexSnapshot();
+    if (snapshot === null) {
+      addLog("warn", "HVSC SID header index not applied: no browse index; metadata hydration will read each song", {
+        sidHeaderIndexPath,
       });
       return;
     }
@@ -84,12 +92,18 @@ export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string) => {
       error: (error as Error).message,
       stack: (error as Error).stack,
     });
-  } finally {
-    await Filesystem.deleteFile({ directory: Directory.Data, path: sidHeaderIndexPath }).catch((error: unknown) => {
-      addLog("warn", "Failed to delete the applied HVSC SID header index", {
-        sidHeaderIndexPath,
-        error: (error as Error).message,
-      });
+  }
+};
+
+/** Deletes the header index, a 13 to 14 MB file for a full library, whether or not it was applied. */
+export const discardIngestedSidHeaderIndex = async (sidHeaderIndexPath = INGESTED_SID_HEADER_INDEX_PATH) => {
+  try {
+    await deleteDataFileIfPresent(sidHeaderIndexPath);
+  } catch (error) {
+    addLog("warn", "Failed to delete the HVSC SID header index", {
+      sidHeaderIndexPath,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
     });
   }
 };

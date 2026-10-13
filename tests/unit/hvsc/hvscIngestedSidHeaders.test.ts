@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  deleteFile: vi.fn(async () => undefined),
+  deleteDataFileIfPresent: vi.fn(async (_path: string) => true),
   readDataFileText: vi.fn<(path: string) => Promise<string | null>>(),
   loadHvscBrowseIndexSnapshot: vi.fn(),
   saveHvscBrowseIndexSnapshot: vi.fn(async () => undefined),
@@ -17,11 +17,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/logging", () => ({ addLog: mocks.addLog }));
-vi.mock("@capacitor/filesystem", () => ({
-  Directory: { Data: "DATA" },
-  Filesystem: { deleteFile: mocks.deleteFile },
+vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
+  deleteDataFileIfPresent: mocks.deleteDataFileIfPresent,
+  readDataFileText: mocks.readDataFileText,
 }));
-vi.mock("@/lib/hvsc/hvscFilesystem", () => ({ readDataFileText: mocks.readDataFileText }));
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hvsc/hvscBrowseIndexStore")>()),
   loadHvscBrowseIndexSnapshot: mocks.loadHvscBrowseIndexSnapshot,
@@ -32,11 +31,17 @@ import {
   buildHvscBrowseIndexFromSonglengthSnapshot,
   type HvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
-import { applyIngestedSidHeaders, applySidHeaderIndex } from "@/lib/hvsc/hvscIngestedSidHeaders";
+import { readFileSync } from "node:fs";
+import {
+  applyIngestedSidHeaders,
+  applySidHeaderIndex,
+  discardIngestedSidHeaderIndex,
+  INGESTED_SID_HEADER_INDEX_PATH,
+} from "@/lib/hvsc/hvscIngestedSidHeaders";
 import { hydrateHvscMetadata } from "@/lib/hvsc/hvscMetadataHydrator";
 import { parseSidHeaderMetadata, uint8ToBase64 } from "@/lib/sid/sidUtils";
 
-const INDEX_PATH = "hvsc/index/ingested-sid-headers.json";
+const INDEX_PATH = INGESTED_SID_HEADER_INDEX_PATH;
 const STEREO_PSID = "/MUSICIANS/H/Hubbard_Rob/Stereo.sid";
 const TRIPLE_RSID = "/MUSICIANS/T/Tester/Triple.sid";
 const TRUNCATED = "/MUSICIANS/T/Tester/Truncated.sid";
@@ -166,7 +171,6 @@ describe("applyIngestedSidHeaders", () => {
 
     expect(mocks.readDataFileText).toHaveBeenCalledWith(INDEX_PATH);
     expect(mocks.saveHvscBrowseIndexSnapshot).toHaveBeenCalledWith(ingested, { foldersUnchanged: true });
-    expect(mocks.deleteFile).toHaveBeenCalledWith({ directory: "DATA", path: INDEX_PATH });
 
     const readSong = vi.fn(readWholeFile);
     const emitProgress = vi.fn();
@@ -196,17 +200,31 @@ describe("applyIngestedSidHeaders", () => {
       sidMetadata: { magicId: "RSID", rsidValid: true, sidChipCount: 3, sid3Model: "both" },
     });
     expect(ingested.songs[TRUNCATED].metadataStatus).toBe("error");
+    expect(mocks.addLog).toHaveBeenCalledWith("warn", "HVSC metadata hydration failed for song", {
+      virtualPath: TRUNCATED,
+      source: "ingested SID header",
+      error: expect.any(String),
+      stack: expect.stringContaining("Error"),
+    });
   });
 
-  it("leaves the songs to metadata hydration when the header index cannot be read", async () => {
+  it("reports a missing header index once, as missing, and leaves its songs to metadata hydration", async () => {
     const ingested = listedSongs();
     mocks.readDataFileText.mockResolvedValue(null);
     mocks.loadHvscBrowseIndexSnapshot.mockResolvedValue(ingested);
+    mocks.deleteDataFileIfPresent.mockResolvedValueOnce(false);
 
     await applyIngestedSidHeaders(INDEX_PATH);
+    await discardIngestedSidHeaderIndex(INDEX_PATH);
 
     expect(mocks.saveHvscBrowseIndexSnapshot).not.toHaveBeenCalled();
-    expect(mocks.deleteFile).toHaveBeenCalledWith({ directory: "DATA", path: INDEX_PATH });
+    expect(mocks.addLog.mock.calls).toEqual([
+      [
+        "warn",
+        "HVSC SID header index missing; metadata hydration will read each song",
+        { sidHeaderIndexPath: INDEX_PATH },
+      ],
+    ]);
     const readSong = vi.fn(readWholeFile);
     await hydrateHvscMetadata({ snapshot: ingested, readSong, emitProgress: vi.fn() });
     expect(readSong).toHaveBeenCalledTimes(3);
@@ -219,19 +237,30 @@ describe("applyIngestedSidHeaders", () => {
     await applyIngestedSidHeaders(INDEX_PATH);
 
     expect(mocks.saveHvscBrowseIndexSnapshot).not.toHaveBeenCalled();
-    expect(mocks.deleteFile).toHaveBeenCalledWith({ directory: "DATA", path: INDEX_PATH });
   });
 
-  it("reports an applied index it could not delete", async () => {
-    mocks.readDataFileText.mockResolvedValue(nativeHeaderIndex());
-    mocks.loadHvscBrowseIndexSnapshot.mockResolvedValue(listedSongs());
-    mocks.deleteFile.mockRejectedValueOnce(new Error("disk busy"));
+  it("deletes the header index the Android ingest writes, at the path it writes it to", async () => {
+    const kotlin = readFileSync(
+      "android/app/src/main/java/uk/gleissner/c64commander/hvsc/HvscSidHeaderIndex.kt",
+      "utf-8",
+    );
+    expect(kotlin).toContain(`const val SID_HEADER_INDEX_PATH = "${INGESTED_SID_HEADER_INDEX_PATH}"`);
 
-    await applyIngestedSidHeaders(INDEX_PATH);
+    await discardIngestedSidHeaderIndex();
 
-    expect(mocks.addLog).toHaveBeenCalledWith("warn", "Failed to delete the applied HVSC SID header index", {
+    expect(mocks.deleteDataFileIfPresent).toHaveBeenCalledWith(INGESTED_SID_HEADER_INDEX_PATH);
+    expect(mocks.addLog).not.toHaveBeenCalled();
+  });
+
+  it("reports a header index it could not delete, with the stack", async () => {
+    mocks.deleteDataFileIfPresent.mockRejectedValueOnce(new Error("disk busy"));
+
+    await discardIngestedSidHeaderIndex(INDEX_PATH);
+
+    expect(mocks.addLog).toHaveBeenCalledWith("warn", "Failed to delete the HVSC SID header index", {
       sidHeaderIndexPath: INDEX_PATH,
       error: "disk busy",
+      stack: expect.stringContaining("disk busy"),
     });
   });
 
@@ -264,6 +293,5 @@ describe("applyIngestedSidHeaders", () => {
 
     expect(mocks.saveHvscBrowseIndexSnapshot).not.toHaveBeenCalled();
     expect(Object.values(ingested.songs).every((song) => song.metadataStatus === "seeded")).toBe(true);
-    expect(mocks.deleteFile).toHaveBeenCalledWith({ directory: "DATA", path: INDEX_PATH });
   });
 });

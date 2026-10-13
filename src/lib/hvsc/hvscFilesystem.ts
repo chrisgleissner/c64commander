@@ -130,6 +130,13 @@ export const writeDataFileText = async (path: string, text: string) => {
   await Filesystem.writeFile({ directory: Directory.Data, path, data: text, encoding: Encoding.UTF8 });
 };
 
+/** Deletes a Data-directory file that is there. Returns whether there was one to delete. */
+export const deleteDataFileIfPresent = async (path: string) => {
+  if ((await dataFileExists(path)) === false) return false;
+  await Filesystem.deleteFile({ directory: Directory.Data, path });
+  return true;
+};
+
 /**
  * Whether a Data-directory file is there: `true`, `false`, or `null` when `stat` could not say.
  *

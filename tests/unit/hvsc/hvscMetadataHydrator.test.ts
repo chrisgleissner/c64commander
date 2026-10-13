@@ -251,6 +251,7 @@ describe("hvscMetadataHydrator", () => {
       expect.objectContaining({
         virtualPath: "/MUSICIANS/H/Hubbard_Rob/Song_9.sid",
         error: "boom",
+        stack: expect.stringContaining("boom"),
       }),
     );
     expect(addLog).toHaveBeenCalledWith(
