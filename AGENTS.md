@@ -480,6 +480,11 @@ from this rig.
   `TOO QUIET TO GRADE` rather than a pipeline defect when the level is not there.
 - If no rig is attached, say that plainly in the PR and in the completion summary, and name the
   stages that were not run. Do not describe the work as verified.
+- With the keypad handset attached, the default `--target auto` runs `input`, `search-latency` and
+  `wire` on the handset and the microphone stages on the Pixel, in one table. Without a Pixel,
+  those stages fail the run unless `--target handset` asked for a handset-only run. Both phones
+  need the branch's APK: the `c64u-remote` edition on the handset and the default edition on the
+  Pixel.
 - `--quiet-check` runs everything that makes no sound, for iterating without disturbing anyone.
 - `--only <stage,stage>` runs a subset. Baseline the base commit with `--only` before
   blaming a stage failure on your own branch.

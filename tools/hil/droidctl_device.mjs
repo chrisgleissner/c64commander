@@ -58,26 +58,43 @@ export const chooseTarget = (targets, serial) => {
 };
 
 /**
- * `choose` picks the target from the listing; it defaults to {@link chooseTarget}. The merge gate
- * passes its own, so it can prefer the keypad handset over the Pixel.
+ * The target a device binds to: `choose(targets)` when given, which is how the merge gate binds a
+ * phone it selected itself, else {@link chooseTarget} with the serial or `ANDROID_SERIAL`.
  */
-export const createDroidDevice = async ({ serial, artifactRoot, choose } = {}) => {
+export const selectTarget = (targets, { serial, choose } = {}) => {
+  if (!choose) return chooseTarget(targets, serial ?? process.env.ANDROID_SERIAL);
+  const chosen = choose(targets);
+  if (!chosen) throw new Error("the requested phone is not in droidctl's listing any more");
+  return chosen;
+};
+
+const createRuntime = async (artifactRoot) => {
   const { createDroidctlServerRuntime } = await loadDroidctl();
-  const runtime = createDroidctlServerRuntime(
+  return createDroidctlServerRuntime(
     artifactRoot ? { artifactRoot } : { artifactRoot: path.join(REPO, "artifacts", "droidctl-runs") },
   );
+};
 
-  const call = async (name, args) => {
-    const result = await runtime.toolRegistry.invoke(name, args);
-    const envelope = JSON.parse(result.content[0].text);
-    if (!envelope.ok) {
-      throw new Error(`${name} failed [${envelope.error?.code}]: ${envelope.error?.message}`);
-    }
-    return envelope.data;
-  };
+const invoke = async (runtime, name, args) => {
+  const result = await runtime.toolRegistry.invoke(name, args);
+  const envelope = JSON.parse(result.content[0].text);
+  if (!envelope.ok) {
+    throw new Error(`${name} failed [${envelope.error?.code}]: ${envelope.error?.message}`);
+  }
+  return envelope.data;
+};
+
+/** Every target droidctl lists, without binding to one. */
+export const listDroidTargets = async ({ artifactRoot } = {}) =>
+  (await invoke(await createRuntime(artifactRoot), "droid_target.list_targets", {})).targets;
+
+export const createDroidDevice = async ({ serial, artifactRoot, choose } = {}) => {
+  const runtime = await createRuntime(artifactRoot);
+
+  const call = (name, args) => invoke(runtime, name, args);
 
   const { targets } = await call("droid_target.list_targets", {});
-  const target = choose ? choose(targets) : chooseTarget(targets, serial ?? process.env.ANDROID_SERIAL);
+  const target = selectTarget(targets, { serial, choose });
   const targetId = target.targetId;
 
   /** Runs an argument vector on the device and returns its stdout, like `adb shell` did. */

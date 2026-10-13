@@ -80,8 +80,16 @@ import { promisify } from "node:util";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { createDroidDevice } from "./droidctl_device.mjs";
-import { resolveGateTarget, stageExclusion } from "./gate_target.mjs";
+import { createDroidDevice, listDroidTargets } from "./droidctl_device.mjs";
+import {
+  DROIDCTL_FREE_STAGES,
+  assertPageApp,
+  controlsVolume,
+  inputLayoutFor,
+  preparePhone,
+  resolveGatePlan,
+  runPhases,
+} from "./gate_target.mjs";
 import { percentile } from "./percentile.mjs";
 import { createGateEvidence } from "./gate_evidence.mjs";
 
@@ -158,33 +166,23 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * as the default for `--serial`.
  */
 const SERIAL = arg("serial", process.env.ANDROID_SERIAL ?? "");
-/** `auto` drives the keypad handset when it is attached and the Pixel otherwise; see gate_target.mjs. */
+/** `auto` drives the keypad handset when it is attached, and the Pixel for what it cannot run. */
 const TARGET_MODE = arg("target", "auto");
-let phonePromise = null;
-let gateTarget = null;
+const MODE_EXPLICIT = argv.includes("--target");
+/** The phones this run uses (gate_target.mjs), or null on a run that needs no droidctl. */
+let plan = null;
+/** The phone the current phase drives. Every phone operation goes to it. */
+let active = null;
+const devices = {};
 const phone = () => {
   // Resolved on first use, not at module load: this file exports pure parsers that unit tests
   // import on a machine with no device attached.
-  phonePromise ??= createDroidDevice({
-    choose: (targets) => {
-      gateTarget = resolveGateTarget(targets, { mode: TARGET_MODE, serial: SERIAL });
-      return targets.find((target) => target.targetId === gateTarget.targetId);
-    },
+  if (!active) throw new Error("this stage needs a phone, and none is bound (droidctl was not used)");
+  const bound = active;
+  devices[bound.kind] ??= createDroidDevice({
+    choose: (targets) => targets.find((target) => target.targetId === bound.targetId),
   });
-  return phonePromise;
-};
-let handsetForwarded = false;
-/** Which phone this run drives: `kind` is "handset" or "pixel", with the package it runs. */
-const target = async () => {
-  const device = await phone();
-  if (gateTarget.kind === "handset" && !handsetForwarded) {
-    // The handset's WebView lives inside its Android container, which only an adb forward reaches.
-    // droidctl opens one through the container route, so the gate does it before any stage, rather
-    // than in preflight, which `--only` may leave out.
-    await device.forwardWebview(gateTarget.packageName, Number(CDP_PORT));
-    handsetForwarded = true;
-  }
-  return gateTarget;
+  return devices[bound.kind];
 };
 
 const run = async (command, args, { timeoutMs = 600_000, env } = {}) => {
@@ -354,6 +352,8 @@ const readVolume = async () => {
  * happened to be on — which is how this gate once ran at 11 of 25 in someone's room.
  */
 const setVolume = async (target) => {
+  if (!controlsVolume(active?.kind))
+    throw new Error(`the ${active?.kind ?? "unbound"} phone's volume is not the gate's`);
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const { muted, index } = await readVolume();
     if (!muted && index === target) return;
@@ -525,28 +525,21 @@ const stage = async (name, audible, body) => {
     console.log(`\n=== ${name}: skipped (audible) ===`);
     return;
   }
-  let exclusion = null;
-  try {
-    exclusion = stageExclusion(name, (await target()).kind);
-  } catch (error) {
-    results.push({ name, status: "fail", detail: String(error.message ?? error) });
-    console.error(`  FAIL ${error.message ?? error}`);
-    return;
-  }
-  if (exclusion) {
-    results.push({ name, status: "skipped", detail: exclusion });
-    console.log(`\n=== ${name}: skipped, ${exclusion} ===`);
-    return;
-  }
-  console.log(`\n=== ${name} ===`);
+  console.log(`\n=== ${name}${active ? ` on the ${active.kind}` : ""} ===`);
   const startedAt = Date.now();
   try {
     if (audible) await ensureMachineAudible();
     const detail = await body();
-    results.push({ name, status: "pass", detail: detail ?? "", seconds: (Date.now() - startedAt) / 1000 });
+    results.push({
+      name,
+      phone: active?.kind,
+      status: "pass",
+      detail: detail ?? "",
+      seconds: (Date.now() - startedAt) / 1000,
+    });
     console.log(`  PASS ${detail ?? ""}`);
   } catch (error) {
-    results.push({ name, status: "fail", detail: String(error.message ?? error) });
+    results.push({ name, phone: active?.kind, status: "fail", detail: String(error.message ?? error) });
     console.error(`  FAIL ${error.message ?? error}`);
   }
   // After EVERY stage, not only the audible ones. `input` loads a probe program and leaves it
@@ -922,15 +915,18 @@ const ensureMachineAudible = async () => {
 const preflight = async () => {
   // droidctl refuses a missing or ambiguous phone here, before anything is driven.
   const { serial } = await phone();
-  const { kind, packageName } = await target();
+  const { kind, packageName } = active;
 
   const version = await fetch(`http://${HOST}/v1/version`, { headers: authHeaders });
   if (!version.ok) throw new Error(`the Ultimate at ${HOST} answered HTTP ${version.status}`);
 
-  const page = await js("(()=>JSON.stringify({route:location.pathname,hidden:document.hidden}))()");
+  const page = await js(
+    "(async()=>JSON.stringify({route:location.pathname,hidden:document.hidden,app:(await window.Capacitor?.Plugins?.App?.getInfo?.())?.id??null}))()",
+  );
   if (typeof page !== "object")
     throw new Error("the WebView is not reachable over CDP — forward it with droid_device.forward_webview");
   if (page.hidden) throw new Error("the WebView is hidden; dismiss the keyguard and foreground the app");
+  assertPageApp(page.app, active);
 
   /*
    * Refuse to run under a display-size override.
@@ -980,7 +976,7 @@ return JSON.stringify({dismissed:true});})()`);
   // The handset's media volume belongs to its host system, not to the container the gate drives,
   // so it is neither read nor stepped there; every stage that would need it is skipped on it.
   let speakerNote = "speaker volume not under the gate's control";
-  if (kind === "pixel") {
+  if (controlsVolume(kind)) {
     const volume = await readVolume();
     if (volume.speaker > MAX_VOLUME) {
       throw new Error(
@@ -1037,6 +1033,70 @@ const restoreRig = () =>
     ["the Ultimate master volume", initialMasterVolume, setMasterVolume],
   ]);
 
+/** The stage bodies, registered in run order by `main` and run per phone by {@link runPlan}. */
+const stageBodies = new Map([["preflight", { audible: false, body: () => preflight() }]]);
+const defineStage = (name, audible, body) => {
+  if (!STAGE_NAMES.includes(name)) throw new Error(`stage "${name}" is missing from STAGE_NAMES`);
+  stageBodies.set(name, { audible, body });
+};
+const runStage = (name) => {
+  const { audible, body } = stageBodies.get(name);
+  return stage(name, audible, body);
+};
+
+/** Forget what one phone's preflight found, once it has been put back, before the next phone's. */
+const resetFoundState = () => {
+  initialVolume = null;
+  initialMirror = null;
+  initialMasterVolume = null;
+};
+
+/**
+ * Run each selected stage on the phone placed for it: the handset first, then the Pixel for what
+ * the handset cannot run, each phone forwarded, preflighted and put back on its own.
+ */
+const runPlan = async () => {
+  const selected = STAGE_NAMES.filter((name) => name !== "preflight" && (!ONLY.length || ONLY.includes(name)));
+  const wantPreflight = !ONLY.length || ONLY.includes("preflight");
+  if (ONLY.length && ONLY.every((name) => DROIDCTL_FREE_STAGES.includes(name))) {
+    // These stages only ever needed the page and the network; they keep running without droidctl.
+    for (const name of selected) await runStage(name);
+    return;
+  }
+  plan = resolveGatePlan(await listDroidTargets(), { mode: TARGET_MODE, modeExplicit: MODE_EXPLICIT, serial: SERIAL });
+  const { aborted } = await runPhases({
+    plan,
+    selected,
+    wantPreflight,
+    hooks: {
+      record: (name, verdict) => {
+        results.push({ name, phone: null, ...verdict });
+        console.log(`\n=== ${name}: ${verdict.status}, ${verdict.detail} ===`);
+      },
+      bind: (bound) => {
+        active = bound;
+      },
+      prepare: async (bound) => {
+        console.log(`\n##### the ${bound.kind}, ${bound.serial} (${bound.packageName})`);
+        await preparePhone(await phone(), bound, CDP_PORT);
+      },
+      preflight: async (bound) => {
+        await runStage("preflight");
+        return !results.some((r) => r.name === "preflight" && r.phone === bound.kind && r.status === "fail");
+      },
+      runStage: (name) => runStage(name),
+      restore: async () => {
+        await restoreRig();
+        resetFoundState();
+      },
+    },
+  });
+  if (aborted) {
+    console.error(`\npreflight failed on the ${aborted}; nothing after it would mean anything`);
+    process.exit(2);
+  }
+};
+
 const main = async () => {
   console.log(
     `HIL merge gate — Ultimate ${HOST}, target ${TARGET_MODE}, phone volume ${GATE_VOLUME}/25${QUIET ? ", quiet check" : ""}`,
@@ -1052,16 +1112,10 @@ const main = async () => {
     process.exit(2);
   }
 
-  await stage("preflight", false, preflight);
-  if (results.some((r) => r.name === "preflight" && r.status === "fail")) {
-    console.error("\npreflight failed; nothing after it would mean anything");
-    process.exit(2);
-  }
-
-  await stage("input", false, async () => {
+  defineStage("input", false, async () => {
     // The harnesses resolve the phone themselves; handing them the gate's own choice keeps them on
     // it when more than one phone is attached.
-    const phoneEnv = { env: { ANDROID_SERIAL: (await phone()).serial } };
+    const phoneEnv = { env: { ANDROID_SERIAL: active.serial } };
     const hold = await run("node", inputHarnessArgs("joystick_hold_hil.mjs", HOST, passwordArgs, CDP_PORT), phoneEnv);
     if (!hold.ok) throw new Error(`held direction: ${hold.out.trim().split("\n").slice(-3).join(" | ")}`);
     const rotation = await run(
@@ -1069,7 +1123,7 @@ const main = async () => {
       [
         ...inputHarnessArgs("joystick_rotation_hil.mjs", HOST, passwordArgs, CDP_PORT),
         "--layouts",
-        "classicT9",
+        inputLayoutFor(active.kind),
         "--rotations",
         "0,90",
       ],
@@ -1089,7 +1143,7 @@ const main = async () => {
    * p95 either: it would be one of the two worst observations. So: 120 samples, thirty rounds of a
    * four-character query, p95 under 100 ms.
    */
-  await stage("search-latency", false, async () => {
+  defineStage("search-latency", false, async () => {
     const opened = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const w=window; w.__c64uSearchLatencyProbe=true; w.__c64uSearchLatencySamples=[];
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
@@ -1145,7 +1199,7 @@ return JSON.stringify({samples});})()`);
   });
 
   // The sender, on the host's own link. Silent: it only listens.
-  await stage("wire", false, async () => {
+  defineStage("wire", false, async () => {
     // Nothing is on the group unless the Ultimate is sending, and preflight leaves the
     // mirror however it found it — so this stage asks for the audio feed rather than
     // inheriting one, and read "0 packets — is the stream running?" when it did not.
@@ -1162,7 +1216,7 @@ return JSON.stringify({samples});})()`);
     return `sender loss ${loss}%, inter-arrival p99 ${p99} ms`;
   });
 
-  await stage("av-clarity", true, async () => {
+  defineStage("av-clarity", true, async () => {
     await setVolume(GATE_VOLUME);
     // Both feeds: the failure this stage exists to catch is the audio losing to the video on the
     // same Wi-Fi link, which a listen-only run cannot see.
@@ -1199,7 +1253,7 @@ return JSON.stringify({samples});})()`);
     return `${bursts} tones, ${defective} defective, ${dropouts}% dropout`;
   });
 
-  await stage("av-latency", true, async () => {
+  defineStage("av-latency", true, async () => {
     await setVolume(GATE_VOLUME);
     await setMirror({ video: true, audio: true });
     audibleSeconds += 10;
@@ -1232,19 +1286,19 @@ return JSON.stringify({samples});})()`);
   // where the Ultimate renders the tune and the mirror carries it here, which is the path this
   // stage exists to grade. Neither stage sets the mirror by hand any more: routing the audio is
   // exactly what the control under test does, and doing it here would hide it getting that wrong.
-  await stage("sid-remote", true, async () => {
+  defineStage("sid-remote", true, async () => {
     await setVolume(TONE_VOLUME);
     audibleSeconds += TONE_SECONDS;
     return await gradePlayback("playback-listen-both", "Remote");
   });
 
-  await stage("sid-local", true, async () => {
+  defineStage("sid-local", true, async () => {
     await setVolume(TONE_VOLUME);
     audibleSeconds += TONE_SECONDS;
     return await gradePlayback("playback-engine-local", "Local");
   });
 
-  await stage("crossfade", true, async () => {
+  defineStage("crossfade", true, async () => {
     // Graded from the app's own samples, so the speaker only needs to be on, not loud.
     await setVolume(1);
     await setMirror({ video: false, audio: false });
@@ -1258,11 +1312,13 @@ return JSON.stringify({samples});})()`);
     }
   });
 
-  await restoreRig();
+  await runPlan();
 
   const notCovered = results.filter((r) => r.status === "pending");
-  console.log(`\n${"stage".padEnd(14)} result`);
-  for (const r of results) console.log(`${r.name.padEnd(14)} ${r.status}${r.detail ? `  ${r.detail}` : ""}`);
+  console.log(`\n${"stage".padEnd(14)} ${"phone".padEnd(8)} result`);
+  for (const r of results) {
+    console.log(`${r.name.padEnd(14)} ${(r.phone ?? "-").padEnd(8)} ${r.status}${r.detail ? `  ${r.detail}` : ""}`);
+  }
   console.log(`\naudible time: ~${audibleSeconds}s`);
   if (notCovered.length) {
     console.log(`NOT YET COVERED: ${notCovered.map((r) => r.name).join(", ")} — this run does not clear them`);
@@ -1272,7 +1328,7 @@ return JSON.stringify({samples});})()`);
     await mkdir(path.dirname(path.resolve(REPO, JSON_OUT)), { recursive: true });
     await writeFile(
       path.resolve(REPO, JSON_OUT),
-      `${JSON.stringify({ host: HOST, target: gateTarget, results, audibleSeconds }, null, 2)}\n`,
+      `${JSON.stringify({ host: HOST, plan, results, audibleSeconds }, null, 2)}\n`,
     );
     console.log(`wrote ${JSON_OUT}`);
   }

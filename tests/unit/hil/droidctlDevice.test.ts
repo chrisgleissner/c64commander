@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 
 // @ts-expect-error -- a HIL harness is plain JavaScript with no type declarations.
-import { chooseTarget } from "../../../tools/hil/droidctl_device.mjs";
+import { chooseTarget, selectTarget } from "../../../tools/hil/droidctl_device.mjs";
 // @ts-expect-error -- a HIL harness is plain JavaScript with no type declarations.
 import { MAIN_ROUTES } from "../../../tools/hil/release_sweep_hil.mjs";
 
@@ -65,5 +65,20 @@ describe("chooseTarget", () => {
 describe("the release sweep's error census", () => {
   it("visits Docs as well as the other five main routes", () => {
     expect(MAIN_ROUTES).toEqual(["/", "/play", "/disks", "/config", "/settings", "/docs"]);
+  });
+});
+
+describe("selectTarget", () => {
+  it("binds the phone a caller chose over the default rules", () => {
+    const handset = target("user@handset", { targetId: "ssh:user@handset" });
+    expect(selectTarget([target("9B0A"), handset], { choose: () => handset }).serial).toBe("user@handset");
+  });
+
+  it("refuses when the chosen phone has left the listing", () => {
+    expect(() => selectTarget([target("9B0A")], { choose: () => undefined })).toThrow(/not in droidctl's listing/);
+  });
+
+  it("applies the default rules without a chooser", () => {
+    expect(selectTarget([target("ABC"), target("9B0A")]).serial).toBe("9B0A");
   });
 });
