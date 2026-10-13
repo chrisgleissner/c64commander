@@ -11,6 +11,7 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { T9FieldListener } from "@/components/input/T9FieldListener";
+import { resetHardwareKeypadUseForTests } from "@/lib/input/hardwareKeypadInputMethod";
 
 const t9 = vi.hoisted(() => ({ keypadFlag: true, editionDefault: true }));
 
@@ -31,6 +32,40 @@ describe("T9FieldListener", () => {
   beforeEach(() => {
     t9.keypadFlag = true;
     t9.editionDefault = true;
+    resetHardwareKeypadUseForTests();
+  });
+
+  it("asks a text field for no platform input method once a hardware keypad has navigated", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <button>Before</button>
+        <SearchField />
+      </>,
+    );
+    const field = screen.getByLabelText("Search");
+
+    fireEvent.focusIn(field);
+    expect(field).not.toHaveAttribute("inputmode");
+
+    // An arrow key that arrives outside any field comes from a hardware D-pad.
+    fireEvent.keyDown(screen.getByRole("button", { name: "Before" }), { key: "ArrowDown", keyCode: 40 });
+    fireEvent.focusIn(field);
+    expect(field).toHaveAttribute("inputmode", "none");
+  });
+
+  it("leaves the input method alone for arrow keys typed inside a field", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <SearchField />
+      </>,
+    );
+    const field = screen.getByLabelText("Search");
+
+    fireEvent.keyDown(field, { key: "ArrowLeft", keyCode: 37 });
+    fireEvent.focusIn(field);
+    expect(field).not.toHaveAttribute("inputmode");
   });
 
   it("types letters into a React-controlled field that has no composer of its own", () => {
