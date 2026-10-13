@@ -44,6 +44,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
+import { applyIngestedSidHeaders } from "./hvscIngestedSidHeaders";
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -856,6 +857,7 @@ const ingestArchivePathNative = async (options: {
           : { outcome: "success" },
       );
     }
+    if (result.sidHeaderIndexPath) await applyIngestedSidHeaders(result.sidHeaderIndexPath);
     if (result.failedSongs > 0) {
       applyIngestionFailureAndThrow({
         archiveName,

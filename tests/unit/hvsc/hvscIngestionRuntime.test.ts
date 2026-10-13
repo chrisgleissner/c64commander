@@ -44,6 +44,7 @@ import {
 import { extractArchiveEntries } from "@/lib/hvsc/hvscArchiveExtraction";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "@/lib/hvsc/hvscSongLengthService";
+import { applyIngestedSidHeaders } from "@/lib/hvsc/hvscIngestedSidHeaders";
 
 const nativeProgressListenerRemove = vi.hoisted(() => vi.fn(async () => undefined));
 const nativeHvscPlugin = vi.hoisted(() => ({
@@ -192,6 +193,10 @@ vi.mock("@/lib/sid/sidUtils", () => ({
     parserWarnings: [],
   })),
   buildSidTrackSubsongs: vi.fn(() => [{ songNr: 1, isDefault: true }]),
+}));
+
+vi.mock("@/lib/hvsc/hvscIngestedSidHeaders", () => ({
+  applyIngestedSidHeaders: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
@@ -993,6 +998,41 @@ describe("hvscIngestionRuntime", () => {
 
     await expect(ingestCachedHvsc("token-corrupt-cached")).rejects.toThrow();
     expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith(expect.stringContaining("hvsc-baseline-5"));
+  });
+
+  it("hands the SID header index a native ingest wrote to the browse index once Songlengths have listed its songs", async () => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({ files: ["hvsc-baseline-5.complete.json"] } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockResolvedValueOnce({
+      totalEntries: 1,
+      songsIngested: 1,
+      songsDeleted: 0,
+      deletedVirtualPaths: [],
+      failedSongs: 0,
+      failedPaths: [],
+      songlengthFilesWritten: 1,
+      metadataRows: 1,
+      metadataUpserts: 0,
+      metadataDeletes: 0,
+      archiveBytes: 10,
+      sidHeaderIndexPath: "hvsc/index/ingested-sid-headers.json",
+    } as Awaited<ReturnType<typeof nativeHvscPlugin.ingestHvsc>>);
+
+    await ingestCachedHvsc("token-native-sid-headers");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
+    expect(applyIngestedSidHeaders).toHaveBeenCalledWith("hvsc/index/ingested-sid-headers.json");
+    expect(vi.mocked(applyIngestedSidHeaders).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(reloadHvscSonglengthsOnConfigChange).mock.invocationCallOrder[0],
+    );
   });
 
   it("rejects cached ingest when baseline is missing", async () => {

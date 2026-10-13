@@ -24,6 +24,11 @@ export type HvscNativeIngestResult = {
   metadataUpserts: number;
   metadataDeletes: number;
   archiveBytes: number;
+  /**
+   * Android only: a Data-directory JSON file mapping each ingested song's virtual path to its first
+   * 124 bytes, base64-encoded, so its header metadata needs no second read of the file.
+   */
+  sidHeaderIndexPath?: string;
 };
 
 export type HvscNativeDownloadResult = {
