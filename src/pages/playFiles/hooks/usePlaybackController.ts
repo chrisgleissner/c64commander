@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchivePlayback, setCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
 import { buildArchivePlayPlan } from "@/lib/archive/execution";
@@ -97,6 +97,7 @@ import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/p
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
 import { autoAdvanceDelayMs, crossfadeLeadMs, deferralToTuneEndMs } from "@/pages/playFiles/crossfadeLead";
 import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
+import { isChosenTrackLaunching, resolveShownItemDurationMs } from "@/pages/playFiles/shownTrackDuration";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
 import {
   applyConfigFileReference,
@@ -421,7 +422,6 @@ export function usePlaybackController({
   // background execution can stop even though `isPlaying` stays true (the Stop
   // affordance must remain available). Reset whenever a new track starts.
   const [playlistEnded, setPlaylistEnded] = useState(false);
-  // A skip moves the current index at once, while `durationMs` stays the launched track's until the next one starts.
   const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const userTransportQueueRef = useRef(Promise.resolve());
   const latestQueuedUserSkipRef = useRef(0);
@@ -2283,15 +2283,15 @@ export function usePlaybackController({
     showChosenTrackWhileStopped,
   ]);
 
-  const playlistItemDuration = useCallback(
-    (item: PlaylistItem, index: number) => {
-      const durationMsBelongsToItem =
-        index === currentIndex && (durationMsItemId === null || durationMsItemId === item.id);
-      const base = durationMsBelongsToItem ? (durationMs ?? item.durationMs) : item.durationMs;
-      return base ?? durationFallbackMs;
-    },
-    [currentIndex, durationFallbackMs, durationMs, durationMsItemId],
+  const shownDuration = useMemo(
+    () => ({ currentIndex, durationMs, durationMsItemId, isPlaying, isPaused, fallbackMs: durationFallbackMs }),
+    [currentIndex, durationFallbackMs, durationMs, durationMsItemId, isPlaying, isPaused],
   );
+  const playlistItemDuration = useCallback(
+    (item: PlaylistItem, index: number) => resolveShownItemDurationMs(item, index, shownDuration),
+    [shownDuration],
+  );
+  const chosenTrackLaunching = isChosenTrackLaunching(playlist[currentIndex], shownDuration);
 
   /**
    * Scrub the locally-played tune. Returns undefined when nothing is playing
@@ -2529,6 +2529,8 @@ export function usePlaybackController({
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,
     playlistItemDuration,
+    chosenTrackLaunching,
+    setDurationMsItemId,
     withTimeout,
   };
 }

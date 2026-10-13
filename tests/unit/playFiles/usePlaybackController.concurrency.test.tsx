@@ -412,6 +412,45 @@ describe("usePlaybackController play transition supersession", () => {
     },
   );
 
+  // A chosen track without a known length showed the default length during its launch, against the elapsed time of
+  // the track still playing, and then jumped to its resolved length.
+  it("shows no length for a chosen track without a known length until its launch has finished", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      { ...createPlaylistItem("commando", "/MUSICIANS/H/Hubbard_Rob/Commando.sid"), durationMs: 236_000 },
+      { ...createPlaylistItem("unknown", "/GAMES/Unknown_Length.prg"), durationMs: undefined },
+    ];
+    const { result } = renderSkipController(playlist, undefined, () => {
+      const [currentIndex, setCurrentIndex] = useState(0);
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+      return { currentIndex, setCurrentIndex, isPlaying, setIsPlaying, durationMs, setDurationMs };
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.chosenTrackLaunching).toBe(false);
+    const skipLaunch = createDeferred<void>();
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => skipLaunch.promise);
+
+    let pendingSkip: Promise<void> = Promise.resolve();
+    await act(async () => {
+      pendingSkip = result.current.handleNext();
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+
+    expect(result.current.playlistItemDuration(playlist[1], 1)).toBeUndefined();
+    expect(result.current.chosenTrackLaunching).toBe(true);
+
+    await act(async () => {
+      skipLaunch.resolve();
+      await pendingSkip;
+    });
+
+    expect(result.current.playlistItemDuration(playlist[1], 1)).toBe(45_000);
+    expect(result.current.chosenTrackLaunching).toBe(false);
+  });
+
   it("drops a skip already queued behind a launch when Stop arrives before it runs", async () => {
     vi.useFakeTimers();
     vi.mocked(getC64API).mockReturnValue({ machineReset: vi.fn().mockResolvedValue(undefined) } as never);
