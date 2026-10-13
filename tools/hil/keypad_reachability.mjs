@@ -198,9 +198,7 @@ const STATE_EXPR = String.raw`(() => {
       isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter(usable).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)
-        // The swipe layer keeps every tab mounted and hides the inactive ones from assistive tech on
-    // the slot, so the control's own attribute is not enough.
-    .filter((e) => usable(e) && !e.closest('[aria-hidden="true"]'))
+        .filter((e) => usable(e) && !e.closest('[aria-hidden="true"]'))
         .map(idOf),
       // OK on a field row (a stop that is not a card) edits the row's first field, even when the
       // row also wraps rows of its own, as Settings' host row wraps the three port rows.
@@ -240,9 +238,13 @@ const STATE_EXPR = String.raw`(() => {
   };
 })()`;
 
+/**
+ * Sum of every scroll offset on the page, inner scrollers included, so a Down that scrolled toward
+ * unreachable text reads as progress.
+ */
+const SCROLL_EXPR = `[...document.querySelectorAll("*")].reduce((sum, el) => sum + el.scrollTop, document.scrollingElement.scrollTop)`;
+
 /** Walk the ring in the current scope until it wraps, recording every stop. */
-/** Sum of every page scroll offset, so a Down that scrolled toward unreachable text reads as progress. */
-const SCROLL_EXPR = `[...document.querySelectorAll("main")].reduce((sum, el) => sum + el.scrollTop, document.scrollingElement.scrollTop)`;
 
 async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}) {
   const stops = [];
