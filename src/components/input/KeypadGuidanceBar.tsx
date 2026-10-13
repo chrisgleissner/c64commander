@@ -37,6 +37,7 @@ import {
   classifyFocusKind,
   getInputModality,
   hasContextMenu,
+  openOverlayOffersSoftKeyMenu,
   resolveGuidanceLabels,
   SKIP_ATTR,
   type GuidanceState,
@@ -74,7 +75,7 @@ const buildGuidanceState = (
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),
     layerOpen: controller.layerDepth > 0,
-    hasMenu: hasContextMenu(currentElement, isGroup),
+    hasMenu: hasContextMenu(currentElement, isGroup) || openOverlayOffersSoftKeyMenu(),
     fieldDeletes: t9Enabled && isT9FieldWithText(document.activeElement),
     gameModeShortcut,
   };

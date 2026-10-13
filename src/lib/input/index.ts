@@ -85,6 +85,7 @@ export {
   accessibleLabelFor,
   findContextMenuTrigger,
   hasContextMenu,
+  openOverlayOffersSoftKeyMenu,
 } from "./guidance";
 
 export type { InputModality } from "./inputModality";

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Settings2,
   Joystick,
@@ -25,6 +25,8 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useRemoteInputCapabilityTier } from "@/hooks/useRemoteInputCapabilityTier";
 import { useRemoteInputSession, type RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 import { useRemoteInputPhysicalKeys } from "@/hooks/useRemoteInputPhysicalKeys";
+import { useRemoteInputKeypadTyping } from "@/hooks/useRemoteInputKeypadTyping";
+import { useRemoteInputKeypadControls } from "@/hooks/useRemoteInputKeypadControls";
 import { useRemoteInputGameMode } from "@/hooks/useRemoteInputGameMode";
 import { useDeviceRotation } from "@/hooks/useDeviceRotation";
 import { useAutoHide } from "@/hooks/useAutoHide";
@@ -60,7 +62,9 @@ import { AUTOFIRE_VISIBILITY_CHANGE_EVENT, loadShowAutofireButton } from "@/lib/
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
 import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
+import { RemoteInputControlsMenu } from "@/components/remoteInput/RemoteInputControlsMenu";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
@@ -400,6 +404,33 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
 
   const gameModeAvailable = joystickAvailable && session.outputMode === "joystick";
 
+  // The same rule as the app's text fields: the keypad composes letters only where T9 is on.
+  const keypadTypesOnTheC64 = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
+  const keypadTyping = useRemoteInputKeypadTyping({ sendChar: session.sendChar, sendCursor: session.sendCursor });
+  const keypadControls = useRemoteInputKeypadControls({
+    open,
+    outputMode: session.outputMode,
+    joystickAvailable,
+    gameModeAvailable,
+    immersive,
+    onOutputModeChange: (mode) => {
+      keypadTyping.reset();
+      handleOutputModeChange(mode);
+    },
+    onOpenOptions: () => setJoystickOptionsOpen(true),
+    onEnterGameMode: () => void startGameMode(),
+    onExitGameMode: () => exitGameMode(),
+    onReleaseAll: session.releaseAll,
+    onClose: () => handleOpenChange(false),
+  });
+  const handleSheetKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (keypadControls.interceptKeyDown(event)) return;
+    handleKeyDown(event);
+    if (!event.defaultPrevented && session.outputMode === "type" && keypadTypesOnTheC64) {
+      keypadTyping.handleKeyDown(event);
+    }
+  };
+
   /**
    * The way INTO Game Mode. The way out is {@link exitGameModeToggle}, which rides the
    * header row instead — the two never render together, and they share one testid so
@@ -521,9 +552,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         // Game Mode kept a further 5rem for its edge-anchored controls, which the action zone
         // already reserves room for; on a 320 x 427 screen those 80px were the picture's.
         className="pb-[var(--safe-area-inset-bottom)]"
-        onKeyDown={handleKeyDown}
+        {...keypadControls.sheetProps}
+        onKeyDown={handleSheetKeyDown}
         onKeyUp={handleKeyUp}
       >
+        <RemoteInputControlsMenu {...keypadControls.menu} />
         {/* Game Mode hides the header, the pinned toolbar and the mirror controls so only the
             live screen and whatever control surface applies remain. A single always-visible
             floating handle brings it all back — "pull the controls down" over the picture. */}

@@ -95,6 +95,12 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
 /** The compact 480×640 profile only has room for the last few breadcrumb segments. */
 export const MAX_BREADCRUMB_SEGMENTS = 3;
 
+/** Set by an open overlay that opens its own menu on the right soft key, so the bar can say so. */
+export const SOFT_KEY_MENU_ATTR = "data-key-nav-soft-key-menu";
+
+export const openOverlayOffersSoftKeyMenu = (root: ParentNode = document): boolean =>
+  root.querySelector(`[${SOFT_KEY_MENU_ATTR}]`) !== null;
+
 /** A context menu the ring can open for the current item / scope on `openMenu`. */
 export const CONTEXT_MENU_SELECTOR = '[data-key-nav-menu],[aria-haspopup="menu"],[aria-haspopup="true"]';
 
