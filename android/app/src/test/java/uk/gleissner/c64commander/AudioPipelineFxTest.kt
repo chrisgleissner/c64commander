@@ -212,4 +212,66 @@ class AudioPipelineFxTest {
       pipeline.close()
     }
   }
+
+  @Test
+  fun aLiveStreamFeedsTheSpectrumAsPacketsArriveBeforeAnyIsPlayed() {
+    val hub = AudioFxHub().also { it.spectrumEnabled = true }
+    val speaker = RecordingTrack()
+    val pipeline =
+        AudioPipeline(rate, 60, rate, 240, speaker.factory, trackBursts = 2, correctDrift = true, clock = VirtualClock(), fxHub = hub)
+    try {
+      val tune = TestSignals.sine(rate / 4, rate, 1000.0, 0.5)
+      var at = 0
+      while (at + packetFrames * 4 <= tune.size) {
+        pipeline.offer(tune, at, packetFrames * 4)
+        at += packetFrames * 4
+      }
+      assertEquals(0, speaker.frames())
+      val frame = hub.analyzer.read(true)
+      assertTrue("sequence ${frame.sequence}", frame.sequence > 0)
+      assertTrue("1 kHz band read ${frame.bands.max()}", frame.bands.max() > -12)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun onDevicePlaybackAnalysesTheSampleTheTrackReportsAtTheSpeaker() {
+    val clock = VirtualClock()
+    val hub = AudioFxHub { clock.now }.also { it.spectrumEnabled = true }
+    val speaker = RecordingTrack()
+    // The speaker runs one second behind the writes, as a deep track buffer plus the mixer would.
+    `when`(speaker.track.getTimestamp(any(android.media.AudioTimestamp::class.java))).thenAnswer { call ->
+      val timestamp = call.getArgument<android.media.AudioTimestamp>(0)
+      timestamp.framePosition = maxOf(0L, speaker.frames().toLong() - rate)
+      timestamp.nanoTime = clock.now
+      true
+    }
+    val pipeline =
+        AudioPipeline(
+            rate, 60, rate, 240, speaker.factory, maxRingMs = 4000, trackBursts = 8, primeMs = 100, correctDrift = false,
+            clock = clock, fxHub = hub)
+    val tune = TestSignals.sine(5 * rate, rate, 1000.0, 0.5)
+    try {
+      // 2.5 s written: the speaker is 1.0 s behind. The clock moves on with
+      // each step, as real time would, so the pipeline takes its periodic track readings.
+      var offered = 0
+      while (speaker.frames() < rate * 5 / 2) {
+        while (offered + packetFrames <= tune.size / 4 && pipeline.stats().jitterBufferMs < 1000.0) {
+          pipeline.offer(tune, offered * 4, packetFrames * 4)
+          offered += packetFrames
+        }
+        pipeline.step()
+        clock.now += 5_000_000L
+      }
+      // The window ends where the track says the speaker is, a second behind the writes, give or
+      // take how far the analyser follows the speaker between readings.
+      val windowEnd = hub.analyzer.read(true).sequence * (rate / 30)
+      val speakerAt = speaker.frames() - rate
+      assertTrue("window ends at $windowEnd, speaker at $speakerAt", Math.abs(windowEnd - speakerAt) <= rate / 4)
+      assertTrue("window ends at $windowEnd, newest write at ${speaker.frames()}", windowEnd < speaker.frames() - rate / 2)
+    } finally {
+      pipeline.close()
+    }
+  }
 }

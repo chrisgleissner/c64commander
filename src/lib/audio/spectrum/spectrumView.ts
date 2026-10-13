@@ -20,6 +20,7 @@ import { readSpectrumPalette, type SpectrumPalette } from "@/lib/audio/spectrum/
 import {
   createSpectrumTierController,
   initialSpectrumTier,
+  SPECTRUM_POLL_HZ,
   type SpectrumTier,
   type SpectrumTierController,
 } from "@/lib/audio/spectrum/spectrumQuality";
@@ -312,7 +313,7 @@ export class SpectrumView {
   }
 
   private pollIfDue(nowMs: number): void {
-    if (this.pollInFlight || nowMs - this.lastPollAt < 1000 / this.tier.dataHz) return;
+    if (this.pollInFlight || nowMs - this.lastPollAt < 1000 / SPECTRUM_POLL_HZ) return;
     this.lastPollAt = nowMs;
     this.read(false);
   }

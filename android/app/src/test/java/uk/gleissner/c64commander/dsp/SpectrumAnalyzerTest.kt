@@ -181,4 +181,62 @@ class SpectrumAnalyzerTest {
       assertFalse("spectrum writer did not stop", writer.isAlive)
     }
   }
+
+  private fun feedTone(target: SpectrumAnalyzer, hz: Double, frames: Int, from: Long) {
+    var done = 0
+    while (done < frames) {
+      val n = minOf(240, frames - done)
+      target.feed(TestSignals.sine(n, rate, hz, 0.5, from + done), n, rate)
+      done += n
+    }
+  }
+
+  private fun loudestBand(frame: SpectrumFrame): Int = frame.bands.indices.maxByOrNull { frame.bands[it] }!!
+
+  @Test
+  fun analysesWhatTheSpeakerIsPlayingWhenTheWriterRunsAhead() {
+    feedTone(analyzer, 500.0, rate, 0)
+    feedTone(analyzer, 3000.0, rate, rate.toLong())
+    // The writer is a whole second ahead of the speaker: the 500 Hz tone is what is being heard.
+    analyzer.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
+    assertEquals(bandOf(500.0), loudestBand(analyzer.read(true)))
+  }
+
+  @Test
+  fun followsTheSpeakerBetweenReportsButFreezesWhenTheyStop() {
+    feedTone(analyzer, 500.0, rate, 0)
+    feedTone(analyzer, 3000.0, rate, rate.toLong())
+    analyzer.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
+    val atReport = analyzer.read(true).sequence
+    now += 100_000_000L
+    assertEquals(atReport + 3, analyzer.read(true).sequence)
+    now += 5_000_000_000L
+    val frozen = analyzer.read(true)
+    now += 5_000_000_000L
+    assertEquals(frozen.sequence, analyzer.read(true).sequence)
+    assertEquals(bandOf(3000.0), loudestBand(frozen))
+  }
+
+  @Test
+  fun aLiveStreamUsesAShortWindowSoANewToneTakesOverSooner() {
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    val output = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    for (target in listOf(live, output)) {
+      feedTone(target, 500.0, rate, 0)
+      feedTone(target, 3000.0, 1200, rate.toLong())
+    }
+    // 1200 new samples fill most of a 2048-point window but under a third of a 4096-point one.
+    assertEquals(bandOf(3000.0), loudestBand(live.read(true)))
+    assertEquals(bandOf(500.0), loudestBand(output.read(true)))
+  }
+
+  @Test
+  fun aLiveStreamPublishesAFrameEveryEightMilliseconds() {
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, 1000.0, 400, 0)
+    assertEquals(1L, live.read(true).sequence)
+    feedTone(live, 1000.0, 400, 400)
+    assertEquals(2L, live.read(true).sequence)
+  }
 }
+

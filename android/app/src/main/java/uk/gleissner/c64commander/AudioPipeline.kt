@@ -260,7 +260,7 @@ internal class AudioPipeline(
     ring = ByteArray(ringFrames * BYTES_PER_FRAME)
     pitchPeriod = RingPitchPeriod(ring, ringFrames, sourceRate)
     fx.ensureCapacity(maxOf(writeFramesPerChunk, trackBufferFrames))
-    fxHub.analyzer.prepare(outputRate)
+    fxHub.analyzer.prepareFor(live = correctDrift, sourceRate = sourceRate, outputRate = outputRate)
   }
 
   /** Output latency this pipeline targets once primed (ms) — ring target plus the track's buffer. */
@@ -367,6 +367,7 @@ internal class AudioPipeline(
         System.arraycopy(data, offset + tail, ring, 0, bytes - tail)
       }
       writeFrames += frames.toLong()
+      if (correctDrift && fxHub.spectrumEnabled) fxHub.analyzer.feed(data, frames, sourceRate, offset)
       blendIntoConcealment(frames)
     }
   }
@@ -876,7 +877,7 @@ internal class AudioPipeline(
     lastWriteNanos = clock.nanoTime()
     if (written > 0) totalFramesWritten += (written / BYTES_PER_FRAME).toLong()
     outputCapture?.record(data, written)
-    if (fxHub.spectrumEnabled) fxHub.analyzer.feed(data, maxOf(written, 0) / BYTES_PER_FRAME, outputRate)
+    if (!correctDrift && fxHub.spectrumEnabled) fxHub.analyzer.feed(data, maxOf(written, 0) / BYTES_PER_FRAME, outputRate)
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
       if (written <= 0) clock.park(POLL_NANOS)
@@ -906,6 +907,7 @@ internal class AudioPipeline(
     }
     try {
       trackQueuedFrames = (totalFramesWritten - track.playbackHeadPosition.toLong()).coerceAtLeast(0)
+      if (!correctDrift && fxHub.spectrumEnabled) fxHub.analyzer.anchorToSpeaker(track, totalFramesWritten)
     } catch (error: Exception) {
       Log.d(TAG, "playbackHeadPosition unavailable", error)
     }

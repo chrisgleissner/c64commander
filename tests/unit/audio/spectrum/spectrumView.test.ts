@@ -197,7 +197,7 @@ describe("SpectrumView", () => {
     expect(t.hasFrameScheduled()).toBe(false);
   });
 
-  it("polls at the data rate of its tier, not at the draw rate", async () => {
+  it("polls at the fixed data rate, not at the draw rate", async () => {
     const t = setup();
     t.view.resize(300, 150, 1);
     t.view.setState({ visible: true, paused: false });
@@ -206,14 +206,14 @@ describe("SpectrumView", () => {
     expect(t.reads.length).toBeLessThanOrEqual(32);
   });
 
-  it("starts at tier 1 on the compact profile and polls at 20 Hz", async () => {
+  it("starts at tier 1 on the compact profile and still polls at 30 Hz", async () => {
     const t = setup({ profile: "compact" });
     t.view.resize(300, 150, 1);
     expect(t.view.currentTier.index).toBe(1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(1000);
-    expect(t.reads.length).toBeLessThanOrEqual(22);
-    expect(t.reads.length).toBeGreaterThanOrEqual(16);
+    expect(t.reads.length).toBeGreaterThanOrEqual(25);
+    expect(t.reads.length).toBeLessThanOrEqual(32);
   });
 
   it("does not draw a new target for a frame it already has", async () => {
