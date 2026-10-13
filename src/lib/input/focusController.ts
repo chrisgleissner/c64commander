@@ -161,6 +161,21 @@ export class FocusController {
     return this.scopeParentId;
   }
 
+  /** Where a step in `delta`'s direction would land, and whether it wraps around the scope, without moving. */
+  peekStep(delta: number): { item: FocusItem; wraps: boolean } | null {
+    const scopedItems = this.itemsInScope(this.scopeParentId);
+    const startIndex = scopedItems.findIndex((entry) => entry.id === this.currentId);
+    if (startIndex < 0) return null;
+    for (let offset = 1; offset < scopedItems.length; offset++) {
+      const index = startIndex + delta * offset;
+      const candidate = scopedItems[(index + scopedItems.length * offset) % scopedItems.length];
+      if (isEnabled(candidate)) {
+        return { item: this.toFocusItem(candidate), wraps: index < 0 || index >= scopedItems.length };
+      }
+    }
+    return null;
+  }
+
   /** Selects a specific item by id; returns false if unknown. */
   setCurrent(id: string): boolean {
     const item = this.items.find((entry) => entry.id === id);

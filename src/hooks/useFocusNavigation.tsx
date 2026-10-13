@@ -78,6 +78,7 @@ import {
   focusRingElement,
   isNativelyActivatable,
   isWithinOpenOverlay,
+  scrollInsteadOfLeavingPage,
   stepFocusWithinOverlay,
 } from "@/lib/input/ringDom";
 import { isOnActivePage } from "@/lib/navigation/activePage";
@@ -728,6 +729,13 @@ export const FocusNavigationProvider = ({
       // Seamless pointer → key hand-off: start the move from where the user is.
       if (getInputModality() === "pointer") adoptActiveElement();
 
+      const scrollDirection = action === "dpadDown" ? 1 : action === "dpadUp" ? -1 : null;
+      const elementForId = (id: string) => engineRef.current?.elementForId(id) ?? null;
+      if (scrollDirection && scrollInsteadOfLeavingPage(controller.focus, elementForId, scrollDirection)) {
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
       // Focus the ring moves itself during a dispatch is already where the ring wants it; adopting
       // it again would, for one, descend into a card whose single control OK just activated.
       dispatchingRef.current = true;

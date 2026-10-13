@@ -38,6 +38,20 @@ describe("FocusController", () => {
     expect(controller.focusPrevious()?.id).toBe("c"); // wrap backward
   });
 
+  it("peeks at the next stop without moving, and says when the step wraps around the scope", () => {
+    const controller = new FocusController();
+    controller.register(item("a", 0));
+    controller.register(item("b", 1));
+    controller.register(item("c", 2, { disabled: true }));
+
+    expect(controller.peekStep(1)).toMatchObject({ item: { id: "b" }, wraps: false });
+    expect(controller.peekStep(-1)).toMatchObject({ item: { id: "b" }, wraps: true });
+    expect(controller.current()?.id).toBe("a");
+    controller.focusNext();
+    // The disabled item after "b" is not a stop, so the next stop is "a", reached by wrapping.
+    expect(controller.peekStep(1)).toMatchObject({ item: { id: "a" }, wraps: true });
+  });
+
   it("skips disabled items during navigation", () => {
     const controller = new FocusController();
     controller.register(item("a", 0));
