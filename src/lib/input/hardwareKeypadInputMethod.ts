@@ -31,7 +31,9 @@ export const noteHardwareKeypadKey = (event: KeyboardEvent): void => {
 };
 
 export const keepPlatformInputMethodAway = (target: EventTarget | null): void => {
-  if (!hardwareKeypadUsed || !isT9Field(target) || target.hasAttribute("inputmode")) return;
+  // isT9Field already leaves numeric, decimal and tel fields alone; a text-like inputmode a field
+  // set for itself still summons the platform's multi-tap, so it gives way too.
+  if (!hardwareKeypadUsed || !isT9Field(target)) return;
   target.setAttribute("inputmode", "none");
 };
 
