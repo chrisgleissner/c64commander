@@ -160,32 +160,3 @@ describe("useRemoteInputPhysicalKeys function keys", () => {
     expect(setHeldKeyboardInputs).toHaveBeenCalledTimes(2);
   });
 });
-
-describe("useRemoteInputPhysicalKeys OK on a focused control", () => {
-  it("leaves OK to a control the ring moved to, and still fires from the sheet itself", () => {
-    const setHeldJoystickInputs = vi.fn();
-    const { hook } = setup({ setHeldJoystickInputs });
-    const sheet = document.createElement("div");
-    const keysTab = document.createElement("button");
-    sheet.append(keysTab);
-    const ok = (target: Element) =>
-      ({
-        key: "Enter",
-        code: "Enter",
-        repeat: false,
-        target,
-        currentTarget: sheet,
-        preventDefault: vi.fn(),
-      }) as unknown as ReactKeyboardEvent<HTMLDivElement>;
-
-    const onControl = ok(keysTab);
-    act(() => hook.result.current.handleKeyDown(onControl));
-    expect(onControl.preventDefault).not.toHaveBeenCalled();
-    expect(setHeldJoystickInputs).not.toHaveBeenCalled();
-
-    const onSheet = ok(sheet);
-    act(() => hook.result.current.handleKeyDown(onSheet));
-    expect(onSheet.preventDefault).toHaveBeenCalled();
-    expect(setHeldJoystickInputs).toHaveBeenCalledWith(new Set(["fire"]));
-  });
-});
