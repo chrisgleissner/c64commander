@@ -157,7 +157,9 @@ const STATE_EXPR = String.raw`(() => {
 
   const inventory = [...scopeEl.querySelectorAll(INTERACTIVE)]
     .filter(visible)
-    .filter((e) => usable(e) && e.getAttribute('aria-hidden') !== 'true')
+    // The swipe layer keeps every tab mounted and hides the inactive ones from assistive tech on
+    // the slot, so the control's own attribute is not enough.
+    .filter((e) => usable(e) && !e.closest('[aria-hidden="true"]'))
     // A control inside a label is represented by its label; the ring stops on one of them.
     .map((e) => ({ id: idOf(e), tag: e.tagName, box: hitBox(e) }));
 
@@ -196,7 +198,9 @@ const STATE_EXPR = String.raw`(() => {
       isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter(usable).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)
-        .filter((e) => usable(e) && e.getAttribute('aria-hidden') !== 'true')
+        // The swipe layer keeps every tab mounted and hides the inactive ones from assistive tech on
+    // the slot, so the control's own attribute is not enough.
+    .filter((e) => usable(e) && !e.closest('[aria-hidden="true"]'))
         .map(idOf),
       // OK on a field row (a stop that is not a card) edits the row's first field, even when the
       // row also wraps rows of its own, as Settings' host row wraps the three port rows.
@@ -237,15 +241,26 @@ const STATE_EXPR = String.raw`(() => {
 })()`;
 
 /** Walk the ring in the current scope until it wraps, recording every stop. */
+/** Sum of every page scroll offset, so a Down that scrolled toward unreachable text reads as progress. */
+const SCROLL_EXPR = `[...document.querySelectorAll("main")].reduce((sum, el) => sum + el.scrollTop, document.scrollingElement.scrollTop)`;
+
 async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}) {
   const stops = [];
   const seen = new Map();
   let wrapped = false;
   let first = null;
+  let scroll = await evaluate(SCROLL_EXPR);
   for (let step = 0; step < maxSteps; step += 1) {
     await key(KEY.DOWN);
     await sleep(settleMs);
     const state = await evaluate(STATE_EXPR);
+    const scrolled = await evaluate(SCROLL_EXPR);
+    // On a page's last stop, Down scrolls the page to show what follows before it moves on.
+    if (state.current?.id && state.current.id === stops.at(-1)?.id && scrolled !== scroll) {
+      scroll = scrolled;
+      continue;
+    }
+    scroll = scrolled;
     if (!state.current) {
       stops.push({ step, id: null, note: "no ring selection" });
       continue;
@@ -291,7 +306,8 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
 
   // One lap plus a margin: the ring may have moved on since walkScope recorded it, and a descend
   // and Back can land a stop away from where it started.
-  const budget = stops.length * 2 + 8;
+  // Plus the presses that scroll a page past its last stop instead of moving the ring.
+  const budget = stops.length * 2 + 24;
   for (let step = 0; step < budget && pending.size > 0; step += 1) {
     const state = await evaluate(STATE_EXPR);
     const id = state.current?.id;
