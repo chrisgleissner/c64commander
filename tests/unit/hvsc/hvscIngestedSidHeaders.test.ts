@@ -38,6 +38,7 @@ import {
   discardIngestedSidHeaderIndex,
   INGESTED_SID_HEADER_INDEX_PATH,
 } from "@/lib/hvsc/hvscIngestedSidHeaders";
+import { createHvscCancellationError } from "@/lib/hvsc/hvscCancellation";
 import { hydrateHvscMetadata } from "@/lib/hvsc/hvscMetadataHydrator";
 import { parseSidHeaderMetadata, uint8ToBase64 } from "@/lib/sid/sidUtils";
 
@@ -262,6 +263,28 @@ describe("applyIngestedSidHeaders", () => {
       error: "disk busy",
       stack: expect.stringContaining("disk busy"),
     });
+  });
+
+  it("stops at the next chunk once the ingest is cancelled, without saving the browse index", async () => {
+    const paths = Array.from({ length: 1200 }, (_, index) => `/MUSICIANS/M/Many/Song_${index}.sid`);
+    const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({
+      pathToSeconds: new Map(paths.map((path) => [path, [60]])),
+      md5ToSeconds: new Map(),
+    });
+    const header = uint8ToBase64(files[STEREO_PSID].subarray(0, 124));
+    mocks.readDataFileText.mockResolvedValue(JSON.stringify(Object.fromEntries(paths.map((path) => [path, header]))));
+    mocks.loadHvscBrowseIndexSnapshot.mockResolvedValue(snapshot);
+    const throwIfCancelled = vi.fn(() => {
+      throw createHvscCancellationError();
+    });
+
+    await expect(applyIngestedSidHeaders(INDEX_PATH, throwIfCancelled)).rejects.toMatchObject({
+      code: "HVSC_CANCELLED",
+    });
+
+    expect(throwIfCancelled).toHaveBeenCalledTimes(1);
+    expect(Object.values(snapshot.songs).filter((song) => song.metadataStatus === "hydrated")).toHaveLength(499);
+    expect(mocks.saveHvscBrowseIndexSnapshot).not.toHaveBeenCalled();
   });
 
   it("gives the UI a turn while it hydrates a full-size library", async () => {

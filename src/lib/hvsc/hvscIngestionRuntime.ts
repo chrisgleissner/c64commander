@@ -852,7 +852,9 @@ const ingestArchivePathNative = async (options: {
             : { outcome: "success" },
         );
       }
-      if (result.sidHeaderIndexPath) await applyIngestedSidHeaders(result.sidHeaderIndexPath);
+      if (result.sidHeaderIndexPath) {
+        await applyIngestedSidHeaders(result.sidHeaderIndexPath, () => ensureNotCancelled(cancelToken));
+      }
     } finally {
       if (result.sidHeaderIndexPath) await discardIngestedSidHeaderIndex(result.sidHeaderIndexPath);
     }

@@ -15,6 +15,7 @@ import {
   updateHvscBrowseSong,
   type HvscBrowseIndexSnapshot,
 } from "./hvscBrowseIndexStore";
+import { isHvscCancellationError } from "./hvscCancellation";
 import { deleteDataFileIfPresent, readDataFileText } from "./hvscFilesystem";
 import { hydrateBrowseSongFromSidHeader } from "./hvscMetadataHydrator";
 
@@ -31,16 +32,23 @@ const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 /**
  * Hydrates every indexed song the header index names, exactly as metadata hydration would after
  * reading the whole file. Songs the browse index does not list are left out, as hydration only ever
- * visits listed songs.
+ * visits listed songs. `throwIfCancelled` is called between chunks, where the UI is also given a turn.
  */
-export const applySidHeaderIndex = async (snapshot: HvscBrowseIndexSnapshot, headers: SidHeaderIndex) => {
+export const applySidHeaderIndex = async (
+  snapshot: HvscBrowseIndexSnapshot,
+  headers: SidHeaderIndex,
+  throwIfCancelled: () => void = () => undefined,
+) => {
   let hydrated = 0;
   let failed = 0;
   let notIndexed = 0;
   let visited = 0;
   for (const [virtualPath, headerBase64] of Object.entries(headers)) {
     visited += 1;
-    if (visited % SONGS_PER_CHUNK === 0) await yieldToUi();
+    if (visited % SONGS_PER_CHUNK === 0) {
+      await yieldToUi();
+      throwIfCancelled();
+    }
     if (!snapshot.songs[normalizePath(virtualPath)]) {
       notIndexed += 1;
       continue;
@@ -65,9 +73,10 @@ export const applySidHeaderIndex = async (snapshot: HvscBrowseIndexSnapshot, hea
 /**
  * Takes the header metadata of the songs an Android ingest just wrote from the index it left beside
  * the library, so they reach the browse index hydrated and metadata hydration has nothing to re-read.
- * Any failure leaves those songs to metadata hydration, which reads each one from its file instead. The index is left on disk for {@link discardIngestedSidHeaderIndex}.
+ * Any failure other than a cancellation leaves those songs to metadata hydration, which reads each
+ * one from its file instead. The index is left on disk for {@link discardIngestedSidHeaderIndex}.
  */
-export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string) => {
+export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string, throwIfCancelled?: () => void) => {
   try {
     const text = await readDataFileText(sidHeaderIndexPath);
     if (text === null) {
@@ -83,10 +92,11 @@ export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string) => {
       });
       return;
     }
-    const outcome = await applySidHeaderIndex(snapshot, JSON.parse(text) as SidHeaderIndex);
+    const outcome = await applySidHeaderIndex(snapshot, JSON.parse(text) as SidHeaderIndex, throwIfCancelled);
     await saveHvscBrowseIndexSnapshot(snapshot, { foldersUnchanged: true });
     addLog("info", "HVSC song metadata taken from the ingested SID headers", { sidHeaderIndexPath, ...outcome });
   } catch (error) {
+    if (isHvscCancellationError(error)) throw error;
     addLog("warn", "HVSC SID header index could not be applied; metadata hydration will read each song", {
       sidHeaderIndexPath,
       error: (error as Error).message,

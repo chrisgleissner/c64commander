@@ -1041,7 +1041,7 @@ describe("hvscIngestionRuntime", () => {
     await ingestCachedHvsc("token-native-sid-headers");
 
     expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
-    expect(applyIngestedSidHeaders).toHaveBeenCalledWith(SID_HEADER_INDEX);
+    expect(applyIngestedSidHeaders).toHaveBeenCalledWith(SID_HEADER_INDEX, expect.any(Function));
     expect(vi.mocked(applyIngestedSidHeaders).mock.invocationCallOrder[0]).toBeGreaterThan(
       vi.mocked(reloadHvscSonglengthsOnConfigChange).mock.invocationCallOrder[0],
     );
@@ -1068,6 +1068,21 @@ describe("hvscIngestionRuntime", () => {
 
     expect(applyIngestedSidHeaders).not.toHaveBeenCalled();
     expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith(SID_HEADER_INDEX);
+  });
+
+  it("stops applying the SID header index once the ingest is cancelled, and still deletes it", async () => {
+    prepareNativeIngestWithSidHeaderIndex();
+    vi.mocked(applyIngestedSidHeaders).mockImplementationOnce(async (_path, throwIfCancelled) => {
+      await cancelHvscInstall("token-cancel-during-apply");
+      throwIfCancelled?.();
+    });
+
+    await expect(ingestCachedHvsc("token-cancel-during-apply")).rejects.toMatchObject({ code: "HVSC_CANCELLED" });
+
+    expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith(SID_HEADER_INDEX);
+    expect(vi.mocked(updateHvscState).mock.calls).not.toContainEqual([
+      expect.objectContaining({ ingestionState: "ready" }),
+    ]);
   });
 
   it("rejects cached ingest when baseline is missing", async () => {
