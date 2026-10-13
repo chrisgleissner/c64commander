@@ -579,6 +579,7 @@ export default function PlayFilesPage() {
     playlistEnded,
     playlistItemDuration,
     chosenTrackLaunching,
+    setDurationMsItemId,
   } = usePlaybackController({
     playlist,
     setPlaylist,
@@ -2266,6 +2267,7 @@ export default function PlayFilesPage() {
     setPlayedMs,
     durationMs,
     setDurationMs,
+    setDurationMsItemId,
     autoAdvanceDueAtMs,
     setCurrentSubsongCount,
     setShuffleEnabled,

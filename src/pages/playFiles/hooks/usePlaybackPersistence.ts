@@ -51,6 +51,8 @@ interface UsePlaybackPersistenceProps {
   setPlayedMs: (value: number) => void;
   durationMs: number | undefined;
   setDurationMs: (value: number | undefined) => void;
+  /** Records the playlist item a restored `durationMs` belongs to. */
+  setDurationMsItemId: (value: string | null) => void;
   autoAdvanceDueAtMs: number | null;
   setCurrentSubsongCount: (value: number | null) => void;
   shuffleEnabled?: boolean;
@@ -121,6 +123,7 @@ export function usePlaybackPersistence({
   setPlayedMs,
   durationMs,
   setDurationMs,
+  setDurationMsItemId,
   autoAdvanceDueAtMs,
   setCurrentSubsongCount,
   shuffleEnabled = false,
@@ -521,6 +524,7 @@ export function usePlaybackPersistence({
     setElapsedMs(restoredElapsedMs);
     setPlayedMs(restoredPlayedMs);
     setDurationMs(pending.durationMs);
+    setDurationMsItemId(playlist[matchedIndex].id);
     setIsPlaying(!otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPlaying));
     setIsPaused(!otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPaused));
     const restoredItem = playlist[matchedIndex];
