@@ -13,9 +13,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 
 /*
  * A keypad that reports its left soft key as KEYCODE_SOFT_LEFT reaches the page as
- * { key: "SoftLeft", code: "SoftLeft" } (forwarded by the native shell). The keypad bar labels that
- * key Back everywhere, including in dialogs, where the navigation handler stands aside and the
- * dialog only answers to Escape.
+ * { key: "SoftLeft", code: "SoftLeft" } (forwarded by the native shell). It is the keypad's Back,
+ * including in dialogs, where the navigation handler stands aside and the dialog only answers to
+ * Escape.
  */
 describe("left soft key inside an open dialog", () => {
   const renderDialog = (onOpenChange: (open: boolean) => void) =>
@@ -51,5 +51,33 @@ describe("left soft key inside an open dialog", () => {
     fireEvent.keyDown(dialog, { key: "SoftLeft", code: "SoftLeft" });
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("closes once per press, so a held key cannot walk on past the dialog", () => {
+    const onOpenChange = vi.fn();
+    renderDialog(onOpenChange);
+    const apply = screen.getByRole("button", { name: "Apply" });
+    apply.focus();
+
+    fireEvent.keyDown(apply, { key: "SoftLeft", code: "SoftLeft", repeat: true });
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("sends Back's Escape while an overlay is open even when focus is outside it, as device Back does", () => {
+    const escapes = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <button type="button">On the page</button>
+        <div role="dialog" aria-label="Menu" />
+      </FocusNavigationProvider>,
+    );
+    document.addEventListener("keydown", (event) => event.key === "Escape" && escapes());
+    const onPage = screen.getByRole("button", { name: "On the page" });
+    onPage.focus();
+
+    fireEvent.keyDown(onPage, { key: "SoftLeft", code: "SoftLeft" });
+
+    expect(escapes).toHaveBeenCalledTimes(1);
   });
 });

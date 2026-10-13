@@ -165,14 +165,21 @@ describe("rotateSlot", () => {
 });
 
 describe("reserved actions", () => {
-  it("names the four actions that already do something inside the sheet", () => {
-    expect([...RESERVED_ACTIONS].sort()).toEqual(["back", "hash", "openMenu", "star"]);
+  it("names the actions that already do something inside the sheet", () => {
+    expect([...RESERVED_ACTIONS].sort()).toEqual(["back", "hash", "openMenu", "softLeft", "star"]);
     expect(isReservedJoystickAction("star")).toBe(true);
     expect(isReservedJoystickAction("digit5")).toBe(false);
   });
 
   it("never resolves a reserved action to a joystick input, even if one is stored", () => {
     expect(resolveJoystickInputs("hash", { up: "hash" }, 0)).toEqual([]);
+  });
+
+  it("keeps the left soft key, which closes the sheet like Back, from steering", () => {
+    expect(isReservedJoystickAction("softLeft")).toBe(true);
+    expect(resolveJoystickInputs("softLeft", { fire: "softLeft" }, 0)).toEqual([]);
+    // A binding stored before the key was reserved reads back as unset.
+    expect(sanitiseJoystickBinding({ fire: "softLeft", up: "digit2" })).toEqual({ up: "digit2" });
   });
 
   it("is dropped by the binding sanitiser rather than stored", () => {

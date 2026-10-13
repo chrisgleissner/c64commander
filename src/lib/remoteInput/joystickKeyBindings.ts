@@ -127,13 +127,14 @@ const dpadSlotsForAction = (action: SemanticAction): JoystickSlot[] =>
 /**
  * Actions that already do something inside the sheet and so may not be bound to a
  * joystick slot: `*`/Menu flips the view lock, `#` shows the quick keys and the
- * Live View switches, and Back leaves.
+ * Live View switches, and Back and the left soft key leave.
  */
 export const RESERVED_ACTIONS: ReadonlySet<SemanticAction> = new Set<SemanticAction>([
   "star",
   "openMenu",
   "hash",
   "back",
+  "softLeft",
 ]);
 
 export const RESERVED_ACTION_ROLE: Partial<Record<SemanticAction, string>> = {
@@ -141,6 +142,7 @@ export const RESERVED_ACTION_ROLE: Partial<Record<SemanticAction, string>> = {
   openMenu: "flips between driving the C64 and adjusting the view",
   hash: "shows the quick keys and the Live View switches",
   back: "leaves Game Mode",
+  softLeft: "leaves Game Mode",
 };
 
 export const isReservedJoystickAction = (action: SemanticAction): boolean => RESERVED_ACTIONS.has(action);

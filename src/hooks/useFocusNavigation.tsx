@@ -439,11 +439,12 @@ export const FocusNavigationProvider = ({
       const isDeviceBackButton = isDeviceBackKey(event);
       const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
       const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
-      // The keypad bar labels the left soft key Back. Inside an overlay Back is the Escape the
-      // overlay closes on, and the handler below stands aside there, so the key sends that Escape.
-      if (action === "softLeft" && event.target && isWithinOpenOverlay(event.target)) {
+      // The left soft key is the keypad's Back. With an overlay open, Back is the Escape the overlay
+      // closes on and the handler below stands aside, so the key sends that Escape, as device Back
+      // does. Once per press: a held key must not close a select, then its dialog, then walk on.
+      if (action === "softLeft" && isAnyOverlayOpen()) {
         event.preventDefault();
-        dispatchDeviceBackKey(event.target);
+        if (!event.repeat) dispatchDeviceBackKey(document.activeElement ?? document);
         return;
       }
       const shortcuts = shortcutsRef.current;

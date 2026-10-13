@@ -312,7 +312,7 @@ describe("TourDriver", () => {
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 2"));
     });
 
-    it("skips on the left soft key, which the keypad bar labels Back", async () => {
+    it("skips on the left soft key, the keypad's Back", async () => {
       renderDriver();
       await startTour();
       fireEvent.keyDown(window, { key: "SoftLeft", code: "SoftLeft" });

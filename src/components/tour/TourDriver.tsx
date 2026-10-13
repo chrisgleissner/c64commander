@@ -369,7 +369,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       /*
        * The guide owns the keys while it is up. Left and Right are Back and Next, OK presses the
        * guide button that has focus (Next unless the user moved it), Up and Down fold and unfold the
-       * caption, and the Back key (or the left soft key the keypad bar labels Back) skips — the same "Back goes out" rule the rest of the app follows.
+       * caption, and the Back key (or the left soft key, the keypad's Back) skips — the same "Back goes out" rule the rest of the app follows.
        *
        * Resolved through the keymap, not off `event.key`. A keypad handset's D-pad emits
        * `code: "DpadLeft"` with `key: "Unidentified"`, so comparing key names left the tour
