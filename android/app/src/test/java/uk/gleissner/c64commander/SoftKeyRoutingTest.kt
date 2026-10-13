@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.view.InputDevice
 import android.view.KeyEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -90,5 +91,53 @@ class SoftKeyRoutingTest {
     assertEquals(1, scripts.size)
     assertTrue(scripts.single().contains("code:'SoftRight'"))
     assertTrue(dispatched.isEmpty())
+  }
+
+  private fun keypadKey(action: Int, keyCode: Int, scanCode: Int) =
+    KeyEvent(0, 0, action, keyCode, 0, 0, 1, scanCode, 0, InputDevice.SOURCE_KEYBOARD)
+
+  private fun routeFrom(keypad: Boolean, event: KeyEvent): Boolean =
+    SoftKeyRouter(fromHardwareKeypad = { keypad }).route(
+      event,
+      editingText = { false },
+      dispatch = { dispatched += it; true },
+      runScript = { scripts += it },
+    )
+
+  @Test
+  fun sendsAKeypadLeftSoftKeyReportedAsMenuOnAsBack() {
+    routeFrom(keypad = true, keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MENU, 139))
+    routeFrom(keypad = true, keypadKey(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MENU, 139))
+
+    assertEquals(listOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BACK), dispatched.map { it.keyCode })
+    assertEquals(listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP), dispatched.map { it.action })
+    assertTrue(scripts.isEmpty())
+  }
+
+  @Test
+  fun forwardsAKeypadRightSoftKeyReportedAsBackAsSoftRightAndConsumesIt() {
+    assertTrue(routeFrom(keypad = true, keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 158)))
+    assertTrue(routeFrom(keypad = true, keypadKey(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, 158)))
+
+    assertTrue(scripts.single().contains("code:'SoftRight'"))
+    assertTrue(dispatched.isEmpty())
+  }
+
+  @Test
+  fun leavesBackAndMenuAloneWhenTheyDoNotComeFromAKeypad() {
+    val gestureBack = keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 158)
+    routeFrom(keypad = false, gestureBack)
+    routeFrom(keypad = false, keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MENU, 139))
+
+    assertSame(gestureBack, dispatched.single())
+    assertTrue(scripts.single().contains("code:'ContextMenu'"))
+  }
+
+  @Test
+  fun leavesAKeypadMenuKeyWithAnotherScanCodeAsTheMenuKey() {
+    routeFrom(keypad = true, keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MENU, 127))
+
+    assertTrue(dispatched.isEmpty())
+    assertTrue(scripts.single().contains("code:'ContextMenu'"))
   }
 }
