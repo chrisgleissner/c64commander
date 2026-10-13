@@ -140,4 +140,16 @@ class SoftKeyRoutingTest {
     assertTrue(dispatched.isEmpty())
     assertTrue(scripts.single().contains("code:'ContextMenu'"))
   }
+
+  @Test
+  fun treatsOnlyABuiltInDeviceWithADpadAsTheKeypad() {
+    assertTrue(isBuiltInKeypad(isVirtual = false, isExternal = false, hasDpad = true))
+    // A Bluetooth keyboard or air-mouse remote with Menu and Back keys and arrow keys.
+    assertEquals(false, isBuiltInKeypad(isVirtual = false, isExternal = true, hasDpad = true))
+    // The navigation-bar Back gesture.
+    assertEquals(false, isBuiltInKeypad(isVirtual = true, isExternal = false, hasDpad = false))
+    // Capacitive hardware Back and Menu keys, with no D-pad.
+    assertEquals(false, isBuiltInKeypad(isVirtual = false, isExternal = false, hasDpad = false))
+  }
 }
+

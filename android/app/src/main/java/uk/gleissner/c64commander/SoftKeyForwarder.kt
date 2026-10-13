@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.os.Build
 import android.view.KeyEvent
 
 /**
@@ -117,8 +118,15 @@ private const val LINUX_KEY_MENU = 139
 private const val LINUX_KEY_BACK = 158
 private const val SOFT_RIGHT = "SoftRight"
 
-/** A key from a physical input device that also has a D-pad, as a keypad handset's keys do. */
+/**
+ * A built-in keypad with a D-pad, as a keypad handset's keys are. A Bluetooth keyboard or remote is
+ * external, and Android maps its Menu and Back keys to the same scan codes, so it keeps their meaning.
+ */
+internal fun isBuiltInKeypad(isVirtual: Boolean, isExternal: Boolean, hasDpad: Boolean): Boolean =
+  !isVirtual && !isExternal && hasDpad
+
 internal fun isFromHardwareKeypad(event: KeyEvent): Boolean {
   val device = event.device ?: return false
-  return !device.isVirtual && device.hasKeys(KeyEvent.KEYCODE_DPAD_UP).firstOrNull() == true
+  val external = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && device.isExternal
+  return isBuiltInKeypad(device.isVirtual, external, device.hasKeys(KeyEvent.KEYCODE_DPAD_UP).firstOrNull() == true)
 }
