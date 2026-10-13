@@ -39,6 +39,8 @@ export const stepFocusWithinOverlay = (overlay: Element, from: Element, forward:
   );
   if (tabbables.length === 0) return false;
   const index = tabbables.indexOf(from as HTMLElement);
+  const wraps = index !== -1 && index === (forward ? tabbables.length - 1 : 0);
+  if (wraps && scrollOverlayTowardUnreachableContent(overlay, from, forward ? 1 : -1)) return true;
   // `from` is not itself tabbable right after a Radix dialog opens — it autofocuses its
   // content wrapper (tabIndex -1), not a real control. Land on the first/last tabbable
   // instead of failing, so the very first press already reaches something.
@@ -184,3 +186,7 @@ export const scrollInsteadOfLeavingPage = (
   const scopeId = focus.currentScopeParentId();
   return scrollTowardUnreachableContent(from, scopeId ? elementForId(scopeId) : null, direction);
 };
+
+/** The overlay's own scrolling area, not the page behind it, shows what follows its last control. */
+const scrollOverlayTowardUnreachableContent = (overlay: Element, from: Element, direction: 1 | -1): boolean =>
+  overlay.contains(scrollContainerOf(from)) && scrollTowardUnreachableContent(from, null, direction);
