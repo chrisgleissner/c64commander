@@ -41,6 +41,21 @@ data class ArchiveProfile(
         val estimatedRequiredBytes: Long,
 )
 
+/**
+ * The memory the 7-Zip extractor may use. It runs as its own native process, so the app's Java heap
+ * limits (memory class, runtime maximum) do not bound it; the system's available memory does. A
+ * compatibility runtime can report a 128 MiB memory class on a phone with 1.8 GB free, and capping
+ * by the heap then refused every HVSC extraction. The heap figures remain only as the fallback
+ * when the system reports no available memory.
+ */
+fun extractionMemoryBudget(availableBytes: Long, memoryClassBytes: Long, runtimeBytes: Long): MemoryBudget =
+        MemoryBudget(
+                maxExtractionBytes =
+                        if (availableBytes > 0L) availableBytes / 2L
+                        else maxOf(memoryClassBytes * 2L, runtimeBytes * 2L),
+                detail = "availMem=${availableBytes} memoryClass=${memoryClassBytes} runtimeMax=${runtimeBytes}",
+        )
+
 data class ExtractedSong(
         val virtualPath: String,
         val fileName: String,

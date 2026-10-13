@@ -46,6 +46,7 @@ import uk.gleissner.c64commander.hvsc.HvscDownloadCancelledException
 import uk.gleissner.c64commander.hvsc.HvscResumableDownload
 import uk.gleissner.c64commander.hvsc.InsufficientMemoryException
 import uk.gleissner.c64commander.hvsc.MemoryBudget
+import uk.gleissner.c64commander.hvsc.extractionMemoryBudget
 
 @CapacitorPlugin(name = "HvscIngestion")
 open class HvscIngestionPlugin : Plugin() {
@@ -152,22 +153,13 @@ open class HvscIngestionPlugin : Plugin() {
   }
 
   private fun buildMemoryBudget(): MemoryBudget {
-    val runtime = Runtime.getRuntime()
     val activityManager = context.getSystemService(ActivityManager::class.java)
     val memoryInfo = ActivityManager.MemoryInfo()
     activityManager?.getMemoryInfo(memoryInfo)
-    val memoryClassBytes = ((activityManager?.memoryClass ?: 256).toLong() * 1024L * 1024L)
-    val runtimeBytes = runtime.maxMemory().coerceAtLeast(0L)
-    val availableBytes = memoryInfo.availMem.coerceAtLeast(0L)
-    val computedBudget =
-            minOf(
-                    if (availableBytes > 0L) availableBytes / 2L else Long.MAX_VALUE,
-                    maxOf(memoryClassBytes * 2L, runtimeBytes * 2L),
-            )
-    return MemoryBudget(
-            maxExtractionBytes = computedBudget,
-            detail =
-                    "availMem=${availableBytes} memoryClass=${memoryClassBytes} runtimeMax=${runtimeBytes}",
+    return extractionMemoryBudget(
+            availableBytes = memoryInfo.availMem.coerceAtLeast(0L),
+            memoryClassBytes = (activityManager?.memoryClass ?: 256).toLong() * 1024L * 1024L,
+            runtimeBytes = Runtime.getRuntime().maxMemory().coerceAtLeast(0L),
     )
   }
 
