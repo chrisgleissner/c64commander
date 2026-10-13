@@ -39,8 +39,6 @@ export const stepFocusWithinOverlay = (overlay: Element, from: Element, forward:
   );
   if (tabbables.length === 0) return false;
   const index = tabbables.indexOf(from as HTMLElement);
-  const wraps = index !== -1 && index === (forward ? tabbables.length - 1 : 0);
-  if (wraps && scrollOverlayTowardUnreachableContent(overlay, from, forward ? 1 : -1)) return true;
   // `from` is not itself tabbable right after a Radix dialog opens — it autofocuses its
   // content wrapper (tabIndex -1), not a real control. Land on the first/last tabbable
   // instead of failing, so the very first press already reaches something.
@@ -48,6 +46,13 @@ export const stepFocusWithinOverlay = (overlay: Element, from: Element, forward:
     index === -1
       ? tabbables[forward ? 0 : tabbables.length - 1]
       : tabbables[(index + (forward ? 1 : -1) + tabbables.length) % tabbables.length];
+  if (index !== -1) {
+    // Wrapping, or moving on to a footer button outside the scrolling body, would leave the
+    // body's remaining text unreachable, so the body scrolls toward it first.
+    const wraps = index === (forward ? tabbables.length - 1 : 0);
+    const leavesBody = leavesScrollContainer(from, next);
+    if ((wraps || leavesBody) && scrollOverlayTowardUnreachableContent(overlay, from, forward ? 1 : -1)) return true;
+  }
   next.focus();
   next.scrollIntoView({ block: "nearest" });
   return true;
@@ -149,10 +154,12 @@ export const leavesScrollContainer = (from: Element, to: Element): boolean => !s
  * a group only scrolls while part of it is still out of view, the page until it reaches its end.
  * Returns false when there is nothing left to show, so the ring wraps as before.
  */
+const remainingScroll = (container: Element, direction: 1 | -1): number =>
+  direction > 0 ? container.scrollHeight - container.clientHeight - container.scrollTop : container.scrollTop;
+
 export const scrollTowardUnreachableContent = (from: Element, scope: Element | null, direction: 1 | -1): boolean => {
   const container = scrollContainerOf(from);
-  const remaining =
-    direction > 0 ? container.scrollHeight - container.clientHeight - container.scrollTop : container.scrollTop;
+  const remaining = remainingScroll(container, direction);
   if (remaining < 1) return false;
   if (scope) {
     const visible =
@@ -187,6 +194,12 @@ export const scrollInsteadOfLeavingPage = (
   return scrollTowardUnreachableContent(from, scopeId ? elementForId(scopeId) : null, direction);
 };
 
-/** The overlay's own scrolling area, not the page behind it, shows what follows its last control. */
-const scrollOverlayTowardUnreachableContent = (overlay: Element, from: Element, direction: 1 | -1): boolean =>
-  overlay.contains(scrollContainerOf(from)) && scrollTowardUnreachableContent(from, null, direction);
+/** Less than about one control's height left to show is the body's padding, not content worth a press. */
+const OVERLAY_CONTENT_THRESHOLD_PX = 44;
+
+/** The overlay's own scrolling body, never the page behind it, shows what follows its last control. */
+const scrollOverlayTowardUnreachableContent = (overlay: Element, from: Element, direction: 1 | -1): boolean => {
+  const body = scrollContainerOf(from);
+  if (!overlay.contains(body) || remainingScroll(body, direction) < OVERLAY_CONTENT_THRESHOLD_PX) return false;
+  return scrollTowardUnreachableContent(from, null, direction);
+};
