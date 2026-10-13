@@ -65,7 +65,12 @@ describe("prerequisite messages", () => {
       [
         containerAdbDisabled(PHONE, ["127.0.0.1:5555"]),
         "container-adb-disabled",
-        ["USB debugging", "DROIDCTL_SSH_CONTAINER_ADB"],
+        [
+          "USB debugging",
+          "DROIDCTL_SSH_CONTAINER_ADB",
+          "settings put global adb_enabled 1",
+          "adb_enabled returns to 0",
+        ],
       ],
       [containerAdbUnauthorized(PHONE, "127.0.0.1:40000"), "container-adb-unauthorized", ["Always allow"]],
       [containerAdbConnect(PHONE, "127.0.0.1:5555", ""), "container-adb-connect", ["no output", "pairing code"]],

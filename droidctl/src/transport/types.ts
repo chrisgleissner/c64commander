@@ -6,6 +6,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import type { HostWindowState } from "./sshWindow.js";
+
 export type TransportKind = "adb" | "ssh";
 
 export type TargetState = "device" | "offline" | "unauthorized" | "booting" | "unknown";
@@ -131,6 +133,17 @@ export interface Transport {
   removeForward(target: ResolvedTarget, localPort: number): Promise<void>;
   /** Without a target, what the transport can do in general; with one, what that target can do now. */
   capabilities(target?: ResolvedTarget): TransportCapabilities;
+  /**
+   * Discards what was learned about the target, so the next resolution probes it again. Returns false
+   * when nothing could have changed since, so a refusal stands without a second probe.
+   */
+  forgetProbe?(target: ResolvedTarget): boolean;
+  /**
+   * Which window the device shows, where the transport can know better than Android: on a phone whose
+   * Android apps run in a container, the host compositor decides. With `raise`, the container's window
+   * is brought forward when it is not in front.
+   */
+  hostWindow?(target: ResolvedTarget, raise: boolean): Promise<HostWindowState>;
   /** Transport-specific connection facts that describe_target adds to its result. */
   describeConnection?(target: ResolvedTarget): Record<string, unknown>;
   /** Releases tunnels and connections the transport opened. */

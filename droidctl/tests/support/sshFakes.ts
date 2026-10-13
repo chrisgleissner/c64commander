@@ -64,6 +64,13 @@ export function parseShellWords(line: string): string[] {
   return words;
 }
 
+/** A made-up compositor window API, configured the way a user would configure a real one. */
+export const TEST_HOST_WINDOW = {
+  bus: "test.Compositor",
+  topmost: { path: "/", method: "test.Compositor.TopmostWindowPid" },
+  raise: { path: "/windows", method: "test.Compositor.RaiseWindowsOf" },
+} as const;
+
 export class FakeSshSystem implements SshSystem {
   env: NodeJS.ProcessEnv = {};
   homeDir = "/home/tester";
@@ -196,6 +203,8 @@ export interface PhoneScenario {
   adbConnectThrows: boolean;
   endpoints: Record<string, EndpointBehaviour>;
   model: string;
+  /** The host compositor's view: null when it offers no topmost-window query. */
+  hostWindow: { before: string; bridge: string | null; after: string; raiseOk: boolean } | null;
   shell: (argv: readonly string[], stdin: Buffer | undefined, via: "adb" | "attach") => ShellReply;
 }
 
@@ -224,6 +233,7 @@ export function defaultScenario(overrides: Partial<PhoneScenario> = {}): PhoneSc
     adbConnectThrows: false,
     endpoints: {},
     model: "Container_Model",
+    hostWindow: null,
     shell: () => ({ stdout: "" }),
     ...overrides,
   };
@@ -301,6 +311,7 @@ export class FakePhone {
   readonly masterChecks: string[] = [];
   readonly adbCalls: string[][] = [];
   readonly containerCalls: { prefix: string[]; argv: string[]; stdin: Buffer | undefined; destination: string }[] = [];
+  readonly hostWindowCalls: { destination: string; prefix: string[]; script: string }[] = [];
   readonly deviceShellCalls: { argv: string[]; via: "adb" | "attach" }[] = [];
   readonly tunnels = new Map<number, FakeTunnel>();
   readonly connected = new Map<string, "device" | "unauthorized" | "offline">();
@@ -392,6 +403,24 @@ export class FakePhone {
         }
       }
       return reply(lines.join("\n") + "\n", s.attachProbeExit === 0 ? "" : "probe broke", s.attachProbeExit);
+    }
+
+    if (script.includes(`--dest=${TEST_HOST_WINDOW.bus} `)) {
+      this.hostWindowCalls.push({ destination, prefix: words.slice(0, words.indexOf("sh")), script });
+      if (destination.startsWith("root@") && !s.rootLogin) {
+        return reply("", "root@192.168.2.15: Permission denied (publickey).\n", 255);
+      }
+      const view = s.hostWindow;
+      if (view === null) {
+        return reply("compositor=absent\n");
+      }
+      const bridge = view.bridge === null ? [] : [`bridge=${view.bridge}`];
+      const inFront = view.bridge !== null && view.before.endsWith(`|${view.bridge}`);
+      const raise =
+        script.includes(TEST_HOST_WINDOW.raise.method) && view.bridge !== null && !inFront
+          ? [`raised=${view.raiseOk ? 1 : 0}`, `after=${view.raiseOk ? view.after : view.before}`]
+          : [];
+      return reply([...bridge, `before=${view.before}`, ...raise].join("\n") + "\n");
     }
 
     const shellIndex = words.indexOf(CONTAINER_SHELL);

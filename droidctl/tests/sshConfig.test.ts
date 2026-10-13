@@ -36,7 +36,14 @@ describe("ssh configuration", () => {
   it("defaults to discovery on, the conventional login user and port 22, with no file present", () => {
     expect(resolveSshConfig(sources())).toEqual({
       discovery: true,
-      defaults: { user: DEFAULT_SSH_USER, port: 22, identityFile: null, attachCommand: null, containerAdb: null },
+      defaults: {
+        user: DEFAULT_SSH_USER,
+        port: 22,
+        identityFile: null,
+        attachCommand: null,
+        containerAdb: null,
+        hostWindow: null,
+      },
       hosts: [],
     });
   });
@@ -66,6 +73,7 @@ describe("ssh configuration", () => {
       identityFile: "/home/me/.ssh/phone",
       attachCommand: null,
       containerAdb: "127.0.0.1:5555",
+      hostWindow: null,
     });
     expect(config.hosts).toEqual([
       {
@@ -76,6 +84,7 @@ describe("ssh configuration", () => {
           identityFile: "/home/me/.ssh/phone",
           attachCommand: ["lxc-attach", "-n", "a", "--"],
           containerAdb: "127.0.0.1:5555",
+          hostWindow: null,
         },
         source: DEFAULT_FILE,
       },
@@ -108,6 +117,7 @@ describe("ssh configuration", () => {
       identityFile: "/keys/id",
       attachCommand: ["helper", "--name", "my container", "--"],
       containerAdb: null,
+      hostWindow: null,
     });
     expect(defaultConfigPath({ env: { XDG_CONFIG_HOME: "/xdg" }, homeDir: "/home/me" })).toBe("/xdg/droidctl/ssh.json");
     expect(resolveSshConfig(sources({ DROIDCTL_SSH_DISCOVERY: "off" })).discovery).toBe(false);
@@ -125,6 +135,15 @@ describe("ssh configuration", () => {
       [sources({ DROIDCTL_SSH_CONTAINER_ADB: "localhost" }), /DROIDCTL_SSH_CONTAINER_ADB must be address:port/],
       [sources({ DROIDCTL_SSH_DISCOVERY: "maybe" }), /DROIDCTL_SSH_DISCOVERY="maybe" is not on or off/],
       [sources({ DROIDCTL_SSH_HOSTS: "user@@host" }), /"user@@host" is not \[user@\]host\[:port\]/],
+      [sources({ DROIDCTL_SSH_WINDOW_BUS: "a.b" }), /DROIDCTL_SSH_WINDOW_BUS and DROIDCTL_SSH_WINDOW_TOPMOST/],
+      [
+        sources({ DROIDCTL_SSH_WINDOW_BUS: "a.b", DROIDCTL_SSH_WINDOW_TOPMOST: "/ a.b;rm" }),
+        /DROIDCTL_SSH_WINDOW_TOPMOST must be '<object path> <interface.method>'/,
+      ],
+      [
+        sources({}, { [DEFAULT_FILE]: JSON.stringify({ defaults: { hostWindow: { bus: "a b", topmost: {} } } }) }),
+        /defaults\.hostWindow\.bus: must be a D-Bus name/,
+      ],
     ];
     for (const [input, pattern] of cases) {
       const error = configError(() => resolveSshConfig(input));
@@ -135,6 +154,39 @@ describe("ssh configuration", () => {
   });
 });
 
+describe("host window settings", () => {
+  const window = {
+    bus: "test.Compositor",
+    topmost: { path: "/", method: "test.Compositor.TopmostWindowPid" },
+    raise: { path: "/windows", method: "test.Compositor.RaiseWindowsOf" },
+  };
+
+  it("has no built-in window query, so nothing is assumed about the host compositor", () => {
+    expect(resolveSshConfig(sources()).defaults.hostWindow).toBeNull();
+  });
+
+  it("reads the window query from the file, per host or as a default, with the raise optional", () => {
+    const file = JSON.stringify({
+      defaults: { hostWindow: { bus: window.bus, topmost: window.topmost } },
+      hosts: [{ host: "10.0.0.5", hostWindow: window }],
+    });
+    const config = resolveSshConfig(sources({}, { [DEFAULT_FILE]: file }));
+    expect(config.defaults.hostWindow).toEqual({ bus: window.bus, topmost: window.topmost, raise: null });
+    expect(config.hosts[0]!.settings.hostWindow).toEqual(window);
+  });
+
+  it("reads the window query from the environment, which overrides the file", () => {
+    const config = resolveSshConfig(
+      sources({
+        DROIDCTL_SSH_WINDOW_BUS: window.bus,
+        DROIDCTL_SSH_WINDOW_TOPMOST: `/ ${window.topmost.method}`,
+        DROIDCTL_SSH_WINDOW_RAISE: `/windows ${window.raise.method}`,
+      }),
+    );
+    expect(config.defaults.hostWindow).toEqual(window);
+  });
+});
+
 describe("configuration helpers", () => {
   it("splits command words with quotes and without expansion", () => {
     expect(splitCommandWords(`  a  'b c' "d 'e'" f"g h"i '' `)).toEqual(["a", "b c", "d 'e'", "fg hi", ""]);
@@ -142,7 +194,14 @@ describe("configuration helpers", () => {
   });
 
   it("parses host specs and rejects a port outside the TCP range", () => {
-    const defaults = { user: "u", port: 22, identityFile: null, attachCommand: null, containerAdb: null };
+    const defaults = {
+      user: "u",
+      port: 22,
+      identityFile: null,
+      attachCommand: null,
+      containerAdb: null,
+      hostWindow: null,
+    };
     expect(parseHostSpec("h", defaults)).toMatchObject({ host: "h", user: "u", port: 22 });
     expect(parseHostSpec("a@h.example:2", defaults)).toMatchObject({ host: "h.example", user: "a", port: 2 });
     expect(() => parseHostSpec("h:0", defaults)).toThrow(/not \[user@\]host/);

@@ -30,13 +30,35 @@ export const CONFIG_VARIABLES: Readonly<Record<string, string>> = {
     "Command that runs a program inside the container, such as lxc-attach -n <name> --. Replaces detection.",
   DROIDCTL_SSH_CONTAINER_ADB:
     "address:port of the container's adbd as seen from the phone. Tried before detected endpoints.",
+  DROIDCTL_SSH_WINDOW_BUS:
+    "D-Bus name of the host compositor on the login user's session bus. With DROIDCTL_SSH_WINDOW_TOPMOST, enables the window check of start_app.",
+  DROIDCTL_SSH_WINDOW_TOPMOST: "'<object path> <method>' that returns the topmost window's process id as an int32.",
+  DROIDCTL_SSH_WINDOW_RAISE:
+    "'<object path> <method>' that raises the windows of the process whose executable path it is given as a string. Optional.",
 };
+
+/** One D-Bus method call on the host compositor: the object it is called on and the interface-qualified method. */
+export interface DbusCall {
+  readonly path: string;
+  readonly method: string;
+}
+
+/**
+ * How to ask the host compositor which window is in front and how to raise one. No default exists,
+ * because the names belong to whichever compositor the phone runs; without them the check is skipped.
+ */
+export interface HostWindowSettings {
+  readonly bus: string;
+  readonly topmost: DbusCall;
+  readonly raise: DbusCall | null;
+}
 
 export interface SshHostSettings extends SshEndpoint {
   /** Replaces attach-command detection when set. */
   readonly attachCommand: readonly string[] | null;
   /** `address:port` of the container's adbd as seen from the phone; tried before any detected endpoint. */
   readonly containerAdb: string | null;
+  readonly hostWindow: HostWindowSettings | null;
 }
 
 export interface ConfiguredHost {
@@ -57,6 +79,24 @@ export interface ConfigSources {
 }
 
 const endpointPattern = /^[A-Za-z0-9.-]+:\d{1,5}$/;
+const busNamePattern = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
+const methodPattern = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$/;
+const objectPathPattern = /^\/(?:[A-Za-z0-9_]+(?:\/[A-Za-z0-9_]+)*)?$/;
+
+const dbusCallSchema = z
+  .object({
+    path: z.string().regex(objectPathPattern, "must be a D-Bus object path"),
+    method: z.string().regex(methodPattern, "must be interface.method"),
+  })
+  .strict();
+
+const hostWindowSchema = z
+  .object({
+    bus: z.string().regex(busNamePattern, "must be a D-Bus name"),
+    topmost: dbusCallSchema,
+    raise: dbusCallSchema.optional(),
+  })
+  .strict();
 
 const hostFields = {
   user: z.string().min(1).optional(),
@@ -64,6 +104,7 @@ const hostFields = {
   identityFile: z.string().min(1).optional(),
   attachCommand: z.array(z.string().min(1)).min(1).optional(),
   containerAdb: z.string().regex(endpointPattern, "must be address:port").optional(),
+  hostWindow: hostWindowSchema.optional(),
 };
 
 const configFileSchema = z
@@ -138,7 +179,21 @@ function applyOverrides(
       overrides.identityFile === undefined ? base.identityFile : expandHome(overrides.identityFile, homeDir),
     attachCommand: overrides.attachCommand ?? base.attachCommand,
     containerAdb: overrides.containerAdb ?? base.containerAdb,
+    hostWindow:
+      overrides.hostWindow === undefined
+        ? base.hostWindow
+        : { ...overrides.hostWindow, raise: overrides.hostWindow.raise ?? null },
   };
+}
+
+/** `<object path> <method>`, validated like the configuration file's fields. */
+function parseDbusCall(name: string, value: string): DbusCall {
+  const [objectPath, method, ...rest] = value.trim().split(/\s+/);
+  const parsed = dbusCallSchema.safeParse({ path: objectPath, method });
+  if (rest.length > 0 || !parsed.success) {
+    throw new Error(`${name} must be '<object path> <interface.method>'`);
+  }
+  return parsed.data;
 }
 
 function envOverrides(env: NodeJS.ProcessEnv): HostOverrides {
@@ -164,6 +219,22 @@ function envOverrides(env: NodeJS.ProcessEnv): HostOverrides {
       throw new Error("DROIDCTL_SSH_CONTAINER_ADB must be address:port");
     }
     overrides.containerAdb = env["DROIDCTL_SSH_CONTAINER_ADB"];
+  }
+  const bus = env["DROIDCTL_SSH_WINDOW_BUS"];
+  const topmost = env["DROIDCTL_SSH_WINDOW_TOPMOST"];
+  if (bus || topmost || env["DROIDCTL_SSH_WINDOW_RAISE"]) {
+    if (!bus || !topmost) {
+      throw new Error("DROIDCTL_SSH_WINDOW_BUS and DROIDCTL_SSH_WINDOW_TOPMOST must be set together");
+    }
+    if (!busNamePattern.test(bus)) {
+      throw new Error("DROIDCTL_SSH_WINDOW_BUS must be a D-Bus name");
+    }
+    const raise = env["DROIDCTL_SSH_WINDOW_RAISE"];
+    overrides.hostWindow = {
+      bus,
+      topmost: parseDbusCall("DROIDCTL_SSH_WINDOW_TOPMOST", topmost),
+      ...(raise ? { raise: parseDbusCall("DROIDCTL_SSH_WINDOW_RAISE", raise) } : {}),
+    };
   }
   return overrides;
 }
@@ -208,6 +279,7 @@ export function resolveSshConfig(sources: ConfigSources): SshTransportConfig {
       identityFile: null,
       attachCommand: null,
       containerAdb: null,
+      hostWindow: null,
     };
     source = "the DROIDCTL_SSH_* environment variables";
     const env = envOverrides(sources.env);
