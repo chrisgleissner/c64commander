@@ -312,6 +312,14 @@ describe("TourDriver", () => {
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 2"));
     });
 
+    it("skips on the left soft key, which the keypad bar labels Back", async () => {
+      renderDriver();
+      await startTour();
+      fireEvent.keyDown(window, { key: "SoftLeft", code: "SoftLeft" });
+      await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
+      expect(loadTourState().skippedAt).not.toBeNull();
+    });
+
     it("skips on the Back key", async () => {
       renderDriver();
       await startTour();

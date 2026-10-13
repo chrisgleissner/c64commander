@@ -10,6 +10,13 @@ import { App } from "@capacitor/app";
 import { addLog } from "@/lib/logging";
 import { isAnyOverlayOpen } from "@/lib/input/eventTargets";
 
+/** Sends the keydown the device Back key becomes to `target`, and returns it so the caller can see whether it was taken. */
+export const dispatchDeviceBackKey = (target: EventTarget): KeyboardEvent => {
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" });
+  target.dispatchEvent(event);
+  return event;
+};
+
 /**
  * Turn Android's hardware Back key into a key event the app can act on.
  *
@@ -30,8 +37,7 @@ export const installDeviceBackButton = (onUnhandled: () => void): (() => void) =
   void App.addListener("backButton", () => {
     // An overlay the key closed is the whole answer, whether or not it cancelled the event.
     const overlayWasOpen = isAnyOverlayOpen();
-    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" });
-    (document.activeElement ?? document).dispatchEvent(event);
+    const event = dispatchDeviceBackKey(document.activeElement ?? document);
     if (!event.defaultPrevented && !overlayWasOpen) onUnhandled();
   })
     .then((handle) => {

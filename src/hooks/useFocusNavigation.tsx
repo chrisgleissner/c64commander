@@ -71,7 +71,7 @@ import {
   OPEN_OVERLAY_ANCESTOR_SELECTOR,
 } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
-import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
   ENTER_IGNORING_CONTROL_SELECTOR,
@@ -439,6 +439,13 @@ export const FocusNavigationProvider = ({
       const isDeviceBackButton = isDeviceBackKey(event);
       const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
       const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
+      // The keypad bar labels the left soft key Back. Inside an overlay Back is the Escape the
+      // overlay closes on, and the handler below stands aside there, so the key sends that Escape.
+      if (action === "softLeft" && event.target && isWithinOpenOverlay(event.target)) {
+        event.preventDefault();
+        dispatchDeviceBackKey(event.target);
+        return;
+      }
       const shortcuts = shortcutsRef.current;
       const shortcutDigit = action === null ? null : digitForAction(action);
       const isGlobalCommand = Boolean(
