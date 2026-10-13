@@ -263,7 +263,10 @@ open class MainActivity : BridgeActivity() {
     }
   }
 
-  private val softKeyRouter = SoftKeyRouter()
+  private val softKeyRouter =
+    SoftKeyRouter(
+      onBuiltInKeypad = { bridge?.webView?.evaluateJavascript(SoftKeyForwarder.BUILT_IN_KEYPAD_SCRIPT, null) }
+    )
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)

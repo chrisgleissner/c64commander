@@ -151,5 +151,28 @@ class SoftKeyRoutingTest {
     // Capacitive hardware Back and Menu keys, with no D-pad.
     assertEquals(false, isBuiltInKeypad(isVirtual = false, isExternal = false, hasDpad = false))
   }
+
+  @Test
+  fun reportsABuiltInKeypadOnceOnItsFirstKeyDown() {
+    var reports = 0
+    val router = SoftKeyRouter(fromHardwareKeypad = { true }, onBuiltInKeypad = { reports++ })
+    val route = { event: KeyEvent -> router.route(event, { false }, { true }, {}) }
+
+    route(keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN, 108))
+    route(keypadKey(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_DOWN, 108))
+    route(keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_2, 3))
+
+    assertEquals(1, reports)
+  }
+
+  @Test
+  fun neverReportsAKeypadForKeysFromOtherDevices() {
+    var reports = 0
+    val router = SoftKeyRouter(fromHardwareKeypad = { false }, onBuiltInKeypad = { reports++ })
+
+    router.route(keypadKey(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN, 108), { false }, { true }, {})
+
+    assertEquals(0, reports)
+  }
 }
 

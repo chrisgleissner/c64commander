@@ -7,6 +7,7 @@
  */
 
 import { isEditableTarget } from "@/lib/input/eventTargets";
+import { isNativePlatform } from "@/lib/native/platform";
 import { isT9Field } from "@/lib/input/t9FieldComposer";
 
 /**
@@ -17,8 +18,11 @@ import { isT9Field } from "@/lib/input/t9FieldComposer";
  * for no input method receives the raw digits instead, and the app's own T9 composes them.
  *
  * Only a navigation key pressed outside a text field counts as the keypad: a touch phone sends none,
- * and the arrow keys some soft keyboards show only ever arrive inside a field.
+ * and the arrow keys some soft keyboards show only ever arrive inside a field. On a native build the
+ * shell must also have reported a built-in keypad, so a Bluetooth gamepad or keyboard, which is
+ * external, never takes the soft keyboard away from a touch phone.
  */
+export const BUILT_IN_KEYPAD_SESSION_KEY = "c64.builtInKeypad";
 const NAVIGATION_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 const IME_COMPOSITION_KEY_CODE = 229;
 
@@ -27,6 +31,7 @@ let hardwareKeypadUsed = false;
 export const noteHardwareKeypadKey = (event: KeyboardEvent): void => {
   if (!NAVIGATION_KEYS.has(event.key)) return;
   if (event.keyCode === IME_COMPOSITION_KEY_CODE || isEditableTarget(event.target)) return;
+  if (isNativePlatform() && sessionStorage.getItem(BUILT_IN_KEYPAD_SESSION_KEY) !== "1") return;
   hardwareKeypadUsed = true;
 };
 

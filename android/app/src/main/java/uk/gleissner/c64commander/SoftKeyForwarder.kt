@@ -31,6 +31,9 @@ object SoftKeyForwarder {
 
   fun domCodeFor(keyCode: Int): String? = DOM_CODES[keyCode]
 
+  /** Tells the page a built-in keypad is in use; it survives a reload of the page within the session. */
+  const val BUILT_IN_KEYPAD_SCRIPT = "sessionStorage.setItem('c64.builtInKeypad','1')"
+
   fun keydownScript(domCode: String, repeat: Boolean): String =
     "(function(){var t=document.activeElement||document;" +
       "t.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true," +
@@ -47,7 +50,12 @@ object SoftKeyForwarder {
  * trusted keydown and a form still submits on it. The choice is made once per press, on its first
  * down event, so the press's repeats and its up event are the same key as its down event.
  */
-class SoftKeyRouter(private val fromHardwareKeypad: (KeyEvent) -> Boolean = ::isFromHardwareKeypad) {
+class SoftKeyRouter(
+  private val fromHardwareKeypad: (KeyEvent) -> Boolean = ::isFromHardwareKeypad,
+  private val onBuiltInKeypad: () -> Unit = {},
+) {
+  private var builtInKeypadReported = false
+  private val keypadByDevice = HashMap<Int, Boolean>()
   private var okPressInProgress = false
   private var okPressGoesOnAsEnter = false
 
@@ -65,6 +73,10 @@ class SoftKeyRouter(private val fromHardwareKeypad: (KeyEvent) -> Boolean = ::is
     dispatch: (KeyEvent) -> Boolean,
     runScript: (String) -> Unit,
   ): Boolean {
+    if (!builtInKeypadReported && event.action == KeyEvent.ACTION_DOWN && isKeypad(event)) {
+      builtInKeypadReported = true
+      onBuiltInKeypad()
+    }
     if (isKeypadSoftKey(event, KeyEvent.KEYCODE_MENU, LINUX_KEY_MENU)) {
       return dispatch(withKeyCode(event, KeyEvent.KEYCODE_BACK))
     }
@@ -97,7 +109,10 @@ class SoftKeyRouter(private val fromHardwareKeypad: (KeyEvent) -> Boolean = ::is
    * and the device keep a navigation-bar Back gesture and a keyboard's Menu key as they are.
    */
   private fun isKeypadSoftKey(event: KeyEvent, keyCode: Int, scanCode: Int): Boolean =
-    event.keyCode == keyCode && event.scanCode == scanCode && fromHardwareKeypad(event)
+    event.keyCode == keyCode && event.scanCode == scanCode && isKeypad(event)
+
+  /** Looked up once per input device: the check asks the system which keys the device has. */
+  private fun isKeypad(event: KeyEvent): Boolean = keypadByDevice.getOrPut(event.deviceId) { fromHardwareKeypad(event) }
 
   private fun withKeyCode(event: KeyEvent, keyCode: Int): KeyEvent =
     KeyEvent(
