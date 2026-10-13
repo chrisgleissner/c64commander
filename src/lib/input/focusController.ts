@@ -163,17 +163,8 @@ export class FocusController {
 
   /** Where a step in `delta`'s direction would land, and whether it wraps around the scope, without moving. */
   peekStep(delta: number): { item: FocusItem; wraps: boolean } | null {
-    const scopedItems = this.itemsInScope(this.scopeParentId);
-    const startIndex = scopedItems.findIndex((entry) => entry.id === this.currentId);
-    if (startIndex < 0) return null;
-    for (let offset = 1; offset < scopedItems.length; offset++) {
-      const index = startIndex + delta * offset;
-      const candidate = scopedItems[(index + scopedItems.length * offset) % scopedItems.length];
-      if (isEnabled(candidate)) {
-        return { item: this.toFocusItem(candidate), wraps: index < 0 || index >= scopedItems.length };
-      }
-    }
-    return null;
+    const found = this.findStep(delta);
+    return found && found.from >= 0 ? { item: this.toFocusItem(found.item), wraps: found.wraps } : null;
   }
 
   /** Selects a specific item by id; returns false if unknown. */
@@ -252,27 +243,32 @@ export class FocusController {
 
   private step(delta: number): FocusItem | null {
     const scopedItems = this.itemsInScope(this.scopeParentId);
+    if (scopedItems.length === 0 || !scopedItems.some(isEnabled)) return null;
+    const found = this.findStep(delta);
+    if (!found) return this.current();
+    this.currentId = found.item.id;
+    this.currentIsDefault = false;
+    return this.toFocusItem(found.item);
+  }
+
+  /**
+   * The next enabled item in `delta`'s direction, wrapping around the scope. With nothing selected,
+   * a forward step lands on the first enabled item and a backward step on the last.
+   */
+  private findStep(delta: number): { item: InternalItem; wraps: boolean; from: number } | null {
+    const scopedItems = this.itemsInScope(this.scopeParentId);
     const count = scopedItems.length;
-    if (count === 0) return null;
-
-    const enabledExists = scopedItems.some(isEnabled);
-    if (!enabledExists) return null;
-
-    const startIndex = scopedItems.findIndex((entry) => entry.id === this.currentId);
-    // When nothing is selected, a forward step lands on the first enabled item
-    // and a backward step on the last enabled item.
-    let index = startIndex < 0 ? (delta > 0 ? -1 : 0) : startIndex;
-
+    const from = scopedItems.findIndex((entry) => entry.id === this.currentId);
+    let index = from < 0 ? (delta > 0 ? -1 : 0) : from;
+    let wraps = false;
     for (let i = 0; i < count; i++) {
-      index = (index + delta + count) % count;
+      const unwrapped = index + delta;
+      wraps ||= unwrapped < 0 || unwrapped >= count;
+      index = (unwrapped + count) % count;
       const candidate = scopedItems[index];
-      if (isEnabled(candidate)) {
-        this.currentId = candidate.id;
-        this.currentIsDefault = false;
-        return this.toFocusItem(candidate);
-      }
+      if (isEnabled(candidate)) return { item: candidate, wraps, from };
     }
-    return this.current();
+    return null;
   }
 
   private firstEnabledIdInScope(parentId: string | null): string | null {
