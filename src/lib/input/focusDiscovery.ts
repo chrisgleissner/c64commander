@@ -149,6 +149,18 @@ const labelledByText = (element: Element): string | undefined => {
   return text || undefined;
 };
 
+/**
+ * A childList record that only swaps text or comment nodes, as setting `textContent` on a readout
+ * does. It cannot add or remove a stop. The spectrum's level readout rewrites its text ten times a
+ * second while sound plays, and each rewrite re-ran the whole page scan, which kept a low-end
+ * phone's renderer at up to 84% of a core.
+ */
+const changesOnlyText = (record: MutationRecord): boolean => {
+  if (record.type !== "childList") return false;
+  const isElement = (node: Node) => node.nodeType === Node.ELEMENT_NODE;
+  return !Array.from(record.addedNodes).some(isElement) && !Array.from(record.removedNodes).some(isElement);
+};
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -195,7 +207,11 @@ export class FocusDiscoveryEngine {
     this.started = true;
     if (typeof MutationObserver !== "undefined") {
       this.observer = new MutationObserver((records) => {
-        if (records.every((record) => this.cannotChangeRing(record))) return;
+        if (records.every((record) => this.cannotChangeRing(record))) {
+          // The guidance bar shows the selected control's own text, so a rewrite there still notifies.
+          if (records.some((record) => this.relabelsCurrent(record))) this.onAfterAssemble?.();
+          return;
+        }
         this.scheduleRefresh();
       });
       this.observer.observe(this.doc.body, {
@@ -231,7 +247,14 @@ export class FocusDiscoveryEngine {
    * test keeps a dialog nested INSIDE a skipped region working once the scope has moved into it,
    * and the overlay test covers the moment before that, when it is only being mounted.
    */
+  private relabelsCurrent(record: MutationRecord): boolean {
+    const currentId = this.controller.current()?.id;
+    const current = currentId ? this.elementForId(currentId) : null;
+    return current !== null && changesOnlyText(record) && current.contains(record.target);
+  }
+
   private cannotChangeRing(record: MutationRecord): boolean {
+    if (changesOnlyText(record)) return true;
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;

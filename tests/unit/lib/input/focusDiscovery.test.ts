@@ -522,6 +522,54 @@ describe("FocusDiscoveryEngine", () => {
   });
 });
 
+describe("text-only mutations", () => {
+  it("do not trigger a rescan when a readout rewrites its text", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><span id="level">-18</span></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("notify the guidance bar without a rescan when the selected control's own text changes", async () => {
+    document.body.innerHTML = `<div id="page"><button id="play">Play</button><span id="level">-18</span></div>`;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+
+    el("play").textContent = "Pause";
+    await afterRingRescan();
+    expect(onAfterAssemble).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("still trigger a rescan when an element arrives alongside text", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><span id="level">-18</span></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("level").replaceChildren("-12", document.createElement("button"));
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalled();
+    engine.stop();
+  });
+});
+
 describe("mutations inside a skipped subtree", () => {
   /*
    * The ring is the same either way; what this pins is whether the engine does the work to find
