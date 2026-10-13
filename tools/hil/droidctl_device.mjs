@@ -57,7 +57,11 @@ export const chooseTarget = (targets, serial) => {
   throw new Error(`several devices attached (${online.map((t) => t.serial).join(", ")}); pass --serial`);
 };
 
-export const createDroidDevice = async ({ serial, artifactRoot } = {}) => {
+/**
+ * `choose` picks the target from the listing; it defaults to {@link chooseTarget}. The merge gate
+ * passes its own, so it can prefer the keypad handset over the Pixel.
+ */
+export const createDroidDevice = async ({ serial, artifactRoot, choose } = {}) => {
   const { createDroidctlServerRuntime } = await loadDroidctl();
   const runtime = createDroidctlServerRuntime(
     artifactRoot ? { artifactRoot } : { artifactRoot: path.join(REPO, "artifacts", "droidctl-runs") },
@@ -73,7 +77,7 @@ export const createDroidDevice = async ({ serial, artifactRoot } = {}) => {
   };
 
   const { targets } = await call("droid_target.list_targets", {});
-  const target = chooseTarget(targets, serial ?? process.env.ANDROID_SERIAL);
+  const target = choose ? choose(targets) : chooseTarget(targets, serial ?? process.env.ANDROID_SERIAL);
   const targetId = target.targetId;
 
   /** Runs an argument vector on the device and returns its stdout, like `adb shell` did. */

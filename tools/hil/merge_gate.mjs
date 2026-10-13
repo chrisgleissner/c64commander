@@ -57,16 +57,22 @@
  *
  *   node tools/hil/merge_gate.mjs [--host c64u] [--iface <host ip>] [--only input,wire]
  *                                [--quiet-check] [--volume 3] [--json artifacts/hil-gate.json]
- *                                [--keep-dir artifacts/gate-runs]
+ *                                [--keep-dir artifacts/gate-runs] [--target auto|handset|pixel]
+ *
+ * `--target auto` (the default) drives the keypad handset when droidctl lists it as ready, and the
+ * Pixel otherwise. On the handset the gate forwards the WebView itself, and the stages that need
+ * the microphone at the Pixel's speaker, or control of the phone's media volume, are reported as
+ * skipped with the reason. See gate_target.mjs.
  *
  * `--keep-dir` keeps each run's evidence in `<dir>/<timestamp>-<host>/<stage>/`: the microphone
  * recordings, the wire capture taken over the same span, each probe's full output, and the app's
  * own audio pipeline stats sampled during the audio stages. Without it, recordings go to `--tmp`
  * and the next run overwrites them.
  *
- * Requires: the branch's APK installed and foregrounded on the attached Pixel, the WebView DevTools
- * forwarded with droid_device.forward_webview (see the `hil-attach` skill), the Ultimate reachable, and a microphone
- * in front of the phone for the audio stages.
+ * Requires: the branch's APK installed and foregrounded on the phone being driven (the `c64u-remote`
+ * edition on the handset, the default edition on the Pixel); on the Pixel, the WebView DevTools
+ * forwarded with droid_device.forward_webview (see the `hil-attach` skill); the Ultimate reachable;
+ * and, for the audio stages, a microphone in front of the Pixel.
  */
 
 import { execFile } from "node:child_process";
@@ -75,6 +81,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createDroidDevice } from "./droidctl_device.mjs";
+import { resolveGateTarget, stageExclusion } from "./gate_target.mjs";
 import { percentile } from "./percentile.mjs";
 import { createGateEvidence } from "./gate_evidence.mjs";
 
@@ -151,12 +158,33 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * as the default for `--serial`.
  */
 const SERIAL = arg("serial", process.env.ANDROID_SERIAL ?? "");
+/** `auto` drives the keypad handset when it is attached and the Pixel otherwise; see gate_target.mjs. */
+const TARGET_MODE = arg("target", "auto");
 let phonePromise = null;
+let gateTarget = null;
 const phone = () => {
   // Resolved on first use, not at module load: this file exports pure parsers that unit tests
   // import on a machine with no device attached.
-  phonePromise ??= createDroidDevice({ serial: SERIAL || undefined });
+  phonePromise ??= createDroidDevice({
+    choose: (targets) => {
+      gateTarget = resolveGateTarget(targets, { mode: TARGET_MODE, serial: SERIAL });
+      return targets.find((target) => target.targetId === gateTarget.targetId);
+    },
+  });
   return phonePromise;
+};
+let handsetForwarded = false;
+/** Which phone this run drives: `kind` is "handset" or "pixel", with the package it runs. */
+const target = async () => {
+  const device = await phone();
+  if (gateTarget.kind === "handset" && !handsetForwarded) {
+    // The handset's WebView lives inside its Android container, which only an adb forward reaches.
+    // droidctl opens one through the container route, so the gate does it before any stage, rather
+    // than in preflight, which `--only` may leave out.
+    await device.forwardWebview(gateTarget.packageName, Number(CDP_PORT));
+    handsetForwarded = true;
+  }
+  return gateTarget;
 };
 
 const run = async (command, args, { timeoutMs = 600_000, env } = {}) => {
@@ -495,6 +523,19 @@ const stage = async (name, audible, body) => {
   if (QUIET && audible) {
     results.push({ name, status: "skipped", detail: "audible stage, --quiet-check" });
     console.log(`\n=== ${name}: skipped (audible) ===`);
+    return;
+  }
+  let exclusion = null;
+  try {
+    exclusion = stageExclusion(name, (await target()).kind);
+  } catch (error) {
+    results.push({ name, status: "fail", detail: String(error.message ?? error) });
+    console.error(`  FAIL ${error.message ?? error}`);
+    return;
+  }
+  if (exclusion) {
+    results.push({ name, status: "skipped", detail: exclusion });
+    console.log(`\n=== ${name}: skipped, ${exclusion} ===`);
     return;
   }
   console.log(`\n=== ${name} ===`);
@@ -881,6 +922,7 @@ const ensureMachineAudible = async () => {
 const preflight = async () => {
   // droidctl refuses a missing or ambiguous phone here, before anything is driven.
   const { serial } = await phone();
+  const { kind, packageName } = await target();
 
   const version = await fetch(`http://${HOST}/v1/version`, { headers: authHeaders });
   if (!version.ok) throw new Error(`the Ultimate at ${HOST} answered HTTP ${version.status}`);
@@ -935,15 +977,21 @@ document.querySelector('[data-testid="tour-skip"]')?.click();
 return JSON.stringify({dismissed:true});})()`);
   const tourNote = tour?.dismissed ? ", skipped the first-run tour" : "";
 
-  const volume = await readVolume();
-  if (volume.speaker > MAX_VOLUME) {
-    throw new Error(
-      `the phone's speaker volume is ${volume.speaker} of 25; this gate will not run above ${MAX_VOLUME}`,
-    );
+  // The handset's media volume belongs to its host system, not to the container the gate drives,
+  // so it is neither read nor stepped there; every stage that would need it is skipped on it.
+  let speakerNote = "speaker volume not under the gate's control";
+  if (kind === "pixel") {
+    const volume = await readVolume();
+    if (volume.speaker > MAX_VOLUME) {
+      throw new Error(
+        `the phone's speaker volume is ${volume.speaker} of 25; this gate will not run above ${MAX_VOLUME}`,
+      );
+    }
+    // Remembered here rather than at the first audible stage, because `--only` and a mid-run failure
+    // both mean that stage may never be reached — and the phone is then left wherever the gate put it.
+    initialVolume = volume.index;
+    speakerNote = `speaker volume ${volume.speaker}`;
   }
-  // Remembered here rather than at the first audible stage, because `--only` and a mid-run failure
-  // both mean that stage may never be reached — and the phone is then left wherever the gate put it.
-  initialVolume = volume.index;
   initialMirror = await readMirror();
   const master = await readMasterVolume();
   let masterNote = "";
@@ -955,7 +1003,7 @@ return JSON.stringify({dismissed:true});})()`);
     }
   }
   return (
-    `device ${serial}, route ${page.route}, speaker volume ${volume.speaker}, ` +
+    `${kind} ${serial} (${packageName}), route ${page.route}, ${speakerNote}, ` +
     `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}`
   );
 };
@@ -990,7 +1038,9 @@ const restoreRig = () =>
   ]);
 
 const main = async () => {
-  console.log(`HIL merge gate — Ultimate ${HOST}, phone volume ${GATE_VOLUME}/25${QUIET ? ", quiet check" : ""}`);
+  console.log(
+    `HIL merge gate — Ultimate ${HOST}, target ${TARGET_MODE}, phone volume ${GATE_VOLUME}/25${QUIET ? ", quiet check" : ""}`,
+  );
   if (GATE_VOLUME > MAX_VOLUME) {
     console.error(`refusing to run at volume ${GATE_VOLUME}: the ceiling is ${MAX_VOLUME} (see the header)`);
     process.exit(2);
@@ -1222,7 +1272,7 @@ return JSON.stringify({samples});})()`);
     await mkdir(path.dirname(path.resolve(REPO, JSON_OUT)), { recursive: true });
     await writeFile(
       path.resolve(REPO, JSON_OUT),
-      `${JSON.stringify({ host: HOST, results, audibleSeconds }, null, 2)}\n`,
+      `${JSON.stringify({ host: HOST, target: gateTarget, results, audibleSeconds }, null, 2)}\n`,
     );
     console.log(`wrote ${JSON_OUT}`);
   }

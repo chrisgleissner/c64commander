@@ -1,6 +1,6 @@
 # The hardware merge gate
 
-`node tools/hil/merge_gate.mjs` is the set of checks a Pixel 4 and a real Ultimate have to agree
+`node tools/hil/merge_gate.mjs` is the set of checks a phone and a real Ultimate have to agree
 on before a pull request is merged. It exists because every property in it has shipped broken at
 least once while CI was green, and because checking them by hand — in a different order, with a
 different stimulus, against a memory of the last run — is not a gate.
@@ -17,6 +17,10 @@ node tools/hil/merge_gate.mjs --quiet-check
 
 # One stage.
 node tools/hil/merge_gate.mjs --only input
+
+# Force the phone instead of choosing it (see "Which phone it drives").
+node tools/hil/merge_gate.mjs --target pixel
+node tools/hil/merge_gate.mjs --target handset --only preflight,input,search-latency,wire
 ```
 
 Exit codes: `0` only when at least one stage ran and passed and none failed, `1` when a stage
@@ -24,9 +28,37 @@ failed, `2` when the gate refused to run or ran nothing. An unrecognised `--only
 that lists the stage names, because a name that matches no stage would otherwise select nothing
 and leave the gate reporting success for a run that measured nothing.
 
-Prerequisites: the branch's APK installed and foregrounded on the attached Pixel, `adb forward`
-pointed at its WebView (the `hil-attach` skill), the Ultimate reachable, and a microphone in front
-of the phone for the audible stages.
+Prerequisites: the branch's APK installed and foregrounded on the phone being driven, the Ultimate
+reachable, and a microphone in front of the Pixel for the audible stages. On the Pixel, `adb forward`
+must point at its WebView (the `hil-attach` skill). On the keypad handset, the gate forwards the
+WebView itself.
+
+## Which phone it drives
+
+HIL runs go to the keypad handset whenever it is attached. The Pixel 4 stays the phone for
+normal-phone behaviour (the default edition, touch, the soft keyboard, non-compact display
+profiles) and is the fallback.
+
+| `--target`       | Drives                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` (default) | The handset when droidctl lists it as ready (`droid_target.list_targets`, an `ssh:` target in state `device`), otherwise the Pixel                                          |
+| `handset`        | The handset, or refuses, naming what is listed                                                                                                                              |
+| `pixel`          | An adb phone, chosen by the rules every harness uses (an explicit serial, the only physical phone, or the one `9B0` Pixel). A handset attached alongside never changes this |
+
+`--serial` (or `ANDROID_SERIAL`) wins over `--target`, and the gate then takes the phone kind from
+its transport. The handset runs the `c64u-remote` edition (`uk.gleissner.c64uremote`), and the
+Pixel runs the default edition (`uk.gleissner.c64commander`).
+
+On the handset, these stages are reported as **skipped** with their reason, never as a pass:
+
+| Stage                                                 | Reason                                                                                                                                                          |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `av-clarity`, `av-latency`, `sid-remote`, `sid-local` | Graded from a recording, and the microphone sits in front of the Pixel's speaker                                                                                |
+| `crossfade`                                           | Steps the phone's media volume to keep the room quiet, and the handset's volume belongs to its host system rather than to the Android container the gate drives |
+
+So a handset run grades `preflight`, `input`, `search-latency` and `wire`. Preflight neither reads
+nor sets the handset's volume. The selection rules and the skip table live in
+`tools/hil/gate_target.mjs` and are unit-tested in `tests/unit/tools/mergeGateTarget.test.ts`.
 
 `--iface` names the local address the wire stages join the multicast groups on. Without it,
 `av_stream_flow.py` joins on the default interface and `mirror_audio_latency_hil.py` uses the
@@ -44,17 +76,17 @@ stages that were therefore not run. Do not describe the work as verified.
 
 ## The stages
 
-| Stage        | What it asserts                                                                                                                                | Why CI cannot                                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `preflight`  | Phone attached, Ultimate answering, WebView reachable over CDP, speaker unmuted and at or below the volume ceiling                             | There is no rig in CI, and every later stage misreads a bad rig as a defect                                |
-| `input`      | A held direction keeps moving the C64, and the key-to-direction mapping survives rotation                                                      | The assertion is made at the CIA, at the far end of a network relay                                        |
-| `search-latency` | App-wide search on the handset: p95 keystroke-to-result under 100 ms over 120 samples                                                         | A wall-clock budget inside Vitest flakes on a shared runner, and the work gate beside it proves the algorithm, not what this handset does with it |
-| `wire`       | What the Ultimate **sends**, measured on the host's own link: sequence loss and inter-arrival jitter                                           | Rules the network in or out before anything is blamed on the app — the most common wrong turn in this area |
-| `av-clarity` | The tone ladder as it leaves the phone's speaker, graded per note for length, pitch, dropouts and correct progression                          | Needs a microphone in a room and a real speaker                                                            |
-| `av-latency` | How long a sound takes to get from the Ultimate's wire to the air in front of the phone                                                        | Needs the multicast and the microphone captured against one clock                                          |
-| `sid-remote` | A known tune played by the Ultimate through the app's **Listen on → Remote** control, graded at the speaker for presence, continuity and pitch | The Ultimate renders it and the mirror carries it; only a microphone sees the end of that path             |
-| `sid-local`  | The same tune with **Listen on → Local**, graded by the same instrument in the same room                                                       | The two paths share nothing after the tune is chosen and have sounded materially different before          |
-| `crossfade`  | The join between the two tunes: seamless, gapped, hard cut or ragged                                                                           | A moving piece of music cannot settle it, and neither can listening once                                   |
+| Stage            | What it asserts                                                                                                                                | Why CI cannot                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight`      | Phone attached, Ultimate answering, WebView reachable over CDP, speaker unmuted and at or below the volume ceiling                             | There is no rig in CI, and every later stage misreads a bad rig as a defect                                                                       |
+| `input`          | A held direction keeps moving the C64, and the key-to-direction mapping survives rotation                                                      | The assertion is made at the CIA, at the far end of a network relay                                                                               |
+| `search-latency` | App-wide search on the handset: p95 keystroke-to-result under 100 ms over 120 samples                                                          | A wall-clock budget inside Vitest flakes on a shared runner, and the work gate beside it proves the algorithm, not what this handset does with it |
+| `wire`           | What the Ultimate **sends**, measured on the host's own link: sequence loss and inter-arrival jitter                                           | Rules the network in or out before anything is blamed on the app — the most common wrong turn in this area                                        |
+| `av-clarity`     | The tone ladder as it leaves the phone's speaker, graded per note for length, pitch, dropouts and correct progression                          | Needs a microphone in a room and a real speaker                                                                                                   |
+| `av-latency`     | How long a sound takes to get from the Ultimate's wire to the air in front of the phone                                                        | Needs the multicast and the microphone captured against one clock                                                                                 |
+| `sid-remote`     | A known tune played by the Ultimate through the app's **Listen on → Remote** control, graded at the speaker for presence, continuity and pitch | The Ultimate renders it and the mirror carries it; only a microphone sees the end of that path                                                    |
+| `sid-local`      | The same tune with **Listen on → Local**, graded by the same instrument in the same room                                                       | The two paths share nothing after the tune is chosen and have sounded materially different before                                                 |
+| `crossfade`      | The join between the two tunes: seamless, gapped, hard cut or ragged                                                                           | A moving piece of music cannot settle it, and neither can listening once                                                                          |
 
 ### What the playback stages need on the rig
 
