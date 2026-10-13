@@ -123,6 +123,8 @@ export const focusRingElement = (element: HTMLElement | null): void => {
   element.scrollIntoView({ block, inline: "nearest" });
 };
 
+const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
+
 /** How much of the visible height one key press scrolls when the ring has no stop left to move to. */
 const PAGE_STEP_FRACTION = 0.8;
 
@@ -158,7 +160,9 @@ export const scrollTowardUnreachableContent = (from: Element, scope: Element | n
         ? { top: 0, bottom: window.innerHeight }
         : container.getBoundingClientRect();
     const bounds = scope.getBoundingClientRect();
-    const hidden = direction > 0 ? bounds.bottom - visible.bottom : visible.top - bounds.top;
+    // The keypad guidance bar is fixed over the bottom of the page and hides what lies under it.
+    const guidanceBar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(GUIDANCE_RESERVE)) || 0;
+    const hidden = direction > 0 ? bounds.bottom - (visible.bottom - guidanceBar) : visible.top - bounds.top;
     if (hidden < 1) return false;
   }
   container.scrollBy({ top: direction * Math.min(remaining, container.clientHeight * PAGE_STEP_FRACTION) });

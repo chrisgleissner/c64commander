@@ -34,6 +34,7 @@ const group = (top: number, bottom: number) => {
 
 afterEach(() => {
   document.body.replaceChildren();
+  document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
 });
 
 describe("scrollTowardUnreachableContent", () => {
@@ -71,6 +72,15 @@ describe("scrollTowardUnreachableContent", () => {
     expect(scrollTowardUnreachableContent(lastControl, group(100, 380), 1)).toBe(false);
     expect(scrollBy).not.toHaveBeenCalled();
     expect(scrollTowardUnreachableContent(lastControl, group(100, 700), 1)).toBe(true);
+    expect(scrollBy).toHaveBeenCalledWith({ top: 320 });
+  });
+
+  it("counts the part of a group under the keypad guidance bar as hidden", () => {
+    const { lastControl, scrollBy } = scrollingPage({ scrollHeight: 1000, clientHeight: 400, scrollTop: 0 });
+    document.documentElement.style.setProperty("--keypad-guidance-reserved-height", "32px");
+
+    // The group ends at 390 px: inside the 400 px page, but under the bar that covers 368-400.
+    expect(scrollTowardUnreachableContent(lastControl, group(100, 390), 1)).toBe(true);
     expect(scrollBy).toHaveBeenCalledWith({ top: 320 });
   });
 
