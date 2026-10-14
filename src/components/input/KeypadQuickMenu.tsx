@@ -6,7 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -44,6 +52,24 @@ const REMOTE_FUNCTION_SETTINGS_TARGET = {
   sectionId: "play-and-disk",
   testId: "settings-remote-function-actions",
 } as const;
+
+/** Names the key, as `KeyboardEvent.key` reports it, that presses an entry while the menu is open. */
+const SHORTCUT_KEY_ATTR = "data-quick-menu-key";
+
+/**
+ * Presses the entry whose keycap matches the key. The keycaps name the keys that reach each entry
+ * from anywhere, but an open overlay owns the keyboard, so with the menu open they did nothing.
+ */
+const pressEntryForKey = (event: ReactKeyboardEvent<HTMLElement>): void => {
+  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+  const entry = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(`[${SHORTCUT_KEY_ATTR}]`)).find(
+    (candidate) => candidate.getAttribute(SHORTCUT_KEY_ATTR) === event.key,
+  );
+  if (!entry || entry.disabled) return;
+  event.preventDefault();
+  event.stopPropagation();
+  entry.click();
+};
 
 /** The physical key that reaches this entry directly, drawn as the keycap it is. */
 const ShortcutKey = ({ children }: { children: ReactNode }) => (
@@ -145,6 +171,7 @@ export function KeypadQuickMenu() {
       <DialogContent
         className="flex max-h-[85dvh] max-w-xs flex-col overflow-hidden"
         data-testid="keypad-quick-menu"
+        onKeyDown={pressEntryForKey}
         /*
          * Focus is normally restored to whatever opened this menu. Not when the menu is closing in
          * order to open the search overlay or land on a Settings control: this dialog animates out
@@ -176,6 +203,7 @@ export function KeypadQuickMenu() {
             variant="ghost"
             className="justify-start gap-3"
             data-testid="keypad-quick-menu-search"
+            data-quick-menu-key={fromKeypad ? "7" : undefined}
             onClick={() => {
               handingOverFocusRef.current = true;
               setOpen(false);
@@ -210,6 +238,7 @@ export function KeypadQuickMenu() {
                   variant="ghost"
                   className="justify-start gap-3"
                   data-testid={`keypad-quick-menu-tab-${route.label.toLowerCase()}`}
+                  data-quick-menu-key={String(index + 1)}
                   onClick={() => run(() => navigate(route.path))}
                 >
                   <ShortcutKey>{index + 1}</ShortcutKey>
@@ -226,6 +255,7 @@ export function KeypadQuickMenu() {
                 variant="ghost"
                 className="justify-start gap-3"
                 data-testid="keypad-quick-menu-machine-pause"
+                data-quick-menu-key="8"
                 onClick={() => run(() => requestMachineCommand("pauseResume"))}
               >
                 <ShortcutKey>8</ShortcutKey>
@@ -235,6 +265,7 @@ export function KeypadQuickMenu() {
                 variant="ghost"
                 className="justify-start gap-3"
                 data-testid="keypad-quick-menu-machine-reset"
+                data-quick-menu-key="9"
                 onClick={() => run(() => requestMachineCommand("reset"))}
               >
                 <ShortcutKey>9</ShortcutKey>
@@ -249,6 +280,7 @@ export function KeypadQuickMenu() {
               variant="ghost"
               className="justify-start gap-3"
               data-testid="keypad-quick-menu-game-mode"
+              data-quick-menu-key={fromKeypad ? "0" : undefined}
               onClick={() =>
                 run(() => {
                   // Only Home and Play mount the Remote Input sheet that answers the request.
@@ -296,6 +328,7 @@ export function KeypadQuickMenu() {
             variant="ghost"
             className="justify-start"
             data-testid="keypad-quick-menu-diagnostics"
+            data-quick-menu-key={fromKeypad ? "*" : undefined}
             onClick={() => run(() => requestDiagnosticsOpen("header"))}
           >
             {fromKeypad ? <ShortcutKey>✱</ShortcutKey> : null}
@@ -306,6 +339,7 @@ export function KeypadQuickMenu() {
               variant="ghost"
               className="justify-start gap-3"
               data-testid="keypad-quick-menu-switch-device"
+              data-quick-menu-key={fromKeypad ? "#" : undefined}
               onClick={() => run(() => requestDeviceSwitcherOpen())}
             >
               {fromKeypad ? <ShortcutKey>#</ShortcutKey> : null}

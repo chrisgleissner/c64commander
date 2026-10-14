@@ -1114,7 +1114,8 @@ What it holds depends on how it was opened. From the keypad it lists jump-to-pag
 (×6), and each entry names the key that reaches it directly — `1`–`6` for the
 pages, `8` for Pause / Resume machine, `9` for Reset machine, `0` for Game Mode,
 `✱` for Diagnostics, `#` for Switch device — which puts those shortcuts somewhere
-they can be discovered without reading the manual. From
+they can be discovered without reading the manual. The same keys press those
+entries while the menu is open (`7` presses Search). From
 the app-bar button the page jumps are omitted: a reader who tapped it is holding
 a touchscreen and has the TabBar in front of them.
 
