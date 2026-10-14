@@ -504,6 +504,7 @@ async function main() {
     }
   } finally {
     ws.close();
+    await device.close();
   }
 
   const failed = results.filter((r) => !r.pass);
