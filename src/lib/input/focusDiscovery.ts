@@ -167,6 +167,13 @@ const changesOnlyText = (record: MutationRecord): boolean => {
   return !Array.from(record.addedNodes).some(isElement) && !Array.from(record.removedNodes).some(isElement);
 };
 
+/** React writes an input's `type` on every render, which is no change and must not rescan the page. */
+const rewritesAttributeWithSameValue = (record: MutationRecord): boolean =>
+  record.type === "attributes" &&
+  record.attributeName !== null &&
+  record.target instanceof Element &&
+  record.oldValue === record.target.getAttribute(record.attributeName);
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -192,6 +199,8 @@ export class FocusDiscoveryEngine {
    * fallback it was given, and dropped after {@link RETURN_TO_OPENER_WINDOW_MS}.
    */
   private pendingReturn: { scope: Element; id: string; fallbackId: string | undefined; until: number } | null = null;
+  /** Where the ring stood when a surface that owns the keys hid every stop on the page, restored when they return. */
+  private standingWhenRingEmptied: { scope: Element; id: string } | null = null;
 
   constructor(options: FocusDiscoveryEngineOptions) {
     this.controller = options.controller;
@@ -227,6 +236,7 @@ export class FocusDiscoveryEngine {
         childList: true,
         subtree: true,
         attributes: true,
+        attributeOldValue: true,
         attributeFilter: OBSERVED_ATTRIBUTES,
       });
     }
@@ -242,6 +252,7 @@ export class FocusDiscoveryEngine {
     this.observer = null;
     this.lastScope = null;
     this.pendingReturn = null;
+    this.standingWhenRingEmptied = null;
     this.removeAllShims();
     this.resolvers.clear();
     this.sources.clear();
@@ -270,6 +281,7 @@ export class FocusDiscoveryEngine {
    */
   private cannotChangeRing(record: MutationRecord): boolean {
     if (changesOnlyText(record)) return !this.renamesAGroup(record);
+    if (rewritesAttributeWithSameValue(record)) return true;
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
@@ -367,6 +379,7 @@ export class FocusDiscoveryEngine {
       this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers);
       returnedTo = this.retryPendingReturn(scope.element);
     }
+    returnedTo ??= this.restoreStandingAfterEmptyRing(scope.element, leavingId, items.focusItems.length);
     this.scopeChain = this.computeScopeChain();
 
     // Drop the mutation records our own tabindex writes just queued — the DOM is
@@ -397,6 +410,24 @@ export class FocusDiscoveryEngine {
       (entry) => !inside.some((other) => other !== entry && other.element.contains(entry.element)),
     );
     if (outermost) this.controller.setCurrent(outermost.id);
+  }
+
+  private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
+    if (itemCount === 0) {
+      if (leavingId) this.standingWhenRingEmptied = { scope, id: leavingId };
+      return undefined;
+    }
+    const standing = this.standingWhenRingEmptied;
+    this.standingWhenRingEmptied = null;
+    if (!standing || standing.scope !== scope || !this.controller.currentIsDefaultSelection()) return undefined;
+    if (this.controller.setCurrent(standing.id)) return standing.id;
+    this.pendingReturn = {
+      scope,
+      id: standing.id,
+      fallbackId: this.controller.current()?.id,
+      until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
+    };
+    return undefined;
   }
 
   private retryPendingReturn(scope: Element): string | undefined {

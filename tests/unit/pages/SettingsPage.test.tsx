@@ -280,6 +280,7 @@ vi.mock("@/lib/savedDevices/deviceDependencies", () => ({
 
 vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => connectionStateRef.current,
+  useConnectionProbeState: () => connectionStateRef.current,
 }));
 
 vi.mock("@/hooks/useDeviceDiscovery", () => ({

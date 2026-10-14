@@ -136,7 +136,7 @@ type ActionListRowProps = { item: ActionListItem; rowTestId?: string; stackTitle
 // On a 320px screen the row's controls take about 150px of the 256px available, all at the 44px
 // target size, and left the name a 96px ribbon that broke most words in half. A stacked row gives
 // the name a line of its own, with the controls on the line below it.
-const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
+const ActionListRow = React.memo(function ActionListRow({ item, rowTestId, stackTitle }: ActionListRowProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
@@ -245,7 +245,7 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
                       return (
                         <DropdownMenuItem
                           key={`info-${index}`}
-                          className="text-muted-foreground"
+                          className="text-muted-foreground [overflow-wrap:anywhere]"
                           data-menu-detail="true"
                           onSelect={keepMenuOpen}
                         >
@@ -345,7 +345,7 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
       </div>
     </div>
   );
-};
+});
 
 export const SelectableActionList = ({
   title,

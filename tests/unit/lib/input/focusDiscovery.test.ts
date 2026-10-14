@@ -502,6 +502,49 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("returns to the opener when a surface that owns the keys left the ring with no stops while it was open", () => {
+    const page = mount(`<div id="page"><button id="first">first</button><button id="opener">opener</button></div>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const sheet = mount(`<div role="dialog" data-key-nav-skip=""><button id="ok">OK</button></div>`);
+    page.setAttribute("aria-hidden", "true");
+    engine.refresh();
+    expect(controller.list()).toHaveLength(0);
+    engine.refresh();
+    sheet.remove();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
+  it("returns to the opener when only the tab bar is back on the first scan after a key-owning surface closes", () => {
+    const page = mount(`<div id="page"><button id="first">first</button><button id="opener">opener</button></div>`);
+    mount(`<button id="tab">tab</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const sheet = mount(`<div role="dialog" data-key-nav-skip=""><button id="ok">OK</button></div>`);
+    page.setAttribute("aria-hidden", "true");
+    document.getElementById("tab")!.setAttribute("aria-hidden", "true");
+    engine.refresh();
+    expect(controller.list()).toHaveLength(0);
+    sheet.remove();
+    document.getElementById("tab")!.removeAttribute("aria-hidden");
+    engine.refresh();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
   it("keeps the selection on a card whose own stop moves inside it as it opens", () => {
     // Only the innermost labelled container is a group, so opening a card that renders a labelled
     // group of rows takes the card itself out of the ring.
@@ -599,6 +642,34 @@ describe("FocusDiscoveryEngine", () => {
     controller.focusFirstChild();
     engine.refresh(); // recompute chain from the controller's scope
     expect(engine.currentScopeChain().map((i) => i.id)).toEqual(["settings"]);
+    engine.stop();
+  });
+});
+
+describe("attribute writes that leave the value as it was", () => {
+  it("do not trigger a rescan when an input is given the type it already has", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><input id="field" type="text" /></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("field").setAttribute("type", "text");
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("still rescan when the same attribute takes a different value", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><input id="field" type="text" /></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("field").setAttribute("type", "hidden");
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
     engine.stop();
   });
 });
