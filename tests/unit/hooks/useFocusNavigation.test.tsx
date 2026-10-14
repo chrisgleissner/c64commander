@@ -20,6 +20,7 @@ import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
 import { Checkbox } from "@/components/ui/checkbox";
 import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
+import { afterRingRescan } from "../helpers/ringRescan";
 
 const SELECTED = "data-key-selected";
 
@@ -1908,5 +1909,75 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
 
     expect(button("Third")).toBeInTheDocument();
     expect(document.activeElement).toBe(button("Third"));
+  });
+});
+
+describe("returning from an overlay", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  const Tiles = ({ open, onLive, onGame }: { open: boolean; onLive?: () => void; onGame?: () => void }) => (
+    <>
+      <button onClick={onLive}>Live</button>
+      <button onClick={onGame}>Game</button>
+      <button>Input</button>
+      {open ? (
+        <div role="dialog" aria-label="Sheet">
+          <button>Close sheet</button>
+        </div>
+      ) : null}
+    </>
+  );
+
+  it("returns to the opener even when the closing overlay hands DOM focus to a different stop", async () => {
+    const view = render(
+      <FocusNavigationProvider>
+        <Tiles open={false} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+    expect(document.activeElement).toBe(button("Live"));
+
+    view.rerender(
+      <FocusNavigationProvider>
+        <Tiles open />
+      </FocusNavigationProvider>,
+    );
+    await act(afterRingRescan);
+    view.rerender(
+      <FocusNavigationProvider>
+        <Tiles open={false} />
+      </FocusNavigationProvider>,
+    );
+    // Radix gives focus back to the element that held it when the overlay opened, before the ring rescans.
+    button("Game").focus();
+    await act(afterRingRescan);
+
+    expect(document.activeElement).toBe(button("Live"));
+    expect(button("Live")).toHaveAttribute(SELECTED, "true");
+    expect(button("Game")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("activates the highlighted stop on OK, not a different stop that still holds DOM focus", () => {
+    const onLive = vi.fn();
+    const onGame = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <Tiles open={false} onLive={onLive} onGame={onGame} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+    expect(button("Live")).toHaveAttribute(SELECTED, "true");
+
+    setInputModality("pointer");
+    button("Game").focus();
+    setInputModality("key-navigation");
+    fireEvent.keyDown(button("Game"), { code: "Enter" });
+
+    expect(onLive).toHaveBeenCalledTimes(1);
+    expect(onGame).not.toHaveBeenCalled();
   });
 });

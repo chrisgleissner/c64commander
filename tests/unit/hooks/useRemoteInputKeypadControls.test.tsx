@@ -16,6 +16,8 @@ import {
 } from "@/hooks/useRemoteInputKeypadControls";
 
 const SKIP = "data-key-nav-skip";
+const OWNS_KEYS = "data-key-nav-owns-keys";
+const SOFT_KEY_MENU = "data-key-nav-soft-key-menu";
 
 const baseOptions: RemoteInputKeypadControlsOptions = {
   open: true,
@@ -89,5 +91,17 @@ describe("useRemoteInputKeypadControls", () => {
     act(() => result.current.menu.onClosed());
 
     expect(document.activeElement).toBe(before);
+  });
+
+  it("names the key that opens the menu, and owns the D-pad and OK only while the keys go to the C64", () => {
+    const { result, rerender } = renderHook(
+      (options: RemoteInputKeypadControlsOptions) => useRemoteInputKeypadControls(options),
+      { initialProps: { ...baseOptions, outputMode: "type" as const } },
+    );
+    expect(result.current.sheetProps).toMatchObject({ [SOFT_KEY_MENU]: "back", [OWNS_KEYS]: "" });
+
+    rerender({ ...baseOptions, outputMode: "type", keypadDrivesTheC64: false });
+    expect(result.current.sheetProps).toMatchObject({ [SOFT_KEY_MENU]: "softRight" });
+    expect(result.current.sheetProps).not.toHaveProperty(OWNS_KEYS);
   });
 });

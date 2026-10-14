@@ -1674,7 +1674,7 @@ export function DiagnosticsDialog({
               <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
                 Clear
               </AlertDialogAction>

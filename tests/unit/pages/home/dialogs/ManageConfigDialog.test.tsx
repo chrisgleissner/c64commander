@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ManageConfigDialog } from "@/pages/home/dialogs/ManageConfigDialog";
 
@@ -79,5 +79,15 @@ describe("ManageConfigDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(onDelete).toHaveBeenCalledWith(baseConfig.id);
+  });
+
+  it("keeps the config when the delete confirmation is cancelled", async () => {
+    const { onDelete } = renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(screen.getByTestId("manage-configs-delete-dialog")).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByTestId("manage-configs-delete-dialog")).not.toBeInTheDocument());
+    expect(onDelete).not.toHaveBeenCalled();
   });
 });

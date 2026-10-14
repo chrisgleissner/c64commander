@@ -38,7 +38,7 @@ export function PowerOffDialog({ open, onOpenChange, onConfirm, isPending }: Pow
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-open-focus>
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending}>

@@ -452,6 +452,7 @@ describe("HomeDiskManager Dialogs", () => {
     fireEvent.click(menuRemoveBtn);
 
     expect(screen.getByText("Remove disk?")).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
 
     // Find the "Remove" button in the dialog (not the menu)
     // Since dialog is open, screen.getByText('Remove') might find two if we aren't careful,
@@ -460,6 +461,21 @@ describe("HomeDiskManager Dialogs", () => {
     fireEvent.click(confirmBtn);
 
     expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith("1");
+  });
+
+  it("keeps the disks when either remove confirmation is cancelled", async () => {
+    render(<HomeDiskManager />);
+
+    fireEvent.click(within(screen.getByTestId("disk-item-1")).getByText("Remove from collection"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Remove disk?")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("checkbox-1"));
+    fireEvent.click(screen.getByText("Delete Selected"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Remove selected disks?")).not.toBeInTheDocument());
+
+    expect(mockDiskLibrary.removeDisk).not.toHaveBeenCalled();
   });
 
   it("handles bulk deletion", async () => {
@@ -475,6 +491,7 @@ describe("HomeDiskManager Dialogs", () => {
     fireEvent.click(deleteSelectedBtn);
 
     expect(screen.getByText("Remove selected disks?")).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
 
     const confirmBtn = screen.getByRole("button", { name: "Remove" });
     fireEvent.click(confirmBtn);

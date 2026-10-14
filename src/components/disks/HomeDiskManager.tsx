@@ -2765,7 +2765,7 @@ export const HomeDiskManager = () => {
             >
               Remove
             </Button>
-            <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)}>
+            <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)} data-open-focus>
               Cancel
             </Button>
           </DialogFooter>
@@ -2786,7 +2786,7 @@ export const HomeDiskManager = () => {
             <Button variant="outline" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
               Remove
             </Button>
-            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)}>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} data-open-focus>
               Cancel
             </Button>
           </DialogFooter>

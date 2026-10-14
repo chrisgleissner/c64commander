@@ -70,6 +70,8 @@ export interface T9Config {
   readonly hostnamePunctuation: readonly string[];
   /** Ordered modes the hash/`cycleMode` rotates through. */
   readonly modes: readonly T9Mode[];
+  /** Multi-tap candidates per digit; {@link MULTITAP_CANDIDATES} unless a target cannot take some. */
+  readonly multitapCandidates: Readonly<Record<number, readonly string[]>>;
 }
 
 /** Sentinel key id for the star-driven punctuation candidate list. */
@@ -93,6 +95,7 @@ export const DEFAULT_T9_CONFIG: T9Config = {
   multiTapTimeoutMs: 800,
   hostnamePunctuation: [".", ":", "-", "_", "/"],
   modes: ["multitap", "hostname"],
+  multitapCandidates: MULTITAP_CANDIDATES,
 };
 
 /** Merges partial config over the defaults. */
@@ -100,6 +103,7 @@ export const resolveT9Config = (config?: Partial<T9Config>): T9Config => ({
   multiTapTimeoutMs: config?.multiTapTimeoutMs ?? DEFAULT_T9_CONFIG.multiTapTimeoutMs,
   hostnamePunctuation: config?.hostnamePunctuation ?? DEFAULT_T9_CONFIG.hostnamePunctuation,
   modes: config?.modes ?? DEFAULT_T9_CONFIG.modes,
+  multitapCandidates: config?.multitapCandidates ?? DEFAULT_T9_CONFIG.multitapCandidates,
 });
 
 export interface CreateT9StateOptions {
@@ -125,7 +129,7 @@ const replaceAt = (text: string, index: number, ch: string): string =>
 const removeAt = (text: string, index: number): string => text.slice(0, index) + text.slice(index + 1);
 
 const candidatesForKey = (key: number, config: T9Config): readonly string[] =>
-  key === STAR_KEY ? config.hostnamePunctuation : (MULTITAP_CANDIDATES[key] ?? []);
+  key === STAR_KEY ? config.hostnamePunctuation : (config.multitapCandidates[key] ?? []);
 
 const toggleCharCase = (ch: string): string => {
   const lower = ch.toLowerCase();

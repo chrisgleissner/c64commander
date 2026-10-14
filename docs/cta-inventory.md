@@ -106,6 +106,20 @@ F1 is the neutral `function1` action (see the F1 row).
   registers.
 - **Group scope outline:** `data-key-scope` dashed outline around the enclosing
   group while the ring is descended inside it.
+- **Scroll into view:** a selected stop is scrolled clear of the app bar above and
+  the guidance bar below, measured inside the container that scrolls it. A stop
+  taller than that area is aligned by its top edge.
+- **`aria-disabled` controls:** stay ring stops, as WAI-ARIA requires. Up/Down
+  skip them and OK does nothing on them, but a selection already on one stays
+  there (the Play/Stop button while a Stop is pending).
+- **OK acts on the highlight:** while keys drive the ring, OK activates the
+  highlighted stop even when DOM focus was left on a different stop.
+- **Closing a dialog or sheet:** the selection and DOM focus return to the
+  control that was selected when it opened.
+- **Destructive confirmations open on Cancel:** Reset and the other machine
+  actions, Power off, Clear flash, Remove disk(s), Delete config, Delete device,
+  Clear diagnostics, Clear custom edits, Clear playlist and Reset HVSC all open
+  with Cancel selected, so OK pressed twice dismisses the dialog.
 
 ---
 
@@ -250,13 +264,13 @@ not-connected / empty / single-device).
       can be applied: Preload on Startup — button — `restore-reu-preload` — and Load into REU —
       button — `restore-reu-load`
     - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Backup, at the end of the list
-  - Reset — button (danger) — `home-machine-reset` — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
+  - Reset — button (danger) — `home-machine-reset` — R✅ I✅ (confirm dialog, opens on Cancel) — keeps a tile of its own; it is among the most-reached controls in the app
   - Power — button (danger) — `home-power-actions` — R✅ I✅ — opens the **Power sheet** (`home-power-sheet`); disabled only when every row inside it is
   - **Power sheet** (`home-power-sheet`, opened by `home-power-actions`) — rows in increasing severity, each keeping the confirmation it had as a tile
     - Reboot — button — `home-power-action-reboot` — R✅ I✅ (confirm dialog)
     - Reboot (Clr Mem) — button — `home-power-action-rebootClearMemory` — R✅ I✅ (confirm dialog) _(flag `home_telnet_clear_ram_reboot_enabled`)_
     - Power Cycle — button — `home-power-action-power-cycle` — R✅ I✅ (confirm dialog) _(flag `home_telnet_power_cycle_enabled`; conditional on device capability)_
-    - Power Off — button — `home-power-action-power-off` — R✅ I✅ (its own `Confirm power off` dialog)
+    - Power Off — button — `home-power-action-power-off` — R✅ I✅ (its own `Confirm power off` dialog, opens on Cancel)
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
   - CPU Speed — slider — `home-cpu-speed-slider` — R✅ I✅ **(verified end-to-end: keypad Right 1→4 reflected in c64u firmware; Left restored)**
@@ -838,9 +852,15 @@ Mode entry, or automatically when a game is launched with that setting on): a Ra
   the D-pad and the bound digits steer and OK is fire. In **Keys** mode, where the
   edition types with T9, the keypad types on the C64: digits and T9 multi-tap
   letters (same engine and timing as the app's text fields; `#` switches
-  letters/digits), OK is RETURN, the D-pad is the cursor keys. Every key is sent as
-  a press and release. Back closes the sheet. While driving, the guidance bar
-  shows only **Back Close** and **Menu**, under the title "Remote Input".
+  letters/digits; letters are unshifted, and the 1 key offers only symbols the
+  C64 has a key for), OK is RETURN, the D-pad is the cursor keys, and the right
+  soft key deletes as in a T9 field: a letter still being chosen, else DEL on the
+  C64. Every key is sent as a press and release. In Joystick mode Back closes the
+  sheet and the guidance bar shows **Back Close** and **Menu**; while typing, Back
+  opens the keypad menu and the bar shows **Back Menu**, **OK Return** and
+  **Delete**, both under the title "Remote Input". While driving, the sheet also
+  carries `data-key-nav-owns-keys`, so the overlay navigation neither moves focus
+  nor presses OK inside it.
 - **Keys mode without T9**: the keypad has nothing to type on the C64, so the
   sheet does not carry `data-key-nav-skip` and the ordinary overlay navigation
   walks the on-screen keys and controls (Up/Down, OK presses).
@@ -848,21 +868,26 @@ Mode entry, or automatically when a game is launched with that setting on): a Ra
   the ordinary overlay navigation walks the sheet's controls (Up/Down, OK presses).
   Back returns to driving instead of closing the sheet.
 
-In every state the **right soft key** opens the sheet's keypad menu and closes it
-again, and the guidance bar labels it **Menu** (`data-key-nav-soft-key-menu`).
+The **right soft key** opens the sheet's keypad menu and closes it again, except
+while the keypad types on the C64, where Back opens it and the right soft key
+deletes (`data-key-nav-soft-key-menu` names the key: `softRight` or `back`). A
+keypad that reports its left soft key as `SoftLeft` gets the same Back as one that
+reports it as Back.
 Touch and the on-screen keyboard/quick-keys buttons remain ordinary tap targets
 throughout.
 
 - Keypad menu — dialog — `remote-input-controls-menu` — R✅ I✅ _(opened by the right
-  soft key; Up/Down move, OK activates, Back or the right soft key closes it)_ — buttons
+  soft key, or by Back while typing; opens with its first item selected; Up/Down
+  move, OK activates, Back or the right soft key closes it; the guidance bar shows
+  **Back Close** and **OK Select** while it is open)_ — buttons
   `remote-input-menu-drive` (Back to the C64, only while operating the sheet),
   `remote-input-menu-joystick` / `remote-input-menu-keys` (the mode not current; not
   in Game Mode), `remote-input-menu-options` (Joystick mode on the compact profile,
   where the options fold behind the Options button; opens them and moves the keypad
   to that button), `remote-input-menu-game` (Game Mode / Exit Game Mode, when
   available), `remote-input-menu-controls` (Other controls: moves the keypad to the
-  sheet's first control after Close), `remote-input-menu-release-all`,
-  `remote-input-menu-close`
+  sheet's first control after Close), `remote-input-menu-release-all` (not in Game
+  Mode, where the sheet shows no Release all), `remote-input-menu-close`
 
 - Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,

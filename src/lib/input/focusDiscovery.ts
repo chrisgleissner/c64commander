@@ -32,6 +32,7 @@ import {
   discoverInteractiveElements,
   isFocusDisabled,
   isFocusVisible,
+  isNativelyDisabled,
   isNativelyFocusable,
   isSkipped,
   nearestGroupElement,
@@ -78,6 +79,8 @@ export interface FocusDiscoveryEngineOptions {
   readonly freezeDuringTransientLayer?: () => boolean;
   /** Run after every (re)assembly so the adapter can re-apply the highlight / bar. */
   readonly onAfterAssemble?: () => void;
+  /** Run when the ring returns to the item that opened a closed overlay, so DOM focus can follow it. */
+  readonly onReturnToOpener?: (id: string) => void;
   readonly doc?: Document;
 }
 
@@ -169,6 +172,7 @@ export class FocusDiscoveryEngine {
   private readonly listExplicit: () => ExplicitRegistration[];
   private readonly freezeDuringTransientLayer: () => boolean;
   private readonly onAfterAssemble?: () => void;
+  private readonly onReturnToOpener?: (id: string) => void;
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
   private scheduled = false;
@@ -194,6 +198,7 @@ export class FocusDiscoveryEngine {
     this.listExplicit = options.listExplicit;
     this.freezeDuringTransientLayer = options.freezeDuringTransientLayer ?? (() => false);
     this.onAfterAssemble = options.onAfterAssemble;
+    this.onReturnToOpener = options.onReturnToOpener;
     this.doc = options.doc ?? document;
   }
 
@@ -304,6 +309,12 @@ export class FocusDiscoveryEngine {
     return this.resolvers.get(id)?.() ?? null;
   }
 
+  /** Whether `element` is itself one of the ring's stops. */
+  isRingStop(element: Element): boolean {
+    for (const resolve of this.resolvers.values()) if (resolve() === element) return true;
+    return false;
+  }
+
   /** Whether a ring item came from DOM discovery, explicit registration, or both. */
   sourceForId(id: string): FocusDiscoverySource | null {
     return this.sources.get(id) ?? null;
@@ -342,7 +353,10 @@ export class FocusDiscoveryEngine {
     // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad
     // user where they were.
     const returningTo = scopeChanged ? this.currentWhenLeft.get(scope.element) : undefined;
-    if (returningTo && !this.controller.setCurrent(returningTo)) {
+    let returnedTo: string | undefined;
+    if (returningTo && this.controller.setCurrent(returningTo)) {
+      returnedTo = returningTo;
+    } else if (returningTo) {
       this.pendingReturn = {
         scope: scope.element,
         id: returningTo,
@@ -351,13 +365,14 @@ export class FocusDiscoveryEngine {
       };
     } else if (!scopeChanged) {
       this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers);
-      this.retryPendingReturn(scope.element);
+      returnedTo = this.retryPendingReturn(scope.element);
     }
     this.scopeChain = this.computeScopeChain();
 
     // Drop the mutation records our own tabindex writes just queued — the DOM is
     // already reflected in this scan, so reacting to them would loop.
     this.observer?.takeRecords();
+    if (returnedTo) this.onReturnToOpener?.(returnedTo);
     this.onAfterAssemble?.();
   }
 
@@ -384,9 +399,9 @@ export class FocusDiscoveryEngine {
     if (outermost) this.controller.setCurrent(outermost.id);
   }
 
-  private retryPendingReturn(scope: Element): void {
+  private retryPendingReturn(scope: Element): string | undefined {
     const pending = this.pendingReturn;
-    if (!pending) return;
+    if (!pending) return undefined;
     // A default selection follows the page's first item as the page reappears, which is not the
     // user moving away from the fallback.
     const userMoved =
@@ -394,9 +409,11 @@ export class FocusDiscoveryEngine {
     const stillApplies = pending.scope === scope && Date.now() <= pending.until && !userMoved;
     if (!stillApplies) {
       this.pendingReturn = null;
-      return;
+      return undefined;
     }
-    if (this.controller.setCurrent(pending.id)) this.pendingReturn = null;
+    if (!this.controller.setCurrent(pending.id)) return undefined;
+    this.pendingReturn = null;
+    return pending.id;
   }
 
   private collectRingNodes(scope: ActiveScope, scan: DiscoveryScan): RingNode[] {
@@ -487,7 +504,7 @@ export class FocusDiscoveryEngine {
     const kept = elements
       .filter((element) => !skipElements.has(element))
       .filter((element) => !ownedByExplicitItem(element))
-      .filter((element) => !isFocusDisabled(element) || groupElements.has(element));
+      .filter((element) => !isNativelyDisabled(element) || groupElements.has(element));
     const inTabbar = (element: HTMLElement): boolean => tabbar instanceof HTMLElement && tabbar.contains(element);
     const ordered = [
       ...sortIntoReadingOrder(
@@ -571,7 +588,7 @@ export class FocusDiscoveryEngine {
         // given real meaning), falling back to the legacy free-text group field.
         group: descriptor?.label ?? descriptor?.group ?? implicitGroupLabel,
         parentId: parentId ?? undefined,
-        disabled: descriptor?.disabled,
+        disabled: descriptor?.disabled || (!node.isGroup && isFocusDisabled(element)) || undefined,
         activate,
       });
       resolvers.set(node.id, () => element);

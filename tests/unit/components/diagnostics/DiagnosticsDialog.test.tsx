@@ -944,6 +944,16 @@ describe("DiagnosticsDialog", () => {
     expect(closing.every((call) => call.variant === "CONFIG")).toBe(true);
   });
 
+  it("opens the Clear all confirmation on Cancel", async () => {
+    setViewportWidth(600);
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("diagnostics-clear-all-trigger"));
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
+  });
+
   it("keeps the primary diagnostics menu controls uniquely addressable", () => {
     setViewportWidth(600);
 

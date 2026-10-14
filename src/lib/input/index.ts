@@ -58,6 +58,7 @@ export {
   OVERLAY_SELECTOR,
   HORIZONTAL_OWNER_SELECTOR,
   SKIP_ATTR,
+  OWNS_KEYS_ATTR,
   GROUP_ATTR,
   SCOPE_ATTR,
   TABBAR_SCOPE_SELECTOR,
@@ -87,10 +88,13 @@ export {
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
   resolveSoftKeyMenuOverlayLabels,
+  resolveSoftKeyMenuPanelLabels,
   SOFT_KEY_MENU_ATTR,
+  SOFT_KEY_MENU_PANEL_ATTR,
 } from "./guidance";
 
 export type { InputModality } from "./inputModality";
+export type { SoftKeyMenuKey } from "./guidance";
 export { getInputModality, setInputModality, subscribeInputModality, resetInputModality } from "./inputModality";
 
 export type {

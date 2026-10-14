@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
+import { OPEN_FOCUS_ATTR, composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 
 const createEvent = () => {
   const event = {
@@ -26,6 +26,25 @@ describe("composeInterstitialOpenAutoFocus", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it("focuses the control the dialog marks to open on instead of the surface", () => {
+    const surface = document.createElement("div");
+    const surfaceFocus = vi.fn();
+    surface.focus = surfaceFocus;
+    const cancel = document.createElement("button");
+    cancel.setAttribute(OPEN_FOCUS_ATTR, "");
+    const cancelFocus = vi.fn();
+    cancel.focus = cancelFocus;
+    surface.append(document.createElement("button"), cancel);
+    const event = createEvent();
+    event.currentTarget = surface;
+
+    composeInterstitialOpenAutoFocus()(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(cancelFocus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(surfaceFocus).not.toHaveBeenCalled();
   });
 
   it("stops when an upstream handler already prevented autofocus", () => {

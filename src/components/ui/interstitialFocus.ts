@@ -12,11 +12,18 @@ type OpenAutoFocusEvent = Event & {
 
 type OpenAutoFocusHandler = (event: OpenAutoFocusEvent) => void;
 
+/**
+ * Marks the control a dialog opens on. A destructive confirmation marks its Cancel button, so a
+ * keypad user who presses OK twice dismisses the dialog instead of running the action.
+ */
+export const OPEN_FOCUS_ATTR = "data-open-focus";
+
 const focusInterstitialSurface = (event: OpenAutoFocusEvent) => {
   const currentTarget = event.currentTarget;
   if (!(currentTarget instanceof HTMLElement)) return;
 
-  currentTarget.focus({ preventScroll: true });
+  const marked = currentTarget.querySelector<HTMLElement>(`[${OPEN_FOCUS_ATTR}]`);
+  (marked ?? currentTarget).focus({ preventScroll: true });
 };
 
 export const composeInterstitialOpenAutoFocus =

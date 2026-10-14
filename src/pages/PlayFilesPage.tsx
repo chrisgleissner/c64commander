@@ -3103,7 +3103,7 @@ export default function PlayFilesPage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     if (!pendingConfigChange) return;
