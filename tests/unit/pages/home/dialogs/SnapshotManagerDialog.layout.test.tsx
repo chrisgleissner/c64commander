@@ -301,8 +301,7 @@ describe("SnapshotManagerDialog", () => {
     expect(screen.getByTestId("snapshot-delete")).toHaveClass("h-11", "w-11");
   });
 
-  // At 320 px the filters wrap onto a second row, and 44 px rows left the list less than half of the dialog.
-  it("keeps the type filters at their text height on the compact profile", () => {
+  it("keeps the type filters 44 px tall on one sideways-scrolling row on the compact profile", () => {
     localStorage.clear();
     setViewportWidth(320);
 
@@ -319,8 +318,11 @@ describe("SnapshotManagerDialog", () => {
       </DisplayProfileProvider>,
     );
 
-    for (const filter of screen.getByTestId("snapshot-type-filters").querySelectorAll("button")) {
-      expect(filter).not.toHaveClass("min-h-11");
+    const filters = screen.getByTestId("snapshot-type-filters");
+    expect(filters).toHaveClass("overflow-x-auto");
+    expect(filters).not.toHaveClass("flex-wrap");
+    for (const filter of filters.querySelectorAll("button")) {
+      expect(filter).toHaveClass("min-h-11", "shrink-0");
     }
   });
 });

@@ -222,15 +222,18 @@ const tidyLabel = (raw: string): string => {
  * under it without a space, and includes text the layout hides: a section header read
  * "ConnectionSaved devices, discov…". The rendered text keeps lines apart and leaves hidden text
  * out, and its first line is the title. Environments without layout fall back to `textContent`.
+ * Key caps and hidden glyphs are lines of their own in a flex row and never the control's name:
+ * the Quick menu's "6 Docs" entry read "6", and its close button read "×".
  */
 const renderedFirstLine = (element: Element): string | null => {
   const rendered = element instanceof HTMLElement ? element.innerText : undefined;
   const text = typeof rendered === "string" ? rendered : element.textContent;
+  const decorations = new Set(
+    Array.from(element.querySelectorAll('kbd, [aria-hidden="true"]'), (decoration) => decoration.textContent?.trim()),
+  );
+  const lines = text?.split("\n").map((line) => line.trim()) ?? [];
   return (
-    text
-      ?.split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? null
+    lines.find((line) => line.length > 0 && !decorations.has(line)) ?? lines.find((line) => line.length > 0) ?? null
   );
 };
 

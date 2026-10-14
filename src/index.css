@@ -686,6 +686,20 @@ button:focus-visible,
   white-space: nowrap;
   text-overflow: ellipsis;
   color: hsl(var(--muted-foreground));
+  container-type: inline-size;
+}
+
+.keypad-guidance-breadcrumb-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Squeezed below a few characters, the breadcrumb showed one letter of "Remote Input": better none. */
+@container (max-width: 3rem) {
+  .keypad-guidance-breadcrumb-text {
+    display: none;
+  }
 }
 
 .keypad-guidance-crumb {

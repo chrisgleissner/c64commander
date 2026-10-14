@@ -206,6 +206,27 @@ describe("accessibleLabelFor", () => {
     expect(accessibleLabelFor(toggle)).toBe("Connection");
   });
 
+  it("names an entry by its label, not by the key cap drawn before it", () => {
+    const entry = make("<button><kbd>6</kbd>Docs</button>");
+    Object.defineProperty(entry, "innerText", { value: "6\nDocs" });
+
+    expect(accessibleLabelFor(entry)).toBe("Docs");
+  });
+
+  it("names a close button by its screen-reader text, not the glyph it hides from screen readers", () => {
+    const close = make('<button><span aria-hidden="true">×</span><span class="sr-only">Close</span></button>');
+    Object.defineProperty(close, "innerText", { value: "×\nClose" });
+
+    expect(accessibleLabelFor(close)).toBe("Close");
+  });
+
+  it("still names a control that shows nothing but a key cap", () => {
+    const key = make("<button><kbd>F1</kbd></button>");
+    Object.defineProperty(key, "innerText", { value: "F1" });
+
+    expect(accessibleLabelFor(key)).toBe("F1");
+  });
+
   it("reads the text of an element that is not an HTML element, such as an SVG label", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
