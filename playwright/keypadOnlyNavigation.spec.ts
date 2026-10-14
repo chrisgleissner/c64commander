@@ -372,6 +372,8 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const count = await items.count();
     expect(count).toBeGreaterThanOrEqual(4);
     await expect(items.first()).toBeFocused();
+    // The menu zooms in from 95%, so a box measured before that settles reads as low as 41.8 px.
+    await waitForAnimations(page);
     const bar = page.getByTestId("keypad-guidance-bar");
     await expect(bar).toHaveAttribute("data-visible", "true");
     await expect(bar.getByTestId("keypad-guidance-center")).toContainText("Select");
