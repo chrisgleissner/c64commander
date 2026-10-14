@@ -1816,7 +1816,7 @@ export const HomeDiskManager = () => {
         const folderPath = getDiskFolderPath(disk.path);
         if (folderPath !== lastFolder) {
           acc.push({
-            id: `folder:${folderPath}`,
+            id: `folder:${folderPath}:${disk.id}`,
             title: folderPath,
             variant: "header",
             icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
