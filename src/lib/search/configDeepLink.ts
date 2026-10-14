@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useSyncExternalStore } from "react";
+
 /**
  * Landing on one live config item.
  *
@@ -37,7 +39,30 @@ export const CONFIG_ITEM_FOCUS_LATCH_TTL_MS = 5_000;
  */
 let pendingFocus: { request: ConfigItemFocusRequest; atMs: number } | null = null;
 
+/*
+ * The item the last request was for. A config card builds its rows over several tasks, and the row a
+ * search result lands on must not wait its turn: the resolver gives up after a bounded wait.
+ */
+let demandedItem: ConfigItemFocusRequest | null = null;
+const demandSubscribers = new Set<() => void>();
+const subscribeDemand = (onChange: () => void) => {
+  demandSubscribers.add(onChange);
+  return () => {
+    demandSubscribers.delete(onChange);
+  };
+};
+
+/** The item of `category` a deep link is landing on, which its list renders at once; null for none. */
+export const useDemandedConfigItem = (category: string | null | undefined): string | null =>
+  useSyncExternalStore(
+    subscribeDemand,
+    () => (category && demandedItem?.category === category ? demandedItem.itemName : null),
+    () => null,
+  );
+
 export const requestConfigItemFocus = (category: string, itemName: string): void => {
+  demandedItem = { category, itemName };
+  for (const onChange of demandSubscribers) onChange();
   pendingFocus = { request: { category, itemName }, atMs: Date.now() };
   if (typeof window === "undefined") return;
   window.dispatchEvent(
@@ -72,4 +97,5 @@ export const subscribeConfigItemFocus = (handler: (request: ConfigItemFocusReque
 /** Test seam: drops a latched request without delivering it. */
 export const resetConfigItemFocusLatchForTests = (): void => {
   pendingFocus = null;
+  demandedItem = null;
 };

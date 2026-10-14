@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import type { NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { canonicalConfigKey, type AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
@@ -51,6 +51,10 @@ export const ConfigLeafRow = memo(function ConfigLeafRow({
   const key = canonicalConfigKey(category, item);
   const resolvedValue = authoritativeValues.resolveValue(key, value, value);
   const formatOptionLabel = getMenuValueFormatter(formatterId);
+  const onValueChange = useCallback(
+    (next: string | number) => writeLeaf(category, item, next),
+    [writeLeaf, category, item],
+  );
 
   return (
     <ConfigItemRow
@@ -63,7 +67,7 @@ export const ConfigLeafRow = memo(function ConfigLeafRow({
       formatOptionLabel={formatOptionLabel}
       readOnly={readOnly}
       isLoading={Boolean(isWriting) || Boolean(authoritativeValues.pending[key])}
-      onValueChange={(next) => writeLeaf(category, item, next)}
+      onValueChange={onValueChange}
     />
   );
 });

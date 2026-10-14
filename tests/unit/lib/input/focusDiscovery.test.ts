@@ -10,6 +10,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { afterRingRescan } from "../../helpers/ringRescan";
 import { FocusController } from "@/lib/input/focusController";
 import { FocusDiscoveryEngine, type ExplicitRegistration } from "@/lib/input/focusDiscovery";
+import { act, render } from "@testing-library/react";
+import { createElement } from "react";
+import { completeStagedRows, resetStagedRowsForTests, setStagedRowsEnabled, useStagedRows } from "@/lib/ui/stagedRows";
 
 const mount = (html: string): HTMLElement => {
   const host = document.createElement("div");
@@ -1250,6 +1253,44 @@ describe("re-scan scheduling", () => {
 
     await afterRingRescan();
     expect(refresh).toHaveBeenCalledTimes(1);
+    engine.stop();
+  });
+});
+
+describe("FocusDiscoveryEngine while a list is still being built", () => {
+  afterEach(() => {
+    setStagedRowsEnabled(false);
+    resetStagedRowsForTests();
+    vi.restoreAllMocks();
+  });
+
+  const LongList = () => createElement("div", null, useStagedRows(100_000).marker);
+
+  it("waits for the list before rescanning, but rescans at once when an overlay opens", async () => {
+    setStagedRowsEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const page = mount(`<button id="first">First</button>`);
+    render(createElement(LongList), { container: page.appendChild(document.createElement("div")) });
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    page.insertAdjacentHTML("beforeend", `<button id="row">Row</button>`);
+    await afterRingRescan();
+    expect(refresh).not.toHaveBeenCalled();
+
+    page.insertAdjacentHTML("beforeend", `<div role="dialog"><button id="ok">OK</button></div>`);
+    await afterRingRescan();
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    page.insertAdjacentHTML("beforeend", `<button id="later">Later</button>`);
+    await afterRingRescan();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    act(() => {
+      completeStagedRows();
+    });
+    await afterRingRescan();
+    expect(refresh).toHaveBeenCalledTimes(2);
     engine.stop();
   });
 });

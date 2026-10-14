@@ -20,6 +20,7 @@
  * the ring) when it is off — preserving the Prime Directive byte-for-byte.
  */
 
+import { afterStagedRowsSettle } from "@/lib/ui/stagedRows";
 import type { FocusController, FocusItem } from "./focusController";
 import {
   GROUP_ATTR,
@@ -136,6 +137,14 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
 
+const containsAnOverlay = (nodes: NodeList): boolean => {
+  for (const node of nodes) {
+    if (!(node instanceof Element)) continue;
+    if (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null) return true;
+  }
+  return false;
+};
+
 const scheduleAfterNextPaint = (run: () => void): void => {
   if (typeof requestAnimationFrame !== "function") {
     queueMicrotask(run);
@@ -223,11 +232,11 @@ export class FocusDiscoveryEngine {
   }
 
   private addsAnOverlay(record: MutationRecord): boolean {
-    for (const node of record.addedNodes) {
-      if (!(node instanceof Element)) continue;
-      if (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null) return true;
-    }
-    return false;
+    return containsAnOverlay(record.addedNodes);
+  }
+
+  private changesAnOverlay(record: MutationRecord): boolean {
+    return containsAnOverlay(record.addedNodes) || containsAnOverlay(record.removedNodes);
   }
 
   /** Attaches the observer and performs the first scan. Idempotent. */
@@ -241,7 +250,7 @@ export class FocusDiscoveryEngine {
           if (records.some((record) => this.relabelsCurrent(record))) this.onAfterAssemble?.();
           return;
         }
-        this.scheduleRefresh();
+        this.scheduleRefresh(records.some((record) => this.changesAnOverlay(record)));
       });
       this.observer.observe(this.doc.body, {
         childList: true,
@@ -311,12 +320,16 @@ export class FocusDiscoveryEngine {
   /**
    * Coalesces DOM mutations into one re-scan after the next paint. Run in a microtask, the scan landed
    * before the first paint of every page and dialog: on a Pixel 4, 70 to 135 ms each, run up to seven
-   * times while a page loaded. A key runs a pending scan first (see flushPendingRefresh).
+   * times while a page loaded. A key runs a pending scan first (see flushPendingRefresh). While a list
+   * is still being built a few rows per task, the scan waits for it to finish, unless an overlay opened
+   * or closed: that moves the ring, and the guidance bar has to follow it at once.
    */
-  scheduleRefresh(): void {
-    if (!this.started || this.scheduled) return;
+  scheduleRefresh(urgent = false): void {
+    if (!this.started || (this.scheduled && !urgent)) return;
     this.scheduled = true;
-    scheduleAfterNextPaint(() => this.flushPendingRefresh());
+    scheduleAfterNextPaint(() =>
+      urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
+    );
   }
 
   /** Re-scans now, for a caller that has just changed the DOM itself; any scheduled re-scan is dropped. */

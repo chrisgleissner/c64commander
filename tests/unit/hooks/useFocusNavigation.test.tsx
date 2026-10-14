@@ -20,6 +20,7 @@ import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
 import { Checkbox } from "@/components/ui/checkbox";
 import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
+import { resetStagedRowsForTests, useStagedRows } from "@/lib/ui/stagedRows";
 import { afterRingRescan } from "../helpers/ringRescan";
 
 const SELECTED = "data-key-selected";
@@ -1917,6 +1918,63 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
 
     expect(button("Third")).toBeInTheDocument();
     expect(document.activeElement).toBe(button("Third"));
+  });
+});
+
+describe("FocusNavigationProvider with rows still being built inside a card", () => {
+  afterEach(() => {
+    setProgressiveMountEnabled(false);
+    resetStagedRowsForTests();
+    vi.restoreAllMocks();
+    resetInputModality();
+  });
+
+  const ROWS = 30;
+
+  const StagedCard = ({ name }: { name: string }) => {
+    const staged = useStagedRows(ROWS);
+    return (
+      <div data-section-scope="fixture" data-section-id={name} data-section-label={name}>
+        <button type="button">{name} header</button>
+        {Array.from({ length: staged.count }, (_, index) => (
+          <button key={index} type="button">
+            {`${name} row ${index + 1}`}
+          </button>
+        ))}
+        {staged.marker}
+      </div>
+    );
+  };
+
+  const walkDown = (staged: boolean) => {
+    setProgressiveMountEnabled(staged);
+    const view = render(
+      <FocusNavigationProvider>
+        {["First", "Second"].map((name) => (
+          <StagedCard key={name} name={name} />
+        ))}
+      </FocusNavigationProvider>,
+    );
+    const builtBeforeWalking = screen.queryAllByRole("button", { name: /^Second row/ }).length;
+    const labels: string[] = [];
+    for (const code of ["ArrowDown", "Enter", ...Array.from({ length: ROWS + 2 }, () => "ArrowDown")]) {
+      fireEvent.keyDown(document.body, { code });
+      labels.push(document.querySelector('[data-key-selected="true"]')?.textContent ?? "");
+    }
+    view.unmount();
+    resetStagedRowsForTests();
+    resetInputModality();
+    return { builtBeforeWalking, labels };
+  };
+
+  it("Down from the last built row builds the rest of the card and reaches its last row", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const eager = walkDown(false);
+    const staged = walkDown(true);
+
+    expect(staged.builtBeforeWalking).toBeLessThan(ROWS);
+    expect(staged.labels).toContain(`Second row ${ROWS}`);
+    expect(staged.labels).toEqual(eager.labels);
   });
 });
 

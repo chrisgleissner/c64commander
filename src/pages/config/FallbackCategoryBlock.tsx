@@ -14,6 +14,7 @@ import type { ConfigCategory, ConfigResponse } from "@/lib/c64api";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { humanizeRestName, resolveOverlayEntry } from "@/lib/config/menuMapping";
 import { ConfigLeafRow } from "./ConfigLeafRow";
+import { useStagedConfigRows } from "./stagedConfigRows";
 
 const BLOCK_QUERY_OPTIONS = { ...VISIBLE_C64_QUERY_OPTIONS, timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS };
 
@@ -66,6 +67,7 @@ export function FallbackCategoryBlock({
     () => Object.keys(liveItems).filter((item) => !claimed.has(item) && (accept ? accept(item) : true)),
     [liveItems, claimed, accept],
   );
+  const staged = useStagedConfigRows(category, leftover, (item) => item);
 
   if (leftover.length === 0) return null;
 
@@ -77,7 +79,7 @@ export function FallbackCategoryBlock({
         </h4>
       )}
       <div className="divide-y divide-border" data-testid="config-group-list">
-        {leftover.map((item) => {
+        {leftover.slice(0, staged.count).map((item) => {
           const overlay = resolveOverlayEntry(category, item);
           const live = liveItems[item];
           return (
@@ -95,6 +97,7 @@ export function FallbackCategoryBlock({
             />
           );
         })}
+        {staged.marker}
       </div>
     </div>
   );
