@@ -441,8 +441,7 @@ test.describe("Item Selection Dialog UX", () => {
     await snap(page, testInfo, "folder-row-navigation");
 
     await ensureRemoteRoot(dialog);
-    const usbRowKeyboard = dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first();
-    await usbRowKeyboard.focus();
+    await dialog.getByRole("button", { name: "Open Usb0", exact: true }).focus();
     await page.keyboard.press("Enter");
     await waitForFtpIdle(dialog);
     await expect(dialog.getByText("Games", { exact: true })).toBeVisible();

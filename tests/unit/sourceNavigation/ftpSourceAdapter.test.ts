@@ -63,6 +63,46 @@ describe("ftpSourceAdapter", () => {
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
   });
 
+  describe("a folder the device cannot open", () => {
+    const echo = (name: string, path: string) => ({ entries: [{ type: "dir" as const, name, path }] });
+
+    it("reports the folder as unreadable instead of listing it inside itself", async () => {
+      listFtpDirectoryMock.mockResolvedValueOnce(echo("SD", "/SD/SD")).mockResolvedValueOnce({ entries: [] });
+
+      await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow(
+        "The C64 could not read /SD. Check that its storage is inserted and readable.",
+      );
+      expect(listFtpDirectoryMock).toHaveBeenLastCalledWith(expect.objectContaining({ path: "/SD/SD" }));
+      expect(localStorage.getItem(FTP_CACHE_KEY) ?? "").not.toContain("/SD");
+    });
+
+    it("reports the folder as unreadable when its echo is refused", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("SD", "/SD/SD"))
+        .mockRejectedValueOnce(new Error("451 Requested action aborted"));
+
+      await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow("could not read /SD");
+    });
+
+    it("lists a readable folder whose only entry shares its name", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("Games", "/Usb0/Games/Games"))
+        .mockResolvedValueOnce({ entries: [{ type: "file", name: "giana.d64", path: "/Usb0/Games/Games/giana.d64" }] });
+
+      const entries = await createUltimateSourceLocation().listEntries("/Usb0/Games");
+
+      expect(entries.map((entry) => entry.path)).toEqual(["/Usb0/Games/Games"]);
+    });
+
+    it("does not probe a folder whose single entry has another name", async () => {
+      listFtpDirectoryMock.mockResolvedValueOnce(echo("Demos", "/Usb0/Demos"));
+
+      await createUltimateSourceLocation().listEntries("/Usb0");
+
+      expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("caches directory listings and reuses cache", async () => {
     listFtpDirectoryMock.mockResolvedValue({
       entries: [

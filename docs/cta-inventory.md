@@ -1386,9 +1386,11 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 - _On the compact profile the three are 44px icon buttons (Up, Root, Refresh, keeping those
   accessible names) on the same row as the path, and the browser takes the whole screen below
   the status bar._
-- Entry row — `source-entry-row` — a focusable row for a folder (Enter opens it) and a
-  plain row for a file, whose checkbox carries the selection. Its expanded detail is
-  `source-entry-detail`. A folder row's "Open <folder>" button fills the row's height, at least 44px
+- Entry row — `source-entry-row` — not a keypad stop itself: a folder row has two, its
+  checkbox and its "Open <folder>" button, and a file row has one, its checkbox, which
+  carries the selection. A tap anywhere else on a folder row opens it. Its expanded detail
+  is `source-entry-detail`. A folder row's "Open <folder>" button fills the row's height,
+  at least 44px
 - Back (the keypad Back key, or Escape) — goes up one folder while the browser is below the source
   root, and closes the browser at the root. While a folder is loading it does neither
 - Load more — button — `add-items-load-more` `[only while the source has more entries]`

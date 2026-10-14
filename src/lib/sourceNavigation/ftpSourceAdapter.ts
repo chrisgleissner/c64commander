@@ -108,6 +108,34 @@ const clearCachedEntriesUnderPrefix = (host: string, port: number | undefined, p
   saveCache(cache);
 };
 
+const folderName = (path: string) => path.replace(/\/+$/, "").split("/").pop() ?? "";
+
+/*
+ * The Ultimate's FTP server answers LIST for a folder it cannot open (an unreadable SD card) by
+ * listing the parent filtered to the folder's own name (`vfs_opendir` in 1541ultimate), so the
+ * folder appears to contain itself. A real folder holding one same-named folder lists that child's
+ * contents one level down; the echo lists nothing there, or refuses with 451.
+ */
+const isUnreadableFolderEcho = async (
+  request: { host: string; port: number; password: string },
+  path: string,
+  entries: { type: string; name: string; path: string }[],
+) => {
+  const [only] = entries;
+  if (path === "/" || entries.length !== 1 || only.type !== "dir") return false;
+  if (only.name.toLowerCase() !== folderName(path).toLowerCase()) return false;
+  try {
+    const child = await listFtpDirectory({ ...request, path: only.path });
+    return child.entries.length === 0;
+  } catch (error) {
+    addLog("warn", "FTP folder lists only itself and its echo cannot be listed", {
+      path,
+      error: (error as Error).message,
+    });
+    return true;
+  }
+};
+
 const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
@@ -118,12 +146,11 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
     if (cached) return cached;
   }
 
-  const result = await listFtpDirectory({
-    host,
-    port: getStoredFtpPort(),
-    password,
-    path: normalizedPath,
-  });
+  const request = { host, port: getStoredFtpPort(), password };
+  const result = await listFtpDirectory({ ...request, path: normalizedPath });
+  if (await isUnreadableFolderEcho(request, normalizedPath, result.entries || [])) {
+    throw new Error(`The C64 could not read ${normalizedPath}. Check that its storage is inserted and readable.`);
+  }
   const entries = (result.entries || []).map((entry) => ({
     type: entry.type,
     name: entry.name,

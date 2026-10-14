@@ -204,21 +204,10 @@ export const ItemSelectionView = ({
               className="flex min-h-11 items-center gap-2 min-w-0 border-b border-border/50 py-[0.44rem]"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
-              tabIndex={canNavigateFolder ? 0 : undefined}
               onClick={
                 canNavigateFolder
                   ? () => {
                       handleOpen(entry.path);
-                    }
-                  : undefined
-              }
-              onKeyDown={
-                canNavigateFolder
-                  ? (event: React.KeyboardEvent) => {
-                      if (event.key === "Enter" && !(event.target as HTMLElement).closest('[role="checkbox"]')) {
-                        event.preventDefault();
-                        handleOpen(entry.path);
-                      }
                     }
                   : undefined
               }
