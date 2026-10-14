@@ -208,7 +208,8 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
           if (!selected || !scroller || !bar) return null;
           const rect = selected.getBoundingClientRect();
           const barTop = bar.getBoundingClientRect().top;
-          const fits = rect.height <= barTop - scroller.getBoundingClientRect().top;
+          const marginTop = Number.parseFloat(getComputedStyle(selected).scrollMarginTop) || 0;
+          const fits = rect.height + marginTop <= barTop - scroller.getBoundingClientRect().top;
           return {
             id: selected.getAttribute("data-testid") ?? selected.textContent?.trim().slice(0, 40) ?? "",
             bottom: rect.bottom,
