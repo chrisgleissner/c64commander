@@ -127,6 +127,10 @@ export const useRemoteInputKeypadTyping = ({
         sendChar(DELETE_CHAR);
         return;
       }
+      if (action === "star") {
+        event.preventDefault();
+        return;
+      }
       if (digitForAction(action) !== null || action === "hash") {
         event.preventDefault();
         if (event.repeat) return;

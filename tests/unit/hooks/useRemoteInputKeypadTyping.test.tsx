@@ -45,6 +45,17 @@ describe("useRemoteInputKeypadTyping", () => {
     expect(sendChar.mock.calls).toEqual([["a"]]);
   });
 
+  it("swallows the star key without typing, so no global shortcut reacts to it", () => {
+    const { result } = renderTyping();
+    const star = keyEvent("*", "NumpadMultiply");
+
+    act(() => result.current.handleKeyDown(star.event));
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(star.preventDefault).toHaveBeenCalled();
+    expect(sendChar).not.toHaveBeenCalled();
+  });
+
   it("ignores a held digit and a held OK, so one press types one character", () => {
     const { result } = renderTyping();
 
