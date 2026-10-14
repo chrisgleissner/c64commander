@@ -366,6 +366,84 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  describe("a selected control that is disabled or removed", () => {
+    const mountGroup = () => {
+      mount(`
+        <section data-section-label="Quick Actions" id="card">
+          <button id="toggle">Quick Actions</button>
+          <button id="game">Game</button>
+          <button id="pause">Pause</button>
+          <button id="backup">Backup</button>
+        </section>
+      `);
+      const onSelectionMovedByScan = vi.fn();
+      const controller = new FocusController();
+      const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
+      engine.start();
+      controller.setCurrent(controller.list().find((item) => item.parentId === undefined)!.id);
+      controller.focusFirstChild();
+      const select = (domId: string) =>
+        controller.setCurrent(controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id);
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { controller, engine, select, selected, onSelectionMovedByScan };
+    };
+
+    it("keeps the selection on a control natively disabled while its work runs, and after it is enabled", () => {
+      const { controller, engine, select, selected } = mountGroup();
+      select("pause");
+
+      el("pause").setAttribute("disabled", "");
+      el("backup").setAttribute("disabled", "");
+      engine.refresh();
+      expect(selected()).toBe("pause");
+      expect(controller.activateCurrent()).toBe(false);
+
+      el("pause").textContent = "Resume";
+      el("pause").removeAttribute("disabled");
+      engine.refresh();
+      expect(selected()).toBe("pause");
+      engine.stop();
+    });
+
+    it("drops a disabled control that is not selected, and lets navigation move off a held one", () => {
+      const { controller, engine, select, selected } = mountGroup();
+      select("pause");
+      el("pause").setAttribute("disabled", "");
+      el("backup").setAttribute("disabled", "");
+      engine.refresh();
+
+      expect(controller.list().some((item) => engine.elementForId(item.id)?.id === "backup")).toBe(false);
+      controller.focusPrevious();
+      expect(selected()).toBe("game");
+      engine.refresh();
+      expect(controller.list().some((item) => engine.elementForId(item.id)?.id === "pause")).toBe(false);
+      engine.stop();
+    });
+
+    it("moves to the following stop when the selected one is removed, and reports the move", () => {
+      const { controller, engine, select, selected, onSelectionMovedByScan } = mountGroup();
+      select("pause");
+
+      el("pause").remove();
+      engine.refresh();
+
+      expect(selected()).toBe("backup");
+      expect(onSelectionMovedByScan).toHaveBeenLastCalledWith(controller.current()!.id);
+      engine.stop();
+    });
+
+    it("moves to the preceding stop when the removed one was the last in its group", () => {
+      const { engine, select, selected } = mountGroup();
+      select("backup");
+
+      el("backup").remove();
+      engine.refresh();
+
+      expect(selected()).toBe("pause");
+      engine.stop();
+    });
+  });
+
   it("returns the ring to the item that opened an overlay once the overlay closes", () => {
     mount(`<button id="first">first</button><button id="opener">opener</button><button id="last">last</button>`);
     const { controller, engine } = makeEngine();
@@ -454,8 +532,8 @@ describe("FocusDiscoveryEngine", () => {
   it("reports the opener it returns to, at once or once the opener is enabled again", () => {
     mount(`<button id="first">first</button><button id="opener">opener</button>`);
     const controller = new FocusController();
-    const onReturnToOpener = vi.fn();
-    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onReturnToOpener });
+    const onSelectionMovedByScan = vi.fn();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
     engine.start();
     const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
     controller.setCurrent(openerId);
@@ -464,7 +542,7 @@ describe("FocusDiscoveryEngine", () => {
     engine.refresh();
     dialog.remove();
     engine.refresh();
-    expect(onReturnToOpener).toHaveBeenLastCalledWith(openerId);
+    expect(onSelectionMovedByScan).toHaveBeenLastCalledWith(openerId);
 
     controller.setCurrent(openerId);
     const second = mount(`<div role="dialog"><button>close</button></div>`);
@@ -472,11 +550,11 @@ describe("FocusDiscoveryEngine", () => {
     el("opener").setAttribute("disabled", "");
     second.remove();
     engine.refresh();
-    expect(onReturnToOpener).toHaveBeenCalledTimes(1);
+    expect(onSelectionMovedByScan).toHaveBeenCalledTimes(1);
     el("opener").removeAttribute("disabled");
     engine.refresh();
-    expect(onReturnToOpener).toHaveBeenCalledTimes(2);
-    expect(onReturnToOpener).toHaveBeenLastCalledWith(openerId);
+    expect(onSelectionMovedByScan).toHaveBeenCalledTimes(2);
+    expect(onSelectionMovedByScan).toHaveBeenLastCalledWith(openerId);
     engine.stop();
   });
 

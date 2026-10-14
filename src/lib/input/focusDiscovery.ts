@@ -79,8 +79,11 @@ export interface FocusDiscoveryEngineOptions {
   readonly freezeDuringTransientLayer?: () => boolean;
   /** Run after every (re)assembly so the adapter can re-apply the highlight / bar. */
   readonly onAfterAssemble?: () => void;
-  /** Run when the ring returns to the item that opened a closed overlay, so DOM focus can follow it. */
-  readonly onReturnToOpener?: (id: string) => void;
+  /**
+   * Run when a scan moves the selection itself: back to the item that opened a closed overlay, or on to
+   * the nearest stop after the selected one went away. DOM focus and the scroll position follow it.
+   */
+  readonly onSelectionMovedByScan?: (id: string) => void;
   readonly doc?: Document;
 }
 
@@ -179,7 +182,7 @@ export class FocusDiscoveryEngine {
   private readonly listExplicit: () => ExplicitRegistration[];
   private readonly freezeDuringTransientLayer: () => boolean;
   private readonly onAfterAssemble?: () => void;
-  private readonly onReturnToOpener?: (id: string) => void;
+  private readonly onSelectionMovedByScan?: (id: string) => void;
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
   private scheduled = false;
@@ -207,7 +210,7 @@ export class FocusDiscoveryEngine {
     this.listExplicit = options.listExplicit;
     this.freezeDuringTransientLayer = options.freezeDuringTransientLayer ?? (() => false);
     this.onAfterAssemble = options.onAfterAssemble;
-    this.onReturnToOpener = options.onReturnToOpener;
+    this.onSelectionMovedByScan = options.onSelectionMovedByScan;
     this.doc = options.doc ?? document;
   }
 
@@ -351,9 +354,14 @@ export class FocusDiscoveryEngine {
     const scopeChanged = previousScope !== scope.element;
     const leavingId = this.controller.current()?.id;
     const leavingElement = leavingId ? this.elementForId(leavingId) : null;
+    const previousItems = this.controller.list();
     if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
-    const nodes = this.collectRingNodes(scope, scan);
+    // A selected control that is disabled while the work it started runs (Pause, Menu) stays the
+    // selection, as an aria-disabled one does; dropping it moved the ring to the top of the group.
+    const heldWhileDisabled =
+      !scopeChanged && leavingElement?.isConnected && isNativelyDisabled(leavingElement) ? leavingElement : null;
+    const nodes = this.collectRingNodes(scope, scan, heldWhileDisabled);
     const items = this.assemble(nodes, scope.element);
 
     this.applyShims(items.shimTargets);
@@ -376,8 +384,10 @@ export class FocusDiscoveryEngine {
         until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
       };
     } else if (!scopeChanged) {
-      this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers);
-      returnedTo = this.retryPendingReturn(scope.element);
+      returnedTo =
+        this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers) ??
+        this.followVanishedStop(leavingId, previousItems);
+      returnedTo = this.retryPendingReturn(scope.element) ?? returnedTo;
     }
     returnedTo ??= this.restoreStandingAfterEmptyRing(scope.element, leavingId, items.focusItems.length);
     this.scopeChain = this.computeScopeChain();
@@ -385,7 +395,7 @@ export class FocusDiscoveryEngine {
     // Drop the mutation records our own tabindex writes just queued — the DOM is
     // already reflected in this scan, so reacting to them would loop.
     this.observer?.takeRecords();
-    if (returnedTo) this.onReturnToOpener?.(returnedTo);
+    if (returnedTo) this.onSelectionMovedByScan?.(returnedTo);
     this.onAfterAssemble?.();
   }
 
@@ -399,8 +409,10 @@ export class FocusDiscoveryEngine {
     leavingElement: HTMLElement | null,
     focusItems: readonly FocusItem[],
     resolvers: Map<string, () => HTMLElement | null>,
-  ): void {
-    if (!leavingId || !leavingElement?.isConnected || focusItems.some((item) => item.id === leavingId)) return;
+  ): string | undefined {
+    if (!leavingId || !leavingElement?.isConnected || focusItems.some((item) => item.id === leavingId)) {
+      return undefined;
+    }
     const inside: Array<{ id: string; element: HTMLElement }> = [];
     for (const item of focusItems) {
       const element = resolvers.get(item.id)?.() ?? null;
@@ -409,7 +421,35 @@ export class FocusDiscoveryEngine {
     const outermost = inside.find(
       (entry) => !inside.some((other) => other !== entry && other.element.contains(entry.element)),
     );
-    if (outermost) this.controller.setCurrent(outermost.id);
+    if (!outermost) return undefined;
+    this.controller.setCurrent(outermost.id);
+    return outermost.id;
+  }
+
+  /**
+   * The selected stop went away (Remove selected items, an inline editor's Cancel). The ring took the
+   * group's first stop, which can be far off screen; it moves to the nearest remaining sibling instead,
+   * the following one first.
+   */
+  private followVanishedStop(leavingId: string | undefined, previousItems: readonly FocusItem[]): string | undefined {
+    if (!leavingId || this.controller.current()?.id === leavingId) return undefined;
+    const leaving = previousItems.find((item) => item.id === leavingId);
+    const parentId = leaving?.parentId ?? null;
+    if (!leaving || this.controller.currentScopeParentId() !== parentId) return undefined;
+    const remaining = new Set(
+      this.controller
+        .list()
+        .filter((item) => !item.disabled && (item.parentId ?? null) === parentId)
+        .map((item) => item.id),
+    );
+    const siblings = previousItems.filter((item) => (item.parentId ?? null) === parentId);
+    const at = siblings.indexOf(leaving);
+    for (let distance = 1; distance < siblings.length; distance += 1) {
+      for (const candidate of [siblings[at + distance], siblings[at - distance]]) {
+        if (candidate && remaining.has(candidate.id) && this.controller.setCurrent(candidate.id)) return candidate.id;
+      }
+    }
+    return undefined;
   }
 
   private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
@@ -447,7 +487,7 @@ export class FocusDiscoveryEngine {
     return pending.id;
   }
 
-  private collectRingNodes(scope: ActiveScope, scan: DiscoveryScan): RingNode[] {
+  private collectRingNodes(scope: ActiveScope, scan: DiscoveryScan, heldWhileDisabled: HTMLElement | null): RingNode[] {
     const scopeEl = scope.element;
     const excludeSubtrees = scope.kind === "page" ? [TABBAR_SCOPE_SELECTOR] : [];
     const discovered = discoverInteractiveElements(scopeEl, { excludeSubtrees, scan });
@@ -462,6 +502,12 @@ export class FocusDiscoveryEngine {
 
     const inScope = (element: HTMLElement): boolean =>
       scopeEl.contains(element) || (tabbar instanceof HTMLElement && tabbar.contains(element));
+    const holdsDisabledSelection =
+      heldWhileDisabled !== null &&
+      inScope(heldWhileDisabled) &&
+      isFocusVisible(heldWhileDisabled, scan) &&
+      !isSkipped(heldWhileDisabled, scopeEl);
+    if (holdsDisabledSelection && !elements.includes(heldWhileDisabled)) elements.push(heldWhileDisabled);
 
     const registrationByElement = new Map<HTMLElement, ExplicitRegistration>();
     const groupElements = new Set<Element>();
@@ -535,7 +581,12 @@ export class FocusDiscoveryEngine {
     const kept = elements
       .filter((element) => !skipElements.has(element))
       .filter((element) => !ownedByExplicitItem(element))
-      .filter((element) => !isNativelyDisabled(element) || groupElements.has(element));
+      .filter(
+        (element) =>
+          !isNativelyDisabled(element) ||
+          groupElements.has(element) ||
+          (holdsDisabledSelection && element === heldWhileDisabled),
+      );
     const inTabbar = (element: HTMLElement): boolean => tabbar instanceof HTMLElement && tabbar.contains(element);
     const ordered = [
       ...sortIntoReadingOrder(

@@ -1981,3 +1981,47 @@ describe("returning from an overlay", () => {
     expect(onGame).not.toHaveBeenCalled();
   });
 });
+
+describe("the selected stop goes away", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  const Rows = ({ withRemove }: { withRemove: boolean }) => (
+    <>
+      <button>Add items</button>
+      <button>Select all</button>
+      {withRemove ? <button>Remove selected items</button> : null}
+      <button>First item</button>
+    </>
+  );
+
+  it("highlights, focuses and scrolls into view the nearest remaining stop", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    const view = render(
+      <FocusNavigationProvider>
+        <Rows withRemove />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(button("Remove selected items")).toHaveAttribute(SELECTED, "true");
+    scrolled.length = 0;
+
+    view.rerender(
+      <FocusNavigationProvider>
+        <Rows withRemove={false} />
+      </FocusNavigationProvider>,
+    );
+    await act(afterRingRescan);
+
+    expect(button("First item")).toHaveAttribute(SELECTED, "true");
+    expect(button("Add items")).not.toHaveAttribute(SELECTED);
+    expect(document.activeElement).toBe(button("First item"));
+    expect(scrolled).toContain(button("First item"));
+    scrollIntoView.mockRestore();
+  });
+});
