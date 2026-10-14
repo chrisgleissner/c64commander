@@ -276,7 +276,6 @@ describe("hvscFilesystem", () => {
       type: "baseline",
       sizeBytes: 1024,
       expectedSizeBytes: 2048,
-      checksumMd5: "abc123",
       sourceUrl: "https://example.com/hvsc-baseline-85.7z",
       completedAt: new Date("2024-01-01T00:00:00Z").toISOString(),
     });
@@ -286,7 +285,6 @@ describe("hvscFilesystem", () => {
     expect(marker?.type).toBe("baseline");
     expect(marker?.sizeBytes).toBe(1024);
     expect(marker?.expectedSizeBytes).toBe(2048);
-    expect(marker?.checksumMd5).toBe("abc123");
     expect(marker?.sourceUrl).toBe("https://example.com/hvsc-baseline-85.7z");
   });
 

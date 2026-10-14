@@ -630,7 +630,6 @@ export type HvscArchiveMarker = {
   type: "baseline" | "update";
   sizeBytes?: number | null;
   expectedSizeBytes?: number | null;
-  checksumMd5?: string | null;
   sourceUrl?: string | null;
   completedAt: string;
 };

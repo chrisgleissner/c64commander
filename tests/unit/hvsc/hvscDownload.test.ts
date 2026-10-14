@@ -81,7 +81,6 @@ import {
   readArchiveBuffer,
   resolveCachedArchive,
   getCacheStatusInternal,
-  computeArchiveChecksumMd5,
   __resetNativeDownloadStateForTests,
 } from "@/lib/hvsc/hvscDownload";
 import { Filesystem } from "@capacitor/filesystem";
@@ -89,7 +88,6 @@ import { Capacitor } from "@capacitor/core";
 
 import { addLog } from "@/lib/logging";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
-import SparkMD5 from "spark-md5";
 
 describe("hvscDownload", () => {
   beforeEach(() => {
@@ -614,25 +612,24 @@ describe("hvscDownload", () => {
       expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
     });
 
-    it("deletes cached archives when the marker checksum no longer matches the file bytes", async () => {
-      vi.mocked(Filesystem.stat).mockResolvedValue({
-        type: "file",
-        size: 3,
-      } as any);
-      vi.mocked(Filesystem.readFile).mockResolvedValue({
-        data: Buffer.from(new Uint8Array([1, 2, 3])).toString("base64"),
-      } as any);
+    it("reuses a cached archive without reading it back, even when an older marker carries a checksum", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.mocked(Filesystem.stat).mockResolvedValue({ type: "file", size: 84_827_547 } as any);
+      const readArchiveChunk = vi.spyOn(HvscIngestion, "readArchiveChunk");
       const { readCachedArchiveMarker, deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
       vi.mocked(readCachedArchiveMarker).mockResolvedValue({
         version: 84,
-        sizeBytes: 3,
-        checksumMd5: "wrong-checksum",
+        sizeBytes: 84_827_547,
+        expectedSizeBytes: 84_827_547,
+        checksumMd5: "written-by-an-earlier-version",
       } as any);
 
       const result = await resolveCachedArchive("hvsc-baseline", 84);
 
-      expect(result).toBeNull();
-      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84");
+      expect(result).toBe("hvsc-baseline-84");
+      expect(readArchiveChunk).not.toHaveBeenCalled();
+      expect(vi.mocked(Filesystem.readFile)).not.toHaveBeenCalled();
+      expect(vi.mocked(deleteCachedArchive)).not.toHaveBeenCalled();
     });
 
     it("deletes cached archives when file size is below 99% of expected size", async () => {
@@ -734,55 +731,12 @@ describe("hvscDownload", () => {
           version: 84,
           type: "baseline",
           expectedSizeBytes: 6,
-          checksumMd5: computeArchiveChecksumMd5(new Uint8Array([1, 2, 3, 4, 5, 6])),
           sourceUrl: "https://example.com/hvsc.7z",
         }),
       );
       const progressStages = (options.emitProgress as any).mock.calls.map((call: any[]) => call[0]?.stage);
       expect(progressStages).toContain("download");
       expect(inMemory).toBeNull();
-    });
-
-    it("deletes the cached archive and downgrades to a null-checksum marker when checksum computation yields no digest", async () => {
-      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 6 } as any);
-      (globalThis.fetch as any).mockResolvedValue({
-        ok: true,
-        headers: { get: () => "6" },
-        body: {
-          getReader: () => {
-            const chunks = [new Uint8Array([1, 2, 3, 4, 5, 6])];
-            let index = 0;
-            return {
-              read: async () => {
-                if (index >= chunks.length) return { done: true, value: undefined };
-                const value = chunks[index];
-                index += 1;
-                return { done: false, value };
-              },
-            };
-          },
-        },
-      });
-      vi.spyOn(SparkMD5.ArrayBuffer, "hash").mockReturnValueOnce("");
-
-      // A missing digest doesn't fail the download outright — it's caught by the
-      // surrounding marker-write try/catch and downgrades to a null-checksum marker.
-      await expect(downloadArchive(makeOptions())).resolves.toBeNull();
-
-      const { deleteCachedArchive, writeCachedArchiveMarker } = await import("@/lib/hvsc/hvscFilesystem");
-      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84.7z");
-      expect(vi.mocked(writeCachedArchiveMarker)).toHaveBeenCalledWith(
-        "hvsc-baseline-84.7z",
-        expect.objectContaining({ checksumMd5: null }),
-      );
-      expect(addLog).toHaveBeenCalledWith(
-        "warn",
-        "Failed to write HVSC cache marker",
-        expect.objectContaining({
-          archivePath: "hvsc-baseline-84.7z",
-          error: 'HVSC archive checksum validation failed for "hvsc-baseline-84.7z". Please re-download.',
-        }),
-      );
     });
 
     it("retains in-memory buffer when requested", async () => {
@@ -1123,6 +1077,27 @@ describe("hvscDownload", () => {
 
       const result = await downloadArchive(makeOptions());
       expect(result).toBeNull();
+    });
+
+    it("native download: writes the marker without reading the 85 MB archive back across the bridge", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? "84827547" : null) },
+      });
+      vi.mocked(Filesystem.downloadFile).mockResolvedValue({} as any);
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 84_827_547, type: "file" } as any);
+      const readArchiveChunk = vi.spyOn(HvscIngestion, "readArchiveChunk");
+
+      await downloadArchive(makeOptions());
+
+      const { writeCachedArchiveMarker } = await import("@/lib/hvsc/hvscFilesystem");
+      expect(readArchiveChunk).not.toHaveBeenCalled();
+      expect(vi.mocked(Filesystem.readFile)).not.toHaveBeenCalled();
+      expect(vi.mocked(writeCachedArchiveMarker)).toHaveBeenCalledWith(
+        "hvsc-baseline-84.7z",
+        expect.objectContaining({ sizeBytes: 84_827_547, expectedSizeBytes: 84_827_547 }),
+      );
     });
 
     it("streams download without Content-Length using dynamic growing buffer", async () => {
