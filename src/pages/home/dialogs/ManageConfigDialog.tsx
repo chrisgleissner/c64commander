@@ -125,7 +125,7 @@ export function ManageConfigDialog({ open, onOpenChange, configs, onRename, onDe
             </AppDialogDescription>
           </AppDialogHeader>
           <AppDialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} data-open-focus>
               Cancel
             </Button>
             <Button

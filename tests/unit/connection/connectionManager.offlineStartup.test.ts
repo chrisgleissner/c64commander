@@ -651,6 +651,89 @@ describe("startup with a network on the device", () => {
 
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
+
+  it("does not count an answer that arrives after the network dropped as a successful probe", async () => {
+    const { noteReachable, getConnectionSnapshot } = await connectThenLoseNetwork();
+    const succeededAtBefore = getConnectionSnapshot().lastProbeSucceededAtMs;
+    await vi.advanceTimersByTimeAsync(1000);
+
+    noteReachable("192.0.2.64", "rest", { product: "C64 Ultimate", errors: [] } as never);
+
+    expect(getConnectionSnapshot().lastProbeSucceededAtMs).toBe(succeededAtBefore);
+  });
+
+  const holdDeviceAnswers = () => {
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(fetch).mockImplementation(async () => {
+      await released;
+      return respondWithDevice();
+    });
+    return release;
+  };
+
+  const loseNetwork = (recordNetworkStatus: (status: { online: boolean; supported: boolean }) => void) => {
+    setNetwork(false);
+    recordNetworkStatus({ online: false, supported: true });
+  };
+
+  it("stays offline when a background probe sent before the network dropped is answered after it", async () => {
+    const { discoverConnection, recordNetworkStatus, getConnectionSnapshot } = await connectThenLoseNetwork();
+    recordNetworkStatus({ online: true, supported: true });
+    const releaseAnswers = holdDeviceAnswers();
+    const requestsBefore = vi.mocked(fetch).mock.calls.length;
+
+    void discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(requestsBefore);
+
+    loseNetwork(recordNetworkStatus);
+    releaseAnswers();
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+  });
+
+  it("does not connect when a manual probe sent before the network dropped is answered after it", async () => {
+    const { discoverConnection, recordNetworkStatus, getConnectionSnapshot } = await connectThenLoseNetwork();
+    recordNetworkStatus({ online: true, supported: true });
+    setNetwork(true);
+    const releaseAnswers = holdDeviceAnswers();
+
+    void discoverConnection("manual");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(getConnectionSnapshot().state).toBe("DISCOVERING");
+
+    loseNetwork(recordNetworkStatus);
+    releaseAnswers();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(getConnectionSnapshot().state).not.toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().state).not.toBe("DISCOVERING");
+  });
+
+  it("keeps discovering when a device answer arrives after the network dropped mid-discovery", async () => {
+    const releaseAnswers = holdDeviceAnswers();
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
+    const connection = await import("../../../src/lib/connection/connectionManager");
+    const { recordNetworkStatus } = await import("../../../src/lib/connection/networkStatusWatch");
+    await connection.initializeConnectionManager();
+    void connection.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(connection.getConnectionSnapshot().state).toBe("DISCOVERING");
+
+    loseNetwork(recordNetworkStatus);
+    connection.noteReachable("192.0.2.64", "rest", { product: "C64 Ultimate", errors: [] } as never);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(connection.getConnectionSnapshot().state).toBe("DISCOVERING");
+
+    releaseAnswers();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(connection.getConnectionSnapshot().state).not.toBe("REAL_CONNECTED");
+    expect(connection.getConnectionSnapshot().state).not.toBe("DISCOVERING");
+  });
 });
 
 describe("startup on a platform with no simulated device (HARD27-027)", () => {

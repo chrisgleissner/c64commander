@@ -39,7 +39,6 @@ export const ConfirmDestructiveDialog = ({
   confirmLabel,
   idPrefix,
 }: ConfirmDestructiveDialogProps) => {
-  const cancelRef = useRef<HTMLButtonElement>(null);
   // One confirmation per opening: a repeated activation before the dialog closes must not run the action twice.
   const confirmedRef = useRef(false);
   useEffect(() => {
@@ -53,20 +52,13 @@ export const ConfirmDestructiveDialog = ({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent
-        data-testid={`${idPrefix}-dialog`}
-        // The keypad ring adopts whatever holds focus, so a second OK press lands on Cancel, not on the action.
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          cancelRef.current?.focus();
-        }}
-      >
+      <AlertDialogContent data-testid={`${idPrefix}-dialog`}>
         <AlertDialogHeader hideClose>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription className="not-sr-only">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel ref={cancelRef} id={`${idPrefix}-cancel`} data-testid={`${idPrefix}-cancel`}>
+          <AlertDialogCancel id={`${idPrefix}-cancel`} data-testid={`${idPrefix}-cancel`} data-open-focus>
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction

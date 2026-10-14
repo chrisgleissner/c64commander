@@ -407,6 +407,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // The same rule as the app's text fields: the keypad composes letters only where T9 is on.
   const keypadTypesOnTheC64 = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const keypadTyping = useRemoteInputKeypadTyping({ sendChar: session.sendChar, sendCursor: session.sendCursor });
+  // The sheet stays mounted, so a letter still being chosen would otherwise reach the C64 after it closed.
+  const resetKeypadTyping = keypadTyping.reset;
+  useEffect(() => {
+    if (!open) resetKeypadTyping();
+  }, [open, resetKeypadTyping]);
   const keypadControls = useRemoteInputKeypadControls({
     open,
     outputMode: session.outputMode,

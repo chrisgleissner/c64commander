@@ -250,11 +250,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionActiveRef = useRef(false);
 
-  // HARD12-006: rehydrate the volume-session snapshot from localStorage on
-  // mount so a Play remount after tab-away or a restart keeps ownership of the same
-  // captured snapshot. The rehydrate is value-equality bailed (we only assign
-  // when the ref is empty) so subsequent re-renders do not loop per the
-  // AGENTS React-safety rule.
+  // HARD12-006: a remount after tab-away or a restart re-owns the saved snapshots. Assigned only into empty
+  // refs, so a re-render cannot loop.
   useEffect(() => {
     if (!resolvedDeviceId) return;
     if (
@@ -286,12 +283,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     }
   }, [resolvedDeviceId]);
 
-  // HARD12-006: persist the volume-session snapshot whenever playback
-  // transitions or the device id changes so a subsequent remount re-owns the
-  // same captured values. The snapshots themselves live in refs (no React
-  // re-render on mutation); the persist effect runs on every isPlaying/
-  // isPaused edge which is the moment Stop/handleTabAway would otherwise
-  // need the snapshot.
+  // HARD12-006: the snapshots live in refs, so they are saved on every playback edge and whenever a mute
+  // changes them, for a remount or a restart to re-own.
   const persistVolumeSession = useCallback(() => {
     if (!resolvedDeviceId) return;
     persistPlaybackSnapshot({
@@ -1036,6 +1029,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       }
       manualMuteSnapshotRef.current = captureSidMuteSnapshot(cachedItems, sidEnablement);
       manualMuteIntentRef.current = true;
+      persistVolumeSession();
       addLog("info", "Play volume mute requested", {
         previousIndex: effectiveState.index,
         muteIndex,
@@ -1086,6 +1080,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     manualMuteIntentRef.current = false;
     dispatchTrackedVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
     manualMuteSnapshotRef.current = null;
+    persistVolumeSession();
     addLog("info", "Play volume unmute requested", {
       index: fallbackIndex,
     });
@@ -1138,6 +1133,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     enabledSidVolumeItems,
     isCurrentMuteToggleIntent,
     masterVolumeItem,
+    persistVolumeSession,
     playbackVolumeItems,
     queuePlaybackMixerWrite,
     resolveMutedVolumeIndex,
@@ -1359,15 +1355,17 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     ],
   );
 
+  const isManualMuteHeld = useCallback(() => manualMuteIntentRef.current || manualMuteSnapshotRef.current !== null, []);
+
   const releaseManualMute = useCallback(
     async (reason: string) => {
-      if (!volumeMuted || (!manualMuteIntentRef.current && !manualMuteSnapshotRef.current)) return false;
+      if (!volumeMuted || !isManualMuteHeld()) return false;
       addLog("info", "Play volume mute released on the C64", { reason });
       await ensureUnmuted({ force: true, refreshItems: true });
       persistVolumeSession();
       return true;
     },
-    [ensureUnmuted, persistVolumeSession, volumeMuted],
+    [ensureUnmuted, isManualMuteHeld, persistVolumeSession, volumeMuted],
   );
 
   return {
@@ -1403,6 +1401,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     handleVolumeCommit,
     handleToggleMute,
     ensureUnmuted,
+    isManualMuteHeld,
     releaseManualMute,
   };
 }

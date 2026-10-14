@@ -44,7 +44,7 @@ describe("discoverInteractiveElements", () => {
     expect(ids).toEqual(["b1", "a1", "i1", "role-btn", "slider"]);
   });
 
-  it("excludes disabled, aria-hidden, hidden, display:none, and skip subtrees", () => {
+  it("excludes natively disabled, aria-hidden, hidden, display:none, and skip subtrees, but keeps aria-disabled", () => {
     const host = mount(`
       <button id="ok">ok</button>
       <button id="disabled" disabled>nope</button>
@@ -58,7 +58,7 @@ describe("discoverInteractiveElements", () => {
       <input type="hidden" id="hidden-input" />
     `);
     const ids = discoverInteractiveElements(host).map((el) => el.id);
-    expect(ids).toEqual(["ok"]);
+    expect(ids).toEqual(["ok", "aria-disabled"]);
   });
 
   it("excludes elements inside an excluded subtree selector (the TabBar)", () => {

@@ -405,6 +405,7 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
+    isManualMuteHeld,
     releaseManualMute,
   } = usePlayFilesVolumeBindings({ isPlaying, isPaused, resolvedDeviceId: getSelectedSavedDevice()?.id ?? null });
   const volumeIndex = volumeState.index;
@@ -2009,9 +2010,8 @@ export default function PlayFilesPage() {
   const soundingRoute = resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local);
   useC64MuteFollowsRoute({
     route: soundingRoute,
-    c64Muted: volumeMuted && volumeState.reason !== "pause",
+    c64Mute: { volumeState, isManualMuteHeld, releaseManualMute },
     sidPlaying: isPlaying && currentItem?.category === "sid",
-    releaseC64Mute: releaseManualMute,
     muteHere: muteLocalOutput,
   });
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
@@ -3103,7 +3103,7 @@ export default function PlayFilesPage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     if (!pendingConfigChange) return;

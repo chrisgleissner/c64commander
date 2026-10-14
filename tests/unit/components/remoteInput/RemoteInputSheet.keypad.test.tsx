@@ -35,6 +35,22 @@ const initialConnectionStatus: "idle" | "error" = "idle";
 const t9 = vi.hoisted(() => ({ on: true }));
 vi.mock("@/lib/input/t9Defaults", () => ({ isDefaultT9InputEnabled: () => t9.on }));
 
+const mirrorState = vi.hoisted(() => ({ videoState: "off" as "off" | "live" }));
+vi.mock("@/hooks/useAvMirror", () => ({
+  useAvMirror: () => ({
+    audio: { state: "off", error: null, fps: 0 },
+    video: { state: mirrorState.videoState, error: null, fps: 0 },
+    audioLive: false,
+    videoLive: mirrorState.videoState === "live",
+    anyLive: mirrorState.videoState === "live",
+    toggleAudio: vi.fn(),
+    toggleVideo: vi.fn(),
+    stopAll: vi.fn(),
+    session: { stopVideo: vi.fn(async () => {}), stopAudio: vi.fn(async () => {}) },
+  }),
+  useAvMirrorCanvas: vi.fn(),
+}));
+
 vi.mock("@/hooks/useRemoteInputCapabilityTier", () => ({
   useRemoteInputCapabilityTier: () => tierState,
 }));
@@ -124,6 +140,16 @@ const renderSheet = (onOpenChange = vi.fn()) => {
   );
   return onOpenChange;
 };
+const renderSheetOnKeypad = (onOpenChange = vi.fn()) => {
+  render(
+    <FocusNavigationProvider profileId="keypad">
+      <RemoteInputSheet open onOpenChange={onOpenChange} />
+    </FocusNavigationProvider>,
+  );
+  return onOpenChange;
+};
+const typedChars = () => sendCharMock.mock.calls.map(([char]) => char);
+const openMenu = () => fireEvent.keyDown(document.activeElement ?? sheet(), { key: "SoftRight", code: "SoftRight" });
 
 const ProfilePin = ({ profile }: { profile: DisplayProfile }) => {
   const { setOverride } = useDisplayProfilePreference();
@@ -146,6 +172,7 @@ describe("RemoteInputSheet keypad", () => {
     initialSessionHeldJoystickInputs = new Set();
     initialSessionHeldKeyboardInputs = new Set();
     t9.on = true;
+    mirrorState.videoState = "off";
     vi.clearAllMocks();
   });
 
@@ -257,7 +284,7 @@ describe("RemoteInputSheet keypad", () => {
     press("ArrowUp");
     press("ArrowRight");
     press("2", "Digit2");
-    fireEvent.keyDown(sheet(), { key: "SoftRight", code: "SoftRight" });
+    fireEvent.keyDown(sheet(), { key: "Escape", code: "Escape" });
     fireEvent.click(screen.getByTestId("remote-input-menu-joystick"));
     act(() => void vi.advanceTimersByTime(1100));
 
@@ -308,7 +335,7 @@ describe("RemoteInputSheet keypad", () => {
     expect(sheet()).toHaveAttribute("data-game-mode", "false");
   });
 
-  it("enters Game Mode, releases all and closes the sheet from the controls menu", () => {
+  it("releases all, enters Game Mode and closes the sheet from the controls menu", () => {
     const onOpenChange = renderSheet();
     sheet().focus();
     const choose = (id: string) => {
@@ -316,10 +343,10 @@ describe("RemoteInputSheet keypad", () => {
       fireEvent.click(screen.getByTestId(`remote-input-menu-${id}`));
     };
 
-    choose("game");
-    expect(sheet()).toHaveAttribute("data-game-mode", "true");
     choose("release-all");
     expect(releaseAllMock).toHaveBeenCalledTimes(1);
+    choose("game");
+    expect(sheet()).toHaveAttribute("data-game-mode", "true");
     choose("close");
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -339,5 +366,190 @@ describe("RemoteInputSheet keypad", () => {
     expect(screen.getByTestId("remote-input-size-stepper")).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("remote-input-joystick-options")));
     expect(sheet()).not.toHaveAttribute("data-key-nav-skip");
+  });
+  it("sends no letter still being chosen once Remote Input has closed", () => {
+    vi.useFakeTimers();
+    initialSessionOutputMode = "type";
+    const onOpenChange = vi.fn();
+    const { rerender } = render(
+      <FocusNavigationProvider>
+        <RemoteInputSheet open onOpenChange={onOpenChange} />
+      </FocusNavigationProvider>,
+    );
+    sheet().focus();
+
+    press("2", "Digit2");
+    rerender(
+      <FocusNavigationProvider>
+        <RemoteInputSheet open={false} onOpenChange={onOpenChange} />
+      </FocusNavigationProvider>,
+    );
+    act(() => void vi.advanceTimersByTime(1100));
+
+    expect(sendCharMock).not.toHaveBeenCalled();
+  });
+
+  it("types nothing from the keypad's unbound digits while the keypad drives the joystick", () => {
+    vi.useFakeTimers();
+    renderSheet();
+    sheet().focus();
+
+    // Each layout leaves one of these two unbound: Classic T9 leaves 0, the diamond leaves 2.
+    press("0", "Digit0");
+    press("2", "Digit2");
+    act(() => void vi.advanceTimersByTime(1100));
+
+    expect(sendCharMock).not.toHaveBeenCalled();
+  });
+
+  it("types nothing from a key the Live View picture takes while its view is being adjusted", () => {
+    vi.useFakeTimers();
+    mirrorState.videoState = "live";
+    initialSessionOutputMode = "type";
+    renderSheet();
+    sheet().focus();
+
+    press("*", "Star");
+    expect(screen.getByTestId("remote-input-mirror-adjust-hint")).toBeInTheDocument();
+    press("2", "Digit2");
+    press("Enter");
+    act(() => void vi.advanceTimersByTime(1100));
+
+    expect(sendCharMock).not.toHaveBeenCalled();
+  });
+
+  it("gives the sheet focus back on Back after operating its controls, so OK fires again", async () => {
+    renderSheet();
+    sheet().focus();
+    openMenu();
+    fireEvent.click(screen.getByTestId("remote-input-menu-controls"));
+    await waitFor(() => expect(screen.getByTestId("remote-input-mode-joystick")).toHaveFocus());
+
+    fireEvent.keyDown(screen.getByTestId("remote-input-mode-joystick"), { key: "Escape", code: "Escape" });
+
+    expect(sheet()).toHaveFocus();
+  });
+
+  it("marks the right soft key handled when it opens the menu", () => {
+    renderSheet();
+    sheet().focus();
+
+    const notPrevented = fireEvent.keyDown(sheet(), { key: "SoftRight", code: "SoftRight" });
+
+    expect(notPrevented).toBe(false);
+    expect(screen.getByTestId("remote-input-controls-menu")).toBeInTheDocument();
+  });
+
+  it("opens the menu on its first item, so the first OK chooses it", async () => {
+    renderSheet();
+    sheet().focus();
+
+    openMenu();
+
+    await waitFor(() => expect(screen.getByTestId("remote-input-menu-keys")).toHaveFocus());
+  });
+
+  it("offers no Release all in Game Mode, where the sheet does not show one", () => {
+    renderSheet();
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    expect(screen.queryByTestId("remote-input-panic-button")).not.toBeInTheDocument();
+    sheet().focus();
+
+    openMenu();
+
+    expect(screen.getByTestId("remote-input-menu-close")).toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-menu-release-all")).not.toBeInTheDocument();
+  });
+
+  it("returns to driving on a keypad's own left soft key after operating the sheet's controls", async () => {
+    const onOpenChange = renderSheetOnKeypad();
+    sheet().focus();
+    openMenu();
+    fireEvent.click(screen.getByTestId("remote-input-menu-controls"));
+    await waitFor(() => expect(screen.getByTestId("remote-input-mode-joystick")).toHaveFocus());
+
+    fireEvent.keyDown(screen.getByTestId("remote-input-mode-joystick"), { key: "SoftLeft", code: "SoftLeft" });
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(sheet()).toHaveAttribute("data-key-nav-skip");
+    expect(sheet()).toHaveFocus();
+  });
+
+  it("closes on a keypad's own left soft key while the keypad drives the joystick", () => {
+    const onOpenChange = renderSheetOnKeypad();
+    sheet().focus();
+
+    fireEvent.keyDown(sheet(), { key: "SoftLeft", code: "SoftLeft" });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  describe("typing in Keys mode", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      initialSessionOutputMode = "type";
+    });
+
+    it("deletes on the C64 with the right soft key, and drops a letter still being chosen first", () => {
+      renderSheet();
+      sheet().focus();
+
+      press("2", "Digit2");
+      press("SoftRight");
+      act(() => void vi.advanceTimersByTime(1100));
+      expect(sendCharMock).not.toHaveBeenCalled();
+      press("SoftRight");
+
+      expect(typedChars()).toEqual(["\b"]);
+      expect(screen.queryByTestId("remote-input-controls-menu")).not.toBeInTheDocument();
+    });
+
+    it("opens the menu on Back instead of closing, and Back closes the menu again", () => {
+      const onOpenChange = renderSheet();
+      sheet().focus();
+
+      fireEvent.keyDown(sheet(), { key: "Escape", code: "Escape" });
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(screen.getByTestId("remote-input-controls-menu")).toBeInTheDocument();
+      fireEvent.keyDown(document.activeElement ?? sheet(), { key: "Escape", code: "Escape" });
+
+      expect(screen.queryByTestId("remote-input-controls-menu")).not.toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it("opens the menu on a keypad's own left soft key, and closes Remote Input from it", () => {
+      const onOpenChange = renderSheetOnKeypad();
+      sheet().focus();
+
+      fireEvent.keyDown(sheet(), { key: "SoftLeft", code: "SoftLeft" });
+      fireEvent.click(screen.getByTestId("remote-input-menu-close"));
+
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it("closes the menu with the right soft key while typing, without deleting", () => {
+      renderSheet();
+      sheet().focus();
+      fireEvent.keyDown(sheet(), { key: "Escape", code: "Escape" });
+
+      fireEvent.keyDown(document.activeElement ?? sheet(), { key: "SoftRight", code: "SoftRight" });
+
+      expect(screen.queryByTestId("remote-input-controls-menu")).not.toBeInTheDocument();
+      expect(sendCharMock).not.toHaveBeenCalled();
+    });
+
+    it("types lower-case letters only, and skips the symbol the C64 has no key for", () => {
+      renderSheet();
+      sheet().focus();
+
+      press("*", "Star");
+      press("2", "Digit2");
+      press("*", "Star");
+      act(() => void vi.advanceTimersByTime(1100));
+      for (let i = 0; i < 6; i += 1) press("1", "Digit1");
+      act(() => void vi.advanceTimersByTime(1100));
+
+      expect(typedChars()).toEqual(["a", ":"]);
+    });
   });
 });

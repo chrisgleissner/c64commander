@@ -96,22 +96,46 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
 /** The compact 480×640 profile only has room for the last few breadcrumb segments. */
 export const MAX_BREADCRUMB_SEGMENTS = 3;
 
-/** Set by an open overlay that opens its own menu on the right soft key, so the bar can say so. */
+/**
+ * Set by an open overlay that opens its own menu, so the bar can say so. The value names the key
+ * that opens it: the right soft key, or Back, in which case the right soft key deletes as it does
+ * in a T9 field.
+ */
 export const SOFT_KEY_MENU_ATTR = "data-key-nav-soft-key-menu";
+
+/** Set on that menu itself while it is open. */
+export const SOFT_KEY_MENU_PANEL_ATTR = "data-key-nav-soft-key-menu-panel";
+
+export type SoftKeyMenuKey = "softRight" | "back";
 
 export const openOverlayOffersSoftKeyMenu = (doc: Document = document): boolean =>
   selectorPresence(doc, `[${SOFT_KEY_MENU_ATTR}]`, [SOFT_KEY_MENU_ATTR]).isPresent();
 
 /**
- * PURE: the labels while an overlay that drives its own keys offers a soft-key menu. OK and the
- * D-pad belong to the overlay, so the bar names only the way out and the way to the menu.
+ * PURE: the labels while an overlay that drives its own keys offers a soft-key menu. The D-pad
+ * belongs to the overlay, so the bar names the way to the menu, the way out or the delete key, and
+ * OK only where it types RETURN.
  */
-export const resolveSoftKeyMenuOverlayLabels = (visible: boolean, overlayTitle: string | null): GuidanceLabels => ({
+export const resolveSoftKeyMenuOverlayLabels = (
+  visible: boolean,
+  overlayTitle: string | null,
+  menuKey: SoftKeyMenuKey,
+): GuidanceLabels => ({
   visible,
   breadcrumb: overlayTitle ? [overlayTitle] : [],
+  left: menuKey === "back" ? "Menu" : "Close",
+  center: menuKey === "back" ? "Return" : null,
+  right: menuKey === "back" ? "Delete" : "Menu",
+  shortcut: null,
+});
+
+/** PURE: the labels while that menu is open. */
+export const resolveSoftKeyMenuPanelLabels = (visible: boolean, menuTitle: string | null): GuidanceLabels => ({
+  visible,
+  breadcrumb: menuTitle ? [menuTitle] : [],
   left: "Close",
-  center: null,
-  right: "Menu",
+  center: "Select",
+  right: null,
   shortcut: null,
 });
 

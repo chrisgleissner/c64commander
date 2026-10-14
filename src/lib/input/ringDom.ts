@@ -119,11 +119,13 @@ export const focusRingElement = (element: HTMLElement | null): void => {
   }
   const rect = element.getBoundingClientRect();
   const style = getComputedStyle(element);
+  const scrollport = visibleBoundsOf(scrollContainerOf(element));
   const block = resolveRingScrollAlignment({
     top: rect.top,
     bottom: rect.bottom,
     height: rect.height,
-    viewportHeight: window.innerHeight,
+    scrollportTop: scrollport.top,
+    scrollportBottom: scrollport.bottom,
     marginTop: parseFloat(style.scrollMarginTop) || 0,
     marginBottom: parseFloat(style.scrollMarginBottom) || 0,
   });
@@ -163,6 +165,11 @@ const scrollContainerOf = (element: Element): Element => {
   return document.scrollingElement ?? document.documentElement;
 };
 
+const visibleBoundsOf = (container: Element): { top: number; bottom: number } =>
+  container === document.scrollingElement || container === document.documentElement
+    ? { top: 0, bottom: window.innerHeight }
+    : container.getBoundingClientRect();
+
 /** Whether moving the ring from `from` to `to` leaves the area that scrolls with `from`. */
 export const leavesScrollContainer = (from: Element, to: Element): boolean => !scrollContainerOf(from).contains(to);
 
@@ -181,10 +188,7 @@ export const scrollTowardUnreachableContent = (from: Element, scope: Element | n
   if (remaining < 1) return false;
   const guidanceBar = guidanceBarHeight();
   if (scope) {
-    const visible =
-      container === document.scrollingElement
-        ? { top: 0, bottom: window.innerHeight }
-        : container.getBoundingClientRect();
+    const visible = visibleBoundsOf(container);
     const bounds = scope.getBoundingClientRect();
     const hidden = direction > 0 ? bounds.bottom - (visible.bottom - guidanceBar) : visible.top - bounds.top;
     if (hidden < 1) return false;

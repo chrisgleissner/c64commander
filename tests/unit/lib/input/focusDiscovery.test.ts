@@ -323,6 +323,49 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  describe("a control that marks itself aria-disabled", () => {
+    const mountTransport = () => {
+      mount(`<button id="previous">previous</button><button id="stop">stop</button><button id="next">next</button>`);
+      const { controller, engine } = makeEngine();
+      engine.start();
+      const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+      return { controller, engine, idOf };
+    };
+    const selectedId = (controller: FocusController, engine: FocusDiscoveryEngine) =>
+      engine.elementForId(controller.current()!.id)?.id;
+
+    it("keeps the selection while it is pending, and after it is enabled again", () => {
+      const { controller, engine, idOf } = mountTransport();
+      controller.setCurrent(idOf("stop"));
+
+      el("stop").setAttribute("aria-disabled", "true");
+      engine.refresh();
+      expect(selectedId(controller, engine)).toBe("stop");
+
+      el("stop").removeAttribute("aria-disabled");
+      engine.refresh();
+      expect(selectedId(controller, engine)).toBe("stop");
+      engine.stop();
+    });
+
+    it("refuses activation and is skipped by navigation while it is aria-disabled", () => {
+      const { controller, engine, idOf } = mountTransport();
+      const clicked = vi.fn();
+      el("stop").addEventListener("click", clicked);
+      controller.setCurrent(idOf("stop"));
+      el("stop").setAttribute("aria-disabled", "true");
+      engine.refresh();
+
+      expect(controller.activateCurrent()).toBe(false);
+      expect(clicked).not.toHaveBeenCalled();
+      controller.focusNext();
+      expect(selectedId(controller, engine)).toBe("next");
+      controller.focusPrevious();
+      expect(selectedId(controller, engine)).toBe("previous");
+      engine.stop();
+    });
+  });
+
   it("returns the ring to the item that opened an overlay once the overlay closes", () => {
     mount(`<button id="first">first</button><button id="opener">opener</button><button id="last">last</button>`);
     const { controller, engine } = makeEngine();
@@ -397,6 +440,44 @@ describe("FocusDiscoveryEngine", () => {
       expect(engine.elementForId(controller.current()!.id)?.id).toBe("first");
       engine.stop();
     });
+  });
+
+  it("tells a ring stop from an element that is not one", () => {
+    mount(`<button id="stop">stop</button><span id="text">text</span>`);
+    const { engine } = makeEngine();
+    engine.start();
+    expect(engine.isRingStop(el("stop"))).toBe(true);
+    expect(engine.isRingStop(el("text"))).toBe(false);
+    engine.stop();
+  });
+
+  it("reports the opener it returns to, at once or once the opener is enabled again", () => {
+    mount(`<button id="first">first</button><button id="opener">opener</button>`);
+    const controller = new FocusController();
+    const onReturnToOpener = vi.fn();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onReturnToOpener });
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const dialog = mount(`<div role="dialog"><button>close</button></div>`);
+    engine.refresh();
+    dialog.remove();
+    engine.refresh();
+    expect(onReturnToOpener).toHaveBeenLastCalledWith(openerId);
+
+    controller.setCurrent(openerId);
+    const second = mount(`<div role="dialog"><button>close</button></div>`);
+    engine.refresh();
+    el("opener").setAttribute("disabled", "");
+    second.remove();
+    engine.refresh();
+    expect(onReturnToOpener).toHaveBeenCalledTimes(1);
+    el("opener").removeAttribute("disabled");
+    engine.refresh();
+    expect(onReturnToOpener).toHaveBeenCalledTimes(2);
+    expect(onReturnToOpener).toHaveBeenLastCalledWith(openerId);
+    engine.stop();
   });
 
   it("returns to the opener when the page behind a closed dialog reappears a scan later", () => {

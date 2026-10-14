@@ -15,6 +15,7 @@ import {
   hasContextMenu,
   resolveGuidanceLabels,
   resolveSoftKeyMenuOverlayLabels,
+  resolveSoftKeyMenuPanelLabels,
   type GuidanceState,
 } from "@/lib/input";
 
@@ -257,8 +258,8 @@ describe("hasContextMenu", () => {
 });
 
 describe("resolveSoftKeyMenuOverlayLabels", () => {
-  it("names only Close and Menu, under the overlay's title", () => {
-    expect(resolveSoftKeyMenuOverlayLabels(true, "Remote Input")).toEqual({
+  it("names only Close and Menu, under the overlay's title, where the right soft key opens the menu", () => {
+    expect(resolveSoftKeyMenuOverlayLabels(true, "Remote Input", "softRight")).toEqual({
       visible: true,
       breadcrumb: ["Remote Input"],
       left: "Close",
@@ -268,10 +269,35 @@ describe("resolveSoftKeyMenuOverlayLabels", () => {
     });
   });
 
+  it("names Menu on Back, Return on OK and Delete on the right soft key where Back opens the menu", () => {
+    expect(resolveSoftKeyMenuOverlayLabels(true, "Remote Input", "back")).toEqual({
+      visible: true,
+      breadcrumb: ["Remote Input"],
+      left: "Menu",
+      center: "Return",
+      right: "Delete",
+      shortcut: null,
+    });
+  });
+
   it("leaves the breadcrumb empty for an overlay with no title, and keeps the visibility it is given", () => {
-    const labels = resolveSoftKeyMenuOverlayLabels(false, null);
+    const labels = resolveSoftKeyMenuOverlayLabels(false, null, "softRight");
 
     expect(labels.breadcrumb).toEqual([]);
     expect(labels.visible).toBe(false);
+  });
+});
+
+describe("resolveSoftKeyMenuPanelLabels", () => {
+  it("names Close and Select under the menu's title, and nothing on the right soft key", () => {
+    expect(resolveSoftKeyMenuPanelLabels(true, "Remote Input")).toEqual({
+      visible: true,
+      breadcrumb: ["Remote Input"],
+      left: "Close",
+      center: "Select",
+      right: null,
+      shortcut: null,
+    });
+    expect(resolveSoftKeyMenuPanelLabels(false, null).breadcrumb).toEqual([]);
   });
 });

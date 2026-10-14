@@ -10,7 +10,9 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useRemoteInputKeypadTyping } from "@/hooks/useRemoteInputKeypadTyping";
+import { C64_MULTITAP_CANDIDATES, useRemoteInputKeypadTyping } from "@/hooks/useRemoteInputKeypadTyping";
+import { MULTITAP_CANDIDATES } from "@/lib/input/t9";
+import { charToKeyboardInputEvents } from "@/lib/remoteInput/keyboardCharMapping";
 
 const keyEvent = (key: string, code = key, repeat = false) => {
   const preventDefault = vi.fn();
@@ -41,6 +43,17 @@ describe("useRemoteInputKeypadTyping", () => {
     act(() => void vi.advanceTimersByTime(1000));
 
     expect(sendChar.mock.calls).toEqual([["a"]]);
+  });
+
+  it("swallows the star key without typing, so no global shortcut reacts to it", () => {
+    const { result } = renderTyping();
+    const star = keyEvent("*", "NumpadMultiply");
+
+    act(() => result.current.handleKeyDown(star.event));
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(star.preventDefault).toHaveBeenCalled();
+    expect(sendChar).not.toHaveBeenCalled();
   });
 
   it("ignores a held digit and a held OK, so one press types one character", () => {
@@ -94,5 +107,42 @@ describe("useRemoteInputKeypadTyping", () => {
     act(() => void vi.advanceTimersByTime(1000));
 
     expect(sendChar).not.toHaveBeenCalled();
+  });
+
+  it("offers only characters the C64 has a key for, and every other one the app's fields offer", () => {
+    const offered = Object.values(C64_MULTITAP_CANDIDATES).flat();
+    const unmapped = Object.values(MULTITAP_CANDIDATES)
+      .flat()
+      .filter((char) => !offered.includes(char));
+
+    expect(offered.filter((char) => charToKeyboardInputEvents(char).length === 0)).toEqual([]);
+    expect(unmapped).toEqual(["_"]);
+  });
+
+  it("deletes a letter still being chosen without sending it, then sends DEL, once per press", () => {
+    const { result } = renderTyping();
+
+    act(() => result.current.handleKeyDown(keyEvent("7", "Digit7").event));
+    const deleteKey = keyEvent("SoftRight");
+    act(() => result.current.handleKeyDown(deleteKey.event));
+    act(() => void vi.advanceTimersByTime(1000));
+    act(() => result.current.handleKeyDown(keyEvent("SoftRight").event));
+    act(() => result.current.handleKeyDown(keyEvent("SoftRight", "SoftRight", true).event));
+
+    expect(sendChar.mock.calls).toEqual([["\b"]]);
+    expect(deleteKey.preventDefault).toHaveBeenCalled();
+  });
+
+  it("sends a chosen letter before the DEL that follows it", () => {
+    const { result } = renderTyping();
+
+    act(() => result.current.handleKeyDown(keyEvent("8", "Digit8").event));
+    act(() => result.current.handleKeyDown(keyEvent("9", "Digit9").event));
+    act(() => result.current.handleKeyDown(keyEvent("SoftRight").event));
+
+    expect(sendChar.mock.calls).toEqual([["t"]]);
+    act(() => void vi.advanceTimersByTime(1000));
+    act(() => result.current.handleKeyDown(keyEvent("SoftRight").event));
+    expect(sendChar.mock.calls).toEqual([["t"], ["\b"]]);
   });
 });
