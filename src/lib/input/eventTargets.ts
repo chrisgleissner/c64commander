@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { selectorPresence } from "@/lib/input/selectorPresence";
+
 /**
  * The two exclusions every global key shortcut in this app applies, in one place.
  *
@@ -43,6 +45,15 @@ export const isSingleLineField = (target: EventTarget | null): target is HTMLInp
 export const OPEN_OVERLAY_ANCESTOR_SELECTOR =
   '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]';
 
+const OPEN_OVERLAY_ATTRIBUTES = ["role", "data-radix-popper-content-wrapper"];
+
+const overlayPresence = (doc: Document) =>
+  selectorPresence(doc, OPEN_OVERLAY_ANCESTOR_SELECTOR, OPEN_OVERLAY_ATTRIBUTES);
+
 /** True while any overlay is on screen, whether or not focus is inside it. */
-export const isAnyOverlayOpen = (): boolean =>
-  typeof document !== "undefined" && document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR) !== null;
+export const isAnyOverlayOpen = (doc: Document | undefined = globalThis.document): boolean =>
+  doc !== undefined && overlayPresence(doc).isPresent();
+
+/** Calls `listener` after {@link isAnyOverlayOpen} changes. */
+export const subscribeOverlayPresence = (listener: () => void): (() => void) =>
+  overlayPresence(document).subscribe(listener);
