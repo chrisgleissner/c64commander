@@ -12,7 +12,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 class SpectrumAnalyzerTest {
   private var now = 1_000_000_000L
@@ -237,6 +240,43 @@ class SpectrumAnalyzerTest {
       writer.join(1_000)
       assertFalse("spectrum writer did not stop", writer.isAlive)
     }
+  }
+
+  @Test
+  fun aFeedInProgressDoesNotStopAReadFromAnalysingTheSamplesAlreadyStored() {
+    val pausedWriter = AtomicReference<Thread?>(null)
+    val writerPaused = CountDownLatch(1)
+    val resumeWriter = CountDownLatch(1)
+    val target = SpectrumAnalyzer {
+      if (Thread.currentThread() === pausedWriter.get()) {
+        writerPaused.countDown()
+        resumeWriter.await(5, TimeUnit.SECONDS)
+      }
+      now
+    }.also { it.prepare(rate) }
+    feedTone(target, 1000.0, rate / 2, 0)
+    val before = target.read(true).sequence
+    val writer = Thread { target.feed(TestSignals.sine(4800, rate, 1000.0, 0.5, rate / 2L), 4800, rate) }
+    pausedWriter.set(writer)
+    writer.start()
+    try {
+      assertTrue("the writer never reached the end of its feed", writerPaused.await(5, TimeUnit.SECONDS))
+      assertEquals("4800 stored samples are three analysis frames", before + 3, target.read(true).sequence)
+    } finally {
+      resumeWriter.countDown()
+      writer.join(5_000)
+    }
+  }
+
+  @Test
+  fun aPauseInReadingCatchesTheLevelsUpOnlyAsFarAsAClipStaysLatched() {
+    feedSine(1000.0, 0.01)
+    analyzer.read(true)
+    feedSine(1000.0, 1.0, seconds = 0.01)
+    feedSine(1000.0, 0.01, seconds = 2.0)
+    val frame = analyzer.read(true)
+    assertFalse("a clip 2 s before the read is still reported", frame.clipped)
+    assertTrue("peak ${frame.peakDb} dB includes the clip 2 s before the read", frame.peakDb < -30)
   }
 
   private fun feedTone(target: SpectrumAnalyzer, hz: Double, frames: Int, from: Long, amplitude: Double = 0.5) {
