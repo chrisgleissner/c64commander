@@ -26,6 +26,7 @@ import {
 } from "../../src/transport/sshCommands.js";
 import type { SshSystem, TcpOutcome } from "../../src/transport/sshDiscovery.js";
 import { SshTransport, type SshTransportOptions } from "../../src/transport/ssh.js";
+import { TunnelReaper } from "../../src/transport/tunnelReaper.js";
 import type { CommandRecord } from "../../src/transport/types.js";
 
 /** Undoes quoteForRemoteShell: single-quoted spans and backslash escapes, split on spaces. */
@@ -316,6 +317,21 @@ export class FakePhone {
   readonly tunnels = new Map<number, FakeTunnel>();
   readonly connected = new Map<string, "device" | "unauthorized" | "offline">();
   readonly commands: CommandRecord[] = [];
+  /** What the reaper ran at a simulated process exit; a fake phone never registers a real exit listener. */
+  readonly exitCommands: (readonly string[])[] = [];
+  readonly exitListeners: (() => void)[] = [];
+  readonly reaperWarnings: { message: string; details: Record<string, unknown> }[] = [];
+  readonly reaper = new TunnelReaper({
+    runSync: (argv) => {
+      this.exitCommands.push(argv);
+    },
+    onProcessExit: (listener) => {
+      this.exitListeners.push(listener);
+    },
+    warn: (message, details) => {
+      this.reaperWarnings.push({ message, details });
+    },
+  });
 
   constructor(scenario: Partial<PhoneScenario> = {}, system: FakeSshSystem = new FakeSshSystem()) {
     this.scenario = defaultScenario(scenario);
@@ -524,6 +540,7 @@ export class FakePhone {
       system: this.system,
       controlDir: "/tmp/droidctl-ssh-test",
       onCommand: (record) => this.commands.push(record),
+      tunnelReaper: this.reaper,
       ...options,
     });
   }

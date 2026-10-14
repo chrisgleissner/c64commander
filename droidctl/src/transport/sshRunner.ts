@@ -140,7 +140,7 @@ export class SshCommandRunner {
     const args = sshForwardArgs(endpoint, localPort, remote);
     const argv = [this.sshPath, ...args];
     this.record(targetId, argv, null, 0, 0);
-    return { handle: this.options.spawn({ file: this.sshPath, args }), argv };
+    return { handle: this.options.spawn({ file: this.sshPath, args, detachFromEventLoop: true }), argv };
   }
 
   private record(

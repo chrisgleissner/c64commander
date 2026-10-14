@@ -83,9 +83,17 @@ export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}
     },
   );
 
+  const dispose = async (): Promise<void> => {
+    await Promise.all(transportList.map((transport) => transport.dispose?.()));
+  };
+
   // Tunnels opened into a container end with the client connection instead of outliving it.
   server.onclose = () => {
-    void Promise.all(transportList.map((transport) => transport.dispose?.()));
+    dispose().catch((error: unknown) => {
+      logger.warn("Releasing the transports after the client connection closed failed", {
+        error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+      });
+    });
   };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -135,6 +143,7 @@ export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}
 
   return {
     artifacts,
+    dispose,
     logger,
     recordings,
     server,
