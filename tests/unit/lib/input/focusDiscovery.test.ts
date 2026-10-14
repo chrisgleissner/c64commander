@@ -556,6 +556,38 @@ describe("text-only mutations", () => {
     engine.stop();
   });
 
+  it("neither notify nor rescan for a text change while nothing is selected", async () => {
+    document.body.innerHTML = `<div id="page"><span id="level">-18</span></div>`;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+
+    expect(controller.current()).toBeNull();
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("tolerate the selected control's text changing when nothing listens for relabels", async () => {
+    document.body.innerHTML = `<div id="page"><button id="play">Play</button></div>`;
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    expect(controller.current()).not.toBeNull();
+
+    el("play").textContent = "Pause";
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
   it("still trigger a rescan when an element arrives alongside text", async () => {
     document.body.innerHTML = `<div id="page"><button id="a">A</button><span id="level">-18</span></div>`;
     const { engine } = makeEngine();
