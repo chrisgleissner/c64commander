@@ -214,7 +214,7 @@ The transport controls run the show: play, stop, pause and resume, previous and 
 
 Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.
 
-Playback carries on when you leave the app or lock your phone or tablet, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one.
+Playback carries on when you leave the app or lock your phone or tablet, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one. On Android 13 and later, the app asks once for permission to show this notification, shortly after it first connects and before you play anything. If you decline, playback works the same without it.
 
 Play is the quick way to start a disk and see what it does. When the drives or your disk collection are what you are after, go to Disks.
 

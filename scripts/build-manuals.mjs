@@ -1038,7 +1038,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(
       variant,
-    )}, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one.`,
+    )}, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one. On Android 13 and later, the app asks once for permission to show this notification, shortly after it first connects and before you play anything. If you decline, playback works the same without it.`,
     "",
     "Play is the quick way to start a disk and see what it does. When the drives or your disk collection are what you are after, go to Disks.",
     "",

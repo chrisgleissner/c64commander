@@ -856,7 +856,7 @@ const library = async () => {
 const music = async () => {
   await enterStockDemoMode();
   await quietenSpeaker();
-  // The first tune after a fresh install asks for the notification permission, and the system
+  // A fresh install asks for the notification permission once it has connected, and the system
   // prompt pauses the activity while it is up. This stage measures playback, not that prompt.
   await shell(`pm grant ${PACKAGE} android.permission.POST_NOTIFICATIONS`);
   await addFromSimulatedDevice(["Usb0", "Music"], "Commander March.sid");

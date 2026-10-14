@@ -181,6 +181,9 @@ vi.mock("@/components/DeviceDiscoveryInterstitial", () => ({
   DeviceDiscoveryInterstitial: () => <div data-testid="device-discovery-interstitial" />,
 }));
 vi.mock("@/components/TraceContextBridge", () => ({ TraceContextBridge: mocks.traceContextBridge }));
+vi.mock("@/components/NotificationPermissionMoment", () => ({
+  NotificationPermissionMoment: () => <div data-testid="notification-permission-moment" />,
+}));
 vi.mock("@/components/diagnostics/GlobalDiagnosticsOverlay", () => ({
   GlobalDiagnosticsOverlay: () => <div data-testid="global-diagnostics-overlay" />,
 }));
@@ -430,6 +433,14 @@ describe("App runtime wiring", () => {
 
     render(<App />);
     expect(await screen.findByText("Coverage Probe Page")).toBeInTheDocument();
+  });
+
+  it("mounts the notification permission request app-wide rather than on the Play page", async () => {
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("notification-permission-moment")).toBeInTheDocument();
   });
 
   it("renders NotFound for unknown routes outside the swipe navigation pages", async () => {
