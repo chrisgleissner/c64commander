@@ -27,6 +27,7 @@
  */
 
 import type { InputModality } from "./inputModality";
+import { selectorPresence } from "./selectorPresence";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
@@ -98,8 +99,8 @@ export const MAX_BREADCRUMB_SEGMENTS = 3;
 /** Set by an open overlay that opens its own menu on the right soft key, so the bar can say so. */
 export const SOFT_KEY_MENU_ATTR = "data-key-nav-soft-key-menu";
 
-export const openOverlayOffersSoftKeyMenu = (root: ParentNode = document): boolean =>
-  root.querySelector(`[${SOFT_KEY_MENU_ATTR}]`) !== null;
+export const openOverlayOffersSoftKeyMenu = (doc: Document = document): boolean =>
+  selectorPresence(doc, `[${SOFT_KEY_MENU_ATTR}]`, [SOFT_KEY_MENU_ATTR]).isPresent();
 
 /**
  * PURE: the labels while an overlay that drives its own keys offers a soft-key menu. OK and the
