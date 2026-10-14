@@ -182,11 +182,11 @@ class SpectrumAnalyzerTest {
     }
   }
 
-  private fun feedTone(target: SpectrumAnalyzer, hz: Double, frames: Int, from: Long) {
+  private fun feedTone(target: SpectrumAnalyzer, hz: Double, frames: Int, from: Long, amplitude: Double = 0.5) {
     var done = 0
     while (done < frames) {
       val n = minOf(240, frames - done)
-      target.feed(TestSignals.sine(n, rate, hz, 0.5, from + done), n, rate)
+      target.feed(TestSignals.sine(n, rate, hz, amplitude, from + done), n, rate)
       done += n
     }
   }
@@ -203,18 +203,16 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun followsTheSpeakerBetweenReportsButFreezesWhenTheyStop() {
-    feedTone(analyzer, 500.0, rate, 0)
-    feedTone(analyzer, 3000.0, rate, rate.toLong())
-    analyzer.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
-    val atReport = analyzer.read(true).sequence
+  fun followsTheSpeakerForAQuarterSecondAfterItsLastReportAndThenFreezes() {
+    val step = rate / 30
+    feedTone(analyzer, 500.0, 3 * rate, 0)
+    // The writer is two seconds ahead: the speaker is at 1 s of the 3 s fed.
+    analyzer.presentAt(framesAheadOfSpeaker = 2L * rate, timestampNanos = now)
+    assertEquals(rate.toLong() / step, analyzer.read(true).sequence)
     now += 100_000_000L
-    assertEquals(atReport + 3, analyzer.read(true).sequence)
+    assertEquals((rate + rate / 10).toLong() / step, analyzer.read(true).sequence)
     now += 5_000_000_000L
-    val frozen = analyzer.read(true)
-    now += 5_000_000_000L
-    assertEquals(frozen.sequence, analyzer.read(true).sequence)
-    assertEquals(bandOf(3000.0), loudestBand(frozen))
+    assertEquals((rate + rate / 4).toLong() / step, analyzer.read(true).sequence)
   }
 
   @Test
@@ -238,5 +236,95 @@ class SpectrumAnalyzerTest {
     feedTone(live, 1000.0, 400, 400)
     assertEquals(2L, live.read(true).sequence)
   }
-}
 
+  @Test
+  fun aClipBetweenTwoReadsIsLatchedWithItsPeak() {
+    feedTone(analyzer, 1000.0, rate / 5, 0, amplitude = 0.25)
+    assertFalse(analyzer.read(true).clipped)
+    feedTone(analyzer, 1000.0, rate / 100, 0, amplitude = 1.0)
+    feedTone(analyzer, 1000.0, rate / 10, 0, amplitude = 0.25)
+    val frame = analyzer.read(true)
+    assertTrue("a 10 ms clip 100 ms before the read was missed", frame.clipped)
+    assertEquals(0, frame.peakDb)
+  }
+
+  @Test
+  fun theLevelReadoutCoversTheLastThirtiethOfASecondNotTheWholeWindow() {
+    feedTone(analyzer, 1000.0, 3000, 0, amplitude = 1.0)
+    feedTone(analyzer, 1000.0, 2000, 0, amplitude = 0.1)
+    val frame = analyzer.read(true)
+    assertEquals(-20.0, frame.peakDb.toDouble(), 1.0)
+    assertFalse(frame.clipped)
+  }
+
+  @Test
+  fun aNewPipelineDoesNotInheritThePreviousSpeakerPosition() {
+    feedTone(analyzer, 500.0, rate, 0)
+    analyzer.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
+    analyzer.prepare(rate)
+    feedTone(analyzer, 500.0, rate, 0)
+    feedTone(analyzer, 3000.0, rate, rate.toLong())
+    assertEquals(bandOf(3000.0), loudestBand(analyzer.read(true)))
+  }
+
+  @Test
+  fun aTrackBufferDeeperThanTheDefaultHistoryStillShowsWhatTheSpeakerPlays() {
+    val deep = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate, speakerLagFrames = 4 * rate) }
+    feedTone(deep, 500.0, rate, 0)
+    feedTone(deep, 3000.0, 4 * rate, rate.toLong())
+    assertTrue(deep.presentAt(framesAheadOfSpeaker = 4L * rate, timestampNanos = now))
+    assertEquals(bandOf(500.0), loudestBand(deep.read(true)))
+  }
+
+  @Test
+  fun reportsASpeakerPositionBeyondItsHistory() {
+    feedTone(analyzer, 500.0, 4 * rate, 0)
+    assertTrue(analyzer.presentAt(framesAheadOfSpeaker = 2L * rate, timestampNanos = now))
+    assertFalse(analyzer.presentAt(framesAheadOfSpeaker = 3L * rate, timestampNanos = now))
+  }
+
+  @Test
+  fun reportingTheSpeakerPositionAllocatesNothing() {
+    val threads = java.lang.management.ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+    feedTone(analyzer, 500.0, rate, 0)
+    repeat(10_000) { analyzer.presentAt(it.toLong() % rate, now) }
+    val before = threads.currentThreadAllocatedBytes
+    repeat(100_000) { analyzer.presentAt(it.toLong() % rate, now) }
+    val allocated = threads.currentThreadAllocatedBytes - before
+    assertTrue("100000 reports allocated $allocated bytes", allocated < 100_000)
+  }
+
+  private fun liveReadingOf(hz: Double): SpectrumFrame {
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, hz, rate / 2, 0)
+    return live.read(true)
+  }
+
+  @Test
+  fun aLiveWindowOf2048PointsReadsEachBandsCentreToneAtItsLevel() {
+    val binHz = rate / 2048.0
+    for (band in 0 until SpectrumBands.COUNT) {
+      val hz = Math.sqrt(SpectrumBands.edge(band) * SpectrumBands.edge(band + 1))
+      val frame = liveReadingOf(hz)
+      // Below about 330 Hz a band is narrower than the 2048-point window's main lobe and reads up to 2 dB low.
+      val tolerance = if (SpectrumBands.edge(band + 1) < 330.0) 2.0 else 1.0
+      assertEquals("band $band", -6.0, frame.bands[band].toDouble(), tolerance)
+      assertTrue("band $band: loudest is ${loudestBand(frame)}", Math.abs(loudestBand(frame) - band) <= 1)
+      for (other in 0 until SpectrumBands.COUNT) {
+        val binsAway = minOf(Math.abs(SpectrumBands.edge(other) - hz), Math.abs(SpectrumBands.edge(other + 1) - hz)) / binHz
+        if (Math.abs(other - band) > 3 && binsAway > 6) {
+          assertTrue("band $band leaked ${frame.bands[other]} into band $other", frame.bands[other] < -45)
+        }
+      }
+    }
+  }
+
+  @Test
+  fun aLiveWindowOf2048PointsReadsAToneBetweenTwoBinsAsOnOne() {
+    val binHz = rate / 2048.0
+    val onBin = liveReadingOf(binHz * 43.0)
+    val betweenBins = liveReadingOf(binHz * 43.5)
+    assertEquals(-6.0, onBin.bands.max().toDouble(), 1.0)
+    assertEquals(onBin.bands.max().toDouble(), betweenBins.bands.max().toDouble(), 1.0)
+  }
+}

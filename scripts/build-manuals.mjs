@@ -1417,9 +1417,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `On an Android ${appDeviceName(
       variant,
-    )}, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, from teal for quiet through green and amber to red near the loudest, and the small cap above a bar is that pitch's recent peak. **Level** and **Peak** give the overall loudness in dB, and the **Clip** lamp lights for a moment when the sound reaches the top of its range. It covers every sound your ${appDeviceName(
+    )}, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, from teal for quiet through green and amber to red near the loudest, and the small cap above a bar is that pitch's recent peak. **Level** and **Peak** give the overall loudness in dB, and the **Clip** lamp lights for a moment when the sound reaches the top of its range. When a tune plays on your ${appDeviceName(
       variant,
-    )} plays: a tune playing on it, and your C64's sound when Live View plays it here. It does not show sound that comes out of the C64 itself.`,
+    )}, the bars follow what its speaker is playing at that moment, after the audio processing described below. When Live View plays your C64's sound here, the bars follow your C64's own sound as it arrives, before that processing, so they keep time with your C64 rather than with the copy your ${appDeviceName(
+      variant,
+    )} plays a moment later.`,
     "",
     image(
       "The Spectrum card while a tune plays on the phone",

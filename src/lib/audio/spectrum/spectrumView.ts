@@ -313,7 +313,7 @@ export class SpectrumView {
   }
 
   private pollIfDue(nowMs: number): void {
-    if (this.pollInFlight || nowMs - this.lastPollAt < 1000 / SPECTRUM_POLL_HZ) return;
+    if (this.pollInFlight || nowMs - this.lastPollAt < (1000 / SPECTRUM_POLL_HZ) * SLOT_TOLERANCE) return;
     this.lastPollAt = nowMs;
     this.read(false);
   }

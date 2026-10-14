@@ -216,6 +216,15 @@ describe("SpectrumView", () => {
     expect(t.reads.length).toBeLessThanOrEqual(32);
   });
 
+  it.each([16.6, 11.1, 8.33])("polls at 30 Hz when the display draws every %s ms", async (frameMs) => {
+    const t = setup();
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(3000, frameMs);
+    expect(t.reads.length / 3).toBeGreaterThanOrEqual(29);
+    expect(t.reads.length / 3).toBeLessThanOrEqual(31);
+  });
+
   it("does not draw a new target for a frame it already has", async () => {
     let calls = 0;
     const t = setup({ frames: () => frame({ sequence: 5, bands: new Array(48).fill(calls++ === 0 ? -20 : -90) }) });

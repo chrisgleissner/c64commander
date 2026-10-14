@@ -46,6 +46,9 @@ internal object SpectrumBands {
  * The writer calls [feed], which only downmixes into a history ring, so its cost is a few operations
  * per sample. The FFT runs on whichever thread calls [read], never on the audio thread.
  *
+ * Each [read] reports the peak and RMS of every sample heard since the previous analysis, and at
+ * least of the last 1/30 s, and latches the clip flag if any of them reached full scale.
+ *
  * Which samples a [read] analyses depends on where the pipeline taps the audio:
  *  - A live stream feeds samples as they arrive, before its jitter ring, and never reports a speaker
  *    position. Its window ends at the newest sample, so the bars follow the source machine, whose
@@ -61,21 +64,23 @@ internal object SpectrumBands {
  * centre. Values are rounded to whole dBFS and floored at [SpectrumBands.FLOOR_DB].
  */
 internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoTime) {
-  private val history = FloatArray(HISTORY_SIZE)
-  private val levels = FloatArray(HISTORY_SIZE)
-
   private class Configuration(
       val sampleRate: Int,
       val fft: FftPlan,
       val plan: BandPlan,
       /** Samples per published sequence step: one analysis frame, or finer for a live stream. */
       val stepSamples: Int,
-      /** Samples the level readout (peak, RMS, clip) is measured over. */
+      /** The shortest span the level readout (peak, RMS, clip) covers. */
       val levelSamples: Int,
-  )
-
-  /** Where the speaker was: the history index it had reached at [nanos]. */
-  private class Anchor(val index: Long, val nanos: Long)
+      /** Mono downmix, indexed by sample count modulo its power-of-two size. */
+      val history: FloatArray,
+      /** max(|left|, |right|) per sample, for the peak readout and the clip latch. */
+      val levels: FloatArray,
+  ) {
+    val mask = (history.size - 1).toLong()
+    /** How far behind the newest sample a window can still end with all of its samples held. */
+    val reach = (history.size - fft.size).toLong()
+  }
 
   /** Installed while opening a pipeline, never lazily by the real-time writer. */
   @Volatile private var configuration: Configuration? = null
@@ -83,8 +88,16 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   @Volatile private var publication = 0L
   @Volatile private var writeCount = 0L
   @Volatile private var lastFeedNanos = Long.MIN_VALUE
-  @Volatile private var anchor: Anchor? = null
+  /** A seqlock around the speaker report, which the writer updates without allocating. 0: no report. */
+  @Volatile private var anchorVersion = 0L
+  @Volatile private var anchorIndex = 0L
+  @Volatile private var anchorNanos = 0L
+  private var readerAnchorKnown = false
+  private var readerAnchorIndex = 0L
+  private var readerAnchorNanos = 0L
   private var lastClipNanos = Long.MIN_VALUE
+  /** Where the last analysis ended; the next level readout covers every sample heard since. */
+  private var levelsReadTo = Long.MAX_VALUE
 
   private val re = FloatArray(MAX_FFT_SIZE)
   private val im = FloatArray(MAX_FFT_SIZE)
@@ -93,17 +106,24 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   private var cachedSeq = -1L
 
   /**
-   * Prepare analysis for a pipeline's rate. This allocates the band plan on the opening thread,
-   * before its writer is started. A rate switch deliberately starts a fresh sequence.
+   * Prepare analysis for a pipeline's rate. This allocates the band plan and history on the opening
+   * thread, before its writer is started. A rate switch deliberately starts a fresh sequence.
    *
    * [fftSize] trades frequency resolution for delay: the window's centre lags its newest sample by
    * half its length, 43 ms at 4096 points and 21 ms at 2048 points at 48 kHz. [stepsPerSecond] is how
-   * often the published sequence advances.
+   * often the published sequence advances. [speakerLagFrames] is the track buffer a writer feeds
+   * ahead of the speaker; the history keeps that much more audio so the speaker stays within it.
    */
   @Synchronized
-  fun prepare(sampleRate: Int, fftSize: Int = FFT_SIZE, stepsPerSecond: Int = FRAMES_PER_SECOND) {
+  fun prepare(sampleRate: Int, fftSize: Int = FFT_SIZE, stepsPerSecond: Int = FRAMES_PER_SECOND, speakerLagFrames: Int = 0) {
     require(sampleRate > 0) { "sampleRate must be positive" }
+    require(speakerLagFrames >= 0) { "speakerLagFrames must not be negative" }
     val fft = FftPlan.of(fftSize)
+    val historySize = historySizeFor(sampleRate, fft.size, speakerLagFrames)
+    val previous = configuration
+    publication++
+    val history = previous?.history?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
+    val levels = previous?.levels?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
     val next =
         Configuration(
             sampleRate,
@@ -111,14 +131,15 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
             BandPlan(sampleRate, fft.size),
             maxOf(1, sampleRate / stepsPerSecond),
             maxOf(1, sampleRate / FRAMES_PER_SECOND),
+            history,
+            levels,
         )
-    publication++
-    history.fill(0.0f)
-    levels.fill(0.0f)
     writeCount = 0
     lastFeedNanos = Long.MIN_VALUE
     lastClipNanos = Long.MIN_VALUE
-    anchor = null
+    levelsReadTo = Long.MAX_VALUE
+    anchorVersion = 0L
+    readerAnchorKnown = false
     cached = null
     cachedSeq = -1
     configuration = next
@@ -127,10 +148,11 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
 
   /**
    * Prepare for a pipeline. A live stream is fed at arrival at its source rate, with the short window
-   * and fine steps; on-device playback is fed at the output rate as it is written.
+   * and fine steps; on-device playback is fed at the output rate as it is written, [speakerLagFrames]
+   * ahead of the speaker.
    */
-  fun prepareFor(live: Boolean, sourceRate: Int, outputRate: Int) {
-    if (live) prepare(sourceRate, LIVE_FFT_SIZE, LIVE_STEPS_PER_SECOND) else prepare(outputRate)
+  fun prepareFor(live: Boolean, sourceRate: Int, outputRate: Int, speakerLagFrames: Int = 0) {
+    if (live) prepare(sourceRate, LIVE_FFT_SIZE, LIVE_STEPS_PER_SECOND) else prepare(outputRate, speakerLagFrames = speakerLagFrames)
   }
 
   /** Called by the writer with interleaved stereo S16LE frames, starting [offset] bytes into [data]. */
@@ -140,6 +162,9 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     // A pipeline must prepare its rate before it starts. Dropping this diagnostic frame is safer
     // than allocating a BandPlan on the audio writer.
     if (config == null || config.sampleRate != sampleRate) return
+    val history = config.history
+    val levels = config.levels
+    val mask = config.mask
     publication++
     var at = offset
     var count = writeCount
@@ -147,7 +172,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       val l = ((data[at].toInt() and 0xFF) or (data[at + 1].toInt() shl 8)).toShort() * INV_FULL_SCALE
       val r = ((data[at + 2].toInt() and 0xFF) or (data[at + 3].toInt() shl 8)).toShort() * INV_FULL_SCALE
       at += BYTES_PER_FRAME
-      val slot = (count and HISTORY_MASK).toInt()
+      val slot = (count and mask).toInt()
       history[slot] = (l + r) * 0.5f
       val al = if (l < 0) -l else l
       val ar = if (r < 0) -r else r
@@ -160,11 +185,19 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   }
 
   /**
-   * Called by a writer whose samples reach the speaker late: [framesAheadOfSpeaker] of what it has
-   * fed had not been heard at [timestampNanos]. Reads then analyse what the speaker is playing.
+   * Called by the writer that feeds, whose samples reach the speaker late: [framesAheadOfSpeaker] of
+   * what it has fed had not been heard at [timestampNanos]. Reads then analyse what the speaker is
+   * playing. Allocation-free. Returns false when the speaker lags further than the history reaches,
+   * in which case reads show the oldest audio still held, which is later than what is heard.
    */
-  fun presentAt(framesAheadOfSpeaker: Long, timestampNanos: Long) {
-    anchor = Anchor(writeCount - framesAheadOfSpeaker.coerceAtLeast(0L), timestampNanos)
+  fun presentAt(framesAheadOfSpeaker: Long, timestampNanos: Long): Boolean {
+    val ahead = framesAheadOfSpeaker.coerceAtLeast(0L)
+    anchorVersion++
+    anchorIndex = writeCount - ahead
+    anchorNanos = timestampNanos
+    anchorVersion++
+    val config = configuration ?: return true
+    return ahead <= config.reach
   }
 
   /** The analysis of the samples now being heard; runs the FFT only when they have moved on. */
@@ -182,7 +215,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     val seq = end / config.stepSamples
     val previous = cached
     if (previous == null || cachedSeq != seq) {
-      val analysed = analyseStable(config, seq * config.stepSamples)
+      val analysed = analyseStable(config, seq * config.stepSamples, now)
       if (analysed != null) {
         cached = analysed
         cachedSeq = seq
@@ -204,29 +237,51 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
    * has not been played.
    */
   private fun heardUpTo(config: Configuration, newest: Long, now: Long): Long {
-    val oldestUsable = newest - (HISTORY_SIZE - config.fft.size)
-    val at = anchor ?: return newest
-    val elapsed = (now - at.nanos).coerceIn(0L, MAX_EXTRAPOLATION_NANOS)
-    val heard = at.index + elapsed * config.sampleRate / 1_000_000_000L
-    return heard.coerceIn(maxOf(0L, oldestUsable), newest)
+    if (!refreshSpeakerAnchor()) return newest
+    val elapsed = (now - readerAnchorNanos).coerceIn(0L, MAX_EXTRAPOLATION_NANOS)
+    val heard = readerAnchorIndex + elapsed * config.sampleRate / 1_000_000_000L
+    return heard.coerceIn(maxOf(0L, newest - config.reach), newest)
   }
 
-  private fun analyseStable(config: Configuration, end: Long): SpectrumFrame? {
+  /** Copies a stable speaker report for the reader; keeps the previous one while the writer is mid-update. */
+  private fun refreshSpeakerAnchor(): Boolean {
+    repeat(MAX_READ_RETRIES) {
+      val version = anchorVersion
+      if (version == 0L) return false
+      if ((version and 1L) == 0L) {
+        val index = anchorIndex
+        val nanos = anchorNanos
+        if (version == anchorVersion) {
+          readerAnchorIndex = index
+          readerAnchorNanos = nanos
+          readerAnchorKnown = true
+          return true
+        }
+      }
+    }
+    return readerAnchorKnown
+  }
+
+  private fun analyseStable(config: Configuration, end: Long, now: Long): SpectrumFrame? {
     val size = config.fft.size
     val window = config.fft.window
+    val history = config.history
+    val levels = config.levels
+    val mask = config.mask
     repeat(MAX_READ_RETRIES) {
       val first = publication
       if ((first and 1L) != 0L) return@repeat
       for (n in 0 until size) {
         val index = end - size + n
-        re[n] = if (index < 0) 0.0f else history[(index and HISTORY_MASK).toInt()] * window[n]
+        re[n] = if (index < 0) 0.0f else history[(index and mask).toInt()] * window[n]
         im[n] = 0.0f
       }
+      // Every sample heard since the last analysis counts, so a clip between two polls is not missed.
+      val from = maxOf(0L, minOf(end - config.levelSamples, levelsReadTo), writeCount - history.size)
       var peak = 0.0f
       var sumSq = 0.0
-      val from = maxOf(0L, end - config.levelSamples)
       for (index in from until end) {
-        val slot = (index and HISTORY_MASK).toInt()
+        val slot = (index and mask).toInt()
         if (levels[slot] > peak) peak = levels[slot]
         sumSq += history[slot] * history[slot]
       }
@@ -237,7 +292,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
           val amplitude = 2.0f * sqrt(re[k] * re[k] + im[k] * im[k]) * scale
           power[k] = amplitude * amplitude
         }
-        if (peak >= CLIP_LEVEL) lastClipNanos = nanoTime()
+        if (peak >= CLIP_LEVEL) lastClipNanos = now
+        levelsReadTo = end
         val rms = if (end > from) sqrt(sumSq / (end - from)) else 0.0
         return SpectrumFrame(true, true, end / config.stepSamples, config.sampleRate, config.plan.bandsDb(power), toDb(peak.toDouble()), toDb(rms), false)
       }
@@ -354,9 +410,10 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     const val LIVE_STEPS_PER_SECOND = 120
     private const val MAX_FFT_SIZE = FFT_SIZE
     private val SUPPORTED_FFT_SIZES = setOf(LIVE_FFT_SIZE, FFT_SIZE)
-    /** About 2.7 s at 48 kHz: the deepest track buffer measured (2.2 s to the speaker) plus a window. */
-    private const val HISTORY_SIZE = 1 shl 17
-    private const val HISTORY_MASK = (HISTORY_SIZE - 1).toLong()
+    /** About 2.7 s at 48 kHz, which holds the deepest track buffer measured (2.2 s to the speaker). */
+    private const val MIN_HISTORY_SIZE = 1 shl 17
+    /** Output latency below the app, which the track reports only once it plays; 235 ms was measured. */
+    private const val BELOW_APP_ALLOWANCE_MS = 500
     private const val BYTES_PER_FRAME = 4
     private const val FRAMES_PER_SECOND = 30
     private const val MAX_READ_RETRIES = 3
@@ -366,6 +423,11 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     private const val ACTIVE_WINDOW_NANOS = 400_000_000L
     private const val CLIP_HOLD_NANOS = 1_000_000_000L
     private const val MAX_EXTRAPOLATION_NANOS = 250_000_000L
+
+    private fun historySizeFor(sampleRate: Int, fftSize: Int, speakerLagFrames: Int): Int {
+      val needed = speakerLagFrames + sampleRate * BELOW_APP_ALLOWANCE_MS / 1000 + fftSize
+      return maxOf(MIN_HISTORY_SIZE, Integer.highestOneBit(needed - 1) shl 1)
+    }
 
     /** Linear power (a full-scale sine is 1.0) to whole dBFS, floored. */
     fun toDb(value: Double, isPower: Boolean = false): Int {
