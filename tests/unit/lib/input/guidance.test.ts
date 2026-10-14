@@ -14,6 +14,7 @@ import {
   classifyFocusKind,
   hasContextMenu,
   resolveGuidanceLabels,
+  resolveSoftKeyMenuOverlayLabels,
   type GuidanceState,
 } from "@/lib/input";
 
@@ -252,5 +253,25 @@ describe("hasContextMenu", () => {
   it("false when there is no menu", () => {
     expect(hasContextMenu(mount("<button>Plain</button>"))).toBe(false);
     expect(hasContextMenu(null)).toBe(false);
+  });
+});
+
+describe("resolveSoftKeyMenuOverlayLabels", () => {
+  it("names only Close and Menu, under the overlay's title", () => {
+    expect(resolveSoftKeyMenuOverlayLabels(true, "Remote Input")).toEqual({
+      visible: true,
+      breadcrumb: ["Remote Input"],
+      left: "Close",
+      center: null,
+      right: "Menu",
+      shortcut: null,
+    });
+  });
+
+  it("leaves the breadcrumb empty for an overlay with no title, and keeps the visibility it is given", () => {
+    const labels = resolveSoftKeyMenuOverlayLabels(false, null);
+
+    expect(labels.breadcrumb).toEqual([]);
+    expect(labels.visible).toBe(false);
   });
 });

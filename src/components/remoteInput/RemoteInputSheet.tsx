@@ -410,9 +410,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const keypadControls = useRemoteInputKeypadControls({
     open,
     outputMode: session.outputMode,
+    keypadDrivesTheC64: session.outputMode === "joystick" || keypadTypesOnTheC64,
     joystickAvailable,
     gameModeAvailable,
     immersive,
+    optionsFolded: foldJoystickOptions,
     onOutputModeChange: (mode) => {
       keypadTyping.reset();
       handleOutputModeChange(mode);

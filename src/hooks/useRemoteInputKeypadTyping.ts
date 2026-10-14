@@ -6,18 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { resolveSemanticAction, digitForAction } from "@/lib/input/keyEvent";
 import { resolveInputProfile } from "@/lib/input/profiles";
-import {
-  applySemanticAction,
-  commitPending,
-  createT9State,
-  DEFAULT_T9_CONFIG,
-  resolveT9Config,
-  type T9State,
-} from "@/lib/input/t9";
+import { applySemanticAction, commitPending, createT9State, resolveT9Config, type T9State } from "@/lib/input/t9";
 import type { CursorDirection } from "@/lib/remoteInput/cursorKeyMapping";
 
 export interface RemoteInputKeypadTypingOptions {
@@ -54,9 +47,10 @@ export const useRemoteInputKeypadTyping = ({
   sendCursor,
 }: RemoteInputKeypadTypingOptions): RemoteInputKeypadTyping => {
   const keymap = resolveInputProfile("keypad");
-  const config = resolveT9Config({
-    multiTapTimeoutMs: keymap.timing?.multiTapTimeoutMs ?? DEFAULT_T9_CONFIG.multiTapTimeoutMs,
-  });
+  const config = useMemo(
+    () => resolveT9Config({ multiTapTimeoutMs: keymap.timing.multiTapTimeoutMs }),
+    [keymap.timing.multiTapTimeoutMs],
+  );
   const stateRef = useRef<T9State>(createT9State());
   const sentRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

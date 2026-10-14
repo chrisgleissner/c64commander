@@ -86,6 +86,8 @@ export {
   findContextMenuTrigger,
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
+  resolveSoftKeyMenuOverlayLabels,
+  SOFT_KEY_MENU_ATTR,
 } from "./guidance";
 
 export type { InputModality } from "./inputModality";

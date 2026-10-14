@@ -101,6 +101,19 @@ export const SOFT_KEY_MENU_ATTR = "data-key-nav-soft-key-menu";
 export const openOverlayOffersSoftKeyMenu = (root: ParentNode = document): boolean =>
   root.querySelector(`[${SOFT_KEY_MENU_ATTR}]`) !== null;
 
+/**
+ * PURE: the labels while an overlay that drives its own keys offers a soft-key menu. OK and the
+ * D-pad belong to the overlay, so the bar names only the way out and the way to the menu.
+ */
+export const resolveSoftKeyMenuOverlayLabels = (visible: boolean, overlayTitle: string | null): GuidanceLabels => ({
+  visible,
+  breadcrumb: overlayTitle ? [overlayTitle] : [],
+  left: "Close",
+  center: null,
+  right: "Menu",
+  shortcut: null,
+});
+
 /** A context menu the ring can open for the current item / scope on `openMenu`. */
 export const CONTEXT_MENU_SELECTOR = '[data-key-nav-menu],[aria-haspopup="menu"],[aria-haspopup="true"]';
 

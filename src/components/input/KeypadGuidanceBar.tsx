@@ -39,7 +39,10 @@ import {
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
   resolveGuidanceLabels,
+  resolveSoftKeyMenuOverlayLabels,
   SKIP_ATTR,
+  SOFT_KEY_MENU_ATTR,
+  type GuidanceLabels,
   type GuidanceState,
 } from "@/lib/input";
 import { isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
@@ -112,6 +115,14 @@ const RouteChangeRefresh = ({ onRouteChange }: { onRouteChange: () => void }) =>
 };
 
 const isGameModeShortcutPath = (pathname: string): boolean => GAME_MODE_SHORTCUT_PATHS.has(pathname);
+
+/** Labels for a focused dialog that drives its own keys and opens a menu on the right soft key. */
+const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
+  const overlay = document.activeElement?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`) ?? null;
+  if (!overlay) return null;
+  const title = document.getElementById(overlay.getAttribute("aria-labelledby") ?? "");
+  return resolveSoftKeyMenuOverlayLabels(visible, accessibleLabelFor(title));
+};
 
 /**
  * Imperative writes with a VALUE-EQUALITY BAIL — only touch the DOM when the value
@@ -209,9 +220,10 @@ export const KeypadGuidanceBar = () => {
     // The path is read at refresh time rather than through `useLocation`: the bar
     // already refreshes on every ring change and modality flip, and a router hook
     // would make this piece of chrome unrenderable outside a Router.
-    const labels = resolveGuidanceLabels(
+    const ringLabels = resolveGuidanceLabels(
       buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname()), t9Enabled),
     );
+    const labels = softKeyMenuOverlayLabels(ringLabels.visible) ?? ringLabels;
     /*
      * The tour owns the keys while it runs, so this bar would be advertising actions that do not
      * happen — and on a 320 x 427 screen it is drawn over the tour's own caption, covering the title
@@ -221,7 +233,7 @@ export const KeypadGuidanceBar = () => {
     const duringTour = document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE);
     // Search is a dialog that drives its own keys, so the ring's labels behind it (the control the
     // search was opened from) say nothing about what the keys do there.
-    const keysOwnedByDialog = document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
+    const keysOwnedByDialog = labels === ringLabels && document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
     if (!labels.visible || duringTour || keysOwnedByDialog) {
       setAttrIfChanged(root, "data-visible", "false");
       reserveGuidanceHeight(false);

@@ -18,15 +18,20 @@ import type { RemoteInputControlsMenuItem } from "@/components/remoteInput/Remot
 
 export const REMOTE_INPUT_SHEET_SELECTOR = '[data-testid="remote-input-sheet"]';
 const OPTIONS_TOGGLE_SELECTOR = '[data-testid="remote-input-joystick-options"]';
+const CLOSE_SELECTOR = '[data-testid="remote-input-close"]';
 
 type FocusAfterMenu = "sheet" | "first-control" | "options";
 
 export interface RemoteInputKeypadControlsOptions {
   open: boolean;
   outputMode: RemoteInputOutputMode;
+  /** False where the keypad's keys have nothing to do on the C64, as in Keys mode without T9. */
+  keypadDrivesTheC64: boolean;
   joystickAvailable: boolean;
   gameModeAvailable: boolean;
   immersive: boolean;
+  /** Whether the sheet folds its joystick options behind an Options button. */
+  optionsFolded: boolean;
   onOutputModeChange: (mode: RemoteInputOutputMode) => void;
   onOpenOptions: () => void;
   onEnterGameMode: () => void;
@@ -46,8 +51,11 @@ export interface RemoteInputKeypadControlsOptions {
  * overlay navigation walks the sheet's controls and OK presses them. Back returns to driving.
  */
 export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsOptions) => {
-  const { open, outputMode, joystickAvailable, gameModeAvailable, immersive } = options;
+  const { open, outputMode, keypadDrivesTheC64, joystickAvailable, gameModeAvailable, immersive, optionsFolded } =
+    options;
   const [driving, setDriving] = useState(true);
+  const keysGoToTheC64 = driving && keypadDrivesTheC64;
+  const inGameMode = gameModeAvailable && immersive;
   const [menuOpen, setMenuOpen] = useState(false);
   const focusAfterMenuRef = useRef<FocusAfterMenu>("sheet");
 
@@ -64,15 +72,10 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
     if (!sheet) return;
     const target = focusAfterMenuRef.current;
     focusAfterMenuRef.current = "sheet";
-    if (target === "options") {
-      const toggle = sheet.querySelector<HTMLElement>(OPTIONS_TOGGLE_SELECTOR);
-      if (toggle) return toggle.focus();
-    }
-    if (target !== "sheet") {
-      stepFocusWithinOverlay(sheet, sheet, true);
-      return;
-    }
-    sheet.focus();
+    if (target === "options") sheet.querySelector<HTMLElement>(OPTIONS_TOGGLE_SELECTOR)?.focus();
+    else if (target === "first-control")
+      stepFocusWithinOverlay(sheet, sheet.querySelector(CLOSE_SELECTOR) ?? sheet, true);
+    else sheet.focus();
   }, []);
 
   const operateTheSheet = (focus: FocusAfterMenu) => {
@@ -84,13 +87,13 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
   if (!driving) {
     items.push({ id: "drive", label: "Back to the C64", onSelect: () => setDriving(true) });
   }
-  if (joystickAvailable && outputMode !== "joystick") {
+  if (joystickAvailable && outputMode !== "joystick" && !inGameMode) {
     items.push({ id: "joystick", label: "Joystick", onSelect: () => options.onOutputModeChange("joystick") });
   }
-  if (outputMode !== "type") {
+  if (outputMode !== "type" && !inGameMode) {
     items.push({ id: "keys", label: "Keys", onSelect: () => options.onOutputModeChange("type") });
   }
-  if (outputMode === "joystick") {
+  if (outputMode === "joystick" && optionsFolded) {
     items.push({
       id: "options",
       label: "Options",
@@ -102,7 +105,7 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
   }
   if (gameModeAvailable) {
     items.push(
-      immersive
+      inGameMode
         ? { id: "game", label: "Exit Game Mode", onSelect: options.onExitGameMode }
         : { id: "game", label: "Game Mode", onSelect: options.onEnterGameMode },
     );
@@ -116,13 +119,13 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
   /** True when the key is the sheet's to handle here and must not reach the C64. */
   const interceptKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>): boolean => {
-      // The menu is portalled, but React still bubbles its keys through the sheet.
-      if (menuOpen) return true;
       if (resolveSemanticAction(resolveInputProfile("keypad"), event) === "softRight") {
         event.preventDefault();
-        setMenuOpen(true);
+        setMenuOpen((wasOpen) => !wasOpen);
         return true;
       }
+      // The menu is portalled, but React still bubbles its keys through the sheet.
+      if (menuOpen) return true;
       return !driving;
     },
     [menuOpen, driving],
@@ -139,13 +142,12 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
   );
 
   const sheetProps = {
-    ...(driving ? { [SKIP_ATTR]: "" } : {}),
+    ...(keysGoToTheC64 ? { [SKIP_ATTR]: "" } : {}),
     [SOFT_KEY_MENU_ATTR]: "",
     onEscapeKeyDown,
   };
 
   return {
-    driving,
     interceptKeyDown,
     sheetProps,
     menu: { open: menuOpen, onOpenChange: setMenuOpen, items, onClosed: onMenuClosed },

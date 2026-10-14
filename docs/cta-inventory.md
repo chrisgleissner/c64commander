@@ -827,26 +827,34 @@ Mode entry, or automatically when a game is launched with that setting on): a Ra
 - **Driving the C64** (the state the sheet opens in): the sheet carries
   `data-key-nav-skip`, so the app's global keypad navigation leaves its keys
   alone and Up/Down never move focus onto a sheet control. In **Joystick** mode
-  the D-pad and the bound digits steer and OK is fire. In **Keys** mode the keypad
-  types on the C64: digits and T9 multi-tap letters (same engine and timing as the
-  app's text fields; `#` switches letters/digits), OK is RETURN, the D-pad is the
-  cursor keys. Every key is sent as a press and release. Back closes the sheet.
+  the D-pad and the bound digits steer and OK is fire. In **Keys** mode, where the
+  edition types with T9, the keypad types on the C64: digits and T9 multi-tap
+  letters (same engine and timing as the app's text fields; `#` switches
+  letters/digits), OK is RETURN, the D-pad is the cursor keys. Every key is sent as
+  a press and release. Back closes the sheet. While driving, the guidance bar
+  shows only **Back Close** and **Menu**, under the title "Remote Input".
+- **Keys mode without T9**: the keypad has nothing to type on the C64, so the
+  sheet does not carry `data-key-nav-skip` and the ordinary overlay navigation
+  walks the on-screen keys and controls (Up/Down, OK presses).
 - **Operating the sheet** (entered from the menu below): nothing reaches the C64;
   the ordinary overlay navigation walks the sheet's controls (Up/Down, OK presses).
   Back returns to driving instead of closing the sheet.
 
-In both states the **right soft key** opens the sheet's keypad menu, and the
-guidance bar labels it **Menu** (`data-key-nav-soft-key-menu`). Touch and the
-on-screen keyboard/quick-keys buttons remain ordinary tap targets throughout.
+In every state the **right soft key** opens the sheet's keypad menu and closes it
+again, and the guidance bar labels it **Menu** (`data-key-nav-soft-key-menu`).
+Touch and the on-screen keyboard/quick-keys buttons remain ordinary tap targets
+throughout.
 
 - Keypad menu — dialog — `remote-input-controls-menu` — R✅ I✅ _(opened by the right
-  soft key; Up/Down move, OK activates, Back closes it)_ — buttons
+  soft key; Up/Down move, OK activates, Back or the right soft key closes it)_ — buttons
   `remote-input-menu-drive` (Back to the C64, only while operating the sheet),
-  `remote-input-menu-joystick` / `remote-input-menu-keys` (the mode not current),
-  `remote-input-menu-options` (Joystick mode; opens the options and hands the
-  keypad to the sheet's controls), `remote-input-menu-game` (Game Mode / Exit Game
-  Mode, when available), `remote-input-menu-controls` (Other controls),
-  `remote-input-menu-release-all`, `remote-input-menu-close`
+  `remote-input-menu-joystick` / `remote-input-menu-keys` (the mode not current; not
+  in Game Mode), `remote-input-menu-options` (Joystick mode on the compact profile,
+  where the options fold behind the Options button; opens them and moves the keypad
+  to that button), `remote-input-menu-game` (Game Mode / Exit Game Mode, when
+  available), `remote-input-menu-controls` (Other controls: moves the keypad to the
+  sheet's first control after Close), `remote-input-menu-release-all`,
+  `remote-input-menu-close`
 
 - Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
