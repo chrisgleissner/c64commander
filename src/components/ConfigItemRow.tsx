@@ -519,13 +519,11 @@ export function ConfigItemRow({
               <SelectValue placeholder={isItemLoading ? "Loading…" : displayValueLabel || "Select"} />
             </SelectTrigger>
             <SelectContent>
-              {selectOptions
-                .filter((option) => selectOpen || option.value === selectedValue)
-                .map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+              {selectOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
