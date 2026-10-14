@@ -39,7 +39,7 @@ describe("selectorPresence", () => {
 
   const presence = () => selectorPresence(doc, "[role='dialog'],[data-popper]", ["role", "data-popper"]);
 
-  it("sees an element added and removed in the same task, before the observer callback runs", () => {
+  it("sees an element added and removed in the same task, before the observer is notified", () => {
     const tracker = presence();
     expect(tracker.isPresent()).toBe(false);
     const dialog = doc.createElement("div");

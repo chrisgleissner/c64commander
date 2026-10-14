@@ -17,7 +17,7 @@
  */
 export interface SelectorPresence {
   readonly isPresent: () => boolean;
-  /** Called after a change of {@link isPresent}, in a microtask, like a MutationObserver callback. */
+  /** Called after a change of {@link isPresent}, in a microtask, as a MutationObserver would be. */
   readonly subscribe: (listener: () => void) => () => void;
 }
 
