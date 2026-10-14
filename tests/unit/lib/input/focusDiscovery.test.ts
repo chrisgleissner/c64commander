@@ -522,6 +522,185 @@ describe("FocusDiscoveryEngine", () => {
   });
 });
 
+describe("text-only mutations", () => {
+  it("do not trigger a rescan when a readout rewrites its text", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><span id="level">-18</span></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("notify the guidance bar without a rescan when the selected control's own text changes", async () => {
+    document.body.innerHTML = `<div id="page"><button id="play">Play</button><span id="level">-18</span></div>`;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+
+    el("play").textContent = "Pause";
+    await afterRingRescan();
+    expect(onAfterAssemble).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("neither notify nor rescan for a text change while nothing is selected", async () => {
+    document.body.innerHTML = `<div id="page"><span id="level">-18</span></div>`;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+
+    expect(controller.current()).toBeNull();
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("tolerate the selected control's text changing when nothing listens for relabels", async () => {
+    document.body.innerHTML = `<div id="page"><button id="play">Play</button></div>`;
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    expect(controller.current()).not.toBeNull();
+
+    el("play").textContent = "Pause";
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("still trigger a rescan when an element arrives alongside text", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><span id="level">-18</span></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("level").replaceChildren("-12", document.createElement("button"));
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("still rescans when an element is removed alongside text", async () => {
+    document.body.innerHTML = `<div id="page"><div id="row"><button id="remove">Remove</button></div><button id="keep">Keep</button></div>`;
+    const { controller, engine } = makeEngine();
+    engine.start();
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("remove");
+
+    el("row").replaceChildren("Removed");
+    await afterRingRescan();
+
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toEqual(["keep"]);
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("keep");
+    engine.stop();
+  });
+
+  it("still rescans when an element is removed", async () => {
+    document.body.innerHTML = `<div id="page"><button id="remove">Remove</button><button id="keep">Keep</button></div>`;
+    const { controller, engine } = makeEngine();
+    engine.start();
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("remove");
+
+    el("remove").remove();
+    await afterRingRescan();
+
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toEqual(["keep"]);
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("keep");
+    engine.stop();
+  });
+});
+
+describe("text changes in a group's labelled-by title", () => {
+  const mountDialog = () => {
+    document.body.innerHTML = `
+      <div role="dialog" id="dialog" aria-labelledby="title" data-sheet-presentation="sheet">
+        <h2 id="title"><span id="name">Drive A</span></h2>
+        <span id="level">-18</span>
+        <button id="run">Run</button>
+        <button id="close">Close</button>
+      </div>`;
+  };
+
+  it("renames the selected dialog when its title's text is replaced", async () => {
+    mountDialog();
+    const { controller, engine } = makeEngine();
+    engine.start();
+    expect(controller.current()?.group).toBe("Drive A");
+
+    el("name").textContent = "Drive B";
+    await afterRingRescan();
+
+    expect(controller.current()?.group).toBe("Drive B");
+    engine.stop();
+  });
+
+  it("renames the selected dialog when a text node is inserted inside its title", async () => {
+    mountDialog();
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    el("name").appendChild(document.createTextNode(" (busy)"));
+    await afterRingRescan();
+
+    expect(controller.current()?.group).toBe("Drive A (busy)");
+    engine.stop();
+  });
+
+  it("renames a descended group in the breadcrumb chain when its title's text changes", async () => {
+    document.body.innerHTML = `
+      <div data-focus-group="drive" id="drive" aria-labelledby="drive-title">
+        <h3 id="drive-title">Drive A</h3>
+        <button id="mount">Mount</button>
+        <button id="eject">Eject</button>
+      </div>`;
+    const { controller, engine } = makeEngine();
+    engine.start();
+    controller.setCurrent("drive");
+    controller.focusFirstChild();
+    engine.refresh();
+    expect(engine.currentScopeChain().map((item) => item.group)).toEqual(["Drive A"]);
+
+    el("drive-title").textContent = "Drive B";
+    await afterRingRescan();
+
+    expect(engine.currentScopeChain().map((item) => item.group)).toEqual(["Drive B"]);
+    engine.stop();
+  });
+
+  it("do not rescan for a readout inside the labelled dialog but outside its title", async () => {
+    mountDialog();
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("level").textContent = "-12";
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+});
+
 describe("mutations inside a skipped subtree", () => {
   /*
    * The ring is the same either way; what this pins is whether the engine does the work to find
