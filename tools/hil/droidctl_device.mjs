@@ -106,5 +106,7 @@ export const createDroidDevice = async ({ serial, artifactRoot } = {}) => {
     swipe: ({ x1, y1, x2, y2, durationMs }) =>
       call("droid_input.swipe", { targetId, x1, y1, x2, y2, ...(durationMs ? { durationMs } : {}) }),
     forwardWebview: (pkg, localPort) => call("droid_device.forward_webview", { targetId, package: pkg, localPort }),
+    /** Closes the ssh tunnels droidctl opened. Optional: a tunnel never keeps the process alive. */
+    close: () => runtime.dispose(),
   };
 };

@@ -104,6 +104,58 @@ describe("server MCP handlers", () => {
     expect(disposed).toBe(1);
   });
 
+  it("disposes every transport that holds connections when the runtime is disposed", async () => {
+    let disposed = 0;
+    const holding = Object.assign(new FakeTransport(), {
+      dispose: async () => {
+        disposed += 1;
+      },
+    });
+    const runtime = createDroidctlServerRuntime({
+      artifactRoot: os.tmpdir(),
+      runId: "dc-DISPOSE",
+      transports: [holding, new FakeTransport(), holding],
+    });
+
+    await runtime.dispose();
+
+    expect(disposed).toBe(2);
+  });
+
+  it("logs a transport that fails to release after the client connection closes", async () => {
+    const written = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failures: unknown[] = [
+      new Error("tunnel stuck"),
+      Object.assign(new Error("bare"), { stack: undefined }),
+      "gone",
+    ];
+    try {
+      for (const failure of failures) {
+        const failing = Object.assign(new FakeTransport(), {
+          dispose: async () => {
+            throw failure;
+          },
+        });
+        const runtime = createDroidctlServerRuntime({
+          artifactRoot: os.tmpdir(),
+          runId: "dc-CLOSE-FAIL",
+          transports: [failing],
+        });
+        runtime.server.onclose?.();
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      const lines = written.mock.calls.map(([line]) => String(line));
+      const warnings = lines.filter((line) => line.includes("Releasing the transports"));
+      expect(warnings).toHaveLength(3);
+      expect(warnings[0]).toContain("tunnel stuck");
+      expect(warnings[0]).toContain("serverHandlers.test.ts");
+      expect(warnings[1]).toContain('"error":"bare"');
+      expect(warnings[2]).toContain('"error":"gone"');
+    } finally {
+      written.mockRestore();
+    }
+  });
+
   it("connects the server over stdio in runDroidctlServer", async () => {
     const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "droidctl-connect-"));
     const connectSpy = vi.spyOn(Server.prototype, "connect").mockResolvedValue(undefined as never);

@@ -41,6 +41,7 @@ import {
   sshForwarding,
 } from "./sshPrerequisites.js";
 import type { SshCommandRunner, SshOutcome } from "./sshRunner.js";
+import type { TunnelReaper } from "./tunnelReaper.js";
 import type { MissingPrerequisite, TargetInfo } from "./types.js";
 
 export const TCP_PROBE_TIMEOUT_MS = 1_500;
@@ -186,6 +187,7 @@ export interface HostProberDeps {
   readonly runner: SshCommandRunner;
   readonly adb: AdbTransport;
   readonly system: SshSystem;
+  readonly reaper: TunnelReaper;
 }
 
 /**
@@ -268,6 +270,7 @@ export class HostProber {
 
   /** Stops a tunnel's ssh process and removes its serial from the adb server. */
   async closeTunnel(tunnel: Tunnel): Promise<void> {
+    this.deps.reaper.forget(tunnel);
     if (!tunnel.closed) {
       tunnel.handle.kill("SIGTERM");
     }
@@ -344,6 +347,7 @@ export class HostProber {
       closed: false,
       stderr: "",
     };
+    this.deps.reaper.track(tunnel, adb.disconnectArgv(tunnel.serial));
     handle.onStderr((chunk) => {
       tunnel.stderr += chunk;
     });
