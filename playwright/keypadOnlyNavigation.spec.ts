@@ -297,10 +297,14 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const trigger = page.locator('[data-slot-active="true"]').getByRole("button", { name: "Item actions" }).first();
     await expect(trigger).toBeAttached({ timeout: 15_000 });
     expect(await ringFocus(page, trigger), "the ring could not reach the row's menu button").toBe(true);
+    // Near the top, so the tall menu opens downward and has to stop at the bars at the bottom.
+    await trigger.evaluate((element) => element.scrollIntoView({ block: "start" }));
     await page.keyboard.press("Enter");
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await waitForAnimations(page);
+    const menuBottom = await menu.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(menuBottom, "the menu runs under the guidance bar").toBeLessThanOrEqual((await guidanceBarTop(page)) + 0.5);
 
     const clipped = await menu
       .locator('[data-menu-detail="true"]')
