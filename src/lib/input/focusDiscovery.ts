@@ -192,6 +192,8 @@ export class FocusDiscoveryEngine {
    * fallback it was given, and dropped after {@link RETURN_TO_OPENER_WINDOW_MS}.
    */
   private pendingReturn: { scope: Element; id: string; fallbackId: string | undefined; until: number } | null = null;
+  /** Where the ring stood when a surface that owns the keys hid every stop on the page, restored when they return. */
+  private standingWhenRingEmptied: { scope: Element; id: string } | null = null;
 
   constructor(options: FocusDiscoveryEngineOptions) {
     this.controller = options.controller;
@@ -242,6 +244,7 @@ export class FocusDiscoveryEngine {
     this.observer = null;
     this.lastScope = null;
     this.pendingReturn = null;
+    this.standingWhenRingEmptied = null;
     this.removeAllShims();
     this.resolvers.clear();
     this.sources.clear();
@@ -367,6 +370,7 @@ export class FocusDiscoveryEngine {
       this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers);
       returnedTo = this.retryPendingReturn(scope.element);
     }
+    returnedTo ??= this.restoreStandingAfterEmptyRing(scope.element, leavingId, items.focusItems.length);
     this.scopeChain = this.computeScopeChain();
 
     // Drop the mutation records our own tabindex writes just queued — the DOM is
@@ -397,6 +401,17 @@ export class FocusDiscoveryEngine {
       (entry) => !inside.some((other) => other !== entry && other.element.contains(entry.element)),
     );
     if (outermost) this.controller.setCurrent(outermost.id);
+  }
+
+  private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
+    if (itemCount === 0) {
+      if (leavingId) this.standingWhenRingEmptied = { scope, id: leavingId };
+      return undefined;
+    }
+    const standing = this.standingWhenRingEmptied;
+    this.standingWhenRingEmptied = null;
+    if (!standing || standing.scope !== scope || !this.controller.currentIsDefaultSelection()) return undefined;
+    return this.controller.setCurrent(standing.id) ? standing.id : undefined;
   }
 
   private retryPendingReturn(scope: Element): string | undefined {
