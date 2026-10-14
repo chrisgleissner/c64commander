@@ -33,7 +33,7 @@ import type { SourceEntry, SelectedItem, SourceLocation } from "@/lib/sourceNavi
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
 import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
-import { ItemSelectionView } from "./ItemSelectionView";
+import { ItemSelectionView, type GoUpOnBack } from "./ItemSelectionView";
 import { ItemSelectionSearch } from "./ItemSelectionSearch";
 import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
@@ -121,6 +121,7 @@ export const ItemSelectionDialog = ({
   const autoConfirmInFlightRef = useRef(false);
   const [confirmInFlight, setConfirmInFlight] = useState(false);
   const confirmInFlightRef = useRef(false);
+  const goUpOnBackRef = useRef<GoUpOnBack | null>(null);
 
   const localSources = useMemo(
     () => sourceGroups.flatMap((group) => group.sources).filter((item) => item.type === "local"),
@@ -670,7 +671,13 @@ export const ItemSelectionDialog = ({
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
       {/* A browser is its list: on the smallest screen it takes the header's height too. */}
-      <AppSheetContent className="overflow-hidden p-0" fullScreen={profile === "compact"}>
+      <AppSheetContent
+        className="overflow-hidden p-0"
+        fullScreen={profile === "compact"}
+        onEscapeKeyDown={(event) => {
+          if (goUpOnBackRef.current?.()) event.preventDefault();
+        }}
+      >
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {compactHeader ? (
             <AppSheetHeader
@@ -786,6 +793,7 @@ export const ItemSelectionDialog = ({
                   onOpen={browser.navigateTo}
                   onNavigateUp={browser.navigateUp}
                   onNavigateRoot={browser.navigateRoot}
+                  goUpOnBackRef={goUpOnBackRef}
                   onRefresh={browser.refresh}
                   showFolderSelect={allowFolderSelection && !browser.isSearching}
                   emptyLabel={

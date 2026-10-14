@@ -32,7 +32,9 @@ describe("SheetContent", () => {
     );
 
     const className = screen.getByTestId("sheet").className;
-    expect(className).toContain("bottom-[var(--safe-area-inset-bottom)]");
+    expect(className).toContain(
+      "bottom-[calc(var(--safe-area-inset-bottom)+var(--keypad-guidance-reserved-height,0px))]",
+    );
     expect(className).not.toMatch(/p[tb]-\[calc\([^\]]*safe-area-inset/);
   });
 
@@ -53,9 +55,35 @@ describe("SheetContent", () => {
     );
 
     const className = screen.getByTestId("sheet").className;
-    expect(className).toContain("bottom-[var(--safe-area-inset-bottom)]");
-    expect(className).toContain("max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))]");
+    expect(className).toContain(
+      "bottom-[calc(var(--safe-area-inset-bottom)+var(--keypad-guidance-reserved-height,0px))]",
+    );
+    expect(className).toContain(
+      "max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom)-var(--keypad-guidance-reserved-height,0px))]",
+    );
+    expect(className).not.toContain("max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))]");
     expect(className).not.toContain("max-h-[100dvh]");
     expect(className).not.toMatch(/p[tb]-\[calc\([^\]]*safe-area-inset/);
+  });
+
+  /*
+   * The keypad guidance bar is fixed over the bottom 32 px of the screen while it shows. A bottom
+   * sheet that stood on the navigation bar ran under it: on a 427 px screen the last line of the
+   * empty Liked Tunes text and half of the selected Recent row were hidden.
+   */
+  it("stands a bottom sheet on the keypad guidance bar and leaves the other sides alone", () => {
+    profileRef.current = "compact";
+    render(
+      <Sheet open>
+        <SheetContent side="right" data-testid="sheet">
+          <SheetTitle>Side</SheetTitle>
+          <SheetDescription>Side sheet</SheetDescription>
+        </SheetContent>
+      </Sheet>,
+    );
+
+    const className = screen.getByTestId("sheet").className;
+    expect(className).toContain("bottom-[var(--safe-area-inset-bottom)]");
+    expect(className).not.toContain("keypad-guidance-reserved-height");
   });
 });

@@ -101,7 +101,7 @@ const sheetVariants = cva(
       side: {
         top: "inset-x-0 top-[var(--safe-area-inset-top)] border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
-          "inset-x-0 bottom-[var(--safe-area-inset-bottom)] border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          "inset-x-0 bottom-[calc(var(--safe-area-inset-bottom)+var(--keypad-guidance-reserved-height,0px))] border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "top-[var(--safe-area-inset-top)] bottom-[var(--safe-area-inset-bottom)] left-0 w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
           "top-[var(--safe-area-inset-top)] bottom-[var(--safe-area-inset-bottom)] right-0 w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
@@ -124,6 +124,19 @@ const sheetVariants = cva(
         standard: "max-h-[85dvh] px-6 pt-6 pb-6",
       },
     },
+    /*
+     * A bottom sheet stands on the keypad guidance bar while it shows, as `AppSheetContent` does, so
+     * its height has to give that up too. Under the bar, the last line of a sheet that does not
+     * scroll could not be read at all.
+     */
+    compoundVariants: [
+      {
+        side: "bottom",
+        density: "compact",
+        className:
+          "max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom)-var(--keypad-guidance-reserved-height,0px))]",
+      },
+    ],
     defaultVariants: {
       side: "right",
       density: "standard",

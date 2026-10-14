@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { ArrowUp, ArrowUpToLine, ChevronRight, Folder, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,6 +24,12 @@ export const compactPathLabel = (path: string): string => {
   return `…/${segments[segments.length - 1]}`;
 };
 
+export const isAtSourceRoot = (path: string, rootPath: string): boolean =>
+  path === rootPath || path === rootPath.replace(/\/$/, "");
+
+/** Goes up one folder for the Back key. False at the root, where Back closes the browser instead. */
+export type GoUpOnBack = () => boolean;
+
 export type ItemSelectionViewProps = {
   path: string;
   rootPath: string;
@@ -38,6 +44,7 @@ export type ItemSelectionViewProps = {
   onRefresh: () => void;
   showFolderSelect: boolean;
   emptyLabel: string;
+  goUpOnBackRef?: MutableRefObject<GoUpOnBack | null>;
 };
 
 export const ItemSelectionView = ({
@@ -54,8 +61,9 @@ export const ItemSelectionView = ({
   onRefresh,
   showFolderSelect,
   emptyLabel,
+  goUpOnBackRef,
 }: ItemSelectionViewProps) => {
-  const atRoot = path === rootPath || path === rootPath.replace(/\/$/, "");
+  const atRoot = isAtSourceRoot(path, rootPath);
   const compact = useDisplayProfile().profile === "compact";
   const rootRef = useRef<HTMLDivElement>(null);
   const focusFollowsNavigationRef = useRef(false);
@@ -65,6 +73,18 @@ export const ItemSelectionView = ({
     go();
   };
   const handleOpen = (entryPath: string) => navigate(() => onOpen(entryPath));
+
+  useEffect(() => {
+    if (!goUpOnBackRef) return undefined;
+    goUpOnBackRef.current = () => {
+      if (atRoot) return false;
+      if (!isLoading) navigate(onNavigateUp);
+      return true;
+    };
+    return () => {
+      goUpOnBackRef.current = null;
+    };
+  });
 
   // The control that opened a folder is replaced by the folder's entries, and the Up and Root
   // buttons disable while it loads, so focus fell back to the dialog. A keypad reader then walked
@@ -224,7 +244,7 @@ export const ItemSelectionView = ({
               {isFolder ? (
                 <button
                   type="button"
-                  className="relative flex min-w-0 flex-1 items-center gap-2 text-left"
+                  className="relative -my-[0.44rem] flex min-h-11 min-w-0 flex-1 items-center gap-2 self-stretch py-[0.44rem] text-left"
                   aria-label={folderLabel}
                   aria-disabled={isLoading ? "true" : undefined}
                   disabled={!canNavigateFolder}

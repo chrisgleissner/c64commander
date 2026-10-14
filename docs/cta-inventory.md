@@ -375,6 +375,12 @@ not-connected / empty / single-device).
 - Filter files — text — `list-filter-input` — R✅ I✅
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
+- Item actions (⋮) — button — `playlist-item-actions-<title>` — R✅ I✅ — opens the row's menu: the
+  **Details** and **Config** rows (Type, Duration, Path, Status, Size, Date, Attached, Status, Origin,
+  Candidates, Overrides, and Location when a config is attached), then Review playback config, Attach or
+  Change local / C64U .cfg, and Remove config association `[only with a config attached]`. The detail
+  rows are menu items the arrow keys stop on, so a keypad scrolls them into view; OK on one does nothing
+  and leaves the menu open. Opened by keypad, the menu starts on its first detail row.
 - Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
   **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
   how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,
@@ -494,7 +500,7 @@ Per drive (A / B / Soft-IEC):
 
 Disk library: New disk — button — `new-disk-open` — R✅ I✅ _(flag `new_disk_enabled`; opens the **New disk dialog**, §5)_ ; Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
 
-Per-disk overflow menu (Set group / Rename / Remove) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
+Per-disk overflow menu (Set group / Rename / Remove; its detail rows are reachable by the arrow keys and inert on OK, as in the playlist row menu, §4.2) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
 
 Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / connected Ultimate (named after its product: C64U, U64, U64E, U64E2 or U2) / CommoServe — buttons — `import-option-*` — R✅ I✅.
 
@@ -1345,7 +1351,9 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
   the status bar._
 - Entry row — `source-entry-row` — a focusable row for a folder (Enter opens it) and a
   plain row for a file, whose checkbox carries the selection. Its expanded detail is
-  `source-entry-detail`
+  `source-entry-detail`. A folder row's "Open <folder>" button fills the row's height, at least 44px
+- Back (the keypad Back key, or Escape) — goes up one folder while the browser is below the source
+  root, and closes the browser at the root. While a folder is loading it does neither
 - Load more — button — `add-items-load-more` `[only while the source has more entries]`
 
 **Archive source** (`ArchiveSelectionView`) — search-first rather than folder-first.

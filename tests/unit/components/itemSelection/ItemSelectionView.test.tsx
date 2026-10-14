@@ -1,6 +1,7 @@
+import { createRef } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ItemSelectionView } from "@/components/itemSelection/ItemSelectionView";
+import { ItemSelectionView, type GoUpOnBack } from "@/components/itemSelection/ItemSelectionView";
 import { resetInputModality, setInputModality } from "@/lib/input";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
@@ -170,6 +171,96 @@ describe("ItemSelectionView", () => {
       openDemos();
 
       expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Open Collection" }));
+    });
+  });
+
+  describe("Back key", () => {
+    afterEach(() => resetInputModality());
+
+    const renderAt = (path: string, entries: SourceEntry[], isLoading = false) => {
+      const goUpOnBackRef = createRef<GoUpOnBack | null>() as { current: GoUpOnBack | null };
+      const onNavigateUp = vi.fn();
+      const view = render(
+        <ItemSelectionView
+          path={path}
+          rootPath="/"
+          entries={entries}
+          isLoading={isLoading}
+          selection={new Map()}
+          onToggleSelect={vi.fn()}
+          onOpen={vi.fn()}
+          onNavigateUp={onNavigateUp}
+          onNavigateRoot={vi.fn()}
+          onRefresh={vi.fn()}
+          showFolderSelect={false}
+          emptyLabel="No entries"
+          goUpOnBackRef={goUpOnBackRef}
+        />,
+      );
+      return { goUpOnBackRef, onNavigateUp, view };
+    };
+    const games: SourceEntry[] = [{ type: "dir", name: "Arcade", path: "/Usb0/Games/Arcade" }];
+    const usb0: SourceEntry[] = [{ type: "dir", name: "Games", path: "/Usb0/Games" }];
+
+    it("goes up one folder from a sub-folder", () => {
+      const { goUpOnBackRef, onNavigateUp } = renderAt("/Usb0/Games", games);
+
+      expect(goUpOnBackRef.current?.()).toBe(true);
+      expect(onNavigateUp).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves Back to close the browser at the root", () => {
+      const { goUpOnBackRef, onNavigateUp } = renderAt("/", usb0);
+
+      expect(goUpOnBackRef.current?.()).toBe(false);
+      expect(onNavigateUp).not.toHaveBeenCalled();
+    });
+
+    it("takes Back without moving again while the folder is still loading", () => {
+      const { goUpOnBackRef, onNavigateUp } = renderAt("/Usb0/Games", games, true);
+
+      expect(goUpOnBackRef.current?.()).toBe(true);
+      expect(onNavigateUp).not.toHaveBeenCalled();
+    });
+
+    it("moves keypad focus to the parent folder's first entry", () => {
+      setInputModality("key-navigation");
+      const { goUpOnBackRef, view } = renderAt("/Usb0/Games", games);
+      screen.getByRole("button", { name: "Open Arcade" }).focus();
+
+      goUpOnBackRef.current?.();
+      view.rerender(
+        <ItemSelectionView
+          path="/Usb0"
+          rootPath="/"
+          entries={usb0}
+          isLoading={false}
+          selection={new Map()}
+          onToggleSelect={vi.fn()}
+          onOpen={vi.fn()}
+          onNavigateUp={vi.fn()}
+          onNavigateRoot={vi.fn()}
+          onRefresh={vi.fn()}
+          showFolderSelect={false}
+          emptyLabel="No entries"
+          goUpOnBackRef={goUpOnBackRef}
+        />,
+      );
+
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open Games" }));
+    });
+
+    it("lets go of the handler when the view unmounts", () => {
+      const { goUpOnBackRef, view } = renderAt("/Usb0/Games", games);
+      view.unmount();
+
+      expect(goUpOnBackRef.current).toBeNull();
+    });
+
+    it("gives every folder's Open button the full 44 px row height", () => {
+      renderAt("/Usb0", usb0);
+
+      expect(screen.getByRole("button", { name: "Open Games" }).className).toMatch(/\bmin-h-11\b/);
     });
   });
 });
