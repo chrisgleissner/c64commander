@@ -100,4 +100,10 @@ describe("LiveViewCard", () => {
     render(<LiveViewCard />);
     expect(screen.getByTestId("live-view-stop")).toHaveAccessibleName("Stop Live View");
   });
+
+  it("labels the feed stop Stop, so it cannot be read as the machine Reset beside it", () => {
+    mirror.state = { video: { state: "live" } };
+    render(<LiveViewCard />);
+    expect(screen.getByTestId("live-view-stop")).toHaveTextContent(/^Stop$/);
+  });
 });
