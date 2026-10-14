@@ -134,14 +134,13 @@ export const CollapsibleSection = ({
   // the accordion effect used to be.
   const compact = profile === "compact";
   /*
-   * A header carrying actions puts them on their own row unless the card is measured wide enough.
-   *
-   * The toggle absorbs whatever the actions and chevron leave, which left "Drives" 3 CSS px of the
-   * 67 it needs at 320 px. The phone profiles always stack. `expanded` (Large display) can be chosen
-   * on a phone too, where "Drive A" was drawn 1 px wide at 392 px, so there the card's width decides.
+   * A header carrying actions keeps them beside the title and puts them on their own row only when
+   * the card is measured too narrow for both. On a 320 px screen a stacked "Reset" sat directly
+   * under the toggle, where it cost a row on every closed card and was easily hit instead of the
+   * header; where the title fits, it now shares the row.
    */
-  const [fitRefs, fitsOneRow] = useHeaderActionsFit(profile === "expanded" && actions != null, title);
-  const stackActions = profile !== "expanded" || fitsOneRow === false;
+  const [fitRefs, fitsOneRow] = useHeaderActionsFit(actions != null, title);
+  const stackActions = fitsOneRow === false;
   // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
   // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which
   // left "Drives" 48 px for 66 px of text. The icon alone still carries the scanning cue.
