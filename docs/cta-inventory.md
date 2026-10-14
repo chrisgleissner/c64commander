@@ -665,7 +665,9 @@ assignments are refused. Defaults are F1 Play/Pause and F3 Next tune.
   `settings-sid-radio-min-seconds-input` (`settings-sid-radio-min-seconds`) — R✅ I✅
   _(always shown: SID Radio reached GA, so what a station will offer is a listener's
   setting, not a developer one)_ ; Clear my rankings — button —
-  `settings-clear-rankings` — R✅ I✅ ; Enable SID Radio — checkbox —
+  `settings-clear-rankings` — R✅ I✅ — opens the **Clear my rankings confirmation**
+  (`clear-rankings-dialog`; Cancel `clear-rankings-cancel` takes focus, Clear
+  `clear-rankings-confirm` removes every ♥/✕) ; Enable SID Radio — checkbox —
   `settings-sid-radio-enabled` — R✅ I✅ `[developer-mode only]` ; Show ♥/✕ ranking —
   checkbox — `settings-sid-ranking-enabled` — R✅ I✅ `[developer-mode only; shown only
 when SID Radio is on]` ;
