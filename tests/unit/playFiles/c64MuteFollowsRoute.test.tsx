@@ -271,25 +271,34 @@ describe("releasing a C64 mute the app wrote", () => {
   });
 });
 
-type RouteProps = { route: PlaybackRoute; isPlaying: boolean; sidPlaying: boolean };
+type RouteProps = {
+  route: PlaybackRoute;
+  isPlaying: boolean;
+  sidPlaying: boolean;
+  isPaused?: boolean;
+  resolvedDeviceId?: string | null;
+};
 
 const renderPlayPage = (initial: RouteProps) => {
   const muteHere = vi.fn();
   const hook = renderHook(
-    ({ route, isPlaying, sidPlaying }: RouteProps) => {
-      const volume = useVolumeOverride({ isPlaying, isPaused: false, resolvedDeviceId: null });
-      useC64MuteFollowsRoute({
-        route,
-        c64Muted: volume.volumeState.muted && volume.volumeState.reason !== "pause",
-        sidPlaying,
-        releaseC64Mute: volume.releaseManualMute,
-        muteHere,
-      });
+    ({ route, isPlaying, sidPlaying, isPaused = false, resolvedDeviceId = null }: RouteProps) => {
+      const volume = useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId });
+      useC64MuteFollowsRoute({ route, c64Mute: volume, sidPlaying, muteHere });
       return volume;
     },
     { initialProps: initial },
   );
   return { ...hook, muteHere };
+};
+
+const pauseOnTheC64 = async (result: { current: ReturnType<typeof useVolumeOverride> }) => {
+  await act(async () => {
+    result.current.pauseMuteSnapshotRef.current = { volumes: { "Vol Master": ultimate.volMaster }, enablement: {} };
+    result.current.dispatchVolume({ type: "mute", reason: "pause" });
+    await result.current.applyAudioMixerUpdates({ "Vol Master": "OFF" }, "Pause mute");
+  });
+  await waitFor(() => expect(result.current.volumeState).toMatchObject({ muted: true, reason: "sync" }));
 };
 
 describe("a C64 mute when the sound moves to this phone", () => {
@@ -368,16 +377,106 @@ describe("a C64 mute when the sound moves to this phone", () => {
   });
 });
 
+describe("a C64 muted by a pause rather than by Mute", () => {
+  it("leaves this phone audible when the paused tune moves here", async () => {
+    const { result, rerender, muteHere } = renderPlayPage({ route: "c64", isPlaying: true, sidPlaying: true });
+    await waitForLabel(result, "0 dB");
+    await pauseOnTheC64(result);
+
+    rerender({ route: "local", isPlaying: true, sidPlaying: true, isPaused: true });
+    ultimate.soundsHere = true;
+    rerender({ route: "local", isPlaying: true, sidPlaying: true, isPaused: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(muteHere).not.toHaveBeenCalled();
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume mute released on the C64", expect.anything());
+  });
+
+  it("still moves a Mute pressed before the pause", async () => {
+    const { result, rerender, muteHere } = renderPlayPage({ route: "c64", isPlaying: true, sidPlaying: true });
+    await waitForLabel(result, "0 dB");
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+    await pauseOnTheC64(result);
+
+    rerender({ route: "local", isPlaying: true, sidPlaying: true, isPaused: true });
+
+    await waitFor(() => expect(muteHere).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("a Mute across an app restart", () => {
+  it("is saved when it is pressed, so a restart that ends the session restores the C64", async () => {
+    const first = renderVolume();
+    await waitForLabel(first.result, "0 dB");
+    await act(async () => {
+      await first.result.current.handleToggleMute();
+    });
+    expect(storedEnvelope()).toMatchObject({
+      volumeActive: true,
+      volumeSnapshot: { "Vol Master": " 0 dB" },
+      manualMuteSnapshot: { "Vol Master": " 0 dB" },
+    });
+    first.unmount();
+
+    const restarted = renderVolume({ isPlaying: false });
+    await waitFor(() => expect(restarted.result.current.volumeState.muted).toBe(true));
+    await act(async () => {
+      await restarted.result.current.restoreVolumeOverrides("playback-ended");
+    });
+
+    expect(ultimate.volMaster).toBe(" 0 dB");
+  });
+
+  it("is released on this phone's route after a restart", async () => {
+    const first = renderVolume();
+    await waitForLabel(first.result, "0 dB");
+    await act(async () => {
+      await first.result.current.handleToggleMute();
+    });
+    first.unmount();
+
+    renderPlayPage({ route: "local", isPlaying: false, sidPlaying: false, resolvedDeviceId: DEVICE_ID });
+
+    await waitFor(() => expect(ultimate.volMaster).toBe(" 0 dB"));
+  });
+
+  it("is forgotten in the saved session once Unmute is pressed", async () => {
+    const { result } = renderVolume();
+    await waitForLabel(result, "0 dB");
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(storedEnvelope().manualMuteSnapshot).toBeNull();
+  });
+});
+
 describe("useC64MuteFollowsRoute on its own", () => {
   const renderRoute = (props: { route: PlaybackRoute; c64Muted: boolean }, release: () => Promise<boolean>) => {
     const muteHere = vi.fn();
-    const releaseC64Mute = vi.fn(release);
+    const releaseManualMute = vi.fn(release);
     const hook = renderHook(
       ({ route, c64Muted }: { route: PlaybackRoute; c64Muted: boolean }) =>
-        useC64MuteFollowsRoute({ route, c64Muted, sidPlaying: false, releaseC64Mute, muteHere }),
+        useC64MuteFollowsRoute({
+          route,
+          c64Mute: {
+            volumeState: { index: 0, muted: c64Muted, reason: "manual" },
+            isManualMuteHeld: () => c64Muted,
+            releaseManualMute,
+          },
+          sidPlaying: false,
+          muteHere,
+        }),
       { initialProps: props },
     );
-    return { ...hook, muteHere, releaseC64Mute };
+    return { ...hook, muteHere, releaseC64Mute: releaseManualMute };
   };
 
   it("releases a C64 mute found on the phone route at start without muting the phone", async () => {

@@ -192,6 +192,52 @@ describe("LocalSidPlaybackController engine loading", () => {
     expect(engine.setMuted).toHaveBeenCalledWith(true);
   });
 
+  const mutableEngine = () => {
+    const engine = fakeEngine();
+    let engineMuted = false;
+    Object.assign(engine, {
+      setMuted: vi.fn((muted: boolean) => {
+        engineMuted = muted;
+      }),
+      getMuted: () => engineMuted,
+    });
+    return engine as typeof engine & { setMuted: ReturnType<typeof vi.fn>; getMuted: () => boolean };
+  };
+
+  it("keeps a Mute set while a handover holds the output silent once the hold is released", async () => {
+    const engine = mutableEngine();
+    const controller = new LocalSidPlaybackController(async () => engine);
+    await controller.play(byteSource(), 0);
+
+    const release = controller.holdSilence();
+    expect(engine.getMuted()).toBe(true);
+    expect(controller.muted()).toBe(false);
+    controller.setMuted(true);
+    release();
+    release();
+
+    expect(controller.muted()).toBe(true);
+    expect(engine.getMuted()).toBe(true);
+  });
+
+  it("stays silent through an Unmute until the last hold is released", async () => {
+    const engine = mutableEngine();
+    const controller = new LocalSidPlaybackController(async () => engine);
+    controller.setMuted(true);
+    const first = controller.holdSilence();
+    const second = controller.holdSilence();
+    await controller.play(byteSource(), 0);
+    expect(engine.getMuted()).toBe(true);
+
+    controller.setMuted(false);
+    first();
+    expect(engine.getMuted()).toBe(true);
+    second();
+
+    expect(engine.getMuted()).toBe(false);
+    expect(controller.muted()).toBe(false);
+  });
+
   it("queues a pre-render and a lead-in asked for before the engine has loaded", async () => {
     const engine = fakeEngine({ prerender: vi.fn(), warmLeadIn: vi.fn() });
     const controller = new LocalSidPlaybackController(async () => engine);
