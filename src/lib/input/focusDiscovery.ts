@@ -397,7 +397,11 @@ export class FocusDiscoveryEngine {
         this.followVanishedStop(leavingId, previousItems);
       returnedTo = this.retryPendingReturn(scope.element) ?? returnedTo;
     }
-    returnedTo ??= this.restoreStandingAfterEmptyRing(scope.element, leavingId, items.focusItems.length);
+    returnedTo ??= this.restoreStandingAfterEmptyRing(
+      scope.element,
+      scopeChanged ? undefined : leavingId,
+      items.focusItems.length,
+    );
     this.scopeChain = this.computeScopeChain();
 
     // Drop the mutation records our own tabindex writes just queued — the DOM is
@@ -460,14 +464,21 @@ export class FocusDiscoveryEngine {
     return undefined;
   }
 
+  /**
+   * `leavingId` is where the ring stood in this same scope, or undefined when the scan came from another one:
+   * the item a menu over a key-owning sheet stood on is no place to return to. The remembered stop outlives
+   * scans of other scopes, such as Remote Input's own menu and its controls, and is used by the next scan
+   * of its own scope that finds stops.
+   */
   private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
     if (itemCount === 0) {
       if (leavingId) this.standingWhenRingEmptied = { scope, id: leavingId };
       return undefined;
     }
     const standing = this.standingWhenRingEmptied;
+    if (!standing || standing.scope !== scope) return undefined;
     this.standingWhenRingEmptied = null;
-    if (!standing || standing.scope !== scope || !this.controller.currentIsDefaultSelection()) return undefined;
+    if (!this.controller.currentIsDefaultSelection()) return undefined;
     if (this.controller.setCurrent(standing.id)) return standing.id;
     this.pendingReturn = {
       scope,

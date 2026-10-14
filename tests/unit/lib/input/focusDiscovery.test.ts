@@ -623,6 +623,64 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  describe("a key-owning sheet closed from its own menu", () => {
+    const openSheetFromOpener = () => {
+      const page = mount(`<div id="page"><button id="first">first</button><button id="opener">Input</button></div>`);
+      const { controller, engine } = makeEngine();
+      engine.start();
+      controller.setCurrent(controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id);
+      const sheetHost = mount(
+        `<div role="dialog" data-key-nav-skip=""><button id="restore">Show controls</button></div>`,
+      );
+      const sheet = sheetHost.firstElementChild!;
+      page.setAttribute("aria-hidden", "true");
+      engine.refresh();
+      expect(controller.list()).toHaveLength(0);
+      const openMenu = () => {
+        const menu = mount(`<div role="menu"><button>Other controls</button><button>Close Remote Input</button></div>`);
+        engine.refresh();
+        expect(controller.list()).toHaveLength(2);
+        return menu;
+      };
+      const closeSheet = () => {
+        sheetHost.remove();
+        page.removeAttribute("aria-hidden");
+        engine.refresh();
+      };
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { controller, engine, sheet, openMenu, closeSheet, selected };
+    };
+
+    it("returns to the opener after Close Remote Input in the menu", () => {
+      const { engine, openMenu, closeSheet, selected } = openSheetFromOpener();
+      const menu = openMenu();
+      menu.remove();
+      engine.refresh();
+      closeSheet();
+
+      expect(selected()).toBe("opener");
+      engine.stop();
+    });
+
+    it("returns to the opener after Other controls, then Back twice", () => {
+      const { controller, engine, sheet, openMenu, closeSheet, selected } = openSheetFromOpener();
+      const menu = openMenu();
+      menu.remove();
+      sheet.removeAttribute("data-key-nav-skip");
+      engine.refresh();
+      expect(selected()).toBe("restore");
+      controller.focusNext();
+
+      sheet.setAttribute("data-key-nav-skip", "");
+      engine.refresh();
+      expect(controller.list()).toHaveLength(0);
+      closeSheet();
+
+      expect(selected()).toBe("opener");
+      engine.stop();
+    });
+  });
+
   it("keeps the selection on a card whose own stop moves inside it as it opens", () => {
     // Only the innermost labelled container is a group, so opening a card that renders a labelled
     // group of rows takes the card itself out of the ring.

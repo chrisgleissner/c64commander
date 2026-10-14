@@ -471,6 +471,40 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
   });
 
+  test("closing Remote Input from its keypad menu returns the selection to the Home control that opened it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openRemoteInput = page
+      .locator('[data-slot-active="true"]')
+      .getByTestId("home-machine-inline-openRemoteInput");
+    expect(await ringFocus(page, openRemoteInput), "The ring could not reach Remote Input on Home").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(sheet).toBeVisible();
+
+    await page.keyboard.press("F2");
+    const close = page.getByTestId("remote-input-controls-menu").getByTestId("remote-input-menu-close");
+    await expect(close).toBeVisible();
+    for (
+      let step = 0;
+      step < 10 && !(await close.evaluate((element) => element === document.activeElement));
+      step += 1
+    ) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(sheet).toBeHidden();
+    await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+  });
+
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
     page,
   }) => {
