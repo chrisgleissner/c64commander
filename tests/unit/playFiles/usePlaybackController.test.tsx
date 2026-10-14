@@ -185,6 +185,7 @@ const renderPlaybackController = (
     setAutoAdvanceDueAtMs?: ReturnType<typeof vi.fn>;
     ensurePlaybackConnection?: ReturnType<typeof vi.fn>;
     ensureUnmuted?: ReturnType<typeof vi.fn>;
+    isManualMuteHeld?: () => boolean;
     applyAudioMixerUpdates?: ReturnType<typeof vi.fn>;
     restoreVolumeOverrides?: ReturnType<typeof vi.fn>;
     dispatchVolume?: ReturnType<typeof vi.fn>;
@@ -295,6 +296,7 @@ const renderPlaybackController = (
       setTrackInstanceId: options?.setTrackInstanceId ?? vi.fn(),
       setAutoAdvanceDueAtMs: options?.setAutoAdvanceDueAtMs ?? vi.fn(),
       ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
+      isManualMuteHeld: options?.isManualMuteHeld ?? (() => false),
       localSidPlaybackController: options?.localSidPlaybackController as any,
       stationActiveRef: options?.stationActiveRef,
     });
@@ -1367,6 +1369,38 @@ describe("usePlaybackController", () => {
     expect(result.current.pauseShown).toBe(false);
   });
 
+  it("keeps the listener's own Mute when a failed pause rolls its mute back", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const dispatchVolume = vi.fn();
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machinePause: vi.fn().mockRejectedValue(new Error("pause failed")) } as any);
+    const pauseMuteSnapshotRef = { current: null };
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      dispatchVolume,
+      applyAudioMixerUpdates,
+      ensureUnmuted,
+      isManualMuteHeld: () => true,
+      enabledSidVolumeItems: [{ name: "SID 1", value: "OFF", options: ["OFF", "-42 dB", "0 dB"] }],
+      pauseMuteSnapshotRef,
+      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({ "SID 1": "OFF" }),
+      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: { "SID 1": "0 dB" }, enablement: {} }),
+      snapshotToUpdates: vi.fn().mockReturnValue({ "SID 1": "0 dB" }),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(applyAudioMixerUpdates).not.toHaveBeenCalledWith(expect.anything(), "Pause mute rollback");
+    expect(ensureUnmuted).not.toHaveBeenCalled();
+    expect(dispatchVolume).toHaveBeenLastCalledWith({ type: "mute", reason: "manual" });
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+  });
+
   it("restores the pause mute snapshot when machine pause fails after muting", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
@@ -1472,6 +1506,41 @@ describe("usePlaybackController", () => {
     await result.current.handlePauseResume();
 
     expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+  });
+
+  it("keeps the listener's own Mute on resume instead of restoring the volume saved before it", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    const dispatchVolume = vi.fn();
+    const pauseMuteSnapshotRef = {
+      current: { volumes: { "Vol Master": "0 dB" }, enablement: {} },
+    };
+    vi.mocked(getC64API).mockReturnValue({ machineResume: vi.fn().mockResolvedValue(undefined) } as any);
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      applyAudioMixerUpdates,
+      ensureUnmuted,
+      dispatchVolume,
+      isManualMuteHeld: () => true,
+      pauseMuteSnapshotRef,
+      enabledSidVolumeItems: [{ name: "Vol Master", value: "OFF", options: ["OFF", "-42 dB", "0 dB", "+6 dB"] }],
+      snapshotToUpdates: vi.fn((snapshot: any) =>
+        buildEnabledSidUnmuteUpdates(snapshot?.volumes, snapshot?.enablement ?? {}),
+      ),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(applyAudioMixerUpdates).not.toHaveBeenCalledWith(expect.anything(), "Resume unmute");
+    expect(ensureUnmuted).not.toHaveBeenCalled();
+    expect(dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "manual" });
+    expect(dispatchVolume).not.toHaveBeenCalledWith({ type: "unmute", reason: "pause" });
     expect(pauseMuteSnapshotRef.current).toBeNull();
   });
 

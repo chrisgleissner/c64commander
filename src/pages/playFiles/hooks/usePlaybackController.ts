@@ -261,6 +261,8 @@ interface UsePlaybackControllerProps {
   pausingFromPauseRef: MutableRefObject<boolean>;
   resumingFromPauseRef: MutableRefObject<boolean>;
   ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
+  /** Whether the listener's own Mute is on, which a pause must hand back rather than undo. */
+  isManualMuteHeld: () => boolean;
 
   // Refs
   // HARD12-007: the second parameter is `reset` (whether to zero the cumulative
@@ -342,6 +344,7 @@ export function usePlaybackController({
   pausingFromPauseRef,
   resumingFromPauseRef,
   ensureUnmuted,
+  isManualMuteHeld,
   playedClockRef,
   trackStartedAtRef,
   trackInstanceIdRef,
@@ -556,7 +559,19 @@ export function usePlaybackController({
     sidEnablement,
   ]);
 
+  const keepManualMuteAfterPause = useCallback(() => {
+    pauseMuteSnapshotRef.current = null;
+    pausingFromPauseRef.current = false;
+    dispatchVolume({ type: "mute", reason: "manual" });
+  }, [dispatchVolume, pauseMuteSnapshotRef, pausingFromPauseRef]);
+
   const unmuteAfterMachineResume = useCallback(async () => {
+    if (isManualMuteHeld()) {
+      keepManualMuteAfterPause();
+      resumingFromPauseRef.current = true;
+      addLog("info", "Playback resume kept the listener's mute");
+      return;
+    }
     const snapshot = pauseMuteSnapshotRef.current;
     const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
     let updates = snapshotToUpdates(snapshot, currentItems);
@@ -580,6 +595,8 @@ export function usePlaybackController({
     dispatchVolume,
     enabledSidVolumeItems,
     ensureUnmuted,
+    isManualMuteHeld,
+    keepManualMuteAfterPause,
     pauseMuteSnapshotRef,
     pausingFromPauseRef,
     resumingFromPauseRef,
@@ -590,6 +607,11 @@ export function usePlaybackController({
     async (pauseError: unknown) => {
       const snapshot = pauseMuteSnapshotRef.current;
       if (!snapshot && !pausingFromPauseRef.current) return;
+      if (isManualMuteHeld()) {
+        keepManualMuteAfterPause();
+        resumingFromPauseRef.current = false;
+        return;
+      }
       try {
         const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
         let updates = snapshotToUpdates(snapshot, currentItems);
@@ -622,6 +644,8 @@ export function usePlaybackController({
       dispatchVolume,
       enabledSidVolumeItems,
       ensureUnmuted,
+      isManualMuteHeld,
+      keepManualMuteAfterPause,
       pauseMuteSnapshotRef,
       pausingFromPauseRef,
       resumingFromPauseRef,

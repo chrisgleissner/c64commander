@@ -640,6 +640,7 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs,
     resumingFromPauseRef,
     ensureUnmuted,
+    isManualMuteHeld,
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
