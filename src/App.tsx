@@ -42,6 +42,7 @@ import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { T9FieldListener } from "@/components/input/T9FieldListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { TourHost } from "@/components/tour/TourHost";
+import { NotificationPermissionMoment } from "@/components/NotificationPermissionMoment";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestDeviceSwitcherOpen, requestMachineCommand, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
@@ -359,6 +360,7 @@ const AppRoutes = () => {
             <T9FieldListener />
             <SearchOverlayHost />
             <TourHost />
+            <NotificationPermissionMoment />
             <ConnectionController />
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />

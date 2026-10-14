@@ -9,7 +9,6 @@
 import { addLog } from "@/lib/logging";
 import { notifyPlaybackActivityChanged } from "@/lib/playback/playbackActivitySignal";
 import { BackgroundExecution, type NowPlayingInfo } from "@/lib/native/backgroundExecution";
-import { ensureNotificationPermission } from "@/lib/native/notificationPermission";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 
@@ -86,9 +85,6 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
   if (activeCount > 1) return;
   publishedPaused = false;
   publishedNowPlaying = null;
-  // Ask before the service starts: startForeground() posts the notification once, and a grant that
-  // arrives afterwards does not bring back a notification the system has already dropped.
-  await ensureNotificationPermission();
   try {
     await BackgroundExecution.start();
   } catch (error) {
