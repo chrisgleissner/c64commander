@@ -128,10 +128,6 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
 
-/**
- * The visible title a dialog names itself by. Without it a dialog's breadcrumb in the keypad
- * guidance bar fell through to its presentation attribute and read "sheet" or "dialog".
- */
 const scheduleAfterNextPaint = (run: () => void): void => {
   if (typeof requestAnimationFrame !== "function") {
     queueMicrotask(run);
@@ -140,10 +136,18 @@ const scheduleAfterNextPaint = (run: () => void): void => {
   requestAnimationFrame(() => setTimeout(run, 0));
 };
 
+const labellingElements = (element: Element): HTMLElement[] =>
+  (element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [])
+    .map((id) => element.ownerDocument.getElementById(id))
+    .filter((label): label is HTMLElement => label !== null);
+
+/**
+ * The visible title a dialog names itself by. Without it a dialog's breadcrumb in the keypad
+ * guidance bar fell through to its presentation attribute and read "sheet" or "dialog".
+ */
 const labelledByText = (element: Element): string | undefined => {
-  const ids = element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [];
-  const text = ids
-    .map((id) => element.ownerDocument.getElementById(id)?.textContent?.trim() ?? "")
+  const text = labellingElements(element)
+    .map((label) => label.textContent.trim())
     .filter(Boolean)
     .join(" ");
   return text || undefined;
@@ -151,9 +155,8 @@ const labelledByText = (element: Element): string | undefined => {
 
 /**
  * A childList record that only swaps text or comment nodes, as setting `textContent` on a readout
- * does. It cannot add or remove a stop. The spectrum's level readout rewrites its text ten times a
- * second while sound plays, and each rewrite re-ran the whole page scan, which kept a low-end
- * phone's renderer at up to 84% of a core.
+ * does. It cannot add or remove a stop, and a readout that updates while sound plays would otherwise
+ * rescan the whole page on every update.
  */
 const changesOnlyText = (record: MutationRecord): boolean => {
   if (record.type !== "childList") return false;
@@ -178,6 +181,7 @@ export class FocusDiscoveryEngine {
   private lastScope: Element | null = null;
   /** Where the ring stood in each scope it left, so closing an overlay returns to its opener. */
   private currentWhenLeft = new WeakMap<Element, string>();
+  private groupLabelElements: HTMLElement[] = [];
   /**
    * A return that could not land yet: the opener is disabled while the write it started is pending, so it is
    * missing from the ring when the overlay closes. Retried on later scans while the ring still stands on the
@@ -236,7 +240,19 @@ export class FocusDiscoveryEngine {
     this.removeAllShims();
     this.resolvers.clear();
     this.sources.clear();
+    this.groupLabelElements = [];
     this.controller.clear();
+  }
+
+  private relabelsCurrent(record: MutationRecord): boolean {
+    const currentId = this.controller.current()?.id;
+    const current = currentId ? this.elementForId(currentId) : null;
+    return current !== null && changesOnlyText(record) && current.contains(record.target);
+  }
+
+  /** A group's breadcrumb label is read from its `aria-labelledby` elements only during a scan. */
+  private renamesAGroup(record: MutationRecord): boolean {
+    return this.groupLabelElements.some((label) => label.contains(record.target));
   }
 
   /*
@@ -247,14 +263,8 @@ export class FocusDiscoveryEngine {
    * test keeps a dialog nested INSIDE a skipped region working once the scope has moved into it,
    * and the overlay test covers the moment before that, when it is only being mounted.
    */
-  private relabelsCurrent(record: MutationRecord): boolean {
-    const currentId = this.controller.current()?.id;
-    const current = currentId ? this.elementForId(currentId) : null;
-    return current !== null && changesOnlyText(record) && current.contains(record.target);
-  }
-
   private cannotChangeRing(record: MutationRecord): boolean {
-    if (changesOnlyText(record)) return true;
+    if (changesOnlyText(record)) return !this.renamesAGroup(record);
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
@@ -326,6 +336,7 @@ export class FocusDiscoveryEngine {
     this.applyShims(items.shimTargets);
     this.resolvers = items.resolvers;
     this.sources = items.sources;
+    this.groupLabelElements = items.groupLabelElements;
     this.controller.setItems(items.focusItems);
     // Closing a dropdown or dialog used to drop the ring on the page's first item, because the item it
     // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad
@@ -520,6 +531,7 @@ export class FocusDiscoveryEngine {
     resolvers: Map<string, () => HTMLElement | null>;
     sources: Map<string, FocusDiscoverySource>;
     shimTargets: HTMLElement[];
+    groupLabelElements: HTMLElement[];
   } {
     const groupElements = new Set<Element>(nodes.filter((node) => node.isGroup).map((node) => node.element));
     const idByElement = new Map<Element, string>(nodes.map((node) => [node.element, node.id]));
@@ -527,6 +539,7 @@ export class FocusDiscoveryEngine {
     const resolvers = new Map<string, () => HTMLElement | null>();
     const sources = new Map<string, FocusDiscoverySource>();
     const shimTargets: HTMLElement[] = [];
+    const groupLabelElements: HTMLElement[] = [];
 
     for (const node of nodes) {
       const descriptor = node.registration?.descriptor;
@@ -549,6 +562,7 @@ export class FocusDiscoveryEngine {
           element.getAttribute("data-sheet-presentation") ||
           undefined
         : undefined;
+      if (node.isGroup) groupLabelElements.push(...labellingElements(element));
 
       focusItems.push({
         id: node.id,
@@ -568,7 +582,7 @@ export class FocusDiscoveryEngine {
       if (!isNativelyFocusable(element)) shimTargets.push(element);
     }
 
-    return { focusItems, resolvers, sources, shimTargets };
+    return { focusItems, resolvers, sources, shimTargets, groupLabelElements };
   }
 
   private applyShims(targets: HTMLElement[]): void {
