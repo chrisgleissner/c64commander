@@ -178,6 +178,10 @@ export interface StreamUdpSpectrumFrame {
   bands: number[];
   /** Per-output-channel measurements; absent only on an older native bridge. */
   channels?: SpectrumChannelLevel[];
+  /** The native monotonic clock when the frame was read, in nanoseconds. */
+  timestampNanos?: number;
+  /** Samples the analysis wanted beyond the newest one held; the bands lag the sound by that much. */
+  shortfallSamples?: number;
   peakDb: number;
   rmsDb: number;
   /** True when a sample reached full scale within the last second. */
@@ -281,7 +285,8 @@ export interface StreamUdpPlugin {
   setAudioProcessing(options: StreamUdpAudioProcessing): Promise<Record<string, never>>;
   /** Switch the spectrum analyser on or off. It costs nothing while off. */
   setSpectrumEnabled(options: { enabled: boolean }): Promise<Record<string, never>>;
-  readSpectrum(): Promise<StreamUdpSpectrumFrame>;
+  /** [targetNanos] is the native monotonic time the frame will be shown at; the bands then match the sound heard at that moment. */
+  readSpectrum(options?: { targetNanos?: number }): Promise<StreamUdpSpectrumFrame>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "audiofocus",

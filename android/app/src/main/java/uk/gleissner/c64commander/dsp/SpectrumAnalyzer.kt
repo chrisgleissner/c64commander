@@ -31,6 +31,10 @@ internal class SpectrumFrame(
         SpectrumChannelLevel("left", SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, false),
         SpectrumChannelLevel("right", SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, false),
     ),
+    /** The monotonic clock when this frame was read, for lining the web layer's clock up with the native one. */
+    val timestampNanos: Long = 0L,
+    /** How many samples a window wanted beyond the newest one held; the bands lag by that much. */
+    val shortfallSamples: Int = 0,
 )
 
 /**
@@ -140,7 +144,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
             sampleRate,
             resolutions,
             maxOf(1, sampleRate / stepsPerSecond),
-            maxOf(1, sampleRate / FRAMES_PER_SECOND),
+            maxOf(1, sampleRate / LEVEL_SPANS_PER_SECOND),
             history,
             left,
             right,
@@ -213,7 +217,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
 
   /** The analysis of the samples now being heard; runs the FFT only when they have moved on. */
   @Synchronized
-  fun read(enabled: Boolean): SpectrumFrame {
+  fun read(enabled: Boolean, targetNanos: Long = 0L): SpectrumFrame {
     val now = nanoTime()
     val config = configuration
     val newest = writeCount
@@ -221,12 +225,12 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       val active = enabled && config != null && now - lastFeedNanos < ACTIVE_WINDOW_NANOS
       return SpectrumFrame(enabled, active, 0L, config?.sampleRate ?: 0, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, false)
     }
-    val end = heardUpTo(config, newest, now)
+    val end = heardUpTo(config, newest, now, targetNanos)
     val active = now - lastFeedNanos < ACTIVE_WINDOW_NANOS || newest - end >= config.levelSamples
     val seq = end / config.stepSamples
     val previous = cached
     if (previous == null || cachedSeq != seq) {
-      val analysed = analyseStable(config, seq * config.stepSamples, now)
+      val analysed = analyseStable(config, seq * config.stepSamples, newest, now)
       if (analysed != null) {
         cached = analysed
         cachedSeq = seq
@@ -236,14 +240,14 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     val clipped = lastClipNanos != Long.MIN_VALUE && now - lastClipNanos < CLIP_HOLD_NANOS
     if (frame == null) {
       // A sequence is observable only once its matching history has been copied.
-      return SpectrumFrame(true, active, 0L, config.sampleRate, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, clipped)
+      return SpectrumFrame(true, active, 0L, config.sampleRate, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, clipped, timestampNanos = now)
     }
     return SpectrumFrame(true, active, frame.sequence, frame.sampleRate, frame.bands, frame.peakDb, frame.rmsDb, clipped,
         Array(2) { channel ->
           val level = frame.channels[channel]
           SpectrumChannelLevel(level.id, level.rmsDb, level.peakDb,
               channelClipNanos[channel] != Long.MIN_VALUE && now - channelClipNanos[channel] < CLIP_HOLD_NANOS)
-        })
+        }, now, frame.shortfallSamples)
   }
 
   /**
@@ -252,9 +256,10 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
    * so a paused track, which stops reporting, freezes the bars rather than running into audio that
    * has not been played.
    */
-  private fun heardUpTo(config: Configuration, newest: Long, now: Long): Long {
+  private fun heardUpTo(config: Configuration, newest: Long, now: Long, targetNanos: Long): Long {
     if (!refreshSpeakerAnchor()) return newest
-    val elapsed = (now - readerAnchorNanos).coerceIn(0L, MAX_EXTRAPOLATION_NANOS)
+    val at = if (targetNanos > 0L) targetNanos else now
+    val elapsed = (at - readerAnchorNanos).coerceIn(0L, MAX_EXTRAPOLATION_NANOS)
     val heard = readerAnchorIndex + elapsed * config.sampleRate / 1_000_000_000L
     return heard.coerceIn(maxOf(0L, newest - config.reach), newest)
   }
@@ -278,17 +283,21 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     return readerAnchorKnown
   }
 
-  private fun analyseStable(config: Configuration, end: Long, now: Long): SpectrumFrame? {
+  private fun analyseStable(config: Configuration, end: Long, newest: Long, now: Long): SpectrumFrame? {
     val history = config.history
     val mask = config.mask
     val bands = IntArray(SpectrumBands.COUNT)
     repeat(MAX_READ_RETRIES) {
       val first = publication
       if ((first and 1L) != 0L) return@repeat
+      var shortfall = 0L
       for (resolution in config.resolutions) {
         val size = resolution.fft.size
         val window = resolution.fft.window
-        val start = end - size
+        val wanted = end + size / 2
+        val windowEnd = minOf(wanted, newest)
+        shortfall = maxOf(shortfall, wanted - windowEnd)
+        val start = windowEnd - size
         for (n in 0 until size) {
           val index = start + n
           re[n] = if (index < 0) 0.0f else history[(index and mask).toInt()] * window[n]
@@ -303,13 +312,14 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
         resolution.plan.fill(power, resolution.bands, bands)
       }
       // Every sample heard since the last analysis counts, so a clip between two polls is not missed.
-      val from = maxOf(0L, minOf(end - config.levelSamples, levelsReadTo), writeCount - history.size)
+      val levelsEnd = minOf(end + config.levelSamples / 2, newest)
+      val from = maxOf(0L, minOf(levelsEnd - config.levelSamples, levelsReadTo), writeCount - history.size)
       var sumSq = 0.0
       var leftPeak = 0.0f
       var rightPeak = 0.0f
       var leftSumSq = 0.0
       var rightSumSq = 0.0
-      for (index in from until end) {
+      for (index in from until levelsEnd) {
         val slot = (index and mask).toInt()
         val mono = history[slot]
         val l = config.left[slot]
@@ -325,14 +335,14 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
         if (peak >= CLIP_LEVEL) lastClipNanos = now
         if (leftPeak >= CLIP_LEVEL) channelClipNanos[0] = now
         if (rightPeak >= CLIP_LEVEL) channelClipNanos[1] = now
-        levelsReadTo = end
-        val span = end - from
+        levelsReadTo = levelsEnd
+        val span = levelsEnd - from
         val rms = if (span > 0) sqrt(sumSq / span) else 0.0
         return SpectrumFrame(true, true, end / config.stepSamples, config.sampleRate, bands, toDb(peak.toDouble()), toDb(rms), false,
             arrayOf(
                 SpectrumChannelLevel("left", toDb(if (span > 0) sqrt(leftSumSq / span) else 0.0), toDb(leftPeak.toDouble()), leftPeak >= CLIP_LEVEL),
                 SpectrumChannelLevel("right", toDb(if (span > 0) sqrt(rightSumSq / span) else 0.0), toDb(rightPeak.toDouble()), rightPeak >= CLIP_LEVEL),
-            ))
+            ), now, shortfall.toInt())
       }
     }
     return null
@@ -354,6 +364,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       Resolution(FftPlan.of(sizes[index]), BandPlan(sampleRate, sizes[index]), bands)
     }
   }
+
+  internal fun writeCountForTest(): Long = writeCount
 
   private fun floorBands(): IntArray = IntArray(SpectrumBands.COUNT) { SpectrumBands.FLOOR_DB }
 
@@ -468,6 +480,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     private const val BELOW_APP_ALLOWANCE_MS = 500
     private const val BYTES_PER_FRAME = 4
     private const val FRAMES_PER_SECOND = 30
+    private const val LEVEL_SPANS_PER_SECOND = 60
     private const val MAX_READ_RETRIES = 3
     private const val INV_FULL_SCALE = 1.0f / 32768.0f
     private const val CLIP_LEVEL = 32767.0f / 32768.0f

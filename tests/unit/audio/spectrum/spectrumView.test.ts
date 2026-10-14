@@ -81,6 +81,7 @@ const setup = (
   let nowMs = 0;
   let pending: ((t: number) => void) | null = null;
   const reads: number[] = [];
+  const targets: Array<number | undefined> = [];
   const readouts: SpectrumReadout[] = [];
   const active: boolean[] = [];
   const tiers: number[] = [];
@@ -91,8 +92,9 @@ const setup = (
     onReadout: (r) => readouts.push(r),
     onActiveChange: (a) => active.push(a),
     onTierChange: (t) => tiers.push(t.index),
-    read: async () => {
+    read: async (target?: number) => {
       reads.push(nowMs);
+      targets.push(target);
       if (options.read) return options.read();
       return options.frames ? options.frames() : frame({ sequence: reads.length });
     },
@@ -125,6 +127,7 @@ const setup = (
     ctx,
     layerCtx,
     reads,
+    targets,
     readouts,
     active,
     tiers,
@@ -241,6 +244,24 @@ describe("SpectrumView", () => {
     t.view.setState({ visible: true, paused: false });
     await t.advance(100);
     expect(t.ctx.fills.some((f) => f.w === 6 && f.h === 14)).toBe(true);
+    t.view.dispose();
+  });
+
+  it("asks for the sound audible when the frame will be shown once the native clock is known", async () => {
+    const nativeOffsetMs = 5000;
+    const t: ReturnType<typeof setup> = setup({
+      frames: () => frame({ timestampNanos: Math.round((t.nowMs + nativeOffsetMs) * 1e6) }),
+    });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(400);
+    expect(t.targets.length).toBeGreaterThan(5);
+    expect(t.targets[0]).toBe(0);
+    const lastIndex = t.targets.length - 1;
+    const askedAt = t.reads[lastIndex];
+    const aheadMs = t.targets[lastIndex]! / 1e6 - nativeOffsetMs - askedAt;
+    expect(aheadMs).toBeGreaterThan(30);
+    expect(aheadMs).toBeLessThan(36);
     t.view.dispose();
   });
 

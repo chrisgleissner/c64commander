@@ -119,11 +119,11 @@ const isFrame = (value: unknown): value is SpectrumFrame => {
 };
 
 /** Reads the newest analysis frame. Null when unavailable, failed or malformed; callers keep their last picture. */
-export const readSpectrum = async (): Promise<SpectrumFrame | null> => {
+export const readSpectrum = async (targetNanos = 0): Promise<SpectrumFrame | null> => {
   const backend = resolveBackend();
   if (!backend || isKnownUnavailable("StreamUdp.audioFx")) return null;
   try {
-    const frame = await backend.readSpectrum();
+    const frame = await backend.readSpectrum(targetNanos > 0 ? { targetNanos } : undefined);
     if (!isFrame(frame)) {
       reportFailure("readSpectrum", new Error("readSpectrum returned an unexpected shape"));
       return null;

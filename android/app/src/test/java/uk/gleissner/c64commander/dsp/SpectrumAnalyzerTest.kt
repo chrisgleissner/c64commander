@@ -400,4 +400,38 @@ class SpectrumAnalyzerTest {
     val bassDb = bass.read(true).bands[bandOf(100.0)]
     assertTrue("bass band reads $bassDb dB against treble $trebleDb dB", bassDb <= trebleDb - 10)
   }
+
+  private fun speakerAlignedBurst(): SpectrumAnalyzer {
+    val speaker = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(speaker, 6000.0, rate / 2, 0, amplitude = 0.0)
+    feedTone(speaker, 6000.0, 256, 0, amplitude = 0.5)
+    feedTone(speaker, 6000.0, rate / 2, 0, amplitude = 0.0)
+    val total = speaker.writeCountForTest()
+    val burstStart = rate / 2L
+    // The speaker is 1000 samples before the burst when the report is taken.
+    speaker.presentAt(framesAheadOfSpeaker = total - (burstStart - 1000), timestampNanos = now)
+    return speaker
+  }
+
+  @Test
+  fun aTargetTimeCentresTheWindowOnTheSoundHeardAtThatMomentSoABurstShowsAtItsOwnTime() {
+    val band = bandOf(6000.0)
+    val atBurstCentre = speakerAlignedBurst().read(true, now + (1000 + 128) * 1_000_000_000L / rate).bands[band]
+    val beforeBurst = speakerAlignedBurst().read(true, now).bands[band]
+    val wellAfterBurst = speakerAlignedBurst().read(true, now + (1000 + 128 + 2000) * 1_000_000_000L / rate).bands[band]
+    assertTrue("burst centre reads $atBurstCentre dB", atBurstCentre >= -20)
+    assertTrue("20 ms before the burst reads $beforeBurst dB", beforeBurst <= atBurstCentre - 25)
+    assertTrue("40 ms after the burst reads $wellAfterBurst dB", wellAfterBurst <= atBurstCentre - 25)
+  }
+
+  @Test
+  fun withoutASpeakerReportTheLatestSamplesAreAnalysedWhateverTheTarget() {
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, 6000.0, rate / 4, 0, amplitude = 0.0)
+    feedTone(live, 6000.0, 256, 0, amplitude = 0.5)
+    val noTarget = live.read(true)
+    val farFuture = live.read(true, now + 5_000_000_000L)
+    assertEquals(noTarget.sequence, farFuture.sequence)
+    assertTrue("the window wanted samples that do not exist yet", farFuture.shortfallSamples > 0)
+  }
 }

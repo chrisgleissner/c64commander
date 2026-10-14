@@ -33,7 +33,7 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
     call.resolve(JSObject())
   }
 
-  fun readSpectrum(call: PluginCall) = call.resolve(payload(hub().readSpectrum()))
+  fun readSpectrum(call: PluginCall) = call.resolve(payload(hub().readSpectrum(call.getDouble("targetNanos", 0.0)?.toLong() ?: 0L)))
 
   fun payload(frame: SpectrumFrame): JSObject {
     val bands = JSArray()
@@ -54,5 +54,7 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
         .put("rmsDb", frame.rmsDb)
         .put("clipped", frame.clipped)
         .put("channels", channels)
+        .put("timestampNanos", frame.timestampNanos)
+        .put("shortfallSamples", frame.shortfallSamples)
   }
 }

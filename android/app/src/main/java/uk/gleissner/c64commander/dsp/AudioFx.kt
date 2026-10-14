@@ -74,7 +74,7 @@ internal class AudioFxHub(nanoTime: () -> Long = System::nanoTime) {
     params = FxParams.clamped(levelling, bassDb, midDb, trebleDb, stereoWidth, reverb)
   }
 
-  fun readSpectrum(): SpectrumFrame = analyzer.read(spectrumEnabled)
+  fun readSpectrum(targetNanos: Long = 0L): SpectrumFrame = analyzer.read(spectrumEnabled, targetNanos)
 
   companion object {
     val shared = AudioFxHub()
