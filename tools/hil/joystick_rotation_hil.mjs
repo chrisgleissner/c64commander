@@ -61,6 +61,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { createDroidDevice } from "./droidctl_device.mjs";
+import { readJoystickLayoutLabels } from "./joystick_layout_labels.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -182,7 +183,7 @@ const LAYOUT_KEYS = {
   ],
 };
 
-const LAYOUT_LABEL = { classicT9: "Classic T9", diamond8: "Diamond (8-centred)", custom: "Custom" };
+const LAYOUT_LABEL = await readJoystickLayoutLabels();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -301,7 +302,9 @@ const selectLayout = async (layout) => {
   const label = LAYOUT_LABEL[layout];
   const before = await js(
     inPage(`q("tab-settings")?.click();await wait(2500);
-if(!q("settings-joystick-key-layout")) { q("settings-section-toggle-play-and-disk")?.click(); await wait(2000); }
+const section=document.querySelector('[data-section-scope="settings"][data-section-id="play-and-disk"]');
+if(section&&section.dataset.open!=="true") q("settings-section-toggle-play-and-disk")?.click();
+for(let i=0;i<30&&!q("settings-joystick-key-layout");i++) await wait(100);
 const t=q("settings-joystick-key-layout");
 if(!t) return JSON.stringify({error:"the joystick layout control is not reachable in Settings"});
 return JSON.stringify({was:localStorage.getItem("c64u_remote_input_joystick_layout"),label:t.innerText});`),
