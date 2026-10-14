@@ -17,7 +17,6 @@ import { useAvMirror } from "@/hooks/useAvMirror";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { SpectrumView, type SpectrumReadout } from "@/lib/audio/spectrum/spectrumView";
 import { METER_AREA_HEIGHT_PX } from "@/lib/audio/spectrum/spectrumRenderer";
-import { cn } from "@/lib/utils";
 
 export const SPECTRUM_UNAVAILABLE_MESSAGE = "Spectrum is available for sound played on this phone";
 
@@ -114,33 +113,16 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
   return (
     <div className="space-y-2 p-3 pt-0" data-testid="spectrum-panel">
       <ScreenActivityWatch onChange={setOnScreen} />
-      <div className="flex items-center justify-between text-sm" data-testid="spectrum-readout">
-        <span className="text-muted-foreground">dBFS</span>
-        <span className="sr-only">
-          <span ref={channelsRef} data-testid="spectrum-channel-readout" />{" "}
-          <span className="whitespace-nowrap text-muted-foreground">
-            Level{" "}
-            <span ref={rmsRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-rms" /> dB
-          </span>{" "}
-          <span className="whitespace-nowrap text-muted-foreground">
-            Peak{" "}
-            <span ref={peakRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-peak" /> dB
-          </span>
-        </span>
-        <span
-          ref={clipRef}
-          data-clipping="false"
-          data-testid="spectrum-clip"
-          className={cn(
-            "inline-flex items-center gap-1.5 whitespace-nowrap text-muted-foreground",
-            "[&[data-clipping=true]]:font-semibold [&[data-clipping=true]]:text-destructive",
-          )}
-        >
-          <span
-            aria-hidden
-            className="inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground/30 [[data-clipping=true]>&]:bg-destructive"
-          />
-          <span className={profile === "compact" ? "sr-only" : undefined}>Clip</span>
+      <div className="sr-only" data-testid="spectrum-readout">
+        <span ref={channelsRef} data-testid="spectrum-channel-readout" />{" "}
+        <span>
+          Level <span ref={rmsRef} data-testid="spectrum-rms" /> dB
+        </span>{" "}
+        <span>
+          Peak <span ref={peakRef} data-testid="spectrum-peak" /> dB
+        </span>{" "}
+        <span ref={clipRef} data-clipping="false" data-testid="spectrum-clip">
+          Clip
         </span>
       </div>
       <div className="relative">

@@ -188,7 +188,7 @@ describe("SpectrumCard", () => {
     expect(created.views).toHaveLength(1);
     expect(lastOptions().profile).toBe("compact");
     expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "194px" });
-    expect(screen.getByText("Clip")).toHaveClass("sr-only");
+    expect(screen.getByTestId("spectrum-readout")).toHaveClass("sr-only");
     const compactView = lastView();
     state.profile = "expanded";
     component.rerender(<SpectrumCard soundOnPhone paused={false} />);
@@ -197,7 +197,6 @@ describe("SpectrumCard", () => {
     expect(lastOptions().profile).toBe("expanded");
     expect(lastView().setState).toHaveBeenLastCalledWith({ visible: true, paused: false });
     expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "324px" });
-    expect(screen.getByText("Clip")).not.toHaveClass("sr-only");
     state.profile = "unheard-of";
     component.rerender(<SpectrumCard soundOnPhone paused={false} />);
     expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "274px" });

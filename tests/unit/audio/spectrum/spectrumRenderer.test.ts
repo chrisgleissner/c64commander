@@ -74,6 +74,17 @@ const stateWith = (bars: number, level: number, peak: number) => {
 };
 
 describe("spectrum renderer", () => {
+  it("leaves the same margin on both sides of the plot", () => {
+    for (const [width, fontPx] of [
+      [192, 14],
+      [300, 14],
+      [420, 16],
+    ]) {
+      const layout = computeLayout(width, 234, fontPx);
+      expect(layout.width - layout.plotRight).toBe(layout.plotLeft);
+    }
+  });
+
   it("stacks left and right channel meters above the frequency plot with a dB scale that rises from left to right", () => {
     const t = makeContext();
     const layout = computeLayout(300, 234, 14);

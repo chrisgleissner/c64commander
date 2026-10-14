@@ -48,10 +48,10 @@ export interface SpectrumLayout {
   showMinorLabels: boolean;
 }
 
-/** Splits the canvas into the plot and the margins that hold the level and frequency labels. */
+/** Splits the canvas into the plot and two equal side margins; the left one holds the labels. */
 export const computeLayout = (width: number, height: number, fontPx: number): SpectrumLayout => {
-  const plotLeft = Math.ceil(fontPx * 3.6);
-  const plotRight = width - 6;
+  const plotLeft = Math.ceil(fontPx * 2.6);
+  const plotRight = width - plotLeft;
   const plotTop = METER_AREA_HEIGHT_PX + Math.ceil(fontPx / 2) + 1;
   const plotBottom = height - Math.ceil(fontPx * 1.5);
   return {

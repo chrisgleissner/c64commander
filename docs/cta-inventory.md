@@ -480,7 +480,7 @@ Listed below in the order they are rendered and walked by the focus ring.
   growing from left to right toward 0 dBFS, with a red block when that channel clips. Matching stereo
   levels do not collapse the rows. Older bridges show one aggregate Mix meter. The body holds only
   display elements (`spectrum-canvas`, `spectrum-channel-readout`, `spectrum-rms`, `spectrum-peak`,
-  `spectrum-clip`, `spectrum-message`), so it adds one control to the page.
+  `spectrum-clip`, `spectrum-message`; the readout elements are screen-reader only), so it adds one control to the page.
 
 ### 4.3 Disks (`/disks`)
 

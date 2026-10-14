@@ -261,7 +261,9 @@ describe("SpectrumView", () => {
     await t.advance(120);
     const capWidth = 3;
     const caps = t.ctx.fills.filter((f) => f.h === 18 && f.y === 8);
-    expect(caps.some((f) => Math.abs(f.x + f.w - 294) <= capWidth)).toBe(true);
+    expect(
+      caps.some((f) => Math.abs(f.x + f.w - spectrumRenderer.computeLayout(300, 234, 14).plotRight) <= capWidth),
+    ).toBe(true);
     t.view.dispose();
   });
 
