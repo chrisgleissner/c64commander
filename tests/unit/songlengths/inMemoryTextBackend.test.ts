@@ -153,7 +153,7 @@ describe("InMemoryTextBackend", () => {
       expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ reason: "empty comment path marker" }));
     });
 
-    it("rejects invalid md5 key (eq at start)", async () => {
+    it("rejects a line whose first character is '=' as an unsupported format", async () => {
       const onRejected = vi.fn();
       const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
       await backend.load(makeInput("=1:00"));

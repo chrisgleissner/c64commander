@@ -57,6 +57,42 @@ describe("parseMd548PathIndex", () => {
     // DUP_MD5_A and DUP_MD5_B share the first 12 hex → one md5_48, two paths.
     expect(index.get("abcdef012345")).toEqual(["/DEMOS/B/Beta.sid", "/GAMES/A/Alpha.sid"]);
   });
+
+  it("ignores an md5 line that precedes every path comment", () => {
+    const index = parseMd548PathIndex([`${COMMANDO_MD5}=3:41`, "; /GAMES/A/Alpha.sid", `${OTHER_MD5}=1:00`].join("\n"));
+
+    expect([...index.entries()]).toEqual([[md548FromFullMd5(OTHER_MD5), ["/GAMES/A/Alpha.sid"]]]);
+  });
+
+  it("keeps the previous path when a comment line carries no path", () => {
+    const index = parseMd548PathIndex(["; /GAMES/A/Alpha.sid", ";;", "#", `${OTHER_MD5}=1:00`].join("\n"));
+
+    expect(index.get(md548FromFullMd5(OTHER_MD5))).toEqual(["/GAMES/A/Alpha.sid"]);
+  });
+
+  it("skips section markers, keys without an md5, lines without an '=', and keys that are not 12+ hex digits", () => {
+    const index = parseMd548PathIndex(
+      [
+        "; /GAMES/A/Alpha.sid",
+        `[${COMMANDO_MD5}=3:41]`,
+        "=3:41",
+        `${COMMANDO_MD5} 3:41`,
+        COMMANDO_MD5,
+        "GAMES/A/Alpha.sid=3:41",
+        "abcdef01234=3:41",
+        "zzzzzzzzzzzzzzzz=3:41",
+        `${OTHER_MD5}=1:00`,
+      ].join("\n"),
+    );
+
+    expect([...index.keys()]).toEqual([md548FromFullMd5(OTHER_MD5)]);
+  });
+
+  it("normalises Windows separators and a missing leading slash in the comment path", () => {
+    const index = parseMd548PathIndex(["; GAMES\\A\\Alpha.sid", `${OTHER_MD5}=1:00`].join("\r\n"));
+
+    expect(index.get(md548FromFullMd5(OTHER_MD5))).toEqual(["/GAMES/A/Alpha.sid"]);
+  });
 });
 
 describe("resolveVirtualPath (D14 tie-break)", () => {
@@ -222,6 +258,44 @@ describe("the sliced parse", () => {
 
     expect(olderResult.rebuilt).toBe(false);
     expect(getMd548PathIndexStats().size).toBe(1);
+  });
+
+  it("hands the main thread back whenever the slice reports its budget spent", async () => {
+    const lines = SONGLENGTHS.split(/\r?\n/);
+    let dueCalls = 0;
+    let yields = 0;
+    const everyOtherLine = {
+      due: () => {
+        dueCalls += 1;
+        return dueCalls % 2 === 0;
+      },
+      yield: async () => {
+        yields += 1;
+      },
+    };
+
+    const index = await parseMd548PathIndexSliced(SONGLENGTHS, everyOtherLine);
+
+    expect(yields).toBe(Math.floor(lines.length / 2));
+    expect(index).toEqual(parseMd548PathIndex(SONGLENGTHS));
+  });
+
+  it("skips an unchanged sliced rebuild unless forced", async () => {
+    resetMd548PathIndex();
+    expect(await rebuildMd548PathIndexSliced(SONGLENGTHS)).toEqual({ rebuilt: true, size: 3 });
+
+    expect(await rebuildMd548PathIndexSliced(SONGLENGTHS)).toEqual({ rebuilt: false, size: 3 });
+    expect(await rebuildMd548PathIndexSliced(SONGLENGTHS, { force: true })).toEqual({ rebuilt: true, size: 3 });
+  });
+
+  it("keeps the populated index when a sliced rebuild parses nothing", async () => {
+    resetMd548PathIndex();
+    await rebuildMd548PathIndexSliced(SONGLENGTHS, { force: true });
+
+    const result = await rebuildMd548PathIndexSliced("[Database]\n; /GAMES/A/Alpha.sid", { force: true });
+
+    expect(result).toEqual({ rebuilt: false, size: 3 });
+    expect(resolveVirtualPath("cd50f5c1a2b3")).toBe("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
   });
 
   it("does not repopulate the index after a reset during a sliced rebuild", async () => {
