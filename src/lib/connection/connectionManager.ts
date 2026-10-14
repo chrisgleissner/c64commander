@@ -592,6 +592,8 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   }
 
   if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") return;
+  // An answer that lands after the phone reported no network was sent before it, so it does not show the device back.
+  if (isNetworkKnownOffline()) return;
   // A switch connects with its target's routing when its probe answers; promoting here too ran it twice.
   if (snapshot.state === "DISCOVERING" && snapshot.lastDiscoveryTrigger === "switch") return;
 
