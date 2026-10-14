@@ -210,7 +210,7 @@ export const KeypadGuidanceBar = () => {
   const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
   const t9Enabled = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const rootRef = useRef<HTMLDivElement>(null);
-  const breadcrumbRef = useRef<HTMLDivElement>(null);
+  const breadcrumbRef = useRef<HTMLSpanElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
   const centerSlotRef = useRef<HTMLSpanElement>(null);
   const centerActionRef = useRef<HTMLSpanElement>(null);
@@ -298,7 +298,9 @@ export const KeypadGuidanceBar = () => {
       aria-hidden="true"
     >
       {inRouter ? <RouteChangeRefresh onRouteChange={refresh} /> : null}
-      <div ref={breadcrumbRef} className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb" />
+      <div className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb">
+        <span ref={breadcrumbRef} className="keypad-guidance-breadcrumb-text" />
+      </div>
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">
           <kbd className="keypad-guidance-cap">Back</kbd>

@@ -426,4 +426,45 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expect(sheet).toBeHidden();
     await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
   });
+
+  test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    await page.keyboard.press("ContextMenu");
+    const docs = page.getByTestId("keypad-quick-menu-tab-docs");
+    await expect(docs).toBeVisible();
+    await expect(docs.locator("kbd")).toHaveText("6");
+    for (
+      let step = 0;
+      step < 20 && !(await docs.evaluate((element) => element === document.activeElement));
+      step += 1
+    ) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(docs).toBeFocused();
+    await expect(page.getByTestId("keypad-guidance-breadcrumb")).toHaveText("Docs");
+  });
+
+  test("a breadcrumb squeezed to a few characters shows nothing rather than a fragment @layout", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    const crumb = page.getByTestId("keypad-guidance-breadcrumb").locator(".keypad-guidance-breadcrumb-text");
+    await expect(crumb).toBeVisible();
+
+    // Widen the key legend until the breadcrumb beside it has 2rem left, as Remote Input's Keys mode does.
+    await page.addStyleTag({
+      content: ".keypad-guidance-keys { min-width: calc(100vw - 1.5rem - 0.75rem - 2rem); }",
+    });
+    expect(
+      await page.getByTestId("keypad-guidance-breadcrumb").evaluate((element) => element.clientWidth),
+    ).toBeLessThanOrEqual(32);
+    await expect(crumb).toBeHidden();
+  });
 });
