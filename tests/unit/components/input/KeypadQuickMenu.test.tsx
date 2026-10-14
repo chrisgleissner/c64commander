@@ -270,7 +270,7 @@ describe("KeypadQuickMenu function-key summary", () => {
     expect(screen.getByTestId("settings-remote-function-actions")).toHaveAttribute("data-search-landed", "true");
   });
 
-  it("scrolls the function-key summary with the entries instead of fixing it above them", async () => {
+  it("lists the function-key summary last, after the entries it scrolls with", async () => {
     renderMenu();
     await openMenu();
 
@@ -278,6 +278,8 @@ describe("KeypadQuickMenu function-key summary", () => {
     const entries = screen.getByTestId("keypad-quick-menu-search").parentElement;
     expect(entries).toHaveClass("overflow-y-auto");
     expect(summary.parentElement).toBe(entries);
+    expect(entries?.lastElementChild).toBe(summary);
+    expect(entries?.firstElementChild).not.toBe(summary);
   });
 
   it("has no function-key summary in C64 Commander", async () => {
