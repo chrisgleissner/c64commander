@@ -157,6 +157,10 @@ import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOver
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { useOnPageLeft } from "@/hooks/useOnPageLeft";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import {
+  BACKGROUND_ADVANCE_LOG_MESSAGES,
+  resolveBackgroundAdvanceOutcome,
+} from "@/pages/playFiles/backgroundAdvanceOutcome";
 import { usePlaybackTimelineTicks } from "@/pages/playFiles/hooks/usePlaybackTimelineTicks";
 import { useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
@@ -1575,23 +1579,17 @@ export default function PlayFilesPage() {
               await advanceOnTrackEndRef.current(expectedTrackInstanceId);
               if (cancelled) return;
               const nextGuard = autoAdvanceGuardRef.current;
-              if (!nextGuard) {
-                setAutoAdvanceDueAtMs(null);
-                await queueBackgroundDueAtUpdateRef.current(null);
-                addLog("debug", "Cleared background auto-advance watchdog after auto next with no remaining guard", {
-                  expectedTrackInstanceId,
-                  dueAtMs: event.dueAtMs,
-                });
-                return;
-              }
-              if (nextGuard.trackInstanceId === expectedTrackInstanceId) {
-                setAutoAdvanceDueAtMs(null);
-                await queueBackgroundDueAtUpdateRef.current(null);
-                addLog("warn", "Background auto-advance did not move to a new track instance; cleared stale watchdog", {
-                  expectedTrackInstanceId,
-                  dueAtMs: event.dueAtMs,
-                  nextDueAtMs: nextGuard.dueAtMs,
-                });
+              const outcome = resolveBackgroundAdvanceOutcome(expectedTrackInstanceId, nextGuard);
+              if (!nextGuard || outcome === "in-flight" || outcome === "stuck") {
+                if (outcome !== "in-flight") {
+                  setAutoAdvanceDueAtMs(null);
+                  await queueBackgroundDueAtUpdateRef.current(null);
+                }
+                addLog(
+                  outcome === "stuck" ? "warn" : "debug",
+                  BACKGROUND_ADVANCE_LOG_MESSAGES[outcome as "no-guard" | "in-flight" | "stuck"],
+                  { expectedTrackInstanceId, dueAtMs: event.dueAtMs, nextDueAtMs: nextGuard?.dueAtMs ?? null },
+                );
                 return;
               }
               setAutoAdvanceDueAtMs(nextGuard.dueAtMs);

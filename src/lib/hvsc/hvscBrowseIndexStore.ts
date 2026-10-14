@@ -9,6 +9,15 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
+import { createTimeSlicer, type TimeSlicer } from "@/lib/async/timeSlice";
+import {
+  buildFoldersFromSongs,
+  buildFoldersFromSongsSliced,
+  normalizeFolderPath,
+  normalizePath,
+} from "@/lib/hvsc/hvscBrowseFolders";
+
+export { buildFoldersFromSongs, normalizePath };
 import { withoutUnknownPlaceholder } from "@/lib/sid/unknownPlaceholder";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
@@ -125,13 +134,6 @@ export const getHvscDisplayTitle = (
 
 export const getHvscDisplayAuthor = (song: Pick<HvscBrowseIndexedSong, "displayAuthorSeed" | "canonicalAuthor">) =>
   normalizeDisplayValue(song.canonicalAuthor) ?? normalizeDisplayValue(song.displayAuthorSeed) ?? null;
-
-export const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
-const normalizeFolderPath = (path: string) => {
-  const normalized = normalizePath(path || "/");
-  if (normalized.length > 1 && normalized.endsWith("/")) return normalized.slice(0, -1);
-  return normalized;
-};
 
 const normalizeDisplayValue = (value: string | null | undefined) =>
   (value && withoutUnknownPlaceholder(value.replace(/_/g, " ").replace(/\s+/g, " ").trim())) || null;
@@ -280,54 +282,6 @@ const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => {
   };
 };
 
-export const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
-  const folderMap = new Map<string, { folders: Set<string>; songs: Set<string> }>();
-  const ensureFolder = (path: string) => {
-    const normalized = normalizeFolderPath(path);
-    const current = folderMap.get(normalized);
-    if (current) return current;
-    const next = { folders: new Set<string>(), songs: new Set<string>() };
-    folderMap.set(normalized, next);
-    return next;
-  };
-
-  const root = ensureFolder("/");
-  // Most tunes share a composer folder. Resolve each hierarchy once, rather than
-  // splitting and rebuilding the same parent chain for every one of 60,000 songs.
-  // This map belongs to this build only; no additional library stays resident.
-  const parents = new Map<string, ReturnType<typeof ensureFolder>>([["", root]]);
-  for (const song of Object.values(songs)) {
-    const normalizedSongPath = normalizePath(song.virtualPath);
-    const hierarchyPath = normalizedSongPath.endsWith("/")
-      ? normalizedSongPath.replace(/\/+$/, "")
-      : normalizedSongPath;
-    const parentPath = hierarchyPath.slice(0, hierarchyPath.lastIndexOf("/"));
-    let parent = parents.get(parentPath);
-    if (!parent) {
-      let currentPath = "/";
-      for (const folderName of parentPath.split("/").filter(Boolean)) {
-        const nextPath = normalizeFolderPath(`${currentPath === "/" ? "" : currentPath}/${folderName}`);
-        ensureFolder(currentPath).folders.add(nextPath);
-        currentPath = nextPath;
-      }
-      parent = ensureFolder(currentPath);
-      parents.set(parentPath, parent);
-    }
-    parent.songs.add(normalizedSongPath);
-  }
-
-  const folders: Record<string, HvscBrowseFolderRow> = {};
-  folderMap.forEach((value, path) => {
-    folders[path] = {
-      path,
-      folders: Array.from(value.folders).sort((a, b) => a.localeCompare(b)),
-      songs: Array.from(value.songs).sort((a, b) => a.localeCompare(b)),
-    };
-  });
-
-  return folders;
-};
-
 export const createEmptyHvscBrowseIndexSnapshot = (): HvscBrowseIndexSnapshot => ({
   schemaVersion: SCHEMA_VERSION,
   updatedAt: new Date().toISOString(),
@@ -402,48 +356,90 @@ const parseSnapshot = (raw: string | null) => {
   }
 };
 
+const readPersistedSidEntries = (raw: string): PersistedMediaIndexEntry[] | null => {
+  const parsed = JSON.parse(raw) as PersistedMediaIndexSnapshot;
+  if (!Array.isArray(parsed.entries)) return null;
+  return parsed.entries.filter((entry) => entry.type === "sid");
+};
+
+const toMediaEntry = (entry: PersistedMediaIndexEntry): MediaEntry => ({
+  path: entry.path,
+  name: entry.name,
+  type: "sid" as const,
+  durationSeconds: entry.durationSeconds ?? null,
+});
+
+/**
+ * Put the hydrated metadata back. Only for entries that carry it, which is nothing at all on a file written before this
+ * existed and grows as hydration progresses, so the common case costs one property read per song and no work.
+ */
+const restoreHydratedMetadata = (snapshot: HvscBrowseIndexSnapshot, entry: PersistedMediaIndexEntry) => {
+  if (!entry.hydrated && !entry.title && !entry.author && !entry.released && !entry.durations) return;
+  const song = snapshot.songs[normalizePath(entry.path)];
+  if (entry.durations && entry.durations.length > 1) {
+    // Restores the tune count with it, which is what the card, the subsong selector and "play
+    // all tunes" all read.
+    song.durationsSeconds = [...entry.durations];
+    song.subsongCount = entry.durations.length;
+    song.trackSubsongs = entry.durations.map((_, index) => ({ songNr: index + 1, isDefault: index === 0 }));
+  }
+  song.canonicalTitle = normalizeDisplayValue(entry.title);
+  song.canonicalAuthor = normalizeDisplayValue(entry.author);
+  song.released = normalizeDisplayValue(entry.released);
+  if (entry.hydrated) song.metadataStatus = "hydrated";
+  song.searchTextSeed = buildSeedSearchText(song);
+  song.searchTextFull = buildFullSearchText(song);
+};
+
+const warnMediaIndexParseFailed = (error: unknown) =>
+  addLog(
+    "warn",
+    "Failed to parse persisted HVSC media index snapshot; will rebuild",
+    describeError(error, { storagePath: MEDIA_INDEX_STORAGE_PATH }),
+  );
+
 const parseMediaIndexSnapshot = (raw: string | null) => {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as PersistedMediaIndexSnapshot;
-    if (!Array.isArray(parsed.entries)) return null;
-    const sidEntries = parsed.entries.filter((entry) => entry.type === "sid");
-    const snapshot = buildHvscBrowseIndexFromEntries(
-      sidEntries.map((entry) => ({
-        path: entry.path,
-        name: entry.name,
-        type: "sid" as const,
-        durationSeconds: entry.durationSeconds ?? null,
-      })),
-    );
-    // Put the hydrated metadata back. Only for entries that carry it, which is nothing at all on a
-    // file written before this existed and grows as hydration progresses — so the common case costs
-    // one property read per song and no work.
+    const sidEntries = readPersistedSidEntries(raw);
+    if (!sidEntries) return null;
+    const snapshot = buildHvscBrowseIndexFromEntries(sidEntries.map(toMediaEntry));
+    for (const entry of sidEntries) restoreHydratedMetadata(snapshot, entry);
+    return snapshot;
+  } catch (error) {
+    warnMediaIndexParseFailed(error);
+    return null;
+  }
+};
+
+/**
+ * {@link parseMediaIndexSnapshot} for the 60,000-song file read at startup: the same result, built in slices so that
+ * a key press or a paint is handled between them. Only the JSON text itself is parsed in one piece.
+ */
+const parseMediaIndexSnapshotSliced = async (raw: string | null, slice: TimeSlicer) => {
+  if (!raw) return null;
+  try {
+    const sidEntries = readPersistedSidEntries(raw);
+    if (!sidEntries) return null;
+    const songs: Record<string, HvscBrowseIndexedSong> = {};
     for (const entry of sidEntries) {
-      if (!entry.hydrated && !entry.title && !entry.author && !entry.released && !entry.durations) continue;
-      const song = snapshot.songs[normalizePath(entry.path)];
-      if (!song) continue;
-      if (entry.durations && entry.durations.length > 1) {
-        // Restores the tune count with it, which is what the card, the subsong selector and "play
-        // all tunes" all read.
-        song.durationsSeconds = [...entry.durations];
-        song.subsongCount = entry.durations.length;
-        song.trackSubsongs = entry.durations.map((_, index) => ({ songNr: index + 1, isDefault: index === 0 }));
-      }
-      song.canonicalTitle = normalizeDisplayValue(entry.title);
-      song.canonicalAuthor = normalizeDisplayValue(entry.author);
-      song.released = normalizeDisplayValue(entry.released);
-      if (entry.hydrated) song.metadataStatus = "hydrated";
-      song.searchTextSeed = buildSeedSearchText(song);
-      song.searchTextFull = buildFullSearchText(song);
+      if (slice.due()) await slice.yield();
+      const song = toIndexedSong(toMediaEntry(entry));
+      songs[song.virtualPath] = song;
+    }
+    const snapshot: HvscBrowseIndexSnapshot = {
+      schemaVersion: SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      songs,
+      folders: await buildFoldersFromSongsSliced(songs, slice),
+    };
+    for (const entry of sidEntries) {
+      if (slice.due()) await slice.yield();
+      restoreHydratedMetadata(snapshot, entry);
     }
     return snapshot;
   } catch (error) {
-    addLog(
-      "warn",
-      "Failed to parse persisted HVSC media index snapshot; will rebuild",
-      describeError(error, { storagePath: MEDIA_INDEX_STORAGE_PATH }),
-    );
+    warnMediaIndexParseFailed(error);
     return null;
   }
 };
@@ -483,6 +479,7 @@ const shouldPersistFullSnapshot = (snapshot: HvscBrowseIndexSnapshot) =>
  */
 export const __buildPersistedMediaIndexSnapshotForTest = buildPersistedMediaIndexSnapshot;
 export const __parseMediaIndexSnapshotForTest = parseMediaIndexSnapshot;
+export const __parseMediaIndexSnapshotSlicedForTest = parseMediaIndexSnapshotSliced;
 
 /**
  * Whether the last save already reported the downgrade, per persistence route.
@@ -528,7 +525,7 @@ const readFilesystemMediaIndexSnapshot = async () => {
       bytes: text?.length ?? 0,
       readMs: Math.round(parseAt - readAt),
     });
-    const snapshot = parseMediaIndexSnapshot(text);
+    const snapshot = await parseMediaIndexSnapshotSliced(text, createTimeSlicer());
     // The two halves are paid on completely different budgets — one is I/O, the other is main-thread
     // CPU over sixty thousand songs — so a single figure cannot say which one to go and reduce.
     addLog("info", "HVSC media index snapshot read", {
@@ -667,6 +664,7 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
  * song objects are shared, and nothing outside parsing changes one in place.
  */
 let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
+let snapshotEpoch = 0;
 
 const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
   ...snapshot,
@@ -675,6 +673,7 @@ const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapsho
 });
 
 const rememberSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
+  snapshotEpoch += 1;
   lastStoredSnapshot = snapshot ? copySnapshot(snapshot) : null;
 };
 
@@ -686,8 +685,9 @@ export const loadHvscBrowseIndexSnapshot = async () => {
   return runWithHvscPerfScope(
     "browse:load-snapshot",
     async () => {
+      const epochAtStart = snapshotEpoch;
       const loaded = await readStoredBrowseIndexSnapshot();
-      rememberSnapshot(loaded);
+      if (epochAtStart === snapshotEpoch) rememberSnapshot(loaded);
       return loaded;
     },
     {

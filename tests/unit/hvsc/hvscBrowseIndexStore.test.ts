@@ -1195,3 +1195,107 @@ describe("hvscBrowseIndexStore remembered snapshot", () => {
     expect(changed.snapshot.songs["/GAMES/A.sid"].durationSeconds).toBe(61);
   });
 });
+
+describe("hvscBrowseIndexStore compact media index in localStorage", () => {
+  const seedLocalMediaIndex = (raw: string) => {
+    localStorage.clear();
+    localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, raw);
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("missing"));
+    vi.mocked(addLog).mockClear();
+  };
+
+  afterEach(() => localStorage.clear());
+
+  it("restores a hydrated multi-tune entry with its tune count, subsong list and header metadata", async () => {
+    seedLocalMediaIndex(
+      JSON.stringify({
+        version: 2,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        entries: [
+          {
+            path: "/MUSICIANS/D/Daglish_Ben/Zoids.sid",
+            name: "Zoids.sid",
+            type: "sid",
+            durationSeconds: 130,
+            durations: [130, 95, 40],
+            title: "Zoids",
+            author: "Ben Daglish",
+            released: "1986 Mastertronic",
+            hydrated: true,
+          },
+        ],
+      }),
+    );
+
+    const song = (await loadHvscBrowseIndexSnapshot())?.songs["/MUSICIANS/D/Daglish_Ben/Zoids.sid"];
+
+    expect(song).toMatchObject({
+      durationsSeconds: [130, 95, 40],
+      subsongCount: 3,
+      trackSubsongs: [
+        { songNr: 1, isDefault: true },
+        { songNr: 2, isDefault: false },
+        { songNr: 3, isDefault: false },
+      ],
+      canonicalTitle: "Zoids",
+      canonicalAuthor: "Ben Daglish",
+      released: "1986 Mastertronic",
+      metadataStatus: "hydrated",
+    });
+    expect(song?.searchTextFull).toContain("1986 mastertronic");
+  });
+
+  it("restores a title on a single-tune entry, keeping its one-tune seed and its seeded status", async () => {
+    seedLocalMediaIndex(
+      JSON.stringify({
+        version: 2,
+        entries: [
+          {
+            path: "/GAMES/Sample_Quest.sid",
+            name: "Sample_Quest.sid",
+            type: "sid",
+            durationSeconds: 95,
+            durations: [95],
+            title: "Sample Quest",
+          },
+          { path: "/GAMES/Plain.sid", name: "Plain.sid", type: "sid", durationSeconds: 60 },
+        ],
+      }),
+    );
+
+    const loaded = await loadHvscBrowseIndexSnapshot();
+    const titled = loaded?.songs["/GAMES/Sample_Quest.sid"];
+    const plain = loaded?.songs["/GAMES/Plain.sid"];
+
+    expect(titled).toMatchObject({
+      canonicalTitle: "Sample Quest",
+      metadataStatus: "seeded",
+      durationsSeconds: [95],
+      subsongCount: 1,
+      trackSubsongs: [{ songNr: 1, isDefault: true }],
+    });
+    expect(plain).toMatchObject({ canonicalTitle: null, metadataStatus: "seeded", durationSeconds: 60 });
+  });
+
+  it("logs a parse warning and returns no snapshot when the stored media index is not JSON", async () => {
+    seedLocalMediaIndex("{ not json");
+
+    expect(await loadHvscBrowseIndexSnapshot()).toBeNull();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse persisted HVSC media index snapshot; will rebuild",
+      expect.objectContaining({ storagePath: "hvsc/index/media-index-v2.json" }),
+    );
+  });
+
+  it("returns no snapshot without a warning when the stored media index has no entries list", async () => {
+    seedLocalMediaIndex(JSON.stringify({ version: 2, entries: "not-an-array" }));
+
+    expect(await loadHvscBrowseIndexSnapshot()).toBeNull();
+    expect(addLog).not.toHaveBeenCalledWith(
+      "warn",
+      "Failed to parse persisted HVSC media index snapshot; will rebuild",
+      expect.anything(),
+    );
+  });
+});
