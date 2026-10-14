@@ -81,7 +81,7 @@ describe("scrollTowardUnreachableContent", () => {
 
     // The group ends at 390 px: inside the 400 px page, but under the bar that covers 368-400.
     expect(scrollTowardUnreachableContent(lastControl, group(100, 390), 1)).toBe(true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 400 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 368 });
   });
 
   it("treats a stop outside the scrolling page, such as the tab bar, as leaving it", () => {

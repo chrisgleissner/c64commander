@@ -186,6 +186,41 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(scrollPositions).toEqual([400, 800, 1050]);
   });
 
+  it("pages by the viewport height minus the keypad guidance bar so no row stays under the bar", () => {
+    document.documentElement.style.setProperty("--keypad-guidance-reserved-height", "calc(1rem + 24px)");
+    const probeHeight = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
+      const height =
+        this.getAttribute("aria-hidden") === "true" && this.parentElement === document.documentElement ? 40 : 0;
+      return { top: 0, bottom: height, left: 0, right: 0, width: 0, height, x: 0, y: 0, toJSON: () => ({}) };
+    });
+    const scrollBy = vi.fn();
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = scrollBy;
+    };
+    try {
+      render(
+        <FocusNavigationProvider>
+          <div ref={measure} style={{ overflowY: "auto" }}>
+            <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          </div>
+          <TabBarStop />
+        </FocusNavigationProvider>,
+      );
+
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: 360 });
+    } finally {
+      probeHeight.mockRestore();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
+  });
+
   it("activates the focused CTA via center/enter (default = click the element)", () => {
     const onA = vi.fn();
     const onB = vi.fn();
