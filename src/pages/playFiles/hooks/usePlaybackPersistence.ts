@@ -92,6 +92,8 @@ interface UsePlaybackPersistenceProps {
   autoAdvanceGuardRef: React.MutableRefObject<any>; // Using any to avoid importing local type from Page
   setTrackInstanceId: (value: number) => void;
   setAutoAdvanceDueAtMs: (value: number | null) => void;
+  playlistEnded?: boolean;
+  setPlaylistEnded?: (ended: boolean) => void;
   /**
    * Called with `true` once the stored session has been read and either applied or
    * rejected. The Play page gates the latched transport commands on it: a "play"
@@ -141,6 +143,8 @@ export function usePlaybackPersistence({
   autoAdvanceGuardRef,
   setTrackInstanceId,
   setAutoAdvanceDueAtMs,
+  playlistEnded = false,
+  setPlaylistEnded,
   setSessionRestoreSettled,
 }: UsePlaybackPersistenceProps) {
   const playlistRepository = getPlaylistDataRepository();
@@ -492,6 +496,9 @@ export function usePlaybackPersistence({
         playlistStorageKey,
       });
     }
+    const endedRestore =
+      pending.isPlaying && pending.playlistEnded === true && !otherDeviceRestore && !staleActiveRestore;
+    if (endedRestore) setPlaylistEnded?.(true);
     // A second restart before Resume finds the session paused, and Resume must still start the tune again.
     const resumeStartsAgain =
       phoneStoppedRestore || (!otherDeviceRestore && pending.isPaused && pending.resumeStartsAgain === true);
@@ -512,7 +519,12 @@ export function usePlaybackPersistence({
     setCurrentIndex(matchedIndex);
     // A session that was playing kept playing while the page was away: the stored clock is from the moment it was written.
     const activeRestore =
-      pending.isPlaying && !pending.isPaused && !staleActiveRestore && !phoneStoppedRestore && !otherDeviceRestore;
+      pending.isPlaying &&
+      !pending.isPaused &&
+      !staleActiveRestore &&
+      !phoneStoppedRestore &&
+      !otherDeviceRestore &&
+      !endedRestore;
     const savedAtMs = Date.parse(pending.updatedAt ?? "");
     const sinceSavedMs = activeRestore && Number.isFinite(savedAtMs) ? Math.max(0, now - savedAtMs) : 0;
     const restoredElapsedMs = otherDeviceRestore ? 0 : Math.max(0, pending.elapsedMs) + sinceSavedMs;
@@ -564,6 +576,7 @@ export function usePlaybackPersistence({
     playlistStorageKey,
     restoreVersion,
     setAutoAdvanceDueAtMs,
+    setPlaylistEnded,
     setTrackInstanceId,
   ]); // Depends on playlist being set
 
@@ -675,6 +688,7 @@ export function usePlaybackPersistence({
         playedMs,
         durationMs,
         autoAdvanceDueAtMs,
+        playlistEnded,
         shuffleEnabled,
         repeatEnabled,
         randomSeed: shuffleSeed,
@@ -693,6 +707,7 @@ export function usePlaybackPersistence({
       isPaused,
       isPlaying,
       playlist,
+      playlistEnded,
       playlistStorageKey,
       repeatEnabled,
       restoreVersion,

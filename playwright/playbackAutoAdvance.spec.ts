@@ -118,6 +118,42 @@ test.describe("Playback auto advance", () => {
     await snap(page, testInfo, "auto-advance-three-song-sequence");
   });
 
+  test("keeps the elapsed time at the last song's length after the playlist ended and the page reloaded", async ({
+    page,
+  }, testInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: "ultimate", path: "/Usb0/Demos/end-1.sid", name: "end-1.sid", durationMs: 1_200 },
+      { source: "ultimate", path: "/Usb0/Demos/end-2.sid", name: "end-2.sid", durationMs: 2_200 },
+    ]);
+
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+    const elapsed = page.getByTestId("playback-elapsed");
+    await expect(elapsed).toHaveText("0:02");
+    // The song plays on on the C64, so Stop stays offered; the clock stays at the end.
+    await page.waitForTimeout(2_500);
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
+
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { elapsedSeen: string[] }).elapsedSeen = seen;
+      new MutationObserver(() => {
+        const text = document.querySelector('[data-testid="playback-elapsed"]')?.textContent;
+        if (text && seen[seen.length - 1] !== text) seen.push(text);
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    await page.reload();
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
+    await expect(elapsed).toHaveText("0:02");
+    await page.waitForTimeout(2_000);
+    // Every value drawn since the reload: a restored running clock showed the time since the session was saved.
+    const seen = await page.evaluate(() => (window as unknown as { elapsedSeen: string[] }).elapsedSeen);
+    expect(seen.filter((text) => text !== "0:00")).toEqual(["0:02"]);
+    expect(server.sidplayRequests).toHaveLength(2);
+    await snap(page, testInfo, "auto-advance-ended-clock-stopped");
+  });
+
   test("repeat mode loops back to the first song after the last track", async ({ page }, testInfo) => {
     await seedPlaylistStorage(page, [
       {
