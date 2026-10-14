@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Device Probe</string>
+    <string name="next_button">Next</string>
+    <string name="again_button">Again</string>
+    <string name="restart_question">Start a new capture? Previous event logs will be kept.</string>
+    <string name="retry_button">Retry</string>
+    <string name="no_event_button">No event</string>
+    <string name="step_prompt">%1$d/%2$d · %3$s\n%4$s</string>
+    <string name="armed_status">Press the named key once, then release. If nothing happens, hold 0.</string>
+    <string name="disruptive_status">Press briefly. Hang Up may darken the screen; the special key may open Home. Wake and reopen Device Probe. This step is saved. If nothing happens, hold 0.</string>
+    <string name="text_status">Follow the prompt in the text field. Hold 0 when done, then OK to continue.</string>
+    <string name="review_status">%1$s\n%2$s · repeats: %3$d\nOK: next · 1: retry · 2: no event</string>
+    <string name="complete_status">Saved. Capture complete. Inventory and events are ready to retrieve.</string>
+    <string name="storage_failed_status">Capture storage failed or is full. Results may be incomplete.</string>
+</resources>

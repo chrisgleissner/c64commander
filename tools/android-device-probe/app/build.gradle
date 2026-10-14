@@ -1,0 +1,24 @@
+plugins { id 'com.android.application' version '9.3.0' }
+
+def versionResult = providers.exec {
+    workingDir rootProject.projectDir.parentFile.parentFile
+    commandLine 'node', 'scripts/resolve-build-version.mjs'
+}.standardOutput.asText.get().trim()
+
+android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    namespace = 'uk.gleissner.deviceprobe'
+    compileSdk = 36
+    defaultConfig {
+        applicationId = 'uk.gleissner.deviceprobe'
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 1
+        versionName = versionResult
+    }
+}
+
+dependencies { testImplementation 'junit:junit:4.13.2' }
