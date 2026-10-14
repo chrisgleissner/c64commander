@@ -31,7 +31,18 @@ import { selectorPresence } from "./selectorPresence";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
-  "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "status" | "none";
+  | "group"
+  | "button"
+  | "expand"
+  | "collapse"
+  | "link"
+  | "field"
+  | "select"
+  | "switch"
+  | "slider"
+  | "tab"
+  | "status"
+  | "none";
 
 /** A plain, DOM-free snapshot of the ring the bar needs to choose its labels. */
 export interface GuidanceState {
@@ -83,6 +94,8 @@ export interface GuidanceLabels {
 const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   group: "Open",
   button: "Activate",
+  expand: "Expand",
+  collapse: "Collapse",
   link: "Open",
   field: "Edit",
   select: "Select",
@@ -207,6 +220,9 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   if (tag === "TEXTAREA") return "field";
   if (element instanceof HTMLElement && element.isContentEditable) return "field";
   if (tag === "A") return element.hasAttribute("href") ? "link" : "button";
+  const expanded = element.hasAttribute("aria-haspopup") ? null : element.getAttribute("aria-expanded");
+  if (expanded === "true") return "collapse";
+  if (expanded === "false") return "expand";
   if (tag === "BUTTON" || role === "button" || role === "menuitem") return "button";
   return "button";
 };
@@ -237,22 +253,57 @@ const renderedFirstLine = (element: Element): string | null => {
   );
 };
 
+const nonBlank = (value: string | null | undefined): string | null => (value && value.trim() ? value : null);
+
+const labelledByName = (element: Element): string | null => {
+  const ids = element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [];
+  const texts = ids.map((id) => element.ownerDocument.getElementById(id)?.textContent?.trim() ?? "").filter(Boolean);
+  return texts.length > 0 ? texts.join(" ") : null;
+};
+
+/** A wrapping label's own words, without the text of the control inside it (a select's options). */
+const textAround = (label: Element, control: Element): string | null => {
+  const walker = label.ownerDocument.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (control.contains(node) || node.parentElement?.closest('kbd, [aria-hidden="true"]')) continue;
+    parts.push(node.textContent ?? "");
+  }
+  return nonBlank(parts.join(" "));
+};
+
+/** The `<label for>` or wrapping `<label>` that names a form control or a button-based switch. */
+const associatedLabelName = (element: Element): string | null => {
+  const forLabels = element.id
+    ? Array.from(element.ownerDocument.querySelectorAll<HTMLLabelElement>("label[for]")).filter(
+        (label) => label.htmlFor === element.id,
+      )
+    : [];
+  for (const label of [...forLabels, element.closest("label")]) {
+    if (!label) continue;
+    const name = label.contains(element) ? textAround(label, element) : renderedFirstLine(label);
+    if (name) return name;
+  }
+  return null;
+};
+
 /**
- * A short human label for the current element, for the breadcrumb tail. Prefers
- * an explicit accessible name (`aria-label`), then visible text, then
- * placeholder/title. Returns `null` when nothing readable is found.
+ * A short human label for the current element, for the breadcrumb tail, in the order an accessible
+ * name is computed: `aria-labelledby`, `aria-label`, an associated `<label>`, the element's own text,
+ * then placeholder and title. Settings rows name their checkboxes and fields with `<label for>`, so
+ * reading only `aria-label` and text left them as "Navigation", and a select as its value.
+ * Returns `null` when nothing readable is found.
  */
 export const accessibleLabelFor = (element: Element | null): string | null => {
   if (!element) return null;
-  const ariaLabel = element.getAttribute("aria-label");
-  if (ariaLabel && ariaLabel.trim()) return tidyLabel(ariaLabel);
-  const text = renderedFirstLine(element);
-  if (text) return tidyLabel(text);
-  const placeholder = element.getAttribute("placeholder");
-  if (placeholder && placeholder.trim()) return tidyLabel(placeholder);
-  const title = element.getAttribute("title");
-  if (title && title.trim()) return tidyLabel(title);
-  return null;
+  const name =
+    labelledByName(element) ??
+    nonBlank(element.getAttribute("aria-label")) ??
+    associatedLabelName(element) ??
+    renderedFirstLine(element) ??
+    nonBlank(element.getAttribute("placeholder")) ??
+    nonBlank(element.getAttribute("title"));
+  return name ? tidyLabel(name) : null;
 };
 
 /**

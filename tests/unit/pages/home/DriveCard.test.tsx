@@ -11,6 +11,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { DriveCard } from "@/pages/home/DriveCard";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { accessibleLabelFor } from "@/lib/input/guidance";
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, onClick, disabled, className, ...rest }: any) => (
@@ -64,6 +65,12 @@ describe("DriveCard", () => {
     } finally {
       localStorage.removeItem("c64u_display_profile_override");
     }
+  });
+
+  it("names the Bus ID and Type selects by their labels, so the keypad guidance bar does not read only the value", () => {
+    render(<DriveCard {...defaultProps} typeValue="1541" typeOptions={["1541"]} />);
+    expect(accessibleLabelFor(screen.getByTestId("home-drive-bus-d8"))).toBe("Bus ID");
+    expect(accessibleLabelFor(screen.getByTestId("home-drive-type-d8"))).toBe("Type");
   });
 
   it("renders name and status", () => {

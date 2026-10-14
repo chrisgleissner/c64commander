@@ -90,6 +90,12 @@ const NestedToolbar = () => {
   );
 };
 
+/** Lays a control out `top()` px from the top of the viewport, 20 px tall. */
+const placeAt = (element: Element | undefined, top: () => number) => {
+  if (!element) return;
+  element.getBoundingClientRect = () => ({ top: top(), bottom: top() + 20, height: 20 }) as DOMRect;
+};
+
 /** A stop outside the scrolling page, as the tab bar is. */
 const TabBarStop = () => {
   const ref = useFocusItem<HTMLButtonElement>({ id: "tab", order: 100 });
@@ -126,6 +132,7 @@ describe("FocusNavigationProvider + useFocusItem", () => {
       Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1000 });
       Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
       page.scrollBy = scrollBy as unknown as typeof page.scrollBy;
+      placeAt(page.querySelectorAll("button")[1], () => 300);
     };
     render(
       <FocusNavigationProvider>
@@ -141,9 +148,9 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(document.activeElement).toBe(button("B"));
 
     // B is the page's last stop and the tab bar comes next, but the page still has 600 px below
-    // the fold: Down shows them instead of leaving the page.
+    // the fold: Down shows them instead of leaving the page, as far as keeps B in view.
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
-    expect(scrollBy).toHaveBeenLastCalledWith({ top: 400 });
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 300 });
     expect(document.activeElement).toBe(button("B"));
 
     // At the end of the page, Down moves on to the tab bar as before.
@@ -153,7 +160,7 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(document.activeElement).toBe(button("Tab"));
   });
 
-  it("pages one viewport per Down past disabled CTAs until the final progress text is visible", () => {
+  it("scrolls past disabled CTAs until the last active CTA reaches the top, then moves on to the tab bar", () => {
     const scrollPositions: number[] = [];
     const measure = (page: HTMLDivElement | null) => {
       if (!page) return;
@@ -163,6 +170,7 @@ describe("FocusNavigationProvider + useFocusItem", () => {
         page.scrollTop = Math.min(1050, page.scrollTop + (top ?? 0));
         scrollPositions.push(page.scrollTop);
       };
+      placeAt(page.querySelectorAll("button")[1], () => 360 - page.scrollTop);
     };
     render(
       <FocusNavigationProvider>
@@ -176,15 +184,14 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(document.activeElement).toBe(button("B"));
-    for (let press = 0; press < 3; press++) {
-      fireEvent.keyDown(document.body, { code: "ArrowDown" });
-      expect(document.activeElement).toBe(button("B"));
-    }
-    expect(scrollPositions).toEqual([400, 800, 1050]);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+    expect(scrollPositions).toEqual([360]);
 
+    // A further page would leave B, still the selection, above the screen.
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(document.activeElement).toBe(button("Tab"));
-    expect(scrollPositions).toEqual([400, 800, 1050]);
+    expect(scrollPositions).toEqual([360]);
   });
 
   it("pages by the viewport height minus the keypad guidance bar so no row stays under the bar", () => {
@@ -194,7 +201,8 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     ) {
       const height =
         this.getAttribute("aria-hidden") === "true" && this.parentElement === document.documentElement ? 40 : 0;
-      return { top: 0, bottom: height, left: 0, right: 0, width: 0, height, x: 0, y: 0, toJSON: () => ({}) };
+      const top = this.textContent === "B" ? 380 : 0;
+      return { top, bottom: top + height, left: 0, right: 0, width: 0, height, x: 0, y: 0, toJSON: () => ({}) };
     });
     const scrollBy = vi.fn();
     const measure = (page: HTMLDivElement | null) => {
@@ -1979,5 +1987,49 @@ describe("returning from an overlay", () => {
 
     expect(onLive).toHaveBeenCalledTimes(1);
     expect(onGame).not.toHaveBeenCalled();
+  });
+});
+
+describe("the selected stop goes away", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  const Rows = ({ withRemove }: { withRemove: boolean }) => (
+    <>
+      <button>Add items</button>
+      <button>Select all</button>
+      {withRemove ? <button>Remove selected items</button> : null}
+      <button>First item</button>
+    </>
+  );
+
+  it("highlights, focuses and scrolls into view the nearest remaining stop", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    const view = render(
+      <FocusNavigationProvider>
+        <Rows withRemove />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(button("Remove selected items")).toHaveAttribute(SELECTED, "true");
+    scrolled.length = 0;
+
+    view.rerender(
+      <FocusNavigationProvider>
+        <Rows withRemove={false} />
+      </FocusNavigationProvider>,
+    );
+    await act(afterRingRescan);
+
+    expect(button("First item")).toHaveAttribute(SELECTED, "true");
+    expect(button("Add items")).not.toHaveAttribute(SELECTED);
+    expect(document.activeElement).toBe(button("First item"));
+    expect(scrolled).toContain(button("First item"));
+    scrollIntoView.mockRestore();
   });
 });

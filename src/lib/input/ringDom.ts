@@ -182,20 +182,35 @@ export const leavesScrollContainer = (from: Element, to: Element): boolean => !s
 const remainingScroll = (container: Element, direction: 1 | -1): number =>
   direction > 0 ? container.scrollHeight - container.clientHeight - container.scrollTop : container.scrollTop;
 
+/**
+ * How far the container can scroll in `direction` before `from` leaves the area the scroll margins
+ * keep clear of the bars. Without this bound the selected stop scrolled away for several presses:
+ * the SID Radio sheet's Close button, laid out at the top of its sheet, reached -1113 px.
+ */
+const scrollRoomKeepingInView = (from: Element, visible: { top: number; bottom: number }, direction: 1 | -1) => {
+  const bounds = from.getBoundingClientRect();
+  const style = getComputedStyle(from);
+  return direction > 0
+    ? bounds.top - (visible.top + (parseFloat(style.scrollMarginTop) || 0))
+    : visible.bottom - (parseFloat(style.scrollMarginBottom) || 0) - bounds.bottom;
+};
+
 export const scrollTowardUnreachableContent = (from: Element, scope: Element | null, direction: 1 | -1): boolean => {
   const container = scrollContainerOf(from);
   const remaining = remainingScroll(container, direction);
   if (remaining < 1) return false;
   const guidanceBar = guidanceBarHeight();
+  const visible = visibleBoundsOf(container);
   if (scope) {
-    const visible = visibleBoundsOf(container);
     const bounds = scope.getBoundingClientRect();
     const hidden = direction > 0 ? bounds.bottom - (visible.bottom - guidanceBar) : visible.top - bounds.top;
     if (hidden < 1) return false;
   }
+  const room = scrollRoomKeepingInView(from, visible, direction);
+  if (room < 1) return false;
   // The keypad guidance bar is fixed over the bottom of the page and hides what lies under it.
   const step = Math.max(container.clientHeight - guidanceBar, 1);
-  container.scrollBy({ top: direction * Math.min(remaining, step) });
+  container.scrollBy({ top: direction * Math.min(remaining, step, room) });
   return true;
 };
 

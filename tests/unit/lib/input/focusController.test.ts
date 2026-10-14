@@ -195,6 +195,43 @@ describe("FocusController", () => {
   });
 });
 
+describe("FocusController — a group whose only stop is the selected one", () => {
+  const categories = (rowsDisabled: boolean) => [
+    item("memory", 0),
+    item("memory-header", 1, { parentId: "memory" }),
+    item("memory-row", 2, { parentId: "memory", disabled: rowsDisabled }),
+    item("wifi", 3),
+  ];
+
+  it("moves Down to the next group after the group was collapsed from inside", () => {
+    const controller = new FocusController();
+    controller.setItems(categories(false));
+    controller.setCurrent("memory-header");
+
+    controller.setItems(categories(false).filter((entry) => entry.id !== "memory-row"));
+
+    expect(controller.focusNext()?.id).toBe("wifi");
+    expect(controller.currentScopeParentId()).toBeNull();
+  });
+
+  it("moves Up to the previous group when every other stop in the group is disabled", () => {
+    const controller = new FocusController();
+    controller.setItems([item("before", -1), ...categories(true)]);
+    controller.setCurrent("memory-header");
+
+    expect(controller.focusPrevious()?.id).toBe("before");
+  });
+
+  it("stays inside a group that still has another enabled stop", () => {
+    const controller = new FocusController();
+    controller.setItems(categories(false));
+    controller.setCurrent("memory-header");
+
+    expect(controller.focusNext()?.id).toBe("memory-row");
+    expect(controller.currentScopeParentId()).toBe("memory");
+  });
+});
+
 describe("FocusController.setItems — DOM-order batch population", () => {
   it("traverses in the given array (DOM) order regardless of `order`", () => {
     const controller = new FocusController();

@@ -168,6 +168,47 @@ describe("KeypadQuickMenu", () => {
     unsubscribe();
   });
 
+  it("presses the entry whose keycap matches a key pressed while the menu is open", async () => {
+    const seen: MachineCommand[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => seen.push(command));
+    renderMenu();
+
+    requestQuickMenuOpen();
+    const menu = await screen.findByTestId("keypad-quick-menu");
+    fireEvent.keyDown(menu, { key: "*" });
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+    await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+
+    requestQuickMenuOpen();
+    fireEvent.keyDown(await screen.findByTestId("keypad-quick-menu"), { key: "8" });
+    await waitFor(() => expect(seen).toEqual(["pauseResume"]));
+
+    requestQuickMenuOpen();
+    fireEvent.keyDown(await screen.findByTestId("keypad-quick-menu"), { key: "#" });
+    expect(requestDeviceSwitcherOpen).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("ignores a held key and a key that names no entry", async () => {
+    renderMenu();
+    requestQuickMenuOpen();
+    const menu = await screen.findByTestId("keypad-quick-menu");
+
+    fireEvent.keyDown(menu, { key: "*", repeat: true });
+    fireEvent.keyDown(menu, { key: "x" });
+
+    expect(requestDiagnosticsOpen).not.toHaveBeenCalled();
+    expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument();
+  });
+
+  it("gives the keycaps no keys in the menu a pointer user opens, where no keycaps are drawn", async () => {
+    renderMenu();
+    requestQuickMenuOpen("pointer");
+    fireEvent.keyDown(await screen.findByTestId("keypad-quick-menu"), { key: "*" });
+
+    expect(requestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
   it("leaves the machine actions out of the menu a pointer user opens, who has the grid in front of them", async () => {
     renderMenu();
 

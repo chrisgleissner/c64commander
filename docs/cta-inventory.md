@@ -61,8 +61,8 @@ one forwarded as `SoftRight`. The keypad profile binds `F21` and `F23` by code.
 
 | Physical key          | Android keycode      | Semantic action   | Behaviour in app                                                                                                                                                                                                                                                  |
 | --------------------- | -------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-pad **Up**          | `DPAD_UP` 19         | `dpadUp`          | Move to previous sibling CTA/group in scope (wraps). On the page's first stop, scrolls the page up while it has content above, before moving to the app bar. On a focused slider thumb: **moves focus** (does not change value).                                                                                                                                          |
-| D-pad **Down**        | `DPAD_DOWN` 20       | `dpadDown`        | Move to next sibling CTA/group in scope (wraps). On the page's last active stop, each Down press scrolls one viewport (clamped at the end) while it has content below, before moving to the tab bar, so text below the last control stays reachable. In a dialog or sheet whose body scrolls, Down on the body's last control scrolls the body one viewport per press to its end before moving on to the footer buttons or wrapping (Up likewise toward its top).                                                                                                                                                                                                                  |
+| D-pad **Up**          | `DPAD_UP` 19         | `dpadUp`          | Move to previous sibling CTA/group in scope (wraps). On the page's first stop, scrolls the page up while it has content above, never so far that the selected stop leaves the screen, before moving to the app bar. On a focused slider thumb: **moves focus** (does not change value).                                                                                                                                          |
+| D-pad **Down**        | `DPAD_DOWN` 20       | `dpadDown`        | Move to next sibling CTA/group in scope (wraps). On the page's last active stop, Down scrolls the page toward content below it, by at most one viewport and never so far that the selected stop leaves the screen, before moving to the tab bar. In a dialog or sheet whose body scrolls, Down on the body's last control scrolls the body the same way before moving on to the footer buttons or wrapping (Up likewise toward its top).                                                                                                                                                                                                                  |
 | D-pad **Left**        | `DPAD_LEFT` 21       | `dpadLeft`        | On a value control (slider/tabs/segmented): **decrement / previous**. Otherwise previous sibling.                                                                                                                                                                 |
 | D-pad **Right**       | `DPAD_RIGHT` 22      | `dpadRight`       | On a value control: **increment / next**. Otherwise next sibling.                                                                                                                                                                                                 |
 | D-pad **OK / Center** | `DPAD_CENTER` 23 or `ENTER` 66 | `center` / `enter`         | **"OK goes in":** descend into the focused group, or activate the focused leaf. On a Select: opens the dropdown.                                                                                                                                                  |
@@ -93,8 +93,9 @@ F1 is the neutral `function1` action (see the F1 row).
   clears it the same frame.
 - **Guidance bar:** a fixed bar above the TabBar (at the screen edge while a
   dialog or sheet hides the TabBar) showing the breadcrumb plus the contextual
-  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate (by
-  control kind), right = Menu only where the focused control has a menu of its
+  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate, or
+  Expand/Collapse on a control with `aria-expanded` (by control kind; on a card
+  whose only control is its header, by that control), right = Menu only where the focused control has a menu of its
   own. While a single-line field on a page has focus, left and center read Done;
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
@@ -111,11 +112,16 @@ F1 is the neutral `function1` action (see the F1 row).
   taller than that area is aligned by its top edge.
 - **`aria-disabled` controls:** stay ring stops, as WAI-ARIA requires. Up/Down
   skip them and OK does nothing on them, but a selection already on one stays
-  there (the Play/Stop button while a Stop is pending).
+  there (the Play/Stop button while a Stop is pending). A selected control that is
+  natively disabled while the work it started runs (Home's Pause, Resume and Menu
+  tiles) is held the same way. When the selected control is removed, the
+  selection moves to the nearest remaining stop in its group, the following one
+  first, and is scrolled into view.
 - **OK acts on the highlight:** while keys drive the ring, OK activates the
   highlighted stop even when DOM focus was left on a different stop.
 - **Closing a dialog or sheet:** the selection and DOM focus return to the
-  control that was selected when it opened.
+  control that was selected when it opened, also when Remote Input is closed
+  from its keypad menu or after its "Other controls".
 - **Destructive confirmations open on Cancel:** Reset and the other machine
   actions, Power off, Clear flash, Remove disk(s), Delete config, Delete device,
   Clear diagnostics, Clear custom edits, Clear playlist and Reset HVSC all open
@@ -126,7 +132,9 @@ F1 is the neutral `function1` action (see the F1 row).
 ## 2. Navigation model (summary)
 
 - **Up/Down** (and Tab/Shift+Tab) move between sibling CTAs and groups in the
-  active scope and wrap.
+  active scope and wrap. In a group whose only enabled stop is the selected one
+  (a Config category collapsed from inside), they move among the group's
+  siblings instead.
 - **OK/Center/Call** descend into a group (a container with ≥1 enabled child) or
   activate a leaf. A group with a single enabled leaf activates it directly.
 - **OK** in a single-line field on a page leaves the field after the field has
@@ -1113,7 +1121,8 @@ What it holds depends on how it was opened. From the keypad it lists jump-to-pag
 (×6), and each entry names the key that reaches it directly — `1`–`6` for the
 pages, `8` for Pause / Resume machine, `9` for Reset machine, `0` for Game Mode,
 `✱` for Diagnostics, `#` for Switch device — which puts those shortcuts somewhere
-they can be discovered without reading the manual. From
+they can be discovered without reading the manual. The same keys press those
+entries while the menu is open (`7` presses Search). From
 the app-bar button the page jumps are omitted: a reader who tapped it is holding
 a touchscreen and has the TabBar in front of them.
 

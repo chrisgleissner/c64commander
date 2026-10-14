@@ -79,8 +79,11 @@ export interface FocusDiscoveryEngineOptions {
   readonly freezeDuringTransientLayer?: () => boolean;
   /** Run after every (re)assembly so the adapter can re-apply the highlight / bar. */
   readonly onAfterAssemble?: () => void;
-  /** Run when the ring returns to the item that opened a closed overlay, so DOM focus can follow it. */
-  readonly onReturnToOpener?: (id: string) => void;
+  /**
+   * Run when a scan moves the selection itself: back to the item that opened a closed overlay, or on to
+   * the nearest stop after the selected one went away. DOM focus and the scroll position follow it.
+   */
+  readonly onSelectionMovedByScan?: (id: string) => void;
   readonly doc?: Document;
 }
 
@@ -119,6 +122,8 @@ const OBSERVED_ATTRIBUTES = [
   "contenteditable",
   GROUP_ATTR,
   "data-key-nav-skip",
+  // Read for the guidance bar; only a group's aria-label is read during a scan.
+  "aria-label",
 ];
 
 /*
@@ -179,7 +184,7 @@ export class FocusDiscoveryEngine {
   private readonly listExplicit: () => ExplicitRegistration[];
   private readonly freezeDuringTransientLayer: () => boolean;
   private readonly onAfterAssemble?: () => void;
-  private readonly onReturnToOpener?: (id: string) => void;
+  private readonly onSelectionMovedByScan?: (id: string) => void;
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
   private scheduled = false;
@@ -193,6 +198,7 @@ export class FocusDiscoveryEngine {
   /** Where the ring stood in each scope it left, so closing an overlay returns to its opener. */
   private currentWhenLeft = new WeakMap<Element, string>();
   private groupLabelElements: HTMLElement[] = [];
+  private groupElements = new Set<Element>();
   /**
    * A return that could not land yet: the opener is disabled while the write it started is pending, so it is
    * missing from the ring when the overlay closes. Retried on later scans while the ring still stands on the
@@ -207,7 +213,7 @@ export class FocusDiscoveryEngine {
     this.listExplicit = options.listExplicit;
     this.freezeDuringTransientLayer = options.freezeDuringTransientLayer ?? (() => false);
     this.onAfterAssemble = options.onAfterAssemble;
-    this.onReturnToOpener = options.onReturnToOpener;
+    this.onSelectionMovedByScan = options.onSelectionMovedByScan;
     this.doc = options.doc ?? document;
   }
 
@@ -257,13 +263,16 @@ export class FocusDiscoveryEngine {
     this.resolvers.clear();
     this.sources.clear();
     this.groupLabelElements = [];
+    this.groupElements.clear();
     this.controller.clear();
   }
 
   private relabelsCurrent(record: MutationRecord): boolean {
     const currentId = this.controller.current()?.id;
     const current = currentId ? this.elementForId(currentId) : null;
-    return current !== null && changesOnlyText(record) && current.contains(record.target);
+    const relabels =
+      changesOnlyText(record) || (record.attributeName === "aria-label" && !rewritesAttributeWithSameValue(record));
+    return current !== null && relabels && current.contains(record.target);
   }
 
   /** A group's breadcrumb label is read from its `aria-labelledby` elements only during a scan. */
@@ -282,6 +291,7 @@ export class FocusDiscoveryEngine {
   private cannotChangeRing(record: MutationRecord): boolean {
     if (changesOnlyText(record)) return !this.renamesAGroup(record);
     if (rewritesAttributeWithSameValue(record)) return true;
+    if (record.attributeName === "aria-label") return !this.groupElements.has(record.target as Element);
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
@@ -351,15 +361,21 @@ export class FocusDiscoveryEngine {
     const scopeChanged = previousScope !== scope.element;
     const leavingId = this.controller.current()?.id;
     const leavingElement = leavingId ? this.elementForId(leavingId) : null;
+    const previousItems = this.controller.list();
     if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
-    const nodes = this.collectRingNodes(scope, scan);
+    // A selected control that is disabled while the work it started runs (Pause, Menu) stays the
+    // selection, as an aria-disabled one does; dropping it moved the ring to the top of the group.
+    const heldWhileDisabled =
+      !scopeChanged && leavingElement?.isConnected && isNativelyDisabled(leavingElement) ? leavingElement : null;
+    const nodes = this.collectRingNodes(scope, scan, heldWhileDisabled);
     const items = this.assemble(nodes, scope.element);
 
     this.applyShims(items.shimTargets);
     this.resolvers = items.resolvers;
     this.sources = items.sources;
     this.groupLabelElements = items.groupLabelElements;
+    this.groupElements = new Set(nodes.filter((node) => node.isGroup).map((node) => node.element));
     this.controller.setItems(items.focusItems);
     // Closing a dropdown or dialog used to drop the ring on the page's first item, because the item it
     // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad
@@ -376,16 +392,22 @@ export class FocusDiscoveryEngine {
         until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
       };
     } else if (!scopeChanged) {
-      this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers);
-      returnedTo = this.retryPendingReturn(scope.element);
+      returnedTo =
+        this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers) ??
+        this.followVanishedStop(leavingId, previousItems);
+      returnedTo = this.retryPendingReturn(scope.element) ?? returnedTo;
     }
-    returnedTo ??= this.restoreStandingAfterEmptyRing(scope.element, leavingId, items.focusItems.length);
+    returnedTo ??= this.restoreStandingAfterEmptyRing(
+      scope.element,
+      scopeChanged ? undefined : leavingId,
+      items.focusItems.length,
+    );
     this.scopeChain = this.computeScopeChain();
 
     // Drop the mutation records our own tabindex writes just queued — the DOM is
     // already reflected in this scan, so reacting to them would loop.
     this.observer?.takeRecords();
-    if (returnedTo) this.onReturnToOpener?.(returnedTo);
+    if (returnedTo) this.onSelectionMovedByScan?.(returnedTo);
     this.onAfterAssemble?.();
   }
 
@@ -399,8 +421,10 @@ export class FocusDiscoveryEngine {
     leavingElement: HTMLElement | null,
     focusItems: readonly FocusItem[],
     resolvers: Map<string, () => HTMLElement | null>,
-  ): void {
-    if (!leavingId || !leavingElement?.isConnected || focusItems.some((item) => item.id === leavingId)) return;
+  ): string | undefined {
+    if (!leavingId || !leavingElement?.isConnected || focusItems.some((item) => item.id === leavingId)) {
+      return undefined;
+    }
     const inside: Array<{ id: string; element: HTMLElement }> = [];
     for (const item of focusItems) {
       const element = resolvers.get(item.id)?.() ?? null;
@@ -409,17 +433,52 @@ export class FocusDiscoveryEngine {
     const outermost = inside.find(
       (entry) => !inside.some((other) => other !== entry && other.element.contains(entry.element)),
     );
-    if (outermost) this.controller.setCurrent(outermost.id);
+    if (!outermost) return undefined;
+    this.controller.setCurrent(outermost.id);
+    return outermost.id;
   }
 
+  /**
+   * The selected stop went away (Remove selected items, an inline editor's Cancel). The ring took the
+   * group's first stop, which can be far off screen; it moves to the nearest remaining sibling instead,
+   * the following one first.
+   */
+  private followVanishedStop(leavingId: string | undefined, previousItems: readonly FocusItem[]): string | undefined {
+    if (!leavingId || this.controller.current()?.id === leavingId) return undefined;
+    const leaving = previousItems.find((item) => item.id === leavingId);
+    const parentId = leaving?.parentId ?? null;
+    if (!leaving || this.controller.currentScopeParentId() !== parentId) return undefined;
+    const remaining = new Set(
+      this.controller
+        .list()
+        .filter((item) => !item.disabled && (item.parentId ?? null) === parentId)
+        .map((item) => item.id),
+    );
+    const siblings = previousItems.filter((item) => (item.parentId ?? null) === parentId);
+    const at = siblings.indexOf(leaving);
+    for (let distance = 1; distance < siblings.length; distance += 1) {
+      for (const candidate of [siblings[at + distance], siblings[at - distance]]) {
+        if (candidate && remaining.has(candidate.id) && this.controller.setCurrent(candidate.id)) return candidate.id;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * `leavingId` is where the ring stood in this same scope, or undefined when the scan came from another one:
+   * the item a menu over a key-owning sheet stood on is no place to return to. The remembered stop outlives
+   * scans of other scopes, such as Remote Input's own menu and its controls, and is used by the next scan
+   * of its own scope that finds stops.
+   */
   private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
     if (itemCount === 0) {
       if (leavingId) this.standingWhenRingEmptied = { scope, id: leavingId };
       return undefined;
     }
     const standing = this.standingWhenRingEmptied;
+    if (!standing || standing.scope !== scope) return undefined;
     this.standingWhenRingEmptied = null;
-    if (!standing || standing.scope !== scope || !this.controller.currentIsDefaultSelection()) return undefined;
+    if (!this.controller.currentIsDefaultSelection()) return undefined;
     if (this.controller.setCurrent(standing.id)) return standing.id;
     this.pendingReturn = {
       scope,
@@ -447,7 +506,7 @@ export class FocusDiscoveryEngine {
     return pending.id;
   }
 
-  private collectRingNodes(scope: ActiveScope, scan: DiscoveryScan): RingNode[] {
+  private collectRingNodes(scope: ActiveScope, scan: DiscoveryScan, heldWhileDisabled: HTMLElement | null): RingNode[] {
     const scopeEl = scope.element;
     const excludeSubtrees = scope.kind === "page" ? [TABBAR_SCOPE_SELECTOR] : [];
     const discovered = discoverInteractiveElements(scopeEl, { excludeSubtrees, scan });
@@ -462,6 +521,12 @@ export class FocusDiscoveryEngine {
 
     const inScope = (element: HTMLElement): boolean =>
       scopeEl.contains(element) || (tabbar instanceof HTMLElement && tabbar.contains(element));
+    const holdsDisabledSelection =
+      heldWhileDisabled !== null &&
+      inScope(heldWhileDisabled) &&
+      isFocusVisible(heldWhileDisabled, scan) &&
+      !isSkipped(heldWhileDisabled, scopeEl);
+    if (holdsDisabledSelection && !elements.includes(heldWhileDisabled)) elements.push(heldWhileDisabled);
 
     const registrationByElement = new Map<HTMLElement, ExplicitRegistration>();
     const groupElements = new Set<Element>();
@@ -535,7 +600,12 @@ export class FocusDiscoveryEngine {
     const kept = elements
       .filter((element) => !skipElements.has(element))
       .filter((element) => !ownedByExplicitItem(element))
-      .filter((element) => !isNativelyDisabled(element) || groupElements.has(element));
+      .filter(
+        (element) =>
+          !isNativelyDisabled(element) ||
+          groupElements.has(element) ||
+          (holdsDisabledSelection && element === heldWhileDisabled),
+      );
     const inTabbar = (element: HTMLElement): boolean => tabbar instanceof HTMLElement && tabbar.contains(element);
     const ordered = [
       ...sortIntoReadingOrder(
