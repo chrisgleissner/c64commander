@@ -270,7 +270,7 @@ class AudioPipelineFxTest {
       }
       // The window ends where the track says the speaker is, a second behind the writes, give or
       // take how far the analyser follows the speaker between readings.
-      val windowEnd = hub.analyzer.read(true).sequence * (rate / 30)
+      val windowEnd = hub.analyzer.read(true).sequence * (rate / SpectrumAnalyzer.LIVE_STEPS_PER_SECOND)
       val speakerAt = speaker.frames() - rate
       assertTrue("window ends at $windowEnd, speaker at $speakerAt", Math.abs(windowEnd - speakerAt) <= rate / 4)
       assertTrue("window ends at $windowEnd, newest write at ${speaker.frames()}", windowEnd < speaker.frames() - rate / 2)

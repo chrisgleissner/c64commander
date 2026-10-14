@@ -275,22 +275,23 @@ class SpectrumAnalyzerTest {
   @Test
   fun aLiveStreamUsesAShortWindowSoANewToneTakesOverSooner() {
     val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
-    val output = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    val output = SpectrumAnalyzer { now }.also { it.prepare(rate) }
     for (target in listOf(live, output)) {
       feedTone(target, 500.0, rate, 0)
       feedTone(target, 3000.0, 1200, rate.toLong())
     }
-    // 1200 new samples fill most of a 2048-point window but under a third of a 4096-point one.
+    // 1200 new samples fill most of a 512-point window but under a third of a 4096-point one.
     assertEquals(bandOf(3000.0), loudestBand(live.read(true)))
     assertEquals(bandOf(500.0), loudestBand(output.read(true)))
   }
 
   @Test
-  fun aLiveStreamPublishesAFrameEveryEightMilliseconds() {
+  fun aLiveStreamPublishesAFrameEveryFourMilliseconds() {
     val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
-    feedTone(live, 1000.0, 400, 0)
+    val step = rate / SpectrumAnalyzer.LIVE_STEPS_PER_SECOND
+    feedTone(live, 1000.0, step, 0)
     assertEquals(1L, live.read(true).sequence)
-    feedTone(live, 1000.0, 400, 400)
+    feedTone(live, 1000.0, step, step.toLong())
     assertEquals(2L, live.read(true).sequence)
   }
 
@@ -358,7 +359,7 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun aLiveWindowOf2048PointsReadsEachBandsCentreToneAtItsLevel() {
+  fun aLiveStreamReadsEachBandsCentreToneAtItsLevel() {
     val binHz = rate / 2048.0
     for (band in 0 until SpectrumBands.COUNT) {
       val hz = Math.sqrt(SpectrumBands.edge(band) * SpectrumBands.edge(band + 1))
@@ -377,11 +378,26 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun aLiveWindowOf2048PointsReadsAToneBetweenTwoBinsAsOnOne() {
+  fun aLiveStreamReadsAToneBetweenTwoBinsAsOnOne() {
     val binHz = rate / 2048.0
     val onBin = liveReadingOf(binHz * 43.0)
     val betweenBins = liveReadingOf(binHz * 43.5)
     assertEquals(-6.0, onBin.bands.max().toDouble(), 1.0)
     assertEquals(onBin.bands.max().toDouble(), betweenBins.bands.max().toDouble(), 1.0)
+  }
+
+  @Test
+  fun aTrebleBurstShowsInTheLiveSpectrumWithinSevenMillisecondsAndABassBurstDoesNot() {
+    val burstFrames = rate * 7 / 1000
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, 6000.0, rate / 4, 0, amplitude = 0.0)
+    feedTone(live, 6000.0, burstFrames, 0, amplitude = 0.5)
+    val trebleDb = live.read(true).bands[bandOf(6000.0)]
+    assertTrue("treble band reads $trebleDb dB", trebleDb >= -18)
+    val bass = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(bass, 100.0, rate / 4, 0, amplitude = 0.0)
+    feedTone(bass, 100.0, burstFrames, 0, amplitude = 0.5)
+    val bassDb = bass.read(true).bands[bandOf(100.0)]
+    assertTrue("bass band reads $bassDb dB against treble $trebleDb dB", bassDb <= trebleDb - 10)
   }
 }
