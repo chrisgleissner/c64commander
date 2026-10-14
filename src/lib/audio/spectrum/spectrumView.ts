@@ -60,6 +60,7 @@ const FRAMES_PER_READ = 4;
 /** A new read is issued when fewer than this many display frames of sound are already waiting. */
 const LOOK_AHEAD_FRAMES = 3;
 const MAX_PENDING_FRAMES = 16;
+const ALIGNMENT_SAMPLES = 1024;
 
 export interface SpectrumReadout {
   /** Null while there is no sound to measure. */
@@ -165,6 +166,8 @@ export class SpectrumView {
   private readonly pending: Array<{ frame: SpectrumFrame; dueMs: number }> = [];
   private alignedMode = false;
   private lastDueMs = 0;
+  private readonly alignmentErrors = new Float32Array(ALIGNMENT_SAMPLES);
+  private alignmentCount = 0;
   private readonly clock = new NativeClockOffset();
   private frameIntervalMs = 1000 / 60;
   private readGeneration = 0;
@@ -186,6 +189,12 @@ export class SpectrumView {
   constructor(options: SpectrumViewOptions) {
     this.options = options;
     this.canvas = options.canvas;
+    if (
+      typeof window !== "undefined" &&
+      (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true
+    ) {
+      (options.canvas as unknown as { __spectrumView?: SpectrumView }).__spectrumView = this;
+    }
     this.profile = options.profile;
     this.readFrame = options.read ?? readSpectrum;
     this.setEnabled = options.setEnabled ?? setSpectrumEnabled;
@@ -198,6 +207,17 @@ export class SpectrumView {
     this.tier = initialSpectrumTier({ profile: this.profile, ...signals });
     this.controller = createSpectrumTierController(this.tier, this.now());
     this.ballistics = createBallistics(this.tier.bars);
+  }
+
+  /**
+   * For the last draws, how much later than the sound shown the frame reached the screen, in
+   * milliseconds: the draw time plus one display frame, minus the time the frame's sound is audible.
+   * Negative means the frame showed sound that was still to come. Empty on a path with no speaker report.
+   */
+  alignmentErrorsMs(): number[] {
+    const count = Math.min(this.alignmentCount, ALIGNMENT_SAMPLES);
+    const start = this.alignmentCount - count;
+    return Array.from({ length: count }, (_, i) => this.alignmentErrors[(start + i) % ALIGNMENT_SAMPLES]);
   }
 
   /** Frames read ahead of their display time and not yet shown. */
@@ -539,6 +559,10 @@ export class SpectrumView {
   private drawFrame(nowMs: number): void {
     const started = this.now();
     this.applyDue(nowMs);
+    if (this.alignedMode && this.lastDueMs > 0) {
+      this.alignmentErrors[this.alignmentCount % ALIGNMENT_SAMPLES] = nowMs + this.frameIntervalMs - this.lastDueMs;
+      this.alignmentCount += 1;
+    }
     const elapsed = this.lastDrawAt === 0 ? 1000 / this.tier.drawFps : Math.min(MAX_STEP_MS, nowMs - this.lastDrawAt);
     const sounding = this.isSounding(nowMs);
     if (sounding) foldBands(this.latest, this.folded);

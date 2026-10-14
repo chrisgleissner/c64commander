@@ -300,6 +300,18 @@ describe("SpectrumView", () => {
       t.view.dispose();
     });
 
+    it("records how far each draw was from the display time of the sound it showed", async () => {
+      const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(600);
+      const errors = t.view.alignmentErrorsMs().sort((a, b) => a - b);
+      expect(errors.length).toBeGreaterThan(20);
+      const median = errors[errors.length >> 1];
+      expect(Math.abs(median)).toBeLessThanOrEqual(stepMs);
+      t.view.dispose();
+    });
+
     it("keeps frames for later display times waiting and shows each at its own tick", async () => {
       let issued = 0;
       const t: ReturnType<typeof setup> = setup({
