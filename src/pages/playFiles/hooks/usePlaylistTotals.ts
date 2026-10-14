@@ -6,29 +6,29 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
-import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
+import { calculatePlaylistTotals, type PlaylistTotals } from "@/lib/playback/playlistTotals";
 import { resolvePlayOrderIndices } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
+/** The playlist's total and remaining time for any elapsed time in the current item, which changes every second. */
 export const usePlaylistTotals = (
   playlist: PlaylistItem[],
   durationOf: (item: PlaylistItem, index: number) => number | undefined,
   {
     currentIndex,
-    elapsedMs,
     shuffleEnabled,
     shuffleSeed,
-  }: { currentIndex: number; elapsedMs: number; shuffleEnabled: boolean; shuffleSeed: number | null },
-) => {
+  }: { currentIndex: number; shuffleEnabled: boolean; shuffleSeed: number | null },
+): ((elapsedMs: number) => PlaylistTotals) => {
   const durations = useMemo(() => playlist.map((item, index) => durationOf(item, index)), [playlist, durationOf]);
   const playOrder = useMemo(
     () => resolvePlayOrderIndices(playlist, shuffleEnabled, shuffleSeed),
     [playlist, shuffleEnabled, shuffleSeed],
   );
-  return useMemo(
-    () => calculatePlaylistTotals(durations, { playOrder, currentIndex, elapsedMs }),
-    [durations, playOrder, currentIndex, elapsedMs],
+  return useCallback(
+    (elapsedMs: number) => calculatePlaylistTotals(durations, { playOrder, currentIndex, elapsedMs }),
+    [durations, playOrder, currentIndex],
   );
 };

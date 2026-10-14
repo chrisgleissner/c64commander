@@ -35,6 +35,7 @@ import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { commitPlaylistSnapshot, usePlaylistRepositorySyncSnapshot } from "@/pages/playFiles/playlistRepositorySync";
+import { type PlaybackTime, type PlaybackTimeStore, usePlaybackTimeEffect } from "@/pages/playFiles/playbackTimeStore";
 
 interface UsePlaybackPersistenceProps {
   playlist: PlaylistItem[];
@@ -45,10 +46,7 @@ interface UsePlaybackPersistenceProps {
   setIsPlaying: (value: boolean) => void;
   isPaused: boolean;
   setIsPaused: (value: boolean) => void;
-  elapsedMs: number;
-  setElapsedMs: (value: number) => void;
-  playedMs: number;
-  setPlayedMs: (value: number) => void;
+  playbackTime: PlaybackTimeStore;
   durationMs: number | undefined;
   setDurationMs: (value: number | undefined) => void;
   /** Records the playlist item a restored `durationMs` belongs to. */
@@ -117,10 +115,7 @@ export function usePlaybackPersistence({
   setIsPlaying,
   isPaused,
   setIsPaused,
-  elapsedMs,
-  setElapsedMs,
-  playedMs,
-  setPlayedMs,
+  playbackTime,
   durationMs,
   setDurationMs,
   setDurationMsItemId,
@@ -149,6 +144,7 @@ export function usePlaybackPersistence({
   setSessionRestoreSettled,
 }: UsePlaybackPersistenceProps) {
   const playlistRepository = getPlaylistDataRepository();
+  const { setElapsedMs, setPlayedMs } = playbackTime;
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
   // True once the stored session has been read and either applied or rejected;
@@ -616,91 +612,95 @@ export function usePlaybackPersistence({
   }, [playlist, playlistRepository, playlistStorageKey, repositorySnapshot.phase, restoreVersion]);
 
   // Persist Repository Session
-  useEffect(() => {
-    if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
-    const session: PlaylistSessionRecord = {
-      playlistId: playlistStorageKey,
-      currentPlaylistItemId,
-      isPlaying,
-      isPaused,
-      elapsedMs,
-      playedMs,
-      shuffleEnabled,
-      repeatEnabled,
-      randomSeed: shuffleSeed,
-      randomCursor: null,
-      activeQuery: activePlaylistQuery,
-      updatedAt: new Date().toISOString(),
-    };
+  const persistRepositorySession = useCallback(
+    ({ elapsedMs, playedMs }: PlaybackTime) => {
+      if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
+      const session: PlaylistSessionRecord = {
+        playlistId: playlistStorageKey,
+        currentPlaylistItemId,
+        isPlaying,
+        isPaused,
+        elapsedMs,
+        playedMs,
+        shuffleEnabled,
+        repeatEnabled,
+        randomSeed: shuffleSeed,
+        randomCursor: null,
+        activeQuery: activePlaylistQuery,
+        updatedAt: new Date().toISOString(),
+      };
 
-    void playlistRepository.saveSession(session).catch((error) => {
-      addErrorLog("Failed to persist playlist session to repository", {
-        playlistStorageKey,
-        error: (error as Error).message,
+      void playlistRepository.saveSession(session).catch((error) => {
+        addErrorLog("Failed to persist playlist session to repository", {
+          playlistStorageKey,
+          error: (error as Error).message,
+        });
       });
-    });
-  }, [
-    activePlaylistQuery,
-    currentPlaylistItemId,
-    elapsedMs,
-    isPaused,
-    isPlaying,
-    playedMs,
-    playlistRepository,
-    playlistStorageKey,
-    repeatEnabled,
-    restoreVersion,
-    shuffleEnabled,
-    shuffleSeed,
-  ]);
+    },
+    [
+      activePlaylistQuery,
+      currentPlaylistItemId,
+      isPaused,
+      isPlaying,
+      playlistRepository,
+      playlistStorageKey,
+      repeatEnabled,
+      restoreVersion,
+      shuffleEnabled,
+      shuffleSeed,
+    ],
+  );
+  usePlaybackTimeEffect(playbackTime, persistRepositorySession);
 
   // Persist Session
-  useEffect(() => {
-    if (!isPlaying && !isPaused) {
-      // A freshly mounted instance starts not-playing; deleting the stored
-      // session here would destroy a live session before the async restore
-      // applies it (navigation remounts the page — playback must survive).
-      if (!sessionRestoreSettledRef.current) return;
-      clearStoredPlaybackSession();
-      return;
-    }
-    const currentItemLabel = currentIndex >= 0 ? (playlist[currentIndex]?.label ?? null) : null;
-    const payload: StoredPlaybackSession = {
-      playlistKey: playlistStorageKey,
-      currentItemId: currentPlaylistItemId,
-      currentItemLabel,
+  const persistSession = useCallback(
+    ({ elapsedMs, playedMs }: PlaybackTime) => {
+      if (!isPlaying && !isPaused) {
+        // A freshly mounted instance starts not-playing; deleting the stored
+        // session here would destroy a live session before the async restore
+        // applies it (navigation remounts the page — playback must survive).
+        if (!sessionRestoreSettledRef.current) return;
+        clearStoredPlaybackSession();
+        return;
+      }
+      const currentItemLabel = currentIndex >= 0 ? (playlist[currentIndex]?.label ?? null) : null;
+      const payload: StoredPlaybackSession = {
+        playlistKey: playlistStorageKey,
+        currentItemId: currentPlaylistItemId,
+        currentItemLabel,
+        currentIndex,
+        isPlaying,
+        isPaused,
+        elapsedMs,
+        playedMs,
+        durationMs,
+        autoAdvanceDueAtMs,
+        shuffleEnabled,
+        repeatEnabled,
+        randomSeed: shuffleSeed,
+        playingOnPhone: isLocalPlaybackActive(),
+        resumeStartsAgain: isPaused && peekRestartedPhoneTune() === currentPlaylistItemId,
+        playbackDeviceId: getSavedDevicesSnapshot().selectedDeviceId,
+        updatedAt: new Date().toISOString(),
+      };
+      writeStoredPlaybackSession(payload);
+    },
+    [
       currentIndex,
-      isPlaying,
-      isPaused,
-      elapsedMs,
-      playedMs,
-      durationMs,
+      currentPlaylistItemId,
       autoAdvanceDueAtMs,
-      shuffleEnabled,
+      durationMs,
+      isPaused,
+      isPlaying,
+      playlist,
+      playlistStorageKey,
       repeatEnabled,
-      randomSeed: shuffleSeed,
-      playingOnPhone: isLocalPlaybackActive(),
-      resumeStartsAgain: isPaused && peekRestartedPhoneTune() === currentPlaylistItemId,
-      playbackDeviceId: getSavedDevicesSnapshot().selectedDeviceId,
-      updatedAt: new Date().toISOString(),
-    };
-    writeStoredPlaybackSession(payload);
-  }, [
-    currentIndex,
-    currentPlaylistItemId,
-    autoAdvanceDueAtMs,
-    durationMs,
-    elapsedMs,
-    isPaused,
-    isPlaying,
-    playedMs,
-    playlist,
-    playlistStorageKey,
-    repeatEnabled,
-    restoreVersion,
-    shuffleEnabled,
-    shuffleSeed,
-  ]);
+      restoreVersion,
+      shuffleEnabled,
+      shuffleSeed,
+    ],
+  );
+  usePlaybackTimeEffect(playbackTime, persistSession);
 
   return { readRepositoryPlaylist, playlistHydrated: restoreVersion > 0 };
 }

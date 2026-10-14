@@ -42,6 +42,7 @@ import {
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidVolumeSnapshot,
 } from "@/lib/config/sidVolumeControl";
+import { spiedPlaybackTime } from "../../helpers/playbackTime";
 
 const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
 const deviceInfoOverride = vi.hoisted(() => ({ current: undefined as Record<string, string> | undefined }));
@@ -237,10 +238,13 @@ const renderPlaybackController = (
       isPaused: options?.statefulPause ? pausedState : (options?.isPaused ?? false),
       setIsPaused: options?.statefulPause ? setPausedState : (options?.setIsPaused ?? vi.fn()),
       setIsPlaylistLoading: options?.setIsPlaylistLoading ?? vi.fn(),
-      elapsedMs: options?.elapsedMs ?? 0,
-      setElapsedMs: options?.setElapsedMs ?? vi.fn(),
-      playedMs: 0,
-      setPlayedMs: options?.setPlayedMs ?? vi.fn(),
+      playbackTime: useState(() =>
+        spiedPlaybackTime({
+          elapsedMs: options?.elapsedMs,
+          setElapsedMs: options?.setElapsedMs,
+          setPlayedMs: options?.setPlayedMs,
+        }),
+      )[0],
       durationMs: options?.durationMs,
       setDurationMs: options?.setDurationMs ?? vi.fn(),
       setCurrentSubsongCount: options?.setCurrentSubsongCount ?? vi.fn(),

@@ -121,6 +121,8 @@ import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPl
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
+import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
+import { usePlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
@@ -299,8 +301,8 @@ export default function PlayFilesPage() {
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { setElapsedMs, setPlayedMs } = playbackTime;
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
   const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
@@ -597,10 +599,7 @@ export default function PlayFilesPage() {
     isPaused,
     setIsPaused,
     setIsPlaylistLoading,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setCurrentSubsongCount,
@@ -1772,7 +1771,6 @@ export default function PlayFilesPage() {
       currentIndex,
       currentItemId: currentItem?.id ?? null,
       isPlaying,
-      elapsedMs,
       durationMs: currentDurationMs ?? null,
       sourceKind,
       localAccessMode,
@@ -1783,7 +1781,6 @@ export default function PlayFilesPage() {
     currentDurationMs,
     currentIndex,
     currentItem?.id,
-    elapsedMs,
     isPlaying,
     playlist.length,
     sourceKind,
@@ -1791,7 +1788,7 @@ export default function PlayFilesPage() {
     trackInstanceId,
   ]);
 
-  usePublishedPlaybackTrace(playbackTraceContext);
+  usePublishedPlaybackTrace(playbackTraceContext, playbackTime);
   useEffect(() => {
     setPlaybackContext({
       sourceBucket:
@@ -1926,7 +1923,7 @@ export default function PlayFilesPage() {
     paused: isPaused,
     trackInstanceId,
     deviceInfo: status.deviceInfo,
-    elapsedMs,
+    playbackTime,
     durationMs: currentDurationMs,
     rebasePlaybackPosition,
   });
@@ -1962,20 +1959,6 @@ export default function PlayFilesPage() {
       ? Math.min(100, (renderedSeconds * 1000 * 100) / currentDurationMs)
       : undefined;
 
-  // While a seek waits for the renderer, the engine is silent and the elapsed clock must sit at the
-  // last position that was genuinely heard. It cannot read its own clock for this: the scheduler was
-  // reset to the target when the seek was accepted, so every position source already reports the
-  // target. A clock advancing normally through a silence is exactly what a listener reads as
-  // playback having died, which is why the target is shown separately on the bar instead.
-  const displayElapsedMs = chosenTrackLaunching
-    ? 0
-    : isScrubbing
-      ? shownScrubTargetMs
-      : (pendingSeek?.audibleMs ?? elapsedMs);
-
-  const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
-  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
-  const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
   // On-device playback attenuates its own PCM before it reaches the speaker, so the Play page's
   // volume control drives whichever route is sounding. Android's media volume is never touched:
   // that dial belongs to the person holding the phone, not to this app.
@@ -2269,10 +2252,7 @@ export default function PlayFilesPage() {
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setDurationMsItemId,
@@ -2468,11 +2448,17 @@ export default function PlayFilesPage() {
     [pendingDurationOverrideMs, playlistItemDuration],
   );
 
-  const playlistTotals = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
+  const playlistTotalsAt = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
     currentIndex,
-    elapsedMs: displayElapsedMs,
     shuffleEnabled: traversalOrdering.shuffleEnabled,
     shuffleSeed,
+  });
+  const timeline = usePlaybackTimeline(playbackTime, {
+    durationMs: currentDurationMs,
+    launching: chosenTrackLaunching,
+    scrubTargetMs: shownScrubTargetMs,
+    heldAtMs: pendingSeek?.audibleMs,
+    playlistTotalsAt,
   });
 
   const previewFilteredPlaylist = queryFilteredPlaylist.previewPlaylist;
@@ -2626,13 +2612,9 @@ export default function PlayFilesPage() {
                   onScrubEnd: () => void endScrub(),
                 })}
                 isScrubbing={isScrubbing}
-                progressPercent={progressPercent}
+                timeline={timeline}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
-                elapsedLabel={formatTime(displayElapsedMs)}
-                remainingLabel={remainingLabel}
-                totalLabel={formatTime(playlistTotals.total)}
-                remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
