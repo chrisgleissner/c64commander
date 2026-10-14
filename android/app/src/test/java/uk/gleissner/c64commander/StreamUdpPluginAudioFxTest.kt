@@ -111,6 +111,15 @@ class StreamUdpPluginAudioFxTest {
     assertEquals(48, result.getJSONArray("bands").length())
     assertEquals(-6.0, result.getInt("peakDb").toDouble(), 1.0)
     assertFalse(result.getBoolean("clipped"))
+    val channels = result.getJSONArray("channels")
+    assertEquals(2, channels.length())
+    assertEquals("left", channels.getJSONObject(0).getString("id"))
+    assertEquals("right", channels.getJSONObject(1).getString("id"))
+    for (i in 0 until 2) {
+      assertEquals(-9.0, channels.getJSONObject(i).getDouble("rmsDb"), 1.5)
+      assertEquals(-6.0, channels.getJSONObject(i).getDouble("peakDb"), 1.0)
+      assertFalse(channels.getJSONObject(i).getBoolean("clipped"))
+    }
   }
 
   @Test
@@ -121,5 +130,45 @@ class StreamUdpPluginAudioFxTest {
     assertFalse(result.getBoolean("enabled"))
     assertFalse(result.getBoolean("active"))
     for (i in 0 until 48) assertEquals(-100, result.getJSONArray("bands").getInt(i))
+  }
+
+  @Test
+  fun readSpectrumReturnsFramesAheadWhenTheSpeakerPositionIsKnown() {
+    val clock = 5_000_000_000L
+    val aligned = AudioFxHub { clock }.also { plugin.fxHub = it }
+    aligned.spectrumEnabled = true
+    aligned.analyzer.prepareFor(live = false, sourceRate = 48000, outputRate = 48000)
+    val tone = TestSignals.sine(24000, 48000, 1000.0, 0.5)
+    repeat(4) { aligned.analyzer.feed(tone, 24000, 48000) }
+    aligned.analyzer.presentAt(framesAheadOfSpeaker = 60000L, timestampNanos = clock)
+    val (c, resolved) = call {
+      `when`(it.data).thenReturn(JSObject().put("targetNanos", clock + 10_000_000L).put("count", 4).put("stepNanos", 16_700_000))
+    }
+    plugin.readSpectrum(c)
+    val result = resolved()!!
+    assertTrue(result.getBoolean("aligned"))
+    val ahead = result.getJSONArray("ahead")
+    assertEquals(3, ahead.length())
+    var previous = result.getLong("sequence")
+    for (i in 0 until ahead.length()) {
+      val sequence = ahead.getJSONObject(i).getLong("sequence")
+      assertTrue("frame $i does not follow", sequence > previous)
+      previous = sequence
+    }
+  }
+
+  @Test
+  fun readSpectrumReturnsOneFrameWhenNoSpeakerPositionIsKnown() {
+    hub.spectrumEnabled = true
+    hub.analyzer.prepareFor(live = true, sourceRate = 48000, outputRate = 48000)
+    val tone = TestSignals.sine(24000, 48000, 1000.0, 0.5)
+    repeat(2) { hub.analyzer.feed(tone, 24000, 48000) }
+    val (c, resolved) = call {
+      `when`(it.data).thenReturn(JSObject().put("targetNanos", 1_000_000_000L).put("count", 4).put("stepNanos", 16_700_000))
+    }
+    plugin.readSpectrum(c)
+    val result = resolved()!!
+    assertFalse(result.getBoolean("aligned"))
+    assertFalse(result.has("ahead"))
   }
 }

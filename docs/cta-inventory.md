@@ -497,8 +497,12 @@ Listed below in the order they are rendered and walked by the focus ring.
 - Spectrum — section toggle — `play-section-toggle-spectrum` (`play-section-spectrum`) — R✅ I✅ — a
   collapsible card above the playback controls; its state is remembered, and it is open on a first
   visit when the tune is playing on the phone. While it is closed, off screen or the document is hidden,
-  the native analyser is switched off. The body holds only display elements (`spectrum-canvas`,
-  `spectrum-rms`, `spectrum-peak`, `spectrum-clip`, `spectrum-message`), so it adds one control to the page.
+  the native analyser is switched off. Its display has stable L/R output-channel meters:
+  solid average level, translucent instantaneous peak, and a held peak marker on one dBFS scale,
+  growing from left to right toward 0 dBFS, with a red block when that channel clips. Matching stereo
+  levels do not collapse the rows. Older bridges show one aggregate Mix meter. The body holds only
+  display elements (`spectrum-canvas`, `spectrum-channel-readout`, `spectrum-rms`, `spectrum-peak`,
+  `spectrum-clip`, `spectrum-message`; the readout elements are screen-reader only), so it adds one control to the page.
 
 ### 4.3 Disks (`/disks`)
 

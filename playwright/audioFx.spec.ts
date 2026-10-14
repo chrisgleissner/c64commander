@@ -177,6 +177,8 @@ test.describe("Spectrum card and audio processing", () => {
       await expect(page.getByTestId("spectrum-rms")).not.toHaveText("");
       await expect(page.getByTestId("spectrum-peak")).not.toHaveText("");
 
+      await card.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(700);
       await noHorizontalOverflow(page);
       const box = await canvas.boundingBox();
       expect(box!.width).toBeGreaterThan(profile.id === "compact" ? 250 : 600);
@@ -186,8 +188,6 @@ test.describe("Spectrum card and audio processing", () => {
       expect(measured.bodyOffenders, "Body text below the size floor").toEqual([]);
       expect(measured.targetOffenders, "Controls below the target size").toEqual([]);
 
-      await card.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(700);
       await keepShot(card, `spectrum-${profile.id}-${theme}`);
       await keepShot(page, `spectrum-${profile.id}-${theme}-page`);
     });
@@ -239,7 +239,7 @@ test.describe("Spectrum card and audio processing", () => {
     await expect(page.getByTestId("spectrum-message")).toHaveCount(0, { timeout: 5000 });
   });
 
-  test("the clip lamp lights while the plugin reports clipping and releases afterwards", async ({ page }) => {
+  test("the clip state follows the plugin's clipping report and releases afterwards", async ({ page }) => {
     await installAudioFxMock(page);
     await installLiveViewAudioStub(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);

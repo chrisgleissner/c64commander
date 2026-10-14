@@ -32,6 +32,63 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
+  fun stereoChannelMetersPreserveIndependentRmsAndPeakLevels() {
+    val pcm = TestSignals.sine(4800, rate, 1000.0, 0.5)
+    for (sample in 0 until 4800) {
+      val at = sample * 4
+      val left = ((pcm[at].toInt() and 255) or (pcm[at + 1].toInt() shl 8)).toShort().toInt()
+      val right = left / 4
+      pcm[at + 2] = right.toByte()
+      pcm[at + 3] = (right shr 8).toByte()
+    }
+    analyzer.feed(pcm, 4800, rate)
+    val channels = analyzer.read(true).channels
+    assertEquals(2, channels.size)
+    assertEquals("left", channels[0].id)
+    assertEquals("right", channels[1].id)
+    assertEquals(-9.0, channels[0].rmsDb.toDouble(), 1.0)
+    assertEquals(-6.0, channels[0].peakDb.toDouble(), 1.0)
+    assertEquals(-21.0, channels[1].rmsDb.toDouble(), 1.0)
+    assertEquals(-18.0, channels[1].peakDb.toDouble(), 1.0)
+  }
+
+  @Test
+  fun oppositePhaseStereoDoesNotCancelEitherChannelMeter() {
+    val pcm = TestSignals.sine(4800, rate, 1000.0, 0.5)
+    for (sample in 0 until 4800) {
+      val at = sample * 4
+      val left = ((pcm[at].toInt() and 255) or (pcm[at + 1].toInt() shl 8)).toShort().toInt()
+      val right = -left
+      pcm[at + 2] = right.toByte()
+      pcm[at + 3] = (right shr 8).toByte()
+    }
+    analyzer.feed(pcm, 4800, rate)
+    val channels = analyzer.read(true).channels
+    for (channel in channels) {
+      assertEquals(-9.0, channel.rmsDb.toDouble(), 1.0)
+      assertEquals(-6.0, channel.peakDb.toDouble(), 1.0)
+    }
+  }
+
+  @Test
+  fun clippingIsHeldOnlyOnTheChannelThatReachedFullScaleAndResetsOnPrepare() {
+    val pcm = ByteArray(4800 * 4)
+    for (sample in 0 until 4800) {
+      pcm[sample * 4 + 2] = 255.toByte()
+      pcm[sample * 4 + 3] = 127.toByte()
+    }
+    analyzer.feed(pcm, 4800, rate)
+    assertFalse(analyzer.read(true).channels[0].clipped)
+    assertTrue(analyzer.read(true).channels[1].clipped)
+    now += 900_000_000L
+    assertTrue(analyzer.read(true).channels[1].clipped)
+    now += 200_000_000L
+    assertFalse(analyzer.read(true).channels[1].clipped)
+    analyzer.prepare(rate)
+    assertTrue(analyzer.read(true).channels.all { !it.clipped && it.rmsDb == -100 && it.peakDb == -100 })
+  }
+
+  @Test
   fun bandEdgesFollowTheSharedLogLayout() {
     assertEquals(48, SpectrumBands.COUNT)
     assertEquals(31.25, SpectrumBands.edge(0), 1e-9)
@@ -216,24 +273,22 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun aLiveStreamUsesAShortWindowSoANewToneTakesOverSooner() {
-    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+  fun onDevicePlaybackKeepsTheLongBassWindowWhileTheTrebleStillUsesAShortOne() {
     val output = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
-    for (target in listOf(live, output)) {
-      feedTone(target, 500.0, rate, 0)
-      feedTone(target, 3000.0, 1200, rate.toLong())
-    }
-    // 1200 new samples fill most of a 2048-point window but under a third of a 4096-point one.
-    assertEquals(bandOf(3000.0), loudestBand(live.read(true)))
-    assertEquals(bandOf(500.0), loudestBand(output.read(true)))
+    feedTone(output, 500.0, rate, 0)
+    feedTone(output, 6000.0, 300, rate.toLong())
+    val bands = output.read(true).bands
+    assertTrue("treble reads ${bands[bandOf(6000.0)]} dB", bands[bandOf(6000.0)] >= -20)
+    assertTrue("bass reads ${bands[bandOf(500.0)]} dB", bands[bandOf(500.0)] >= -12)
   }
 
   @Test
-  fun aLiveStreamPublishesAFrameEveryEightMilliseconds() {
+  fun aLiveStreamPublishesAFrameEveryFourMilliseconds() {
     val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
-    feedTone(live, 1000.0, 400, 0)
+    val step = rate / SpectrumAnalyzer.LIVE_STEPS_PER_SECOND
+    feedTone(live, 1000.0, step, 0)
     assertEquals(1L, live.read(true).sequence)
-    feedTone(live, 1000.0, 400, 400)
+    feedTone(live, 1000.0, step, step.toLong())
     assertEquals(2L, live.read(true).sequence)
   }
 
@@ -301,7 +356,7 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun aLiveWindowOf2048PointsReadsEachBandsCentreToneAtItsLevel() {
+  fun aLiveStreamReadsEachBandsCentreToneAtItsLevel() {
     val binHz = rate / 2048.0
     for (band in 0 until SpectrumBands.COUNT) {
       val hz = Math.sqrt(SpectrumBands.edge(band) * SpectrumBands.edge(band + 1))
@@ -320,11 +375,71 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun aLiveWindowOf2048PointsReadsAToneBetweenTwoBinsAsOnOne() {
+  fun aLiveStreamReadsAToneBetweenTwoBinsAsOnOne() {
     val binHz = rate / 2048.0
     val onBin = liveReadingOf(binHz * 43.0)
     val betweenBins = liveReadingOf(binHz * 43.5)
     assertEquals(-6.0, onBin.bands.max().toDouble(), 1.0)
     assertEquals(onBin.bands.max().toDouble(), betweenBins.bands.max().toDouble(), 1.0)
+  }
+
+  @Test
+  fun aTrebleBurstShowsInTheLiveSpectrumWithinSevenMillisecondsAndABassBurstDoesNot() {
+    val burstFrames = rate * 7 / 1000
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, 6000.0, rate / 4, 0, amplitude = 0.0)
+    feedTone(live, 6000.0, burstFrames, 0, amplitude = 0.5)
+    val trebleDb = live.read(true).bands[bandOf(6000.0)]
+    assertTrue("treble band reads $trebleDb dB", trebleDb >= -18)
+    val bass = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(bass, 100.0, rate / 4, 0, amplitude = 0.0)
+    feedTone(bass, 100.0, burstFrames, 0, amplitude = 0.5)
+    val bassDb = bass.read(true).bands[bandOf(100.0)]
+    assertTrue("bass band reads $bassDb dB against treble $trebleDb dB", bassDb <= trebleDb - 10)
+  }
+
+  private fun speakerAlignedBurst(): SpectrumAnalyzer {
+    val speaker = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(speaker, 6000.0, rate / 2, 0, amplitude = 0.0)
+    feedTone(speaker, 6000.0, 256, 0, amplitude = 0.5)
+    feedTone(speaker, 6000.0, rate / 2, 0, amplitude = 0.0)
+    val total = speaker.writeCountForTest()
+    val burstStart = rate / 2L
+    // The speaker is 1000 samples before the burst when the report is taken.
+    speaker.presentAt(framesAheadOfSpeaker = total - (burstStart - 1000), timestampNanos = now)
+    return speaker
+  }
+
+  @Test
+  fun aTargetTimeCentresTheWindowOnTheSoundHeardAtThatMomentSoABurstShowsAtItsOwnTime() {
+    val band = bandOf(6000.0)
+    val atBurstCentre = speakerAlignedBurst().read(true, now + (1000 + 128) * 1_000_000_000L / rate).bands[band]
+    val beforeBurst = speakerAlignedBurst().read(true, now).bands[band]
+    val wellAfterBurst = speakerAlignedBurst().read(true, now + (1000 + 128 + 2000) * 1_000_000_000L / rate).bands[band]
+    assertTrue("burst centre reads $atBurstCentre dB", atBurstCentre >= -20)
+    assertTrue("20 ms before the burst reads $beforeBurst dB", beforeBurst <= atBurstCentre - 25)
+    assertTrue("40 ms after the burst reads $wellAfterBurst dB", wellAfterBurst <= atBurstCentre - 25)
+  }
+
+  @Test
+  fun withoutASpeakerReportTheLatestSamplesAreAnalysedWhateverTheTarget() {
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, 6000.0, rate / 4, 0, amplitude = 0.0)
+    feedTone(live, 6000.0, 256, 0, amplitude = 0.5)
+    val noTarget = live.read(true)
+    val farFuture = live.read(true, now + 5_000_000_000L)
+    assertEquals(noTarget.sequence, farFuture.sequence)
+    assertTrue("the window wanted samples that do not exist yet", farFuture.shortfallSamples > 0)
+  }
+
+  @Test
+  fun aTargetFarAheadStillAdvancesTheWindowWhenTheSpeakerReportIsOld() {
+    val speaker = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(speaker, 1000.0, rate * 2, 0)
+    speaker.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
+    now += 200_000_000L
+    val first = speaker.read(true, now + 50_000_000L).sequence
+    val later = speaker.read(true, now + 50_000_000L + 8 * 16_700_000L).sequence
+    assertTrue("sequence did not advance: $first then $later", later > first)
   }
 }

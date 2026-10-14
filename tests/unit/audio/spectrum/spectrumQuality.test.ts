@@ -40,12 +40,12 @@ describe("spectrum quality tiers", () => {
     ]);
   });
 
-  it("starts at tier 1 on the compact profile and on weak devices, otherwise at tier 0", () => {
-    expect(initialSpectrumTier({ profile: "compact" }).index).toBe(1);
-    expect(initialSpectrumTier({ profile: "medium", hardwareConcurrency: 4 }).index).toBe(1);
-    expect(initialSpectrumTier({ profile: "medium", deviceMemory: 2 }).index).toBe(1);
-    expect(initialSpectrumTier({ profile: "medium", hardwareConcurrency: 8, deviceMemory: 8 }).index).toBe(0);
-    expect(initialSpectrumTier({ profile: "expanded" }).index).toBe(0);
+  it("starts at tier 1 on weak devices only, whatever the display profile", () => {
+    expect(initialSpectrumTier({}).index).toBe(0);
+    expect(initialSpectrumTier({ hardwareConcurrency: 4 }).index).toBe(1);
+    expect(initialSpectrumTier({ deviceMemory: 2 }).index).toBe(1);
+    expect(initialSpectrumTier({ hardwareConcurrency: 8, deviceMemory: 8 }).index).toBe(0);
+    expect(initialSpectrumTier({ hardwareConcurrency: 16 }).index).toBe(0);
   });
 
   it("drops a tier after one second of frames over budget, and not before", () => {

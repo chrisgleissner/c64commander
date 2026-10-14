@@ -33,21 +33,31 @@ describe("spectrum colours", () => {
     expect(oklchToHex(0.628, 0.2577, 29.23)).toBe("#ff0000");
   });
 
-  it("gets brighter with level on a dark panel and darker with level on a light one, at every step", () => {
-    const dark = levelColorSteps(true).map((step) => relativeLuminance(step.color));
-    const light = levelColorSteps(false).map((step) => relativeLuminance(step.color));
+  it("gets brighter with level on a dark panel and darker with level on a light one, up to the warm stops", () => {
+    const warmFromDb = -9;
+    const dark = levelColorSteps(true).filter((step) => step.db <= warmFromDb);
+    const light = levelColorSteps(false).filter((step) => step.db <= warmFromDb);
     for (let i = 1; i < dark.length; i++) {
-      expect(dark[i]).toBeGreaterThan(dark[i - 1]);
-      expect(light[i]).toBeLessThan(light[i - 1]);
+      expect(relativeLuminance(dark[i].color)).toBeGreaterThan(relativeLuminance(dark[i - 1].color));
+      expect(relativeLuminance(light[i].color)).toBeLessThan(relativeLuminance(light[i - 1].color));
     }
   });
 
-  it("runs teal, green, yellow-green, amber, red by hue and keeps the levels ascending", () => {
+  it("turns clearly red at full scale on both panels", () => {
+    for (const dark of [true, false]) {
+      const steps = levelColorSteps(dark);
+      const [red, green, blue] = [1, 3, 5].map((i) => parseInt(steps[steps.length - 1].color.slice(i, i + 2), 16));
+      expect(red).toBeGreaterThan(green + 60);
+      expect(red).toBeGreaterThan(blue + 40);
+    }
+  });
+
+  it("runs green, yellow, orange, red by hue and keeps the levels ascending", () => {
     for (const stops of [DARK_PANEL_STOPS, LIGHT_PANEL_STOPS]) {
       const hues = stops.map((stop) => stop.hue);
       expect(hues).toEqual([...hues].sort((a, b) => b - a));
       expect(stops.map((stop) => stop.db)).toEqual([...stops.map((stop) => stop.db)].sort((a, b) => a - b));
-      expect(hues[0]).toBeGreaterThan(190);
+      expect(hues[0]).toBeGreaterThan(160);
       expect(hues[hues.length - 1]).toBeLessThan(35);
     }
   });

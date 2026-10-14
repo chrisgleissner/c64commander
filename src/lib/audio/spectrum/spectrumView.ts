@@ -8,6 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 import { readSpectrum, setSpectrumEnabled, type SpectrumFrame } from "@/lib/native/audioFx";
+import type { StreamUdpSpectrumRequest as SpectrumRequest } from "@/lib/native/streamUdp";
 import {
   SPECTRUM_BALLISTICS,
   SPECTRUM_BALLISTICS_REDUCED,
@@ -16,6 +17,7 @@ import {
   type SpectrumBallisticsState,
 } from "@/lib/audio/spectrum/spectrumBallistics";
 import { SPECTRUM_BAND_COUNT, SPECTRUM_FLOOR_DB, foldBands } from "@/lib/audio/spectrum/spectrumBands";
+import { NativeClockOffset } from "@/lib/audio/spectrum/spectrumClock";
 import { readSpectrumPalette, type SpectrumPalette } from "@/lib/audio/spectrum/spectrumColors";
 import {
   createSpectrumTierController,
@@ -27,6 +29,8 @@ import {
 import {
   computeLayout,
   createBarGradient,
+  createMeterGradient,
+  drawMeters,
   devicePixelRatioFor,
   drawBars,
   drawStaticLayer,
@@ -49,12 +53,22 @@ const MAX_STEP_MS = 100;
 const SLOT_TOLERANCE = 0.9;
 const SETTLED_DB = SPECTRUM_FLOOR_DB + 1;
 const READOUT_INTERVAL_MS = 100;
+/** A frame drawn at the next tick is on the display one frame after that. */
+const PRESENT_FRAMES_AHEAD = 2;
+/** Frames asked for in one read, one display frame apart, so a late draw still finds the frame for its moment. */
+const FRAMES_PER_READ = 8;
+/** A new read is issued when fewer than this many display frames of sound are already waiting. */
+const LOOK_AHEAD_FRAMES = 5;
+const MAX_PENDING_FRAMES = 24;
+const ALIGNMENT_SAMPLES = 1024;
+const DRAW_GAP_SAMPLES = 16;
 
 export interface SpectrumReadout {
   /** Null while there is no sound to measure. */
   rmsDb: number | null;
   peakDb: number | null;
   clipped: boolean;
+  channels?: readonly { label: string; rmsDb: number | null; peakDb: number | null }[];
 }
 
 export interface SpectrumLayer {
@@ -68,7 +82,7 @@ export interface SpectrumViewOptions {
   onReadout?: (readout: SpectrumReadout) => void;
   onActiveChange?: (active: boolean) => void;
   onTierChange?: (tier: SpectrumTier) => void;
-  read?: () => Promise<SpectrumFrame | null>;
+  read?: (request?: SpectrumRequest) => Promise<SpectrumFrame | null>;
   setEnabled?: (enabled: boolean) => Promise<boolean>;
   now?: () => number;
   requestFrame?: (callback: (timeMs: number) => void) => number;
@@ -110,7 +124,7 @@ const defaultDeviceSignals = () => {
 export class SpectrumView {
   private readonly canvas: HTMLCanvasElement;
   private readonly profile: string;
-  private readonly readFrame: () => Promise<SpectrumFrame | null>;
+  private readonly readFrame: (request?: SpectrumRequest) => Promise<SpectrumFrame | null>;
   private readonly setEnabled: (enabled: boolean) => Promise<boolean>;
   private readonly now: () => number;
   private readonly requestFrame: (callback: (timeMs: number) => void) => number;
@@ -122,6 +136,13 @@ export class SpectrumView {
   private controller: SpectrumTierController;
   private tier: SpectrumTier;
   private ballistics: SpectrumBallisticsState;
+  private meterBallistics = createBallistics(4);
+  private meterTargets = new Float32Array(4).fill(SPECTRUM_FLOOR_DB);
+  private meterLabels: readonly string[] = ["L", "R"];
+  private readonly channelClipUntil = new Float64Array(2);
+  private readonly channelClipped = [false, false];
+  private meterLatest = new Float32Array(4).fill(SPECTRUM_FLOOR_DB);
+  private meterGradient: CanvasGradient | null = null;
   private folded = new Float32Array(SPECTRUM_BAND_COUNT);
   private latest = new Float32Array(SPECTRUM_BAND_COUNT).fill(SPECTRUM_FLOOR_DB);
 
@@ -143,6 +164,16 @@ export class SpectrumView {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private clipTimer: ReturnType<typeof setTimeout> | null = null;
   private pollInFlight = false;
+  private readonly pending: Array<{ frame: SpectrumFrame; dueMs: number }> = [];
+  private alignedMode = false;
+  private lastDueMs = 0;
+  private readonly alignmentErrors = new Float32Array(ALIGNMENT_SAMPLES);
+  private alignmentCount = 0;
+  private readonly clock = new NativeClockOffset();
+  private frameIntervalMs = 1000 / 60;
+  private readonly gapRing = new Float64Array(DRAW_GAP_SAMPLES).fill(1000 / 60);
+  private readonly gapScratch = new Float64Array(DRAW_GAP_SAMPLES);
+  private gapCount = 0;
   private readGeneration = 0;
   private answered = false;
   private lastPollAt = 0;
@@ -162,6 +193,12 @@ export class SpectrumView {
   constructor(options: SpectrumViewOptions) {
     this.options = options;
     this.canvas = options.canvas;
+    if (
+      typeof window !== "undefined" &&
+      (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true
+    ) {
+      (options.canvas as unknown as { __spectrumView?: SpectrumView }).__spectrumView = this;
+    }
     this.profile = options.profile;
     this.readFrame = options.read ?? readSpectrum;
     this.setEnabled = options.setEnabled ?? setSpectrumEnabled;
@@ -171,9 +208,25 @@ export class SpectrumView {
     this.createLayer = options.createLayer ?? defaultCreateLayer;
     this.reducedMotion = options.reducedMotion ?? defaultReducedMotion;
     const signals = (options.deviceSignals ?? defaultDeviceSignals)();
-    this.tier = initialSpectrumTier({ profile: this.profile, ...signals });
+    this.tier = initialSpectrumTier(signals);
     this.controller = createSpectrumTierController(this.tier, this.now());
     this.ballistics = createBallistics(this.tier.bars);
+  }
+
+  /**
+   * For the last draws, how much later than the sound shown the frame reached the screen, in
+   * milliseconds: the draw time plus one display frame, minus the time the frame's sound is audible.
+   * Negative means the frame showed sound that was still to come. Empty on a path with no speaker report.
+   */
+  alignmentErrorsMs(): number[] {
+    const count = Math.min(this.alignmentCount, ALIGNMENT_SAMPLES);
+    const start = this.alignmentCount - count;
+    return Array.from({ length: count }, (_, i) => this.alignmentErrors[(start + i) % ALIGNMENT_SAMPLES]);
+  }
+
+  /** Frames read ahead of their display time and not yet shown. */
+  get pendingFrameCount(): number {
+    return this.pending.length;
   }
 
   get currentTier(): SpectrumTier {
@@ -247,6 +300,9 @@ export class SpectrumView {
       this.setActive(false);
       return;
     }
+    this.pending.length = 0;
+    this.lastDueMs = 0;
+    this.alignedMode = false;
     this.controller.restart(this.now());
     this.answered = false;
     this.lastDrawAt = 0;
@@ -278,14 +334,16 @@ export class SpectrumView {
     this.layer = this.createLayer(this.canvas.width, this.canvas.height);
     if (this.layer) {
       this.layer.context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
-      drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio);
+      drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio, this.meterLabels);
     }
+    this.meterGradient = createMeterGradient(this.ctx, this.layout, this.palette);
     this.gradient = createBarGradient(this.ctx, this.layout, this.palette);
     if (this.drawOptions) {
       this.drawOptions.layout = this.layout;
       this.drawOptions.palette = this.palette;
       this.drawOptions.gradient = this.gradient;
       this.drawOptions.ratio = this.ratio;
+      this.drawOptions.meterLabels = this.meterLabels;
     } else {
       this.drawOptions = {
         layout: this.layout,
@@ -294,6 +352,7 @@ export class SpectrumView {
         gradient: this.gradient,
         glow: false,
         ratio: this.ratio,
+        meterLabels: this.meterLabels,
       };
     }
   }
@@ -312,19 +371,43 @@ export class SpectrumView {
     addLog("info", "Spectrum: quality tier changed", { service: "audio-fx", tier: next.index });
   }
 
-  private pollIfDue(nowMs: number): void {
-    if (this.pollInFlight || nowMs - this.lastPollAt < (1000 / SPECTRUM_POLL_HZ) * SLOT_TOLERANCE) return;
-    this.lastPollAt = nowMs;
-    this.read(false);
+  private noteDrawGap(gapMs: number): void {
+    this.gapRing[this.gapCount % DRAW_GAP_SAMPLES] = Math.min(100, gapMs);
+    this.gapCount += 1;
+    this.gapScratch.set(this.gapRing);
+    this.gapScratch.sort();
+    this.frameIntervalMs = Math.max(8, this.gapScratch[DRAW_GAP_SAMPLES >> 1]);
   }
 
-  private read(idle: boolean): void {
+  private pollIfDue(nowMs: number): void {
+    if (this.pollInFlight) return;
+    if (this.alignedMode) {
+      const horizonMs = this.pending.length > 0 ? this.pending[this.pending.length - 1].dueMs : this.lastDueMs;
+      const stepMs = this.frameIntervalMs;
+      if (horizonMs - nowMs > LOOK_AHEAD_FRAMES * stepMs) return;
+      const firstMs = nowMs + PRESENT_FRAMES_AHEAD * stepMs;
+      this.lastPollAt = nowMs;
+      this.read(false, {
+        targetNanos: this.clock.nativeNanosAt(firstMs),
+        count: FRAMES_PER_READ,
+        stepNanos: Math.round(stepMs * 1e6),
+      });
+      return;
+    }
+    if (nowMs - this.lastPollAt < (1000 / SPECTRUM_POLL_HZ) * SLOT_TOLERANCE) return;
+    this.lastPollAt = nowMs;
+    this.read(false, { targetNanos: this.clock.nativeNanosAt(nowMs + PRESENT_FRAMES_AHEAD * this.frameIntervalMs) });
+  }
+
+  private read(idle: boolean, request?: SpectrumRequest): void {
     if (this.pollInFlight || !this.shouldEnableNative) return;
     this.pollInFlight = true;
     const generation = this.readGeneration;
-    void this.readFrame()
+    const sentAt = this.now();
+    void this.readFrame(request)
       .then((frame) => {
-        if (generation === this.readGeneration) this.receive(frame);
+        if (frame?.timestampNanos) this.clock.add(sentAt, this.now(), frame.timestampNanos);
+        if (generation === this.readGeneration) this.receive(frame, request);
       })
       .catch((error: unknown) => {
         addLog("warn", "Spectrum: frame poll failed", {
@@ -344,9 +427,43 @@ export class SpectrumView {
       });
   }
 
-  private receive(frame: SpectrumFrame | null): void {
+  private receive(frame: SpectrumFrame | null, request?: SpectrumRequest): void {
     if (!frame || this.disposed) return;
     this.setActive(frame.active && !this.paused);
+    const firstMs = request?.targetNanos ? this.clock.pageMsAt(request.targetNanos) : 0;
+    this.alignedMode = frame.aligned === true && firstMs > 0;
+    if (!this.alignedMode) {
+      this.pending.length = 0;
+      this.lastDueMs = 0;
+      this.applyFrame(frame, false);
+      return;
+    }
+    const stepMs = (request?.stepNanos ?? 0) / 1e6;
+    while (this.pending.length > 0 && this.pending[this.pending.length - 1].dueMs >= firstMs - stepMs / 2) {
+      this.pending.pop();
+    }
+    this.enqueue(frame, firstMs);
+    frame.ahead?.forEach((later, index) => this.enqueue(later, firstMs + (index + 1) * stepMs));
+    if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
+  }
+
+  private enqueue(frame: SpectrumFrame, dueMs: number): void {
+    if (dueMs <= this.lastDueMs || this.pending.length >= MAX_PENDING_FRAMES) return;
+    this.pending.push({ frame, dueMs });
+  }
+
+  private applyDue(nowMs: number): void {
+    const limit = nowMs + this.frameIntervalMs * (PRESENT_FRAMES_AHEAD - 1 + 0.5);
+    let applied = 0;
+    while (this.pending.length > 0 && this.pending[0].dueMs <= limit) {
+      const due = this.pending.shift()!;
+      this.lastDueMs = due.dueMs;
+      this.applyFrame(due.frame, applied > 0);
+      applied += 1;
+    }
+  }
+
+  private applyFrame(frame: SpectrumFrame, keepHigherPeaks: boolean): void {
     if (frame.sequence === this.lastSequence) return;
     this.lastSequence = frame.sequence;
     this.lastNewFrameAt = this.now();
@@ -364,7 +481,32 @@ export class SpectrumView {
     for (let i = 0; i < SPECTRUM_BAND_COUNT; i++) this.latest[i] = frame.bands[i];
     this.rmsDb = frame.rmsDb;
     this.peakDb = frame.peakDb;
-    if (frame.clipped) this.clipUntil = this.now() + CLIP_LAMP_HOLD_MS;
+    const channels = frame.channels;
+    const count = channels?.length === 2 ? 2 : 1;
+    const label = channels?.[0]?.id === "mono" ? "Mono" : "Mix";
+    if (this.meterLabels.length !== count || (count === 1 && this.meterLabels[0] !== label)) {
+      this.meterLabels = count === 2 ? ["L", "R"] : [label];
+      this.rebuildStaticLayer();
+    }
+    const previousLeftPeak = this.meterLatest[1];
+    const previousRightPeak = this.meterLatest[3];
+    this.meterLatest.fill(SPECTRUM_FLOOR_DB);
+    for (let channel = 0; channel < count; channel++) {
+      const reading = channels?.[channel];
+      this.meterLatest[channel * 2] = reading?.rmsDb ?? frame.rmsDb;
+      const peak = reading?.peakDb ?? frame.peakDb;
+      this.meterLatest[channel * 2 + 1] = keepHigherPeaks
+        ? Math.max(peak, channel === 0 ? previousLeftPeak : previousRightPeak)
+        : peak;
+    }
+    const receivedAt = this.now();
+    if (frame.clipped && receivedAt >= this.clipUntil) this.clipUntil = receivedAt + CLIP_LAMP_HOLD_MS;
+    for (let channel = 0; channel < count; channel++) {
+      const clipped = channels ? channels[channel]?.clipped : frame.clipped;
+      if (clipped && receivedAt >= this.channelClipUntil[channel]) {
+        this.channelClipUntil[channel] = receivedAt + CLIP_LAMP_HOLD_MS;
+      }
+    }
     if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
   }
 
@@ -383,13 +525,17 @@ export class SpectrumView {
     for (let i = 0; i < levels.length; i++) {
       if (levels[i] > SETTLED_DB || peaks[i] > SETTLED_DB) return false;
     }
+    const meterPeaks = this.meterBallistics.peaks;
+    for (let i = 0; i < meterPeaks.length; i++) {
+      if (meterPeaks[i] > SETTLED_DB) return false;
+    }
     return true;
   }
 
-  private readonly tick = (): void => {
+  private readonly tick = (frameTimeMs?: number): void => {
     this.frameHandle = null;
     if (!this.shouldAnalyse) return;
-    const nowMs = this.now();
+    const nowMs = frameTimeMs ?? this.now();
     if (!this.paused) this.pollIfDue(nowMs);
     const slotMs = 1000 / this.tier.drawFps;
     if (this.lastDrawAt === 0 || nowMs - this.lastDrawAt >= slotMs * SLOT_TOLERANCE) {
@@ -414,6 +560,7 @@ export class SpectrumView {
     this.clipTimer = setTimeout(
       () => {
         this.clipTimer = null;
+        this.paint(this.reducedMotion());
         this.emitReadout(this.now(), true);
       },
       this.clipUntil - nowMs + 5,
@@ -430,20 +577,48 @@ export class SpectrumView {
 
   private drawFrame(nowMs: number): void {
     const started = this.now();
+    this.applyDue(nowMs);
+    if (this.alignedMode && this.lastDueMs > 0) {
+      this.alignmentErrors[this.alignmentCount % ALIGNMENT_SAMPLES] = nowMs + this.frameIntervalMs - this.lastDueMs;
+      this.alignmentCount += 1;
+    }
     const elapsed = this.lastDrawAt === 0 ? 1000 / this.tier.drawFps : Math.min(MAX_STEP_MS, nowMs - this.lastDrawAt);
     const sounding = this.isSounding(nowMs);
     if (sounding) foldBands(this.latest, this.folded);
     else this.folded.fill(SPECTRUM_FLOOR_DB);
     const reduced = this.reducedMotion();
     stepBallistics(this.ballistics, this.folded, elapsed, reduced ? SPECTRUM_BALLISTICS_REDUCED : SPECTRUM_BALLISTICS);
+    if (sounding) this.meterTargets.set(this.meterLatest);
+    else this.meterTargets.fill(SPECTRUM_FLOOR_DB);
+    stepBallistics(
+      this.meterBallistics,
+      this.meterTargets,
+      elapsed,
+      reduced ? SPECTRUM_BALLISTICS_REDUCED : SPECTRUM_BALLISTICS,
+    );
+    this.catchMeterPeaks();
     this.paint(reduced);
     const previousDrawAt = this.lastDrawAt;
+    if (previousDrawAt !== 0) this.noteDrawGap(nowMs - previousDrawAt);
     this.lastDrawAt = nowMs;
     this.framesDrawn += 1;
     this.emitReadout(nowMs, false);
     if (previousDrawAt === 0) return;
     const changed = this.controller.report(nowMs, this.now() - started, nowMs - previousDrawAt);
     if (changed) this.applyTier(changed);
+  }
+
+  private catchMeterPeaks(): void {
+    const { levels, peaks, holdMsLeft } = this.meterBallistics;
+    for (let i = 1; i < levels.length; i += 2) {
+      const target = this.meterTargets[i];
+      if (target <= levels[i]) continue;
+      levels[i] = target;
+      if (target >= peaks[i]) {
+        peaks[i] = target;
+        holdMsLeft[i] = SPECTRUM_BALLISTICS.peakHoldMs;
+      }
+    }
   }
 
   private paint(reducedMotion: boolean): void {
@@ -454,6 +629,10 @@ export class SpectrumView {
     if (!options) return;
     options.glow = this.tier.glow && !reducedMotion;
     drawBars(ctx, options, this.ballistics);
+    for (let channel = 0; channel < this.channelClipped.length; channel++) {
+      this.channelClipped[channel] = this.now() < this.channelClipUntil[channel];
+    }
+    drawMeters(ctx, options, this.meterBallistics, this.meterGradient, this.channelClipped);
   }
 
   private drawOnce(): void {
@@ -468,9 +647,18 @@ export class SpectrumView {
     const rmsDb = sounding && this.rmsDb !== null ? Math.round(this.rmsDb) : null;
     const peakDb = sounding && this.peakDb !== null ? Math.round(this.peakDb) : null;
     const clipped = nowMs < this.clipUntil;
-    const key = `${rmsDb}|${peakDb}|${clipped}`;
+    const key = `${rmsDb}|${peakDb}|${clipped}|${sounding ? this.meterLatest.join(",") : "silent"}`;
     if (key === this.lastReadoutKey) return;
     this.lastReadoutKey = key;
-    this.options.onReadout({ rmsDb, peakDb, clipped });
+    this.options.onReadout({
+      rmsDb,
+      peakDb,
+      clipped,
+      channels: this.meterLabels.map((label, index) => ({
+        label,
+        rmsDb: sounding ? Math.round(this.meterLatest[index * 2]) : null,
+        peakDb: sounding ? Math.round(this.meterLatest[index * 2 + 1]) : null,
+      })),
+    });
   }
 }

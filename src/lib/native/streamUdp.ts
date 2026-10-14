@@ -158,6 +158,23 @@ export interface StreamUdpAudioProcessing {
   reverb: number;
 }
 
+export interface SpectrumChannelLevel {
+  /** Playback output channel, never a SID-chip index. */
+  id: "left" | "right" | "mono";
+  rmsDb: number;
+  peakDb: number;
+  clipped: boolean;
+}
+
+/** Which moment of the sound a `readSpectrum` call wants, on the native monotonic clock. */
+export interface StreamUdpSpectrumRequest {
+  /** When the first frame will be shown. */
+  targetNanos?: number;
+  /** How many frames to return, [stepNanos] apart, starting at the target. Fewer come back when none are ahead. */
+  count?: number;
+  stepNanos?: number;
+}
+
 /** One analysis frame of the sound leaving the phone, from {@link StreamUdpPlugin.readSpectrum}. */
 export interface StreamUdpSpectrumFrame {
   enabled: boolean;
@@ -168,6 +185,16 @@ export interface StreamUdpSpectrumFrame {
   sampleRate: number;
   /** Integer dBFS per band (0 is a full-scale sine in that band, floor -100). See `spectrumBands.ts` for the layout. */
   bands: number[];
+  /** Per-output-channel measurements; absent only on an older native bridge. */
+  channels?: SpectrumChannelLevel[];
+  /** The native monotonic clock when the frame was read, in nanoseconds. */
+  timestampNanos?: number;
+  /** Samples the analysis wanted beyond the newest one held; the bands lag the sound by that much. */
+  shortfallSamples?: number;
+  /** The bands follow a speaker position, so a later target time returns later sound. */
+  aligned?: boolean;
+  /** Frames after this one, one step apart, when more than one was asked for and the path can look ahead. */
+  ahead?: StreamUdpSpectrumFrame[];
   peakDb: number;
   rmsDb: number;
   /** True when a sample reached full scale within the last second. */
@@ -271,7 +298,8 @@ export interface StreamUdpPlugin {
   setAudioProcessing(options: StreamUdpAudioProcessing): Promise<Record<string, never>>;
   /** Switch the spectrum analyser on or off. It costs nothing while off. */
   setSpectrumEnabled(options: { enabled: boolean }): Promise<Record<string, never>>;
-  readSpectrum(): Promise<StreamUdpSpectrumFrame>;
+  /** [targetNanos] is the native monotonic time the frame will be shown at; the bands then match the sound heard at that moment. */
+  readSpectrum(options?: StreamUdpSpectrumRequest): Promise<StreamUdpSpectrumFrame>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
   addListener(
     eventName: "audiofocus",
