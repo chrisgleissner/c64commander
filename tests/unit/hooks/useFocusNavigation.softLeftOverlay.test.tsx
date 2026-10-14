@@ -80,4 +80,20 @@ describe("left soft key inside an open dialog", () => {
 
     expect(escapes).toHaveBeenCalledTimes(1);
   });
+
+  it("sends Back's Escape to the document when no element holds focus", () => {
+    const escapes = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <div role="dialog" aria-label="Menu" />
+      </FocusNavigationProvider>,
+    );
+    document.addEventListener("keydown", (event) => event.key === "Escape" && escapes(event.target));
+    const activeElement = vi.spyOn(document, "activeElement", "get").mockReturnValue(null);
+
+    fireEvent.keyDown(document, { key: "SoftLeft", code: "SoftLeft" });
+    activeElement.mockRestore();
+
+    expect(escapes).toHaveBeenCalledWith(document);
+  });
 });
