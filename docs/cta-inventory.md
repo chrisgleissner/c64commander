@@ -112,11 +112,16 @@ F1 is the neutral `function1` action (see the F1 row).
   taller than that area is aligned by its top edge.
 - **`aria-disabled` controls:** stay ring stops, as WAI-ARIA requires. Up/Down
   skip them and OK does nothing on them, but a selection already on one stays
-  there (the Play/Stop button while a Stop is pending).
+  there (the Play/Stop button while a Stop is pending). A selected control that is
+  natively disabled while the work it started runs (Home's Pause, Resume and Menu
+  tiles) is held the same way. When the selected control is removed, the
+  selection moves to the nearest remaining stop in its group, the following one
+  first, and is scrolled into view.
 - **OK acts on the highlight:** while keys drive the ring, OK activates the
   highlighted stop even when DOM focus was left on a different stop.
 - **Closing a dialog or sheet:** the selection and DOM focus return to the
-  control that was selected when it opened.
+  control that was selected when it opened, also when Remote Input is closed
+  from its keypad menu or after its "Other controls".
 - **Destructive confirmations open on Cancel:** Reset and the other machine
   actions, Power off, Clear flash, Remove disk(s), Delete config, Delete device,
   Clear diagnostics, Clear custom edits, Clear playlist and Reset HVSC all open
