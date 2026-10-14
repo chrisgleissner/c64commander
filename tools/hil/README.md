@@ -246,7 +246,7 @@ node tools/hil/joystick_hold_hil.mjs --hold-ms 2000
 ```
 
 Both shipped defaults are run, because they are different products' defaults and a change to one
-is not a change to the other: `c64u-remote` ships **Diamond (8-centred)** — the four keys around
+is not a change to the other: `c64u-remote` ships **Diamond (8-centered)** — the four keys around
 `8`, with `8` as fire — and `c64commander` ships **Classic T9**. The layout is chosen through
 Settings → Play and Disk → Joystick keys each time, not by writing storage, because the claim
 under test is that the assignment is configurable and the section is collapsed by default.
