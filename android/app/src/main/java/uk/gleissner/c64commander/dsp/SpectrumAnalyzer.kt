@@ -76,7 +76,11 @@ internal object SpectrumBands {
  * centre. Values are rounded to whole dBFS and floored at [SpectrumBands.FLOOR_DB].
  */
 internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoTime) {
-  private class Resolution(val fft: FftPlan, val plan: BandPlan, val bands: IntArray)
+  /** [binFrom]..[binTo] are the only bins of this window that any of its [bands] reads. */
+  private class Resolution(val fft: FftPlan, val plan: BandPlan, val bands: IntArray) {
+    val binFrom = bands.minOfOrNull { plan.firstBin(it) } ?: 0
+    val binTo = bands.maxOfOrNull { plan.lastBin(it) } ?: -1
+  }
 
   private class Configuration(
       val sampleRate: Int,
@@ -306,11 +310,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
           im[n] = 0.0f
         }
         resolution.fft.transform(re, im)
-        val scale = resolution.fft.amplitudeScale
-        for (k in 0..size / 2) {
-          val amplitude = 2.0f * sqrt(re[k] * re[k] + im[k] * im[k]) * scale
-          power[k] = amplitude * amplitude
-        }
+        val powerScale = resolution.fft.powerScale
+        for (k in resolution.binFrom..resolution.binTo) power[k] = (re[k] * re[k] + im[k] * im[k]) * powerScale
         resolution.plan.fill(power, resolution.bands, bands)
       }
       // Every sample heard since the last analysis counts, so a clip between two polls is not missed.
@@ -374,7 +375,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   /** Window, twiddles and bit reversal for one FFT length; shared, built once per length. */
   private class FftPlan private constructor(val size: Int) {
     val window = FloatArray(size) { (0.5 - 0.5 * cos(2.0 * PI * it / size)).toFloat() }
-    val amplitudeScale = 1.0f / (size * 0.5f)
+    /** A bin's squared magnitude times this is the power of the sine it holds, whose full-scale value is 1.0. */
+    val powerScale = 16.0f / (size.toFloat() * size)
     private val cosTable = FloatArray(size / 2) { cos(2.0 * PI * it / size).toFloat() }
     private val sinTable = FloatArray(size / 2) { (-sin(2.0 * PI * it / size)).toFloat() }
     private val bitReverse = IntArray(size) { Integer.reverse(it) ushr (32 - Integer.numberOfTrailingZeros(size)) }
@@ -448,6 +450,10 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
         highWeight[i] = (centre - lowBin[i]).toFloat()
       }
     }
+
+    fun firstBin(band: Int): Int = if (aboveNyquist[band]) Int.MAX_VALUE else if (interpolated[band]) lowBin[band] else first[band]
+
+    fun lastBin(band: Int): Int = if (aboveNyquist[band]) -1 else if (interpolated[band]) lowBin[band] + 1 else last[band]
 
     fun fill(power: FloatArray, owned: IntArray, out: IntArray) {
       for (i in owned) {

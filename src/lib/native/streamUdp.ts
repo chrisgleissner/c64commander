@@ -193,6 +193,8 @@ export interface StreamUdpSpectrumFrame {
   shortfallSamples?: number;
   /** The bands follow a speaker position, so a later target time returns later sound. */
   aligned?: boolean;
+  /** Time the analyzer spent on this call's frames, in nanoseconds. */
+  analysisNanos?: number;
   /** Frames after this one, one step apart, when more than one was asked for and the path can look ahead. */
   ahead?: StreamUdpSpectrumFrame[];
   peakDb: number;
