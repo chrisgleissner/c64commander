@@ -34,6 +34,11 @@ export class NativeClockOffset {
     return this.best >= 0;
   }
 
+  /** The page time, in milliseconds, at a native clock reading in nanoseconds. */
+  pageMsAt(nativeNanos: number): number {
+    return this.best < 0 ? 0 : nativeNanos / 1e6 - this.offsetMs[this.best];
+  }
+
   /** The native clock reading, in nanoseconds, at a page time; 0 while no reply has been seen. */
   nativeNanosAt(pageMs: number): number {
     return this.best < 0 ? 0 : Math.round((pageMs + this.offsetMs[this.best]) * 1e6);

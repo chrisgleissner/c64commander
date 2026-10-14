@@ -16,6 +16,7 @@ import {
   type StreamUdpAudioProcessing,
   type StreamUdpPlugin,
   type StreamUdpSpectrumFrame,
+  type StreamUdpSpectrumRequest,
 } from "@/lib/native/streamUdp";
 
 export type AudioProcessingParams = StreamUdpAudioProcessing;
@@ -119,11 +120,11 @@ const isFrame = (value: unknown): value is SpectrumFrame => {
 };
 
 /** Reads the newest analysis frame. Null when unavailable, failed or malformed; callers keep their last picture. */
-export const readSpectrum = async (targetNanos = 0): Promise<SpectrumFrame | null> => {
+export const readSpectrum = async (request?: StreamUdpSpectrumRequest): Promise<SpectrumFrame | null> => {
   const backend = resolveBackend();
   if (!backend || isKnownUnavailable("StreamUdp.audioFx")) return null;
   try {
-    const frame = await backend.readSpectrum(targetNanos > 0 ? { targetNanos } : undefined);
+    const frame = await backend.readSpectrum(request && request.targetNanos ? request : undefined);
     if (!isFrame(frame)) {
       reportFailure("readSpectrum", new Error("readSpectrum returned an unexpected shape"));
       return null;

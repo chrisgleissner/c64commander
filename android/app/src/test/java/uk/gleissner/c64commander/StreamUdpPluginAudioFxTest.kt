@@ -131,4 +131,48 @@ class StreamUdpPluginAudioFxTest {
     assertFalse(result.getBoolean("active"))
     for (i in 0 until 48) assertEquals(-100, result.getJSONArray("bands").getInt(i))
   }
+
+  @Test
+  fun readSpectrumReturnsFramesAheadWhenTheSpeakerPositionIsKnown() {
+    val clock = 5_000_000_000L
+    val aligned = AudioFxHub { clock }.also { plugin.fxHub = it }
+    aligned.spectrumEnabled = true
+    aligned.analyzer.prepareFor(live = false, sourceRate = 48000, outputRate = 48000)
+    val tone = TestSignals.sine(24000, 48000, 1000.0, 0.5)
+    repeat(4) { aligned.analyzer.feed(tone, 24000, 48000) }
+    aligned.analyzer.presentAt(framesAheadOfSpeaker = 60000L, timestampNanos = clock)
+    val (c, resolved) = call {
+      `when`(it.getDouble("targetNanos", 0.0)).thenReturn(clock.toDouble() + 10_000_000.0)
+      `when`(it.getInt("count", 1)).thenReturn(4)
+      `when`(it.getDouble("stepNanos", 0.0)).thenReturn(16_700_000.0)
+    }
+    plugin.readSpectrum(c)
+    val result = resolved()!!
+    assertTrue(result.getBoolean("aligned"))
+    val ahead = result.getJSONArray("ahead")
+    assertEquals(3, ahead.length())
+    var previous = result.getLong("sequence")
+    for (i in 0 until ahead.length()) {
+      val sequence = ahead.getJSONObject(i).getLong("sequence")
+      assertTrue("frame $i does not follow", sequence > previous)
+      previous = sequence
+    }
+  }
+
+  @Test
+  fun readSpectrumReturnsOneFrameWhenNoSpeakerPositionIsKnown() {
+    hub.spectrumEnabled = true
+    hub.analyzer.prepareFor(live = true, sourceRate = 48000, outputRate = 48000)
+    val tone = TestSignals.sine(24000, 48000, 1000.0, 0.5)
+    repeat(2) { hub.analyzer.feed(tone, 24000, 48000) }
+    val (c, resolved) = call {
+      `when`(it.getDouble("targetNanos", 0.0)).thenReturn(1e9)
+      `when`(it.getInt("count", 1)).thenReturn(4)
+      `when`(it.getDouble("stepNanos", 0.0)).thenReturn(16_700_000.0)
+    }
+    plugin.readSpectrum(c)
+    val result = resolved()!!
+    assertFalse(result.getBoolean("aligned"))
+    assertFalse(result.has("ahead"))
+  }
 }

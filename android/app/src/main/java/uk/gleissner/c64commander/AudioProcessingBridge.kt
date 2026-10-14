@@ -33,7 +33,25 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
     call.resolve(JSObject())
   }
 
-  fun readSpectrum(call: PluginCall) = call.resolve(payload(hub().readSpectrum(call.getDouble("targetNanos", 0.0)?.toLong() ?: 0L)))
+  fun readSpectrum(call: PluginCall) {
+    val target = call.getDouble("targetNanos", 0.0)?.toLong() ?: 0L
+    val count = (call.getInt("count", 1) ?: 1).coerceIn(1, MAX_FRAMES_PER_READ)
+    val step = call.getDouble("stepNanos", 0.0)?.toLong() ?: 0L
+    val first = hub().readSpectrum(target)
+    val result = payload(first)
+    if (target > 0L && step > 0L && first.aligned && count > 1) {
+      val ahead = JSArray()
+      var previous = first.sequence
+      for (k in 1 until count) {
+        val frame = hub().readSpectrum(target + k * step)
+        if (frame.sequence == previous) break
+        previous = frame.sequence
+        ahead.put(payload(frame))
+      }
+      result.put("ahead", ahead)
+    }
+    call.resolve(result)
+  }
 
   fun payload(frame: SpectrumFrame): JSObject {
     val bands = JSArray()
@@ -56,5 +74,10 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
         .put("channels", channels)
         .put("timestampNanos", frame.timestampNanos)
         .put("shortfallSamples", frame.shortfallSamples)
+        .put("aligned", frame.aligned)
+  }
+
+  private companion object {
+    const val MAX_FRAMES_PER_READ = 8
   }
 }

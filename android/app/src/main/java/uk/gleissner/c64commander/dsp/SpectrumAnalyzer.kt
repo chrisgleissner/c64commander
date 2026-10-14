@@ -35,6 +35,8 @@ internal class SpectrumFrame(
     val timestampNanos: Long = 0L,
     /** How many samples a window wanted beyond the newest one held; the bands lag by that much. */
     val shortfallSamples: Int = 0,
+    /** True when the bands follow a speaker position, so a later target time yields later sound. */
+    val aligned: Boolean = false,
 )
 
 /**
@@ -240,14 +242,14 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     val clipped = lastClipNanos != Long.MIN_VALUE && now - lastClipNanos < CLIP_HOLD_NANOS
     if (frame == null) {
       // A sequence is observable only once its matching history has been copied.
-      return SpectrumFrame(true, active, 0L, config.sampleRate, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, clipped, timestampNanos = now)
+      return SpectrumFrame(true, active, 0L, config.sampleRate, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, clipped, timestampNanos = now, aligned = readerAnchorKnown)
     }
     return SpectrumFrame(true, active, frame.sequence, frame.sampleRate, frame.bands, frame.peakDb, frame.rmsDb, clipped,
         Array(2) { channel ->
           val level = frame.channels[channel]
           SpectrumChannelLevel(level.id, level.rmsDb, level.peakDb,
               channelClipNanos[channel] != Long.MIN_VALUE && now - channelClipNanos[channel] < CLIP_HOLD_NANOS)
-        }, now, frame.shortfallSamples)
+        }, now, frame.shortfallSamples, readerAnchorKnown)
   }
 
   /**

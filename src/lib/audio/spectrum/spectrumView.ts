@@ -8,6 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 import { readSpectrum, setSpectrumEnabled, type SpectrumFrame } from "@/lib/native/audioFx";
+import type { StreamUdpSpectrumRequest as SpectrumRequest } from "@/lib/native/streamUdp";
 import {
   SPECTRUM_BALLISTICS,
   SPECTRUM_BALLISTICS_REDUCED,
@@ -54,6 +55,11 @@ const SETTLED_DB = SPECTRUM_FLOOR_DB + 1;
 const READOUT_INTERVAL_MS = 100;
 /** A frame drawn at the next tick is on the display one frame after that. */
 const PRESENT_FRAMES_AHEAD = 2;
+/** Frames asked for in one read, one display frame apart, so a late draw still finds the frame for its moment. */
+const FRAMES_PER_READ = 4;
+/** A new read is issued when fewer than this many display frames of sound are already waiting. */
+const LOOK_AHEAD_FRAMES = 3;
+const MAX_PENDING_FRAMES = 16;
 
 export interface SpectrumReadout {
   /** Null while there is no sound to measure. */
@@ -74,7 +80,7 @@ export interface SpectrumViewOptions {
   onReadout?: (readout: SpectrumReadout) => void;
   onActiveChange?: (active: boolean) => void;
   onTierChange?: (tier: SpectrumTier) => void;
-  read?: (targetNanos?: number) => Promise<SpectrumFrame | null>;
+  read?: (request?: SpectrumRequest) => Promise<SpectrumFrame | null>;
   setEnabled?: (enabled: boolean) => Promise<boolean>;
   now?: () => number;
   requestFrame?: (callback: (timeMs: number) => void) => number;
@@ -116,7 +122,7 @@ const defaultDeviceSignals = () => {
 export class SpectrumView {
   private readonly canvas: HTMLCanvasElement;
   private readonly profile: string;
-  private readonly readFrame: (targetNanos?: number) => Promise<SpectrumFrame | null>;
+  private readonly readFrame: (request?: SpectrumRequest) => Promise<SpectrumFrame | null>;
   private readonly setEnabled: (enabled: boolean) => Promise<boolean>;
   private readonly now: () => number;
   private readonly requestFrame: (callback: (timeMs: number) => void) => number;
@@ -156,6 +162,9 @@ export class SpectrumView {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private clipTimer: ReturnType<typeof setTimeout> | null = null;
   private pollInFlight = false;
+  private readonly pending: Array<{ frame: SpectrumFrame; dueMs: number }> = [];
+  private alignedMode = false;
+  private lastDueMs = 0;
   private readonly clock = new NativeClockOffset();
   private frameIntervalMs = 1000 / 60;
   private readGeneration = 0;
@@ -189,6 +198,11 @@ export class SpectrumView {
     this.tier = initialSpectrumTier({ profile: this.profile, ...signals });
     this.controller = createSpectrumTierController(this.tier, this.now());
     this.ballistics = createBallistics(this.tier.bars);
+  }
+
+  /** Frames read ahead of their display time and not yet shown. */
+  get pendingFrameCount(): number {
+    return this.pending.length;
   }
 
   get currentTier(): SpectrumTier {
@@ -262,6 +276,9 @@ export class SpectrumView {
       this.setActive(false);
       return;
     }
+    this.pending.length = 0;
+    this.lastDueMs = 0;
+    this.alignedMode = false;
     this.controller.restart(this.now());
     this.answered = false;
     this.lastDrawAt = 0;
@@ -331,20 +348,34 @@ export class SpectrumView {
   }
 
   private pollIfDue(nowMs: number): void {
-    if (this.pollInFlight || nowMs - this.lastPollAt < (1000 / SPECTRUM_POLL_HZ) * SLOT_TOLERANCE) return;
+    if (this.pollInFlight) return;
+    if (this.alignedMode) {
+      const horizonMs = this.pending.length > 0 ? this.pending[this.pending.length - 1].dueMs : this.lastDueMs;
+      const stepMs = this.frameIntervalMs;
+      if (horizonMs - nowMs > LOOK_AHEAD_FRAMES * stepMs) return;
+      const firstMs = Math.max(nowMs + PRESENT_FRAMES_AHEAD * stepMs, horizonMs + stepMs);
+      this.lastPollAt = nowMs;
+      this.read(false, {
+        targetNanos: this.clock.nativeNanosAt(firstMs),
+        count: FRAMES_PER_READ,
+        stepNanos: Math.round(stepMs * 1e6),
+      });
+      return;
+    }
+    if (nowMs - this.lastPollAt < (1000 / SPECTRUM_POLL_HZ) * SLOT_TOLERANCE) return;
     this.lastPollAt = nowMs;
-    this.read(false, this.clock.nativeNanosAt(nowMs + PRESENT_FRAMES_AHEAD * this.frameIntervalMs));
+    this.read(false, { targetNanos: this.clock.nativeNanosAt(nowMs + PRESENT_FRAMES_AHEAD * this.frameIntervalMs) });
   }
 
-  private read(idle: boolean, targetNanos = 0): void {
+  private read(idle: boolean, request?: SpectrumRequest): void {
     if (this.pollInFlight || !this.shouldEnableNative) return;
     this.pollInFlight = true;
     const generation = this.readGeneration;
     const sentAt = this.now();
-    void this.readFrame(targetNanos)
+    void this.readFrame(request)
       .then((frame) => {
         if (frame?.timestampNanos) this.clock.add(sentAt, this.now(), frame.timestampNanos);
-        if (generation === this.readGeneration) this.receive(frame);
+        if (generation === this.readGeneration) this.receive(frame, request);
       })
       .catch((error: unknown) => {
         addLog("warn", "Spectrum: frame poll failed", {
@@ -364,9 +395,38 @@ export class SpectrumView {
       });
   }
 
-  private receive(frame: SpectrumFrame | null): void {
+  private receive(frame: SpectrumFrame | null, request?: SpectrumRequest): void {
     if (!frame || this.disposed) return;
     this.setActive(frame.active && !this.paused);
+    const firstMs = request?.targetNanos ? this.clock.pageMsAt(request.targetNanos) : 0;
+    this.alignedMode = frame.aligned === true && firstMs > 0;
+    if (!this.alignedMode) {
+      this.applyFrame(frame, false);
+      return;
+    }
+    const stepMs = (request?.stepNanos ?? 0) / 1e6;
+    this.enqueue(frame, firstMs);
+    frame.ahead?.forEach((later, index) => this.enqueue(later, firstMs + (index + 1) * stepMs));
+    if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
+  }
+
+  private enqueue(frame: SpectrumFrame, dueMs: number): void {
+    if (dueMs <= this.lastDueMs || this.pending.length >= MAX_PENDING_FRAMES) return;
+    this.pending.push({ frame, dueMs });
+  }
+
+  private applyDue(nowMs: number): void {
+    const limit = nowMs + this.frameIntervalMs * (PRESENT_FRAMES_AHEAD - 1 + 0.5);
+    let applied = 0;
+    while (this.pending.length > 0 && this.pending[0].dueMs <= limit) {
+      const due = this.pending.shift()!;
+      this.lastDueMs = due.dueMs;
+      this.applyFrame(due.frame, applied > 0);
+      applied += 1;
+    }
+  }
+
+  private applyFrame(frame: SpectrumFrame, keepHigherPeaks: boolean): void {
     if (frame.sequence === this.lastSequence) return;
     this.lastSequence = frame.sequence;
     this.lastNewFrameAt = this.now();
@@ -391,11 +451,16 @@ export class SpectrumView {
       this.meterLabels = count === 2 ? ["L", "R"] : [label];
       this.rebuildStaticLayer();
     }
+    const previousLeftPeak = this.meterLatest[1];
+    const previousRightPeak = this.meterLatest[3];
     this.meterLatest.fill(SPECTRUM_FLOOR_DB);
     for (let channel = 0; channel < count; channel++) {
       const reading = channels?.[channel];
       this.meterLatest[channel * 2] = reading?.rmsDb ?? frame.rmsDb;
-      this.meterLatest[channel * 2 + 1] = reading?.peakDb ?? frame.peakDb;
+      const peak = reading?.peakDb ?? frame.peakDb;
+      this.meterLatest[channel * 2 + 1] = keepHigherPeaks
+        ? Math.max(peak, channel === 0 ? previousLeftPeak : previousRightPeak)
+        : peak;
     }
     const receivedAt = this.now();
     if (frame.clipped) this.clipUntil = receivedAt + CLIP_LAMP_HOLD_MS;
@@ -473,6 +538,7 @@ export class SpectrumView {
 
   private drawFrame(nowMs: number): void {
     const started = this.now();
+    this.applyDue(nowMs);
     const elapsed = this.lastDrawAt === 0 ? 1000 / this.tier.drawFps : Math.min(MAX_STEP_MS, nowMs - this.lastDrawAt);
     const sounding = this.isSounding(nowMs);
     if (sounding) foldBands(this.latest, this.folded);

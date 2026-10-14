@@ -82,6 +82,7 @@ const setup = (
   let pending: ((t: number) => void) | null = null;
   const reads: number[] = [];
   const targets: Array<number | undefined> = [];
+  const requests: Array<{ targetNanos?: number; count?: number; stepNanos?: number } | undefined> = [];
   const readouts: SpectrumReadout[] = [];
   const active: boolean[] = [];
   const tiers: number[] = [];
@@ -92,9 +93,10 @@ const setup = (
     onReadout: (r) => readouts.push(r),
     onActiveChange: (a) => active.push(a),
     onTierChange: (t) => tiers.push(t.index),
-    read: async (target?: number) => {
+    read: async (request?: { targetNanos?: number; count?: number; stepNanos?: number }) => {
       reads.push(nowMs);
-      targets.push(target);
+      targets.push(request?.targetNanos);
+      requests.push(request);
       if (options.read) return options.read();
       return options.frames ? options.frames() : frame({ sequence: reads.length });
     },
@@ -128,6 +130,7 @@ const setup = (
     layerCtx,
     reads,
     targets,
+    requests,
     readouts,
     active,
     tiers,
@@ -263,6 +266,61 @@ describe("SpectrumView", () => {
     expect(aheadMs).toBeGreaterThan(30);
     expect(aheadMs).toBeLessThan(36);
     t.view.dispose();
+  });
+
+  describe("with a native path that can look ahead", () => {
+    const nativeOffsetMs = 5000;
+    const stepMs = 17;
+    const aligned = (t: ReturnType<typeof setup>, loud: boolean) => {
+      const request = t.requests.at(-1);
+      const sequences = (request?.count ?? 1) > 1 ? request!.count! : 1;
+      const base = 100 + Math.round(((request?.targetNanos ?? 0) / 1e6 - nativeOffsetMs) / stepMs);
+      const build = (k: number) =>
+        frame({
+          sequence: base + k,
+          aligned: true,
+          timestampNanos: Math.round((t.nowMs + nativeOffsetMs) * 1e6),
+          bands: new Array(48).fill(loud ? -10 : -80),
+        });
+      const first = build(0);
+      first.ahead = Array.from({ length: sequences - 1 }, (_, i) => build(i + 1));
+      return first;
+    };
+
+    it("asks for several frames at once and not on every display frame", async () => {
+      const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(1000);
+      const alignedRequests = t.requests.filter((request) => (request?.count ?? 1) > 1);
+      expect(alignedRequests.length).toBeGreaterThan(5);
+      expect(alignedRequests[0]!.count).toBe(4);
+      expect(alignedRequests[0]!.stepNanos).toBeGreaterThan(15e6);
+      expect(t.reads.length).toBeLessThan(45);
+      t.view.dispose();
+    });
+
+    it("keeps frames for later display times waiting and shows each at its own tick", async () => {
+      let issued = 0;
+      const t: ReturnType<typeof setup> = setup({
+        frames: () => {
+          const first = aligned(t, true);
+          issued += 1;
+          return first;
+        },
+      });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      let mostWaiting = 0;
+      for (let tick = 0; tick < 20; tick++) {
+        await t.advance(17);
+        mostWaiting = Math.max(mostWaiting, t.view.pendingFrameCount);
+      }
+      expect(issued).toBeGreaterThan(1);
+      expect(mostWaiting).toBeGreaterThanOrEqual(2);
+      expect(mostWaiting).toBeLessThanOrEqual(8);
+      t.view.dispose();
+    });
   });
 
   it("raises the held meter peak to a one-frame transient at once", async () => {
