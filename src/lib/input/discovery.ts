@@ -23,7 +23,7 @@
  * {@link FocusController}. Everything here works in jsdom so it is unit-testable.
  */
 
-import { isAnyOverlayOpen } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { selectorPresence } from "@/lib/input/selectorPresence";
 
 /** Marks a subtree as off-limits to the focus ring (skipped during discovery). */
@@ -52,9 +52,12 @@ export const SCOPE_ATTR = "data-focus-scope";
 export const HORIZONTAL_OWNER_SELECTOR =
   "[role='slider'],[role='tablist'],[role='radiogroup'],[data-key-nav-horizontal]";
 
-/** Open Radix-style overlays that own the keyboard while focus is inside them. */
-export const OVERLAY_SELECTOR =
-  "[role='dialog'],[role='alertdialog'],[role='menu'],[role='listbox'],[data-radix-popper-content-wrapper]";
+/**
+ * Open Radix-style overlays that own the keyboard while focus is inside them. The same selector
+ * {@link isAnyOverlayOpen} tracks, because {@link resolveActiveScope} looks for overlays only when it
+ * reports one.
+ */
+export const OVERLAY_SELECTOR = OPEN_OVERLAY_ANCESTOR_SELECTOR;
 
 /**
  * Containers that should be traversed as groups without per-surface hook wiring:

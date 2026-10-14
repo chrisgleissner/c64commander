@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { selectorPresence } from "@/lib/input/selectorPresence";
 import { isAnyOverlayOpen, subscribeOverlayPresence } from "@/lib/input/eventTargets";
+import { OVERLAY_SELECTOR, resolveActiveScope } from "@/lib/input/discovery";
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -211,6 +212,30 @@ describe("isAnyOverlayOpen", () => {
     menu.setAttribute("role", "group");
     expect(isAnyOverlayOpen()).toBe(false);
   });
+
+  const overlayKinds = OVERLAY_SELECTOR.split(",").map((alternative) => {
+    const [, name, value = ""] = /^\[([\w-]+)(?:=["']([^"']*)["'])?\]$/.exec(alternative.trim()) ?? [];
+    return { alternative, name, value };
+  });
+
+  it.each(overlayKinds)(
+    "scopes the ring to $alternative whether it opens by an attribute change or by insertion",
+    ({ name, value }) => {
+      document.body.innerHTML = "<main><button>Play</button></main>";
+      const overlay = document.createElement("div");
+      overlay.innerHTML = "<button>Close</button>";
+      document.body.appendChild(overlay);
+      expect(isAnyOverlayOpen()).toBe(false);
+
+      overlay.setAttribute(name, value);
+      expect(resolveActiveScope(document)).toEqual({ element: overlay, kind: "overlay" });
+
+      overlay.remove();
+      expect(resolveActiveScope(document).kind).toBe("page");
+      document.body.appendChild(overlay);
+      expect(resolveActiveScope(document)).toEqual({ element: overlay, kind: "overlay" });
+    },
+  );
 
   it("tells overlay-presence subscribers when an alert dialog opens and closes", async () => {
     const listener = vi.fn();
