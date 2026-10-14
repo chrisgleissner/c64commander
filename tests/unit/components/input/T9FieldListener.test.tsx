@@ -84,6 +84,21 @@ describe("T9FieldListener", () => {
     expect(field).toHaveAttribute("inputmode", "none");
   });
 
+  it("also overrides a text-like inputmode the field set itself", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <button>Before</button>
+        <input aria-label="File name" inputMode="text" />
+      </>,
+    );
+    const field = screen.getByLabelText("File name");
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Before" }), { key: "ArrowDown", keyCode: 40 });
+    fireEvent.focusIn(field);
+    expect(field).toHaveAttribute("inputmode", "none");
+  });
+
   it("leaves the input method alone for arrow keys typed inside a field", () => {
     render(
       <>
