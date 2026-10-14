@@ -35,6 +35,9 @@ export const MINOR_LABELS_MIN_PLOT_PX = 400;
 const CAP_HEIGHT_PX = 2;
 export const METER_AREA_HEIGHT_PX = 84;
 export const METER_HEIGHT_PX = 14;
+const EDGE_PAD_PX = 8;
+const LABEL_WIDTH_EM = 1.45;
+const LABEL_GAP_PX = 5;
 const CLIP_BLOCK_PX = 6;
 export const METER_SCALE_DB = [0, -20, -40, -60] as const;
 
@@ -48,10 +51,10 @@ export interface SpectrumLayout {
   showMinorLabels: boolean;
 }
 
-/** Splits the canvas into the plot and two equal side margins; the left one holds the labels. */
+/** Splits the canvas so the labels and the plot together sit centered, with equal padding at both edges. */
 export const computeLayout = (width: number, height: number, fontPx: number): SpectrumLayout => {
-  const plotLeft = Math.ceil(fontPx * 2.6);
-  const plotRight = width - plotLeft;
+  const plotLeft = EDGE_PAD_PX + Math.ceil(fontPx * LABEL_WIDTH_EM) + LABEL_GAP_PX;
+  const plotRight = width - EDGE_PAD_PX;
   const plotTop = METER_AREA_HEIGHT_PX + Math.ceil(fontPx / 2) + 1;
   const plotBottom = height - Math.ceil(fontPx * 1.5);
   return {

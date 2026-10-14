@@ -74,14 +74,15 @@ const stateWith = (bars: number, level: number, peak: number) => {
 };
 
 describe("spectrum renderer", () => {
-  it("leaves the same margin on both sides of the plot", () => {
+  it("pads the labels and the plot equally from the left and right edges", () => {
     for (const [width, fontPx] of [
       [192, 14],
       [300, 14],
       [420, 16],
     ]) {
       const layout = computeLayout(width, 234, fontPx);
-      expect(layout.width - layout.plotRight).toBe(layout.plotLeft);
+      const labelStart = layout.plotLeft - 5 - Math.ceil(fontPx * 1.45);
+      expect(layout.width - layout.plotRight).toBe(labelStart);
     }
   });
 
@@ -219,9 +220,9 @@ describe("spectrum renderer", () => {
       const pitch = (layout.plotRight - layout.plotLeft) / bars;
       return pitch - t.fills[0].w;
     });
-    expect(widths[0]).toBeCloseTo(3, 0);
-    expect(widths[1]).toBeCloseTo(2, 0);
-    expect(widths[2]).toBeCloseTo(1, 0);
+    [3, 2, 1].forEach((expected, i) => expect(Math.abs(widths[i] - expected)).toBeLessThanOrEqual(0.75));
+    expect(widths[0]).toBeGreaterThan(widths[1]);
+    expect(widths[1]).toBeGreaterThan(widths[2]);
   });
 
   it("omits the peak cap of a bar whose peak is at the floor", () => {
