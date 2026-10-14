@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
-import { resetInputModality } from "@/lib/input";
+import { resetInputModality, setInputModality } from "@/lib/input";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 
 /**
@@ -133,6 +133,43 @@ describe("KeypadGuidanceBar", () => {
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
 
     expect(bar()).toHaveAttribute("data-visible", "false");
+  });
+
+  it("names Close and Menu, and no OK action, while a dialog that drives its own keys offers a menu", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <div role="dialog" aria-labelledby="driving-title" data-key-nav-skip="" data-key-nav-soft-key-menu="">
+          <h2 id="driving-title">Remote Input</h2>
+          <button data-testid="driving-focus">Joystick</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("driving-focus").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Remote Input");
+    expect(actionText("keypad-guidance-left")).toBe("Close");
+    expect(screen.getByTestId("keypad-guidance-center")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
+  });
+
+  it("falls back to 'Navigation' for a dialog that drives its own keys and has no title", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" data-key-nav-skip="" data-key-nav-soft-key-menu="">
+          <button data-testid="untitled-focus">Fire</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("untitled-focus").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Navigation");
   });
 
   it("exposes the Menu soft key when the focused item has a context menu", () => {

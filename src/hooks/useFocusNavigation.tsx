@@ -580,7 +580,8 @@ export const FocusNavigationProvider = ({
       // Menus/listboxes/poppers are deliberately excluded: Radix already drives Up/Down inside
       // those itself (a Select's own option highlighting), and re-walking them here would
       // fight that with a second, DOM-focus-based cursor.
-      if (action === "dpadUp" || action === "dpadDown") {
+      const overlayOwnsItsKeys = event.target instanceof Element && event.target.closest(`[${SKIP_ATTR}]`) !== null;
+      if ((action === "dpadUp" || action === "dpadDown") && !overlayOwnsItsKeys) {
         const overlay = event.target instanceof Element ? event.target.closest(DIALOG_ANCESTOR_SELECTOR) : null;
         if (overlay) {
           const from = document.activeElement instanceof Element ? document.activeElement : (event.target as Element);
@@ -607,6 +608,7 @@ export const FocusNavigationProvider = ({
       // it. Nothing inside the dialog answers OK on the dialog itself, so OK goes in here.
       if (
         (action === "enter" || action === "center" || action === "activate") &&
+        !overlayOwnsItsKeys &&
         event.target instanceof Element &&
         event.target.matches(DIALOG_ANCESTOR_SELECTOR) &&
         stepFocusWithinOverlay(event.target, event.target, true)

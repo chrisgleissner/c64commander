@@ -1721,6 +1721,10 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "**Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.",
           "",
+          variant.runtime.defaultT9InputEnabled
+            ? "While Remote Input is open, the keypad drives your C64. The **Right Soft Key** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **Left Soft Key** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, `#` to switch between letters and digits, OK for RETURN, and the D-pad for the cursor keys."
+            : "With a keyboard or D-pad, **F2** (the Menu soft key) opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. While the joystick is in use, the arrow keys steer and OK fires, so this menu is the way to the other controls. **Back** then gives the keys back to your C64. In **Keys**, the arrow keys move between the keys on the screen and OK presses the selected one.",
+          "",
           image("Remote Input keyboard mode", profile, remoteInputKeyboardImage(profile)),
           "",
           remoteInputJoystickFirmware(variant),

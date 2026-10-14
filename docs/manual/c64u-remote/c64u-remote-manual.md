@@ -797,6 +797,8 @@ Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap a
 
 **Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.
 
+While Remote Input is open, the keypad drives your C64. The **Right Soft Key** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **Left Soft Key** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, `#` to switch between letters and digits, OK for RETURN, and the D-pad for the cursor keys.
+
 ![Remote Input keyboard mode](../../img/app/home/remote-input/03-keyboard-compact.png)
 
 The **Joystick** tab needs the device's `machine:input` REST endpoint. The app simply asks for it. If your machine answers, the tab appears; if not, you get **Keys** only. The endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**.
