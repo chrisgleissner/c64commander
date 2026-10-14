@@ -116,6 +116,7 @@ const usePlaybackHarness = ({
     setPlayedMs,
     durationMs,
     setDurationMs,
+    setDurationMsItemId: vi.fn(),
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,

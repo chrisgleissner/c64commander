@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/playback/playbackSessionStore";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import { getLogs } from "@/lib/logging";
+import { resolveShownItemDurationMs } from "@/pages/playFiles/shownTrackDuration";
 
 const phone = vi.hoisted(() => ({ playing: false }));
 vi.mock("@/lib/playback/activePlaybackSession", async (importOriginal) => ({
@@ -76,6 +77,7 @@ const usePlaybackPersistenceHarness = ({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+  const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const [autoAdvanceDueAtMs] = useState<number | null>(initialAutoAdvanceDueAtMs);
   const playedClockRef = useRef({
     hydrate: vi.fn(),
@@ -101,6 +103,7 @@ const usePlaybackPersistenceHarness = ({
     setPlayedMs,
     durationMs,
     setDurationMs,
+    setDurationMsItemId,
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
@@ -147,9 +150,12 @@ const usePlaybackPersistenceHarness = ({
   return {
     playlist,
     currentIndex,
+    setCurrentIndex,
     isPlaying,
     isPaused,
     elapsedMs,
+    durationMs,
+    durationMsItemId,
     trackStartedAtRef,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
@@ -1126,6 +1132,66 @@ describe("usePlaybackPersistence", () => {
       expect(dueAt).toBeLessThan(Date.now() + durationMs + 5000); // sanity: not too far in the future
     });
   });
+
+  // Issue #468: a restored session set `durationMs` without the item it belongs to, so the first skip after a restart
+  // showed the restored track's length for the chosen track until the chosen track had launched.
+  it.each([
+    { skip: "Next", from: 0, to: 1 },
+    { skip: "Previous", from: 1, to: 0 },
+  ])(
+    "gives the track chosen by the first $skip after a restored playing session its own length",
+    async ({ from, to }) => {
+      const playlistStorageKey = buildPlaylistStorageKey("device-1");
+      const tunes = [
+        { path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid", name: "Commando.sid", durationMs: 236_000 },
+        { path: "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid", name: "Monty_on_the_Run.sid", durationMs: 350_000 },
+      ];
+      localStorage.setItem(
+        playlistStorageKey,
+        JSON.stringify({
+          items: tunes.map((tune) => ({
+            ...tune,
+            source: "hvsc",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+          })),
+          currentIndex: from,
+        }),
+      );
+      sessionStorage.setItem(
+        PLAYBACK_SESSION_KEY,
+        JSON.stringify({
+          playlistKey: playlistStorageKey,
+          currentItemId: `hvsc:hvsc-library:${tunes[from].path}`,
+          currentIndex: from,
+          isPlaying: true,
+          isPaused: false,
+          elapsedMs: 10_000,
+          playedMs: 10_000,
+          durationMs: tunes[from].durationMs,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+
+      const { result } = renderHook(() =>
+        usePlaybackPersistenceHarness({
+          playlistStorageKey,
+          localEntriesBySourceId: new Map(),
+          localSourceTreeUris: new Map(),
+        }),
+      );
+      await waitFor(() => {
+        expect(result.current.isPlaying).toBe(true);
+        expect(result.current.durationMs).toBe(tunes[from].durationMs);
+      });
+
+      act(() => result.current.setCurrentIndex(to));
+
+      const { playlist, currentIndex, durationMs, durationMsItemId, isPlaying, isPaused } = result.current;
+      const shownState = { currentIndex, durationMs, durationMsItemId, isPlaying, isPaused, fallbackMs: 180_000 };
+      expect(resolveShownItemDurationMs(playlist[to], to, shownState)).toBe(tunes[to].durationMs);
+    },
+  );
 
   it("restores stored absolute auto-advance due-at so overdue playback advances promptly after remount", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");

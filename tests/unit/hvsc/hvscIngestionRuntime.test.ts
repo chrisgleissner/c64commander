@@ -44,6 +44,7 @@ import {
 import { extractArchiveEntries } from "@/lib/hvsc/hvscArchiveExtraction";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "@/lib/hvsc/hvscSongLengthService";
+import { applyIngestedSidHeaders, discardIngestedSidHeaderIndex } from "@/lib/hvsc/hvscIngestedSidHeaders";
 
 const nativeProgressListenerRemove = vi.hoisted(() => vi.fn(async () => undefined));
 const nativeHvscPlugin = vi.hoisted(() => ({
@@ -192,6 +193,11 @@ vi.mock("@/lib/sid/sidUtils", () => ({
     parserWarnings: [],
   })),
   buildSidTrackSubsongs: vi.fn(() => [{ songNr: 1, isDefault: true }]),
+}));
+
+vi.mock("@/lib/hvsc/hvscIngestedSidHeaders", () => ({
+  applyIngestedSidHeaders: vi.fn(async () => undefined),
+  discardIngestedSidHeaderIndex: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
@@ -993,6 +999,90 @@ describe("hvscIngestionRuntime", () => {
 
     await expect(ingestCachedHvsc("token-corrupt-cached")).rejects.toThrow();
     expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith(expect.stringContaining("hvsc-baseline-5"));
+  });
+
+  const SID_HEADER_INDEX = "hvsc/index/ingested-sid-headers.json";
+
+  const prepareNativeIngestWithSidHeaderIndex = (
+    beforeNativeIngestReturns: () => Promise<unknown> = async () => {},
+  ) => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({ files: ["hvsc-baseline-5.complete.json"] } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockImplementationOnce(async () => {
+      await beforeNativeIngestReturns();
+      return {
+        totalEntries: 1,
+        songsIngested: 1,
+        songsDeleted: 0,
+        deletedVirtualPaths: [],
+        failedSongs: 0,
+        failedPaths: [],
+        songlengthFilesWritten: 1,
+        metadataRows: 1,
+        metadataUpserts: 0,
+        metadataDeletes: 0,
+        archiveBytes: 10,
+        sidHeaderIndexPath: SID_HEADER_INDEX,
+      } as Awaited<ReturnType<typeof nativeHvscPlugin.ingestHvsc>>;
+    });
+  };
+
+  it("hands the SID header index a native ingest wrote to the browse index once Songlengths have listed its songs", async () => {
+    prepareNativeIngestWithSidHeaderIndex();
+
+    await ingestCachedHvsc("token-native-sid-headers");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
+    expect(applyIngestedSidHeaders).toHaveBeenCalledWith(SID_HEADER_INDEX, expect.any(Function));
+    expect(vi.mocked(applyIngestedSidHeaders).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(reloadHvscSonglengthsOnConfigChange).mock.invocationCallOrder[0],
+    );
+    expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith(SID_HEADER_INDEX);
+    expect(vi.mocked(discardIngestedSidHeaderIndex).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(applyIngestedSidHeaders).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("deletes the SID header index when the ingest is cancelled after the native step", async () => {
+    prepareNativeIngestWithSidHeaderIndex(() => cancelHvscInstall("token-cancel-after-native"));
+
+    await expect(ingestCachedHvsc("token-cancel-after-native")).rejects.toMatchObject({ code: "HVSC_CANCELLED" });
+
+    expect(applyIngestedSidHeaders).not.toHaveBeenCalled();
+    expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith(SID_HEADER_INDEX);
+  });
+
+  it("deletes the SID header index when the Songlengths reload after the native step fails", async () => {
+    prepareNativeIngestWithSidHeaderIndex();
+    vi.mocked(reloadHvscSonglengthsOnConfigChange).mockRejectedValueOnce(new Error("reload failed"));
+
+    await expect(ingestCachedHvsc("token-native-reload-fail")).rejects.toThrow("reload failed");
+
+    expect(applyIngestedSidHeaders).not.toHaveBeenCalled();
+    expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith(SID_HEADER_INDEX);
+  });
+
+  it("stops applying the SID header index once the ingest is cancelled, and still deletes it", async () => {
+    prepareNativeIngestWithSidHeaderIndex();
+    vi.mocked(applyIngestedSidHeaders).mockImplementationOnce(async (_path, throwIfCancelled) => {
+      await cancelHvscInstall("token-cancel-during-apply");
+      throwIfCancelled?.();
+    });
+
+    await expect(ingestCachedHvsc("token-cancel-during-apply")).rejects.toMatchObject({ code: "HVSC_CANCELLED" });
+
+    expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith(SID_HEADER_INDEX);
+    expect(vi.mocked(updateHvscState).mock.calls).not.toContainEqual([
+      expect.objectContaining({ ingestionState: "ready" }),
+    ]);
   });
 
   it("rejects cached ingest when baseline is missing", async () => {
@@ -2202,6 +2292,11 @@ describe("ingestion shared helpers (P0-E)", () => {
       cancelTokens: new Map(),
     });
     expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(expect.objectContaining({ updates: {} }));
+  });
+
+  it("resetHvscLibraryData deletes a SID header index an interrupted native ingest left behind", async () => {
+    await resetHvscLibraryData();
+    expect(discardIngestedSidHeaderIndex).toHaveBeenCalledWith();
   });
 
   it("resetHvscLibraryData clears stale update-applied records so reinstalled updates are not skipped forever (HARD9-014)", async () => {

@@ -7,6 +7,7 @@
  */
 
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { USER_TRANSPORT_COALESCE_MS, usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -86,7 +87,11 @@ const createDeferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
-const renderSkipController = (playlist: PlaylistItem[], setCurrentIndex: (index: number) => void = vi.fn()) =>
+const renderSkipController = (
+  playlist: PlaylistItem[],
+  setCurrentIndex: (index: number) => void = vi.fn(),
+  useStatefulProps: () => Partial<Parameters<typeof usePlaybackController>[0]> = () => ({}),
+) =>
   renderHook(() =>
     usePlaybackController({
       playlist,
@@ -144,6 +149,7 @@ const renderSkipController = (playlist: PlaylistItem[], setCurrentIndex: (index:
       durationSeconds: 45,
       setAutoAdvanceDueAtMs: vi.fn(),
       trace: (fn: (...args: unknown[]) => unknown) => fn,
+      ...useStatefulProps(),
     }),
   );
 
@@ -361,6 +367,88 @@ describe("usePlaybackController play transition supersession", () => {
       "/PROGRAMS/track-b.prg",
       "/PROGRAMS/track-d.prg",
     ]);
+  });
+
+  // Issue #468: until the skip's launch finished, the chosen track showed the previous track's length and
+  // the playlist total counted it with that length.
+  it.each([
+    { skip: "handleNext", from: 0, to: 1 },
+    { skip: "handlePrevious", from: 1, to: 0 },
+  ] as const)(
+    "gives the chosen track its own length while the $skip launch is in flight",
+    async ({ skip, from, to }) => {
+      vi.useFakeTimers();
+      const playlist = [
+        { ...createPlaylistItem("commando", "/MUSICIANS/H/Hubbard_Rob/Commando.sid"), durationMs: 236_000 },
+        { ...createPlaylistItem("monty", "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid"), durationMs: 350_000 },
+      ];
+      const { result } = renderSkipController(playlist, undefined, () => {
+        const [currentIndex, setCurrentIndex] = useState(from);
+        const [isPlaying, setIsPlaying] = useState(false);
+        const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+        return { currentIndex, setCurrentIndex, isPlaying, setIsPlaying, durationMs, setDurationMs };
+      });
+      await act(async () => {
+        await result.current.playItem(playlist[from], { playlistIndex: from });
+      });
+      const skipLaunch = createDeferred<void>();
+      vi.mocked(executePlayPlan).mockImplementationOnce(() => skipLaunch.promise);
+
+      let pendingSkip: Promise<void> = Promise.resolve();
+      await act(async () => {
+        pendingSkip = result.current[skip]();
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      });
+
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(2);
+      expect(result.current.playlistItemDuration(playlist[to], to)).toBe(playlist[to].durationMs);
+
+      await act(async () => {
+        skipLaunch.resolve();
+        await pendingSkip;
+      });
+
+      expect(result.current.playlistItemDuration(playlist[to], to)).toBe(playlist[to].durationMs);
+    },
+  );
+
+  // A chosen track without a known length showed the default length during its launch, against the elapsed time of
+  // the track still playing, and then jumped to its resolved length.
+  it("shows no length for a chosen track without a known length until its launch has finished", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      { ...createPlaylistItem("commando", "/MUSICIANS/H/Hubbard_Rob/Commando.sid"), durationMs: 236_000 },
+      { ...createPlaylistItem("unknown", "/GAMES/Unknown_Length.prg"), durationMs: undefined },
+    ];
+    const { result } = renderSkipController(playlist, undefined, () => {
+      const [currentIndex, setCurrentIndex] = useState(0);
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
+      return { currentIndex, setCurrentIndex, isPlaying, setIsPlaying, durationMs, setDurationMs };
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(result.current.chosenTrackLaunching).toBe(false);
+    const skipLaunch = createDeferred<void>();
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => skipLaunch.promise);
+
+    let pendingSkip: Promise<void> = Promise.resolve();
+    await act(async () => {
+      pendingSkip = result.current.handleNext();
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+    });
+
+    expect(result.current.playlistItemDuration(playlist[1], 1)).toBeUndefined();
+    expect(result.current.chosenTrackLaunching).toBe(true);
+
+    await act(async () => {
+      skipLaunch.resolve();
+      await pendingSkip;
+    });
+
+    expect(result.current.playlistItemDuration(playlist[1], 1)).toBe(45_000);
+    expect(result.current.chosenTrackLaunching).toBe(false);
   });
 
   it("drops a skip already queued behind a launch when Stop arrives before it runs", async () => {

@@ -578,6 +578,8 @@ export default function PlayFilesPage() {
     scrubTargetMs,
     playlistEnded,
     playlistItemDuration,
+    chosenTrackLaunching,
+    setDurationMsItemId,
   } = usePlaybackController({
     playlist,
     setPlaylist,
@@ -1963,7 +1965,11 @@ export default function PlayFilesPage() {
   // reset to the target when the seek was accepted, so every position source already reports the
   // target. A clock advancing normally through a silence is exactly what a listener reads as
   // playback having died, which is why the target is shown separately on the bar instead.
-  const displayElapsedMs = isScrubbing ? shownScrubTargetMs : (pendingSeek?.audibleMs ?? elapsedMs);
+  const displayElapsedMs = chosenTrackLaunching
+    ? 0
+    : isScrubbing
+      ? shownScrubTargetMs
+      : (pendingSeek?.audibleMs ?? elapsedMs);
 
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
@@ -2261,6 +2267,7 @@ export default function PlayFilesPage() {
     setPlayedMs,
     durationMs,
     setDurationMs,
+    setDurationMsItemId,
     autoAdvanceDueAtMs,
     setCurrentSubsongCount,
     setShuffleEnabled,

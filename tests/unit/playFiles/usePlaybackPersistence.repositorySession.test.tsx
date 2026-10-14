@@ -103,6 +103,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     setPlayedMs,
     durationMs,
     setDurationMs,
+    setDurationMsItemId: vi.fn(),
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     activePlaylistQuery,

@@ -61,7 +61,12 @@ data class ExtractedSong(
         val fileName: String,
         val songs: Int?,
         val startSong: Int?,
+        /** The file's first [SID_HEADER_BYTES] bytes, or all of it when it is shorter. */
+        val sidHeader: ByteArray,
 )
+
+/** The PSID/RSID v2+ header length, which is what the app's SID header parser requires. */
+const val SID_HEADER_BYTES = 0x7C
 
 data class ExtractionProgress(
         val processedEntries: Int,
@@ -615,13 +620,15 @@ class DefaultHvscArchiveExtractor(
               val targetFile = ensureWithinRoot(outputDir, File(outputDir, normalizedPath))
               targetFile.parentFile?.mkdirs()
               moveIntoPlace(candidate, targetFile)
-              val header = readSidHeader(targetFile)
+              val headerBytes = readSidHeaderBytes(targetFile)
+              val header = parseSubsongFields(headerBytes)
               extractedSongs.add(
                       ExtractedSong(
                               virtualPath = "/$normalizedPath",
                               fileName = targetFile.name,
                               songs = header?.songs,
                               startSong = header?.startSong,
+                              sidHeader = headerBytes,
                       )
               )
             }
@@ -678,23 +685,32 @@ class DefaultHvscArchiveExtractor(
     )
   }
 
-  private fun readSidHeader(file: File): SidHeader? {
-    BufferedInputStream(file.inputStream()).use { input ->
-      val headerBytes = ByteArray(0x80)
-      val headerLength = input.read(headerBytes)
-      if (headerLength < 0x12) {
-        return null
+  private fun readSidHeaderBytes(file: File): ByteArray {
+    file.inputStream().use { input ->
+      val headerBytes = ByteArray(SID_HEADER_BYTES)
+      var headerLength = 0
+      while (headerLength < headerBytes.size) {
+        val read = input.read(headerBytes, headerLength, headerBytes.size - headerLength)
+        if (read < 0) break
+        headerLength += read
       }
-      val magic = String(headerBytes, 0, 4, Charsets.US_ASCII)
-      if (magic != "PSID" && magic != "RSID") {
-        return null
-      }
-      val songs =
-              ((headerBytes[0x0E].toInt() and 0xFF) shl 8) or (headerBytes[0x0F].toInt() and 0xFF)
-      val startSong =
-              ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
-      return SidHeader(songs = songs, startSong = startSong)
+      return headerBytes.copyOf(headerLength)
     }
+  }
+
+  private fun parseSubsongFields(headerBytes: ByteArray): SidHeader? {
+    if (headerBytes.size < 0x12) {
+      return null
+    }
+    val magic = String(headerBytes, 0, 4, Charsets.US_ASCII)
+    if (magic != "PSID" && magic != "RSID") {
+      return null
+    }
+    val songs =
+            ((headerBytes[0x0E].toInt() and 0xFF) shl 8) or (headerBytes[0x0F].toInt() and 0xFF)
+    val startSong =
+            ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
+    return SidHeader(songs = songs, startSong = startSong)
   }
 
   private fun normalizeArchiveEntryPath(raw: String, mode: HvscArchiveMode): String {

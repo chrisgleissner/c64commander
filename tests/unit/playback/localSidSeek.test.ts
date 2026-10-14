@@ -157,7 +157,10 @@ describe("scrub feedback contract", () => {
     // instead of letting it run on through the silence. Insisting on the old two-way expression
     // would have required the clock to advance normally while nothing was sounding, which is the
     // defect the pending-seek state exists to remove.
-    expect(page).toContain("const displayElapsedMs = isScrubbing ? shownScrubTargetMs :");
+    // Amended: while a skip's chosen track launches, the previous track's clock is not shown against it.
+    expect(page).toMatch(
+      /const displayElapsedMs = chosenTrackLaunching\s*\?\s*0\s*:\s*isScrubbing\s*\?\s*shownScrubTargetMs\s*:/,
+    );
     expect(page).toContain("pendingSeek?.audibleMs ?? elapsedMs");
     // Both the bar and the timer must use it, or they disagree mid-gesture.
     expect(page).toMatch(/progressPercent = currentDurationMs \? Math\.min\(100, \(displayElapsedMs/);
