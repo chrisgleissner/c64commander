@@ -238,7 +238,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await page.addInitScript(() => {
       const items = Array.from({ length: 3 }, (_, index) => ({
         source: "ultimate",
-        path: `/Usb0/Demos/Keypad_Menu_Tune_${index + 1}.sid`,
+        path: `/Usb0/Demos/MUSICIANS/Long_Directory_Name_For_Detail_Rows/Keypad_Menu_Tune_${index + 1}.sid`,
         name: `Keypad_Menu_Tune_${index + 1}.sid`,
         durationMs: 214_000,
         songNr: 1,
@@ -257,6 +257,15 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await waitForAnimations(page);
+
+    const clipped = await menu
+      .locator('[data-menu-detail="true"]')
+      .evaluateAll((rows) =>
+        rows
+          .filter((row) => row.scrollWidth > row.clientWidth + 1)
+          .map((row) => `${(row.textContent ?? "").trim().slice(0, 40)} (${row.scrollWidth} > ${row.clientWidth})`),
+      );
+    expect(clipped, "detail rows whose text runs past the menu's edge").toEqual([]);
 
     // Walk the whole menu both ways, as a reader looking for the details would, and note every row
     // the menu's own highlight landed on while that row was inside the menu's visible box.
