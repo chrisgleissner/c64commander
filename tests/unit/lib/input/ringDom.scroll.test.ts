@@ -42,7 +42,7 @@ describe("scrollTowardUnreachableContent", () => {
     const { lastControl, scrollBy } = scrollingPage({ scrollHeight: 1000, clientHeight: 400, scrollTop: 0 });
 
     expect(scrollTowardUnreachableContent(lastControl, null, 1)).toBe(true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 320 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 400 });
   });
 
   it("scrolls no further than the end of the page", () => {
@@ -72,7 +72,7 @@ describe("scrollTowardUnreachableContent", () => {
     expect(scrollTowardUnreachableContent(lastControl, group(100, 380), 1)).toBe(false);
     expect(scrollBy).not.toHaveBeenCalled();
     expect(scrollTowardUnreachableContent(lastControl, group(100, 700), 1)).toBe(true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 320 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 400 });
   });
 
   it("counts the part of a group under the keypad guidance bar as hidden", () => {
@@ -81,7 +81,7 @@ describe("scrollTowardUnreachableContent", () => {
 
     // The group ends at 390 px: inside the 400 px page, but under the bar that covers 368-400.
     expect(scrollTowardUnreachableContent(lastControl, group(100, 390), 1)).toBe(true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 320 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 368 });
   });
 
   it("treats a stop outside the scrolling page, such as the tab bar, as leaving it", () => {

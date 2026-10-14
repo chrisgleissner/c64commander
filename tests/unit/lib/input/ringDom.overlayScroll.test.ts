@@ -75,7 +75,7 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     last.focus();
 
     expect(stepFocusWithinOverlay(dialog, last, true)).toBe(true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 240 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 300 });
     expect(document.activeElement).toBe(last);
   });
 
@@ -93,7 +93,7 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     option.focus();
 
     stepFocusWithinOverlay(dialog, option, true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 240 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 300 });
     expect(document.activeElement).toBe(option);
   });
 
@@ -111,7 +111,7 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     first.focus();
 
     stepFocusWithinOverlay(dialog, first, false);
-    expect(scrollBy).toHaveBeenCalledWith({ top: -240 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: -300 });
     expect(document.activeElement).toBe(first);
   });
 

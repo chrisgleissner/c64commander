@@ -142,7 +142,7 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     // B is the page's last stop and the tab bar comes next, but the page still has 600 px below
     // the fold: Down shows them instead of leaving the page.
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
-    expect(scrollBy).toHaveBeenLastCalledWith({ top: 320 });
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 400 });
     expect(document.activeElement).toBe(button("B"));
 
     // At the end of the page, Down moves on to the tab bar as before.
@@ -150,6 +150,75 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(scrollBy).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(button("Tab"));
+  });
+
+  it("pages one viewport per Down past disabled CTAs until the final progress text is visible", () => {
+    const scrollPositions: number[] = [];
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = ({ top }: ScrollToOptions) => {
+        page.scrollTop = Math.min(1050, page.scrollTop + (top ?? 0));
+        scrollPositions.push(page.scrollTop);
+      };
+    };
+    render(
+      <FocusNavigationProvider>
+        <div ref={measure} style={{ overflowY: "auto" }}>
+          <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          <p>HVSC download and ingestion progress below disabled controls</p>
+        </div>
+        <TabBarStop />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+    for (let press = 0; press < 3; press++) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(document.activeElement).toBe(button("B"));
+    }
+    expect(scrollPositions).toEqual([400, 800, 1050]);
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Tab"));
+    expect(scrollPositions).toEqual([400, 800, 1050]);
+  });
+
+  it("pages by the viewport height minus the keypad guidance bar so no row stays under the bar", () => {
+    document.documentElement.style.setProperty("--keypad-guidance-reserved-height", "calc(1rem + 24px)");
+    const probeHeight = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
+      const height =
+        this.getAttribute("aria-hidden") === "true" && this.parentElement === document.documentElement ? 40 : 0;
+      return { top: 0, bottom: height, left: 0, right: 0, width: 0, height, x: 0, y: 0, toJSON: () => ({}) };
+    });
+    const scrollBy = vi.fn();
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = scrollBy;
+    };
+    try {
+      render(
+        <FocusNavigationProvider>
+          <div ref={measure} style={{ overflowY: "auto" }}>
+            <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          </div>
+          <TabBarStop />
+        </FocusNavigationProvider>,
+      );
+
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: 360 });
+    } finally {
+      probeHeight.mockRestore();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
   });
 
   it("activates the focused CTA via center/enter (default = click the element)", () => {

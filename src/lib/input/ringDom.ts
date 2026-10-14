@@ -132,8 +132,24 @@ export const focusRingElement = (element: HTMLElement | null): void => {
 
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
 
-/** How much of the visible height one key press scrolls when the ring has no stop left to move to. */
-const PAGE_STEP_FRACTION = 0.8;
+/**
+ * Browsers return the reserve as unevaluated `calc(...)` text, so a plain number is parsed directly
+ * and anything else is measured through a hidden element that lays the value out.
+ */
+const guidanceBarHeight = (): number => {
+  const root = document.documentElement;
+  const raw = getComputedStyle(root).getPropertyValue(GUIDANCE_RESERVE).trim();
+  if (!raw) return 0;
+  const direct = Number(raw.replace(/px$/, ""));
+  if (Number.isFinite(direct)) return direct;
+  const probe = document.createElement("div");
+  probe.setAttribute("aria-hidden", "true");
+  probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;width:0;height:var(${GUIDANCE_RESERVE},0px)`;
+  root.appendChild(probe);
+  const height = probe.getBoundingClientRect().height;
+  probe.remove();
+  return height;
+};
 
 const isScrollContainer = (element: Element): boolean => {
   const overflowY = getComputedStyle(element).overflowY;
@@ -163,18 +179,19 @@ export const scrollTowardUnreachableContent = (from: Element, scope: Element | n
   const container = scrollContainerOf(from);
   const remaining = remainingScroll(container, direction);
   if (remaining < 1) return false;
+  const guidanceBar = guidanceBarHeight();
   if (scope) {
     const visible =
       container === document.scrollingElement
         ? { top: 0, bottom: window.innerHeight }
         : container.getBoundingClientRect();
     const bounds = scope.getBoundingClientRect();
-    // The keypad guidance bar is fixed over the bottom of the page and hides what lies under it.
-    const guidanceBar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(GUIDANCE_RESERVE)) || 0;
     const hidden = direction > 0 ? bounds.bottom - (visible.bottom - guidanceBar) : visible.top - bounds.top;
     if (hidden < 1) return false;
   }
-  container.scrollBy({ top: direction * Math.min(remaining, container.clientHeight * PAGE_STEP_FRACTION) });
+  // The keypad guidance bar is fixed over the bottom of the page and hides what lies under it.
+  const step = Math.max(container.clientHeight - guidanceBar, 1);
+  container.scrollBy({ top: direction * Math.min(remaining, step) });
   return true;
 };
 
