@@ -98,6 +98,11 @@ export interface HostDiagnosis {
   readonly attachMissing: readonly MissingPrerequisite[];
   readonly container: ContainerFacts | null;
   readonly apiLevel: number | null;
+  /** Container attach helpers the login user can see; they name where the container runtime lives. */
+  readonly attachHelpers: readonly string[];
+  /** The login user's uid and whether `sudo -n` works for it, so either route can find root. */
+  readonly loginUid: number | null;
+  readonly loginSudo: boolean;
 }
 
 const NOTHING_LEARNED: HostDiagnosis = {
@@ -112,6 +117,9 @@ const NOTHING_LEARNED: HostDiagnosis = {
   attachMissing: [],
   container: null,
   apiLevel: null,
+  attachHelpers: [],
+  loginUid: null,
+  loginSudo: false,
 };
 
 export function endpointOf(settings: SshHostSettings): SshEndpoint {
@@ -226,6 +234,9 @@ export class HostProber {
         tunnel: adb.tunnel,
         tunnelState: "device",
         adbTarget: adb.listed,
+        attachHelpers: facts.attachHelpers,
+        loginUid: facts.uid,
+        loginSudo: facts.sudo,
       };
     }
 
@@ -249,6 +260,9 @@ export class HostProber {
       attachMissing: attach.missing,
       container: attach.container,
       apiLevel: attach.apiLevel,
+      attachHelpers: facts.attachHelpers,
+      loginUid: facts.uid,
+      loginSudo: facts.sudo,
     };
   }
 

@@ -214,9 +214,16 @@ export function containerAdbDisabled(endpoint: SshEndpoint, tried: readonly stri
       `The container adb route to ${endpoint.host} is unavailable: ${where}. Inside the container, open Android ` +
       "Settings > About phone, tap Build number seven times, then enable Developer options > USB debugging and " +
       "Wireless debugging. If adbd listens on another address or port, set DROIDCTL_SSH_CONTAINER_ADB to that " +
-      "address:port as seen from the phone.",
+      `address:port as seen from the phone. ${REENABLE_CONTAINER_ADB}`,
   };
 }
+
+/** A container restart resets adb_enabled to 0 while the TCP port property persists. */
+export const REENABLE_CONTAINER_ADB =
+  "A restart of the container turns adb off again (adb_enabled returns to 0). While the container-attach route " +
+  'works, droid_device.run_shell with ["sh", "-c", "settings put global development_settings_enabled 1; setprop ' +
+  'persist.adb.tcp.port 5555; settings put global adb_enabled 1"] turns it back on, and the next droidctl call ' +
+  "picks it up.";
 
 export function containerAdbUnauthorized(endpoint: SshEndpoint, serial: string): MissingPrerequisite {
   return {

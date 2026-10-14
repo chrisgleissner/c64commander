@@ -19,6 +19,7 @@ import {
   shellQuote,
   targetIdSchema,
 } from "../common.js";
+import type { ResolvedTargetHandle } from "../../transport/registry.js";
 import { defineToolModule } from "../types.js";
 
 const installSchema = z
@@ -47,7 +48,14 @@ const startAppSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
-    activity: z.string().min(1).describe("Activity name, e.g. .MainActivity. Default .MainActivity.").optional(),
+    activity: z
+      .string()
+      .min(1)
+      .describe(
+        "Activity name, e.g. .MainActivity. Default: the package's launcher activity as the package manager " +
+          "resolves it, or .MainActivity when it resolves none.",
+      )
+      .optional(),
     waitForResume: z.boolean().describe("Poll dumpsys until the package is the resumed activity.").optional(),
     resumeTimeoutMs: z
       .number()
@@ -119,6 +127,31 @@ function detectRunAsRefusal(stdout: string, stderr: string): string | null {
     combined,
   );
   return refusal ? refusal[0].trim() : null;
+}
+
+/**
+ * The launcher component as the package manager resolves it. An activity class can live in another
+ * Java package than the application id, so `<package>/.MainActivity` names a class that may not exist.
+ */
+export function parseLauncherComponent(stdout: string, pkg: string): string | null {
+  const lines = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(`${pkg}/`) && !/\s/.test(line));
+  return lines.at(-1) ?? null;
+}
+
+async function launcherComponent(handle: ResolvedTargetHandle, pkg: string): Promise<string> {
+  const resolved = await handle.transport.exec(handle.target, [
+    "cmd",
+    "package",
+    "resolve-activity",
+    "--brief",
+    "-c",
+    "android.intent.category.LAUNCHER",
+    pkg,
+  ]);
+  return (resolved.exitCode === 0 ? parseLauncherComponent(resolved.stdout, pkg) : null) ?? `${pkg}/.MainActivity`;
 }
 
 export const appModule = defineToolModule({
@@ -202,7 +235,10 @@ export const appModule = defineToolModule({
       name: "droid_app.start_app",
       description:
         "Launch the application, by explicit activity with am start -W, or through the launcher intent. Returns the " +
-        "resumed activity and, when am start reported it, the measured total start time.",
+        "resumed activity and, when am start reported it, the measured total start time. On a phone whose Android " +
+        "apps run in a container and a host window query is configured, the host is also asked which window it " +
+        "shows; the container's window is raised when another is in front, and the call fails when it stays " +
+        "behind. hostWindow reports whether the host was asked and, when it was not, why.",
       argsSchema: startAppSchema,
       execute: defineExecute(startAppSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -219,15 +255,13 @@ export const appModule = defineToolModule({
           ]);
           expectSuccess(result, `monkey launch of ${args.package}`);
         } else {
-          const activity = args.activity ?? ".MainActivity";
-          const result = await handle.transport.exec(handle.target, [
-            "am",
-            "start",
-            "-W",
-            "-n",
-            `${args.package}/${activity}`,
-          ]);
-          expectSuccess(result, `am start of ${args.package}/${activity}`);
+          const component =
+            args.activity === undefined
+              ? await launcherComponent(handle, args.package)
+              : `${args.package}/${args.activity}`;
+          const activity = component.slice(component.indexOf("/") + 1);
+          const result = await handle.transport.exec(handle.target, ["am", "start", "-W", "-n", component]);
+          expectSuccess(result, `am start of ${component}`);
           if (/Error:/.test(result.stdout)) {
             throw new ToolExecutionError(`am start reported an error: ${result.stdout.trim()}`, {
               details: { package: args.package, activity, stdout: result.stdout },
@@ -263,7 +297,23 @@ export const appModule = defineToolModule({
           );
         }
 
-        return { launched: true, package: args.package, resumedActivity, totalTimeMs };
+        const hostWindow = await handle.transport.hostWindow?.(handle.target, true);
+        if (hostWindow?.known && hostWindow.containerInFront === false) {
+          throw new ToolExecutionError(
+            `${args.package} was started inside the Android container, but the host shows another window in ` +
+              `front (topmost: ${hostWindow.topmost ?? "unknown"}) and the container's window could not be brought ` +
+              "forward, so the app receives no keys.",
+            { details: { package: args.package, resumedActivity, hostWindow } },
+          );
+        }
+
+        return {
+          launched: true,
+          package: args.package,
+          resumedActivity,
+          totalTimeMs,
+          ...(hostWindow === undefined ? {} : { hostWindow }),
+        };
       }),
     },
     {
