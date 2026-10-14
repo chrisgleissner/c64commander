@@ -34,9 +34,10 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
   }
 
   fun readSpectrum(call: PluginCall) {
-    val target = call.getDouble("targetNanos", 0.0)?.toLong() ?: 0L
-    val count = (call.getInt("count", 1) ?: 1).coerceIn(1, MAX_FRAMES_PER_READ)
-    val step = call.getDouble("stepNanos", 0.0)?.toLong() ?: 0L
+    val request = call.data
+    val target = request?.opt("targetNanos").asLong()
+    val count = request?.opt("count").asLong().toInt().coerceIn(1, MAX_FRAMES_PER_READ)
+    val step = request?.opt("stepNanos").asLong()
     val first = hub().readSpectrum(target)
     val result = payload(first)
     if (target > 0L && step > 0L && first.aligned && count > 1) {
@@ -76,6 +77,9 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
         .put("shortfallSamples", frame.shortfallSamples)
         .put("aligned", frame.aligned)
   }
+
+  /** A JSON number arrives as an Int, Long or Double depending on its size; the typed getters drop some of them. */
+  private fun Any?.asLong(): Long = (this as? Number)?.toLong() ?: 0L
 
   private companion object {
     const val MAX_FRAMES_PER_READ = 8

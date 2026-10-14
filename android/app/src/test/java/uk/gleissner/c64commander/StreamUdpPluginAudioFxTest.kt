@@ -142,9 +142,7 @@ class StreamUdpPluginAudioFxTest {
     repeat(4) { aligned.analyzer.feed(tone, 24000, 48000) }
     aligned.analyzer.presentAt(framesAheadOfSpeaker = 60000L, timestampNanos = clock)
     val (c, resolved) = call {
-      `when`(it.getDouble("targetNanos", 0.0)).thenReturn(clock.toDouble() + 10_000_000.0)
-      `when`(it.getInt("count", 1)).thenReturn(4)
-      `when`(it.getDouble("stepNanos", 0.0)).thenReturn(16_700_000.0)
+      `when`(it.data).thenReturn(JSObject().put("targetNanos", clock + 10_000_000L).put("count", 4).put("stepNanos", 16_700_000))
     }
     plugin.readSpectrum(c)
     val result = resolved()!!
@@ -166,9 +164,7 @@ class StreamUdpPluginAudioFxTest {
     val tone = TestSignals.sine(24000, 48000, 1000.0, 0.5)
     repeat(2) { hub.analyzer.feed(tone, 24000, 48000) }
     val (c, resolved) = call {
-      `when`(it.getDouble("targetNanos", 0.0)).thenReturn(1e9)
-      `when`(it.getInt("count", 1)).thenReturn(4)
-      `when`(it.getDouble("stepNanos", 0.0)).thenReturn(16_700_000.0)
+      `when`(it.data).thenReturn(JSObject().put("targetNanos", 1_000_000_000L).put("count", 4).put("stepNanos", 16_700_000))
     }
     plugin.readSpectrum(c)
     val result = resolved()!!
