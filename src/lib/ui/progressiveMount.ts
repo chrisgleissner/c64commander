@@ -17,8 +17,13 @@ import { SECTION_OPEN_REQUEST_EVENT, type SectionOpenRequestDetail } from "./col
  * screen below it, is built before the first paint, so nothing visible arrives late; the rest are
  * built one per task after it on the first visit, so a tap or a key is handled between them.
  * On return visits, measured distant bodies wait until needed, reserving their previous height.
+ *
+ * The allowance is per page and lasts until that page commits, not per task: React renders a page in
+ * 5 ms slices with a task boundary between them, so a per-task allowance was renewed every slice and
+ * Settings built all twelve open bodies before its first paint. It is held by card id, so a render
+ * React throws away and starts again gives the same two cards their bodies rather than none.
  */
-const IMMEDIATE_MOUNTS_PER_TASK = 2;
+const IMMEDIATE_MOUNTS_PER_COMMIT = 2;
 
 /** How far below the viewport a card still counts as on screen, in viewport heights. */
 const NEAR_VIEWPORT = 1.5;
@@ -30,8 +35,7 @@ const isNearViewport = (element: Element) => {
 };
 
 let enabled = true;
-let immediateMountsThisTask = 0;
-let taskEndScheduled = false;
+const immediateMountsByScope = new Map<string, Set<string>>();
 type WaitingMount = { mount: () => void; anchor: RefObject<Element | null>; reserveHeight: boolean };
 
 const waiting: WaitingMount[] = [];
@@ -42,17 +46,15 @@ export const setProgressiveMountEnabled = (value: boolean) => {
   enabled = value;
 };
 
-const claimImmediateMount = (): boolean => {
+export type ProgressiveCard = { scope: string; id: string };
+
+const claimImmediateMount = ({ scope, id }: ProgressiveCard): boolean => {
   if (!enabled) return true;
-  if (!taskEndScheduled) {
-    taskEndScheduled = true;
-    queueMicrotask(() => {
-      immediateMountsThisTask = 0;
-      taskEndScheduled = false;
-    });
-  }
-  if (immediateMountsThisTask >= IMMEDIATE_MOUNTS_PER_TASK) return false;
-  immediateMountsThisTask += 1;
+  const claimed = immediateMountsByScope.get(scope) ?? new Set<string>();
+  immediateMountsByScope.set(scope, claimed);
+  if (claimed.has(id)) return true;
+  if (claimed.size >= IMMEDIATE_MOUNTS_PER_COMMIT) return false;
+  claimed.add(id);
   return true;
 };
 
@@ -181,13 +183,18 @@ export const mountAllWaiting = (scope?: Element): boolean => {
  * a card the user opens, is mounted at once.
  */
 export const useProgressiveMount = (
+  card: ProgressiveCard,
   wanted: boolean,
   anchor: RefObject<Element | null>,
   rememberedHeight?: number,
 ): boolean => {
   const [mounted, setMounted] = useState(
-    () => !enabled || !wanted || (!(rememberedHeight && rememberedHeight > 0) && claimImmediateMount()),
+    () => !enabled || !wanted || (!(rememberedHeight && rememberedHeight > 0) && claimImmediateMount(card)),
   );
+  const { scope } = card;
+  useLayoutEffect(() => {
+    immediateMountsByScope.delete(scope);
+  }, [scope]);
   useLayoutEffect(() => {
     if (!mounted && wanted && anchor.current && isNearViewport(anchor.current)) setMounted(true);
   }, [anchor, mounted, wanted]);

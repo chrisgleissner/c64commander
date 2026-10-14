@@ -327,7 +327,7 @@ export const CollapsibleSection = ({
   // A body open from the first render below the screen may be built after the page has drawn (see
   // useProgressiveMount). When it arrives it is simply there: an open animation would look like a card opening.
   const cachedHeight = rememberedCardHeight(scope, id);
-  const bodyMayMount = useProgressiveMount(bodyVisible, sectionRef, cachedHeight);
+  const bodyMayMount = useProgressiveMount({ scope, id }, bodyVisible, sectionRef, cachedHeight);
   const bodyArrivesLateRef = useRef(!bodyMayMount);
   const bodyEntryAnimation = bodyArrivesLateRef.current ? false : { height: 0, opacity: 0 };
   if (bodyMayMount && bodyVisible) bodyArrivesLateRef.current = false;
