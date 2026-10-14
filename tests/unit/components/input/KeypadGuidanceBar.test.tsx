@@ -156,6 +156,62 @@ describe("KeypadGuidanceBar", () => {
     expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
   });
 
+  it("names Menu, Return and Delete while a dialog that types with the keypad opens its menu on Back", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-labelledby="typing-title" data-key-nav-skip="" data-key-nav-soft-key-menu="back">
+          <h2 id="typing-title">Remote Input</h2>
+          <button data-testid="typing-focus">Keys</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("typing-focus").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(actionText("keypad-guidance-left")).toBe("Menu");
+    expect(actionText("keypad-guidance-center")).toBe("Return");
+    expect(actionText("keypad-guidance-right")).toBe("Delete");
+  });
+
+  it("names Close and Select while that dialog's own menu has focus, though the dialog behind drives its keys", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-skip="" data-key-nav-soft-key-menu="softRight" />
+        <div role="dialog" aria-labelledby="menu-title" data-key-nav-soft-key-menu-panel="">
+          <h2 id="menu-title">Remote Input</h2>
+          <button data-testid="menu-item">Keys</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("menu-item").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Remote Input");
+    expect(actionText("keypad-guidance-left")).toBe("Close");
+    expect(actionText("keypad-guidance-center")).toBe("Select");
+    expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
+  it("names the Menu soft key while the keypad walks the controls of a dialog that offers a menu", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-soft-key-menu="softRight">
+          <button data-testid="sheet-control">Joystick</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("sheet-control").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
+  });
+
   it("falls back to 'Navigation' for a dialog that drives its own keys and has no title", () => {
     render(
       <FocusNavigationProvider enabled>

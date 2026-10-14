@@ -10,8 +10,8 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKe
 
 import { resolveSemanticAction } from "@/lib/input/keyEvent";
 import { resolveInputProfile } from "@/lib/input/profiles";
-import { SKIP_ATTR } from "@/lib/input/discovery";
-import { SOFT_KEY_MENU_ATTR } from "@/lib/input/guidance";
+import { OWNS_KEYS_ATTR, SKIP_ATTR } from "@/lib/input/discovery";
+import { SOFT_KEY_MENU_ATTR, type SoftKeyMenuKey } from "@/lib/input/guidance";
 import { stepFocusWithinOverlay } from "@/lib/input/ringDom";
 import type { RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 import type { RemoteInputControlsMenuItem } from "@/components/remoteInput/RemoteInputControlsMenu";
@@ -45,7 +45,9 @@ export interface RemoteInputKeypadControlsOptions {
  *
  * Driving (the default): every key goes to the C64, and the sheet tells the app-wide navigation
  * to leave its keys alone, so Up or Down can never park focus on a control that the next OK would
- * press instead of firing. The right soft key opens a menu of the sheet's controls.
+ * press instead of firing. The right soft key opens a menu of the sheet's controls. While the
+ * keypad types on the C64, the right soft key deletes, as in the app's T9 fields, and Back opens
+ * the menu instead of closing the sheet.
  *
  * Operating the sheet ("Other controls", or "Options"): nothing goes to the C64; the ordinary
  * overlay navigation walks the sheet's controls and OK presses them. Back returns to driving.
@@ -55,6 +57,7 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
     options;
   const [driving, setDriving] = useState(true);
   const keysGoToTheC64 = driving && keypadDrivesTheC64;
+  const menuKey: SoftKeyMenuKey = keysGoToTheC64 && outputMode === "type" ? "back" : "softRight";
   const inGameMode = gameModeAvailable && immersive;
   const [menuOpen, setMenuOpen] = useState(false);
   const focusAfterMenuRef = useRef<FocusAfterMenu>("sheet");
@@ -110,16 +113,15 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
         : { id: "game", label: "Game Mode", onSelect: options.onEnterGameMode },
     );
   }
-  items.push(
-    { id: "controls", label: "Other controls", onSelect: () => operateTheSheet("first-control") },
-    { id: "release-all", label: "Release all", onSelect: options.onReleaseAll },
-    { id: "close", label: "Close Remote Input", onSelect: options.onClose },
-  );
+  items.push({ id: "controls", label: "Other controls", onSelect: () => operateTheSheet("first-control") });
+  if (!inGameMode) items.push({ id: "release-all", label: "Release all", onSelect: options.onReleaseAll });
+  items.push({ id: "close", label: "Close Remote Input", onSelect: options.onClose });
 
   /** True when the key is the sheet's to handle here and must not reach the C64. */
   const interceptKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>): boolean => {
       if (resolveSemanticAction(resolveInputProfile("keypad"), event) === "softRight") {
+        if (menuKey === "back" && !menuOpen) return false;
         event.preventDefault();
         setMenuOpen((wasOpen) => !wasOpen);
         return true;
@@ -128,22 +130,26 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
       if (menuOpen) return true;
       return !driving;
     },
-    [menuOpen, driving],
+    [menuOpen, driving, menuKey],
   );
 
   const onEscapeKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (driving) return;
+      if (driving && menuKey === "softRight") return;
       event.preventDefault();
+      if (driving) {
+        setMenuOpen(true);
+        return;
+      }
       setDriving(true);
       focusSheet();
     },
-    [driving],
+    [driving, menuKey],
   );
 
   const sheetProps = {
-    ...(keysGoToTheC64 ? { [SKIP_ATTR]: "" } : {}),
-    [SOFT_KEY_MENU_ATTR]: "",
+    ...(keysGoToTheC64 ? { [SKIP_ATTR]: "", [OWNS_KEYS_ATTR]: "" } : {}),
+    [SOFT_KEY_MENU_ATTR]: menuKey,
     onEscapeKeyDown,
   };
 

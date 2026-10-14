@@ -338,4 +338,61 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       [],
     );
   });
+
+  test("Remote Input's keypad menu opens on its first item, and every item is on screen and big enough @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openRemoteInput = page
+      .locator('[data-slot-active="true"]')
+      .getByTestId("home-machine-inline-openRemoteInput");
+    expect(await ringFocus(page, openRemoteInput), "The ring could not reach Remote Input on Home").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(sheet).toBeVisible();
+
+    await page.keyboard.press("F2");
+    const menu = page.getByTestId("remote-input-controls-menu");
+    await expect(menu).toBeVisible();
+    const items = menu.locator('[data-testid^="remote-input-menu-"]');
+    const count = await items.count();
+    expect(count).toBeGreaterThanOrEqual(4);
+    await expect(items.first()).toBeFocused();
+    const bar = page.getByTestId("keypad-guidance-bar");
+    await expect(bar).toHaveAttribute("data-visible", "true");
+    await expect(bar.getByTestId("keypad-guidance-center")).toContainText("Select");
+
+    const problems: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const item = items.nth(index);
+      await expect(item).toBeFocused();
+      const measured = await item.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          label: element.textContent?.trim() ?? "",
+          width: rect.width,
+          height: rect.height,
+          onScreen:
+            rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth,
+          fontPx: Number.parseFloat(window.getComputedStyle(element).fontSize),
+        };
+      });
+      if (measured.width < 44 || measured.height < 44) {
+        problems.push(`${measured.label}: ${Math.round(measured.width)}x${Math.round(measured.height)}`);
+      }
+      if (!measured.onScreen) problems.push(`${measured.label}: selected but not on screen`);
+      if (measured.fontPx < 14) problems.push(`${measured.label}: ${measured.fontPx}px text`);
+      if (index < count - 1) await page.keyboard.press("ArrowDown");
+    }
+    expect(problems, `Keypad menu items that fail the keypad and size rules:\n  ${problems.join("\n  ")}`).toEqual([]);
+
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(sheet).toBeFocused();
+  });
 });

@@ -587,6 +587,33 @@ test.describe("Small screen ergonomics", () => {
     expect(problems, `Below the ${MIN_TEXT_PX}px text or ${MIN_TARGET_PX}px target floor`).toEqual([]);
   });
 
+  test("Remote Input's keypad menu meets the text and target floors @layout", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.locator('[data-slot-active="true"]').getByTestId("home-machine-inline-openRemoteInput").click();
+    await expect(page.getByTestId("remote-input-sheet")).toBeVisible();
+    await page.keyboard.press("F2");
+    await expect(page.getByTestId("remote-input-controls-menu")).toBeVisible();
+
+    const text = (await collectTextViolations(page, MIN_TEXT_PX)) as Swept<TextViolation>;
+    expect(text.inspected, "Remote Input rendered almost no text to measure").toBeGreaterThanOrEqual(MIN_TEXT_ELEMENTS);
+    expect(
+      text.violations,
+      `Text below the ${MIN_TEXT_PX}px floor with Remote Input's keypad menu open:\n` +
+        text.violations.map((v) => `  ${v.fontPx}px  ${v.selector}  "${v.text}"`).join("\n"),
+    ).toEqual([]);
+
+    const targets = (await collectTargetViolations(page, MIN_TARGET_PX)) as Swept<TargetViolation>;
+    expect(targets.inspected, "Remote Input rendered almost no controls to measure").toBeGreaterThanOrEqual(
+      MIN_TARGETS,
+    );
+    expect(
+      targets.violations,
+      `Controls below the ${MIN_TARGET_PX}px target size with Remote Input's keypad menu open:\n` +
+        targets.violations.map((v) => `  ${v.width}x${v.height}  ${v.selector}  "${v.label}"`).join("\n"),
+    ).toEqual([]);
+  });
+
   test("body text is not stepped down to fit the smallest screen @layout", async ({ page }) => {
     // Every tab, not just Home. Home renders no paragraph-like prose at all - it is tiles
     // and controls - so when this test only visited Home it inspected zero elements and

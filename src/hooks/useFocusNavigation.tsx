@@ -54,6 +54,7 @@ import {
   getInputModality,
   isHorizontalKeyOwner,
   normalizeKeyEvent,
+  OWNS_KEYS_ATTR,
   SKIP_ATTR,
   setInputModality,
   subscribeInputModality,
@@ -584,7 +585,8 @@ export const FocusNavigationProvider = ({
       // Menus/listboxes/poppers are deliberately excluded: Radix already drives Up/Down inside
       // those itself (a Select's own option highlighting), and re-walking them here would
       // fight that with a second, DOM-focus-based cursor.
-      const overlayOwnsItsKeys = event.target instanceof Element && event.target.closest(`[${SKIP_ATTR}]`) !== null;
+      const overlayOwnsItsKeys =
+        event.target instanceof Element && event.target.closest(`[${OWNS_KEYS_ATTR}]`) !== null;
       if ((action === "dpadUp" || action === "dpadDown") && !overlayOwnsItsKeys) {
         const overlay = event.target instanceof Element ? event.target.closest(DIALOG_ANCESTOR_SELECTOR) : null;
         if (overlay) {

@@ -57,6 +57,7 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
+import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { SKIP_ATTR } from "@/lib/input";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 import { SEARCH_RECENT_KEY } from "@/lib/search/history";
@@ -531,6 +532,46 @@ describe("SearchOverlay", () => {
 
       expect(notCancelled).toBe(false);
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
+    });
+  });
+
+  describe("with the keypad after a tap", () => {
+    const renderOverlayInApp = () =>
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <MemoryRouter>
+            <FocusNavigationProvider enabled>
+              <SearchOverlayHost />
+            </FocusNavigationProvider>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+    it("moves on from the close button a tap left focus on, with Down and then Up", async () => {
+      renderOverlayInApp();
+      await open();
+      const close = screen.getByTestId("search-close");
+      close.focus();
+
+      fireEvent.keyDown(close, { key: "ArrowDown", code: "ArrowDown" });
+      const next = document.activeElement;
+      expect(next).not.toBe(close);
+      expect(screen.getByTestId("search-overlay")).toContainElement(next as HTMLElement);
+
+      fireEvent.keyDown(next ?? close, { key: "ArrowUp", code: "ArrowUp" });
+      expect(document.activeElement).toBe(close);
+    });
+
+    it("moves on from a chip a tap left focus on", async () => {
+      renderOverlayInApp();
+      await open();
+      const [chip] = screen.getAllByTestId(/^search-chip-/);
+      chip.focus();
+
+      fireEvent.keyDown(chip, { key: "ArrowDown", code: "ArrowDown" });
+
+      expect(document.activeElement).not.toBe(chip);
+      expect(screen.getByTestId("search-overlay")).toContainElement(document.activeElement as HTMLElement);
     });
   });
 });

@@ -26,6 +26,12 @@
 /** Marks a subtree as off-limits to the focus ring (skipped during discovery). */
 export const SKIP_ATTR = "data-key-nav-skip";
 
+/**
+ * Marks an open overlay that answers the D-pad and OK itself wherever focus is inside it, so the
+ * overlay navigation neither moves DOM focus nor presses OK there. {@link SKIP_ATTR} alone does not.
+ */
+export const OWNS_KEYS_ATTR = "data-key-nav-owns-keys";
+
 /** Declares an element a focus group (its discovered descendants become children). Value is an optional id. */
 export const GROUP_ATTR = "data-focus-group";
 

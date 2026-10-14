@@ -40,8 +40,10 @@ import {
   openOverlayOffersSoftKeyMenu,
   resolveGuidanceLabels,
   resolveSoftKeyMenuOverlayLabels,
+  resolveSoftKeyMenuPanelLabels,
   SKIP_ATTR,
   SOFT_KEY_MENU_ATTR,
+  SOFT_KEY_MENU_PANEL_ATTR,
   type GuidanceLabels,
   type GuidanceState,
 } from "@/lib/input";
@@ -116,12 +118,18 @@ const RouteChangeRefresh = ({ onRouteChange }: { onRouteChange: () => void }) =>
 
 const isGameModeShortcutPath = (pathname: string): boolean => GAME_MODE_SHORTCUT_PATHS.has(pathname);
 
-/** Labels for a focused dialog that drives its own keys and opens a menu on the right soft key. */
+const dialogTitle = (dialog: Element): string | null =>
+  accessibleLabelFor(document.getElementById(dialog.getAttribute("aria-labelledby") ?? ""));
+
+/** Labels for a focused dialog that drives its own keys and opens a menu of its own, or for that menu. */
 const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
-  const overlay = document.activeElement?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`) ?? null;
+  const focused = document.activeElement;
+  const panel = focused?.closest(`[role="dialog"][${SOFT_KEY_MENU_PANEL_ATTR}]`);
+  if (panel) return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel));
+  const overlay = focused?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`);
   if (!overlay) return null;
-  const title = document.getElementById(overlay.getAttribute("aria-labelledby") ?? "");
-  return resolveSoftKeyMenuOverlayLabels(visible, accessibleLabelFor(title));
+  const menuKey = overlay.getAttribute(SOFT_KEY_MENU_ATTR) === "back" ? "back" : "softRight";
+  return resolveSoftKeyMenuOverlayLabels(visible, dialogTitle(overlay), menuKey);
 };
 
 /**
