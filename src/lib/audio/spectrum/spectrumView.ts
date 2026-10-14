@@ -393,7 +393,8 @@ export class SpectrumView {
     const receivedAt = this.now();
     if (frame.clipped) this.clipUntil = receivedAt + CLIP_LAMP_HOLD_MS;
     for (let channel = 0; channel < count; channel++) {
-      if (channels?.[channel]?.clipped) this.channelClipUntil[channel] = receivedAt + CLIP_LAMP_HOLD_MS;
+      const clipped = channels ? channels[channel]?.clipped : frame.clipped;
+      if (clipped) this.channelClipUntil[channel] = receivedAt + CLIP_LAMP_HOLD_MS;
     }
     if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
   }
@@ -448,7 +449,7 @@ export class SpectrumView {
     this.clipTimer = setTimeout(
       () => {
         this.clipTimer = null;
-        this.paint(false);
+        this.paint(this.reducedMotion());
         this.emitReadout(this.now(), true);
       },
       this.clipUntil - nowMs + 5,
@@ -479,6 +480,7 @@ export class SpectrumView {
       elapsed,
       reduced ? SPECTRUM_BALLISTICS_REDUCED : SPECTRUM_BALLISTICS,
     );
+    this.catchMeterPeaks();
     this.paint(reduced);
     const previousDrawAt = this.lastDrawAt;
     this.lastDrawAt = nowMs;
@@ -487,6 +489,19 @@ export class SpectrumView {
     if (previousDrawAt === 0) return;
     const changed = this.controller.report(nowMs, this.now() - started, nowMs - previousDrawAt);
     if (changed) this.applyTier(changed);
+  }
+
+  private catchMeterPeaks(): void {
+    const { levels, peaks, holdMsLeft } = this.meterBallistics;
+    for (let i = 1; i < levels.length; i += 2) {
+      const target = this.meterTargets[i];
+      if (target <= levels[i]) continue;
+      levels[i] = target;
+      if (target >= peaks[i]) {
+        peaks[i] = target;
+        holdMsLeft[i] = SPECTRUM_BALLISTICS.peakHoldMs;
+      }
+    }
   }
 
   private paint(reducedMotion: boolean): void {

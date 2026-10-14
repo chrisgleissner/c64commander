@@ -165,7 +165,7 @@ export interface FrameDrawOptions {
 }
 
 /** Colour steps used by the lowest tier, which skips the gradient to save fill cost. */
-const FLAT_STEPS_DB = [SPECTRUM_DISPLAY_MIN_DB, -48, -30, -14, -4, SPECTRUM_DISPLAY_MAX_DB] as const;
+const FLAT_STEPS_DB = [SPECTRUM_DISPLAY_MIN_DB, -48, -30, -16, -9, -4, SPECTRUM_DISPLAY_MAX_DB] as const;
 
 const drawFlatBar = (
   ctx: SpectrumContext,

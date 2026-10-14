@@ -30,7 +30,7 @@ export const DARK_PANEL_STOPS: readonly LevelColorStop[] = [
   { db: -16, lightness: 0.68, chroma: 0.17, hue: 135 },
   { db: -9, lightness: 0.78, chroma: 0.17, hue: 100 },
   { db: -4, lightness: 0.8, chroma: 0.19, hue: 58 },
-  { db: SPECTRUM_DISPLAY_MAX_DB, lightness: 0.82, chroma: 0.22, hue: 27 },
+  { db: SPECTRUM_DISPLAY_MAX_DB, lightness: 0.74, chroma: 0.23, hue: 27 },
 ];
 
 export const LIGHT_PANEL_STOPS: readonly LevelColorStop[] = [

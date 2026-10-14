@@ -222,6 +222,49 @@ describe("SpectrumView", () => {
     t.view.dispose();
   });
 
+  it("labels a bridge-reported mono channel Mono and keeps a single row", async () => {
+    const t = setup({ frames: () => frame({ channels: [{ id: "mono", rmsDb: -20, peakDb: -6, clipped: false }] }) });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(150);
+    expect(t.layerCtx.fillText.mock.calls.some(([text]) => text === "Mono")).toBe(true);
+    const rowLabels = t.layerCtx.fillText.mock.calls
+      .map(([text]) => text)
+      .filter((text) => ["L", "R", "Mix", "Mono"].includes(text));
+    expect(rowLabels.at(-1)).toBe("Mono");
+    t.view.dispose();
+  });
+
+  it("marks the single Mix meter as clipped when an older bridge reports clipping", async () => {
+    const t = setup({ frames: () => frame({ channels: undefined, clipped: true }) });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(100);
+    expect(t.ctx.fills.some((f) => f.w === 6 && f.h === 14)).toBe(true);
+    t.view.dispose();
+  });
+
+  it("raises the held meter peak to a one-frame transient at once", async () => {
+    let sequence = 0;
+    const t = setup({
+      frames: () =>
+        frame({
+          sequence: ++sequence,
+          channels: [
+            { id: "left", rmsDb: -60, peakDb: sequence === 3 ? 0 : -60, clipped: false },
+            { id: "right", rmsDb: -60, peakDb: -60, clipped: false },
+          ],
+        }),
+    });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(120);
+    const capWidth = 3;
+    const caps = t.ctx.fills.filter((f) => f.h === 18 && f.y === 8);
+    expect(caps.some((f) => Math.abs(f.x + f.w - 294) <= capWidth)).toBe(true);
+    t.view.dispose();
+  });
+
   it("shows one honest Mix meter for an older bridge with only aggregate levels", async () => {
     const t = setup({ frames: () => frame({ channels: undefined }) });
     t.view.resize(300, 234, 1);
