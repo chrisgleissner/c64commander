@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -94,6 +94,7 @@ export function LightingSummaryCard({
   testIdPrefix,
 }: LightingSummaryCardProps) {
   const { configWritePending, resolveConfigValue, updateConfigValue } = useSharedConfigActions();
+  const labelId = useId();
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category });
   const unavailableLabel = CONFIG_UNAVAILABLE_LABEL;
   // While the category read is outstanding every item looks unsupported, because
@@ -303,7 +304,9 @@ export function LightingSummaryCard({
       <p className="text-xs font-semibold text-primary uppercase tracking-wider">{sectionLabel}</p>
       <div className="space-y-2 text-xs">
         <div className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-2">
-          <span className="text-muted-foreground">Mode</span>
+          <span id={`${labelId}-mode`} className="text-muted-foreground">
+            Mode
+          </span>
           <Select
             value={modeSelectValue}
             onValueChange={(value) =>
@@ -316,7 +319,11 @@ export function LightingSummaryCard({
             }
             disabled={!isActive || !modeSupported || isPending("LedStrip Mode")}
           >
-            <SelectTrigger className={selectTriggerClassName} data-testid={`${testIdPrefix}-mode`}>
+            <SelectTrigger
+              className={selectTriggerClassName}
+              data-testid={`${testIdPrefix}-mode`}
+              aria-labelledby={`${labelId}-mode`}
+            >
               <SelectValue placeholder={modeValue} />
             </SelectTrigger>
             <SelectContent>
@@ -349,7 +356,9 @@ export function LightingSummaryCard({
         ) : null}
 
         <div className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-2">
-          <span className="text-muted-foreground">Pattern</span>
+          <span id={`${labelId}-pattern`} className="text-muted-foreground">
+            Pattern
+          </span>
           <Select
             value={patternSelectValue}
             onValueChange={(value) =>
@@ -362,7 +371,11 @@ export function LightingSummaryCard({
             }
             disabled={!isActive || !patternSupported || isPending("LedStrip Pattern")}
           >
-            <SelectTrigger className={selectTriggerClassName} data-testid={`${testIdPrefix}-pattern`}>
+            <SelectTrigger
+              className={selectTriggerClassName}
+              data-testid={`${testIdPrefix}-pattern`}
+              aria-labelledby={`${labelId}-pattern`}
+            >
               <span>{formatLightingPatternLabel(patternValue)}</span>
             </SelectTrigger>
             <SelectContent>
@@ -376,7 +389,9 @@ export function LightingSummaryCard({
         </div>
 
         <div className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-2">
-          <span className="text-muted-foreground">Color</span>
+          <span id={`${labelId}-color`} className="text-muted-foreground">
+            Color
+          </span>
           <Select
             value={fixedColorSelectValue}
             onValueChange={(value) =>
@@ -389,7 +404,11 @@ export function LightingSummaryCard({
             }
             disabled={!isActive || !fixedColorSupported || isPending("Fixed Color")}
           >
-            <SelectTrigger className={selectTriggerClassName} data-testid={`${testIdPrefix}-color`}>
+            <SelectTrigger
+              className={selectTriggerClassName}
+              data-testid={`${testIdPrefix}-color`}
+              aria-labelledby={`${labelId}-color`}
+            >
               <div className="flex items-center gap-2">
                 {(() => {
                   const rgb = getLedColorRgb(fixedColorValue);
@@ -471,7 +490,9 @@ export function LightingSummaryCard({
         />
 
         <div className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-2">
-          <span className="text-muted-foreground">Tint</span>
+          <span id={`${labelId}-tint`} className="text-muted-foreground">
+            Tint
+          </span>
           <Select
             value={tintSelectValue}
             onValueChange={(value) =>
@@ -479,7 +500,11 @@ export function LightingSummaryCard({
             }
             disabled={!isActive || !tintSupported || isPending("Color tint")}
           >
-            <SelectTrigger className={selectTriggerClassName} data-testid={`${testIdPrefix}-tint`}>
+            <SelectTrigger
+              className={selectTriggerClassName}
+              data-testid={`${testIdPrefix}-tint`}
+              aria-labelledby={`${labelId}-tint`}
+            >
               <SelectValue placeholder={tintValue} />
             </SelectTrigger>
             <SelectContent>
@@ -493,7 +518,9 @@ export function LightingSummaryCard({
         </div>
 
         <div className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-2">
-          <span className="text-muted-foreground">SID Select</span>
+          <span id={`${labelId}-sid-select`} className="text-muted-foreground">
+            SID Select
+          </span>
           <Select
             value={sidSelectSelectValue}
             onValueChange={(value) =>
@@ -506,7 +533,11 @@ export function LightingSummaryCard({
             }
             disabled={!isActive || !sidSelectSupported || isPending("LedStrip SID Select")}
           >
-            <SelectTrigger className={selectTriggerClassName} data-testid={`${testIdPrefix}-sid-select`}>
+            <SelectTrigger
+              className={selectTriggerClassName}
+              data-testid={`${testIdPrefix}-sid-select`}
+              aria-labelledby={`${labelId}-sid-select`}
+            >
               <SelectValue placeholder={sidSelectValue} />
             </SelectTrigger>
             <SelectContent>
