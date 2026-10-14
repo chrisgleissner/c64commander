@@ -91,7 +91,7 @@
   },
   {
     "name": "droid_app.start_app",
-    "description": "Launch the application, by explicit activity with am start -W, or through the launcher intent. Returns the resumed activity and, when am start reported it, the measured total start time.",
+    "description": "Launch the application, by explicit activity with am start -W, or through the launcher intent. Returns the resumed activity and, when am start reported it, the measured total start time. On a phone whose Android apps run in a container and a host window query is configured, the host is also asked which window it shows; the container's window is raised when another is in front, and the call fails when it stays behind. hostWindow reports whether the host was asked and, when it was not, why.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -105,7 +105,7 @@
         },
         "activity": {
           "type": "string",
-          "description": "Activity name, e.g. .MainActivity. Default .MainActivity."
+          "description": "Activity name, e.g. .MainActivity. Default: the package's launcher activity as the package manager resolves it, or .MainActivity when it resolves none."
         },
         "waitForResume": {
           "type": "boolean",

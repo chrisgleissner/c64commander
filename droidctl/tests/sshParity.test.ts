@@ -18,9 +18,9 @@ import { encodePng } from "../src/png.js";
 import { ALL_TOOL_NAMES } from "../src/tools/toolNames.js";
 import { AdbTransport } from "../src/transport/adb.js";
 import { FakeTransport } from "../src/transport/fake.js";
-import { CONTAINER_ADB_ONLY } from "../src/transport/ssh.js";
+import { CONTAINER_ADB_ONLY, FORCED_REPROBE_MIN_MS } from "../src/transport/ssh.js";
 import { createTestContext, invoke } from "./support/harness.js";
-import { FakePhone, type PhoneScenario, usbPhone } from "./support/sshFakes.js";
+import { FakePhone, type PhoneScenario, TEST_HOST_WINDOW, usbPhone } from "./support/sshFakes.js";
 
 const PACKAGE = "uk.gleissner.c64commander";
 const SSH_TARGET = "ssh:defaultuser@192.168.2.15";
@@ -133,7 +133,8 @@ function toolCalls(
 
 /** Target identity and artifact locations differ by construction; everything else must match. */
 function comparable(data: Record<string, unknown>): Record<string, unknown> {
-  const { targetId: _t, transport: _k, serial: _s, connection: _c, ...rest } = data;
+  // hostWindow is the ssh transport's own view of the host, like connection.
+  const { targetId: _t, transport: _k, serial: _s, connection: _c, hostWindow: _w, ...rest } = data;
   return JSON.parse(
     JSON.stringify(rest, (key, value) =>
       typeof value === "string" && key.endsWith("Path") ? path.basename(value) : value,
@@ -265,6 +266,166 @@ describe("parity: container attach route against an ordinary adb target", () => 
       expect(envelope.error.message, name).toContain("[container-adb-disabled]");
     }
     expect(attached.phone.deviceShellCalls).toEqual([]);
+  });
+
+  it("probes again before refusing, so a container adb enabled after the last probe is used at once", async () => {
+    const attached = await containerAttach();
+    const targetId = SSH_TARGET;
+    expect((await invoke("droid_target.list_targets", {}, attached.ctx)).ok).toBe(true);
+    expect(attached.phone.loginProbes()).toBe(1);
+
+    attached.phone.scenario.listeners = ["00000000000000000000000000000000:15B3"];
+    attached.phone.scenario.endpoints = { "127.0.0.1:5555": "device" };
+    // Turning adb on inside the container takes the user longer than the re-probe rate limit.
+    attached.phone.system.clock += FORCED_REPROBE_MIN_MS;
+    const forward = await invoke(
+      "droid_device.forward_webview",
+      { targetId, package: PACKAGE, localPort: 9222 },
+      attached.ctx,
+    );
+
+    expect(forward.ok).toBe(true);
+    expect(attached.phone.loginProbes()).toBe(2);
+  });
+
+  it("forces a fresh probe on a refusal at most once every few seconds per host", async () => {
+    const attached = await containerAttach();
+    const targetId = SSH_TARGET;
+    const refused = () => invoke("droid_capture.ui_hierarchy", { targetId }, attached.ctx);
+    expect((await invoke("droid_target.list_targets", {}, attached.ctx)).ok).toBe(true);
+    expect(attached.phone.loginProbes()).toBe(1);
+    attached.phone.system.clock += FORCED_REPROBE_MIN_MS;
+
+    expect((await refused()).ok).toBe(false);
+    expect(attached.phone.loginProbes()).toBe(2);
+    expect((await refused()).ok).toBe(false);
+    expect(attached.phone.loginProbes()).toBe(2);
+
+    attached.phone.system.clock += FORCED_REPROBE_MIN_MS;
+    expect((await refused()).ok).toBe(false);
+    expect(attached.phone.loginProbes()).toBe(3);
+  });
+});
+
+describe("start_app and the window the host shows", () => {
+  const BRIDGE = "/usr/libexec/container/window-bridge";
+  const CONFIG = "/home/tester/.config/droidctl/ssh.json";
+  const start = (route: Route) =>
+    invoke("droid_app.start_app", { targetId: route.targetId, package: PACKAGE, waitForResume: true }, route.ctx);
+  const configureWindow = (route: Route) =>
+    route.phone.system.files.set(CONFIG, JSON.stringify({ defaults: { hostWindow: TEST_HOST_WINDOW } }));
+  const configured = async (route: Promise<Route>) => {
+    const ready = await route;
+    configureWindow(ready);
+    return ready;
+  };
+
+  it("raises the container's window when the host keeps its own home screen in front", async () => {
+    const attached = await configured(containerAttach());
+    attached.phone.scenario.hostWindow = { before: "0|", bridge: BRIDGE, after: `77|${BRIDGE}`, raiseOk: true };
+
+    const result = await start(attached);
+
+    expect(result.ok).toBe(true);
+    expect(result.data.hostWindow).toEqual({
+      checked: true,
+      reason: null,
+      known: true,
+      containerInFront: true,
+      raised: true,
+      topmost: `77|${BRIDGE}`,
+    });
+    const [call] = attached.phone.hostWindowCalls;
+    expect(call!.prefix).toEqual(["sudo", "-n"]);
+    expect(call!.script).toContain("^/usr/libexec/container/[^/]+-bridge$");
+    expect(call!.script).toContain("/proc/[0-9]*/cmdline");
+  });
+
+  it("fails when the container's window cannot be brought in front, since the app would receive no keys", async () => {
+    const attached = await configured(containerAttach());
+    attached.phone.scenario.hostWindow = { before: "0|", bridge: BRIDGE, after: `77|${BRIDGE}`, raiseOk: false };
+
+    const result = await start(attached);
+
+    expect(result.ok).toBe(false);
+    expect(result.error.message).toMatch(/host shows another window in front \(topmost: 0\|\)/);
+  });
+
+  it("leaves a container window that is already in front alone", async () => {
+    const attached = await configured(containerAttach());
+    attached.phone.scenario.hostWindow = { before: `77|${BRIDGE}`, bridge: BRIDGE, after: "", raiseOk: true };
+
+    const result = await start(attached);
+
+    expect(result.data.hostWindow).toMatchObject({ containerInFront: true, raised: false });
+  });
+
+  const adbRouted = (overrides: Partial<PhoneScenario>) =>
+    configured(
+      sshRoute({
+        listeners: ["00000000:15B3"],
+        endpoints: { "127.0.0.1:5555": "device" },
+        helpers: ["/usr/bin/container-attach"],
+        hostWindow: { before: "0|", bridge: BRIDGE, after: `77|${BRIDGE}`, raiseOk: true },
+        ...overrides,
+      }),
+    );
+
+  it("uses sudo for the window check on the container adb route when the login user has it", async () => {
+    const route = await adbRouted({ sudo: true, rootLogin: false });
+
+    const result = await start(route);
+
+    expect(result.data.hostWindow).toMatchObject({ checked: true, containerInFront: true, raised: true });
+    expect(route.phone.hostWindowCalls[0]!.destination).toBe("defaultuser@192.168.2.15");
+    expect(route.phone.hostWindowCalls[0]!.prefix).toEqual(["sudo", "-n"]);
+  });
+
+  it("logs in as root for the window check on the container adb route when that is the only way to root", async () => {
+    const route = await adbRouted({ sudo: false, rootLogin: true });
+
+    const result = await start(route);
+
+    expect(result.data.hostWindow).toMatchObject({ containerInFront: true, raised: true });
+    expect(route.phone.hostWindowCalls[0]!.destination).toBe("root@192.168.2.15");
+  });
+
+  it("says why when the window query fails, instead of leaving the check out", async () => {
+    const route = await adbRouted({ sudo: false, rootLogin: false });
+
+    const result = await start(route);
+
+    expect(result.ok).toBe(true);
+    expect(result.data.hostWindow).toMatchObject({ checked: false, known: false });
+    expect(result.data.hostWindow.reason).toMatch(/as root exited 255: .*Permission denied/);
+  });
+
+  it("reports the check as not configured and does not ask the host without a window query", async () => {
+    const attached = await containerAttach();
+    attached.phone.scenario.hostWindow = { before: "0|", bridge: BRIDGE, after: `77|${BRIDGE}`, raiseOk: true };
+
+    const result = await start(attached);
+
+    expect(result.ok).toBe(true);
+    expect(result.data.hostWindow).toEqual({
+      checked: false,
+      reason: "not configured",
+      known: false,
+      containerInFront: null,
+      raised: false,
+      topmost: null,
+    });
+    expect(attached.phone.hostWindowCalls).toHaveLength(0);
+  });
+
+  it("reports an unknown window where the host offers no answer to the configured query", async () => {
+    const attached = await configured(containerAttach());
+
+    const result = await start(attached);
+
+    expect(result.ok).toBe(true);
+    expect(result.data.hostWindow).toMatchObject({ checked: true, known: false, containerInFront: null });
+    expect(attached.phone.hostWindowCalls).toHaveLength(1);
   });
 });
 

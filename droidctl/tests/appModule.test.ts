@@ -147,6 +147,40 @@ describe("droid_app.start_app", () => {
     expect(transport.execArgvLines()).toContain(`am start -W -n ${PACKAGE}/.MainActivity`);
   });
 
+  it("starts the launcher activity the package manager resolves when its class lives in another package", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("cmd package resolve-activity", {
+      stdout: `priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false\n${PACKAGE}/other.pkg.MainActivity\n`,
+    });
+    transport.respondTo("am start", { stdout: "Status: ok\nTotalTime: 90\n" });
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke("droid_app.start_app", { targetId: "adb:TESTSERIAL01", package: PACKAGE }, ctx);
+
+    expect(result.ok).toBe(true);
+    expect(transport.execArgvLines()).toContain(`am start -W -n ${PACKAGE}/other.pkg.MainActivity`);
+  });
+
+  it("falls back to .MainActivity when the package manager resolves no launcher activity", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("cmd package resolve-activity", { stdout: "No activity found\n" });
+    const { ctx } = await createTestContext({ transport });
+
+    await invoke("droid_app.start_app", { targetId: "adb:TESTSERIAL01", package: PACKAGE }, ctx);
+
+    expect(transport.execArgvLines()).toContain(`am start -W -n ${PACKAGE}/.MainActivity`);
+  });
+
+  it("starts the named activity without asking the package manager", async () => {
+    const transport = new FakeTransport();
+    const { ctx } = await createTestContext({ transport });
+
+    await invoke("droid_app.start_app", { targetId: "adb:TESTSERIAL01", package: PACKAGE, activity: ".Settings" }, ctx);
+
+    expect(transport.execArgvLines()).toContain(`am start -W -n ${PACKAGE}/.Settings`);
+    expect(transport.execArgvLines().some((line) => line.startsWith("cmd package"))).toBe(false);
+  });
+
   it("uses the launcher intent when asked", async () => {
     const transport = new FakeTransport();
     transport.respondTo("dumpsys activity activities", { stdout: `mResumedActivity: ${PACKAGE}/.MainActivity` });

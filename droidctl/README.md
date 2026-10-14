@@ -150,8 +150,37 @@ missing prerequisites. A target with no route is still listed; every tool on it 
 
 A host with a working tunnel is not probed again while adb lists the tunnel. A host on the attach route
 is re-checked after 60 s or when its SSH connection ends, and a blocked host after 10 s, so a fixed
-prerequisite is picked up by a later call without restarting droidctl. Tunnels are closed when the MCP
-client disconnects.
+prerequisite is picked up by a later call without restarting droidctl. A tool that the attach route
+cannot run probes the host once more before it refuses, so adb turned on inside the container is used
+by that call rather than after the 60 s interval. Tunnels are closed when the MCP client disconnects.
+
+A restart of the container turns adb off again: `adb_enabled` returns to 0, while
+`persist.adb.tcp.port` keeps its value. While the attach route works, re-enable it with
+`droid_device.run_shell` and
+`["sh", "-c", "settings put global development_settings_enabled 1; setprop persist.adb.tcp.port 5555; settings put global adb_enabled 1"]`.
+The `container-adb-disabled` message says the same.
+
+### Which window the phone shows
+
+The container can report an activity as resumed while the host's compositor keeps its own home screen
+in front. The app then receives no keys, and an Android screenshot still shows it, because
+`screencap` runs inside the container. `droid_app.start_app` can therefore ask the host as well, once
+a host window query is configured (`hostWindow` in `ssh.json`, or the `DROIDCTL_SSH_WINDOW_*`
+variables). Compositors name this API differently, so droidctl has no built-in default.
+
+- **The query.** The compositor is called on the login user's session D-Bus. `topmost` is a method
+  that returns the topmost window's process id as an `int32`. `raise` (optional) is a method that
+  raises the windows of the process whose executable path it is given as a string.
+- **The bridge.** The container's windows belong to a bridge process in the libexec directory named
+  after the attach helper: `/usr/sbin/<name>-attach` gives `/usr/libexec/<name>/*-bridge`. It is
+  found by reading `/proc/*/cmdline`.
+- **Root.** The check runs as root, because a compositor typically raises windows only for a
+  privileged caller. It uses the attach route's session when there is one, otherwise the login user
+  when it is root or has `sudo -n`, otherwise a root login.
+- **The result.** `hostWindow` reports `checked`, `reason`, `known`, `containerInFront`, `raised`
+  and `topmost`. When the host was not asked (`not configured`, no runtime attach helper) or the
+  query failed (timed out, non-zero exit), `checked` is false and `reason` says why. `start_app`
+  fails only when the host answered and the container's window stayed behind after a raise.
 
 ### Missing prerequisites
 
@@ -282,12 +311,28 @@ fields.
 | `DROIDCTL_SSH_IDENTITY`       | Private key file, passed with `IdentitiesOnly=yes`.                                 |
 | `DROIDCTL_SSH_ATTACH_COMMAND` | Command that runs a program inside the container. Replaces detection.              |
 | `DROIDCTL_SSH_CONTAINER_ADB`  | `address:port` of the container's adbd as seen from the phone. Tried first.        |
+| `DROIDCTL_SSH_WINDOW_BUS`     | D-Bus name of the host compositor. Set with `DROIDCTL_SSH_WINDOW_TOPMOST` to enable the window check. |
+| `DROIDCTL_SSH_WINDOW_TOPMOST` | `'<object path> <interface.method>'` returning the topmost window's process id.     |
+| `DROIDCTL_SSH_WINDOW_RAISE`   | `'<object path> <interface.method>'` raising the windows of a process, given its executable path. Optional. |
 
 ```json
 {
   "discovery": true,
   "defaults": { "user": "defaultuser", "identityFile": "~/.ssh/id_ed25519" },
   "hosts": [{ "host": "192.168.2.15", "containerAdb": "127.0.0.1:5555" }]
+}
+```
+
+A host window query, per host or under `defaults` (names here are placeholders for the compositor's
+own):
+
+```json
+{
+  "hostWindow": {
+    "bus": "org.example.Compositor",
+    "topmost": { "path": "/", "method": "org.example.Compositor.topmostWindowPid" },
+    "raise": { "path": "/windows", "method": "org.example.Windows.raiseWindowsOf" }
+  }
 }
 ```
 

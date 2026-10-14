@@ -61,12 +61,27 @@ export function defineExecute<T>(
   };
 }
 
+/**
+ * A refusal is checked against a fresh probe before it is reported, because a capability the cached
+ * probe lacked may have been enabled since, and the caller would otherwise wait out a re-check interval.
+ */
 export async function resolveTarget(ctx: ToolExecutionContext, targetId: string): Promise<ResolvedTargetHandle> {
   const handle = await ctx.transports.resolve(targetId);
-  if (ctx.toolName) {
-    requireCapability(handle, ctx.toolName);
+  const toolName = ctx.toolName;
+  if (!toolName) {
+    return handle;
   }
-  return handle;
+  try {
+    requireCapability(handle, toolName);
+    return handle;
+  } catch (error) {
+    if (!(error instanceof UnsupportedOnTransportError) || handle.transport.forgetProbe?.(handle.target) !== true) {
+      throw error;
+    }
+  }
+  const reprobed = await ctx.transports.resolve(targetId);
+  requireCapability(reprobed, toolName);
+  return reprobed;
 }
 
 /** An unsupported capability is a structured refusal, never a silent no-op. */

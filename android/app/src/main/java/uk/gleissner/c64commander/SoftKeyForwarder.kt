@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.os.Build
 import android.view.KeyEvent
 
 /**
@@ -30,6 +31,9 @@ object SoftKeyForwarder {
 
   fun domCodeFor(keyCode: Int): String? = DOM_CODES[keyCode]
 
+  /** Tells the page a built-in keypad is in use; it survives a reload of the page within the session. */
+  const val BUILT_IN_KEYPAD_SCRIPT = "sessionStorage.setItem('c64.builtInKeypad','1')"
+
   fun keydownScript(domCode: String, repeat: Boolean): String =
     "(function(){var t=document.activeElement||document;" +
       "t.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,cancelable:true," +
@@ -46,7 +50,12 @@ object SoftKeyForwarder {
  * trusted keydown and a form still submits on it. The choice is made once per press, on its first
  * down event, so the press's repeats and its up event are the same key as its down event.
  */
-class SoftKeyRouter {
+class SoftKeyRouter(
+  private val fromHardwareKeypad: (KeyEvent) -> Boolean = ::isFromHardwareKeypad,
+  private val onBuiltInKeypad: () -> Unit = {},
+) {
+  private var builtInKeypadReported = false
+  private val keypadByDevice = HashMap<Int, Boolean>()
   private var okPressInProgress = false
   private var okPressGoesOnAsEnter = false
 
@@ -64,6 +73,19 @@ class SoftKeyRouter {
     dispatch: (KeyEvent) -> Boolean,
     runScript: (String) -> Unit,
   ): Boolean {
+    if (!builtInKeypadReported && event.action == KeyEvent.ACTION_DOWN && isKeypad(event)) {
+      builtInKeypadReported = true
+      onBuiltInKeypad()
+    }
+    if (isKeypadSoftKey(event, KeyEvent.KEYCODE_MENU, LINUX_KEY_MENU)) {
+      return dispatch(withKeyCode(event, KeyEvent.KEYCODE_BACK))
+    }
+    if (isKeypadSoftKey(event, KeyEvent.KEYCODE_BACK, LINUX_KEY_BACK)) {
+      if (event.action == KeyEvent.ACTION_DOWN) {
+        runScript(SoftKeyForwarder.keydownScript(SOFT_RIGHT, event.repeatCount > 0))
+      }
+      return true
+    }
     if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
       if (event.action == KeyEvent.ACTION_DOWN && (event.repeatCount == 0 || !okPressInProgress)) {
         okPressInProgress = true
@@ -71,7 +93,7 @@ class SoftKeyRouter {
       }
       val sendAsEnter = okPressGoesOnAsEnter
       if (event.action == KeyEvent.ACTION_UP) reset()
-      return dispatch(if (sendAsEnter) asEnter(event) else event)
+      return dispatch(if (sendAsEnter) withKeyCode(event, KeyEvent.KEYCODE_ENTER) else event)
     }
     val domCode = SoftKeyForwarder.domCodeFor(event.keyCode) ?: return dispatch(event)
     if (event.action == KeyEvent.ACTION_DOWN) {
@@ -80,12 +102,24 @@ class SoftKeyRouter {
     return true
   }
 
-  private fun asEnter(event: KeyEvent): KeyEvent =
+  /**
+   * Some keypads report their two soft keys as the Linux Menu and Back keys instead of as the
+   * Android soft keys. Their left key is the keypad bar's Back and their right key its Menu, the
+   * opposite of what Menu and Back mean to Android, so they are swapped back here. The scan code
+   * and the device keep a navigation-bar Back gesture and a keyboard's Menu key as they are.
+   */
+  private fun isKeypadSoftKey(event: KeyEvent, keyCode: Int, scanCode: Int): Boolean =
+    event.keyCode == keyCode && event.scanCode == scanCode && isKeypad(event)
+
+  /** Looked up once per input device: the check asks the system which keys the device has. */
+  private fun isKeypad(event: KeyEvent): Boolean = keypadByDevice.getOrPut(event.deviceId) { fromHardwareKeypad(event) }
+
+  private fun withKeyCode(event: KeyEvent, keyCode: Int): KeyEvent =
     KeyEvent(
       event.downTime,
       event.eventTime,
       event.action,
-      KeyEvent.KEYCODE_ENTER,
+      keyCode,
       event.repeatCount,
       event.metaState,
       event.deviceId,
@@ -93,4 +127,21 @@ class SoftKeyRouter {
       event.flags,
       event.source,
     )
+}
+
+private const val LINUX_KEY_MENU = 139
+private const val LINUX_KEY_BACK = 158
+private const val SOFT_RIGHT = "SoftRight"
+
+/**
+ * A built-in keypad with a D-pad, as a keypad handset's keys are. A Bluetooth keyboard or remote is
+ * external, and Android maps its Menu and Back keys to the same scan codes, so it keeps their meaning.
+ */
+internal fun isBuiltInKeypad(isVirtual: Boolean, isExternal: Boolean, hasDpad: Boolean): Boolean =
+  !isVirtual && !isExternal && hasDpad
+
+internal fun isFromHardwareKeypad(event: KeyEvent): Boolean {
+  val device = event.device ?: return false
+  val external = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && device.isExternal
+  return isBuiltInKeypad(device.isVirtual, external, device.hasKeys(KeyEvent.KEYCODE_DPAD_UP).firstOrNull() == true)
 }

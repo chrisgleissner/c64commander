@@ -218,9 +218,12 @@ gates, not a substitute for real Pixel 4 evidence.
 ### Phase 6 — Deploy the latest APK before completion
 
 Before declaring any task complete, deploy the most recent built APK from
-`android/app/build/outputs/apk/` to the attached Pixel 4.
+`android/app/build/outputs/apk/` to the attached test phone.
 
-- Prefer the adb-attached Pixel 4 with serial prefix `9B0` when it is present.
+- When the change touches the `c64u-remote` edition or keypad, compact-screen or
+  constrained-device behaviour, and the keypad handset is attached, deploy the
+  `c64u-remote` APK there (see [The hardware that exists](#the-hardware-that-exists)).
+- Otherwise prefer the adb-attached Pixel 4 with serial prefix `9B0` when it is present.
 - Attempt installation of the newest APK first.
 - If installation fails because an earlier installed copy blocks the update, uninstall the
   existing `uk.gleissner.c64commander` package from that Pixel 4 and retry. **Do this through
@@ -390,10 +393,11 @@ One thing `droidctl` cannot do: evaluate JavaScript inside the app's WebView ove
 scripts/bughunt-cdp.mjs eval`, per the `hil-attach` skill) — this is the one place raw tooling
 outside `droidctl` is expected, not a loophole.
 
-### The hardware that exists — and the keypad handset, which does not
+### The hardware that exists
 
-**The available rig is exactly: the Pixel 4 (adb), the C64U, the U64, and the U2.** That
-is all of it. Plan every gate, task and acceptance criterion against that list.
+**The available rig is: the compact keypad handset (droidctl `ssh:` target), the Pixel 4
+(adb), the C64U, the U64, and the U2.** Plan every gate, task and acceptance criterion
+against that list.
 
 **The U64 is reserved and must not be driven.** It is in use for Software IEC work, so
 every gate, sweep and one-off probe runs against `c64u` and `u2` only. Between them those
@@ -409,20 +413,26 @@ feeds, took two 404s, and reported a healthy cartridge as unhealthy with eight p
 Check any change to Live View, Game Mode, streaming or the health badge against `u2` as
 well as `c64u`.
 
-**The compact keypad handset the `c64u-remote` variant targets does not exist yet.** It
-is unreleased and cannot be tested on, now or by waiting — so:
+**HIL runs go to the keypad handset whenever it is attached.** It is the constrained target
+the `c64u-remote` variant is built for: 320 x 427 CSS px (480x640 at DPR 1.5), a physical
+keypad, and Android apps in a compatibility container on a Linux phone. It is reached over USB
+networking as the droidctl target `ssh:defaultuser@192.168.2.15`, with route `container-adb`.
 
-- **The Pixel 4 stands in for every phone**, that handset included. A result proven on
-  the Pixel 4 is the phone-side result; report it as measured on the Pixel 4 and move on.
-- **Never write a task, gate or "remaining work" item whose venue is that handset.** Such
-  an item is not blocked, it is unrunnable, and it has repeatedly been re-created and
-  re-carried across sessions as though hardware were about to arrive.
-- Where a spec assumes it (e.g. keypad-first / low-power sizing), treat that as a
-  _design constraint to build for_, not a device to measure on: satisfy it by
-  construction, prove what is provable on the Pixel 4, and say plainly which part is
-  unverifiable until the handset ships.
-- The same applies to the `c64u-remote` variant's manual: writing for a keypad handset is
-  fine, testing on one is not.
+- **Check first.** Call `droid_target.list_targets`. If the handset is listed as `device`, run
+  the HIL there with the `c64u-remote` APK (`uk.gleissner.c64uremote`, launch activity
+  `uk.gleissner.c64commander.MainActivity`).
+- **The Pixel 4 is the fallback**, and the device for normal-phone behaviour: the default
+  edition, touch, the soft keyboard, and non-compact display profiles. A run that falls back
+  to the Pixel says so.
+- **The handset is unique and cannot be repaired here.** Never restart its Android
+  container: one restart rebooted the whole phone. Never reboot or flash it, and never
+  change its OS or package repositories. Take a full backup before any state change outside
+  the app.
+- **It reports keys differently from the Pixel**, measured. The soft keys arrive as Android
+  `MENU` / `BACK`. OK arrives as `ENTER`. F1 / F3 have no Android key code and reach the
+  WebView as code `F21` / `F23`. The C= key never reaches the app, because the system uses it
+  as Home. The system input method garbles multi-tap in WebView text fields, so the app keeps
+  it out once the D-pad is used. Measure on the handset instead of inferring from the Pixel.
 
 Physically power-cycling the C64 is a rare, ask-first exception; the U64 may be absent,
 so probe it rather than assuming.
@@ -470,6 +480,11 @@ from this rig.
   `TOO QUIET TO GRADE` rather than a pipeline defect when the level is not there.
 - If no rig is attached, say that plainly in the PR and in the completion summary, and name the
   stages that were not run. Do not describe the work as verified.
+- With the keypad handset attached, the default `--target auto` runs `input`, `search-latency` and
+  `wire` on the handset and the microphone stages on the Pixel, in one table. Without a Pixel,
+  those stages fail the run unless `--target handset` asked for a handset-only run. Both phones
+  need the branch's APK: the `c64u-remote` edition on the handset and the default edition on the
+  Pixel.
 - `--quiet-check` runs everything that makes no sound, for iterating without disturbing anyone.
 - `--only <stage,stage>` runs a subset. Baseline the base commit with `--only` before
   blaming a stage failure on your own branch.

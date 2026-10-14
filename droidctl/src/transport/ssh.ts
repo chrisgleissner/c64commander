@@ -36,6 +36,13 @@ import {
 } from "./sshPrerequisites.js";
 import { type AttachRoute, type HostDiagnosis, HostProber, type SshRouteKind, endpointOf } from "./sshProbe.js";
 import { SshCommandRunner } from "./sshRunner.js";
+import {
+  type HostWindowState,
+  hostWindowCommand,
+  parseHostWindow,
+  runtimeStem,
+  uncheckedHostWindow,
+} from "./sshWindow.js";
 import type {
   CapabilitySupport,
   CommandSink,
@@ -59,6 +66,9 @@ export const BLOCKED_REPROBE_MS = 10_000;
 /** The attach route has no tunnel to watch, so it is re-checked on this interval and on a lost connection. */
 export const ATTACH_REPROBE_MS = 60_000;
 export const TRANSFER_TIMEOUT_MS = 300_000;
+export const HOST_WINDOW_TIMEOUT_MS = 10_000;
+/** A refusal forces a fresh probe at most this often, so repeated refused calls cannot run a probe each. */
+export const FORCED_REPROBE_MIN_MS = 3_000;
 export const PULL_MAX_BYTES = 512 * 1024 * 1024;
 
 export const SSH_DETECTION_ORDER: readonly string[] = [
@@ -296,6 +306,72 @@ export class SshTransport implements Transport {
       }
     }
     return { transport: "ssh", tools, notes };
+  }
+
+  /**
+   * Only a target on the attach route can gain a capability without a reconnect: enabling adb inside
+   * the container makes the container adb route available, which a cached probe would not show.
+   */
+  forgetProbe(target: ResolvedTarget): boolean {
+    const state = this.hosts.get(target.serial);
+    if (state === undefined || state.diagnosis.tunnel !== null || state.diagnosis.attach === null) {
+      return false;
+    }
+    if (this.system.now() - state.probedAt < FORCED_REPROBE_MIN_MS) {
+      return false;
+    }
+    state.probedAt = Number.NEGATIVE_INFINITY;
+    return true;
+  }
+
+  /**
+   * Asks the host which window is in front and, with `raise`, brings the container's window forward
+   * when it is not. Root is used because the compositor raises windows only for a privileged caller:
+   * the attach route's session when there is one, otherwise the login user when it is root or has
+   * `sudo -n`, otherwise a root login. The result always says whether the host was asked, and why not.
+   */
+  async hostWindow(target: ResolvedTarget, raise: boolean): Promise<HostWindowState> {
+    const state = this.hosts.get(target.serial);
+    if (state === undefined) {
+      return uncheckedHostWindow("the target has not been probed");
+    }
+    const window = state.settings.hostWindow;
+    if (window === null) {
+      return uncheckedHostWindow("not configured");
+    }
+    const stem = runtimeStem(state.diagnosis.attachHelpers);
+    if (stem === null) {
+      return uncheckedHostWindow("no attach helper names the container runtime, so its window bridge is unknown");
+    }
+    const login = endpointOf(state.settings);
+    const { attach, loginUid, loginSudo } = state.diagnosis;
+    const [session, rootPrefix] =
+      attach !== null
+        ? [attach.session, attach.rootPrefix]
+        : loginUid === 0
+          ? [login, []]
+          : loginSudo
+            ? [login, ["sudo", "-n"]]
+            : [{ ...login, user: "root" }, []];
+    const outcome = await this.runner.run(
+      target.targetId,
+      session,
+      hostWindowCommand(rootPrefix, login.user, stem, window, raise),
+      { timeoutMs: HOST_WINDOW_TIMEOUT_MS },
+    );
+    if (outcome.kind !== "ran") {
+      return uncheckedHostWindow(`the window query could not run: ${outcome.message}`);
+    }
+    if (outcome.timedOut) {
+      return uncheckedHostWindow(`the window query did not finish within ${HOST_WINDOW_TIMEOUT_MS} ms`);
+    }
+    if (outcome.exitCode !== 0) {
+      const detail = outcome.stderr.trim().split(/\r?\n/).at(-1) ?? "";
+      return uncheckedHostWindow(
+        `the window query as ${session.user} exited ${outcome.exitCode}${detail ? `: ${detail}` : ""}`,
+      );
+    }
+    return parseHostWindow(outcome.stdout.toString("utf8"));
   }
 
   describeConnection(target: ResolvedTarget): Record<string, unknown> {
