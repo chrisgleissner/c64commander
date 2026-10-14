@@ -300,6 +300,22 @@ describe("SpectrumView", () => {
       t.view.dispose();
     });
 
+    it("keeps its estimate of the display frame period when one draw is late", async () => {
+      const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      await t.advance(1, 120);
+      await t.advance(150);
+      const steps = t.requests.filter((request) => (request?.count ?? 1) > 1).map((request) => request!.stepNanos!);
+      expect(steps.length).toBeGreaterThan(4);
+      for (const step of steps) {
+        expect(step).toBeGreaterThan(15e6);
+        expect(step).toBeLessThan(19e6);
+      }
+      t.view.dispose();
+    });
+
     it("records how far each draw was from the display time of the sound it showed", async () => {
       const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
       t.view.resize(300, 234, 1);

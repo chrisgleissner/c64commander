@@ -61,6 +61,7 @@ const FRAMES_PER_READ = 4;
 const LOOK_AHEAD_FRAMES = 3;
 const MAX_PENDING_FRAMES = 16;
 const ALIGNMENT_SAMPLES = 1024;
+const DRAW_GAP_SAMPLES = 16;
 
 export interface SpectrumReadout {
   /** Null while there is no sound to measure. */
@@ -170,6 +171,9 @@ export class SpectrumView {
   private alignmentCount = 0;
   private readonly clock = new NativeClockOffset();
   private frameIntervalMs = 1000 / 60;
+  private readonly gapRing = new Float64Array(DRAW_GAP_SAMPLES);
+  private readonly gapScratch = new Float64Array(DRAW_GAP_SAMPLES);
+  private gapCount = 0;
   private readGeneration = 0;
   private answered = false;
   private lastPollAt = 0;
@@ -367,13 +371,22 @@ export class SpectrumView {
     addLog("info", "Spectrum: quality tier changed", { service: "audio-fx", tier: next.index });
   }
 
+  private noteDrawGap(gapMs: number): void {
+    this.gapRing[this.gapCount % DRAW_GAP_SAMPLES] = Math.min(100, gapMs);
+    this.gapCount += 1;
+    const count = Math.min(this.gapCount, DRAW_GAP_SAMPLES);
+    this.gapScratch.set(this.gapRing);
+    this.gapScratch.subarray(0, count).sort();
+    this.frameIntervalMs = Math.max(8, this.gapScratch[count >> 1]);
+  }
+
   private pollIfDue(nowMs: number): void {
     if (this.pollInFlight) return;
     if (this.alignedMode) {
       const horizonMs = this.pending.length > 0 ? this.pending[this.pending.length - 1].dueMs : this.lastDueMs;
       const stepMs = this.frameIntervalMs;
       if (horizonMs - nowMs > LOOK_AHEAD_FRAMES * stepMs) return;
-      const firstMs = Math.max(nowMs + PRESENT_FRAMES_AHEAD * stepMs, horizonMs + stepMs);
+      const firstMs = nowMs + PRESENT_FRAMES_AHEAD * stepMs;
       this.lastPollAt = nowMs;
       this.read(false, {
         targetNanos: this.clock.nativeNanosAt(firstMs),
@@ -425,6 +438,9 @@ export class SpectrumView {
       return;
     }
     const stepMs = (request?.stepNanos ?? 0) / 1e6;
+    while (this.pending.length > 0 && this.pending[this.pending.length - 1].dueMs >= firstMs - stepMs / 2) {
+      this.pending.pop();
+    }
     this.enqueue(frame, firstMs);
     frame.ahead?.forEach((later, index) => this.enqueue(later, firstMs + (index + 1) * stepMs));
     if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
@@ -580,9 +596,7 @@ export class SpectrumView {
     this.catchMeterPeaks();
     this.paint(reduced);
     const previousDrawAt = this.lastDrawAt;
-    if (previousDrawAt !== 0) {
-      this.frameIntervalMs += (Math.min(50, Math.max(8, nowMs - previousDrawAt)) - this.frameIntervalMs) * 0.1;
-    }
+    if (previousDrawAt !== 0) this.noteDrawGap(nowMs - previousDrawAt);
     this.lastDrawAt = nowMs;
     this.framesDrawn += 1;
     this.emitReadout(nowMs, false);
