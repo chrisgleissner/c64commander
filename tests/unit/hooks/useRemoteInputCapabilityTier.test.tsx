@@ -35,6 +35,7 @@ vi.mock("@/lib/savedDevices/store", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: (...args: unknown[]) => addErrorLogMock(...args),
+  addLog: vi.fn(),
   buildErrorLogDetails: (error: Error, context: Record<string, unknown>) => ({ error: error.message, ...context }),
 }));
 
