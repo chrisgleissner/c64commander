@@ -14,6 +14,7 @@ import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistStorageKey, PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 // Flexible harness allowing custom buildPlaylistItem and initial state
 const usePlaybackHarness = ({
@@ -67,8 +68,8 @@ const usePlaybackHarness = ({
   const [currentIndex, setCurrentIndex] = useState(initialCurrentIndex);
   const [isPlaying, setIsPlaying] = useState(initialIsPlaying);
   const [isPaused, setIsPaused] = useState(initialIsPaused);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [autoAdvanceDueAtMs] = useState<number | null>(initialAutoAdvanceDueAtMs);
   const playedClockRef = useRef({ hydrate: vi.fn() });
@@ -110,10 +111,7 @@ const usePlaybackHarness = ({
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setDurationMsItemId: vi.fn(),

@@ -14,6 +14,7 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -82,8 +83,8 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
-    const [elapsedMs, setElapsedMs] = useState(0);
-    const [playedMs, setPlayedMs] = useState(0);
+    const [playbackTime] = useState(createPlaybackTimeStore);
+    const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
     const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
     const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
     const [trackInstanceId, setTrackInstanceId] = useState(0);
@@ -121,10 +122,7 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       isPaused,
       setIsPaused,
       setIsPlaylistLoading: vi.fn(),
-      elapsedMs,
-      setElapsedMs,
-      playedMs,
-      setPlayedMs,
+      playbackTime,
       durationMs,
       setDurationMs,
       setCurrentSubsongCount,

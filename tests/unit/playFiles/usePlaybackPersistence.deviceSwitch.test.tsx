@@ -14,6 +14,7 @@ import type { PlayableEntry, PlaylistItem, StoredPlaybackSession } from "@/pages
 import { buildPlaylistStorageKey, isStoredSessionFromAnotherDevice } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 const rig = vi.hoisted(() => ({ selectedDeviceId: "device-b", phonePlaying: false }));
 vi.mock("@/lib/savedDevices/store", async (importOriginal) => {
@@ -51,8 +52,8 @@ const useHarness = (playlistStorageKey: string) => {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [settled, setSettled] = useState(false);
   const playedClockRef = useRef({ hydrate: vi.fn() });
@@ -70,10 +71,7 @@ const useHarness = (playlistStorageKey: string) => {
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setDurationMsItemId: vi.fn(),

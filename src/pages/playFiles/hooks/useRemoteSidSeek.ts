@@ -33,6 +33,7 @@ import {
 } from "@/lib/playback/remoteSeek/patchSeekSupport";
 import { parseSidHeaderMetadata, type SidHeaderMetadata } from "@/lib/sid/sidUtils";
 import type { PlaylistItem } from "../types";
+import type { PlaybackTimeStore } from "../playbackTimeStore";
 
 /** The seek handlers the transport card takes, shared by the on-device engine and the C64. */
 export type PlaybackSeekHandlers = {
@@ -51,7 +52,7 @@ type Options = {
   paused?: boolean;
   trackInstanceId: number;
   deviceInfo: DeviceInfo | null | undefined;
-  elapsedMs: number;
+  playbackTime: PlaybackTimeStore;
   durationMs: number | undefined;
   rebasePlaybackPosition: (positionMs: number) => void;
 };
@@ -109,7 +110,7 @@ export const useRemoteSidSeek = ({
   paused = false,
   trackInstanceId,
   deviceInfo,
-  elapsedMs,
+  playbackTime,
   durationMs,
   rebasePlaybackPosition,
 }: Options): { handlers: PlaybackSeekHandlers | null; targetMs: number | null } => {
@@ -132,8 +133,8 @@ export const useRemoteSidSeek = ({
   const seekEpochRef = useRef(0);
   /** A jump has been asked for: running, queued, or a tap on the bar still settling. */
   const jumpAwaited = useCallback(() => jumpingRef.current || dragTimerRef.current !== null, []);
-  const live = useRef({ elapsedMs, durationMs, rebasePlaybackPosition });
-  live.current = { elapsedMs, durationMs, rebasePlaybackPosition };
+  const live = useRef({ playbackTime, durationMs, rebasePlaybackPosition });
+  live.current = { playbackTime, durationMs, rebasePlaybackPosition };
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   /** A probe that met a paused tune, whose clock stands still; it runs again on resume. */
@@ -363,7 +364,9 @@ export const useRemoteSidSeek = ({
   /** Where the tune is now: the last landing until the page's elapsed time has caught up with it. */
   const currentSeconds = useCallback((): number => {
     const landing = latestLandingRef.current;
-    return landing ? landing.seconds + (Date.now() - landing.atMs) / 1000 : live.current.elapsedMs / 1000;
+    return landing
+      ? landing.seconds + (Date.now() - landing.atMs) / 1000
+      : live.current.playbackTime.read().elapsedMs / 1000;
   }, []);
 
   const jump = useCallback(

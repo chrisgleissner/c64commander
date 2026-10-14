@@ -17,7 +17,6 @@ import {
 import { Loader2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
@@ -32,7 +31,9 @@ import {
   NOW_PLAYING_METADATA_SEPARATOR,
   type NowPlayingMetadataSegment,
 } from "@/lib/playback/nowPlayingMetadata";
+import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { TuneDetails } from "./TuneDetails";
+import { readShownPlaybackTime, ShownPlaybackProgress, ShownPlaybackTime } from "./ShownPlaybackTime";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -109,7 +110,8 @@ export type PlaybackControlsCardProps = {
    * on-device engine — the C64 renders the SID itself and cannot be positioned.
    */
   onSeekToFraction?: (fraction: number) => void;
-  progressPercent: number;
+  /** The progress bar and the time labels follow it, so the clock moving re-renders only them. */
+  timeline: PlaybackTimeline;
   /**
    * Everything shown about a seek that is waiting for the renderer, or undefined when none is.
    *
@@ -128,10 +130,6 @@ export type PlaybackControlsCardProps = {
    * will not.
    */
   renderedPercent?: number;
-  elapsedLabel: string;
-  remainingLabel: string;
-  totalLabel: string;
-  remainingTotalLabel: string;
   volumeControls: ReactNode;
   shuffleEnabled: boolean;
   onShuffleChange: (value: boolean) => void;
@@ -340,13 +338,9 @@ export const PlaybackControlsCard = ({
   onScrubEnd,
   isScrubbing = false,
   onSeekToFraction,
-  progressPercent,
+  timeline,
   renderedPercent,
   pendingSeek,
-  elapsedLabel,
-  remainingLabel,
-  totalLabel,
-  remainingTotalLabel,
   volumeControls,
   shuffleEnabled,
   onShuffleChange,
@@ -658,7 +652,7 @@ export const PlaybackControlsCard = ({
             >
               {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
               <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
-              {elapsedLabel}
+              <ShownPlaybackTime timeline={timeline} field="elapsedLabel" />
             </span>
             {onSeekToFraction ? (
               // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
@@ -690,6 +684,7 @@ export const PlaybackControlsCard = ({
                   const step = event.key === "ArrowRight" ? 0.02 : event.key === "ArrowLeft" ? -0.02 : 0;
                   if (step === 0) return;
                   event.preventDefault();
+                  const { progressPercent } = readShownPlaybackTime(timeline);
                   onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
                 }}
               >
@@ -758,8 +753,8 @@ export const PlaybackControlsCard = ({
                       </span>
                     </div>
                   ) : null}
-                  <Progress
-                    value={progressPercent}
+                  <ShownPlaybackProgress
+                    timeline={timeline}
                     className={cn(
                       "relative w-full bg-transparent transition-none",
                       isScrubbing && "ring-2 ring-primary/60",
@@ -771,8 +766,8 @@ export const PlaybackControlsCard = ({
                 </div>
               </button>
             ) : (
-              <Progress
-                value={progressPercent}
+              <ShownPlaybackProgress
+                timeline={timeline}
                 // Scrubbing gets its own look so the moving bar reads as "you are
                 // dragging this", not as playback that has suddenly sped up.
                 className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
@@ -782,7 +777,7 @@ export const PlaybackControlsCard = ({
               />
             )}
             <span className="shrink-0 tabular-nums" data-testid="playback-remaining">
-              {remainingLabel}
+              <ShownPlaybackTime timeline={timeline} field="remainingLabel" />
             </span>
           </div>
           {/* Inline and always visible, never a tooltip: there is no hover on a phone, and this is
@@ -814,8 +809,12 @@ export const PlaybackControlsCard = ({
             className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
             data-testid="playback-counters"
           >
-            <span className="whitespace-nowrap">Total: {totalLabel}</span>
-            <span className="whitespace-nowrap">Remaining: {remainingTotalLabel}</span>
+            <span className="whitespace-nowrap">
+              Total: <ShownPlaybackTime timeline={timeline} field="totalLabel" />
+            </span>
+            <span className="whitespace-nowrap">
+              Remaining: <ShownPlaybackTime timeline={timeline} field="remainingTotalLabel" />
+            </span>
           </div>
         </div>
         {volumeControls}

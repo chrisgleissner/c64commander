@@ -19,6 +19,7 @@ import { peekPlayLaunchMount, recordPlayLaunchMount } from "@/lib/playback/playL
 import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { reportUserError } from "@/lib/uiErrors";
 import { isMachineTransitionActive } from "@/lib/deviceInteraction/deviceActivityGate";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 vi.mock("@/lib/archive/client", () => ({ createArchiveClient: vi.fn() }));
 vi.mock("@/lib/archive/execution", () => ({ buildArchivePlayPlan: vi.fn() }));
@@ -72,8 +73,8 @@ const renderHarness = (initialPlaylist: PlaylistItem[], initiallyPlaying = false
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(initiallyPlaying);
     const [isPaused, setIsPaused] = useState(false);
-    const [elapsedMs, setElapsedMs] = useState(0);
-    const [playedMs, setPlayedMs] = useState(0);
+    const [playbackTime] = useState(createPlaybackTimeStore);
+    const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
     const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
     const playedClockRef = useRef({
       start: vi.fn(),
@@ -94,10 +95,7 @@ const renderHarness = (initialPlaylist: PlaylistItem[], initiallyPlaying = false
       isPaused,
       setIsPaused,
       setIsPlaylistLoading: vi.fn(),
-      elapsedMs,
-      setElapsedMs,
-      playedMs,
-      setPlayedMs,
+      playbackTime,
       durationMs,
       setDurationMs,
       setCurrentSubsongCount: vi.fn(),

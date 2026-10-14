@@ -76,6 +76,7 @@ import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
+import type { PlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -190,10 +191,7 @@ interface UsePlaybackControllerProps {
   setIsPaused: (v: boolean) => void;
   setIsPlaylistLoading: (v: boolean) => void;
 
-  elapsedMs: number;
-  setElapsedMs: (v: number) => void;
-  playedMs: number;
-  setPlayedMs: (v: number) => void;
+  playbackTime: PlaybackTimeStore;
   durationMs: number | undefined;
   setDurationMs: (v: number | undefined) => void;
   setCurrentSubsongCount: (v: number | null) => void;
@@ -308,10 +306,7 @@ export function usePlaybackController({
   isPaused,
   setIsPaused,
   setIsPlaylistLoading,
-  elapsedMs,
-  setElapsedMs,
-  playedMs,
-  setPlayedMs,
+  playbackTime,
   durationMs,
   setDurationMs,
   setCurrentSubsongCount,
@@ -448,13 +443,11 @@ export function usePlaybackController({
   isPlayingRef.current = isPlaying;
   isPausedRef.current = isPaused;
 
-  // HARD19-009: refs synced during render so the machine-execution subscription
-  // below can re-arm auto-advance on an external resume without depending on
-  // (and re-subscribing for) every elapsed/duration change.
+  // HARD19-009: synced during render so the machine-execution subscription below can re-arm
+  // auto-advance on an external resume without re-subscribing for every duration change.
   const durationMsRef = useRef(durationMs);
   durationMsRef.current = durationMs;
-  const elapsedMsRef = useRef(elapsedMs);
-  elapsedMsRef.current = elapsedMs;
+  const { setElapsedMs, setPlayedMs } = playbackTime;
   // Set while Play performs its OWN machine-execution write so the subscription
   // ignores it and only mirrors EXTERNAL transitions (e.g. a Home pause).
   const playInitiatedMachineTransitionRef = useRef(false);
@@ -1732,7 +1725,7 @@ export function usePlaybackController({
         setAutoAdvanceDueAtMs(null);
       } else {
         setIsPaused(false);
-        const currentElapsedMs = elapsedMsRef.current;
+        const currentElapsedMs = playbackTime.read().elapsedMs;
         trackStartedAtRef.current = now - currentElapsedMs;
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -1755,7 +1748,7 @@ export function usePlaybackController({
     autoAdvanceGuardRef,
     trackStartedAtRef,
     durationMsRef,
-    elapsedMsRef,
+    playbackTime,
   ]);
 
   // Defined below; read by Resume after a restart, which starts the tune again where it was.
@@ -1770,7 +1763,7 @@ export function usePlaybackController({
       const item = playlistRef.current[currentIndexRef.current];
       if (restartedItemId && item?.id === restartedItemId) {
         // Resumed the machine before, which was not playing it, and the page showed a tune playing in silence.
-        const resumeAtSeconds = elapsedMs / 1000;
+        const resumeAtSeconds = playbackTime.read().elapsedMs / 1000;
         try {
           await playItem(item, { playlistIndex: currentIndexRef.current });
         } catch (error) {
@@ -1796,6 +1789,7 @@ export function usePlaybackController({
           await local.resume();
           setIsPaused(false);
           writeMachineExecutionFromPlay("running");
+          const { elapsedMs } = playbackTime.read();
           trackStartedAtRef.current = now - elapsedMs;
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
@@ -1856,6 +1850,7 @@ export function usePlaybackController({
               // HARD12-020: publish the resumed state so Home's pause/resume converges with Play.
               writeMachineExecutionFromPlay("running");
               const now = Date.now();
+              const { elapsedMs } = playbackTime.read();
               trackStartedAtRef.current = now - elapsedMs;
               playedClockRef.current.resume(now);
               setPlayedMs(playedClockRef.current.current(now));
@@ -1912,7 +1907,7 @@ export function usePlaybackController({
     }),
     [
       durationMs,
-      elapsedMs,
+      playbackTime,
       isPaused,
       isPlaying,
       trace,
@@ -2324,13 +2319,13 @@ export function usePlaybackController({
   // Neither wall clock behind the progress display knows the engine; a seek that skips this looks like it did nothing.
   const rebasePlaybackPosition = useCallback(
     (positionMs: number) => {
-      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
+      const { elapsedMs } = playbackTime.read();
+      const clockTarget = { positionMs, elapsedMs, paused: isPausedRef.current, now: Date.now() };
       setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
-      elapsedMsRef.current = positionMs;
       setElapsedMs(positionMs);
       rescheduleAutoAdvance(positionMs);
     },
-    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
+    [playbackTime, playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
 
   /**

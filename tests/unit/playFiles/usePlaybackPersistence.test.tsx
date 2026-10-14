@@ -23,6 +23,7 @@ import {
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import { getLogs } from "@/lib/logging";
 import { resolveShownItemDurationMs } from "@/pages/playFiles/shownTrackDuration";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 const phone = vi.hoisted(() => ({ playing: false }));
 vi.mock("@/lib/playback/activePlaybackSession", async (importOriginal) => ({
@@ -74,8 +75,8 @@ const usePlaybackPersistenceHarness = ({
     if (value) restoreOrder.push("paused");
     setIsPausedState(value);
   };
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const [autoAdvanceDueAtMs] = useState<number | null>(initialAutoAdvanceDueAtMs);
@@ -97,10 +98,7 @@ const usePlaybackPersistenceHarness = ({
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setDurationMsItemId,

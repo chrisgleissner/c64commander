@@ -13,6 +13,7 @@ import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersi
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 const repository = {
   upsertTracks: vi.fn().mockResolvedValue(undefined),
@@ -75,8 +76,8 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [autoAdvanceDueAtMs] = useState<number | null>(null);
   const [activePlaylistQuery, setActivePlaylistQuery] = useState("");
@@ -97,10 +98,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setDurationMsItemId: vi.fn(),
