@@ -18,26 +18,29 @@ export interface LevelColorStop {
 }
 
 /*
- * Louder is warmer and, on a dark panel, lighter: teal, green, yellow-green, amber, red. Lightness
- * rises with level at every step, so the ramp still orders correctly when hue cannot be told apart.
- * On a light panel the same order is kept by making louder darker.
+ * Green carries most of the range, as on a conventional level meter, so that yellow, orange and red
+ * only appear as the level approaches full scale and a glance shows how close the signal is to
+ * clipping. Lightness rises through the green and yellow stops on a dark panel; on a light panel the
+ * same order is kept by making louder darker.
  */
 export const DARK_PANEL_STOPS: readonly LevelColorStop[] = [
-  { db: SPECTRUM_DISPLAY_MIN_DB, lightness: 0.4, chroma: 0.07, hue: 205 },
-  { db: -52, lightness: 0.5, chroma: 0.11, hue: 160 },
-  { db: -36, lightness: 0.62, chroma: 0.16, hue: 135 },
-  { db: -18, lightness: 0.78, chroma: 0.16, hue: 85 },
-  { db: -4, lightness: 0.86, chroma: 0.17, hue: 35 },
-  { db: SPECTRUM_DISPLAY_MAX_DB, lightness: 0.9, chroma: 0.15, hue: 25 },
+  { db: SPECTRUM_DISPLAY_MIN_DB, lightness: 0.5, chroma: 0.1, hue: 165 },
+  { db: -52, lightness: 0.56, chroma: 0.13, hue: 152 },
+  { db: -30, lightness: 0.64, chroma: 0.16, hue: 142 },
+  { db: -16, lightness: 0.68, chroma: 0.17, hue: 135 },
+  { db: -9, lightness: 0.78, chroma: 0.17, hue: 100 },
+  { db: -4, lightness: 0.8, chroma: 0.19, hue: 58 },
+  { db: SPECTRUM_DISPLAY_MAX_DB, lightness: 0.82, chroma: 0.22, hue: 27 },
 ];
 
 export const LIGHT_PANEL_STOPS: readonly LevelColorStop[] = [
-  { db: SPECTRUM_DISPLAY_MIN_DB, lightness: 0.84, chroma: 0.06, hue: 205 },
-  { db: -52, lightness: 0.77, chroma: 0.1, hue: 165 },
-  { db: -36, lightness: 0.71, chroma: 0.15, hue: 135 },
-  { db: -18, lightness: 0.67, chroma: 0.16, hue: 80 },
-  { db: -4, lightness: 0.6, chroma: 0.19, hue: 40 },
-  { db: SPECTRUM_DISPLAY_MAX_DB, lightness: 0.54, chroma: 0.2, hue: 27 },
+  { db: SPECTRUM_DISPLAY_MIN_DB, lightness: 0.8, chroma: 0.08, hue: 165 },
+  { db: -52, lightness: 0.74, chroma: 0.12, hue: 152 },
+  { db: -30, lightness: 0.7, chroma: 0.15, hue: 142 },
+  { db: -16, lightness: 0.68, chroma: 0.16, hue: 135 },
+  { db: -9, lightness: 0.66, chroma: 0.17, hue: 100 },
+  { db: -4, lightness: 0.62, chroma: 0.19, hue: 58 },
+  { db: SPECTRUM_DISPLAY_MAX_DB, lightness: 0.55, chroma: 0.22, hue: 27 },
 ];
 
 const toSrgbChannel = (linear: number): number => {

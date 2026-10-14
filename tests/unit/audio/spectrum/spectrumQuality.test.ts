@@ -40,8 +40,8 @@ describe("spectrum quality tiers", () => {
     ]);
   });
 
-  it("starts at tier 1 on the compact profile and on weak devices, otherwise at tier 0", () => {
-    expect(initialSpectrumTier({ profile: "compact" }).index).toBe(1);
+  it("starts at tier 1 on weak devices only, so the compact profile still draws every display frame", () => {
+    expect(initialSpectrumTier({ profile: "compact" }).index).toBe(0);
     expect(initialSpectrumTier({ profile: "medium", hardwareConcurrency: 4 }).index).toBe(1);
     expect(initialSpectrumTier({ profile: "medium", deviceMemory: 2 }).index).toBe(1);
     expect(initialSpectrumTier({ profile: "medium", hardwareConcurrency: 8, deviceMemory: 8 }).index).toBe(0);

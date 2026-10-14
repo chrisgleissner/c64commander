@@ -117,8 +117,7 @@ const setup = (
       const callback = pending;
       pending = null;
       callback?.(nowMs);
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let i = 0; i < 8; i++) await Promise.resolve();
     }
   };
   return {
@@ -197,6 +196,32 @@ describe("SpectrumView", () => {
     t.view.dispose();
   });
 
+  it("marks only the clipped channel's meter and releases the mark after the hold time", async () => {
+    let sequence = 0;
+    const t = setup({
+      frames: () =>
+        frame({
+          sequence: ++sequence <= 3 ? sequence : 3,
+          channels: [
+            { id: "left", rmsDb: -20, peakDb: -6, clipped: false },
+            { id: "right", rmsDb: -20, peakDb: -6, clipped: sequence <= 3 },
+          ],
+        }),
+    });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(100);
+    const clipBlocks = () => t.ctx.fills.filter((f) => f.w === 6 && f.h === 14);
+    expect(clipBlocks().length).toBeGreaterThan(0);
+    expect(new Set(clipBlocks().map((f) => f.y))).toEqual(new Set([34]));
+    t.ctx.fills.length = 0;
+    await t.advance(2500);
+    t.ctx.fills.length = 0;
+    await t.advance(100);
+    expect(clipBlocks()).toHaveLength(0);
+    t.view.dispose();
+  });
+
   it("shows one honest Mix meter for an older bridge with only aggregate levels", async () => {
     const t = setup({ frames: () => frame({ channels: undefined }) });
     t.view.resize(300, 234, 1);
@@ -253,27 +278,27 @@ describe("SpectrumView", () => {
     t.view.resize(300, 150, 1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(1000);
-    expect(t.reads.length).toBeGreaterThanOrEqual(25);
-    expect(t.reads.length).toBeLessThanOrEqual(32);
+    expect(t.reads.length).toBeGreaterThanOrEqual(50);
+    expect(t.reads.length).toBeLessThanOrEqual(62);
   });
 
-  it("starts at tier 1 on the compact profile and still polls at 30 Hz", async () => {
+  it("starts at tier 0 on the compact profile and polls at 60 Hz", async () => {
     const t = setup({ profile: "compact" });
     t.view.resize(300, 150, 1);
-    expect(t.view.currentTier.index).toBe(1);
+    expect(t.view.currentTier.index).toBe(0);
     t.view.setState({ visible: true, paused: false });
     await t.advance(1000);
-    expect(t.reads.length).toBeGreaterThanOrEqual(25);
-    expect(t.reads.length).toBeLessThanOrEqual(32);
+    expect(t.reads.length).toBeGreaterThanOrEqual(50);
+    expect(t.reads.length).toBeLessThanOrEqual(62);
   });
 
-  it.each([16.6, 11.1, 8.33])("polls at 30 Hz when the display draws every %s ms", async (frameMs) => {
+  it.each([16.6, 11.1, 8.33])("polls at no more than 60 Hz when the display draws every %s ms", async (frameMs) => {
     const t = setup();
     t.view.resize(300, 150, 1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(3000, frameMs);
-    expect(t.reads.length / 3).toBeGreaterThanOrEqual(29);
-    expect(t.reads.length / 3).toBeLessThanOrEqual(31);
+    expect(t.reads.length / 3).toBeGreaterThanOrEqual(44);
+    expect(t.reads.length / 3).toBeLessThanOrEqual(61);
   });
 
   it("does not draw a new target for a frame it already has", async () => {

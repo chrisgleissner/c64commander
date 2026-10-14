@@ -111,6 +111,15 @@ class StreamUdpPluginAudioFxTest {
     assertEquals(48, result.getJSONArray("bands").length())
     assertEquals(-6.0, result.getInt("peakDb").toDouble(), 1.0)
     assertFalse(result.getBoolean("clipped"))
+    val channels = result.getJSONArray("channels")
+    assertEquals(2, channels.length())
+    assertEquals("left", channels.getJSONObject(0).getString("id"))
+    assertEquals("right", channels.getJSONObject(1).getString("id"))
+    for (i in 0 until 2) {
+      assertEquals(-9.0, channels.getJSONObject(i).getDouble("rmsDb"), 1.5)
+      assertEquals(-6.0, channels.getJSONObject(i).getDouble("peakDb"), 1.0)
+      assertFalse(channels.getJSONObject(i).getBoolean("clipped"))
+    }
   }
 
   @Test

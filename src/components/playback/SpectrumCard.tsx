@@ -117,11 +117,11 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
       <div className="flex items-center justify-between text-sm" data-testid="spectrum-readout">
         <span className="text-muted-foreground">dBFS</span>
         <span className="sr-only">
-          <span ref={channelsRef} data-testid="spectrum-channel-readout" />
+          <span ref={channelsRef} data-testid="spectrum-channel-readout" />{" "}
           <span className="whitespace-nowrap text-muted-foreground">
             Level{" "}
             <span ref={rmsRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-rms" /> dB
-          </span>
+          </span>{" "}
           <span className="whitespace-nowrap text-muted-foreground">
             Peak{" "}
             <span ref={peakRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-peak" /> dB

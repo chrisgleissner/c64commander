@@ -128,6 +128,8 @@ export class SpectrumView {
   private meterBallistics = createBallistics(4);
   private meterTargets = new Float32Array(4).fill(SPECTRUM_FLOOR_DB);
   private meterLabels: readonly string[] = ["L", "R"];
+  private readonly channelClipUntil = new Float64Array(2);
+  private readonly channelClipped = [false, false];
   private meterLatest = new Float32Array(4).fill(SPECTRUM_FLOOR_DB);
   private meterGradient: CanvasGradient | null = null;
   private folded = new Float32Array(SPECTRUM_BAND_COUNT);
@@ -388,7 +390,11 @@ export class SpectrumView {
       this.meterLatest[channel * 2] = reading?.rmsDb ?? frame.rmsDb;
       this.meterLatest[channel * 2 + 1] = reading?.peakDb ?? frame.peakDb;
     }
-    if (frame.clipped) this.clipUntil = this.now() + CLIP_LAMP_HOLD_MS;
+    const receivedAt = this.now();
+    if (frame.clipped) this.clipUntil = receivedAt + CLIP_LAMP_HOLD_MS;
+    for (let channel = 0; channel < count; channel++) {
+      if (channels?.[channel]?.clipped) this.channelClipUntil[channel] = receivedAt + CLIP_LAMP_HOLD_MS;
+    }
     if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
   }
 
@@ -407,7 +413,11 @@ export class SpectrumView {
     for (let i = 0; i < levels.length; i++) {
       if (levels[i] > SETTLED_DB || peaks[i] > SETTLED_DB) return false;
     }
-    return this.meterBallistics.peaks.every((peak) => peak <= SETTLED_DB);
+    const meterPeaks = this.meterBallistics.peaks;
+    for (let i = 0; i < meterPeaks.length; i++) {
+      if (meterPeaks[i] > SETTLED_DB) return false;
+    }
+    return true;
   }
 
   private readonly tick = (): void => {
@@ -438,6 +448,7 @@ export class SpectrumView {
     this.clipTimer = setTimeout(
       () => {
         this.clipTimer = null;
+        this.paint(false);
         this.emitReadout(this.now(), true);
       },
       this.clipUntil - nowMs + 5,
@@ -486,7 +497,10 @@ export class SpectrumView {
     if (!options) return;
     options.glow = this.tier.glow && !reducedMotion;
     drawBars(ctx, options, this.ballistics);
-    drawMeters(ctx, options, this.meterBallistics, this.meterGradient);
+    for (let channel = 0; channel < this.channelClipped.length; channel++) {
+      this.channelClipped[channel] = this.now() < this.channelClipUntil[channel];
+    }
+    drawMeters(ctx, options, this.meterBallistics, this.meterGradient, this.channelClipped);
   }
 
   private drawOnce(): void {

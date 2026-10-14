@@ -35,6 +35,7 @@ export const MINOR_LABELS_MIN_PLOT_PX = 400;
 const CAP_HEIGHT_PX = 2;
 export const METER_AREA_HEIGHT_PX = 84;
 export const METER_HEIGHT_PX = 14;
+const CLIP_BLOCK_PX = 6;
 export const METER_SCALE_DB = [0, -20, -40, -60] as const;
 
 export interface SpectrumLayout {
@@ -224,7 +225,6 @@ export const drawBars = (ctx: SpectrumContext, options: FrameDrawOptions, state:
   }
 };
 
-/** Uses the spectrum's own level ramp and held caps, anchored at the quiet left edge. */
 export const createMeterGradient = (ctx: SpectrumContext, layout: SpectrumLayout, palette: SpectrumPalette) => {
   const gradient = ctx.createLinearGradient(layout.plotLeft, 0, layout.plotRight, 0);
   for (const step of palette.steps) gradient.addColorStop(levelToUnit(step.db), step.color);
@@ -236,6 +236,7 @@ export const drawMeters = (
   options: FrameDrawOptions,
   state: SpectrumBallisticsState,
   gradient: CanvasGradient | null,
+  clipped: ArrayLike<boolean> = [],
 ): void => {
   const { layout, palette, ratio } = options;
   const labels = options.meterLabels;
@@ -248,7 +249,6 @@ export const drawMeters = (
     const rmsWidth = levelToUnit(state.levels[rmsIndex]) * span;
     const peakWidth = Math.max(rmsWidth, levelToUnit(state.levels[peakIndex]) * span);
     ctx.fillStyle = gradient ?? colorAtLevel(palette.steps, state.levels[peakIndex]);
-    // The translucent extension is the instantaneous peak, beyond the solid average level.
     if (peakWidth - rmsWidth >= 1) {
       ctx.globalAlpha = 0.45;
       ctx.fillRect(layout.plotLeft + rmsWidth, y, peakWidth - rmsWidth, METER_HEIGHT_PX);
@@ -256,6 +256,10 @@ export const drawMeters = (
     }
     ctx.fillStyle = gradient ?? colorAtLevel(palette.steps, state.levels[rmsIndex]);
     if (rmsWidth >= 1) ctx.fillRect(layout.plotLeft, y, rmsWidth, METER_HEIGHT_PX);
+    if (clipped[channel]) {
+      ctx.fillStyle = palette.steps[palette.steps.length - 1].color;
+      ctx.fillRect(layout.plotRight - CLIP_BLOCK_PX, y, CLIP_BLOCK_PX, METER_HEIGHT_PX);
+    }
     const heldPeak = levelToUnit(state.peaks[peakIndex]);
     if (heldPeak < 0.02) continue;
     ctx.fillStyle = palette.cap;

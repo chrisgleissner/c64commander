@@ -127,7 +127,22 @@ describe("SpectrumCard", () => {
     expect(screen.getByTestId("spectrum-rms")).toHaveTextContent("-20");
     expect(screen.getByTestId("spectrum-peak")).toHaveTextContent("-3");
     expect(screen.getByTestId("spectrum-clip")).toHaveAttribute("data-clipping", "true");
+    act(() =>
+      lastOptions().onReadout({
+        rmsDb: -20,
+        peakDb: -3,
+        clipped: false,
+        channels: [
+          { label: "L", rmsDb: -21, peakDb: -7 },
+          { label: "R", rmsDb: null, peakDb: null },
+        ],
+      }),
+    );
+    expect(screen.getByTestId("spectrum-channel-readout")).toHaveTextContent(
+      "L: average -21 dBFS, peak -7 dBFS. R: average — dBFS, peak — dBFS",
+    );
     act(() => lastOptions().onReadout({ rmsDb: null, peakDb: null, clipped: false }));
+    expect(screen.getByTestId("spectrum-channel-readout")).toHaveTextContent("");
     expect(screen.getByTestId("spectrum-rms")).toHaveTextContent("—");
     expect(screen.getByTestId("spectrum-peak")).toHaveTextContent("—");
     expect(screen.getByTestId("spectrum-clip")).toHaveAttribute("data-clipping", "false");
