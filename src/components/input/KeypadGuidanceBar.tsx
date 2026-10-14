@@ -45,7 +45,7 @@ import {
   type GuidanceLabels,
   type GuidanceState,
 } from "@/lib/input";
-import { isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isT9Field } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
@@ -233,7 +233,8 @@ export const KeypadGuidanceBar = () => {
     const duringTour = document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE);
     // Search is a dialog that drives its own keys, so the ring's labels behind it (the control the
     // search was opened from) say nothing about what the keys do there.
-    const keysOwnedByDialog = labels === ringLabels && document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
+    const keysOwnedByDialog =
+      labels === ringLabels && isAnyOverlayOpen() && document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
     if (!labels.visible || duringTour || keysOwnedByDialog) {
       setAttrIfChanged(root, "data-visible", "false");
       reserveGuidanceHeight(false);

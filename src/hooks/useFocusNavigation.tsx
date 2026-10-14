@@ -71,6 +71,7 @@ import {
   OPEN_OVERLAY_ANCESTOR_SELECTOR,
 } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { selectorPresence } from "@/lib/input/selectorPresence";
 import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
@@ -85,6 +86,12 @@ import { isOnActivePage } from "@/lib/navigation/activePage";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import { mountAllWaiting } from "@/lib/ui/progressiveMount";
+
+const SECTION_SCOPE_SELECTOR = "[data-section-scope]";
+
+const hasSectionScopeIn = (scope: Element): boolean =>
+  selectorPresence(scope.ownerDocument, SECTION_SCOPE_SELECTOR, ["data-section-scope"]).isPresent() &&
+  scope.querySelector(SECTION_SCOPE_SELECTOR) !== null;
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
@@ -437,8 +444,7 @@ export const FocusNavigationProvider = ({
       // overlay open it means Escape, which the overlay closes on; otherwise it is the hardware
       // `back`: disengage, come out of the card, and once nothing is left, leave the route.
       const isDeviceBackButton = isDeviceBackKey(event);
-      const deviceBackAction = isAnyOverlayOpen() ? "escape" : "back";
-      const action = normalized.action ?? (isDeviceBackButton ? deviceBackAction : null);
+      const action = normalized.action ?? (isDeviceBackButton ? (isAnyOverlayOpen() ? "escape" : "back") : null);
       // The left soft key is the keypad's Back. With an overlay open, Back is the Escape the overlay
       // closes on and the handler below stands aside, so the key sends that Escape, as device Back
       // does. Once per press: a held key must not close a select, then its dialog, then walk on.
@@ -478,7 +484,7 @@ export const FocusNavigationProvider = ({
         engine?.flushPendingRefresh();
         if (traversesRing) {
           const scope = resolveActiveScope(document).element;
-          if (!scope.querySelector("[data-section-scope]")) {
+          if (!hasSectionScopeIn(scope)) {
             // Consumers without persistent card headers still need their full ring.
             if (mountAllWaiting(scope)) engine?.refreshNow();
           } else {
@@ -491,7 +497,7 @@ export const FocusNavigationProvider = ({
                 : 0;
             if (delta && getInputModality() === "pointer") adoptActiveElement();
             const mountCardFor = (id: string | undefined) => {
-              const card = id ? engine?.elementForId(id)?.closest("[data-section-scope]") : null;
+              const card = id ? engine?.elementForId(id)?.closest(SECTION_SCOPE_SELECTOR) : null;
               if (card && scope.contains(card) && mountAllWaiting(card)) engine?.refreshNow();
             };
             // Discover the current card's real stops before predicting the next sibling.
@@ -514,7 +520,7 @@ export const FocusNavigationProvider = ({
       // Error toasts persist until closed (ERROR_POLICY §4) and render outside the keypad ring, so
       // Back closes the newest one through its own close button; an open dialog wins. The Pixel 4
       // hardware Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no "back" binding.
-      if ((action === "back" || isDeviceBackButton) && !document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) {
+      if ((action === "back" || isDeviceBackButton) && !isAnyOverlayOpen()) {
         const closeButton = document.querySelector<HTMLElement>(
           '[data-testid="app-toast"][data-state="open"] [data-testid="app-toast-close"]',
         );

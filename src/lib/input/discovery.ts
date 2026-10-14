@@ -23,6 +23,9 @@
  * {@link FocusController}. Everything here works in jsdom so it is unit-testable.
  */
 
+import { isAnyOverlayOpen } from "@/lib/input/eventTargets";
+import { selectorPresence } from "@/lib/input/selectorPresence";
+
 /** Marks a subtree as off-limits to the focus ring (skipped during discovery). */
 export const SKIP_ATTR = "data-key-nav-skip";
 
@@ -100,6 +103,7 @@ export const INTERACTIVE_SELECTOR = [
 ].join(",");
 
 const TABBAR_SELECTOR = `[${SCOPE_ATTR}='tabbar']`;
+const PAGE_SCOPE_SELECTOR = `[${SCOPE_ATTR}='page']`;
 
 /**
  * Visible to the focus ring. Walks ancestors for `hidden` / `aria-hidden` /
@@ -339,9 +343,8 @@ const hasInteractive = (scope: Element, scan?: DiscoveryScan): boolean => {
  *     if present, else `document.body`.
  */
 export const resolveActiveScope = (doc: Document, scan?: DiscoveryScan): ActiveScope => {
-  const overlays = Array.from(doc.querySelectorAll(OVERLAY_SELECTOR)).filter(
-    (overlay) => isFocusVisible(overlay, scan) && hasInteractive(overlay, scan),
-  );
+  const candidates = isAnyOverlayOpen(doc) ? Array.from(doc.querySelectorAll(OVERLAY_SELECTOR)) : [];
+  const overlays = candidates.filter((overlay) => isFocusVisible(overlay, scan) && hasInteractive(overlay, scan));
   if (overlays.length > 0) {
     // Prefer an overlay not contained by a later one; among siblings, the last in
     // DOM order is on top.
@@ -351,7 +354,9 @@ export const resolveActiveScope = (doc: Document, scan?: DiscoveryScan): ActiveS
     }
     return { element: top, kind: "overlay" };
   }
-  const explicitPage = doc.querySelector(`[${SCOPE_ATTR}='page']`);
+  const explicitPage = selectorPresence(doc, PAGE_SCOPE_SELECTOR, [SCOPE_ATTR]).isPresent()
+    ? doc.querySelector(PAGE_SCOPE_SELECTOR)
+    : null;
   return { element: explicitPage ?? doc.body, kind: "page" };
 };
 
