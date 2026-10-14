@@ -519,4 +519,13 @@ describe("InMemoryTextBackend while a load yields to the event loop", () => {
     expect(backend.resolve({ virtualPath: "/DEMOS/Second.sid" }).durationSeconds).toBe(90);
     expect(backend.resolve({ virtualPath: "/DEMOS/First.sid" }).durationSeconds).toBeNull();
   });
+
+  it("does not adopt a load that a reset overtook", async () => {
+    const backend = new InMemoryTextBackend();
+    const loading = backend.load(makeInput(demo("First")));
+    backend.reset();
+    await loading;
+
+    expect(backend.resolve({ virtualPath: "/DEMOS/First.sid" }).durationSeconds).toBeNull();
+  });
 });

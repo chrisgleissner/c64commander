@@ -213,4 +213,22 @@ describe("the sliced parse", () => {
     await rebuilding;
     expect(getMd548PathIndexStats().size).toBeGreaterThan(0);
   });
+
+  it("keeps the newer index when an older sliced rebuild finishes last", async () => {
+    resetMd548PathIndex();
+    const older = rebuildMd548PathIndexSliced(SONGLENGTHS, { force: true });
+    rebuildMd548PathIndex(`; /DEMOS/Other.sid\n${OTHER_MD5}=0:30`, { force: true });
+    const olderResult = await older;
+
+    expect(olderResult.rebuilt).toBe(false);
+    expect(getMd548PathIndexStats().size).toBe(1);
+  });
+
+  it("does not repopulate the index after a reset during a sliced rebuild", async () => {
+    const rebuilding = rebuildMd548PathIndexSliced(SONGLENGTHS, { force: true });
+    resetMd548PathIndex();
+    await rebuilding;
+
+    expect(getMd548PathIndexStats().size).toBe(0);
+  });
 });

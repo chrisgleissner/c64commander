@@ -107,6 +107,7 @@ let currentIndex = new Map<string, string[]>();
  */
 let pathIndex = new Map<string, string>();
 let lastContentHash: string | null = null;
+let rebuildEpoch = 0;
 
 /**
  * Invert the forward index.
@@ -160,6 +161,7 @@ export const rebuildMd548PathIndex = (
   if (next.size === 0 && currentIndex.size > 0) {
     return { rebuilt: false, size: currentIndex.size };
   }
+  rebuildEpoch += 1;
   currentIndex = next;
   pathIndex = buildPathIndex(next);
   lastContentHash = hash;
@@ -186,10 +188,12 @@ export const rebuildMd548PathIndexSliced = async (
   if (!options?.force && hash === lastContentHash) {
     return { rebuilt: false, size: currentIndex.size };
   }
+  const epochAtStart = rebuildEpoch;
   const next = await parseMd548PathIndexSliced(text, createTimeSlicer());
-  if (next.size === 0 && currentIndex.size > 0) {
+  if (epochAtStart !== rebuildEpoch || (next.size === 0 && currentIndex.size > 0)) {
     return { rebuilt: false, size: currentIndex.size };
   }
+  rebuildEpoch += 1;
   currentIndex = next;
   pathIndex = buildPathIndex(next);
   lastContentHash = hash;
@@ -233,6 +237,7 @@ export const getMd548PathIndexStats = () => ({ size: currentIndex.size });
 
 /** Empties the singleton; used when the HVSC library is removed, and by tests. */
 export const resetMd548PathIndex = (): void => {
+  rebuildEpoch += 1;
   currentIndex = new Map<string, string[]>();
   pathIndex = new Map<string, string>();
   lastContentHash = null;

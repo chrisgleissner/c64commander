@@ -259,8 +259,8 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
    * between slices would otherwise see half a database.
    */
   async load(input: SongLengthLoadInput): Promise<void> {
-    const generation = (this.loadGeneration += 1);
     this.reset();
+    const generation = this.loadGeneration;
     const staging = new InMemoryTextBackend(this.options);
     await staging.fill(input, createTimeSlicer());
     if (generation === this.loadGeneration) this.adopt(staging);
@@ -523,6 +523,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
   }
 
   reset() {
+    this.loadGeneration += 1;
     this.configuredPath = null;
     this.sourceLabel = null;
     this.filesLoaded = [];

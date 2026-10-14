@@ -665,6 +665,7 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
  * song objects are shared, and nothing outside parsing changes one in place.
  */
 let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
+let snapshotEpoch = 0;
 
 const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
   ...snapshot,
@@ -673,6 +674,7 @@ const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapsho
 });
 
 const rememberSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
+  snapshotEpoch += 1;
   lastStoredSnapshot = snapshot ? copySnapshot(snapshot) : null;
 };
 
@@ -684,8 +686,9 @@ export const loadHvscBrowseIndexSnapshot = async () => {
   return runWithHvscPerfScope(
     "browse:load-snapshot",
     async () => {
+      const epochAtStart = snapshotEpoch;
       const loaded = await readStoredBrowseIndexSnapshot();
-      rememberSnapshot(loaded);
+      if (epochAtStart === snapshotEpoch) rememberSnapshot(loaded);
       return loaded;
     },
     {

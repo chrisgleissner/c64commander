@@ -10,6 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   __parseMediaIndexSnapshotForTest,
   __parseMediaIndexSnapshotSlicedForTest,
+  forgetHvscBrowseIndexSnapshot,
+  loadHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { buildFoldersFromSongs, buildFoldersFromSongsSliced } from "@/lib/hvsc/hvscBrowseFolders";
 
@@ -82,5 +84,15 @@ describe("buildFoldersFromSongsSliced", () => {
   it("lists the same folders as the plain build", async () => {
     const snapshot = __parseMediaIndexSnapshotForTest(persisted)!;
     expect(await buildFoldersFromSongsSliced(snapshot.songs, noSlice)).toEqual(buildFoldersFromSongs(snapshot.songs));
+  });
+
+  it("does not remember a snapshot that was forgotten while it was being read", async () => {
+    localStorage.setItem("c64u_media_index:v1", persisted);
+    const loading = loadHvscBrowseIndexSnapshot();
+    forgetHvscBrowseIndexSnapshot();
+    await loading;
+    localStorage.clear();
+
+    expect(await loadHvscBrowseIndexSnapshot()).toBeNull();
   });
 });
