@@ -347,7 +347,8 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
   } else if (outcome.kind === "transport") {
     setSnapshot({ lastProbeError: outcome.result.error });
   }
-  return outcome.result.ok;
+  // Discovery promotes on this result, so an answer read after the network dropped counts as none, as in noteReachable.
+  return outcome.result.ok && !isNetworkKnownOffline();
 }
 
 /**
@@ -578,6 +579,8 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     });
     return;
   }
+  // An answer that lands after the phone reported no network was sent before it, so it does not show the device back.
+  if (isNetworkKnownOffline()) return;
 
   setSnapshot({
     lastProbeSucceededAtMs: Date.now(),
@@ -592,8 +595,6 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   }
 
   if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") return;
-  // An answer that lands after the phone reported no network was sent before it, so it does not show the device back.
-  if (isNetworkKnownOffline()) return;
   // A switch connects with its target's routing when its probe answers; promoting here too ran it twice.
   if (snapshot.state === "DISCOVERING" && snapshot.lastDiscoveryTrigger === "switch") return;
 

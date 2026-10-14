@@ -112,9 +112,8 @@ const carryOnWithoutPage = async () => {
     playPageOpen: false,
   });
   const controller = getSharedLocalSidPlaybackController();
-  const muted = controller.muted();
   // Silent until the seek lands, or the opening of the tune would be heard first.
-  controller.setMuted(true);
+  const releaseSilence = controller.holdSilence();
   try {
     await controller.play({ name: tune.label, arrayBuffer: async () => bytes }, tune.tuneIndex, undefined, {
       prerenderKey: tune.renderKey,
@@ -138,7 +137,7 @@ const carryOnWithoutPage = async () => {
       error: error instanceof Error ? error.message : String(error),
     });
   } finally {
-    controller.setMuted(muted);
+    releaseSilence();
   }
 };
 

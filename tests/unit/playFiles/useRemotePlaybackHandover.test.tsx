@@ -82,9 +82,10 @@ const setConnection = (state: string) => {
 };
 
 const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActive = false) => {
+  const releaseSilence = vi.fn();
   const engine = {
-    muted: vi.fn(() => false),
-    setMuted: vi.fn(),
+    holdSilence: vi.fn(() => releaseSilence),
+    releaseSilence,
     positionSeconds: vi.fn(() => 0.2),
     preload: vi.fn(),
     prerender: vi.fn(),
@@ -253,7 +254,9 @@ describe("useRemotePlaybackHandover", () => {
     expect(delta).toBeGreaterThan(41);
     expect(delta).toBeLessThan(43);
     // Silent while the phone opens the tune and seeks, then back to what the listener had.
-    expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+    expect(engine.holdSilence).toHaveBeenCalledTimes(1);
+    expect(engine.releaseSilence).toHaveBeenCalledTimes(1);
+    expect(engine.releaseSilence.mock.invocationCallOrder[0]).toBeGreaterThan(seekBy.mock.invocationCallOrder[0]);
     // Recorded, so the C64 is reset when it is back.
     expect(wasTuneHandedOver(startedAt)).toBe(true);
   });
@@ -276,7 +279,8 @@ describe("useRemotePlaybackHandover", () => {
       ),
     );
     expect(seekBy).not.toHaveBeenCalled();
-    expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+    expect(engine.holdSilence).toHaveBeenCalledTimes(1);
+    expect(engine.releaseSilence).toHaveBeenCalledTimes(1);
   });
 
   it("reads a tune from the phone's library ahead, and logs a read that fails without stopping the tune", async () => {
