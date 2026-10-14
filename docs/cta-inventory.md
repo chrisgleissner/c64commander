@@ -582,9 +582,17 @@ past it to anything below.
   flash write. Enabling it reveals the warning block
   `settings-persist-config-to-flash-warning`, which is display-only and explains
   the hold-RESTORE-at-power-up recovery)_
-- **Devices**: Add device — button — `settings-add-device` — R✅ I✅ ; Delete
-  device — button — `settings-delete-device` — R✅ I✅ `[disabled: single device]`
-  ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
+- **Devices**: Add device — button — `settings-add-device` — R✅ I✅ — opens the
+  **Add device** dialog (`settings-add-device-dialog`), which saves nothing and leaves
+  the connection alone until the new device answers: the shared saved-device editor
+  fields `add-device-*` (name, host in T9 hostname mode, HTTP/FTP/Telnet ports, and
+  `add-device-use-suggested-address` when an unreachable hostname is found on the LAN),
+  Cancel — button — `settings-add-device-cancel`, and Add — button —
+  `settings-add-device-confirm`, which probes the host, saves the device and connects
+  to it _(dialog code-verified, not yet hardware-verified)_ ; Delete device — button —
+  `settings-delete-device` — R✅ I✅ `[disabled: single device]` — the confirmation
+  names the device selected when it opened, by name and address, and deletes that
+  device even if the selection changes while it is open ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
   `settings-device-host` — R✅ I✅ (T9 hostname) ; HTTP/FTP/Telnet ports — text —
   `settings-device-http|ftp|telnet` — R✅ I✅ ; password — password — R✅ I✅ ;
   device-editor reachability hint — status panel —
