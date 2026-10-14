@@ -164,32 +164,32 @@ export function KeypadQuickMenu() {
             {fromKeypad ? "Jump to a page or open a high-value action." : "Actions for this page."}
           </DialogDescription>
         </DialogHeader>
-        {String(variant.id) === "c64u-remote" ? (
-          <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
-            F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
-            {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
-            <Button
-              variant="link"
-              className="ml-1 h-auto min-h-11 px-1"
-              data-testid="keypad-quick-menu-configure-function-keys"
-              onClick={() => {
-                handingOverFocusRef.current = true;
-                run(
-                  () =>
-                    void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
-                      navigate,
-                      currentPath: location.pathname,
-                      label: "Remote function keys",
-                      onToast: (message) => toast({ title: message, variant: "destructive" }),
-                    }),
-                );
-              }}
-            >
-              Configure
-            </Button>
-          </div>
-        ) : null}
         <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
+          {String(variant.id) === "c64u-remote" ? (
+            <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
+              F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
+              {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
+              <Button
+                variant="link"
+                className="ml-1 h-auto min-h-11 px-1"
+                data-testid="keypad-quick-menu-configure-function-keys"
+                onClick={() => {
+                  handingOverFocusRef.current = true;
+                  run(
+                    () =>
+                      void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
+                        navigate,
+                        currentPath: location.pathname,
+                        label: "Remote function keys",
+                        onToast: (message) => toast({ title: message, variant: "destructive" }),
+                      }),
+                  );
+                }}
+              >
+                Configure
+              </Button>
+            </div>
+          ) : null}
           {/*
             The top entry, on both sources: search is the way around the app for someone who does
             not know where a thing lives, which is exactly why they opened this menu. Opening it
