@@ -110,7 +110,12 @@ export function PageContainer({ children, className, size = "default", as = "mai
   };
 
   return (
-    <Component className={cn("page-shell", className)} data-page-scroll-container="true" style={style}>
+    <Component
+      className={cn("page-shell", className)}
+      data-page-scroll-container="true"
+      data-app-chrome={appChromeMode}
+      style={style}
+    >
       {children}
     </Component>
   );

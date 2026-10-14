@@ -186,6 +186,50 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     expect(textBottom, "the empty Liked Tunes text is under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
   });
 
+  /*
+   * The guidance bar's height is reserved at the bottom of `.page-stack`. Docs laid its cards out
+   * without one, so its last card could not scroll clear of the bar and stayed 18 px under it.
+   */
+  test("every page's selected stop scrolls clear of the guidance bar @layout", async ({ page }) => {
+    test.setTimeout(240_000);
+    const covered: string[] = [];
+    for (const route of TAB_ROUTES) {
+      await page.goto(route.path, { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await page.keyboard.press("ArrowDown");
+      await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+      const seen = new Set<string>();
+      for (let step = 0; step < 45; step += 1) {
+        await page.waitForTimeout(150);
+        const stop = await page.evaluate(() => {
+          const selected = document.querySelector('[data-key-selected="true"]');
+          const scroller = selected?.closest('[data-page-scroll-container="true"]');
+          const bar = document.querySelector('[data-testid="keypad-guidance-bar"]');
+          if (!selected || !scroller || !bar) return null;
+          const rect = selected.getBoundingClientRect();
+          const barTop = bar.getBoundingClientRect().top;
+          const fits = rect.height <= barTop - scroller.getBoundingClientRect().top;
+          return {
+            id: selected.getAttribute("data-testid") ?? selected.textContent?.trim().slice(0, 40) ?? "",
+            bottom: rect.bottom,
+            barTop,
+            fits,
+          };
+        });
+        if (stop && stop.fits && !seen.has(stop.id)) {
+          seen.add(stop.id);
+          if (stop.bottom > stop.barTop + 0.5) {
+            covered.push(
+              `${route.path} ${stop.id}: bottom ${Math.round(stop.bottom)} > bar ${Math.round(stop.barTop)}`,
+            );
+          }
+        }
+        await page.keyboard.press("ArrowDown");
+      }
+    }
+    expect(covered, `Selected stops left under the guidance bar:\n  ${covered.join("\n  ")}`).toEqual([]);
+  });
+
   test("the last Recent row selected by keypad is clear of the guidance bar @layout", async ({ page }) => {
     await page.addInitScript(() => {
       const entries = Array.from({ length: 12 }, (_, index) => ({
