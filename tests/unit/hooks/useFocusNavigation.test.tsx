@@ -1781,13 +1781,13 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
 
   const WaitingCard = ({ name }: { name: string }) => {
     const anchor = useRef<HTMLDivElement | null>(null);
-    const mounted = useProgressiveMount(true, anchor);
+    const mounted = useProgressiveMount({ scope: "fixture", id: name }, true, anchor);
     return <div ref={anchor}>{mounted ? <button type="button">{name}</button> : null}</div>;
   };
 
   const MeasuredCard = ({ name }: { name: string }) => {
     const anchor = useRef<HTMLDivElement | null>(null);
-    const mounted = useProgressiveMount(true, anchor, 400);
+    const mounted = useProgressiveMount({ scope: "fixture", id: name }, true, anchor, 400);
     return (
       <div ref={anchor} data-section-scope="fixture" data-section-id={name} data-section-label={name}>
         <button type="button">{name} header</button>
