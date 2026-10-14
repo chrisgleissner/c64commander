@@ -132,9 +132,6 @@ export const focusRingElement = (element: HTMLElement | null): void => {
 
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
 
-/** How much of the visible height one key press scrolls when the ring has no stop left to move to. */
-const PAGE_STEP_FRACTION = 0.8;
-
 const isScrollContainer = (element: Element): boolean => {
   const overflowY = getComputedStyle(element).overflowY;
   return (overflowY === "auto" || overflowY === "scroll") && element.scrollHeight > element.clientHeight;
@@ -174,7 +171,7 @@ export const scrollTowardUnreachableContent = (from: Element, scope: Element | n
     const hidden = direction > 0 ? bounds.bottom - (visible.bottom - guidanceBar) : visible.top - bounds.top;
     if (hidden < 1) return false;
   }
-  container.scrollBy({ top: direction * Math.min(remaining, container.clientHeight * PAGE_STEP_FRACTION) });
+  container.scrollBy({ top: direction * Math.min(remaining, container.clientHeight) });
   return true;
 };
 
