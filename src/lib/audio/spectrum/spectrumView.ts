@@ -529,10 +529,10 @@ export class SpectrumView {
     return true;
   }
 
-  private readonly tick = (): void => {
+  private readonly tick = (frameTimeMs?: number): void => {
     this.frameHandle = null;
     if (!this.shouldAnalyse) return;
-    const nowMs = this.now();
+    const nowMs = frameTimeMs ?? this.now();
     if (!this.paused) this.pollIfDue(nowMs);
     const slotMs = 1000 / this.tier.drawFps;
     if (this.lastDrawAt === 0 || nowMs - this.lastDrawAt >= slotMs * SLOT_TOLERANCE) {
