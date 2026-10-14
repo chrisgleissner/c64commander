@@ -122,6 +122,8 @@ const OBSERVED_ATTRIBUTES = [
   "contenteditable",
   GROUP_ATTR,
   "data-key-nav-skip",
+  // Read for the guidance bar; only a group's aria-label is read during a scan.
+  "aria-label",
 ];
 
 /*
@@ -196,6 +198,7 @@ export class FocusDiscoveryEngine {
   /** Where the ring stood in each scope it left, so closing an overlay returns to its opener. */
   private currentWhenLeft = new WeakMap<Element, string>();
   private groupLabelElements: HTMLElement[] = [];
+  private groupElements = new Set<Element>();
   /**
    * A return that could not land yet: the opener is disabled while the write it started is pending, so it is
    * missing from the ring when the overlay closes. Retried on later scans while the ring still stands on the
@@ -260,13 +263,16 @@ export class FocusDiscoveryEngine {
     this.resolvers.clear();
     this.sources.clear();
     this.groupLabelElements = [];
+    this.groupElements.clear();
     this.controller.clear();
   }
 
   private relabelsCurrent(record: MutationRecord): boolean {
     const currentId = this.controller.current()?.id;
     const current = currentId ? this.elementForId(currentId) : null;
-    return current !== null && changesOnlyText(record) && current.contains(record.target);
+    const relabels =
+      changesOnlyText(record) || (record.attributeName === "aria-label" && !rewritesAttributeWithSameValue(record));
+    return current !== null && relabels && current.contains(record.target);
   }
 
   /** A group's breadcrumb label is read from its `aria-labelledby` elements only during a scan. */
@@ -285,6 +291,7 @@ export class FocusDiscoveryEngine {
   private cannotChangeRing(record: MutationRecord): boolean {
     if (changesOnlyText(record)) return !this.renamesAGroup(record);
     if (rewritesAttributeWithSameValue(record)) return true;
+    if (record.attributeName === "aria-label") return !this.groupElements.has(record.target as Element);
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
@@ -368,6 +375,7 @@ export class FocusDiscoveryEngine {
     this.resolvers = items.resolvers;
     this.sources = items.sources;
     this.groupLabelElements = items.groupLabelElements;
+    this.groupElements = new Set(nodes.filter((node) => node.isGroup).map((node) => node.element));
     this.controller.setItems(items.focusItems);
     // Closing a dropdown or dialog used to drop the ring on the page's first item, because the item it
     // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad

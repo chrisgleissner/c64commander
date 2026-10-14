@@ -724,6 +724,72 @@ describe("FocusDiscoveryEngine", () => {
   });
 });
 
+describe("aria-label changes", () => {
+  const start = (html: string) => {
+    document.body.innerHTML = html;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+    return { controller, engine, onAfterAssemble, refresh };
+  };
+
+  it("notify the guidance bar without a rescan when the selected control is renamed", async () => {
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="like" aria-label="Like this tune">♥</button><button id="next">Next</button></div>`,
+    );
+
+    el("like").setAttribute("aria-label", "Remove like");
+    await afterRingRescan();
+
+    expect(onAfterAssemble).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("neither notify nor rescan when a control that is not selected is renamed", async () => {
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="like" aria-label="Like this tune">♥</button><button id="next">Next</button></div>`,
+    );
+
+    el("next").setAttribute("aria-label", "Next tune");
+    await afterRingRescan();
+
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("neither notify nor rescan when the same name is written again", async () => {
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="like" aria-label="Like this tune">♥</button></div>`,
+    );
+
+    el("like").setAttribute("aria-label", "Like this tune");
+    await afterRingRescan();
+
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("rescan when a group is renamed, because its breadcrumb label is read during a scan", async () => {
+    const { controller, engine, refresh } = start(
+      `<section id="card" data-focus-group="card" aria-label="Drive A"><button>Mount</button></section>`,
+    );
+    expect(controller.current()?.group).toBe("Drive A");
+
+    el("card").setAttribute("aria-label", "Drive B");
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalled();
+    expect(controller.current()?.group).toBe("Drive B");
+    engine.stop();
+  });
+});
+
 describe("attribute writes that leave the value as it was", () => {
   it("do not trigger a rescan when an input is given the type it already has", async () => {
     document.body.innerHTML = `<div id="page"><button id="a">A</button><input id="field" type="text" /></div>`;
