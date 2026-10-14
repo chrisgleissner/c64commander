@@ -32,6 +32,63 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
+  fun stereoChannelMetersPreserveIndependentRmsAndPeakLevels() {
+    val pcm = TestSignals.sine(4800, rate, 1000.0, 0.5)
+    for (sample in 0 until 4800) {
+      val at = sample * 4
+      val left = ((pcm[at].toInt() and 255) or (pcm[at + 1].toInt() shl 8)).toShort().toInt()
+      val right = left / 4
+      pcm[at + 2] = right.toByte()
+      pcm[at + 3] = (right shr 8).toByte()
+    }
+    analyzer.feed(pcm, 4800, rate)
+    val channels = analyzer.read(true).channels
+    assertEquals(2, channels.size)
+    assertEquals("left", channels[0].id)
+    assertEquals("right", channels[1].id)
+    assertEquals(-9.0, channels[0].rmsDb.toDouble(), 1.0)
+    assertEquals(-6.0, channels[0].peakDb.toDouble(), 1.0)
+    assertEquals(-21.0, channels[1].rmsDb.toDouble(), 1.0)
+    assertEquals(-18.0, channels[1].peakDb.toDouble(), 1.0)
+  }
+
+  @Test
+  fun oppositePhaseStereoDoesNotCancelEitherChannelMeter() {
+    val pcm = TestSignals.sine(4800, rate, 1000.0, 0.5)
+    for (sample in 0 until 4800) {
+      val at = sample * 4
+      val left = ((pcm[at].toInt() and 255) or (pcm[at + 1].toInt() shl 8)).toShort().toInt()
+      val right = -left
+      pcm[at + 2] = right.toByte()
+      pcm[at + 3] = (right shr 8).toByte()
+    }
+    analyzer.feed(pcm, 4800, rate)
+    val channels = analyzer.read(true).channels
+    for (channel in channels) {
+      assertEquals(-9.0, channel.rmsDb.toDouble(), 1.0)
+      assertEquals(-6.0, channel.peakDb.toDouble(), 1.0)
+    }
+  }
+
+  @Test
+  fun clippingIsHeldOnlyOnTheChannelThatReachedFullScaleAndResetsOnPrepare() {
+    val pcm = ByteArray(4800 * 4)
+    for (sample in 0 until 4800) {
+      pcm[sample * 4 + 2] = 255.toByte()
+      pcm[sample * 4 + 3] = 127.toByte()
+    }
+    analyzer.feed(pcm, 4800, rate)
+    assertFalse(analyzer.read(true).channels[0].clipped)
+    assertTrue(analyzer.read(true).channels[1].clipped)
+    now += 900_000_000L
+    assertTrue(analyzer.read(true).channels[1].clipped)
+    now += 200_000_000L
+    assertFalse(analyzer.read(true).channels[1].clipped)
+    analyzer.prepare(rate)
+    assertTrue(analyzer.read(true).channels.all { !it.clipped && it.rmsDb == -100 && it.peakDb == -100 })
+  }
+
+  @Test
   fun bandEdgesFollowTheSharedLogLayout() {
     assertEquals(48, SpectrumBands.COUNT)
     assertEquals(31.25, SpectrumBands.edge(0), 1e-9)

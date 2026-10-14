@@ -15,6 +15,8 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+internal class SpectrumChannelLevel(val id: String, val rmsDb: Int, val peakDb: Int, val clipped: Boolean)
+
 /** One analysis result, in the shape `readSpectrum` hands to the web layer. */
 internal class SpectrumFrame(
     val enabled: Boolean,
@@ -25,6 +27,10 @@ internal class SpectrumFrame(
     val peakDb: Int,
     val rmsDb: Int,
     val clipped: Boolean,
+    val channels: Array<SpectrumChannelLevel> = arrayOf(
+        SpectrumChannelLevel("left", SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, false),
+        SpectrumChannelLevel("right", SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, false),
+    ),
 )
 
 /**
@@ -76,6 +82,9 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       val history: FloatArray,
       /** max(|left|, |right|) per sample, for the peak readout and the clip latch. */
       val levels: FloatArray,
+      /** Signed stereo samples, retained separately so opposite-phase audio cannot cancel a meter. */
+      val left: FloatArray,
+      val right: FloatArray,
   ) {
     val mask = (history.size - 1).toLong()
     /** How far behind the newest sample a window can still end with all of its samples held. */
@@ -96,6 +105,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   private var readerAnchorIndex = 0L
   private var readerAnchorNanos = 0L
   private var lastClipNanos = Long.MIN_VALUE
+  private val channelClipNanos = LongArray(2) { Long.MIN_VALUE }
   /** Where the last analysis ended; the next level readout covers every sample heard since. */
   private var levelsReadTo = Long.MAX_VALUE
 
@@ -124,6 +134,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     publication++
     val history = previous?.history?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
     val levels = previous?.levels?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
+    val left = previous?.left?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
+    val right = previous?.right?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
     val next =
         Configuration(
             sampleRate,
@@ -133,10 +145,13 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
             maxOf(1, sampleRate / FRAMES_PER_SECOND),
             history,
             levels,
+            left,
+            right,
         )
     writeCount = 0
     lastFeedNanos = Long.MIN_VALUE
     lastClipNanos = Long.MIN_VALUE
+    channelClipNanos.fill(Long.MIN_VALUE)
     levelsReadTo = Long.MAX_VALUE
     anchorVersion = 0L
     readerAnchorKnown = false
@@ -174,6 +189,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       at += BYTES_PER_FRAME
       val slot = (count and mask).toInt()
       history[slot] = (l + r) * 0.5f
+      config.left[slot] = l
+      config.right[slot] = r
       val al = if (l < 0) -l else l
       val ar = if (r < 0) -r else r
       levels[slot] = if (al > ar) al else ar
@@ -227,7 +244,12 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       // A sequence is observable only once its matching history has been copied.
       return SpectrumFrame(true, active, 0L, config.sampleRate, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, clipped)
     }
-    return SpectrumFrame(true, active, frame.sequence, frame.sampleRate, frame.bands, frame.peakDb, frame.rmsDb, clipped)
+    return SpectrumFrame(true, active, frame.sequence, frame.sampleRate, frame.bands, frame.peakDb, frame.rmsDb, clipped,
+        Array(2) { channel ->
+          val level = frame.channels[channel]
+          SpectrumChannelLevel(level.id, level.rmsDb, level.peakDb,
+              channelClipNanos[channel] != Long.MIN_VALUE && now - channelClipNanos[channel] < CLIP_HOLD_NANOS)
+        })
   }
 
   /**
@@ -280,10 +302,20 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       val from = maxOf(0L, minOf(end - config.levelSamples, levelsReadTo), writeCount - history.size)
       var peak = 0.0f
       var sumSq = 0.0
+      var leftPeak = 0.0f
+      var rightPeak = 0.0f
+      var leftSumSq = 0.0
+      var rightSumSq = 0.0
       for (index in from until end) {
         val slot = (index and mask).toInt()
         if (levels[slot] > peak) peak = levels[slot]
         sumSq += history[slot] * history[slot]
+        val l = config.left[slot]
+        val r = config.right[slot]
+        leftPeak = maxOf(leftPeak, kotlin.math.abs(l))
+        rightPeak = maxOf(rightPeak, kotlin.math.abs(r))
+        leftSumSq += l * l
+        rightSumSq += r * r
       }
       if (first == publication) {
         config.fft.transform(re, im)
@@ -293,9 +325,15 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
           power[k] = amplitude * amplitude
         }
         if (peak >= CLIP_LEVEL) lastClipNanos = now
+        if (leftPeak >= CLIP_LEVEL) channelClipNanos[0] = now
+        if (rightPeak >= CLIP_LEVEL) channelClipNanos[1] = now
         levelsReadTo = end
         val rms = if (end > from) sqrt(sumSq / (end - from)) else 0.0
-        return SpectrumFrame(true, true, end / config.stepSamples, config.sampleRate, config.plan.bandsDb(power), toDb(peak.toDouble()), toDb(rms), false)
+        return SpectrumFrame(true, true, end / config.stepSamples, config.sampleRate, config.plan.bandsDb(power), toDb(peak.toDouble()), toDb(rms), false,
+            arrayOf(
+                SpectrumChannelLevel("left", toDb(if (end > from) sqrt(leftSumSq / (end - from)) else 0.0), toDb(leftPeak.toDouble()), leftPeak >= CLIP_LEVEL),
+                SpectrumChannelLevel("right", toDb(if (end > from) sqrt(rightSumSq / (end - from)) else 0.0), toDb(rightPeak.toDouble()), rightPeak >= CLIP_LEVEL),
+            ))
       }
     }
     return null

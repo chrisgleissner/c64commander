@@ -38,6 +38,12 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
   fun payload(frame: SpectrumFrame): JSObject {
     val bands = JSArray()
     for (db in frame.bands) bands.put(db)
+    val channels = JSArray()
+    for (channel in frame.channels) channels.put(JSObject()
+        .put("id", channel.id)
+        .put("rmsDb", channel.rmsDb)
+        .put("peakDb", channel.peakDb)
+        .put("clipped", channel.clipped))
     return JSObject()
         .put("enabled", frame.enabled)
         .put("active", frame.active)
@@ -47,5 +53,6 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
         .put("peakDb", frame.peakDb)
         .put("rmsDb", frame.rmsDb)
         .put("clipped", frame.clipped)
+        .put("channels", channels)
   }
 }

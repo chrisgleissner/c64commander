@@ -16,11 +16,12 @@ import { useActivePlayback } from "@/hooks/useActivePlayback";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { SpectrumView, type SpectrumReadout } from "@/lib/audio/spectrum/spectrumView";
+import { METER_AREA_HEIGHT_PX } from "@/lib/audio/spectrum/spectrumRenderer";
 import { cn } from "@/lib/utils";
 
 export const SPECTRUM_UNAVAILABLE_MESSAGE = "Spectrum is available for sound played on this phone";
 
-const CANVAS_HEIGHT_PX: Record<string, number> = { compact: 150, medium: 190, expanded: 240 };
+const CANVAS_HEIGHT_PX: Record<string, number> = { compact: 110, medium: 190, expanded: 240 };
 
 const THEME_ATTRIBUTES = ["class", "style", "data-theme", "data-app-style", "data-palette"];
 
@@ -42,14 +43,24 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
   const viewRef = useRef<SpectrumView | null>(null);
   const rmsRef = useRef<HTMLSpanElement | null>(null);
   const peakRef = useRef<HTMLSpanElement | null>(null);
+  const channelsRef = useRef<HTMLSpanElement | null>(null);
   const clipRef = useRef<HTMLSpanElement | null>(null);
   const [onScreen, setOnScreen] = useState(true);
   const [active, setActive] = useState(false);
   const height = CANVAS_HEIGHT_PX[profile] ?? CANVAS_HEIGHT_PX.medium;
+  const chartHeight = height + METER_AREA_HEIGHT_PX;
 
   const writeReadout = useCallback((readout: SpectrumReadout) => {
     if (rmsRef.current) rmsRef.current.textContent = formatLevel(readout.rmsDb);
     if (peakRef.current) peakRef.current.textContent = formatLevel(readout.peakDb);
+    if (channelsRef.current)
+      channelsRef.current.textContent =
+        readout.channels
+          ?.map(
+            (channel) =>
+              `${channel.label}: average ${formatLevel(channel.rmsDb)} dBFS, peak ${formatLevel(channel.peakDb)} dBFS`,
+          )
+          .join(". ") ?? "";
     clipRef.current?.setAttribute("data-clipping", readout.clipped ? "true" : "false");
   }, []);
 
@@ -103,14 +114,18 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
   return (
     <div className="space-y-2 p-3 pt-0" data-testid="spectrum-panel">
       <ScreenActivityWatch onChange={setOnScreen} />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-testid="spectrum-readout">
-        <span className="whitespace-nowrap text-muted-foreground">
-          Level <span ref={rmsRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-rms" />{" "}
-          dB
-        </span>
-        <span className="whitespace-nowrap text-muted-foreground">
-          Peak <span ref={peakRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-peak" />{" "}
-          dB
+      <div className="flex items-center justify-between text-sm" data-testid="spectrum-readout">
+        <span className="text-muted-foreground">dBFS</span>
+        <span className="sr-only">
+          <span ref={channelsRef} data-testid="spectrum-channel-readout" />
+          <span className="whitespace-nowrap text-muted-foreground">
+            Level{" "}
+            <span ref={rmsRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-rms" /> dB
+          </span>
+          <span className="whitespace-nowrap text-muted-foreground">
+            Peak{" "}
+            <span ref={peakRef} className="font-semibold tabular-nums text-foreground" data-testid="spectrum-peak" /> dB
+          </span>
         </span>
         <span
           ref={clipRef}
@@ -132,16 +147,17 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
         <canvas
           ref={canvasRef}
           role="img"
-          aria-label="Spectrum of the sound playing on this phone, level in dB by frequency"
-          className="block w-full rounded-lg border border-border"
-          style={{ height }}
+          aria-label="Audio channel meters growing from left to right: solid average level, translucent instantaneous peak, and a held peak marker on a shared dBFS scale; frequency spectrum below, bass to treble"
+          className="block w-full rounded-panel border border-border bg-background"
+          style={{ height: chartHeight }}
           data-testid="spectrum-canvas"
         />
         {message ? (
           <p
+            style={{ top: `calc(50% + ${METER_AREA_HEIGHT_PX / 2}px)` }}
             role="status"
             data-testid="spectrum-message"
-            className="pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2 rounded-md bg-background/85 px-3 py-2 text-center text-base text-foreground"
+            className="pointer-events-none absolute inset-x-3 -translate-y-1/2 rounded-md bg-background/85 px-3 py-2 text-center text-base text-foreground"
           >
             {message}
           </p>

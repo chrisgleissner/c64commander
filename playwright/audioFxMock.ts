@@ -61,6 +61,15 @@ export const installAudioFxMock = async (page: Page, options: { active?: boolean
           sequence: Math.floor(t * 30),
           sampleRate: 48000,
           bands,
+          channels: [
+            {
+              id: "left",
+              rmsDb: -21 + Math.round(kick * 3),
+              peakDb: -7 - Math.round(kick * 2),
+              clipped: w.__c64uAudioFxClipped === true,
+            },
+            { id: "right", rmsDb: -27 + Math.round(kick * 3), peakDb: -13 - Math.round(kick * 2), clipped: false },
+          ],
           peakDb: -7 - Math.round(kick * 2),
           rmsDb: -21 + Math.round(kick * 3),
           clipped: w.__c64uAudioFxClipped === true,

@@ -27,6 +27,8 @@ import {
 import {
   computeLayout,
   createBarGradient,
+  createMeterGradient,
+  drawMeters,
   devicePixelRatioFor,
   drawBars,
   drawStaticLayer,
@@ -55,6 +57,7 @@ export interface SpectrumReadout {
   rmsDb: number | null;
   peakDb: number | null;
   clipped: boolean;
+  channels?: readonly { label: string; rmsDb: number | null; peakDb: number | null }[];
 }
 
 export interface SpectrumLayer {
@@ -122,6 +125,11 @@ export class SpectrumView {
   private controller: SpectrumTierController;
   private tier: SpectrumTier;
   private ballistics: SpectrumBallisticsState;
+  private meterBallistics = createBallistics(4);
+  private meterTargets = new Float32Array(4).fill(SPECTRUM_FLOOR_DB);
+  private meterLabels: readonly string[] = ["L", "R"];
+  private meterLatest = new Float32Array(4).fill(SPECTRUM_FLOOR_DB);
+  private meterGradient: CanvasGradient | null = null;
   private folded = new Float32Array(SPECTRUM_BAND_COUNT);
   private latest = new Float32Array(SPECTRUM_BAND_COUNT).fill(SPECTRUM_FLOOR_DB);
 
@@ -278,14 +286,16 @@ export class SpectrumView {
     this.layer = this.createLayer(this.canvas.width, this.canvas.height);
     if (this.layer) {
       this.layer.context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
-      drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio);
+      drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio, this.meterLabels);
     }
+    this.meterGradient = createMeterGradient(this.ctx, this.layout, this.palette);
     this.gradient = createBarGradient(this.ctx, this.layout, this.palette);
     if (this.drawOptions) {
       this.drawOptions.layout = this.layout;
       this.drawOptions.palette = this.palette;
       this.drawOptions.gradient = this.gradient;
       this.drawOptions.ratio = this.ratio;
+      this.drawOptions.meterLabels = this.meterLabels;
     } else {
       this.drawOptions = {
         layout: this.layout,
@@ -294,6 +304,7 @@ export class SpectrumView {
         gradient: this.gradient,
         glow: false,
         ratio: this.ratio,
+        meterLabels: this.meterLabels,
       };
     }
   }
@@ -364,6 +375,19 @@ export class SpectrumView {
     for (let i = 0; i < SPECTRUM_BAND_COUNT; i++) this.latest[i] = frame.bands[i];
     this.rmsDb = frame.rmsDb;
     this.peakDb = frame.peakDb;
+    const channels = frame.channels;
+    const count = channels?.length === 2 ? 2 : 1;
+    const label = channels?.[0]?.id === "mono" ? "Mono" : "Mix";
+    if (this.meterLabels.length !== count || (count === 1 && this.meterLabels[0] !== label)) {
+      this.meterLabels = count === 2 ? ["L", "R"] : [label];
+      this.rebuildStaticLayer();
+    }
+    this.meterLatest.fill(SPECTRUM_FLOOR_DB);
+    for (let channel = 0; channel < count; channel++) {
+      const reading = channels?.[channel];
+      this.meterLatest[channel * 2] = reading?.rmsDb ?? frame.rmsDb;
+      this.meterLatest[channel * 2 + 1] = reading?.peakDb ?? frame.peakDb;
+    }
     if (frame.clipped) this.clipUntil = this.now() + CLIP_LAMP_HOLD_MS;
     if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
   }
@@ -383,7 +407,7 @@ export class SpectrumView {
     for (let i = 0; i < levels.length; i++) {
       if (levels[i] > SETTLED_DB || peaks[i] > SETTLED_DB) return false;
     }
-    return true;
+    return this.meterBallistics.peaks.every((peak) => peak <= SETTLED_DB);
   }
 
   private readonly tick = (): void => {
@@ -436,6 +460,14 @@ export class SpectrumView {
     else this.folded.fill(SPECTRUM_FLOOR_DB);
     const reduced = this.reducedMotion();
     stepBallistics(this.ballistics, this.folded, elapsed, reduced ? SPECTRUM_BALLISTICS_REDUCED : SPECTRUM_BALLISTICS);
+    if (sounding) this.meterTargets.set(this.meterLatest);
+    else this.meterTargets.fill(SPECTRUM_FLOOR_DB);
+    stepBallistics(
+      this.meterBallistics,
+      this.meterTargets,
+      elapsed,
+      reduced ? SPECTRUM_BALLISTICS_REDUCED : SPECTRUM_BALLISTICS,
+    );
     this.paint(reduced);
     const previousDrawAt = this.lastDrawAt;
     this.lastDrawAt = nowMs;
@@ -454,6 +486,7 @@ export class SpectrumView {
     if (!options) return;
     options.glow = this.tier.glow && !reducedMotion;
     drawBars(ctx, options, this.ballistics);
+    drawMeters(ctx, options, this.meterBallistics, this.meterGradient);
   }
 
   private drawOnce(): void {
@@ -468,9 +501,18 @@ export class SpectrumView {
     const rmsDb = sounding && this.rmsDb !== null ? Math.round(this.rmsDb) : null;
     const peakDb = sounding && this.peakDb !== null ? Math.round(this.peakDb) : null;
     const clipped = nowMs < this.clipUntil;
-    const key = `${rmsDb}|${peakDb}|${clipped}`;
+    const key = `${rmsDb}|${peakDb}|${clipped}|${sounding ? this.meterLatest.join(",") : "silent"}`;
     if (key === this.lastReadoutKey) return;
     this.lastReadoutKey = key;
-    this.options.onReadout({ rmsDb, peakDb, clipped });
+    this.options.onReadout({
+      rmsDb,
+      peakDb,
+      clipped,
+      channels: this.meterLabels.map((label, index) => ({
+        label,
+        rmsDb: sounding ? Math.round(this.meterLatest[index * 2]) : null,
+        peakDb: sounding ? Math.round(this.meterLatest[index * 2 + 1]) : null,
+      })),
+    });
   }
 }

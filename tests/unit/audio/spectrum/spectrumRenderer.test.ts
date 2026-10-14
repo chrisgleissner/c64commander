@@ -16,6 +16,10 @@ import {
   computeLayout,
   devicePixelRatioFor,
   drawBars,
+  drawMeters,
+  createMeterGradient,
+  METER_HEIGHT_PX,
+  METER_AREA_HEIGHT_PX,
   drawStaticLayer,
   type FrameDrawOptions,
   type SpectrumContext,
@@ -70,6 +74,67 @@ const stateWith = (bars: number, level: number, peak: number) => {
 };
 
 describe("spectrum renderer", () => {
+  it("stacks left and right channel meters above the frequency plot with a dB scale that rises from left to right", () => {
+    const t = makeContext();
+    const layout = computeLayout(300, 234, 14);
+    drawStaticLayer(t.ctx, layout, palette, 1);
+    expect(layout.plotTop).toBeGreaterThan(METER_AREA_HEIGHT_PX);
+    const labels = t.raw.fillText.mock.calls;
+    expect(labels).toContainEqual(["L", layout.plotLeft - 6, 17]);
+    expect(labels).toContainEqual(["R", layout.plotLeft - 6, 41]);
+    const scale = labels.filter(([, , y]) => y === 64);
+    expect(scale.map(([text]) => text)).toEqual(["0", "-20", "-40", "-60"]);
+    expect(scale[0][1]).toBeGreaterThan(scale.at(-1)![1]);
+    expect(labels.some(([text]) => text === "Hz")).toBe(true);
+  });
+
+  it("grows both meters from the left edge toward 0 dBFS on the right and places held caps at their higher peaks", () => {
+    const t = makeContext();
+    const opts = options(1, false, null);
+    const state = createBallistics(4);
+    state.levels.set([-36, -24, -18, -12]);
+    state.peaks.set([-30, -18, -16, -6]);
+    const gradient = {} as CanvasGradient;
+    drawMeters(t.ctx, opts, state, gradient);
+    const bars = t.fills.filter((f) => f.style === gradient && f.alpha === 1);
+    const extensions = t.fills.filter((f) => f.alpha === 0.45);
+    expect(extensions).toHaveLength(2);
+    expect(t.raw.globalAlpha).toBe(1);
+    const caps = t.fills.filter((f) => f.style === palette.cap);
+    expect(bars).toHaveLength(2);
+    expect(bars[0].y).toBeLessThan(bars[1].y);
+    for (let i = 0; i < 2; i++) {
+      expect(bars[i].x).toBeCloseTo(opts.layout.plotLeft);
+      expect(bars[i].h).toBe(METER_HEIGHT_PX);
+      expect(caps[i].x + caps[i].w).toBeGreaterThanOrEqual(extensions[i].x + extensions[i].w);
+      expect(extensions[i].x).toBeCloseTo(bars[i].x + bars[i].w);
+    }
+    expect(bars[1].w).toBeGreaterThan(bars[0].w);
+  });
+
+  it("clamps meter overrange and silence, omits floor caps, and supports flat colours", () => {
+    const t = makeContext();
+    const opts = options(3, false, null);
+    const state = createBallistics(4);
+    state.levels.set([12, 12, -100, -100]);
+    state.peaks.set([12, 12, -100, -100]);
+    drawMeters(t.ctx, opts, state, null);
+    expect(t.fills).toHaveLength(2);
+    expect(t.fills[0].x).toBe(opts.layout.plotLeft);
+    expect(t.fills[0].w).toBe(opts.layout.plotRight - opts.layout.plotLeft);
+    expect(t.fills[1].x + t.fills[1].w).toBe(opts.layout.plotRight);
+  });
+
+  it("uses the spectrum colour ramp from the quiet left edge towards the loud right edge", () => {
+    const t = makeContext();
+    const gradient = { addColorStop: vi.fn() };
+    t.raw.createLinearGradient.mockReturnValue(gradient);
+    const layout = computeLayout(300, 234, 14);
+    expect(createMeterGradient(t.ctx, layout, palette)).toBe(gradient);
+    expect(t.raw.createLinearGradient).toHaveBeenCalledWith(layout.plotLeft, 0, layout.plotRight, 0);
+    expect(gradient.addColorStop).toHaveBeenCalledTimes(palette.steps.length);
+  });
+
   it("limits the device pixel ratio to between 1 and 2 and treats an unusable ratio as 1", () => {
     expect(devicePixelRatioFor(3)).toBe(2);
     expect(devicePixelRatioFor(1.5)).toBe(1.5);

@@ -158,6 +158,14 @@ export interface StreamUdpAudioProcessing {
   reverb: number;
 }
 
+export interface SpectrumChannelLevel {
+  /** Playback output channel, never a SID-chip index. */
+  id: "left" | "right" | "mono";
+  rmsDb: number;
+  peakDb: number;
+  clipped: boolean;
+}
+
 /** One analysis frame of the sound leaving the phone, from {@link StreamUdpPlugin.readSpectrum}. */
 export interface StreamUdpSpectrumFrame {
   enabled: boolean;
@@ -168,6 +176,8 @@ export interface StreamUdpSpectrumFrame {
   sampleRate: number;
   /** Integer dBFS per band (0 is a full-scale sine in that band, floor -100). See `spectrumBands.ts` for the layout. */
   bands: number[];
+  /** Per-output-channel measurements; absent only on an older native bridge. */
+  channels?: SpectrumChannelLevel[];
   peakDb: number;
   rmsDb: number;
   /** True when a sample reached full scale within the last second. */

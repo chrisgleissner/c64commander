@@ -56,6 +56,10 @@ const frame = (overrides: Partial<SpectrumFrame> = {}): SpectrumFrame => ({
   peakDb: -6,
   rmsDb: -20,
   clipped: false,
+  channels: [
+    { id: "left", rmsDb: overrides.rmsDb ?? -20, peakDb: overrides.peakDb ?? -6, clipped: overrides.clipped ?? false },
+    { id: "right", rmsDb: overrides.rmsDb ?? -20, peakDb: overrides.peakDb ?? -6, clipped: overrides.clipped ?? false },
+  ],
   ...overrides,
 });
 
@@ -155,6 +159,53 @@ describe("SpectrumView", () => {
     expect(t.ctx.fills.some((f) => f.h > 20)).toBe(true);
   });
 
+  it("draws live meters with held caps every spectrum frame without waiting for the text readout", async () => {
+    const t = setup();
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(85);
+    expect(t.readouts).toHaveLength(0);
+    const meters = t.ctx.fills.filter((f) => f.y === 10 || f.y === 34);
+    expect(meters.length).toBeGreaterThan(2);
+    expect(meters.some((f) => f.w > 100)).toBe(true);
+    expect(t.ctx.fills.some((f) => f.y === 8 && f.h === 18)).toBe(true);
+    t.view.dispose();
+  });
+
+  it("keeps stereo rows when equal channel levels later diverge during the same playback", async () => {
+    let different = false;
+    let sequence = 0;
+    const t = setup({
+      frames: () =>
+        frame({
+          sequence: ++sequence,
+          channels: [
+            { id: "left", rmsDb: -20, peakDb: -6, clipped: false },
+            { id: "right", rmsDb: different ? -40 : -20, peakDb: different ? -26 : -6, clipped: false },
+          ],
+        }),
+    });
+    t.view.resize(300, 234, 1);
+    const labelsDrawn = t.layerCtx.fillText.mock.calls.length;
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(150);
+    expect(t.readouts.at(-1)?.channels).toHaveLength(2);
+    different = true;
+    await t.advance(150);
+    expect(t.readouts.at(-1)?.channels?.map((channel) => channel.rmsDb)).toEqual([-20, -40]);
+    expect(t.layerCtx.fillText.mock.calls).toHaveLength(labelsDrawn);
+    t.view.dispose();
+  });
+
+  it("shows one honest Mix meter for an older bridge with only aggregate levels", async () => {
+    const t = setup({ frames: () => frame({ channels: undefined }) });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(150);
+    expect(t.readouts.at(-1)?.channels).toEqual([{ label: "Mix", rmsDb: -20, peakDb: -6 }]);
+    t.view.dispose();
+  });
+
   it("reuses draw options and reports frame timing as primitives", async () => {
     const t = setup();
     t.view.resize(300, 150, 1);
@@ -228,7 +279,7 @@ describe("SpectrumView", () => {
   it("does not draw a new target for a frame it already has", async () => {
     let calls = 0;
     const t = setup({ frames: () => frame({ sequence: 5, bands: new Array(48).fill(calls++ === 0 ? -20 : -90) }) });
-    t.view.resize(300, 150, 1);
+    t.view.resize(300, 234, 1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(600);
     const loud = t.ctx.fills.filter((f) => f.h > 40);
@@ -498,7 +549,14 @@ describe("SpectrumView", () => {
       let n = 0;
       return () => {
         n += 1;
-        return frame({ sequence: n, active: n === 1, clipped: n === 1, bands: new Array(48).fill(-100) });
+        return frame({
+          sequence: n,
+          active: n === 1,
+          clipped: n === 1,
+          bands: new Array(48).fill(-100),
+          rmsDb: -100,
+          peakDb: -100,
+        });
       };
     };
 
