@@ -121,6 +121,8 @@ const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
+const keepMenuOpen = (event: Event) => event.preventDefault();
+
 const countNonHeaderItems = (list: ActionListItem[]) =>
   list.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
 
@@ -238,8 +240,15 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
                       return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
                     }
                     if (entry.type === "info") {
+                      // Not `disabled`: a menu's arrow keys skip disabled items, so on a keypad the
+                      // details could never be scrolled into view. OK on one leaves the menu open.
                       return (
-                        <DropdownMenuItem key={`info-${index}`} disabled>
+                        <DropdownMenuItem
+                          key={`info-${index}`}
+                          className="text-muted-foreground"
+                          data-menu-detail="true"
+                          onSelect={keepMenuOpen}
+                        >
                           {entry.label}: {entry.value}
                         </DropdownMenuItem>
                       );

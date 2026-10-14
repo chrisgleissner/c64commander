@@ -50,6 +50,21 @@ const settle = async (page: Page) => {
   await page.waitForTimeout(500);
 };
 
+/** The top edge of the keypad guidance bar, which covers whatever lies below it. */
+const guidanceBarTop = (page: Page) =>
+  page.getByTestId("keypad-guidance-bar").evaluate((element) => element.getBoundingClientRect().top);
+
+/** Sheets and menus open with a slide or zoom, so a box measured mid-animation is not where it settles. */
+const waitForAnimations = (page: Page) =>
+  page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished),
+    ),
+  );
+
 test.describe("Keypad-only navigation on the smallest screen", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -142,5 +157,146 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     expect(offScreen, `The focus ring selected controls that were off screen:\n  ${offScreen.join("\n  ")}`).toEqual(
       [],
     );
+  });
+
+  /*
+   * A bottom sheet stood on the bottom of the viewport while the keypad guidance bar covered its
+   * last 32 px. On a 427 px screen that hid the last line of the empty Liked Tunes text, which no
+   * key could reveal because the sheet's only stop is Close, and half of the selected Recent row.
+   */
+  test("a bottom sheet keeps its text above the keypad guidance bar @layout", async ({ page }) => {
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const opener = page.locator('[data-slot-active="true"]').getByTestId("sid-radio-liked-tunes-open");
+    expect(await ringFocus(page, opener), "the ring could not reach Liked Tunes").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("liked-tunes-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+    await waitForAnimations(page);
+
+    const barTop = await guidanceBarTop(page);
+    const sheetBottom = await sheet.evaluate((element) => element.getBoundingClientRect().bottom);
+    const textBottom = await sheet
+      .getByTestId("liked-tunes")
+      .evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(sheetBottom, "the sheet runs under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
+    expect(textBottom, "the empty Liked Tunes text is under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
+  });
+
+  test("the last Recent row selected by keypad is clear of the guidance bar @layout", async ({ page }) => {
+    await page.addInitScript(() => {
+      const entries = Array.from({ length: 12 }, (_, index) => ({
+        virtualPath: `/Usb0/Disks/Recent-Disk-${index + 1}.d64`,
+        title: `Recent-Disk-${index + 1}.d64`,
+        author: null,
+        folder: "/Usb0/Disks",
+        category: "disk",
+        source: "ultimate",
+        playedAt: 1_760_000_000_000 - index * 60_000,
+      }));
+      localStorage.setItem("c64u_recently_played:v2", JSON.stringify(entries));
+    });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const opener = page.locator('[data-slot-active="true"]').getByTestId("hvsc-search-open");
+    expect(await ringFocus(page, opener), "the ring could not reach Find a tune").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("hvsc-search-sheet");
+    const rows = sheet.getByTestId("recently-played-other-row");
+    await expect(rows).toHaveCount(12);
+    await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+    await waitForAnimations(page);
+
+    const last = rows.last();
+    for (let step = 0; step < 40; step += 1) {
+      if (await last.evaluate((element) => element === document.activeElement)) break;
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(60);
+    }
+    expect(
+      await last.evaluate((element) => element === document.activeElement),
+      "Down never reached the last row",
+    ).toBe(true);
+    await page.waitForTimeout(300);
+
+    const barTop = await guidanceBarTop(page);
+    const rowBottom = await last.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(rowBottom, "the selected row is partly under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
+  });
+
+  /*
+   * A playlist row's menu lists eleven detail rows above its actions. They were disabled menu items,
+   * which a menu's arrow keys skip, so a keypad opened the menu on its first action with the details
+   * scrolled above it and no key that could bring them back.
+   */
+  test("a playlist row's menu lets the keypad read every detail row @layout", async ({ page }) => {
+    await page.addInitScript(() => {
+      const items = Array.from({ length: 3 }, (_, index) => ({
+        source: "ultimate",
+        path: `/Usb0/Demos/Keypad_Menu_Tune_${index + 1}.sid`,
+        name: `Keypad_Menu_Tune_${index + 1}.sid`,
+        durationMs: 214_000,
+        songNr: 1,
+        sourceId: null,
+      }));
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify({ items, currentIndex: 0 }));
+    });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const trigger = page.locator('[data-slot-active="true"]').getByRole("button", { name: "Item actions" }).first();
+    await expect(trigger).toBeAttached({ timeout: 15_000 });
+    expect(await ringFocus(page, trigger), "the ring could not reach the row's menu button").toBe(true);
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await waitForAnimations(page);
+
+    // Walk the whole menu both ways, as a reader looking for the details would, and note every row
+    // the menu's own highlight landed on while that row was inside the menu's visible box.
+    const seen = new Set<string>();
+    const record = async () => {
+      const label = await page.evaluate(() => {
+        const focused = document.activeElement;
+        const box = focused?.closest('[role="menu"]')?.getBoundingClientRect();
+        if (!focused || !box || focused.getAttribute("role") !== "menuitem") return null;
+        const rect = focused.getBoundingClientRect();
+        const inMenu = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
+        const onScreen = rect.top >= 0 && rect.bottom <= window.innerHeight;
+        return inMenu && onScreen ? (focused.textContent ?? "").trim() : null;
+      });
+      if (label) seen.add(label.split(":")[0]);
+    };
+    for (const key of ["ArrowDown", "ArrowUp"]) {
+      for (let step = 0; step < 24; step += 1) {
+        await record();
+        await page.keyboard.press(key);
+        await page.waitForTimeout(60);
+      }
+    }
+
+    const details = [
+      "Type",
+      "Duration",
+      "Path",
+      "Status",
+      "Size",
+      "Date",
+      "Attached",
+      "Origin",
+      "Candidates",
+      "Overrides",
+    ];
+    expect(
+      details.filter((label) => !seen.has(label)),
+      "detail rows the keypad could not bring into view",
+    ).toEqual([]);
+    expect(seen.has("Review playback config"), "the menu's actions are still reachable").toBe(true);
   });
 });

@@ -6,12 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
+import { clickSourceSelectionButton } from "./sourceSelection";
+import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 
 /**
  * Readability and reach on the smallest screen the app supports.
@@ -117,8 +119,10 @@ const MIN_TARGETS = 15;
  */
 const MIN_BODY_TEXT_ELEMENTS = 10;
 
-const collectTextViolations = (page: Page, floor: number) =>
-  page.evaluate((minPx) => {
+/** Every sweep looks inside `scope`, a CSS selector: the whole page, or one open surface. */
+const collectTextViolations = (page: Page, floor: number, scope = "body") => {
+  const args = { minPx: floor, scope };
+  return page.evaluate(({ minPx, scope }) => {
     const describe = (element: Element) => {
       const parts = [element.tagName.toLowerCase()];
       const testId = element.getAttribute("data-testid");
@@ -135,7 +139,7 @@ const collectTextViolations = (page: Page, floor: number) =>
     const seen = new Set<Element>();
     let inspected = 0;
 
-    for (const element of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
+    for (const element of Array.from(document.querySelectorAll<HTMLElement>(`${scope} *`))) {
       if (seen.has(element)) continue;
       // Only elements that render text directly, so a wrapper is not blamed for its
       // children's type size.
@@ -166,10 +170,12 @@ const collectTextViolations = (page: Page, floor: number) =>
       results.push({ text: ownText.slice(0, 40), fontPx, selector: describe(element) });
     }
     return { violations: results, inspected };
-  }, floor);
+  }, args);
+};
 
-const collectTargetViolations = (page: Page, floor: number) =>
-  page.evaluate((minPx) => {
+const collectTargetViolations = (page: Page, floor: number, scope = "body") => {
+  const args = { minPx: floor, scope };
+  return page.evaluate(({ minPx, scope }) => {
     const describe = (element: Element) => {
       const parts = [element.tagName.toLowerCase()];
       const testId = element.getAttribute("data-testid");
@@ -189,7 +195,7 @@ const collectTargetViolations = (page: Page, floor: number) =>
     const results: Array<{ label: string; width: number; height: number; selector: string }> = [];
     let inspected = 0;
 
-    for (const control of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+    for (const control of Array.from(document.querySelectorAll<HTMLElement>(`${scope} :is(${selector})`))) {
       const element =
         control.getAttribute("role") === "slider"
           ? (control.closest<HTMLElement>("[data-orientation][dir]") ?? control)
@@ -242,7 +248,8 @@ const collectTargetViolations = (page: Page, floor: number) =>
       });
     }
     return { violations: results, inspected };
-  }, floor);
+  }, args);
+};
 
 /**
  * Paragraph-like prose inside the route's own content, ignoring the app chrome. Only
@@ -358,6 +365,77 @@ const settle = async (page: Page, profile = "compact") => {
   await page.waitForTimeout(600);
 };
 
+const SURFACE_MARKER = "data-ergonomics-surface";
+
+/** Dialogs open with a 95% zoom-in, so a box measured mid-animation reads 42 px for a 44 px control. */
+const waitForFiniteAnimations = (page: Page) =>
+  page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished),
+    ),
+  );
+
+/**
+ * The route sweeps above never open anything, so a control that only exists inside a dialog or a
+ * sheet was never measured. The dialog close control sat at 40x40 px in every surface that uses it
+ * while every route passed. Returns one line per violation, so one run reports every surface.
+ */
+const measureOpenSurface = async (page: Page, name: string, surface: Locator): Promise<string[]> => {
+  await expect(surface, `${name} did not open`).toBeVisible({ timeout: 15_000 });
+  await waitForFiniteAnimations(page);
+  await page.evaluate((marker) => {
+    document.querySelectorAll(`[${marker}]`).forEach((element) => element.removeAttribute(marker));
+  }, SURFACE_MARKER);
+  await surface.evaluate((element, marker) => element.setAttribute(marker, ""), SURFACE_MARKER);
+  const scope = `[${SURFACE_MARKER}]`;
+
+  const problems: string[] = [];
+  const text = (await collectTextViolations(page, MIN_TEXT_PX, scope)) as Swept<TextViolation>;
+  if (text.inspected === 0) problems.push(`${name}: no text was measured`);
+  for (const v of text.violations) problems.push(`${name}: text ${v.fontPx}px  ${v.selector}  "${v.text}"`);
+  const targets = (await collectTargetViolations(page, MIN_TARGET_PX, scope)) as Swept<TargetViolation>;
+  if (targets.inspected === 0) problems.push(`${name}: no controls were measured`);
+  for (const v of targets.violations)
+    problems.push(`${name}: target ${v.width}x${v.height}  ${v.selector}  "${v.label}"`);
+  return problems;
+};
+
+const closeSurface = async (page: Page, surface: Locator) => {
+  await page.keyboard.press("Escape");
+  await expect(surface).toBeHidden({ timeout: 5_000 });
+};
+
+const activeMain = (page: Page) => page.locator('[data-slot-active="true"]');
+
+const measurePlaySurfaces = async (page: Page): Promise<string[]> => {
+  const problems: string[] = [];
+
+  await activeMain(page).getByTestId("sid-radio-liked-tunes-open").click();
+  const liked = page.getByTestId("liked-tunes-sheet");
+  problems.push(...(await measureOpenSurface(page, "Liked Tunes", liked)));
+  await closeSurface(page, liked);
+
+  await activeMain(page)
+    .getByRole("button", { name: /Add items|Add more items/i })
+    .first()
+    .click();
+  const sources = page.locator('[role="dialog"][data-state="open"]').last();
+  problems.push(...(await measureOpenSurface(page, "Add items", sources)));
+
+  await clickSourceSelectionButton(page, "C64U");
+  await expect(page.getByTestId("c64u-file-picker")).toBeVisible({ timeout: 15_000 });
+  const browser = page.locator('[data-app-surface="sheet"]').last();
+  // The folder rows carry the "Open" buttons; measuring a browser with none of them proves nothing.
+  await expect(browser.locator('[data-testid="source-entry-row"][data-entry-type="dir"]').first()).toBeVisible({
+    timeout: 15_000,
+  });
+  problems.push(...(await measureOpenSurface(page, "File browser", browser)));
+  return problems;
+};
+
 test.describe("Small screen ergonomics", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -458,6 +536,55 @@ test.describe("Small screen ergonomics", () => {
       ),
       `Diagnostics controls below the ${MIN_TARGET_PX}px target size`,
     ).toEqual([]);
+  });
+
+  test("Home dialogs and sheets keep their text and targets above the floors @layout", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    const problems: string[] = [];
+
+    await activeMain(page).getByTestId("home-power-actions").click();
+    const power = page.getByTestId("home-power-sheet");
+    problems.push(...(await measureOpenSurface(page, "Power sheet", power)));
+    await closeSurface(page, power);
+
+    await activeMain(page)
+      .getByTestId("home-machine-controls")
+      .getByRole("button", { name: "Reset", exact: true })
+      .click();
+    const reset = page.getByTestId("machine-action-confirmation");
+    problems.push(...(await measureOpenSurface(page, "Reset confirmation", reset)));
+    await closeSurface(page, reset);
+
+    const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    // A plain click is intercepted by the app bar's own overlay at this width.
+    await badge.evaluate((node) => (node as HTMLButtonElement).click());
+    const diagnostics = page.getByTestId("diagnostics-sheet");
+    problems.push(...(await measureOpenSurface(page, "Diagnostics", diagnostics)));
+    await closeSurface(page, diagnostics);
+
+    expect(problems, `Below the ${MIN_TEXT_PX}px text or ${MIN_TARGET_PX}px target floor`).toEqual([]);
+  });
+
+  test("Play dialogs, sheets and the file browser keep their text and targets above the floors @layout", async ({
+    page,
+  }) => {
+    const problems: string[] = [];
+    const ftp = await startFtpTestServers();
+    try {
+      await seedFtpConfig(page, {
+        host: ftp.ftpServer.host,
+        port: ftp.ftpServer.port,
+        bridgeUrl: ftp.bridgeServer.baseUrl,
+        password: "",
+      });
+      await page.goto("/play", { waitUntil: "domcontentloaded" });
+      await settle(page);
+      problems.push(...(await measurePlaySurfaces(page)));
+    } finally {
+      await ftp.close();
+    }
+    expect(problems, `Below the ${MIN_TEXT_PX}px text or ${MIN_TARGET_PX}px target floor`).toEqual([]);
   });
 
   test("body text is not stepped down to fit the smallest screen @layout", async ({ page }) => {

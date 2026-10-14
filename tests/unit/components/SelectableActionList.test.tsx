@@ -618,6 +618,51 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   });
 
+  /*
+   * A menu's arrow keys skip disabled items. The detail rows were disabled, so a keypad could not
+   * reach them, and on a short screen they sat scrolled above the menu's first action for good.
+   */
+  it("keeps detail rows reachable by the menu's arrow keys, and OK on one leaves the menu open", async () => {
+    const items: ActionListItem[] = [
+      {
+        id: "track-1",
+        title: "Track One",
+        selected: false,
+        actionLabel: "Play",
+        onAction: vi.fn(),
+        menuItems: [
+          { type: "info", label: "Duration", value: "3:45" },
+          { type: "action", label: "Delete", onSelect: vi.fn() },
+        ],
+      },
+    ];
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+      />,
+    );
+    await act(async () => {
+      screen.getByRole("button", { name: "Item actions" }).click();
+    });
+
+    const detail = screen.getByRole("menuitem", { name: "Duration: 3:45" });
+    expect(detail).not.toHaveAttribute("data-disabled");
+    expect(detail).not.toHaveAttribute("aria-disabled", "true");
+
+    await act(async () => {
+      fireEvent.keyDown(detail, { key: "Enter" });
+    });
+
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+  });
+
   it("renders item with icon, titleSuffix, subtitle, and meta", () => {
     const items: ActionListItem[] = [
       {
