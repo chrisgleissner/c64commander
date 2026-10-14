@@ -10,6 +10,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { openAllCards } from "./cards";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
+import { LARGEST_TEXT_SCALE_ID } from "../src/lib/textScale";
 import { saveCoverageFromPage } from "./withCoverage";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
@@ -123,6 +124,41 @@ test.describe("Game Mode", () => {
     // and the button that used to be the second step no longer exists.
     await expect(page.getByTestId("remote-input-restore-chrome")).toBeVisible();
     await expect(page.getByTestId("remote-input-collapse-chrome")).toHaveCount(0);
+  });
+
+  test("with the picture off, the explanation starts below the Show controls handle and can be read from the top", async ({
+    page,
+  }) => {
+    await page.addInitScript((scaleId: string) => {
+      localStorage.setItem("c64u_game_mode_controls_visibility", "hidden");
+      localStorage.setItem("c64u_text_scale", scaleId);
+      localStorage.setItem("c64u_display_profile_override", "compact");
+    }, LARGEST_TEXT_SCALE_ID);
+    await page.setViewportSize({ width: 320, height: 427 });
+    await page.goto("/");
+    await waitForConnected(page);
+    await page.getByTestId("home-machine-inline-openGameMode").click();
+    await expectInGameMode(page);
+    const panel = page.getByTestId("remote-input-no-picture-panel");
+    await expect(panel).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const heading = document.querySelector('[data-testid="remote-input-no-picture-panel"] p');
+      const handle = document.querySelector('[data-testid="remote-input-restore-chrome"]');
+      let scroller = heading?.parentElement ?? null;
+      while (scroller && scroller.scrollHeight <= scroller.clientHeight) scroller = scroller.parentElement;
+      return {
+        headingTop: heading?.getBoundingClientRect().top ?? Number.NaN,
+        scrollerTop: scroller?.getBoundingClientRect().top ?? 0,
+        handleBottom: handle?.getBoundingClientRect().bottom ?? 0,
+      };
+    });
+    expect(layout.headingTop, "the heading sits above where its scroll box starts").toBeGreaterThanOrEqual(
+      layout.scrollerTop - 0.5,
+    );
+    expect(layout.headingTop, "the Show controls handle covers the heading").toBeGreaterThanOrEqual(
+      layout.handleBottom - 0.5,
+    );
   });
 
   test("Game Mode leads the Quick Action grid, ahead of every destructive one", async ({ page }) => {

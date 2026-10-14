@@ -768,8 +768,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                  the resolver used to ignore `hidden` here. The space carries the reason,
                  the switch that fixes it and the quick keys instead — all reachable from
                  a keypad, which the on-screen joystick is not. */
+              // Auto margins, not justify-center: centred content taller than the sheet overflowed above
+              // the scroll origin, where no key could reach it. Clears the "Show controls" handle at the top.
               <div
-                className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-4"
+                className={cn("my-auto flex shrink-0 flex-col gap-3 px-4", chromeHidden && "pt-12")}
                 data-testid="remote-input-no-picture-panel"
               >
                 <p className="text-sm font-medium">The picture is off</p>
