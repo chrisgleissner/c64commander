@@ -65,7 +65,7 @@ class FtpClientPlugin : Plugin() {
   private val completedReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
   private val maxTrackedCompletedReads = 256
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
-  internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
+  internal var ftpClientFactory: () -> FTPClient = { SocketClosingFtpClient() }
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
