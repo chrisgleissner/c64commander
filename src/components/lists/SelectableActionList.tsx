@@ -245,7 +245,7 @@ const ActionListRow = React.memo(function ActionListRow({ item, rowTestId, stack
                       return (
                         <DropdownMenuItem
                           key={`info-${index}`}
-                          className="text-muted-foreground"
+                          className="text-muted-foreground [overflow-wrap:anywhere]"
                           data-menu-detail="true"
                           onSelect={keepMenuOpen}
                         >
