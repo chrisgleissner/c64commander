@@ -616,6 +616,41 @@ describe("startup with a network on the device", () => {
     expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     expect(startMockServer).not.toHaveBeenCalled();
   });
+
+  const connectThenLoseNetwork = async () => {
+    vi.mocked(fetch).mockResolvedValue(respondWithDevice());
+    localStorage.setItem("c64u_device_host", "192.0.2.64");
+    const connection = await import("../../../src/lib/connection/connectionManager");
+    const network = await import("../../../src/lib/connection/networkStatusWatch");
+    await connection.initializeConnectionManager();
+    void connection.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(connection.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+
+    network.recordNetworkStatus({ online: false, supported: true });
+    await connection.noteDeviceUnreachable("network-lost");
+    expect(connection.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    return { ...connection, ...network };
+  };
+
+  it("stays offline when an answer the device sent before the network dropped arrives after it", async () => {
+    const { noteReachable, getConnectionSnapshot } = await connectThenLoseNetwork();
+
+    noteReachable("192.0.2.64", "rest", { product: "C64 Ultimate", errors: [] } as never);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+  });
+
+  it("reconnects on a device answer once the network is back", async () => {
+    const { noteReachable, recordNetworkStatus, getConnectionSnapshot } = await connectThenLoseNetwork();
+
+    recordNetworkStatus({ online: true, supported: true });
+    noteReachable("192.0.2.64", "rest", { product: "C64 Ultimate", errors: [] } as never);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+  });
 });
 
 describe("startup on a platform with no simulated device (HARD27-027)", () => {
