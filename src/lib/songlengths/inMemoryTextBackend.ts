@@ -130,15 +130,6 @@ const parseSongLengthFile = async (
     if (eqIndex > 0) {
       const md5 = normalizeMd5(line.slice(0, eqIndex));
       const durations = parseDurations(line.slice(eqIndex + 1));
-      if (!md5) {
-        onRejectedLine({
-          sourceFile,
-          line: lineNo,
-          raw: clampRawLine(rawLine),
-          reason: "invalid md5 key",
-        });
-        continue;
-      }
       if (!durations.length) {
         onRejectedLine({
           sourceFile,

@@ -376,7 +376,6 @@ const toMediaEntry = (entry: PersistedMediaIndexEntry): MediaEntry => ({
 const restoreHydratedMetadata = (snapshot: HvscBrowseIndexSnapshot, entry: PersistedMediaIndexEntry) => {
   if (!entry.hydrated && !entry.title && !entry.author && !entry.released && !entry.durations) return;
   const song = snapshot.songs[normalizePath(entry.path)];
-  if (!song) return;
   if (entry.durations && entry.durations.length > 1) {
     // Restores the tune count with it, which is what the card, the subsong selector and "play
     // all tunes" all read.

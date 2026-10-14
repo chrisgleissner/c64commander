@@ -64,4 +64,32 @@ describe("createTimeSlicer", () => {
 
     expect(seen).toEqual(["timer", "after-yield"]);
   });
+
+  it("yields through scheduler.yield when the platform provides it, without a timer", async () => {
+    const schedulerYield = vi.fn(async () => {});
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    vi.stubGlobal("scheduler", { yield: schedulerYield });
+    try {
+      await createTimeSlicer().yield();
+
+      expect(schedulerYield).toHaveBeenCalledTimes(1);
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
+  it("falls back to a zero-delay timer when scheduler exists without a yield function", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    vi.stubGlobal("scheduler", { postTask: () => {} });
+    try {
+      await createTimeSlicer().yield();
+
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 0);
+    } finally {
+      vi.unstubAllGlobals();
+      setTimeoutSpy.mockRestore();
+    }
+  });
 });
