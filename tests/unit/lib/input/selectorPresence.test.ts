@@ -72,6 +72,30 @@ describe("selectorPresence", () => {
     expect(tracker.isPresent()).toBe(false);
   });
 
+  it("ignores a tested attribute that takes a non-matching value or lands on a removed element", () => {
+    const tracker = presence();
+    const panel = doc.createElement("div");
+    doc.body.appendChild(panel);
+    expect(tracker.isPresent()).toBe(false);
+    panel.setAttribute("role", "region");
+    expect(tracker.isPresent()).toBe(false);
+    panel.setAttribute("role", "dialog");
+    panel.remove();
+    expect(tracker.isPresent()).toBe(false);
+  });
+
+  it("notifies every subscriber of one change", async () => {
+    const tracker = presence();
+    const first = vi.fn();
+    const second = vi.fn();
+    tracker.subscribe(first);
+    tracker.subscribe(second);
+    doc.body.innerHTML = "<div data-popper></div>";
+    await settle();
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
   it("stays present while a second match remains after the first is removed", () => {
     const tracker = presence();
     doc.body.innerHTML = "<div id='a' role='dialog'></div><div id='b' data-popper></div>";
