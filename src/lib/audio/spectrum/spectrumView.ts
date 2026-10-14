@@ -56,10 +56,10 @@ const READOUT_INTERVAL_MS = 100;
 /** A frame drawn at the next tick is on the display one frame after that. */
 const PRESENT_FRAMES_AHEAD = 2;
 /** Frames asked for in one read, one display frame apart, so a late draw still finds the frame for its moment. */
-const FRAMES_PER_READ = 4;
+const FRAMES_PER_READ = 8;
 /** A new read is issued when fewer than this many display frames of sound are already waiting. */
-const LOOK_AHEAD_FRAMES = 3;
-const MAX_PENDING_FRAMES = 16;
+const LOOK_AHEAD_FRAMES = 5;
+const MAX_PENDING_FRAMES = 24;
 const ALIGNMENT_SAMPLES = 1024;
 const DRAW_GAP_SAMPLES = 16;
 

@@ -294,9 +294,9 @@ describe("SpectrumView", () => {
       await t.advance(1000);
       const alignedRequests = t.requests.filter((request) => (request?.count ?? 1) > 1);
       expect(alignedRequests.length).toBeGreaterThan(5);
-      expect(alignedRequests[0]!.count).toBe(4);
+      expect(alignedRequests[0]!.count).toBe(8);
       expect(alignedRequests[0]!.stepNanos).toBeGreaterThan(15e6);
-      expect(t.reads.length).toBeLessThan(45);
+      expect(t.reads.length).toBeLessThan(35);
       t.view.dispose();
     });
 
@@ -346,7 +346,7 @@ describe("SpectrumView", () => {
       }
       expect(issued).toBeGreaterThan(1);
       expect(mostWaiting).toBeGreaterThanOrEqual(2);
-      expect(mostWaiting).toBeLessThanOrEqual(8);
+      expect(mostWaiting).toBeLessThanOrEqual(14);
       t.view.dispose();
     });
   });
