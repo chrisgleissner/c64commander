@@ -172,6 +172,9 @@ describe("classifyFocusKind", () => {
     ["<a>No href</a>", "button"],
     ["<button>Press</button>", "button"],
     ['<div role="button"></div>', "button"],
+    ['<button aria-expanded="true">Spectrum</button>', "collapse"],
+    ['<button aria-expanded="false">Spectrum</button>', "expand"],
+    ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "button"],
   ] as const)("%s → %s", (html, kind) => {
     expect(classifyFocusKind(el(html), false)).toBe(kind);
   });

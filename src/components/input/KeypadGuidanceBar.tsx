@@ -71,11 +71,18 @@ const buildGuidanceState = (
     : accessibleLabelFor(currentElement);
   if (currentLabel) breadcrumb.push(currentLabel);
 
+  // OK on a card with a single control presses that control, so the bar names what it does.
+  const children = current && isGroup ? focus.enabledChildrenOf(current.id) : [];
+  const onlyControl = children.length === 1 && !focus.hasEnabledChildren(children[0].id) ? children[0] : null;
+  const currentKind = onlyControl
+    ? classifyFocusKind(engine.elementForId(onlyControl.id), false)
+    : classifyFocusKind(currentElement, isGroup);
+
   return {
     enabled,
     modality: getInputModality(),
     hasCurrent: current !== null,
-    currentKind: classifyFocusKind(currentElement, isGroup),
+    currentKind,
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),

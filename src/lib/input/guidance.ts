@@ -31,7 +31,18 @@ import { selectorPresence } from "./selectorPresence";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
-  "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "status" | "none";
+  | "group"
+  | "button"
+  | "expand"
+  | "collapse"
+  | "link"
+  | "field"
+  | "select"
+  | "switch"
+  | "slider"
+  | "tab"
+  | "status"
+  | "none";
 
 /** A plain, DOM-free snapshot of the ring the bar needs to choose its labels. */
 export interface GuidanceState {
@@ -83,6 +94,8 @@ export interface GuidanceLabels {
 const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   group: "Open",
   button: "Activate",
+  expand: "Expand",
+  collapse: "Collapse",
   link: "Open",
   field: "Edit",
   select: "Select",
@@ -207,6 +220,9 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   if (tag === "TEXTAREA") return "field";
   if (element instanceof HTMLElement && element.isContentEditable) return "field";
   if (tag === "A") return element.hasAttribute("href") ? "link" : "button";
+  const expanded = element.hasAttribute("aria-haspopup") ? null : element.getAttribute("aria-expanded");
+  if (expanded === "true") return "collapse";
+  if (expanded === "false") return "expand";
   if (tag === "BUTTON" || role === "button" || role === "menuitem") return "button";
   return "button";
 };

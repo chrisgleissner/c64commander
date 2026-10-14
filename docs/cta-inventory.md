@@ -93,8 +93,9 @@ F1 is the neutral `function1` action (see the F1 row).
   clears it the same frame.
 - **Guidance bar:** a fixed bar above the TabBar (at the screen edge while a
   dialog or sheet hides the TabBar) showing the breadcrumb plus the contextual
-  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate (by
-  control kind), right = Menu only where the focused control has a menu of its
+  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate, or
+  Expand/Collapse on a control with `aria-expanded` (by control kind; on a card
+  whose only control is its header, by that control), right = Menu only where the focused control has a menu of its
   own. While a single-line field on a page has focus, left and center read Done;
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
@@ -126,7 +127,9 @@ F1 is the neutral `function1` action (see the F1 row).
 ## 2. Navigation model (summary)
 
 - **Up/Down** (and Tab/Shift+Tab) move between sibling CTAs and groups in the
-  active scope and wrap.
+  active scope and wrap. In a group whose only enabled stop is the selected one
+  (a Config category collapsed from inside), they move among the group's
+  siblings instead.
 - **OK/Center/Call** descend into a group (a container with ≥1 enabled child) or
   activate a leaf. A group with a single enabled leaf activates it directly.
 - **OK** in a single-line field on a page leaves the field after the field has
