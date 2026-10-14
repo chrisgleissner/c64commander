@@ -411,7 +411,14 @@ export class FocusDiscoveryEngine {
     const standing = this.standingWhenRingEmptied;
     this.standingWhenRingEmptied = null;
     if (!standing || standing.scope !== scope || !this.controller.currentIsDefaultSelection()) return undefined;
-    return this.controller.setCurrent(standing.id) ? standing.id : undefined;
+    if (this.controller.setCurrent(standing.id)) return standing.id;
+    this.pendingReturn = {
+      scope,
+      id: standing.id,
+      fallbackId: this.controller.current()?.id,
+      until: Date.now() + RETURN_TO_OPENER_WINDOW_MS,
+    };
+    return undefined;
   }
 
   private retryPendingReturn(scope: Element): string | undefined {

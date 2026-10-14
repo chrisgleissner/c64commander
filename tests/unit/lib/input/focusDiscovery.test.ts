@@ -522,6 +522,29 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("returns to the opener when only the tab bar is back on the first scan after a key-owning surface closes", () => {
+    const page = mount(`<div id="page"><button id="first">first</button><button id="opener">opener</button></div>`);
+    mount(`<button id="tab">tab</button>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
+    controller.setCurrent(openerId);
+
+    const sheet = mount(`<div role="dialog" data-key-nav-skip=""><button id="ok">OK</button></div>`);
+    page.setAttribute("aria-hidden", "true");
+    document.getElementById("tab")!.setAttribute("aria-hidden", "true");
+    engine.refresh();
+    expect(controller.list()).toHaveLength(0);
+    sheet.remove();
+    document.getElementById("tab")!.removeAttribute("aria-hidden");
+    engine.refresh();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
   it("keeps the selection on a card whose own stop moves inside it as it opens", () => {
     // Only the innermost labelled container is a group, so opening a card that renders a labelled
     // group of rows takes the card itself out of the ring.
