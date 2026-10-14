@@ -299,4 +299,43 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     ).toEqual([]);
     expect(seen.has("Review playback config"), "the menu's actions are still reachable").toBe(true);
   });
+
+  test("a selected card's top edge is never left under the app bar @layout", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await settle(page);
+
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    // Only the step that selects a card is checked. Down on the page's last card scrolls on to the
+    // text below it while the selection stays put, which moves that card up on purpose.
+    const underAppBar: string[] = [];
+    let previousLabel: string | null = null;
+    for (let step = 0; step < 14; step += 1) {
+      const info = await page.evaluate(() => {
+        const selected = document.querySelector('[data-key-selected="true"]');
+        const shell = selected?.closest(".page-shell");
+        const appBar =
+          shell?.closest("[data-route-index]")?.querySelector("header") ?? document.querySelector("header");
+        if (!selected || !shell || !appBar) return null;
+        return {
+          label: selected.getAttribute("data-testid") ?? selected.tagName,
+          top: selected.getBoundingClientRect().top,
+          appBarBottom: appBar.getBoundingClientRect().bottom,
+        };
+      });
+      const newlySelected = info !== null && info.label !== previousLabel;
+      previousLabel = info?.label ?? null;
+      if (info && newlySelected && info.top < info.appBarBottom) {
+        underAppBar.push(`${info.label} (top ${Math.round(info.top)}, app bar ends ${Math.round(info.appBarBottom)})`);
+      }
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(150);
+    }
+
+    expect(underAppBar, `Selected cards whose top edge was under the app bar:\n  ${underAppBar.join("\n  ")}`).toEqual(
+      [],
+    );
+  });
 });

@@ -106,6 +106,20 @@ F1 is the neutral `function1` action (see the F1 row).
   registers.
 - **Group scope outline:** `data-key-scope` dashed outline around the enclosing
   group while the ring is descended inside it.
+- **Scroll into view:** a selected stop is scrolled clear of the app bar above and
+  the guidance bar below, measured inside the container that scrolls it. A stop
+  taller than that area is aligned by its top edge.
+- **`aria-disabled` controls:** stay ring stops, as WAI-ARIA requires. Up/Down
+  skip them and OK does nothing on them, but a selection already on one stays
+  there (the Play/Stop button while a Stop is pending).
+- **OK acts on the highlight:** while keys drive the ring, OK activates the
+  highlighted stop even when DOM focus was left on a different stop.
+- **Closing a dialog or sheet:** the selection and DOM focus return to the
+  control that was selected when it opened.
+- **Destructive confirmations open on Cancel:** Reset and the other machine
+  actions, Power off, Clear flash, Remove disk(s), Delete config, Delete device,
+  Clear diagnostics, Clear custom edits, Clear playlist and Reset HVSC all open
+  with Cancel selected, so OK pressed twice dismisses the dialog.
 
 ---
 
@@ -250,13 +264,13 @@ not-connected / empty / single-device).
       can be applied: Preload on Startup — button — `restore-reu-preload` — and Load into REU —
       button — `restore-reu-load`
     - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Backup, at the end of the list
-  - Reset — button (danger) — `home-machine-reset` — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
+  - Reset — button (danger) — `home-machine-reset` — R✅ I✅ (confirm dialog, opens on Cancel) — keeps a tile of its own; it is among the most-reached controls in the app
   - Power — button (danger) — `home-power-actions` — R✅ I✅ — opens the **Power sheet** (`home-power-sheet`); disabled only when every row inside it is
   - **Power sheet** (`home-power-sheet`, opened by `home-power-actions`) — rows in increasing severity, each keeping the confirmation it had as a tile
     - Reboot — button — `home-power-action-reboot` — R✅ I✅ (confirm dialog)
     - Reboot (Clr Mem) — button — `home-power-action-rebootClearMemory` — R✅ I✅ (confirm dialog) _(flag `home_telnet_clear_ram_reboot_enabled`)_
     - Power Cycle — button — `home-power-action-power-cycle` — R✅ I✅ (confirm dialog) _(flag `home_telnet_power_cycle_enabled`; conditional on device capability)_
-    - Power Off — button — `home-power-action-power-off` — R✅ I✅ (its own `Confirm power off` dialog)
+    - Power Off — button — `home-power-action-power-off` — R✅ I✅ (its own `Confirm power off` dialog, opens on Cancel)
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
   - CPU Speed — slider — `home-cpu-speed-slider` — R✅ I✅ **(verified end-to-end: keypad Right 1→4 reflected in c64u firmware; Left restored)**

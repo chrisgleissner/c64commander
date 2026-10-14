@@ -172,12 +172,17 @@ const isChainVisible = (node: Element | null, scan: DiscoveryScan): boolean => {
   return visible;
 };
 
-/** Disabled for the ring: the `disabled` property/attribute or `aria-disabled="true"`. */
-export const isFocusDisabled = (element: Element): boolean => {
-  if ("disabled" in element && (element as { disabled?: boolean }).disabled === true) return true;
-  if (element.hasAttribute("disabled")) return true;
-  return element.getAttribute("aria-disabled") === "true";
-};
+/** Natively disabled: the browser cannot focus it, so it is not a ring stop at all. */
+export const isNativelyDisabled = (element: Element): boolean =>
+  ("disabled" in element && (element as { disabled?: boolean }).disabled === true) || element.hasAttribute("disabled");
+
+/**
+ * Disabled for the ring: natively disabled or `aria-disabled="true"`. An aria-disabled control stays focusable, as
+ * WAI-ARIA requires, so it remains a ring stop that navigation skips and activation refuses; a selection already on
+ * it stays there.
+ */
+export const isFocusDisabled = (element: Element): boolean =>
+  isNativelyDisabled(element) || element.getAttribute("aria-disabled") === "true";
 
 /** Within a `data-key-nav-skip` subtree (bounded at `scope`). */
 export const isSkipped = (element: Element, scope: Element): boolean => {
@@ -362,7 +367,7 @@ export interface DiscoverOptions {
 }
 
 /**
- * Every interactive element within `scope`, filtered (visible, enabled, not
+ * Every interactive element within `scope`, filtered (visible, not natively disabled, not
  * skipped, not inside an excluded subtree) and sorted into reading order.
  * Deduped by element identity.
  */
@@ -375,7 +380,7 @@ export const discoverInteractiveElements = (scope: Element, options: DiscoverOpt
     if (!(candidate instanceof HTMLElement)) continue;
     if (seen.has(candidate)) continue;
     if (!isFocusVisible(candidate, scan)) continue;
-    if (isFocusDisabled(candidate)) continue;
+    if (isNativelyDisabled(candidate)) continue;
     if (isSkipped(candidate, scope)) continue;
     if (excluded.some((selector) => candidate.closest(selector))) continue;
     seen.add(candidate);

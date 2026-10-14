@@ -288,8 +288,12 @@ export const FocusNavigationProvider = ({
           adoptFocusAwaitingRingRef.current();
           notifyRing();
         },
+        // Radix may hand DOM focus back to a different stop; focusing the opener makes the ring's return hold.
+        onReturnToOpener: (id) => {
+          if (getInputModality() === "key-navigation") focusRingElement(ringElementFor(id));
+        },
       }),
-    [controller, notifyRing],
+    [controller, notifyRing, ringElementFor],
   );
   engineRef.current = engine;
 
@@ -727,12 +731,14 @@ export const FocusNavigationProvider = ({
       if (event.defaultPrevented && (action === "back" || action === "escape" || action === "softLeft")) {
         return;
       }
-      // Defer activation to a real focused control outside the ring (invariant 3).
+      // Defer activation to a real focused control outside the ring (invariant 3). Another ring stop
+      // holding DOM focus while keys drive the ring is stale focus: OK acts on the highlighted stop.
       if (
         (action === "enter" || action === "center" || action === "activate") &&
         activeElement instanceof HTMLElement &&
         isNativelyActivatable(activeElement) &&
-        activeElement !== (engineRef.current?.elementForId(controller.focus.current()?.id ?? "") ?? null)
+        activeElement !== ringElementFor(controller.focus.current()?.id ?? "") &&
+        !(getInputModality() === "key-navigation" && engineRef.current?.isRingStop(activeElement))
       ) {
         return;
       }
@@ -799,7 +805,7 @@ export const FocusNavigationProvider = ({
       window.removeEventListener("touchstart", handlePointer, true);
       window.removeEventListener("focusin", handleFocusIn, true);
     };
-  }, [adoptActiveElement, controller, enabled, keymap, notifyRing, startEngine]);
+  }, [adoptActiveElement, controller, enabled, keymap, notifyRing, ringElementFor, startEngine]);
 
   const value = useMemo<FocusNavigationContextValue>(
     () => ({

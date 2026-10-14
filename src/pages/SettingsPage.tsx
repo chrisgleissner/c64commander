@@ -2085,7 +2085,7 @@ export default function SettingsPage() {
                       </div>
                     ) : null}
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => {
                           void confirmDeleteSelectedDevice();
