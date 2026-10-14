@@ -532,7 +532,7 @@ Playing on your C64:
 
 #### The sound itself
 
-**Volume** and **Mute** follow whichever machine is making the sound. Playing here, they change this tune alone and leave your ringer and notifications as they were. Playing on the C64, they move the machine’s own mixer.
+**Volume** and **Mute** follow whichever machine is making the sound. Playing here, they change this tune alone and leave your ringer and notifications as they were. Playing on the C64, they move the machine’s own mixer, so with **Both** chosen, **Mute** silences your C64 and the sound it sends here alike. If you choose **Here** while your C64 is muted, the mute moves with the sound: your C64 returns to the volume it had before, and the tune here starts muted, with **Unmute** where you expect it.
 
 Your phone or tablet plays either its own tune or the sound sent from your C64, never both at once. Whichever you start last wins.
 

@@ -353,7 +353,9 @@ not-connected / empty / single-device).
   do not move when a long title truncates)
 - Now playing, two lines: author · released — `playback-current-credits`; SID model · clock · tune position · length — `playback-current-facts`
 - Mute — button — `volume-mute` — R✅ I✅ `[disabled]` (icon-only; the accessible name carries the
-  state, and on the on-device route it attenuates the samples rather than the device's volume)
+  state, and on the on-device route it attenuates the samples rather than the device's volume). On the
+  C64 route it sets `Vol Master` to OFF and the readout shows OFF; when the sound moves to this device
+  the C64 is restored and this device's output is muted instead
 - Volume — slider — `volume-slider` — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
   the former `volume-caption` label is gone, the readout is fixed-width so the row cannot reflow
 - Shuffle / Repeat — checkbox — `playback-shuffle|playback-repeat` — R✅ I✅ — **not rendered** while

@@ -151,6 +151,7 @@ import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
 import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
+import { useC64MuteFollowsRoute } from "@/pages/playFiles/hooks/useC64MuteFollowsRoute";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
 import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOverlayState";
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
@@ -404,6 +405,7 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
+    releaseManualMute,
   } = usePlayFilesVolumeBindings({ isPlaying, isPaused, resolvedDeviceId: getSelectedSavedDevice()?.id ?? null });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
@@ -2000,9 +2002,21 @@ export default function PlayFilesPage() {
     });
   }, []);
 
+  const muteLocalOutput = useCallback(() => {
+    getSharedLocalSidPlaybackController().setMuted(true);
+    setLocalMuted(true);
+  }, []);
+  const soundingRoute = resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local);
+  useC64MuteFollowsRoute({
+    route: soundingRoute,
+    c64Muted: volumeMuted && volumeState.reason !== "pause",
+    sidPlaying: isPlaying && currentItem?.category === "sid",
+    releaseC64Mute: releaseManualMute,
+    muteHere: muteLocalOutput,
+  });
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeBinding = resolvePlaybackVolumeBinding({
-    route: resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local),
+    route: soundingRoute,
     local: {
       index: localVolumeIndex,
       muted: localMuted,
@@ -2224,13 +2238,8 @@ export default function PlayFilesPage() {
       if (!ids.size) return;
       const plan = planPlaylistItemRemoval(playlist, currentIndex, ids, isPlaying, isPaused);
       if (plan.shouldStopDevice) {
-        // Route through handleStop so the C64 actually stops instead of
-        // continuing to play a track the playlist no longer has, and so the
-        // native auto-advance watchdog due-time is cleared. handleStop
-        // performs the full teardown (resume-if-paused, device stop, volume
-        // restore, guard/due-at clear) that used to be partially and
-        // impurely duplicated as setState calls inside the setPlaylist
-        // updater below. See HARD9-030.
+        // HARD9-030: the full teardown, so the C64 stops a track the playlist no longer has and the
+        // native auto-advance due-time is cleared.
         stopPlayback();
       }
       setPlaylist(plan.next);
@@ -2626,14 +2635,7 @@ export default function PlayFilesPage() {
                 totalLabel={formatTime(playlistTotals.total)}
                 remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
-                  // Bound to whichever route is sounding — see resolvePlaybackVolumeBinding. The two
-                  // routes must not be blended: while the C64 route's handlers also ran on this
-                  // device, its synchronisation loop pulled the slider back to the Ultimate's level
-                  // a moment after every drag.
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {/* Where the sound goes, then how loud it is — one row answering both. The
-                        chip used to be a three-button block at the top of the card, which spent
-                        30% of a 427 px screen on a preference and pushed the transport off it. */}
                     {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
                       <PlaybackEngineToggle />
                     ) : null}

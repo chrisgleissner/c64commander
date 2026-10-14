@@ -266,7 +266,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     }
     const persisted = hydratePlaybackSnapshot(resolvedDeviceId);
     if (!persisted) return;
-    if (persisted.volumeSnapshot) {
+    if (Object.keys(persisted.volumeSnapshot).length) {
       volumeSessionSnapshotRef.current = persisted.volumeSnapshot;
     }
     if (persisted.volumeActive) {
@@ -292,7 +292,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   // re-render on mutation); the persist effect runs on every isPlaying/
   // isPaused edge which is the moment Stop/handleTabAway would otherwise
   // need the snapshot.
-  useEffect(() => {
+  const persistVolumeSession = useCallback(() => {
     if (!resolvedDeviceId) return;
     persistPlaybackSnapshot({
       deviceId: resolvedDeviceId,
@@ -303,7 +303,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       pauseMuteSnapshot: pauseMuteSnapshotRef.current?.volumes ?? null,
       pauseMuteEnablement: pauseMuteSnapshotRef.current?.enablement ?? null,
     });
-  }, [isPlaying, isPaused, resolvedDeviceId]);
+  }, [resolvedDeviceId]);
+  useEffect(persistVolumeSession, [isPlaying, isPaused, persistVolumeSession]);
   const previousVolumeIndexRef = useRef<number | null>(null);
   const mutedDraftVolumeIndexRef = useRef<number | null>(null);
   const volumeUpdateTimerRef = useRef<number | null>(null);
@@ -364,8 +365,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
 
   const resolveMutedVolumeIndex = useCallback(
     (items: typeof audioMixerItems) => {
-      const options = items.find((item) => Array.isArray(item.options) && item.options.length)?.options;
-      return resolveVolumeIndex(resolveSidMutedVolumeOption(options));
+      const item = items.find((entry) => Array.isArray(entry.options) && entry.options.length);
+      return resolveVolumeIndex(resolveSidMutedVolumeOption(item?.options, item?.name));
     },
     [resolveVolumeIndex],
   );
@@ -389,7 +390,9 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       const sessionSnapshot = volumeSessionSnapshotRef.current;
       const snapshotAlreadyMuted =
         items.length > 0 &&
-        items.every((item) => String(volumes[item.name] ?? "") === String(resolveSidMutedVolumeOption(item.options)));
+        items.every(
+          (item) => String(volumes[item.name] ?? "") === String(resolveSidMutedVolumeOption(item.options, item.name)),
+        );
       if (snapshotAlreadyMuted && sessionSnapshot) {
         return {
           volumes: { ...sessionSnapshot },
@@ -786,14 +789,18 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       if (!volumeSessionActiveRef.current) return;
       const snapshot = volumeSessionSnapshotRef.current;
       if (!snapshot) return;
+      const endVolumeSession = () => {
+        volumeSessionSnapshotRef.current = null;
+        volumeSessionActiveRef.current = false;
+        manualMuteSnapshotRef.current = null;
+        manualMuteIntentRef.current = false;
+        pauseMuteSnapshotRef.current = null;
+        dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
+        volumeUiTargetRef.current = null;
+      };
       const restorePromise = (async () => {
         if (status.state === "DEMO_ACTIVE" || (!status.isConnected && !status.isConnecting)) {
-          volumeSessionSnapshotRef.current = null;
-          volumeSessionActiveRef.current = false;
-          manualMuteSnapshotRef.current = null;
-          pauseMuteSnapshotRef.current = null;
-          dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
-          volumeUiTargetRef.current = null;
+          endVolumeSession();
           return;
         }
         if (playbackWriteInFlightRef.current) {
@@ -815,12 +822,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
             }
           });
         }
-        volumeSessionSnapshotRef.current = null;
-        volumeSessionActiveRef.current = false;
-        manualMuteSnapshotRef.current = null;
-        pauseMuteSnapshotRef.current = null;
-        dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
-        volumeUiTargetRef.current = null;
+        endVolumeSession();
       })();
       restoreInFlightRef.current = restorePromise;
       try {
@@ -1171,7 +1173,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     if (isDraggingVolumeRef.current) {
       return;
     }
-    const muteValues = playbackVolumeItems.map((item) => resolveSidMutedVolumeOption(item.options));
+    const muteValues = playbackVolumeItems.map((item) => resolveSidMutedVolumeOption(item.options, item.name));
     const activeIndices: number[] = [];
     playbackVolumeItems.forEach((item, index) => {
       if (isSidVolumeOffValue(item.value)) return;
@@ -1194,6 +1196,11 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       } else {
         return;
       }
+    }
+    if (activeIndices.length && manualMuteSnapshotRef.current && !manualMuteIntentRef.current) {
+      manualMuteSnapshotRef.current = null;
+      addLog("info", "Play volume mute snapshot dropped: the C64 reports it unmuted", { activeIndices });
+      persistVolumeSession();
     }
     if (shouldHoldManualMuteSync(manualMuteIntentRef.current, activeIndices)) {
       addLog("debug", "Play volume sync held while manual mute intent remains authoritative", {
@@ -1267,6 +1274,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     clearPendingVolumeWrite,
     defaultVolumeIndex,
     dispatchTrackedVolume,
+    persistVolumeSession,
     resolveMutedVolumeIndex,
     volumeIndex,
     volumeState.reason,
@@ -1351,6 +1359,17 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     ],
   );
 
+  const releaseManualMute = useCallback(
+    async (reason: string) => {
+      if (!volumeMuted || (!manualMuteIntentRef.current && !manualMuteSnapshotRef.current)) return false;
+      addLog("info", "Play volume mute released on the C64", { reason });
+      await ensureUnmuted({ force: true, refreshItems: true });
+      persistVolumeSession();
+      return true;
+    },
+    [ensureUnmuted, persistVolumeSession, volumeMuted],
+  );
+
   return {
     volumeState,
     dispatchVolume,
@@ -1384,5 +1403,6 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     handleVolumeCommit,
     handleToggleMute,
     ensureUnmuted,
+    releaseManualMute,
   };
 }

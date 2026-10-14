@@ -1546,6 +1546,7 @@ describe("useVolumeOverride", () => {
   });
 
   it("updates manual mute snapshots on local changes and muted commits without sending writes", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("-42 dB");
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
     );
