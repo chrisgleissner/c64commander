@@ -12,19 +12,24 @@ export interface SpectrumTier {
   index: 0 | 1 | 2 | 3;
   /** Frames drawn per second. */
   drawFps: number;
-  /** Analysis frames requested per second. */
-  dataHz: number;
   bars: 48 | 24 | 12;
   glow: boolean;
   /** False draws each bar in flat colour steps instead of a gradient. */
   gradient: boolean;
 }
 
+/**
+ * Analysis frames requested per second, whatever the tier. A tier only decides what drawing costs:
+ * polling at the draw tier's rate made a slow phone's bars late as well as coarse, and a poll is a
+ * few milliseconds of bridge time against a draw that costs far more.
+ */
+export const SPECTRUM_POLL_HZ = 30;
+
 export const SPECTRUM_TIERS: readonly SpectrumTier[] = [
-  { index: 0, drawFps: 60, dataHz: 30, bars: 48, glow: true, gradient: true },
-  { index: 1, drawFps: 30, dataHz: 20, bars: 48, glow: false, gradient: true },
-  { index: 2, drawFps: 20, dataHz: 15, bars: 24, glow: false, gradient: true },
-  { index: 3, drawFps: 12, dataHz: 10, bars: 12, glow: false, gradient: false },
+  { index: 0, drawFps: 60, bars: 48, glow: true, gradient: true },
+  { index: 1, drawFps: 30, bars: 48, glow: false, gradient: true },
+  { index: 2, drawFps: 20, bars: 24, glow: false, gradient: true },
+  { index: 3, drawFps: 12, bars: 12, glow: false, gradient: false },
 ];
 
 export const LOWEST_SPECTRUM_TIER = SPECTRUM_TIERS.length - 1;

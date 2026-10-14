@@ -556,7 +556,7 @@ There is no playlist to build, and nothing downloads while you listen. Once the 
 
 #### The spectrum and audio processing
 
-On an Android phone, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, from teal for quiet through green and amber to red near the loudest, and the small cap above a bar is that pitch's recent peak. **Level** and **Peak** give the overall loudness in dB, and the **Clip** lamp lights for a moment when the sound reaches the top of its range. It covers every sound your phone plays: a tune playing on it, and your C64's sound when Live View plays it here. It does not show sound that comes out of the C64 itself.
+On an Android phone, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, from teal for quiet through green and amber to red near the loudest, and the small cap above a bar is that pitch's recent peak. **Level** and **Peak** give the overall loudness in dB, and the **Clip** lamp lights for a moment when the sound reaches the top of its range. When a tune plays on your phone, the bars follow what its speaker is playing at that moment, after the audio processing described below. When Live View plays your C64's sound here, the bars follow your C64's own sound as it arrives, before that processing, so they keep time with your C64 rather than with the copy your phone plays a moment later.
 
 ![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/compact/01-spectrum.png)
 
