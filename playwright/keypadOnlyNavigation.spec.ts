@@ -395,4 +395,24 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expect(menu).toBeHidden();
     await expect(sheet).toBeFocused();
   });
+
+  test("closing Remote Input returns the selection to the Home control that opened it @layout", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openRemoteInput = page
+      .locator('[data-slot-active="true"]')
+      .getByTestId("home-machine-inline-openRemoteInput");
+    expect(await ringFocus(page, openRemoteInput), "The ring could not reach Remote Input on Home").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(sheet).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+  });
 });
