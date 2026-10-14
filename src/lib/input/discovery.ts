@@ -112,6 +112,12 @@ export const INTERACTIVE_SELECTOR = [
 ].join(",");
 
 const TABBAR_SELECTOR = `[${SCOPE_ATTR}='tabbar']`;
+export const SECTION_SCOPE_SELECTOR = "[data-section-scope]";
+
+export const hasSectionScopeIn = (scope: Element): boolean =>
+  selectorPresence(scope.ownerDocument, SECTION_SCOPE_SELECTOR, ["data-section-scope"]).isPresent() &&
+  scope.querySelector(SECTION_SCOPE_SELECTOR) !== null;
+
 const PAGE_SCOPE_SELECTOR = `[${SCOPE_ATTR}='page']`;
 
 /**

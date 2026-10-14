@@ -71,8 +71,8 @@ import {
   isSingleLineField,
   OPEN_OVERLAY_ANCESTOR_SELECTOR,
 } from "@/lib/input/eventTargets";
+import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
-import { selectorPresence } from "@/lib/input/selectorPresence";
 import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
@@ -87,12 +87,6 @@ import { isOnActivePage } from "@/lib/navigation/activePage";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import { mountAllWaiting } from "@/lib/ui/progressiveMount";
-
-const SECTION_SCOPE_SELECTOR = "[data-section-scope]";
-
-const hasSectionScopeIn = (scope: Element): boolean =>
-  selectorPresence(scope.ownerDocument, SECTION_SCOPE_SELECTOR, ["data-section-scope"]).isPresent() &&
-  scope.querySelector(SECTION_SCOPE_SELECTOR) !== null;
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
 const KEY_SELECTED_ATTR = "data-key-selected";
