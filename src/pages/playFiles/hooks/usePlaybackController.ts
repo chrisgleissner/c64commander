@@ -116,6 +116,7 @@ import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
+import { usePauseMute, type SidMuteSnapshot } from "@/pages/playFiles/hooks/usePauseMute";
 
 type HandledUiError = Error & { c64uHandled?: boolean };
 
@@ -127,11 +128,6 @@ const markHandledUiError = (error: unknown) => {
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
   error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
-
-type SidMuteSnapshot = {
-  volumes: Record<string, string | number>;
-  enablement: SidEnablement;
-};
 
 type AutoAdvanceGuard = {
   trackInstanceId: number;
@@ -518,133 +514,20 @@ export function usePlaybackController({
     [withTimeout],
   );
 
-  const muteBeforeMachinePause = useCallback(async () => {
-    if (!enabledSidVolumeItems.length) {
-      pauseMuteSnapshotRef.current = null;
-      pausingFromPauseRef.current = false;
-      resumingFromPauseRef.current = false;
-      addLog("warn", "Playback pause mute skipped because no cached SID mixer items are available");
-      return;
-    }
-    const items = enabledSidVolumeItems;
-    const snapshot = captureSidMuteSnapshot(items, sidEnablement);
-    const updates = buildEnabledSidMuteUpdates(items, sidEnablement);
-    pauseMuteSnapshotRef.current = snapshot;
-    pausingFromPauseRef.current = true;
-    resumingFromPauseRef.current = false;
-    dispatchVolume({ type: "mute", reason: "pause" });
-    if (Object.keys(updates).length) {
-      await applyAudioMixerUpdates(updates, "Pause mute");
-    }
-    addLog("info", "Playback pause mute applied", {
-      sidOutputCount: items.length,
-      updateCount: Object.keys(updates).length,
-    });
-  }, [
-    applyAudioMixerUpdates,
-    buildEnabledSidMuteUpdates,
-    captureSidMuteSnapshot,
-    dispatchVolume,
+  const { muteBeforeMachinePause, unmuteAfterMachineResume, rollbackMuteAfterFailedPause } = usePauseMute({
     enabledSidVolumeItems,
-    pauseMuteSnapshotRef,
-    pausingFromPauseRef,
-    resumingFromPauseRef,
     sidEnablement,
-  ]);
-
-  const keepManualMuteAfterPause = useCallback(() => {
-    pauseMuteSnapshotRef.current = null;
-    pausingFromPauseRef.current = false;
-    dispatchVolume({ type: "mute", reason: "manual" });
-  }, [dispatchVolume, pauseMuteSnapshotRef, pausingFromPauseRef]);
-
-  const unmuteAfterMachineResume = useCallback(async () => {
-    if (isManualMuteHeld()) {
-      keepManualMuteAfterPause();
-      resumingFromPauseRef.current = true;
-      addLog("info", "Playback resume kept the listener's mute");
-      return;
-    }
-    const snapshot = pauseMuteSnapshotRef.current;
-    const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
-    let updates = snapshotToUpdates(snapshot, currentItems);
-    if (!Object.keys(updates).length && snapshot) {
-      updates = snapshotToUpdates(snapshot);
-    }
-    if (Object.keys(updates).length) {
-      await applyAudioMixerUpdates(updates, "Resume unmute");
-    } else {
-      await ensureUnmuted({ force: true, refreshItems: true });
-    }
-    pauseMuteSnapshotRef.current = null;
-    pausingFromPauseRef.current = false;
-    resumingFromPauseRef.current = true;
-    dispatchVolume({ type: "unmute", reason: "pause" });
-    addLog("info", "Playback resume unmute applied", {
-      updateCount: Object.keys(updates).length,
-    });
-  }, [
+    captureSidMuteSnapshot,
+    buildEnabledSidMuteUpdates,
+    snapshotToUpdates,
     applyAudioMixerUpdates,
-    dispatchVolume,
-    enabledSidVolumeItems,
     ensureUnmuted,
     isManualMuteHeld,
-    keepManualMuteAfterPause,
+    dispatchVolume,
     pauseMuteSnapshotRef,
     pausingFromPauseRef,
     resumingFromPauseRef,
-    snapshotToUpdates,
-  ]);
-
-  const rollbackMuteAfterFailedPause = useCallback(
-    async (pauseError: unknown) => {
-      const snapshot = pauseMuteSnapshotRef.current;
-      if (!snapshot && !pausingFromPauseRef.current) return;
-      if (isManualMuteHeld()) {
-        keepManualMuteAfterPause();
-        resumingFromPauseRef.current = false;
-        return;
-      }
-      try {
-        const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
-        let updates = snapshotToUpdates(snapshot, currentItems);
-        if (!Object.keys(updates).length && snapshot) {
-          updates = snapshotToUpdates(snapshot);
-        }
-        if (Object.keys(updates).length) {
-          await applyAudioMixerUpdates(updates, "Pause mute rollback");
-        } else {
-          await ensureUnmuted({ force: true, refreshItems: true });
-        }
-        dispatchVolume({ type: "unmute", reason: "pause" });
-        addLog("warn", "Playback pause mute rolled back after machine pause failed", {
-          updateCount: Object.keys(updates).length,
-          pauseError: pauseError instanceof Error ? pauseError.message : String(pauseError),
-        });
-      } catch (rollbackError) {
-        addErrorLog("Playback pause mute rollback failed", {
-          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-          pauseError: pauseError instanceof Error ? pauseError.message : String(pauseError),
-        });
-      } finally {
-        pauseMuteSnapshotRef.current = null;
-        pausingFromPauseRef.current = false;
-        resumingFromPauseRef.current = false;
-      }
-    },
-    [
-      applyAudioMixerUpdates,
-      dispatchVolume,
-      enabledSidVolumeItems,
-      ensureUnmuted,
-      isManualMuteHeld,
-      keepManualMuteAfterPause,
-      pauseMuteSnapshotRef,
-      pausingFromPauseRef,
-      resumingFromPauseRef,
-      snapshotToUpdates,
-    ],
-  );
+  });
 
   const stopMachineWithGracePeriod = useCallback(
     async (api: ReturnType<typeof getC64API>, shouldReboot: boolean) => {
