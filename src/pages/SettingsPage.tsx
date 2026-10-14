@@ -219,7 +219,7 @@ import {
 } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
-import { useConnectionState } from "@/hooks/useConnectionState";
+import { DemoProbeNote } from "@/pages/settings/DemoProbeNote";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
@@ -331,7 +331,6 @@ export default function SettingsPage() {
   const [textScaleId, setTextScaleIdState] = useState(getTextScaleId);
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
-  const connectionSnapshot = useConnectionState();
   const deviceDiscovery = useDeviceDiscovery();
   const { theme, setTheme, resolvedTheme } = useThemeContext();
   const {
@@ -401,8 +400,6 @@ export default function SettingsPage() {
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
     null;
-  const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
-  const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
@@ -1738,13 +1735,11 @@ export default function SettingsPage() {
                   </HelperText>
                   {isDemoActive ? (
                     <HelperText>
-                      {isDemoModePinnedByUser()
-                        ? "Demo Mode stays on until you connect to a real device."
-                        : lastProbeSucceededAtMs
-                          ? "Real device detected during probe."
-                          : lastProbeFailedAtMs
-                            ? "No real device detected in recent probe."
-                            : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
+                      {isDemoModePinnedByUser() ? (
+                        "Demo Mode stays on until you connect to a real device."
+                      ) : (
+                        <DemoProbeNote />
+                      )}
                     </HelperText>
                   ) : null}
                 </div>
