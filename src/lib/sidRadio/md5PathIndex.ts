@@ -22,6 +22,8 @@
  * the flag off (Prime Directive 7).
  */
 
+import { createTimeSlicer, type TimeSlicer } from "@/lib/async/timeSlice";
+
 const HEX12 = /^[0-9a-f]{12,}$/;
 
 const normalizePath = (path: string): string => {
@@ -37,38 +39,53 @@ export const md548FromFullMd5 = (fullMd5: string): string => fullMd5.trim().toLo
  * for a shared prefix (HVSC duplicates) are de-duplicated and sorted
  * lexicographically for a deterministic tie-break (D14: lowest sorted path).
  */
-export const parseMd548PathIndex = (content: string): Map<string, string[]> => {
-  const buckets = new Map<string, Set<string>>();
-  let currentPath = "";
+type Md548ParseState = { buckets: Map<string, Set<string>>; currentPath: string };
 
-  for (const raw of content.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
-    const first = line.charCodeAt(0);
-    // Comment line (`;` `#` `:`) carries the path.
-    if (first === 59 || first === 35 || first === 58) {
-      const path = line.replace(/^[:;#]+/, "").trim();
-      if (path) currentPath = normalizePath(path);
-      continue;
-    }
-    if (first === 91) continue; // "[Database]" and similar section markers
-
-    const eqIndex = line.indexOf("=");
-    if (eqIndex <= 0) continue; // md5 lines only; legacy path-first rows carry no md5
-    const md5 = line.slice(0, eqIndex).trim().toLowerCase();
-    if (!currentPath || !HEX12.test(md5)) continue;
-    const md548 = md5.slice(0, 12);
-    let set = buckets.get(md548);
-    if (!set) {
-      set = new Set<string>();
-      buckets.set(md548, set);
-    }
-    set.add(currentPath);
+const applyMd548Line = (state: Md548ParseState, raw: string): void => {
+  const line = raw.trim();
+  if (!line) return;
+  const first = line.charCodeAt(0);
+  // Comment line (`;` `#` `:`) carries the path.
+  if (first === 59 || first === 35 || first === 58) {
+    const path = line.replace(/^[:;#]+/, "").trim();
+    if (path) state.currentPath = normalizePath(path);
+    return;
   }
+  if (first === 91) return; // "[Database]" and similar section markers
 
+  const eqIndex = line.indexOf("=");
+  if (eqIndex <= 0) return; // md5 lines only; legacy path-first rows carry no md5
+  const md5 = line.slice(0, eqIndex).trim().toLowerCase();
+  if (!state.currentPath || !HEX12.test(md5)) return;
+  const md548 = md5.slice(0, 12);
+  let set = state.buckets.get(md548);
+  if (!set) {
+    set = new Set<string>();
+    state.buckets.set(md548, set);
+  }
+  set.add(state.currentPath);
+};
+
+const sortedBuckets = (buckets: Map<string, Set<string>>): Map<string, string[]> => {
   const index = new Map<string, string[]>();
   for (const [md548, set] of buckets) index.set(md548, [...set].sort());
   return index;
+};
+
+export const parseMd548PathIndex = (content: string): Map<string, string[]> => {
+  const state: Md548ParseState = { buckets: new Map(), currentPath: "" };
+  for (const raw of content.split(/\r?\n/)) applyMd548Line(state, raw);
+  return sortedBuckets(state.buckets);
+};
+
+/** {@link parseMd548PathIndex} that hands the main thread back between slices of lines. */
+export const parseMd548PathIndexSliced = async (content: string, slice: TimeSlicer): Promise<Map<string, string[]>> => {
+  const state: Md548ParseState = { buckets: new Map(), currentPath: "" };
+  for (const raw of content.split(/\r?\n/)) {
+    if (slice.due()) await slice.yield();
+    applyMd548Line(state, raw);
+  }
+  return sortedBuckets(state.buckets);
 };
 
 export interface ResolveVirtualPathOptions {
@@ -157,6 +174,36 @@ export const rebuildMd548PathIndexFromFiles = (
   const md5Contents = files.filter((file) => file.path.toLowerCase().endsWith(".md5")).map((file) => file.content);
   if (md5Contents.length === 0) return { rebuilt: false, size: currentIndex.size };
   return rebuildMd548PathIndex(md5Contents, options);
+};
+
+/** {@link rebuildMd548PathIndex} that parses in slices; the index is replaced in one step when the parse is done. */
+export const rebuildMd548PathIndexSliced = async (
+  content: string | string[],
+  options?: { force?: boolean },
+): Promise<RebuildMd548PathIndexResult> => {
+  const text = Array.isArray(content) ? content.join("\n") : content;
+  const hash = hashContent(text);
+  if (!options?.force && hash === lastContentHash) {
+    return { rebuilt: false, size: currentIndex.size };
+  }
+  const next = await parseMd548PathIndexSliced(text, createTimeSlicer());
+  if (next.size === 0 && currentIndex.size > 0) {
+    return { rebuilt: false, size: currentIndex.size };
+  }
+  currentIndex = next;
+  pathIndex = buildPathIndex(next);
+  lastContentHash = hash;
+  return { rebuilt: true, size: currentIndex.size };
+};
+
+/** {@link rebuildMd548PathIndexFromFiles} that parses in slices. */
+export const rebuildMd548PathIndexFromFilesSliced = async (
+  files: ReadonlyArray<{ path: string; content: string }>,
+  options?: { force?: boolean },
+): Promise<RebuildMd548PathIndexResult> => {
+  const md5Contents = files.filter((file) => file.path.toLowerCase().endsWith(".md5")).map((file) => file.content);
+  if (md5Contents.length === 0) return { rebuilt: false, size: currentIndex.size };
+  return rebuildMd548PathIndexSliced(md5Contents, options);
 };
 
 /** Resolve a `md5_48` to a playable virtual path, or null (D14 tie-break). */

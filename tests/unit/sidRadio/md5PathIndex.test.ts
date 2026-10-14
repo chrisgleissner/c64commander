@@ -12,6 +12,8 @@ import {
   getMd548PathIndexStats,
   md548FromFullMd5,
   parseMd548PathIndex,
+  parseMd548PathIndexSliced,
+  rebuildMd548PathIndexSliced,
   rebuildMd548PathIndex,
   resetMd548PathIndex,
   md548ForVirtualPath,
@@ -179,5 +181,36 @@ describe("md548ForVirtualPath", () => {
 
     expect(md548ForVirtualPath("/NEW/Only.sid")).toBe(OTHER_MD5.slice(0, 12));
     expect(md548ForVirtualPath("/MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBeNull();
+  });
+});
+
+describe("the sliced parse", () => {
+  const slices = { count: 0 };
+  const countingSlice = {
+    due: () => {
+      slices.count += 1;
+      return false;
+    },
+    yield: async () => {},
+  };
+
+  it("builds exactly the index the plain parse builds", async () => {
+    expect(await parseMd548PathIndexSliced(SONGLENGTHS, countingSlice)).toEqual(parseMd548PathIndex(SONGLENGTHS));
+  });
+
+  it("asks for a slice once per line, so a long file never runs as one task", async () => {
+    slices.count = 0;
+    await parseMd548PathIndexSliced(SONGLENGTHS, countingSlice);
+
+    expect(slices.count).toBe(SONGLENGTHS.split(/\r?\n/).length);
+  });
+
+  it("replaces the live index only when the whole parse is done", async () => {
+    resetMd548PathIndex();
+    const rebuilding = rebuildMd548PathIndexSliced(SONGLENGTHS, { force: true });
+
+    expect(getMd548PathIndexStats().size).toBe(0);
+    await rebuilding;
+    expect(getMd548PathIndexStats().size).toBeGreaterThan(0);
   });
 });

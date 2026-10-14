@@ -7,6 +7,15 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/async/timeSlice", () => ({
+  createTimeSlicer: () => ({
+    due: () => true,
+    yield: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    },
+  }),
+}));
+
 import { InMemoryTextBackend } from "@/lib/songlengths/inMemoryTextBackend";
 
 const makeInput = (content: string, path = "test.md5") => ({
@@ -483,5 +492,31 @@ describe("InMemoryTextBackend", () => {
       const byFile = backend.resolve({ fileName: "song.sid" });
       expect(byFile.strategy).toBe("filename-unique");
     });
+  });
+});
+
+describe("InMemoryTextBackend while a load yields to the event loop", () => {
+  const demo = (name: string) => `[Database]\n; /DEMOS/${name}.sid\nabc123=1:30`;
+
+  it("answers as unavailable, not from half a database, until the whole load has been adopted", async () => {
+    const backend = new InMemoryTextBackend();
+    const loading = backend.load(makeInput(demo("Song")));
+
+    expect(backend.resolve({ virtualPath: "/DEMOS/Song.sid" }).strategy).toBe("unavailable");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(backend.resolve({ virtualPath: "/DEMOS/Song.sid" }).strategy).toBe("unavailable");
+
+    await loading;
+    expect(backend.resolve({ virtualPath: "/DEMOS/Song.sid" }).durationSeconds).toBe(90);
+  });
+
+  it("keeps the later load when two overlap", async () => {
+    const backend = new InMemoryTextBackend();
+    const first = backend.load(makeInput(demo("First")));
+    const second = backend.load(makeInput(demo("Second")));
+    await Promise.all([first, second]);
+
+    expect(backend.resolve({ virtualPath: "/DEMOS/Second.sid" }).durationSeconds).toBe(90);
+    expect(backend.resolve({ virtualPath: "/DEMOS/First.sid" }).durationSeconds).toBeNull();
   });
 });
