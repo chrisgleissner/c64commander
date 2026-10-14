@@ -2845,6 +2845,7 @@ export default function PlayFilesPage() {
                 onToggleFilter={togglePlaylistTypeFilter}
                 formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
+                playlistLoading={!playlistHydrated}
                 playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
                 onClearPlaylist={() => {
