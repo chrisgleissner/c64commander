@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { createTimeSlicer, type TimeSlicer } from "@/lib/async/timeSlice";
 import type { SongLengthStoreBackend } from "./songlengthBackend";
 import type {
   SongLengthBackendStats,
@@ -92,17 +93,19 @@ const parseDurations = (value: string) => {
   return durations;
 };
 
-const parseSongLengthFile = (
+const parseSongLengthFile = async (
   sourceFile: string,
   content: string,
   onRejectedLine: RejectLineHandler,
-): ParsedSongLengthEntry[] => {
+  slice: TimeSlicer,
+): Promise<ParsedSongLengthEntry[]> => {
   const entries: ParsedSongLengthEntry[] = [];
   let currentPath: string | null = null;
   const lines = content.split(/\r?\n/);
-  lines.forEach((rawLine, index) => {
+  for (const [index, rawLine] of lines.entries()) {
+    if (slice.due()) await slice.yield();
     const line = rawLine.trim();
-    if (!line) return;
+    if (!line) continue;
     const lineNo = index + 1;
     const firstChar = line.charCodeAt(0);
 
@@ -115,13 +118,13 @@ const parseSongLengthFile = (
           raw: clampRawLine(rawLine),
           reason: "empty comment path marker",
         });
-        return;
+        continue;
       }
       currentPath = normalizePath(pathCandidate);
-      return;
+      continue;
     }
 
-    if (firstChar === 91) return;
+    if (firstChar === 91) continue;
 
     const eqIndex = line.indexOf("=");
     if (eqIndex > 0) {
@@ -134,7 +137,7 @@ const parseSongLengthFile = (
           raw: clampRawLine(rawLine),
           reason: "invalid md5 key",
         });
-        return;
+        continue;
       }
       if (!durations.length) {
         onRejectedLine({
@@ -143,7 +146,7 @@ const parseSongLengthFile = (
           raw: clampRawLine(rawLine),
           reason: "invalid duration payload",
         });
-        return;
+        continue;
       }
       entries.push({
         fullPath: currentPath,
@@ -153,7 +156,7 @@ const parseSongLengthFile = (
         sourceFile,
         line: lineNo,
       });
-      return;
+      continue;
     }
 
     let splitIndex = -1;
@@ -171,7 +174,7 @@ const parseSongLengthFile = (
         raw: clampRawLine(rawLine),
         reason: "unsupported line format",
       });
-      return;
+      continue;
     }
     const parsedPath = normalizePath(line.slice(0, splitIndex));
     const durations = parseDurations(line.slice(splitIndex + 1));
@@ -182,7 +185,7 @@ const parseSongLengthFile = (
         raw: clampRawLine(rawLine),
         reason: "invalid duration payload",
       });
-      return;
+      continue;
     }
     entries.push({
       fullPath: parsedPath,
@@ -192,7 +195,7 @@ const parseSongLengthFile = (
       sourceFile,
       line: lineNo,
     });
-  });
+  }
   return entries;
 };
 
@@ -249,28 +252,63 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
 
   private durationIndex = new Map<string, number>();
 
+  private loadGeneration = 0;
+
+  /**
+   * Built on a scratch instance and adopted in one step, because the build yields to the event loop: a lookup that ran
+   * between slices would otherwise see half a database.
+   */
   async load(input: SongLengthLoadInput): Promise<void> {
+    const generation = (this.loadGeneration += 1);
     this.reset();
+    const staging = new InMemoryTextBackend(this.options);
+    await staging.fill(input, createTimeSlicer());
+    if (generation === this.loadGeneration) this.adopt(staging);
+  }
+
+  private adopt(staged: InMemoryTextBackend) {
+    this.configuredPath = staged.configuredPath;
+    this.sourceLabel = staged.sourceLabel;
+    this.filesLoaded = staged.filesLoaded;
+    this.loadedAtIso = staged.loadedAtIso;
+    this.rejectedLines = staged.rejectedLines;
+    this.fullPaths = staged.fullPaths;
+    this.fileNames = staged.fileNames;
+    this.durations = staged.durations;
+    this.records = staged.records;
+    this.durationIndex = staged.durationIndex;
+    this.fullPathToEntryId = staged.fullPathToEntryId;
+    this.md5ToEntryId = staged.md5ToEntryId;
+    this.uniqueFileNameToEntryId = staged.uniqueFileNameToEntryId;
+    this.duplicateFileNameToEntryIds = staged.duplicateFileNameToEntryIds;
+  }
+
+  private async fill(input: SongLengthLoadInput, slice: TimeSlicer): Promise<void> {
     this.configuredPath = input.configuredPath ?? null;
     this.sourceLabel = input.sourceLabel;
     this.filesLoaded = input.files.map((file) => file.path);
     this.loadedAtIso = new Date().toISOString();
 
     const parsed: ParsedSongLengthEntry[] = [];
-    input.files.forEach((file) => {
-      parsed.push(
-        ...parseSongLengthFile(file.path, file.content, ({ sourceFile, line, raw, reason }) => {
+    for (const file of input.files) {
+      const entries = await parseSongLengthFile(
+        file.path,
+        file.content,
+        ({ sourceFile, line, raw, reason }) => {
           this.rejectedLines += 1;
           this.options.onRejectedLine?.({ sourceFile, line, raw, reason });
-        }),
+        },
+        slice,
       );
-    });
+      for (const entry of entries) parsed.push(entry);
+    }
 
     const pathIndex = new Map<string, number>();
     const fileNameIndex = new Map<string, number>();
     const fileNameBuckets = new Map<string, number[]>();
 
-    parsed.forEach((entry) => {
+    for (const entry of parsed) {
+      if (slice.due()) await slice.yield();
       if (!entry.fullPath || !entry.fileName) {
         // An md5 line that no `; <path>` comment has given a path to. HVSC always writes that
         // comment, so a database without one is hand-made or generated — and dropping it in silence
@@ -282,7 +320,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
           raw: entry.md5 ? `${entry.md5}=…` : "",
           reason: "no path: an md5 line needs a '; <path>' comment line before it",
         });
-        return;
+        continue;
       }
       const fullPathId = this.intern(this.fullPaths, pathIndex, entry.fullPath);
       const fileNameId = this.intern(this.fileNames, fileNameIndex, entry.fileName);
@@ -304,7 +342,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
       const bucket = fileNameBuckets.get(entry.fileName) ?? [];
       bucket.push(recordId);
       fileNameBuckets.set(entry.fileName, bucket);
-    });
+    }
 
     fileNameBuckets.forEach((entryIds, fileName) => {
       if (entryIds.length === 1) {

@@ -21,7 +21,7 @@ import {
   type SongLengthSourceFile,
 } from "@/lib/songlengths";
 import { loadSidRadioEnabled } from "@/lib/config/appSettings";
-import { rebuildMd548PathIndexFromFiles } from "@/lib/sidRadio/md5PathIndex";
+import { rebuildMd548PathIndexFromFilesSliced } from "@/lib/sidRadio/md5PathIndex";
 import { mergeSonglengthDurations } from "./hvscSonglengthProjection";
 
 const HVSC_WORK_DIR = "hvsc";
@@ -264,7 +264,7 @@ const loadInternal = async (trigger: "cold-start" | "config-change", force = fal
     // the flag off (Prime Directive 7); failures are non-fatal to songlengths.
     if (loadSidRadioEnabled()) {
       try {
-        rebuildMd548PathIndexFromFiles(files, { force });
+        await rebuildMd548PathIndexFromFilesSliced(files, { force });
       } catch (error) {
         addErrorLog("SID Radio md5 path index rebuild failed", {
           service: "hvsc-songlengths",
