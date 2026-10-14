@@ -167,6 +167,13 @@ const changesOnlyText = (record: MutationRecord): boolean => {
   return !Array.from(record.addedNodes).some(isElement) && !Array.from(record.removedNodes).some(isElement);
 };
 
+/** React writes an input's `type` on every render, which is no change and must not rescan the page. */
+const rewritesAttributeWithSameValue = (record: MutationRecord): boolean =>
+  record.type === "attributes" &&
+  record.attributeName !== null &&
+  record.target instanceof Element &&
+  record.oldValue === record.target.getAttribute(record.attributeName);
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -227,6 +234,7 @@ export class FocusDiscoveryEngine {
         childList: true,
         subtree: true,
         attributes: true,
+        attributeOldValue: true,
         attributeFilter: OBSERVED_ATTRIBUTES,
       });
     }
@@ -270,6 +278,7 @@ export class FocusDiscoveryEngine {
    */
   private cannotChangeRing(record: MutationRecord): boolean {
     if (changesOnlyText(record)) return !this.renamesAGroup(record);
+    if (rewritesAttributeWithSameValue(record)) return true;
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
