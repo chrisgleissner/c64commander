@@ -41,6 +41,9 @@ export const remoteInputSupportsJoystick = (tier: RemoteInputTier): boolean => t
 export const REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT =
   "Joystick relay requires Ultimate firmware with machine:input support. The Keys tab still works.";
 
+/** A cartridge has no machine:input endpoint in any firmware, so the firmware hint would mislead there. */
+export const REMOTE_INPUT_NO_JOYSTICK_RELAY_HINT = "This device has no joystick relay. The Keys tab still works.";
+
 /**
  * Lead F3: the fallback keyboard-buffer injection (`injectAutostart`) issues
  * the same authenticated REST calls the `machine:input` probe used to
@@ -51,3 +54,11 @@ export const REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT =
  */
 export const REMOTE_INPUT_AUTH_REQUIRED_HINT =
   "This device needs its password entered in Settings before Remote Input can send anything - Joystick and Keys both need it.";
+
+export const resolveJoystickUnavailableHint = (
+  tier: RemoteInputTier,
+  status: MachineInputCapabilityStatus | null,
+): string => {
+  if (tier === "auth-required") return REMOTE_INPUT_AUTH_REQUIRED_HINT;
+  return status === "unsupported-family" ? REMOTE_INPUT_NO_JOYSTICK_RELAY_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
+};

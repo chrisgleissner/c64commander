@@ -1341,7 +1341,7 @@ function HomePageContent() {
             menuLoading={deviceControlActionId === "toggleMenu"}
             powerCycleLoading={telnet.activeActionId === "powerCycle"}
             extraActions={machineExtraActions}
-            gameModeVisible={remoteInputEnabled}
+            gameModeVisible={remoteInputEnabled && deviceCapabilities.supportsStreaming}
             onGameMode={() => void startGameMode()}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
