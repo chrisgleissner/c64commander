@@ -1579,6 +1579,25 @@ describe("SettingsPage", () => {
     expect(deleteDialog).toHaveAccessibleDescription(/from your saved devices\? This can.t be undone\./);
   });
 
+  it("opens the delete device confirmation on Cancel", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        ...savedDevicesRef.current.devices,
+        { ...savedDevicesRef.current.devices[0], id: "saved-device-2", name: "Backup U64", host: "backup-u64" },
+      ],
+    };
+    mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+    const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(deleteDialog).getByRole("button", { name: "Cancel" })),
+    );
+  });
+
   it("warns before deleting a device that is still referenced by playlists or disks", async () => {
     savedDevicesRef.current = {
       ...savedDevicesRef.current,
