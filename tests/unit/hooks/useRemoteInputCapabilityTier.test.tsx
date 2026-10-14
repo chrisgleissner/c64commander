@@ -61,7 +61,9 @@ describe("useRemoteInputCapabilityTier", () => {
 
     const { result } = renderHook(() => useRemoteInputCapabilityTier());
 
-    await waitFor(() => expect(result.current).toEqual({ tier: "full", loading: false, resolved: true }));
+    await waitFor(() =>
+      expect(result.current).toEqual({ tier: "full", loading: false, resolved: true, status: "available" }),
+    );
     expect(probeMachineInputCapabilityMock).toHaveBeenCalledWith(
       expect.objectContaining({ deviceId: "device-a", firmwareVersion: "3.15", coreVersion: "1.4B" }),
     );
@@ -74,7 +76,9 @@ describe("useRemoteInputCapabilityTier", () => {
 
     const { result } = renderHook(() => useRemoteInputCapabilityTier());
 
-    await waitFor(() => expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: true }));
+    await waitFor(() =>
+      expect(result.current).toEqual({ tier: "kernal-fallback", loading: false, resolved: true, status: "missing" }),
+    );
   });
 
   it("falls back to kernal-fallback and logs when the probe itself rejects", async () => {
@@ -129,7 +133,9 @@ describe("useRemoteInputCapabilityTier", () => {
 
       const { result } = renderHook(() => useRemoteInputCapabilityTier());
 
-      await waitFor(() => expect(result.current).toEqual({ tier: expectedTier, loading: false, resolved: false }));
+      await waitFor(() =>
+        expect(result.current).toEqual({ tier: expectedTier, loading: false, resolved: false, status }),
+      );
     },
   );
 });

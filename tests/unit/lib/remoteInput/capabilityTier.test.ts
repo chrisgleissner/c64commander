@@ -10,6 +10,8 @@ import { describe, expect, it } from "vitest";
 import {
   REMOTE_INPUT_AUTH_REQUIRED_HINT,
   REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT,
+  REMOTE_INPUT_NO_JOYSTICK_RELAY_HINT,
+  resolveJoystickUnavailableHint,
   remoteInputSupportsJoystick,
   resolveRemoteInputTier,
 } from "@/lib/remoteInput/capabilityTier";
@@ -49,8 +51,21 @@ describe("Remote Input hints", () => {
   it.each([
     ["auth-required", REMOTE_INPUT_AUTH_REQUIRED_HINT],
     ["joystick-unavailable", REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
+    ["no-joystick-relay", REMOTE_INPUT_NO_JOYSTICK_RELAY_HINT],
   ])("names only tabs the sheet shows in the %s hint", (_name, hint) => {
     expect(hint).not.toMatch(/\bType\b/);
     expect(hint).toMatch(/\bKeys\b/);
+  });
+});
+
+describe("resolveJoystickUnavailableHint", () => {
+  it.each([
+    ["kernal-fallback", "unsupported-family", REMOTE_INPUT_NO_JOYSTICK_RELAY_HINT],
+    ["kernal-fallback", "missing", REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
+    ["kernal-fallback", "hardware-unavailable", REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
+    ["kernal-fallback", null, REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
+    ["auth-required", "auth-required", REMOTE_INPUT_AUTH_REQUIRED_HINT],
+  ] as const)("on tier %s with probe status %s names the cause the user can act on", (tier, status, hint) => {
+    expect(resolveJoystickUnavailableHint(tier, status)).toBe(hint);
   });
 });

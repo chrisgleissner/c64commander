@@ -14,6 +14,7 @@ const tierState = {
   tier: "full" as "full" | "kernal-fallback" | "auth-required",
   loading: false,
   resolved: true,
+  status: undefined as string | undefined,
 };
 
 const setOutputModeMock = vi.fn();
@@ -110,6 +111,7 @@ describe("RemoteInputSheet", () => {
     tierState.tier = "full";
     tierState.loading = false;
     tierState.resolved = true;
+    tierState.status = undefined;
     initialSessionOutputMode = "joystick";
     initialSessionHeldJoystickInputs = new Set();
     initialSessionHeldKeyboardInputs = new Set();
@@ -151,6 +153,17 @@ describe("RemoteInputSheet", () => {
     );
     expect(reason).toHaveClass("text-sm");
     expect(screen.getByTestId("remote-input-mode-joystick")).toHaveAccessibleDescription(reason.textContent ?? "");
+  });
+
+  it("does not blame the firmware for the missing joystick on a cartridge", () => {
+    tierState.tier = "kernal-fallback";
+    tierState.status = "unsupported-family";
+    initialSessionOutputMode = "type";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByTestId("remote-input-joystick-unavailable-reason")).toHaveTextContent(
+      "This device has no joystick relay. The Keys tab still works.",
+    );
   });
 
   it("shows no Joystick unavailable reason on a joystick-capable device or while the probe is running", () => {

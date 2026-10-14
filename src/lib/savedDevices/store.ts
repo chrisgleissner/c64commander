@@ -593,6 +593,12 @@ export const buildSavedDevicePrimaryLabel = (device: SavedDevice, verified?: Ver
   return resolveSavedDeviceLabel(device, devices, verifiedByDeviceId);
 };
 
+export const describeSavedDeviceForConfirmation = (device: SavedDevice) => {
+  const label = buildSavedDevicePrimaryLabel(device);
+  const host = buildDeviceHost(device.host, device.httpPort);
+  return label.trim().toLowerCase() === host.trim().toLowerCase() ? label : `${label} (${host})`;
+};
+
 export const validateSavedDeviceName = (devices: SavedDevice[], deviceId: string, name: string, host: string) => {
   const normalizedHost = normalizeSavedDeviceHostInput(host);
   const normalizedName = normalizeSavedDeviceUserName(name);

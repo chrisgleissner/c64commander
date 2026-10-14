@@ -28,6 +28,7 @@ export type RemoteInputCapabilityState = {
    * here too.
    */
   resolved: boolean;
+  status?: MachineInputCapabilityStatus;
 };
 
 const isDefinitiveStatus = (status: MachineInputCapabilityStatus): boolean =>
@@ -73,6 +74,7 @@ export const useRemoteInputCapabilityTier = (enabled = true): RemoteInputCapabil
           tier: resolveRemoteInputTier(result.status),
           loading: false,
           resolved: isDefinitiveStatus(result.status),
+          status: result.status,
         });
       })
       .catch((error) => {
