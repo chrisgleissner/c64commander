@@ -89,6 +89,12 @@ const NestedToolbar = () => {
   );
 };
 
+/** A stop outside the scrolling page, as the tab bar is. */
+const TabBarStop = () => {
+  const ref = useFocusItem<HTMLButtonElement>({ id: "tab", order: 100 });
+  return <button ref={ref}>Tab</button>;
+};
+
 describe("FocusNavigationProvider + useFocusItem", () => {
   it("moves d-pad focus across enabled CTAs, skipping disabled ones and wrapping", () => {
     render(
@@ -110,6 +116,40 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     // Back with nothing to dismiss and no onNavigateBack handler must not throw.
     expect(() => fireEvent.keyDown(document.body, { code: "Escape" })).not.toThrow();
+  });
+
+  it("scrolls a page that continues below its last CTA before Down leaves it for the tab bar", () => {
+    const scrollBy = vi.fn();
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1000 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = scrollBy as unknown as typeof page.scrollBy;
+    };
+    render(
+      <FocusNavigationProvider>
+        <div ref={measure} data-testid="page" style={{ overflowY: "auto" }}>
+          <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          <p>Text below the last control</p>
+        </div>
+        <TabBarStop />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+
+    // B is the page's last stop and the tab bar comes next, but the page still has 600 px below
+    // the fold: Down shows them instead of leaving the page.
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 320 });
+    expect(document.activeElement).toBe(button("B"));
+
+    // At the end of the page, Down moves on to the tab bar as before.
+    screen.getByTestId("page").scrollTop = 600;
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(scrollBy).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(button("Tab"));
   });
 
   it("activates the focused CTA via center/enter (default = click the element)", () => {

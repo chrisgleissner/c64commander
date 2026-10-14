@@ -10,6 +10,7 @@
 
 import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/input/discovery";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import type { FocusController } from "@/lib/input/focusController";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 
 /**
@@ -120,4 +121,70 @@ export const focusRingElement = (element: HTMLElement | null): void => {
     marginBottom: parseFloat(style.scrollMarginBottom) || 0,
   });
   element.scrollIntoView({ block, inline: "nearest" });
+};
+
+const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
+
+/** How much of the visible height one key press scrolls when the ring has no stop left to move to. */
+const PAGE_STEP_FRACTION = 0.8;
+
+const isScrollContainer = (element: Element): boolean => {
+  const overflowY = getComputedStyle(element).overflowY;
+  return (overflowY === "auto" || overflowY === "scroll") && element.scrollHeight > element.clientHeight;
+};
+
+const scrollContainerOf = (element: Element): Element => {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (isScrollContainer(parent)) return parent;
+  }
+  return document.scrollingElement ?? document.documentElement;
+};
+
+/** Whether moving the ring from `from` to `to` leaves the area that scrolls with `from`. */
+export const leavesScrollContainer = (from: Element, to: Element): boolean => !scrollContainerOf(from).contains(to);
+
+/**
+ * Scrolls toward content the ring cannot reach because no control follows it, instead of letting
+ * Up or Down leave the page for the app or tab bar, or wrap to the other end. `scope` is the group being navigated, or null at page level:
+ * a group only scrolls while part of it is still out of view, the page until it reaches its end.
+ * Returns false when there is nothing left to show, so the ring wraps as before.
+ */
+export const scrollTowardUnreachableContent = (from: Element, scope: Element | null, direction: 1 | -1): boolean => {
+  const container = scrollContainerOf(from);
+  const remaining =
+    direction > 0 ? container.scrollHeight - container.clientHeight - container.scrollTop : container.scrollTop;
+  if (remaining < 1) return false;
+  if (scope) {
+    const visible =
+      container === document.scrollingElement
+        ? { top: 0, bottom: window.innerHeight }
+        : container.getBoundingClientRect();
+    const bounds = scope.getBoundingClientRect();
+    // The keypad guidance bar is fixed over the bottom of the page and hides what lies under it.
+    const guidanceBar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(GUIDANCE_RESERVE)) || 0;
+    const hidden = direction > 0 ? bounds.bottom - (visible.bottom - guidanceBar) : visible.top - bounds.top;
+    if (hidden < 1) return false;
+  }
+  container.scrollBy({ top: direction * Math.min(remaining, container.clientHeight * PAGE_STEP_FRACTION) });
+  return true;
+};
+
+/**
+ * Down on the page's last stop would leave the page for the tab bar (Up on its first, for the app
+ * bar), or wrap. While the page still has content that way, it scrolls to show it instead, so text
+ * below the last control is reachable without a touchscreen. Returns true when it scrolled.
+ */
+export const scrollInsteadOfLeavingPage = (
+  focus: FocusController,
+  elementForId: (id: string) => Element | null,
+  direction: 1 | -1,
+): boolean => {
+  const current = focus.current();
+  const from = current ? elementForId(current.id) : null;
+  const destination = focus.peekStep(direction);
+  if (!from || !destination) return false;
+  const to = elementForId(destination.item.id);
+  if (!destination.wraps && !(to && leavesScrollContainer(from, to))) return false;
+  const scopeId = focus.currentScopeParentId();
+  return scrollTowardUnreachableContent(from, scopeId ? elementForId(scopeId) : null, direction);
 };
