@@ -12,7 +12,14 @@ import {
   subscribeConnection,
   type ConnectionSnapshot,
 } from "@/lib/connection/connectionManager";
+import { getCoarseConnectionSnapshot, type CoarseConnectionSnapshot } from "@/lib/connection/coarseConnectionSnapshot";
 
-export function useConnectionState(): ConnectionSnapshot {
+/** The connection without probe timestamps; it changes when the state, the device or the probe error does. */
+export function useConnectionState(): CoarseConnectionSnapshot {
+  return useSyncExternalStore(subscribeConnection, getCoarseConnectionSnapshot, getCoarseConnectionSnapshot);
+}
+
+/** The whole connection, including the probe timestamps: it changes after every answer from the device. */
+export function useConnectionProbeState(): ConnectionSnapshot {
   return useSyncExternalStore(subscribeConnection, getConnectionSnapshot, getConnectionSnapshot);
 }
