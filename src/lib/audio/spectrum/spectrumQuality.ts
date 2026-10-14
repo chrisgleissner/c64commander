@@ -6,8 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { DisplayProfile } from "@/lib/displayProfiles";
-
 export interface SpectrumTier {
   index: 0 | 1 | 2 | 3;
   /** Frames drawn per second. */
@@ -48,7 +46,6 @@ const LATE_FRAME_RATIO = 1.6;
 const PROMOTE_HEADROOM_SHARE = 0.3;
 
 export interface SpectrumDeviceSignals {
-  profile: DisplayProfile | string;
   hardwareConcurrency?: number;
   deviceMemory?: number;
 }

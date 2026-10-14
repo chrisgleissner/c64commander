@@ -171,7 +171,7 @@ export class SpectrumView {
   private alignmentCount = 0;
   private readonly clock = new NativeClockOffset();
   private frameIntervalMs = 1000 / 60;
-  private readonly gapRing = new Float64Array(DRAW_GAP_SAMPLES);
+  private readonly gapRing = new Float64Array(DRAW_GAP_SAMPLES).fill(1000 / 60);
   private readonly gapScratch = new Float64Array(DRAW_GAP_SAMPLES);
   private gapCount = 0;
   private readGeneration = 0;
@@ -208,7 +208,7 @@ export class SpectrumView {
     this.createLayer = options.createLayer ?? defaultCreateLayer;
     this.reducedMotion = options.reducedMotion ?? defaultReducedMotion;
     const signals = (options.deviceSignals ?? defaultDeviceSignals)();
-    this.tier = initialSpectrumTier({ profile: this.profile, ...signals });
+    this.tier = initialSpectrumTier(signals);
     this.controller = createSpectrumTierController(this.tier, this.now());
     this.ballistics = createBallistics(this.tier.bars);
   }
@@ -374,10 +374,9 @@ export class SpectrumView {
   private noteDrawGap(gapMs: number): void {
     this.gapRing[this.gapCount % DRAW_GAP_SAMPLES] = Math.min(100, gapMs);
     this.gapCount += 1;
-    const count = Math.min(this.gapCount, DRAW_GAP_SAMPLES);
     this.gapScratch.set(this.gapRing);
-    this.gapScratch.subarray(0, count).sort();
-    this.frameIntervalMs = Math.max(8, this.gapScratch[count >> 1]);
+    this.gapScratch.sort();
+    this.frameIntervalMs = Math.max(8, this.gapScratch[DRAW_GAP_SAMPLES >> 1]);
   }
 
   private pollIfDue(nowMs: number): void {
@@ -434,6 +433,8 @@ export class SpectrumView {
     const firstMs = request?.targetNanos ? this.clock.pageMsAt(request.targetNanos) : 0;
     this.alignedMode = frame.aligned === true && firstMs > 0;
     if (!this.alignedMode) {
+      this.pending.length = 0;
+      this.lastDueMs = 0;
       this.applyFrame(frame, false);
       return;
     }
@@ -499,10 +500,12 @@ export class SpectrumView {
         : peak;
     }
     const receivedAt = this.now();
-    if (frame.clipped) this.clipUntil = receivedAt + CLIP_LAMP_HOLD_MS;
+    if (frame.clipped && receivedAt >= this.clipUntil) this.clipUntil = receivedAt + CLIP_LAMP_HOLD_MS;
     for (let channel = 0; channel < count; channel++) {
       const clipped = channels ? channels[channel]?.clipped : frame.clipped;
-      if (clipped) this.channelClipUntil[channel] = receivedAt + CLIP_LAMP_HOLD_MS;
+      if (clipped && receivedAt >= this.channelClipUntil[channel]) {
+        this.channelClipUntil[channel] = receivedAt + CLIP_LAMP_HOLD_MS;
+      }
     }
     if (this.shouldAnalyse && this.isSounding(this.now())) this.startFrameLoop();
   }

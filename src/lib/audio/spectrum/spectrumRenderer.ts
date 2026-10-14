@@ -38,6 +38,7 @@ export const METER_HEIGHT_PX = 14;
 const EDGE_PAD_PX = 8;
 const LABEL_WIDTH_EM = 1.45;
 const LABEL_GAP_PX = 5;
+const LABEL_EDGE_SPILL_PX = 2;
 const CLIP_BLOCK_PX = 6;
 export const METER_SCALE_DB = [0, -20, -40, -60] as const;
 
@@ -100,7 +101,9 @@ export const drawStaticLayer = (
   ctx.fillStyle = palette.label;
   for (let i = 0; i < meterLabels.length; i++) {
     const y = meterLabels.length === 1 ? 22 : 10 + i * 24;
-    ctx.fillText(meterLabels[i], layout.plotLeft - 6, y + METER_HEIGHT_PX / 2);
+    const room = layout.plotLeft - 6 - LABEL_EDGE_SPILL_PX;
+    const label = ctx.measureText(meterLabels[i]).width <= room ? meterLabels[i] : meterLabels[i][0];
+    ctx.fillText(label, layout.plotLeft - 6, y + METER_HEIGHT_PX / 2);
     ctx.fillStyle = palette.grid;
     ctx.fillRect(layout.plotLeft, y, layout.plotRight - layout.plotLeft, METER_HEIGHT_PX);
     ctx.fillStyle = palette.label;

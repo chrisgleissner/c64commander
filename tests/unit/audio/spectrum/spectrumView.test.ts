@@ -42,6 +42,7 @@ const makeContext = () => {
     lineTo: vi.fn(),
     stroke: vi.fn(),
     fillText: vi.fn(),
+    measureText: vi.fn((text: string) => ({ width: text.length * 4 })),
     createLinearGradient: vi.fn(() => gradient),
   };
   return ctx;
@@ -126,6 +127,7 @@ const setup = (
   };
   return {
     view,
+    canvas: canvas as HTMLCanvasElement & { __spectrumView?: unknown },
     ctx,
     layerCtx,
     reads,
@@ -316,6 +318,55 @@ describe("SpectrumView", () => {
       t.view.dispose();
     });
 
+    it("drops frames queued for an old position once the native path stops reporting a speaker", async () => {
+      let alignedReplies = true;
+      const t: ReturnType<typeof setup> = setup({
+        frames: () => {
+          const reply = aligned(t, true);
+          if (!alignedReplies) {
+            reply.aligned = false;
+            reply.ahead = undefined;
+          }
+          return reply;
+        },
+      });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      expect(t.view.pendingFrameCount).toBeGreaterThan(0);
+      alignedReplies = false;
+      await t.advance(100);
+      expect(t.view.pendingFrameCount).toBe(0);
+      t.view.dispose();
+    });
+
+    it("keeps a clip block up for one hold after the first report, not one hold per report", async () => {
+      let sequence = 0;
+      const t: ReturnType<typeof setup> = setup({
+        frames: () => {
+          const clipping = t.nowMs < 1000;
+          return frame({
+            sequence: ++sequence,
+            clipped: clipping,
+            channels: [
+              { id: "left", rmsDb: -20, peakDb: 0, clipped: clipping },
+              { id: "right", rmsDb: -20, peakDb: -6, clipped: false },
+            ],
+          });
+        },
+      });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      const clipBlocks = () => t.ctx.fills.filter((f) => f.w === 6 && f.h === 14);
+      await t.advance(200);
+      expect(clipBlocks().length).toBeGreaterThan(0);
+      await t.advance(2000);
+      t.ctx.fills.length = 0;
+      await t.advance(100);
+      expect(clipBlocks()).toHaveLength(0);
+      t.view.dispose();
+    });
+
     it("records how far each draw was from the display time of the sound it showed", async () => {
       const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
       t.view.resize(300, 234, 1);
@@ -324,7 +375,7 @@ describe("SpectrumView", () => {
       const errors = t.view.alignmentErrorsMs().sort((a, b) => a - b);
       expect(errors.length).toBeGreaterThan(20);
       const median = errors[errors.length >> 1];
-      expect(Math.abs(median)).toBeLessThanOrEqual(stepMs);
+      expect(Math.abs(median)).toBeLessThanOrEqual(stepMs / 4);
       t.view.dispose();
     });
 
@@ -349,6 +400,16 @@ describe("SpectrumView", () => {
       expect(mostWaiting).toBeLessThanOrEqual(14);
       t.view.dispose();
     });
+  });
+
+  it("exposes itself on its canvas only when test probes are enabled", () => {
+    const probeWindow = window as unknown as { __c64uTestProbeEnabled?: boolean };
+    const off = setup();
+    expect(off.canvas.__spectrumView).toBeUndefined();
+    probeWindow.__c64uTestProbeEnabled = true;
+    const on = setup();
+    expect(on.canvas.__spectrumView).toBe(on.view);
+    delete probeWindow.__c64uTestProbeEnabled;
   });
 
   it("raises the held meter peak to a one-frame transient at once", async () => {

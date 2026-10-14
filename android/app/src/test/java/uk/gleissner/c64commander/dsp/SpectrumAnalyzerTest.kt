@@ -273,16 +273,13 @@ class SpectrumAnalyzerTest {
   }
 
   @Test
-  fun aLiveStreamUsesAShortWindowSoANewToneTakesOverSooner() {
-    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
-    val output = SpectrumAnalyzer { now }.also { it.prepare(rate) }
-    for (target in listOf(live, output)) {
-      feedTone(target, 500.0, rate, 0)
-      feedTone(target, 3000.0, 1200, rate.toLong())
-    }
-    // 1200 new samples fill most of a 512-point window but under a third of a 4096-point one.
-    assertEquals(bandOf(3000.0), loudestBand(live.read(true)))
-    assertEquals(bandOf(500.0), loudestBand(output.read(true)))
+  fun onDevicePlaybackKeepsTheLongBassWindowWhileTheTrebleStillUsesAShortOne() {
+    val output = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(output, 500.0, rate, 0)
+    feedTone(output, 6000.0, 300, rate.toLong())
+    val bands = output.read(true).bands
+    assertTrue("treble reads ${bands[bandOf(6000.0)]} dB", bands[bandOf(6000.0)] >= -20)
+    assertTrue("bass reads ${bands[bandOf(500.0)]} dB", bands[bandOf(500.0)] >= -12)
   }
 
   @Test
@@ -433,5 +430,16 @@ class SpectrumAnalyzerTest {
     val farFuture = live.read(true, now + 5_000_000_000L)
     assertEquals(noTarget.sequence, farFuture.sequence)
     assertTrue("the window wanted samples that do not exist yet", farFuture.shortfallSamples > 0)
+  }
+
+  @Test
+  fun aTargetFarAheadStillAdvancesTheWindowWhenTheSpeakerReportIsOld() {
+    val speaker = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(speaker, 1000.0, rate * 2, 0)
+    speaker.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
+    now += 200_000_000L
+    val first = speaker.read(true, now + 50_000_000L).sequence
+    val later = speaker.read(true, now + 50_000_000L + 8 * 16_700_000L).sequence
+    assertTrue("sequence did not advance: $first then $later", later > first)
   }
 }

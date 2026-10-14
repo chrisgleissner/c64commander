@@ -52,6 +52,7 @@ const makeContext = () => {
     lineTo: vi.fn(),
     stroke: vi.fn(),
     fillText: vi.fn(),
+    measureText: vi.fn((text: string) => ({ width: text.length * 8 })),
     createLinearGradient: vi.fn(),
   };
   return { ctx: ctx as unknown as SpectrumContext, fills, raw: ctx };

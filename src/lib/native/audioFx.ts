@@ -115,7 +115,8 @@ const isFrame = (value: unknown): value is SpectrumFrame => {
     frame !== null &&
     Array.isArray(frame.bands) &&
     typeof frame.sequence === "number" &&
-    typeof frame.active === "boolean"
+    typeof frame.active === "boolean" &&
+    (frame.ahead === undefined || (Array.isArray(frame.ahead) && frame.ahead.every(isFrame)))
   );
 };
 

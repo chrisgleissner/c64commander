@@ -59,15 +59,17 @@ internal object SpectrumBands {
  * per sample. The FFT runs on whichever thread calls [read], never on the audio thread.
  *
  * Each [read] reports the peak and RMS of every sample heard since the previous analysis, and at
- * least of the last 1/30 s, and latches the clip flag if any of them reached full scale.
+ * least of the last 1/60 s, and latches the clip flag if any of them reached full scale.
  *
  * Which samples a [read] analyses depends on where the pipeline taps the audio:
  *  - A live stream feeds samples as they arrive, before its jitter ring, and never reports a speaker
  *    position. Its window ends at the newest sample, so the bars follow the source machine, whose
  *    own speakers the listener hears in the room.
  *  - On-device playback feeds samples as they enter a deep track buffer and reports, through
- *    [presentAt], how far its writes run ahead of the speaker. Its window ends at the sample
- *    leaving the speaker; tapping at the write put the bars about two seconds ahead of the sound.
+ *    [presentAt], how far its writes run ahead of the speaker. A read names the time the frame will
+ *    be shown, and each window is centred on the sample the speaker plays then; the track buffer holds
+ *    seconds of audio beyond it, so no window length delays the bars. Tapping at the write put the bars
+ *    about two seconds ahead of the sound.
  *
  * Band value: bins of a Hann-windowed FFT are converted to amplitude (so a full-scale sine peaks at
  * 1.0), squared, and power-summed over the bins whose centre lies in the band, divided by the
@@ -169,13 +171,13 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   }
 
   /**
-   * Prepare for a pipeline. Both paths use the short window and fine steps. A live stream is fed at arrival at its source rate;
-   * on-device playback is fed at the output rate as it is written, [speakerLagFrames]
+   * Prepare for a pipeline. A live stream is fed at arrival at its source rate, with the short window as its
+   * windows end at the newest sample; on-device playback is fed at the output rate as it is written, [speakerLagFrames]
    * ahead of the speaker.
    */
   fun prepareFor(live: Boolean, sourceRate: Int, outputRate: Int, speakerLagFrames: Int = 0) {
     if (live) prepare(sourceRate, LIVE_FFT_SIZE, LIVE_STEPS_PER_SECOND)
-    else prepare(outputRate, LIVE_FFT_SIZE, LIVE_STEPS_PER_SECOND, speakerLagFrames)
+    else prepare(outputRate, FFT_SIZE, LIVE_STEPS_PER_SECOND, speakerLagFrames)
   }
 
   /** Called by the writer with interleaved stereo S16LE frames, starting [offset] bytes into [data]. */
@@ -264,8 +266,9 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
    */
   private fun heardUpTo(config: Configuration, newest: Long, now: Long, targetNanos: Long): Long {
     if (!refreshSpeakerAnchor()) return newest
-    val at = if (targetNanos > 0L) targetNanos else now
-    val elapsed = (at - readerAnchorNanos).coerceIn(0L, MAX_EXTRAPOLATION_NANOS)
+    val age = (now - readerAnchorNanos).coerceIn(0L, MAX_EXTRAPOLATION_NANOS)
+    val lead = if (targetNanos > 0L) (targetNanos - now).coerceIn(0L, MAX_LEAD_NANOS) else 0L
+    val elapsed = age + lead
     val heard = readerAnchorIndex + elapsed * config.sampleRate / 1_000_000_000L
     return heard.coerceIn(maxOf(0L, newest - config.reach), newest)
   }
@@ -497,6 +500,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     private const val ACTIVE_WINDOW_NANOS = 400_000_000L
     private const val CLIP_HOLD_NANOS = 1_000_000_000L
     private const val MAX_EXTRAPOLATION_NANOS = 250_000_000L
+    private const val MAX_LEAD_NANOS = 500_000_000L
 
     private fun historySizeFor(sampleRate: Int, fftSize: Int, speakerLagFrames: Int): Int {
       val needed = speakerLagFrames + sampleRate * BELOW_APP_ALLOWANCE_MS / 1000 + fftSize

@@ -38,24 +38,19 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
     val target = request?.opt("targetNanos").asLong()
     val count = request?.opt("count").asLong().toInt().coerceIn(1, MAX_FRAMES_PER_READ)
     val step = request?.opt("stepNanos").asLong()
-    val startedAt = System.nanoTime()
     val first = hub().readSpectrum(target)
     val result = payload(first)
-    var analysisNanos = System.nanoTime() - startedAt
     if (target > 0L && step > 0L && first.aligned && count > 1) {
       val ahead = JSArray()
       var previous = first.sequence
       for (k in 1 until count) {
-        val frameStartedAt = System.nanoTime()
         val frame = hub().readSpectrum(target + k * step)
-        analysisNanos += System.nanoTime() - frameStartedAt
         if (frame.sequence == previous) break
         previous = frame.sequence
         ahead.put(payload(frame))
       }
       result.put("ahead", ahead)
     }
-    result.put("analysisNanos", analysisNanos)
     call.resolve(result)
   }
 
