@@ -603,6 +603,34 @@ describe("FocusDiscoveryEngine", () => {
   });
 });
 
+describe("attribute writes that leave the value as it was", () => {
+  it("do not trigger a rescan when an input is given the type it already has", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><input id="field" type="text" /></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("field").setAttribute("type", "text");
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("still rescan when the same attribute takes a different value", async () => {
+    document.body.innerHTML = `<div id="page"><button id="a">A</button><input id="field" type="text" /></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("field").setAttribute("type", "hidden");
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    engine.stop();
+  });
+});
+
 describe("text-only mutations", () => {
   it("do not trigger a rescan when a readout rewrites its text", async () => {
     document.body.innerHTML = `<div id="page"><button id="a">A</button><span id="level">-18</span></div>`;
