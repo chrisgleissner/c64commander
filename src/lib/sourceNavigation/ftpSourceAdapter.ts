@@ -108,10 +108,11 @@ const clearCachedEntriesUnderPrefix = (host: string, port: number | undefined, p
   saveCache(cache);
 };
 
-const folderName = (path: string) => path.replace(/\/+$/, "").split("/").pop() ?? "";
+const folderName = (path: string) => path.replace(/\/+$/, "").replace(/^.*\//, "");
+const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** 450, 451 and 550 are the FTP replies for a folder the server could not open. */
-const isRefusedListing = (error: unknown) => /\b(450|451|550)\b/.test((error as Error).message ?? "");
+const isRefusedListing = (error: unknown) => /\b(450|451|550)\b/.test(describeError(error));
 
 /*
  * The Ultimate's FTP server answers LIST for a folder it cannot open (an unreadable SD card) by
@@ -132,7 +133,7 @@ const isUnreadableFolderEcho = async (
     return false;
   } catch (error) {
     if (isRefusedListing(error)) return true;
-    throw new Error(`Could not check whether ${path} can be read: ${(error as Error).message}`, { cause: error });
+    throw new Error(`Could not check whether ${path} can be read: ${describeError(error)}`, { cause: error });
   }
 };
 

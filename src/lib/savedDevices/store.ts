@@ -201,7 +201,7 @@ const buildDeviceHost = (host: string, httpPort: number) => {
   return `${bracketed}:${httpPort}`;
 };
 
-const createId = () =>
+export const createSavedDeviceId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
   `${Date.now().toString(36)}-${Math.round(Math.random() * 1e9).toString(36)}`;
 
@@ -338,7 +338,7 @@ const createLegacyDevice = (): SavedDevice => {
   const resolvedHost = storedHost || legacyBaseUrl || DEFAULT_DEVICE_HOST;
   const { host, httpPort } = splitSavedDeviceHostAndHttpPort(resolvedHost);
   return {
-    id: createId(),
+    id: createSavedDeviceId(),
     name: host,
     nameSource: "INFERRED",
     host,
@@ -771,7 +771,7 @@ export const addSavedDevice = (
     const nextName = resolveSavedDeviceStoredName(draft.name, host, draft.nameSource);
     const nextType = resolveSavedDeviceStoredType(draft.type, draft.lastKnownProduct ?? null, draft.typeSource);
     const nextDevice: SavedDevice = {
-      id: draft.id ?? createId(),
+      id: draft.id ?? createSavedDeviceId(),
       name: nextName.name,
       nameSource: nextName.nameSource,
       host,

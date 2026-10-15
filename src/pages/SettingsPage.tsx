@@ -431,6 +431,7 @@ export default function SettingsPage() {
   const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);
   const deleteTargetDevice = savedDevices.devices.find((device) => device.id === deleteTargetDeviceId) ?? null;
   const deleteTargetLabel = deleteTargetDevice ? describeSavedDeviceForConfirmation(deleteTargetDevice) : "this device";
+  const deleteReferenceCount = deleteDependencySummary?.totalCount ?? 0;
   const [addDeviceOpen, setAddDeviceOpen] = useState(false);
   const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
@@ -2036,21 +2037,18 @@ export default function SettingsPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
                       {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
-                      <AlertDialogDescription
-                        className={(deleteDependencySummary?.totalCount ?? 0) > 0 ? undefined : "not-sr-only"}
-                      >
-                        {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
+                      <AlertDialogDescription className={deleteReferenceCount > 0 ? undefined : "not-sr-only"}>
+                        {deleteReferenceCount > 0 ? (
                           <>
-                            Removing {deleteTargetLabel} will disconnect {deleteDependencySummary?.totalCount ?? 0}{" "}
-                            saved item
-                            {(deleteDependencySummary?.totalCount ?? 0) === 1 ? "" : "s"} that still point to it.
+                            Removing {deleteTargetLabel} will disconnect {deleteReferenceCount} saved item
+                            {deleteReferenceCount === 1 ? "" : "s"} that still point to it.
                           </>
                         ) : (
                           <>Remove {deleteTargetLabel} from your saved devices? This can&apos;t be undone.</>
                         )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
+                    {deleteReferenceCount > 0 ? (
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <p>Those items will stay in your playlists and disk library.</p>
                         <p>
