@@ -852,6 +852,14 @@ describe("HomePage config refresh", () => {
 describe("HomePage SID status", () => {
   vi.setConfig({ testTimeout: 30000 });
 
+  it("names the Config card's Save, Load and Reset tiles by what they act on", () => {
+    renderHomePage();
+    expect(screen.getByTestId("home-config-save-app")).toHaveAttribute("aria-label", "Save config to app");
+    expect(screen.getByTestId("home-config-load-app")).toHaveAttribute("aria-label", "Load config from app");
+    expect(screen.getByRole("button", { name: "Save config to flash" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset config to default" })).toBeInTheDocument();
+  });
+
   it("does not render a visible Home subtitle", () => {
     renderHomePage();
     expect(screen.queryByTestId("home-header-subtitle")).not.toBeInTheDocument();

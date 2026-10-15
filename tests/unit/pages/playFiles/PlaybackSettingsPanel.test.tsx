@@ -9,6 +9,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 const baseProps = {
   durationSliderMax: 600,
@@ -40,15 +41,23 @@ describe("PlaybackSettingsPanel", () => {
 
     expect(screen.getByTestId("songlengths-path-label")).toBeInTheDocument();
     expect(screen.getByText("1024 entries, 240 KB")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change songlengths file" })).toBeInTheDocument();
   });
 
   it("invokes change handler from compact action button", () => {
     const onChooseSonglengthsFile = vi.fn();
     render(<PlaybackSettingsPanel {...baseProps} onChooseSonglengthsFile={onChooseSonglengthsFile} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change songlengths file" }));
     expect(onChooseSonglengthsFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the duration field and the songlengths button by what they change", () => {
+    render(<PlaybackSettingsPanel {...baseProps} />);
+    expect(guidanceLabelFor(screen.getByTestId("duration-input"))).toBe("Default duration (mm:ss)");
+    expect(guidanceLabelFor(screen.getByRole("button", { name: "Change songlengths file" }))).toBe(
+      "Change songlengths file",
+    );
   });
 
   it("calls onDurationInputChange when input value changes", () => {

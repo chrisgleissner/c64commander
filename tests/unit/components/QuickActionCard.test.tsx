@@ -14,6 +14,7 @@ import { ProfileActionGrid } from "@/components/layout/PageContainer";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 vi.mock("@/lib/ui/buttonInteraction", () => ({
   handlePointerButtonClick: vi.fn(),
@@ -39,6 +40,13 @@ describe("QuickActionCard", () => {
     expect(screen.getByText("Play")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button"));
     expect(baseProps.onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("is named by its accessible label where the one-word label is ambiguous, and by the label otherwise", () => {
+    render(
+      <QuickActionCard {...baseProps} label="Save" description="To flash" accessibleLabel="Save config to flash" />,
+    );
+    expect(guidanceLabelFor(screen.getByRole("button"))).toBe("Save config to flash");
   });
 
   it("uses compact density from the shared action-grid boundary on wide screens", () => {

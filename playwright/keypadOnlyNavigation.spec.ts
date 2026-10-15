@@ -592,6 +592,41 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     }
   });
 
+  test("the guidance bar names Home's controls by what they act on, and the badge without cutting it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const crumb = page.getByTestId("keypad-guidance-breadcrumb");
+    const home = page.locator('[data-slot-active="true"]');
+
+    const badge = page.getByTestId("unified-health-badge");
+    for (let step = 0; step < 10 && (await badge.getAttribute(SELECTED)) !== "true"; step += 1) {
+      await page.keyboard.press("ArrowUp");
+    }
+    await expect(badge).toHaveAttribute(SELECTED, "true");
+    await expect(crumb).toHaveText(/^C64U: /);
+    expect(
+      await page
+        .locator(".keypad-guidance-breadcrumb-text")
+        .evaluate((text) => text.scrollWidth <= text.clientWidth + 1),
+      "The badge's name is drawn whole in the guidance bar",
+    ).toBe(true);
+
+    const expected: Array<[string, RegExp]> = [
+      ["home-drives-reset", /^Drives: reset$/],
+      ["home-drive-toggle-a", /^Drive A power: (on|off)$/],
+      ["home-drive-status-a", /^Drive A status: /],
+    ];
+    for (const [testId, name] of expected) {
+      expect(await ringFocus(page, home.getByTestId(testId), 160), `The ring could not reach ${testId}`).toBe(true);
+      await expect(crumb, testId).toHaveText(name);
+    }
+  });
+
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
     page,
   }) => {

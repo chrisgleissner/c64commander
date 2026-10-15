@@ -122,6 +122,7 @@ export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
                         onClick={() => void handleStreamStart(entry.key)}
                         disabled={locked}
                         data-testid={`home-stream-start-${entry.key}`}
+                        aria-label={`Start ${entry.label} stream`}
                         className="h-6 px-2 text-xs"
                       >
                         Start
@@ -132,6 +133,7 @@ export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
                         onClick={() => void handleStreamStop(entry.key)}
                         disabled={locked}
                         data-testid={`home-stream-stop-${entry.key}`}
+                        aria-label={`Stop ${entry.label} stream`}
                         className="h-6 px-2 text-xs"
                       >
                         Stop
