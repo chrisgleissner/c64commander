@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SidChipBadge } from "@/components/playback/SidChipBadge";
@@ -41,6 +41,21 @@ export type PlaylistListItemsOptions = {
   currentPlayingItemId: string | null;
 };
 
+/** What a built row was built from; the row is reused while every one of these is unchanged. */
+type CachedPlaylistRow = {
+  item: PlaylistItem;
+  playlistIndex: number;
+  durationLabel: string;
+  selected: boolean;
+  isPlaying: boolean;
+  row: ActionListItem;
+};
+
+type PlaylistRowCache = { shared: readonly unknown[]; rows: Map<string, CachedPlaylistRow | ActionListItem> };
+
+const sameInputs = (left: readonly unknown[], right: readonly unknown[]) =>
+  left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+
 export const usePlaylistListItems = ({
   filteredPlaylist,
   playlist,
@@ -62,8 +77,33 @@ export const usePlaylistListItems = ({
 }: PlaylistListItemsOptions) => {
   const playlistIndexById = useMemo(() => new Map(playlist.map((entry, index) => [entry.id, index])), [playlist]);
   const friendlyNames = useFriendlySidNames();
+  // Rows outlive one call: the view-all list grows a page at a time, and rebuilding every row on each
+  // page made the first jump to a far letter one render of several hundred milliseconds.
+  const rowCacheRef = useRef<PlaylistRowCache | null>(null);
 
   return useMemo(() => {
+    // Every row closes over these, so a change to any of them rebuilds every row.
+    const shared = [
+      playlist,
+      playlistIndexById,
+      friendlyNames,
+      isPlaylistLoading,
+      handlePlaylistSelect,
+      onAttachLocalConfig,
+      onAttachUltimateConfig,
+      onOpenConfig,
+      onRemoveConfig,
+      startPlaylist,
+      playlistItemDuration,
+      formatTime,
+      formatPlayCategory,
+      formatBytes,
+      formatDate,
+      getParentPath,
+    ];
+    const previousCache = rowCacheRef.current;
+    const cachedRows = previousCache && sameInputs(previousCache.shared, shared) ? previousCache.rows : new Map();
+    rowCacheRef.current = { shared, rows: cachedRows };
     const renderScope = beginHvscPerfScope("browse:render", {
       filteredCount: filteredPlaylist.length,
       playlistCount: playlist.length,
@@ -75,9 +115,11 @@ export const usePlaylistListItems = ({
     filteredPlaylist.forEach((item) => {
       const folderPath = getParentPath(item.path);
       if (folderPath !== lastFolder) {
-        items.push({
-          // A folder can recur further down the list, so its path alone is not a unique React key.
-          id: `folder:${folderPath}:${item.id}`,
+        // A folder can recur further down the list, so its path alone is not a unique React key.
+        const headerId = `folder:${folderPath}:${item.id}`;
+        const cachedHeader = cachedRows.get(headerId) as ActionListItem | undefined;
+        const header: ActionListItem = cachedHeader ?? {
+          id: headerId,
           title: folderPath,
           variant: "header",
           icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
@@ -86,16 +128,32 @@ export const usePlaylistListItems = ({
           showMenu: false,
           showSelection: false,
           disableActions: true,
-        });
+        };
+        cachedRows.set(headerId, header);
+        items.push(header);
         lastFolder = folderPath;
       }
       const playlistIndex = playlistIndexById.get(item.id) ?? -1;
+      const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
+      const selected = selectedPlaylistIds.has(item.id);
+      const isPlaying = currentPlayingItemId === item.id;
+      const cached = cachedRows.get(item.id) as CachedPlaylistRow | undefined;
+      if (
+        cached &&
+        cached.item === item &&
+        cached.playlistIndex === playlistIndex &&
+        cached.durationLabel === durationLabel &&
+        cached.selected === selected &&
+        cached.isPlaying === isPlaying
+      ) {
+        items.push(cached.row);
+        return;
+      }
       // Presentation only. `item.label`, `item.id` and `item.path` are untouched, so selection,
       // removal, the playlist filter and everything persisted still work off the raw values; the row
       // only draws something else. A playlist row has no file bytes, so the chip count here comes
       // from the file-name marker rather than from a parsed SID header.
       const display = resolveTrackDisplayName({ label: item.label, category: item.category, friendlyNames });
-      const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
       const configUiState = resolvePlaybackConfigUiState({
         configRef: item.configRef ?? null,
@@ -206,7 +264,7 @@ export const usePlaylistListItems = ({
             ]
           : []),
       ];
-      items.push({
+      const row: ActionListItem = {
         id: item.id,
         title: display.title,
         titleClassName: "whitespace-normal break-words block",
@@ -244,13 +302,13 @@ export const usePlaylistListItems = ({
             ) : null}
           </div>
         ),
-        selected: selectedPlaylistIds.has(item.id),
-        isPlaying: currentPlayingItemId === item.id,
-        onSelectToggle: (selected) => handlePlaylistSelect(item, selected),
+        selected,
+        isPlaying,
+        onSelectToggle: (nextSelected) => handlePlaylistSelect(item, nextSelected),
         menuItems,
         actionLabel: "Play",
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        secondaryActionLabel: configStatusLabel,
+        secondaryActionLabel: configStatusLabel ?? undefined,
         onSecondaryAction: configStatusLabel ? () => onOpenConfig(item) : undefined,
         // The chip is four letters; its accessible name is what actually says what will happen.
         secondaryActionAriaLabel: configStatusLabel
@@ -264,7 +322,9 @@ export const usePlaylistListItems = ({
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
-      } as ActionListItem);
+      };
+      cachedRows.set(item.id, { item, playlistIndex, durationLabel, selected, isPlaying, row });
+      items.push(row);
     });
     endHvscPerfScope(renderScope, {
       outcome: "success",

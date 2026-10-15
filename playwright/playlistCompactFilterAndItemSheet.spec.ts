@@ -230,6 +230,38 @@ test.describe("Playlist filter and item actions on the smallest screen", () => {
     await expect(filterPanel(page)).toHaveAttribute("data-expanded", "true");
   });
 
+  test("the View all sheet opens with its filter folded from the first frame, the active filter named and the list given the screen @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      Object.assign(window, { __viewAllFilterStates: seen });
+      new MutationObserver(() => {
+        const panel = document.querySelector('[data-testid="view-all-filter-toggle-panel"]');
+        const state = panel?.getAttribute("data-expanded");
+        if (state && seen[seen.length - 1] !== state) seen.push(state);
+      }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-expanded"] });
+    });
+    await openPlay(page);
+    await filterToggle(page).click();
+    await active(page).getByTestId("playlist-type-songs").click();
+    await filterToggle(page).click();
+
+    await active(page).getByRole("button", { name: "View all" }).click();
+    const sheet = page.getByTestId("action-list-view-all");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+    expect(
+      await page.evaluate(() => (window as unknown as { __viewAllFilterStates: string[] }).__viewAllFilterStates),
+    ).toEqual(["false"]);
+    await expect(sheet.getByTestId("view-all-filter-toggle")).toHaveText("Filter: Progs, Disks");
+    const listHeight = await sheet
+      .locator('[data-virtuoso-scroller="true"]')
+      .evaluate((element) => element.getBoundingClientRect().height);
+    // 97 px while the open filter and its two lines of type checkboxes took the sheet's header.
+    expect(listHeight, "the list area of the View all sheet at open").toBeGreaterThanOrEqual(200);
+  });
+
   test("the View all sheet folds its filter when its list is scrolled, without moving the rows @layout", async ({
     page,
   }) => {
