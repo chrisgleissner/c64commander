@@ -599,6 +599,26 @@ describe("UnifiedHealthBadge", () => {
     expect(screen.getByTestId("unified-health-badge")).not.toHaveAttribute("data-connected-device");
   });
 
+  // The health model has no trace evidence for an unreachable device and reports Idle; the badge
+  // drew Idle's solid ring, which the Docs reserve for "not connected yet".
+  it.each(["Offline", "Auth"])("draws the dotted ring the Docs describe for %s, not the Idle ring", (connectivity) => {
+    (mockState.healthState as { connectivity: string }).connectivity = connectivity;
+    (mockState.healthState as { state: string }).state = "Idle";
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.querySelector("svg[data-health-shape]")).toHaveAttribute("data-health-shape", "Unavailable");
+  });
+
+  it("keeps naming the selected device while it is offline", () => {
+    (mockState.healthState as { connectivity: string }).connectivity = "Offline";
+    (mockState.healthState as { state: string }).state = "Idle";
+    mockState.currentProfile = "compact";
+    render(<UnifiedHealthBadge />);
+
+    expect(screen.getByTestId("unified-health-badge-device")).toHaveTextContent("Office U64");
+  });
+
   it("renders offline and not-yet-connected special copy unchanged", () => {
     (mockState.healthState as { connectivity: string }).connectivity = "Offline";
     (mockState.healthState as { state: string }).state = "Unavailable";
