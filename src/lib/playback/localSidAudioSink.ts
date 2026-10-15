@@ -65,10 +65,15 @@ export interface LocalSidAudioSink {
    *
    * `seconds` is the whole budget — long enough to cover opening the next tune and then to fade
    * under it — because this is the only audio there is until the next tune renders a sample.
+   *
+   * With `playOutDeclickSeconds` above zero the tune is ending by itself instead: `seconds` is what is
+   * left of it, it ends there over that declick, and the next tune plays it whole before its own audio.
    */
-  beginCrossfadeTailPlayout?: (seconds: number) => void;
+  beginCrossfadeTailPlayout?: (seconds: number, playOutDeclickSeconds?: number) => void;
   /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
   releaseForHandover?: () => void;
+  /** Call `listener` once, when this sink's own first sample has been heard, after a predecessor's play-out. */
+  onOwnAudioHeard?: (listener: () => void) => void;
   /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
   adoptCrossfadeTail?: (tail: CrossfadeTail, seconds: number) => void;
   /**

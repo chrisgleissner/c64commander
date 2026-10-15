@@ -18,11 +18,12 @@ export const CROSSFADE_START_MARGIN_MS = 2500;
 /**
  * How long before a tune's songlength the next one is started on the phone.
  *
- * The outgoing tune must still be sounding when the next one starts: a crossfade fades it out under the
- * incoming one, and a cut ramps it out over a declick. A tune played from its whole-tune pre-render has
- * no audio past its songlength, and advancing at the songlength left nothing to fade or ramp: the first
- * tune stopped on a step, and with a crossfade the next one faded in from silence. Never more than half
- * the tune, so a short tune is still heard.
+ * The outgoing tune must still be sounding when the next one starts. A crossfade fades it out under the
+ * incoming one. With the crossfade off, the phone plays it on to its songlength while the next one opens,
+ * ends it over a declick, and starts the next one straight after (`outgoingEndsAtSeconds`). A tune played
+ * from its whole-tune pre-render has no audio past its songlength, and advancing at the songlength left
+ * nothing to fade or ramp: the first tune stopped on a step, and with a crossfade the next one faded in
+ * from silence. Never more than half the tune, so a short tune is still heard.
  */
 export const crossfadeLeadMs = (durationMs: number, onPhone: boolean, crossfadeMs = loadPlaybackCrossfadeMs()) =>
   onPhone ? Math.min(Math.max(0, crossfadeMs) + CROSSFADE_START_MARGIN_MS, durationMs / 2) : 0;

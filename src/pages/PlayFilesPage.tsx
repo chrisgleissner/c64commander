@@ -72,6 +72,7 @@ import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
 import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
 import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
+import { useShownNowPlaying } from "@/pages/playFiles/hooks/useShownNowPlaying";
 import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
@@ -1758,6 +1759,8 @@ export default function PlayFilesPage() {
   );
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
+  const shownNowPlaying = useShownNowPlaying({ playlist, currentIndex, durationMs: currentDurationMs, playbackTime });
+  const shownItem = shownNowPlaying.item;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
     if (!currentItem) return null;
     return currentItem.request.source;
@@ -1806,7 +1809,7 @@ export default function PlayFilesPage() {
       setPlaybackContext({ sourceBucket: null, activeItemLabel: null });
     };
   }, [currentItem, isPlaying, setPlaybackContext]);
-  const currentDurationLabel = formatTime(currentDurationMs);
+  const currentDurationLabel = formatTime(shownNowPlaying.durationMs);
   // While the user is scrubbing, the bar and the timer follow the FINGER rather
   // than the audio clock. The engine is deliberately behind — it is catching up
   // to the target in the background — and showing its position would make the
@@ -1837,14 +1840,14 @@ export default function PlayFilesPage() {
   useEffect(() => {
     let cancelled = false;
     setCurrentItemCredits({ itemId: null, author: null, released: null, chipCount: null, sidModels: [], clock: null });
-    const file = currentItem?.request.file;
-    if (!file || currentItem?.category !== "sid") return;
+    const file = shownItem?.request.file;
+    if (!file || shownItem?.category !== "sid") return;
     void (async () => {
       try {
         const header = parseSidHeaderMetadata(new Uint8Array(await file.arrayBuffer()));
         if (cancelled) return;
         setCurrentItemCredits({
-          itemId: currentItem.id,
+          itemId: shownItem.id,
           author: header.author || null,
           released: header.released || null,
           chipCount: header.sidChipCount === 2 || header.sidChipCount === 3 ? header.sidChipCount : 1,
@@ -1858,7 +1861,7 @@ export default function PlayFilesPage() {
       } catch (error) {
         // Not a readable SID header — nothing to show, which is the same as a tune that names nobody.
         addLog("debug", "Could not read tune credits from the SID header", {
-          item: currentItem?.label,
+          item: shownItem?.label,
           error: (error as Error)?.message ?? String(error),
         });
       }
@@ -1866,16 +1869,16 @@ export default function PlayFilesPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentItem?.id, currentItem?.request.file, currentItem?.category]);
+  }, [shownItem?.id, shownItem?.request.file, shownItem?.category]);
 
   // How the tune is named on screen. `currentItem.label` stays the raw file name — the session
   // persistence, the playlist and every lookup still use it — and only what the transport draws
   // changes.
   const friendlySidNames = useFriendlySidNames();
-  const currentDisplay = currentItem
+  const currentDisplay = shownItem
     ? resolveTrackDisplayName({
-        label: currentItem.label,
-        category: currentItem.category,
+        label: shownItem.label,
+        category: shownItem.category,
         friendlyNames: friendlySidNames,
         chipCount: currentItemCredits.chipCount,
       })
@@ -1883,7 +1886,7 @@ export default function PlayFilesPage() {
   useRecordRecentlyPlayed({
     trackInstanceId,
     item: currentItem,
-    title: currentDisplay?.title,
+    title: shownItem === currentItem ? currentDisplay?.title : undefined,
     credits: currentItemCredits,
   });
 
@@ -1894,11 +1897,11 @@ export default function PlayFilesPage() {
    * manager keeps the last tune and republishes it once a session starts, because the page names
    * the track in the commit before the one that starts playback.
    */
-  const nowPlayingTitle = currentDisplay?.title ?? currentItem?.label ?? null;
+  const nowPlayingTitle = currentDisplay?.title ?? shownItem?.label ?? null;
   const nowPlayingArtist = currentItemCredits.author;
   useEffect(() => {
     void setBackgroundExecutionNowPlaying(
-      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: currentDurationMs ?? null },
+      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: shownNowPlaying.durationMs ?? null },
       {
         source: "playback-controller",
         reason: "now-playing",
@@ -1916,7 +1919,7 @@ export default function PlayFilesPage() {
         background: true,
       });
     });
-  }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
+  }, [shownNowPlaying.durationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
 
   const activePlayback = useActivePlayback();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
@@ -2107,12 +2110,12 @@ export default function PlayFilesPage() {
   // HVSC has STIL, so anything played from a device, a local file or an archive resolves to nothing
   // without a lookup.
   const stilInfo = useStilInfo({
-    virtualPath: currentItem?.request.source === "hvsc" ? currentItem.path : null,
+    virtualPath: shownItem?.request.source === "hvsc" ? shownItem.path : null,
     songNr: clampedSongNr ?? undefined,
   });
   // Everything the tune's own header says about itself, on one line under the title. The order and
   // the omission rules live in buildNowPlayingMetadataParts; this only supplies the fields.
-  const currentItemMetadataParts = currentItem
+  const currentItemMetadataParts = shownItem
     ? buildNowPlayingMetadataParts({
         author: currentItemCredits.author,
         released: currentItemCredits.released,
@@ -2454,13 +2457,13 @@ export default function PlayFilesPage() {
   );
 
   const playlistTotalsAt = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
-    currentIndex,
+    currentIndex: shownNowPlaying.index,
     shuffleEnabled: traversalOrdering.shuffleEnabled,
     shuffleSeed,
   });
-  const timeline = usePlaybackTimeline(playbackTime, {
-    durationMs: currentDurationMs,
-    launching: chosenTrackLaunching,
+  const timeline = usePlaybackTimeline(shownNowPlaying.time, {
+    durationMs: shownNowPlaying.durationMs,
+    launching: chosenTrackLaunching && shownNowPlaying.index === currentIndex,
     scrubTargetMs: shownScrubTargetMs,
     heldAtMs: pendingSeek?.audibleMs,
     playlistTotalsAt,
@@ -2468,8 +2471,7 @@ export default function PlayFilesPage() {
 
   const previewFilteredPlaylist = queryFilteredPlaylist.previewPlaylist;
   const filteredPlaylist = queryFilteredPlaylist.viewAllPlaylist;
-  const currentPlayingItemId =
-    (isPlaying || isPaused) && currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
+  const currentPlayingItemId = (isPlaying || isPaused) && shownNowPlaying.index >= 0 ? (shownItem?.id ?? null) : null;
 
   // Stable identities so usePlaylistListItems's useMemo isn't defeated by a
   // fresh inline arrow on every 1s elapsedMs tick during playback (HARD9-032).

@@ -130,7 +130,7 @@ export class LocalSidPlaybackController {
     file: SidByteSource,
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
-    options?: { prerenderKey?: string; durationSeconds?: number },
+    options?: { prerenderKey?: string; durationSeconds?: number; outgoingEndsAtSeconds?: number },
   ): Promise<LocalSidPlayResult> {
     const engine = await this.ensureEngine();
     // Timed separately from the engine open: opening measures 23-48 ms on a
@@ -147,7 +147,13 @@ export class LocalSidPlaybackController {
       readMs: performance.now() - readStartedAt,
       bytes: buffer.byteLength,
     });
-    const result = await engine.play(buffer, songIndex, callbacks, options?.prerenderKey);
+    const result = await engine.play(
+      buffer,
+      songIndex,
+      callbacks,
+      options?.prerenderKey,
+      options?.outgoingEndsAtSeconds,
+    );
     traceLocalSid("engine-play-returned", {
       ms: Math.round(performance.now() - readStartedAt),
       started: result.started,

@@ -91,7 +91,7 @@ describe("PlayFilesPage recently-played wiring", () => {
 
   it("records through the hook with credits tagged by the item whose SID header they came from", () => {
     expect(pageSource).toContain("credits: currentItemCredits,");
-    expect(pageSource).toContain("itemId: currentItem.id,");
+    expect(pageSource).toContain("itemId: shownItem.id,");
     expect(pageSource).not.toContain("saveRecentlyPlayed(");
   });
 });

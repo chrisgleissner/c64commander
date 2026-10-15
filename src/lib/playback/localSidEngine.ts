@@ -74,6 +74,7 @@ export const CUT_DECLICK_MS = 10;
 /** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
 const CUT_CLOSE_MARGIN_MS = 30;
 import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { beginLocalPlayOut, endLocalPlayOut, playOutSeconds } from "./localPlayOut";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -558,6 +559,8 @@ export class LocalSidEngine {
   private prerenderedSeamSeconds: number | null = null;
   /** How long that tail should take to disappear. */
   private crossfadeSeconds = 0;
+  /** The outgoing tune is being played out to its end; the next sink reports when that is over. */
+  private playOutHandedOver = false;
   private totalRenderMs = 0;
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
@@ -819,6 +822,8 @@ export class LocalSidEngine {
      * arrives afterwards is a warm cache that is never found.
      */
     cacheKey?: string,
+    /** Where the tune playing now ends, when this play is the playlist moving on: it plays on to there. */
+    outgoingEndsAtSeconds?: number,
   ): Promise<LocalSidPlayResult> {
     // A new track instance, so anything still in flight for the previous one can be told apart from
     // this one's work. A stall recovery re-opens the same tune and counts as a new instance too:
@@ -851,7 +856,7 @@ export class LocalSidEngine {
     // so a retry has something left to open with.
     const retryBytes = sidBytes.slice(0);
     try {
-      return await this.openTuneOnce(sidBytes, songIndex, callbacks);
+      return await this.openTuneOnce(sidBytes, songIndex, callbacks, outgoingEndsAtSeconds);
     } catch (error) {
       // An open that times out is nearly always transient: the device was busy — often finishing
       // the seek this tune replaced, or emulating for a worker that has been told to stop but has
@@ -881,6 +886,7 @@ export class LocalSidEngine {
     sidBytes: ArrayBuffer,
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
+    outgoingEndsAtSeconds?: number,
   ): Promise<LocalSidPlayResult> {
     // A seek still running cannot be called off, and this `open` would queue behind all of it (8.8 s
     // after a pause on a Pixel 4; past the 15 s open timeout after scrub-then-skip), so start on a fresh
@@ -897,7 +903,7 @@ export class LocalSidEngine {
     // hard cut, and so is leaving a paused tune: faded out, it came back and held the next tune in a paused track.
     const crossfadeMs = this.paused ? 0 : loadPlaybackCrossfadeMs();
     this.pendingCrossfadeMs = crossfadeMs;
-    this.stopPlayback({ crossfadeMs, declick: !this.paused });
+    this.stopPlayback({ crossfadeMs, declick: !this.paused, playOutToSeconds: outgoingEndsAtSeconds });
     this.callbacks = callbacks;
     const worker = this.ensureWorker();
     const id = this.nextId;
@@ -1311,6 +1317,8 @@ export class LocalSidEngine {
     if (this.crossfadeTail && this.audio) {
       this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
     }
+    if (this.playOutHandedOver) this.audio?.onOwnAudioHeard?.(endLocalPlayOut);
+    this.playOutHandedOver = false;
     traceLocalSid("crossfade-tail-adopted", { frames: this.crossfadeTail?.frames ?? 0 });
     this.crossfadeTail = null;
   }
@@ -2355,7 +2363,7 @@ export class LocalSidEngine {
     }, afterMs);
   }
 
-  stopPlayback(options: { crossfadeMs?: number; declick?: boolean } = {}): void {
+  stopPlayback(options: { crossfadeMs?: number; declick?: boolean; playOutToSeconds?: number } = {}): void {
     // Stop asking the mirror to protect audio that is no longer playing, or Live View would stay
     // demoted for the rest of the session.
     clearLocalAudioHealth();
@@ -2372,14 +2380,23 @@ export class LocalSidEngine {
     const declickMs = fadeMs === 0 && options.declick ? CUT_DECLICK_MS : 0;
     const outgoing = this.audio;
     const keepMs = fadeMs || declickMs;
+    const position = this.scheduler?.positionSeconds() ?? 0;
+    const playOut =
+      declickMs > 0 ? playOutSeconds(options.playOutToSeconds, position, CROSSFADE_TAIL_BUDGET_SECONDS) : 0;
+    const playsOut = playOut > declickMs / 1000;
+    endLocalPlayOut();
+    this.playOutHandedOver = false;
     this.scheduler?.stopAll(keepMs > 0 ? { keepSourcesFor: keepMs } : undefined);
     this.scheduler = null;
     this.audio = null;
     if (outgoing && keepMs > 0 && outgoing.beginCrossfadeTailPlayout) {
       this.crossfadeOut = outgoing;
       this.crossfadeSeconds = keepMs / 1000;
-      outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds);
-      traceLocalSid("crossfade-tail-playout", { fadeMs: keepMs });
+      if (playsOut) outgoing.beginCrossfadeTailPlayout(playOut, declickMs / 1000);
+      else outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds);
+      if (playsOut) beginLocalPlayOut(playOut);
+      this.playOutHandedOver = playsOut;
+      traceLocalSid("crossfade-tail-playout", { fadeMs: keepMs, playOutSeconds: playsOut ? playOut : 0 });
       this.closeIfNeverHandedOver(outgoing, (CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds) * 1000 + 500);
     } else if (outgoing && declickMs > 0 && outgoing.fadeOut) {
       outgoing.fadeOut(declickMs);

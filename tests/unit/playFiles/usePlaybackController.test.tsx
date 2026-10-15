@@ -3781,6 +3781,39 @@ describe("usePlaybackController", () => {
       expect(autoAdvanceGuardRef.current!.dueAtMs).toBe(trackStartedAtRef.current! + 120_000);
     });
 
+    // The next tune starts the start margin before the songlength. With the crossfade off the phone has to
+    // play the outgoing tune on to that songlength, so it needs to know where that is.
+    it("tells the phone where the outgoing tune ends when the playlist moves on by itself", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const trackInstanceIdRef = { current: 0 };
+      const autoAdvanceGuardRef = { current: null as unknown };
+      const playlist = [sidItem(psid), sidItem(psid, 1, "sid-2")];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        trackInstanceIdRef,
+        autoAdvanceGuardRef,
+        durationMs: 120_000,
+      } as any);
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect((controller.play.mock.calls[0] as unknown[])[3]).toMatchObject({ outgoingEndsAtSeconds: undefined });
+      autoAdvanceGuardRef.current = {
+        trackInstanceId: trackInstanceIdRef.current,
+        dueAtMs: 0,
+        autoFired: false,
+        userCancelled: false,
+      };
+
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+
+      expect(controller.play).toHaveBeenCalledTimes(2);
+      expect((controller.play.mock.calls[1] as unknown[])[3]).toMatchObject({ outgoingEndsAtSeconds: 120 });
+    });
+
     it("ends the last tune when it comes due again after being deferred once, as when its playhead has stalled", async () => {
       enableLocal();
       localStorage.setItem("c64u_playback_crossfade_ms", "1500");

@@ -695,6 +695,8 @@ export function usePlaybackController({
         playlistSize?: number;
         /** `auto` marks a playlist moving on by itself; anything else is the user asking. */
         origin?: PlaybackLaunchOrigin;
+        /** With `auto`: the outgoing tune's songlength, which it plays on to on the phone. */
+        outgoingSonglengthMs?: number;
         /** The Stop count when the user asked, for a request that waited before reaching here. */
         stopsAtRequest?: number;
       },
@@ -1144,6 +1146,7 @@ export function usePlaybackController({
             {
               prerenderKey: buildRenderedTuneKey(item.id, toEngineTuneIndex(effectiveRequest.songNr)),
               durationSeconds: resolvedDuration ? resolvedDuration / 1000 : undefined,
+              outgoingEndsAtSeconds: options?.outgoingSonglengthMs ? options.outgoingSonglengthMs / 1000 : undefined,
             },
           );
           // Warm the tracks either side of this one. A track started from a warmed opening plays out
@@ -2102,6 +2105,7 @@ export function usePlaybackController({
             rebootBeforePlay: shouldReboot,
             playlistIndex: reachableIndex,
             origin: "auto",
+            outgoingSonglengthMs: durationNowMs,
           });
           setIsPaused(false);
         } catch (error) {
