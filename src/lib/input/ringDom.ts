@@ -47,6 +47,7 @@ export const stepFocusWithinOverlay = (overlay: Element, from: Element, forward:
       ? tabbables[forward ? 0 : tabbables.length - 1]
       : tabbables[(index + (forward ? 1 : -1) + tabbables.length) % tabbables.length];
   if (index !== -1) {
+    if (scrollThroughTallStop(overlay, from, forward ? 1 : -1)) return true;
     // Wrapping, or moving on to a footer button outside the scrolling body, would leave the
     // body's remaining text unreachable, so the body scrolls toward it first.
     const wraps = index === (forward ? tabbables.length - 1 : 0);
@@ -236,6 +237,22 @@ export const scrollInsteadOfLeavingPage = (
 
 /** Less than about one control's height left to show is the body's padding, not content worth a press. */
 const OVERLAY_CONTENT_THRESHOLD_PX = 44;
+
+/**
+ * A stop taller than the overlay body it scrolls in, such as a block of details, is read a page at a
+ * time: the key scrolls the rest of it into view before the ring moves on, so none of it is skipped.
+ */
+const scrollThroughTallStop = (overlay: Element, from: Element, direction: 1 | -1): boolean => {
+  const body = scrollContainerOf(from);
+  if (!overlay.contains(body)) return false;
+  const visible = visibleBoundsOf(body);
+  const bounds = from.getBoundingClientRect();
+  const hidden = direction > 0 ? bounds.bottom - visible.bottom : visible.top - bounds.top;
+  if (hidden < 1) return false;
+  const page = Math.max(body.clientHeight - OVERLAY_CONTENT_THRESHOLD_PX, 1);
+  body.scrollBy({ top: direction * Math.min(hidden, page) });
+  return true;
+};
 
 /** The overlay's own scrolling body, never the page behind it, shows what follows its last control. */
 const scrollOverlayTowardUnreachableContent = (overlay: Element, from: Element, direction: 1 | -1): boolean => {

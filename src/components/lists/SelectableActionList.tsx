@@ -8,7 +8,7 @@
 
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { MoreVertical, Play, Search, X } from "lucide-react";
+import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,18 +19,11 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { PathWrap } from "@/components/PathWrap";
 import { NameWrap } from "@/components/NameWrap";
 import { AlphabetScrollbar } from "./AlphabetScrollbar";
+import { ActionListItemMenu } from "./ActionListItemMenu";
+import { CollapsibleListFilter, ListFilterField, nearestScroller, type ListFilterRegion } from "./ListFilter";
 import { getDisplayProfileLayoutTokens, type DisplayProfile } from "@/lib/displayProfiles";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -115,13 +108,16 @@ export type SelectableActionListProps = {
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
   stackTitleProfiles?: readonly DisplayProfile[];
+  /** Profiles on which the filter folds into one summary row once the reader moves on to the list. */
+  collapsibleFilterProfiles?: readonly DisplayProfile[];
+  /** What `filterHeader` currently restricts the list to, shown while the filter is folded; null for nothing. */
+  filterHeaderSummary?: string | null;
 };
 
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
+const NO_PROFILES: readonly DisplayProfile[] = [];
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
-
-const keepMenuOpen = (event: Event) => event.preventDefault();
 
 const countNonHeaderItems = (list: ActionListItem[]) =>
   list.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
@@ -131,13 +127,22 @@ const resolveEmptyListLabel = (emptyLabel: string, hiddenItemCount: number) => {
   return `No items match the filter. ${hiddenItemCount} ${hiddenItemCount === 1 ? "item is" : "items are"} hidden.`;
 };
 
-type ActionListRowProps = { item: ActionListItem; rowTestId?: string; stackTitle: boolean };
+type ActionListRowProps = {
+  item: ActionListItem;
+  rowTestId?: string;
+  stackTitle: boolean;
+  menuPresentation: "dropdown" | "sheet";
+};
 
 // On a 320px screen the row's controls take about 150px of the 256px available, all at the 44px
 // target size, and left the name a 96px ribbon that broke most words in half. A stacked row gives
 // the name a line of its own, with the controls on the line below it.
-const ActionListRow = React.memo(function ActionListRow({ item, rowTestId, stackTitle }: ActionListRowProps) {
-  const [actionsOpen, setActionsOpen] = useState(false);
+const ActionListRow = React.memo(function ActionListRow({
+  item,
+  rowTestId,
+  stackTitle,
+  menuPresentation,
+}: ActionListRowProps) {
   if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
@@ -212,61 +217,7 @@ const ActionListRow = React.memo(function ActionListRow({ item, rowTestId, stack
           </label>
         ) : null}
         {item.showMenu === false ? null : (
-          <DropdownMenu modal={false} open={actionsOpen} onOpenChange={setActionsOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 min-h-[44px] min-w-[44px]"
-                aria-label="Item actions"
-                disabled={item.disableActions}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  // The trigger opens on pointer-down or its own Enter; the keypad ring activates it
-                  // with a click, which carries no pointer (detail 0) and would otherwise do nothing.
-                  if (event.detail === 0) setActionsOpen(true);
-                }}
-                id={actionMenuTestId}
-                data-testid={actionMenuTestId}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {item.menuItems?.length
-                ? item.menuItems.map((entry, index) => {
-                    if (entry.type === "separator") return <DropdownMenuSeparator key={`sep-${index}`} />;
-                    if (entry.type === "label") {
-                      return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
-                    }
-                    if (entry.type === "info") {
-                      // Not `disabled`: a menu's arrow keys skip disabled items, so on a keypad the
-                      // details could never be scrolled into view. OK on one leaves the menu open.
-                      return (
-                        <DropdownMenuItem
-                          key={`info-${index}`}
-                          className="text-muted-foreground [overflow-wrap:anywhere]"
-                          data-menu-detail="true"
-                          onSelect={keepMenuOpen}
-                        >
-                          {entry.label}: {entry.value}
-                        </DropdownMenuItem>
-                      );
-                    }
-                    return (
-                      <DropdownMenuItem
-                        key={`action-${index}`}
-                        onSelect={entry.onSelect}
-                        disabled={entry.disabled}
-                        className={entry.destructive ? "text-destructive focus:text-destructive" : undefined}
-                      >
-                        {entry.label}
-                      </DropdownMenuItem>
-                    );
-                  })
-                : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
         )}
       </div>
       <div
@@ -381,10 +332,17 @@ export const SelectableActionList = ({
   selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
+  collapsibleFilterProfiles = NO_PROFILES,
+  filterHeaderSummary = null,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
   const stackTitles = stackTitleProfiles.includes(profile);
+  const collapsibleFilter = collapsibleFilterProfiles.includes(profile);
+  const menuPresentation = isCompact ? "sheet" : "dropdown";
+  const listRootRef = useRef<HTMLDivElement>(null);
+  const inlineListRef = useRef<HTMLDivElement>(null);
+  const viewAllBodyRef = useRef<HTMLDivElement>(null);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
   const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
@@ -517,18 +475,49 @@ export const SelectableActionList = ({
     return { visibleItems: list };
   }, [filteredItems, maxVisible]);
 
+  const inlineFilterRegion = useMemo<ListFilterRegion>(
+    () => ({
+      focusRegion: () => listRootRef.current,
+      scrollAnchor: () => {
+        const anchor = inlineListRef.current;
+        return anchor ? { anchor, scroller: nearestScroller(anchor) } : null;
+      },
+    }),
+    [],
+  );
+
+  const viewAllFilterRegion = useMemo<ListFilterRegion>(
+    () => ({
+      focusRegion: () => viewAllBodyRef.current,
+      scrollAnchor: () => {
+        const scroller = viewAllScrollRef.current;
+        const anchor = scroller?.firstElementChild;
+        return scroller && anchor instanceof HTMLElement ? { anchor, scroller } : null;
+      },
+    }),
+    [],
+  );
+
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
       {list.length === 0 ? (
         <p className="text-xs text-muted-foreground">{inlineEmptyLabel}</p>
       ) : (
-        list.map((item) => <ActionListRow key={item.id} item={item} rowTestId={rowTestId} stackTitle={stackTitles} />)
+        list.map((item) => (
+          <ActionListRow
+            key={item.id}
+            item={item}
+            rowTestId={rowTestId}
+            stackTitle={stackTitles}
+            menuPresentation={menuPresentation}
+          />
+        ))
       )}
     </div>
   );
 
   return (
-    <div className="space-y-3">
+    <div ref={listRootRef} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
         <div className="min-w-0">
           <p className="text-sm font-medium">{title}</p>
@@ -548,33 +537,30 @@ export const SelectableActionList = ({
         </div>
       </div>
 
-      {/* Text filter */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="text"
-          placeholder={filterPlaceholder}
+      {collapsibleFilter ? (
+        <CollapsibleListFilter
           value={inlineFilterText}
-          onChange={(e) => setInlineFilterText(e.target.value)}
-          className="pl-9 pr-9 h-9"
-          data-testid="list-filter-input"
+          onChange={setInlineFilterText}
+          placeholder={filterPlaceholder}
+          testId="list-filter-input"
+          toggleTestId="list-filter-toggle"
+          header={filterHeader}
+          headerSummary={filterHeaderSummary}
+          region={inlineFilterRegion}
         />
-        {inlineFilterText && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setInlineFilterText("")}
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-            aria-label="Clear filter"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {filterHeader ? (
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
-      ) : null}
+      ) : (
+        <>
+          <ListFilterField
+            value={inlineFilterText}
+            onChange={setInlineFilterText}
+            placeholder={filterPlaceholder}
+            testId="list-filter-input"
+          />
+          {filterHeader ? (
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
+          ) : null}
+        </>
+      )}
 
       {showSelectionControls ? (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
@@ -612,7 +598,9 @@ export const SelectableActionList = ({
         </div>
       ) : null}
 
-      <div className="bg-card border border-border rounded-panel p-4 overflow-hidden">{renderList(visibleItems)}</div>
+      <div ref={inlineListRef} className="bg-card border border-border rounded-panel p-4 overflow-hidden">
+        {renderList(visibleItems)}
+      </div>
 
       {viewAllTitle && (
         <AppSheet open={viewAllOpen} onOpenChange={setViewAllOpen}>
@@ -628,36 +616,36 @@ export const SelectableActionList = ({
               <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
                 <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
                 <AppSheetDescription>Review all items in this list.</AppSheetDescription>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="text"
-                    placeholder={filterPlaceholder}
+                {collapsibleFilter ? (
+                  <CollapsibleListFilter
                     value={expandedFilterText}
-                    onChange={(e) => setExpandedFilterText(e.target.value)}
-                    className="pl-9 pr-9 h-9"
-                    data-testid="view-all-filter-input"
+                    onChange={setExpandedFilterText}
+                    placeholder={filterPlaceholder}
+                    testId="view-all-filter-input"
+                    toggleTestId="view-all-filter-toggle"
+                    header={viewAllFilterHeader ?? filterHeader}
+                    headerSummary={filterHeaderSummary}
+                    region={viewAllFilterRegion}
                   />
-                  {expandedFilterText && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setExpandedFilterText("")}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                      aria-label="Clear filter"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                {(viewAllFilterHeader ?? filterHeader) ? (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    {viewAllFilterHeader ?? filterHeader}
-                  </div>
-                ) : null}
+                ) : (
+                  <>
+                    <ListFilterField
+                      value={expandedFilterText}
+                      onChange={setExpandedFilterText}
+                      placeholder={filterPlaceholder}
+                      testId="view-all-filter-input"
+                    />
+                    {(viewAllFilterHeader ?? filterHeader) ? (
+                      <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+                        {viewAllFilterHeader ?? filterHeader}
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </AppSheetHeader>
               <AppSheetBody className={cn("flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
                 <div
+                  ref={viewAllBodyRef}
                   className={cn(
                     "bg-card border border-border rounded-panel overflow-hidden flex-1 h-full min-h-0 flex flex-col",
                     isCompact ? "p-3" : "p-4",
@@ -684,7 +672,12 @@ export const SelectableActionList = ({
                       }}
                       itemContent={(index, item) => (
                         <div className="mb-2 last:mb-0">
-                          <ActionListRow item={item} rowTestId={rowTestId} stackTitle={stackTitles} />
+                          <ActionListRow
+                            item={item}
+                            rowTestId={rowTestId}
+                            stackTitle={stackTitles}
+                            menuPresentation={menuPresentation}
+                          />
                         </div>
                       )}
                     />

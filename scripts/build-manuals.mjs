@@ -1036,6 +1036,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "A filter only hides rows; it never changes the playlist. Clear the box and the whole queue comes back.",
     "",
+    "The **Songs**, **Progs** and **Disks** boxes narrow the list by kind: SID and MOD music, PRG programs and CRT cartridges, or disk images. On the smallest screens the filter folds into a single **Filter** row once you move on to the list. The row still says what is being filtered, and a tap or OK opens it again.",
+    "",
     "Every item remembers where it came from. Local files stay local, C64U files point back at the device, archive results remember their source, and SID entries carry their tunes and lengths with them.",
     "",
     "Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.",
@@ -1044,7 +1046,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
     "",
-    "Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.",
+    "Each row's **⋮** button opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.",
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(
       variant,

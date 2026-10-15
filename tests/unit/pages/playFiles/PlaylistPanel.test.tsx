@@ -11,14 +11,16 @@ import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 vi.mock("@/components/lists/SelectableActionList", () => ({
   SelectableActionList: ({
     filterHeader,
-    viewAllFilterHeader,
+    filterHeaderSummary,
+    collapsibleFilterProfiles,
     removeSelectedLabel,
     headerActions,
     hiddenItemCount,
     emptyLabel,
   }: {
     filterHeader: React.ReactNode;
-    viewAllFilterHeader?: React.ReactNode;
+    filterHeaderSummary?: string | null;
+    collapsibleFilterProfiles?: readonly string[];
     removeSelectedLabel?: string;
     headerActions?: React.ReactNode;
     hiddenItemCount?: number;
@@ -28,7 +30,8 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
       <div data-testid="playlist-empty-label">{emptyLabel}</div>
       <div data-testid="playlist-hidden-item-count">{hiddenItemCount}</div>
       <div data-testid="playlist-filter-header">{filterHeader}</div>
-      <div data-testid="playlist-view-all-filter-header">{viewAllFilterHeader}</div>
+      <div data-testid="playlist-filter-summary">{filterHeaderSummary ?? "none"}</div>
+      <div data-testid="playlist-collapsible-profiles">{collapsibleFilterProfiles?.join(",")}</div>
       <div data-testid="playlist-remove-selected-label">{removeSelectedLabel}</div>
       <div data-testid="playlist-header-actions">{headerActions}</div>
     </div>
@@ -52,8 +55,8 @@ type HarnessProps = {
   hasPlaylist?: boolean;
   onAddItems?: () => void;
   onClearPlaylist?: () => void;
-  categoryOptions?: PlayFileCategory[];
   playlistTypeFilters?: PlayFileCategory[];
+  onToggleFilter?: (category: PlayFileCategory) => void;
   playlistFilterText?: string;
   hiddenItemCount?: number;
   playlistItemCount?: number;
@@ -66,8 +69,8 @@ const PlaylistPanelHarness = ({
   hasPlaylist = true,
   onAddItems = vi.fn(),
   onClearPlaylist = vi.fn(),
-  categoryOptions = ["sid", "mod", "prg", "crt", "disk"] satisfies PlayFileCategory[],
   playlistTypeFilters = ["sid", "mod", "prg", "crt", "disk"],
+  onToggleFilter = vi.fn(),
   playlistFilterText = "",
   hiddenItemCount = 0,
   playlistItemCount = items.length,
@@ -90,18 +93,8 @@ const PlaylistPanelHarness = ({
       onToggleSelectAll={vi.fn()}
       onRemoveSelected={vi.fn()}
       maxVisible={0}
-      categoryOptions={categoryOptions}
       playlistTypeFilters={playlistTypeFilters}
-      onToggleFilter={vi.fn()}
-      formatCategory={(category) =>
-        ({
-          sid: "SID music",
-          mod: "MOD music",
-          prg: "PRG program",
-          crt: "CRT cartridge",
-          disk: "Disk image",
-        })[category] ?? category
-      }
+      onToggleFilter={onToggleFilter}
       hasPlaylist={hasPlaylist}
       playlistLoading={playlistLoading}
       playlistItemCount={playlistItemCount}
@@ -133,49 +126,52 @@ describe("PlaylistPanel", () => {
     expect(screen.getByTestId("playlist-empty-label")).toHaveTextContent("No tracks in playlist yet.");
   });
 
-  it("shortens category labels only inside the compact playlist sheet", () => {
+  it("offers three type filters, Songs, Progs and Disks, in place of one per file type", () => {
     renderPanel({ compact: true });
 
-    const inlineHeader = screen.getByTestId("playlist-filter-header");
-    const viewAllHeader = screen.getByTestId("playlist-view-all-filter-header");
+    const header = screen.getByTestId("playlist-filter-header");
+    expect(Array.from(header.querySelectorAll("label")).map((label) => label.textContent)).toEqual([
+      "Songs",
+      "Progs",
+      "Disks",
+    ]);
+    expect(screen.getByTestId("playlist-type-songs")).toBeChecked();
+    expect(screen.queryByTestId("playlist-type-sid")).not.toBeInTheDocument();
+  });
 
-    expect(inlineHeader).toHaveTextContent("SID music");
-    expect(inlineHeader).toHaveTextContent("MOD music");
-    expect(inlineHeader).toHaveTextContent("PRG program");
-    expect(inlineHeader).toHaveTextContent("CRT cartridge");
-    expect(inlineHeader).toHaveTextContent("Disk image");
+  it("hides SID and MOD files together when Songs is unchecked", () => {
+    const onToggleFilter = vi.fn();
+    renderPanel({ onToggleFilter });
 
-    expect(viewAllHeader).toHaveTextContent("SID");
-    expect(viewAllHeader).toHaveTextContent("MOD");
-    expect(viewAllHeader).toHaveTextContent("PRG");
-    expect(viewAllHeader).toHaveTextContent("CRT");
-    expect(viewAllHeader).toHaveTextContent("Disks");
-    expect(viewAllHeader).not.toHaveTextContent("SID music");
+    fireEvent.click(screen.getByTestId("playlist-type-songs"));
+
+    expect(onToggleFilter.mock.calls.map(([category]) => category)).toEqual(["sid", "mod"]);
+  });
+
+  it("shows PRG and CRT files together again when Progs is checked", () => {
+    const onToggleFilter = vi.fn();
+    renderPanel({ onToggleFilter, playlistTypeFilters: ["sid", "mod", "disk"] });
+
+    expect(screen.getByTestId("playlist-type-progs")).not.toBeChecked();
+    fireEvent.click(screen.getByTestId("playlist-type-progs"));
+
+    expect(onToggleFilter.mock.calls.map(([category]) => category)).toEqual(["prg", "crt"]);
+  });
+
+  it("names the types the filter still shows, for the folded filter to display", () => {
+    renderPanel({ playlistTypeFilters: ["prg", "crt", "disk"] });
+    expect(screen.getByTestId("playlist-filter-summary")).toHaveTextContent("Progs, Disks");
+  });
+
+  it("folds the filter on the compact profile only", () => {
+    renderPanel();
+    expect(screen.getByTestId("playlist-collapsible-profiles")).toHaveTextContent(/^compact$/);
   });
 
   it("hands the list the number of playlist items its filters hide", () => {
     renderPanel({ hiddenItemCount: 153 });
 
     expect(screen.getByTestId("playlist-hidden-item-count")).toHaveTextContent("153");
-  });
-
-  it("keeps the view-all filter header empty outside compact mode", () => {
-    renderPanel();
-
-    expect(screen.getByTestId("playlist-view-all-filter-header")).toBeEmptyDOMElement();
-  });
-
-  it("falls back to the formatted label when compact sheet shorthand is unavailable", () => {
-    renderPanel({
-      compact: true,
-      categoryOptions: ["sid", "tape" as PlayFileCategory],
-      playlistTypeFilters: ["sid", "tape" as PlayFileCategory],
-    });
-
-    const viewAllHeader = screen.getByTestId("playlist-view-all-filter-header");
-
-    expect(viewAllHeader).toHaveTextContent("SID");
-    expect(viewAllHeader).toHaveTextContent("tape");
   });
 
   it("switches playlist actions and removal label based on playlist state", () => {

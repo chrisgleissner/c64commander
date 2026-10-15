@@ -279,7 +279,9 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
    * which a menu's arrow keys skip, so a keypad opened the menu on its first action with the details
    * scrolled above it and no key that could bring them back.
    */
-  test("a playlist row's menu lets the keypad read every detail row @layout", async ({ page }) => {
+  test("a playlist row's item sheet lets the keypad read every detail and reach every action, and Back returns to ⋮ @layout", async ({
+    page,
+  }) => {
     await page.addInitScript(() => {
       const items = Array.from({ length: 3 }, (_, index) => ({
         source: "ultimate",
@@ -298,48 +300,54 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const trigger = page.locator('[data-slot-active="true"]').getByRole("button", { name: "Item actions" }).first();
     await expect(trigger).toBeAttached({ timeout: 15_000 });
     expect(await ringFocus(page, trigger), "the ring could not reach the row's menu button").toBe(true);
-    // Near the top, so the tall menu opens downward and has to stop at the bars at the bottom.
+    // Near the top of the screen, where the dropdown this sheet replaced had the least room.
     await trigger.evaluate((element) => element.scrollIntoView({ block: "start" }));
     await page.keyboard.press("Enter");
-    const menu = page.getByRole("menu");
-    await expect(menu).toBeVisible();
+    const sheet = page.getByTestId("action-list-item-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(page.getByRole("menu")).toHaveCount(0);
     await waitForAnimations(page);
-    const menuBottom = await menu.evaluate((element) => element.getBoundingClientRect().bottom);
-    expect(menuBottom, "the menu runs under the guidance bar").toBeLessThanOrEqual((await guidanceBarTop(page)) + 0.5);
+    const sheetBottom = await sheet.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(sheetBottom, "the sheet runs under the guidance bar").toBeLessThanOrEqual(
+      (await guidanceBarTop(page)) + 0.5,
+    );
 
-    const clipped = await menu
-      .locator('[data-menu-detail="true"]')
-      .evaluateAll((rows) =>
-        rows
-          .filter((row) => row.scrollWidth > row.clientWidth + 1)
-          .map((row) => `${(row.textContent ?? "").trim().slice(0, 40)} (${row.scrollWidth} > ${row.clientWidth})`),
+    const clipped = await sheet
+      .locator("dd[data-detail-label], button")
+      .evaluateAll((elements) =>
+        elements
+          .filter((element) => element.scrollWidth > element.clientWidth + 1)
+          .map(
+            (element) =>
+              `${(element.textContent ?? "").trim().slice(0, 40)} (${element.scrollWidth} > ${element.clientWidth})`,
+          ),
       );
-    expect(clipped, "detail rows whose text runs past the menu's edge").toEqual([]);
+    expect(clipped, "details or actions whose text runs past the sheet's edge").toEqual([]);
 
-    // Walk the whole menu both ways, as a reader looking for the details would, and note every row
-    // the menu's own highlight landed on while that row was inside the menu's visible box.
+    // Walk the whole sheet both ways, as a reader looking for the details would, and note every detail
+    // and action that was wholly inside the sheet's visible body at some step.
     const seen = new Set<string>();
     const record = async () => {
-      const label = await page.evaluate(() => {
-        const focused = document.activeElement;
-        const box = focused?.closest('[role="menu"]')?.getBoundingClientRect();
-        if (!focused || !box || focused.getAttribute("role") !== "menuitem") return null;
-        const rect = focused.getBoundingClientRect();
-        const inMenu = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
-        const onScreen = rect.top >= 0 && rect.bottom <= window.innerHeight;
-        return inMenu && onScreen ? (focused.textContent ?? "").trim() : null;
+      const visible = await sheet.evaluate((root) => {
+        const body = root.querySelector(".overflow-y-auto")!.getBoundingClientRect();
+        const bottom = Math.min(body.bottom, window.innerHeight);
+        return Array.from(root.querySelectorAll<HTMLElement>("dd[data-detail-label], button"))
+          .filter((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.height > 0 && rect.top >= body.top - 0.5 && rect.bottom <= bottom + 0.5;
+          })
+          .map((element) => element.getAttribute("data-detail-label") ?? (element.textContent ?? "").trim());
       });
-      if (label) seen.add(label.split(":")[0]);
+      visible.forEach((label) => seen.add(label));
     };
     for (const key of ["ArrowDown", "ArrowUp"]) {
-      for (let step = 0; step < 24; step += 1) {
+      for (let step = 0; step < 12; step += 1) {
         await record();
         await page.keyboard.press(key);
         await page.waitForTimeout(60);
       }
     }
-
-    const details = [
+    const expected = [
       "Type",
       "Duration",
       "Path",
@@ -350,12 +358,20 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       "Origin",
       "Candidates",
       "Overrides",
+      "Play",
+      "Review playback config",
+      "Attach local .cfg",
+      "Attach C64U .cfg",
     ];
     expect(
-      details.filter((label) => !seen.has(label)),
-      "detail rows the keypad could not bring into view",
+      expected.filter((label) => !seen.has(label)),
+      "details or actions the keypad never brought wholly on screen",
     ).toEqual([]);
-    expect(seen.has("Review playback config"), "the menu's actions are still reachable").toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute(SELECTED, "true");
   });
 
   test("a selected card's top edge is never left under the app bar @layout", async ({ page }) => {
