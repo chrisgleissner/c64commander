@@ -284,6 +284,25 @@ describe("the native sink controller", () => {
     expect(sink.currentTime).toBe(1);
   });
 
+  it("reports its own first sample heard after a play-out, from the feed's played frames, within a tick", async () => {
+    const { audio, setStats } = build();
+    const heard = vi.fn();
+    audio.sink.createPcmSource!(ref(1, 0, RATE * 4), 2).start(0);
+    await vi.advanceTimersByTimeAsync(300);
+    audio.onOwnAudioHeard!(heard);
+    // Before the hand-over the session is not the one playing; during the play-out its own audio waits behind it.
+    setStats(() => ({ playedFrames: 0, bufferedMs: 0, active: false }));
+    await vi.advanceTimersByTimeAsync(100);
+    setStats(() => ({ playedFrames: 0, bufferedMs: 2400, active: true }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(heard).not.toHaveBeenCalled();
+    setStats(() => ({ playedFrames: 480, bufferedMs: 12000, active: true }));
+    await vi.advanceTimersByTimeAsync(60);
+    expect(heard).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+
   it("does not run the clock ahead while the feed reports nothing playing", async () => {
     const { sink, setStats } = build();
     sink.createPcmSource!(ref(1, 0, RATE * 4), 2).start(0);

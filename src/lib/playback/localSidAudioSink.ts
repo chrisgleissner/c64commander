@@ -72,6 +72,8 @@ export interface LocalSidAudioSink {
   beginCrossfadeTailPlayout?: (seconds: number, playOutDeclickSeconds?: number) => void;
   /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
   releaseForHandover?: () => void;
+  /** Call `listener` once, when this sink's own first sample has been heard, after a predecessor's play-out. */
+  onOwnAudioHeard?: (listener: () => void) => void;
   /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
   adoptCrossfadeTail?: (tail: CrossfadeTail, seconds: number) => void;
   /**

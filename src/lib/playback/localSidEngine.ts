@@ -71,14 +71,10 @@ import { localSidPlaybackSupported } from "./localSidSupport";
 const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
 /** How long a track change with the crossfade off takes to silence the outgoing tune: a declick, not a fade. */
 export const CUT_DECLICK_MS = 10;
-/** What is left of a tune that ends at `endsAtSeconds` and stands at `positionSeconds`, within the tail budget. */
-export const playOutSeconds = (endsAtSeconds: number | undefined, positionSeconds: number) =>
-  endsAtSeconds === undefined
-    ? 0
-    : Math.min(CROSSFADE_TAIL_BUDGET_SECONDS, Math.max(0, endsAtSeconds - positionSeconds));
 /** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
 const CUT_CLOSE_MARGIN_MS = 30;
 import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { beginLocalPlayOut, endLocalPlayOut, playOutSeconds } from "./localPlayOut";
 
 /**
  * Main-thread controller for the Local SID engine (spec §12.2, Track B / LE1).
@@ -563,6 +559,8 @@ export class LocalSidEngine {
   private prerenderedSeamSeconds: number | null = null;
   /** How long that tail should take to disappear. */
   private crossfadeSeconds = 0;
+  /** The outgoing tune is being played out to its end; the next sink reports when that is over. */
+  private playOutHandedOver = false;
   private totalRenderMs = 0;
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
@@ -1319,6 +1317,8 @@ export class LocalSidEngine {
     if (this.crossfadeTail && this.audio) {
       this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
     }
+    if (this.playOutHandedOver) this.audio?.onOwnAudioHeard?.(endLocalPlayOut);
+    this.playOutHandedOver = false;
     traceLocalSid("crossfade-tail-adopted", { frames: this.crossfadeTail?.frames ?? 0 });
     this.crossfadeTail = null;
   }
@@ -2381,8 +2381,11 @@ export class LocalSidEngine {
     const outgoing = this.audio;
     const keepMs = fadeMs || declickMs;
     const position = this.scheduler?.positionSeconds() ?? 0;
-    const playOut = declickMs > 0 ? playOutSeconds(options.playOutToSeconds, position) : 0;
+    const playOut =
+      declickMs > 0 ? playOutSeconds(options.playOutToSeconds, position, CROSSFADE_TAIL_BUDGET_SECONDS) : 0;
     const playsOut = playOut > declickMs / 1000;
+    endLocalPlayOut();
+    this.playOutHandedOver = false;
     this.scheduler?.stopAll(keepMs > 0 ? { keepSourcesFor: keepMs } : undefined);
     this.scheduler = null;
     this.audio = null;
@@ -2391,6 +2394,8 @@ export class LocalSidEngine {
       this.crossfadeSeconds = keepMs / 1000;
       if (playsOut) outgoing.beginCrossfadeTailPlayout(playOut, declickMs / 1000);
       else outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds);
+      if (playsOut) beginLocalPlayOut(playOut);
+      this.playOutHandedOver = playsOut;
       traceLocalSid("crossfade-tail-playout", { fadeMs: keepMs, playOutSeconds: playsOut ? playOut : 0 });
       this.closeIfNeverHandedOver(outgoing, (CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds) * 1000 + 500);
     } else if (outgoing && declickMs > 0 && outgoing.fadeOut) {
