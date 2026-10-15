@@ -193,6 +193,9 @@ const mockState = vi.hoisted(() => ({
   },
 }));
 
+const mirrorState = vi.hoisted(() => ({ current: { anyLive: false, videoLive: false } }));
+vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirrorState.current }));
+
 vi.mock("@/hooks/useHealthState", () => ({
   useHealthState: () => mockState.healthState,
 }));
@@ -286,6 +289,47 @@ describe("UnifiedHealthBadge", () => {
 
     expect(screen.queryByTestId("unified-health-badge-demo")).toBeNull();
     expect(screen.getByTestId("unified-health-badge").textContent).not.toContain("C64U");
+  });
+
+  describe("Live View in the badge", () => {
+    afterEach(() => {
+      mirrorState.current = { anyLive: false, videoLive: false };
+    });
+
+    it("carries a picture mark and says Live View is on while the picture streams", () => {
+      mirrorState.current = { anyLive: true, videoLive: true };
+      render(<UnifiedHealthBadge />);
+
+      const badge = screen.getByTestId("unified-health-badge");
+      expect(screen.getByTestId("unified-health-badge-live")).toHaveAttribute("data-live-stream", "video");
+      expect(badge.getAttribute("aria-label")).toMatch(/, Live View on$/);
+    });
+
+    it("carries a sound mark while only the sound streams", () => {
+      mirrorState.current = { anyLive: true, videoLive: false };
+      render(<UnifiedHealthBadge />);
+
+      expect(screen.getByTestId("unified-health-badge-live")).toHaveAttribute("data-live-stream", "audio");
+    });
+
+    it("has no mark and no Live View wording while nothing streams", () => {
+      render(<UnifiedHealthBadge />);
+
+      expect(screen.queryByTestId("unified-health-badge-live")).toBeNull();
+      expect(screen.getByTestId("unified-health-badge").getAttribute("aria-label")).not.toMatch(/Live View/);
+    });
+
+    it("puts a named device on its own line, above the Live View mark", () => {
+      mockState.currentProfile = "compact";
+      mirrorState.current = { anyLive: true, videoLive: true };
+      render(<UnifiedHealthBadge />);
+
+      const stacked = screen.getByTestId("unified-health-badge-stacked");
+      const name = screen.getByTestId("unified-health-badge-device");
+      expect(stacked.firstElementChild).toBe(name);
+      expect(name).toHaveTextContent("Office U64");
+      expect(name.nextElementSibling).toContainElement(screen.getByTestId("unified-health-badge-live"));
+    });
   });
 
   describe("naming the device on a phone", () => {

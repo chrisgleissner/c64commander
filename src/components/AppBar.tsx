@@ -13,7 +13,6 @@ import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { useLayoutEffect, useRef } from "react";
 import { rememberSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
-import { AvMirrorLivePip } from "@/components/streams/AvMirrorLivePip";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { cn } from "@/lib/utils";
@@ -181,8 +180,6 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
             >
               <MoreVertical className="h-5 w-5 text-muted-foreground" aria-hidden />
             </Button>
-            {/* Live A/V mirror indicator — renders only while a stream is active. */}
-            <AvMirrorLivePip />
             {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
             <UnifiedHealthBadge className="self-center" />
           </div>

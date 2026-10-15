@@ -32,6 +32,7 @@ import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { toast } from "@/hooks/use-toast";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
+import { useAvMirror } from "@/hooks/useAvMirror";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { variant } from "@/generated/variant";
 import { APP_SETTINGS_KEYS, loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
@@ -91,6 +92,7 @@ export function KeypadQuickMenu() {
   const location = useLocation();
   const savedDevices = useSavedDevices();
   const gameModeAvailable = useGameModeAvailable();
+  const mirror = useAvMirror();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
   const [functionActions, setFunctionActions] = useState(
@@ -229,6 +231,17 @@ export function KeypadQuickMenu() {
               }
             >
               Notification: {toastAction.label}
+            </Button>
+          ) : null}
+          {/* Live View's mark in the header badge says a stream is running; this is where it stops. */}
+          {mirror.anyLive ? (
+            <Button
+              variant="ghost"
+              className="justify-start"
+              data-testid="keypad-quick-menu-stop-live-view"
+              onClick={() => run(() => void mirror.stopAll())}
+            >
+              Stop Live View
             </Button>
           ) : null}
           {fromKeypad

@@ -93,7 +93,7 @@ Let's take a walk through the app, one page at a time. First come two things you
 
 The badge in the top right corner tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. If the app is offline, the same tap also tries to reconnect.
 
-If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
+If you have saved more than one device, the badge does a little more. It shows the name of the device you are using; on a narrow screen the name has the top line of the badge to itself. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
 
 ### Moving Between Pages
 
@@ -666,12 +666,12 @@ There is only ever one Live View. Start it in one place, and it keeps playing wh
 
 You find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it. The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it. Inside are two switches:
 
-- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a matching dot in the top bar reminds you it is playing; tap it to stop everything at once.
+- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a speaker mark in the header badge reminds you it is playing.
 - **Watch** turns the picture on. A small preview of the C64 screen appears beneath the switches; tap the chevron beside it to make it bigger.
 
 ![Live View on Home](../../img/app/home/content-explorer/profiles/medium/01-live-view.png)
 
-While either is playing, a **Reset** in the card's header stops both, without opening the card.
+While either is playing, the header badge carries a small mark, a screen for the picture or a speaker for the sound alone, and a **Reset** in the card's header stops both without opening the card. From any other page, **Stop Live View** in the Quick menu does the same.
 
 If the stream stops reaching the device running the app, because the network drops out or the machine is switched off, Live View tells you so. You never sit in front of a frozen picture wondering.
 

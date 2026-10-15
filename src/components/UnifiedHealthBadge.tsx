@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Tv, Volume2 } from "lucide-react";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
 import {
@@ -54,6 +54,7 @@ import { describeSameDeviceEntry } from "@/lib/savedDevices/sameDevice";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { formatElapsedAgo } from "@/lib/ui/elapsedAgo";
 import { cn } from "@/lib/utils";
+import { useAvMirror } from "@/hooks/useAvMirror";
 
 const BADGE_LONG_PRESS_MS = 450;
 
@@ -475,6 +476,8 @@ export function UnifiedHealthBadge({ className }: Props) {
   );
 
   const glyph = HEALTH_GLYPHS[state];
+  const mirror = useAvMirror();
+  const LiveMarkIcon = mirror.videoLive ? Tv : Volume2;
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
   const glyphColor = HEALTH_COLOR[state];
   const badgeText = getBadgeTextContract(
@@ -640,13 +643,70 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const pickerSelectedDeviceId = pendingSwitch?.toDeviceId ?? savedDevices.selectedDeviceId;
 
+  const statusTail = (
+    <>
+      {mirror.anyLive ? (
+        <>
+          <LiveMarkIcon
+            className="h-3.5 w-3.5 shrink-0 text-success"
+            aria-hidden
+            data-testid="unified-health-badge-live"
+            data-live-stream={mirror.videoLive ? "video" : "audio"}
+          />
+          <span className="shrink-0 whitespace-pre" aria-hidden="true">
+            {" "}
+          </span>
+        </>
+      ) : null}
+      <HealthStateShape
+        state={state}
+        className={showShortDeviceLabel ? "text-[12.8px]" : "text-[1rem]"}
+        overlayCritical
+      />
+      {badgeText.countLabel ? (
+        <>
+          <span className="shrink-0 whitespace-pre" aria-hidden="true">
+            {" "}
+          </span>
+          <span
+            className={cn("shrink-0 text-xs font-semibold !leading-none", glyphColor)}
+            data-overlay-critical="badge"
+          >
+            {badgeText.countLabel}
+          </span>
+        </>
+      ) : null}
+      {badgeText.trailingLabel ? (
+        <>
+          <span className="app-chrome-badge-status shrink-0 whitespace-pre" aria-hidden="true">
+            {" "}
+          </span>
+          {/*
+                  Dropped on a narrow header, like the host above it. "UNHEALTHY" is nine wide
+                  letters and it is the third thing saying the same as the glyph's colour and the
+                  problem count beside it, so on a phone it spends the page title's width to repeat
+                  what is already on screen. Hidden in CSS (`app-chrome-badge-status`) rather than
+                  by asking for the compact contract, so the model still describes what the badge
+                  means and the header decides what it has room to draw.
+                */}
+          <span
+            className="app-chrome-badge-status truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+            data-overlay-critical="badge"
+          >
+            {badgeText.trailingLabel}
+          </span>
+        </>
+      ) : null}
+    </>
+  );
+
   return (
     <>
       <button
         ref={badgeRef}
         type="button"
         role="button"
-        aria-label={ariaLabel}
+        aria-label={mirror.anyLive ? `${ariaLabel}, Live View on` : ariaLabel}
         data-testid="unified-health-badge"
         data-diagnostics-open-trigger="true"
         data-connection-state={rawConnectionState}
@@ -681,11 +741,31 @@ export function UnifiedHealthBadge({ className }: Props) {
         style={{ WebkitTouchCallout: "none" }}
       >
         <span
-          className="app-chrome-badge-surface inline-flex min-w-0 max-w-full select-none items-center overflow-hidden rounded-md px-2 py-[0.3rem]"
+          className={cn(
+            "app-chrome-badge-surface inline-flex min-w-0 max-w-full select-none items-center overflow-hidden rounded-md",
+            showShortDeviceLabel ? "px-1.5 py-0.5" : "px-2 py-[0.3rem]",
+          )}
           aria-hidden="true"
         >
-          <span className="inline-flex min-w-0 max-w-full select-none items-center overflow-hidden whitespace-nowrap leading-none">
-            {/*
+          {showShortDeviceLabel ? (
+            // Two lines when the badge names the device: the name keeps the badge's whole width, and the
+            // Live View mark and the health glyph sit under it instead of taking width from it.
+            <span
+              className="flex min-w-0 max-w-full select-none flex-col items-center whitespace-nowrap leading-none"
+              data-testid="unified-health-badge-stacked"
+            >
+              <span
+                className="min-w-0 max-w-full truncate pb-[0.2em] text-xs font-semibold !leading-none text-foreground"
+                data-overlay-critical="badge"
+                data-testid="unified-health-badge-device"
+              >
+                {targetDevice.shortLabel}
+              </span>
+              <span className="inline-flex max-w-full items-center overflow-hidden">{statusTail}</span>
+            </span>
+          ) : (
+            <span className="inline-flex min-w-0 max-w-full select-none items-center overflow-hidden whitespace-nowrap leading-none">
+              {/*
               The host name is dropped on a narrow screen. At 320 px it took 154 px — 48% of the
               header — to render "192.168.1.148" truncated to "192.168.1…", which names nothing. The
               glyph is what this badge is for, and the host is on Home's system row and in Settings
@@ -698,85 +778,38 @@ export function UnifiedHealthBadge({ className }: Props) {
               (`app-chrome-badge-host`) so the breakpoint lives beside the other header rules
               instead of being duplicated as a width listener here.
             */}
-            {narrowHeader && connectivity === "Demo" ? (
-              // Not a host name, so not dropped with one: on a narrow screen this word is the only
-              // sign that nothing real is connected.
-              <>
-                <span
-                  className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
-                  data-overlay-critical="badge"
-                  data-testid="unified-health-badge-demo"
-                >
-                  {badgeText.leadingLabel}
-                </span>
-                <span className="shrink-0 whitespace-pre" aria-hidden="true">
-                  {" "}
-                </span>
-              </>
-            ) : null}
-            {narrowHeader ? null : (
-              <>
-                <span
-                  className="app-chrome-badge-host truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
-                  data-overlay-critical="badge"
-                >
-                  {badgeText.leadingLabel}
-                </span>
-                <span className="app-chrome-badge-host shrink-0 whitespace-pre" aria-hidden="true">
-                  {" "}
-                </span>
-              </>
-            )}
-            {showShortDeviceLabel ? (
-              <>
-                <span
-                  className="min-w-0 truncate text-xs font-semibold text-foreground"
-                  data-overlay-critical="badge"
-                  data-testid="unified-health-badge-device"
-                >
-                  {targetDevice.shortLabel}
-                </span>
-                <span className="shrink-0 whitespace-pre" aria-hidden="true">
-                  {" "}
-                </span>
-              </>
-            ) : null}
-            <HealthStateShape state={state} className="text-[1rem]" overlayCritical />
-            {badgeText.countLabel ? (
-              <>
-                <span className="shrink-0 whitespace-pre" aria-hidden="true">
-                  {" "}
-                </span>
-                <span
-                  className={cn("shrink-0 text-xs font-semibold leading-none", glyphColor)}
-                  data-overlay-critical="badge"
-                >
-                  {badgeText.countLabel}
-                </span>
-              </>
-            ) : null}
-            {badgeText.trailingLabel ? (
-              <>
-                <span className="app-chrome-badge-status shrink-0 whitespace-pre" aria-hidden="true">
-                  {" "}
-                </span>
-                {/*
-                  Dropped on a narrow header, like the host above it. "UNHEALTHY" is nine wide
-                  letters and it is the third thing saying the same as the glyph's colour and the
-                  problem count beside it, so on a phone it spends the page title's width to repeat
-                  what is already on screen. Hidden in CSS (`app-chrome-badge-status`) rather than
-                  by asking for the compact contract, so the model still describes what the badge
-                  means and the header decides what it has room to draw.
-                */}
-                <span
-                  className="app-chrome-badge-status truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
-                  data-overlay-critical="badge"
-                >
-                  {badgeText.trailingLabel}
-                </span>
-              </>
-            ) : null}
-          </span>
+              {narrowHeader && connectivity === "Demo" ? (
+                // Not a host name, so not dropped with one: on a narrow screen this word is the only
+                // sign that nothing real is connected.
+                <>
+                  <span
+                    className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                    data-overlay-critical="badge"
+                    data-testid="unified-health-badge-demo"
+                  >
+                    {badgeText.leadingLabel}
+                  </span>
+                  <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                    {" "}
+                  </span>
+                </>
+              ) : null}
+              {narrowHeader ? null : (
+                <>
+                  <span
+                    className="app-chrome-badge-host truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                    data-overlay-critical="badge"
+                  >
+                    {badgeText.leadingLabel}
+                  </span>
+                  <span className="app-chrome-badge-host shrink-0 whitespace-pre" aria-hidden="true">
+                    {" "}
+                  </span>
+                </>
+              )}
+              {statusTail}
+            </span>
+          )}
         </span>
       </button>
       {narrowHeader && connectedAnnouncement && typeof document !== "undefined"
