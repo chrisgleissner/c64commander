@@ -749,7 +749,9 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
   — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
-  `/settings/open-source-licenses`)
+  `/settings/open-source-licenses`, a sheet `open-source-licenses-overlay` that leaves the
+  guidance bar visible: Close — button — `open-source-licenses-close`; each package's
+  License and Source links — link — 44 px targets; Back closes it)
 
 ### 4.6 Docs (`/docs`)
 
