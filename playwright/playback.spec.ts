@@ -941,7 +941,9 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "add-items-opened");
   });
 
-  test("alphabet overlay does not affect list metrics", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("letter rail leaves the list's size unchanged while it is used", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_list_preview_limit", "5");
     });
@@ -958,60 +960,27 @@ test.describe("Playback file browser", () => {
     // are left on the raw file name on purpose: a playlist row keeps its full path as the subtitle,
     // which is both still true and more stable than the rendered title.
     await expect(scrollArea.getByText("A-Track-001", { exact: true })).toBeVisible();
-    await expect(scrollArea).toBeVisible();
-    await expect
-      .poll(async () => {
-        const isEligible = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight * 2);
-        return isEligible;
-      })
-      .toBe(true);
-    const initialMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
-      width: node.clientWidth,
-      height: node.clientHeight,
-      scrollHeight: node.scrollHeight,
-    }));
+    const rail = page.getByTestId("alphabet-rail");
+    await expect(rail).toBeVisible({ timeout: 15000 });
+    // The sheet slides in; a box measured mid-animation is not where the rail settles.
+    await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
+    const metrics = () =>
+      scrollArea.evaluate((node: HTMLElement) => ({ width: node.clientWidth, height: node.clientHeight }));
+    const initialMetrics = await metrics();
 
-    const touchArea = page.getByTestId("alphabet-touch-area");
-    await expect(touchArea).toBeVisible({ timeout: 15000 });
-    const box = await touchArea.boundingBox();
+    const box = await rail.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.6);
+    await page.mouse.down();
+    await expect(page.getByTestId("alphabet-badge")).toHaveAttribute("data-visible", "true");
 
-    const targetX = box.x + box.width / 2;
-    const targetY = box.y + box.height * 0.6;
-    const touchPoint = { identifier: 1, clientX: targetX, clientY: targetY };
-    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchstart", {
-      touches: [touchPoint],
-      targetTouches: [touchPoint],
-      changedTouches: [touchPoint],
-    });
-    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchmove", {
-      touches: [touchPoint],
-      targetTouches: [touchPoint],
-      changedTouches: [touchPoint],
-    });
-    await expect
-      .poll(async () => {
-        const opacity = await page
-          .getByTestId("alphabet-overlay")
-          .evaluate((node: HTMLElement) => Number(window.getComputedStyle(node).opacity));
-        return opacity;
-      })
-      .toBeGreaterThan(0.2);
-
-    const afterMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
-      width: node.clientWidth,
-      height: node.clientHeight,
-      scrollHeight: node.scrollHeight,
-    }));
-
-    expect(afterMetrics.width).toEqual(initialMetrics.width);
-    expect(afterMetrics.height).toEqual(initialMetrics.height);
-    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(400);
-    await snap(page, testInfo, "alphabet-overlay-metrics");
+    expect(await metrics()).toEqual(initialMetrics);
+    await page.mouse.up();
+    await snap(page, testInfo, "alphabet-rail-metrics");
   });
 
-  test("alphabet overlay jumps to selected letter and auto-hides", async ({
+  test("letter rail jumps to the selected letter and its bubble fades", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
@@ -1024,54 +993,26 @@ test.describe("Playback file browser", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     await expect(scrollArea.getByText("A-Track-001", { exact: true })).toBeVisible();
-    await expect(scrollArea).toBeVisible();
-    await expect
-      .poll(async () => {
-        const isEligible = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight * 2);
-        return isEligible;
-      })
-      .toBe(true);
 
-    const touchArea = page.getByTestId("alphabet-touch-area");
-    await expect(touchArea).toBeVisible({ timeout: 15000 });
-    const box = await touchArea.boundingBox();
+    const rail = page.getByTestId("alphabet-rail");
+    await expect(rail).toBeVisible({ timeout: 15000 });
+    // The sheet slides in; a box measured mid-animation is not where the rail settles.
+    await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
+    const box = await rail.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
 
-    const targetY = box.y + box.height * 0.95;
-    const clientX = box.x + box.width / 2;
-
-    const touchPoint = { identifier: 1, clientX, clientY: targetY };
-    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchstart", {
-      touches: [touchPoint],
-      targetTouches: [touchPoint],
-      changedTouches: [touchPoint],
-    });
-    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchmove", {
-      touches: [touchPoint],
-      targetTouches: [touchPoint],
-      changedTouches: [touchPoint],
-    });
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.95);
+    await page.mouse.down();
+    await page.mouse.up();
 
     const badge = page.getByTestId("alphabet-badge");
-    await expect(badge).toBeVisible();
-    // The list is scrolled to the letter the badge names — 95% down the bar is "Y", not "Z". Naming
-    // a fixed track instead only held while the rows were short enough that Y's entries and Z's
-    // first entry fitted on screen together, which is a property of the row height rather than of
-    // the jump this test is about.
-    const jumpedLetter = (await badge.textContent())?.trim();
-    expect(jumpedLetter).toMatch(/^[A-Z]$/);
-    await expect(scrollArea.getByText(`${jumpedLetter}-Track-001`, { exact: true })).toBeVisible();
+    // 95% down a rail of 26 letters is the 25th band, Y.
+    await expect(badge).toHaveText("Y");
+    await expect(scrollArea.getByText("Y-Track-001", { exact: true })).toBeVisible();
     await snap(page, testInfo, "alphabet-jump");
 
-    await expect
-      .poll(async () => {
-        const overlayOpacity = await page
-          .getByTestId("alphabet-overlay")
-          .evaluate((node: HTMLElement) => window.getComputedStyle(node).opacity);
-        return Number(overlayOpacity);
-      })
-      .toBeLessThan(0.2);
+    await expect(badge).toHaveAttribute("data-visible", "false");
   });
 
   test("playback counters reflect played, total, and remaining time", async ({

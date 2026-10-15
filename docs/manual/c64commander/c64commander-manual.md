@@ -204,6 +204,10 @@ A short list fits on the Play page. When it grows, open **View all**. There you 
 
 A filter only hides rows; it never changes the playlist. Clear the box and the whole queue comes back.
 
+When the list is long, a column of letters runs down the right edge of View all. Touch or drag along it and the list jumps to the first item that starts with that letter. That item is selected, so its play button, or OK, starts it at once.
+
+With a keypad, a number key does the same for its letters: `2` once for A, twice for B. On a hardware keyboard, a letter key goes straight to that letter.
+
 Every item remembers where it came from. Local files stay local, C64U files point back at the device, archive results remember their source, and SID entries carry their tunes and lengths with them.
 
 Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.

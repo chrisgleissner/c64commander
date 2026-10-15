@@ -71,7 +71,7 @@ one forwarded as `SoftRight`. The keypad profile binds `F21` and `F23` by code.
 | **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": the focused control's own context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device). A card or other group has no menu of its own, even when a row inside it does.                                     |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done). Inside an open dialog, sheet or the tour it closes it, as Back does. Forwarded by the native shell.                                                                                                                                                                                      |
 | **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Same as Menu. In a text field that holds text, **deletes the last character** (T9 editions; the guidance bar labels it Delete). Forwarded by the native shell. |
-| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱, # and Call ignore key repeat.                                                                                                                                 |
+| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. In a "View all" list with a letter rail: **jump to a letter** (see that overlay below). Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱, # and Call ignore key repeat.                                                                                                                                 |
 | **0**                 | `KEYCODE_0` 7        | `digit0`          | In a text field: T9 entry. Outside a field: **enter Game Mode** (starts the remembered Watch/Listen and opens the sheet ready to play). Inside the Remote Input sheet it is a joystick direction, which the open-overlay exclusion keeps this shortcut away from. |
 | **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. In another text field: switch the case of the last letter. Otherwise **open Diagnostics**. |
 | **# (pound)**         | `POUND` 18           | `hash`            | In a text field: switch between letters and digits. Otherwise **open the Device Switcher** (= badge long-press); with one saved device a message says there is no other device to switch to. |
@@ -842,7 +842,17 @@ buttons are disabled during that retry, so the prompt cannot be double-submitted
 **"View all" list overlay** (`SelectableActionList`, the shared list used by the Home,
 Play and Disks lists once they exceed the preview limit set by Settings → List preview
 limit): Filter — text — `view-all-filter-input` — filters the expanded list only, and
-carries its own clear button.
+carries its own clear button. Letter rail — touch strip — `alphabet-rail` — shown at the
+right edge when the list holds at least four screens of rows and two or more initial
+letters; the list leaves a lane for it, so it covers no row. Pressing or dragging along it
+scrolls to the first item of the letter under the finger and selects that item's title, with
+the letter in a bubble (`alphabet-badge`) beside the finger. It is not a ring stop: on the
+keypad, **2–9** inside the sheet multi-tap through their letters (2 = A, then B, then C;
+letters the list lacks are skipped) and **1** goes to titles that do not start with a letter;
+a hardware keyboard's letter keys go straight to that letter. Each jump selects the item's
+title, so **OK** plays it. Keys typed into the filter field stay T9 entry. For the playlist the
+rail indexes the whole playlist and loads the pages up to a letter before jumping; with a
+filter text it indexes the loaded results.
 
 **New disk dialog** (`new-disk-*`, Content Explorer, behind `new_disk_enabled`;
 opened from the Disks library's "New disk" button): Type — select — `new-disk-type`

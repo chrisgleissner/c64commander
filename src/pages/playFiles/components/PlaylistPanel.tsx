@@ -14,6 +14,7 @@ import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { ClearPlaylistDialog } from "@/pages/playFiles/components/ClearPlaylistDialog";
+import type { LetterIndexSource } from "@/lib/lists/letterIndex";
 
 export type PlaylistPanelProps = {
   previewItems: ActionListItem[];
@@ -39,6 +40,7 @@ export type PlaylistPanelProps = {
   onPlaylistFilterTextChange: (value: string) => void;
   hasMoreViewAllItems: boolean;
   onViewAllEndReached: () => void;
+  letterIndexSource?: LetterIndexSource;
 };
 
 const PLAY_PLAYLIST_FOCUS_ORDER = {
@@ -69,6 +71,7 @@ export const PlaylistPanel = ({
   onPlaylistFilterTextChange,
   hasMoreViewAllItems,
   onViewAllEndReached,
+  letterIndexSource,
 }: PlaylistPanelProps) => {
   const { profile } = useDisplayProfile();
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
@@ -144,6 +147,7 @@ export const PlaylistPanel = ({
         disableClientFiltering
         hasMoreViewAllItems={hasMoreViewAllItems}
         onViewAllEndReached={onViewAllEndReached}
+        letterIndexSource={letterIndexSource}
         viewAllMode="non-empty"
         headerActions={
           <div className="flex flex-wrap items-center gap-2">

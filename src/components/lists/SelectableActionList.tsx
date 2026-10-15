@@ -30,7 +30,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { PathWrap } from "@/components/PathWrap";
 import { NameWrap } from "@/components/NameWrap";
-import { AlphabetScrollbar } from "./AlphabetScrollbar";
+import { LetterIndexRail, useLetterRailModel } from "./LetterIndexRail";
+import type { LetterIndexSource } from "@/lib/lists/letterIndex";
 import { getDisplayProfileLayoutTokens, type DisplayProfile } from "@/lib/displayProfiles";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -115,6 +116,8 @@ export type SelectableActionListProps = {
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
   stackTitleProfiles?: readonly DisplayProfile[];
+  /** The whole list for the view-all letter rail when `viewAllItems` is paged. */
+  letterIndexSource?: LetterIndexSource;
 };
 
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
@@ -277,6 +280,7 @@ const ActionListRow = React.memo(function ActionListRow({ item, rowTestId, stack
           <button
             type="button"
             className="text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex items-center gap-1"
+            data-row-title="true"
             onClick={wrapUserEvent(
               (event) => {
                 event.stopPropagation();
@@ -381,6 +385,7 @@ export const SelectableActionList = ({
   selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
+  letterIndexSource,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
@@ -388,7 +393,7 @@ export const SelectableActionList = ({
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
   const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
-  const viewAllScrollRef = useRef<HTMLDivElement>(null);
+  const [viewAllSheet, setViewAllSheet] = useState<HTMLElement | null>(null);
   /*
    * Virtuoso's first layout uses this estimate before it has measured a row, and the difference
    * between the estimate and the real height is corrected as a jump in scrollHeight. A row is
@@ -479,6 +484,19 @@ export const SelectableActionList = ({
     () => filterWithHeaders(expandedFilterText, effectiveViewAllItems),
     [effectiveViewAllItems, expandedFilterText, filterWithHeaders],
   );
+  const letterRail = useLetterRailModel(
+    viewAllFilteredItems,
+    estimatedItemHeight,
+    viewAllOpen ? letterIndexSource : undefined,
+  );
+  // The rail's 2.75rem strip spans the sheet's and card's right padding; rows give up only the rest,
+  // and its letters are centred over the card padding plus that lane.
+  const letterRailLaneClass = letterRail.eligible ? (isCompact ? "pr-5" : "pr-3") : undefined;
+  const letterColumnClass = isCompact ? "pr-3.5" : "pr-9";
+  // Level with the list itself, inside the card's rounded corners: body padding, border, card padding.
+  const letterRailBoundsClass = isCompact
+    ? "top-[calc(1.5rem+1px)] bottom-[calc(1.5rem+1px)]"
+    : "top-[calc(2rem+1px)] bottom-[calc(2rem+1px)]";
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
@@ -617,6 +635,7 @@ export const SelectableActionList = ({
       {viewAllTitle && (
         <AppSheet open={viewAllOpen} onOpenChange={setViewAllOpen}>
           <AppSheetContent
+            ref={setViewAllSheet}
             className={cn(
               "p-0 overflow-hidden",
               profile === "expanded"
@@ -656,7 +675,7 @@ export const SelectableActionList = ({
                   </div>
                 ) : null}
               </AppSheetHeader>
-              <AppSheetBody className={cn("flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
+              <AppSheetBody className={cn("relative flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
                 <div
                   className={cn(
                     "bg-card border border-border rounded-panel overflow-hidden flex-1 h-full min-h-0 flex flex-col",
@@ -677,39 +696,25 @@ export const SelectableActionList = ({
                           onViewAllEndReached?.();
                         }
                       }}
-                      scrollerRef={(ref) => {
-                        if (ref && viewAllScrollRef) {
-                          (viewAllScrollRef as React.MutableRefObject<HTMLElement | null>).current = ref as HTMLElement;
-                        }
-                      }}
+                      scrollerRef={letterRail.setScroller}
                       itemContent={(index, item) => (
-                        <div className="mb-2 last:mb-0">
+                        <div className={cn("mb-2 last:mb-0", letterRailLaneClass)}>
                           <ActionListRow item={item} rowTestId={rowTestId} stackTitle={stackTitles} />
                         </div>
                       )}
                     />
                   )}
                 </div>
+                {letterRail.eligible ? (
+                  <LetterIndexRail
+                    model={letterRail}
+                    scrollToListIndex={(index) => virtuosoRef.current?.scrollToIndex({ index, align: "start" })}
+                    keyScope={viewAllSheet}
+                    className={letterRailBoundsClass}
+                    letterColumnClassName={letterColumnClass}
+                  />
+                ) : null}
               </AppSheetBody>
-              <AlphabetScrollbar
-                items={viewAllFilteredItems
-                  .filter((item) => item.variant !== "header")
-                  .map((item) => ({ title: item.title, id: item.id }))}
-                scrollContainerRef={viewAllScrollRef}
-                onScrollToIndex={(index) => {
-                  const filtered = viewAllFilteredItems.filter((item) => item.variant !== "header");
-                  const targetItem = filtered[index];
-                  if (targetItem) {
-                    const originalIndex = viewAllFilteredItems.findIndex((item) => item.id === targetItem.id);
-                    if (originalIndex !== -1) {
-                      virtuosoRef.current?.scrollToIndex({
-                        index: originalIndex,
-                        align: "start",
-                      });
-                    }
-                  }
-                }}
-              />
             </div>
           </AppSheetContent>
         </AppSheet>

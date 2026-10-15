@@ -11,6 +11,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
+import { ScrollPositionIndicator } from "@/components/ScrollPositionIndicator";
 import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
@@ -249,9 +250,20 @@ const AppSheetHeader = (props: AppSurfaceHeaderProps) => {
   return renderAppSurfaceHeader(props, context, AppSheetTitle, AppSheetDescription);
 };
 
-const AppSheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", className)} {...props} />
-);
+const AppSheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
+  const [scrollBody, setScrollBody] = React.useState<HTMLDivElement | null>(null);
+  return (
+    <>
+      <div
+        ref={setScrollBody}
+        className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", className)}
+        data-surface-body="true"
+        {...props}
+      />
+      <ScrollPositionIndicator target={scrollBody} />
+    </>
+  );
+};
 
 const AppSheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
   return (
@@ -341,9 +353,20 @@ const AppDialogHeader = (props: AppSurfaceHeaderProps) => {
   return renderAppSurfaceHeader(props, context, AppDialogTitle, AppDialogDescription);
 };
 
-const AppDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4", className)} {...props} />
-);
+const AppDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
+  const [scrollBody, setScrollBody] = React.useState<HTMLDivElement | null>(null);
+  return (
+    <>
+      <div
+        ref={setScrollBody}
+        className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4", className)}
+        data-surface-body="true"
+        {...props}
+      />
+      <ScrollPositionIndicator target={scrollBody} />
+    </>
+  );
+};
 
 // No navigation-bar inset here: resolveCenteredOverlayLayout already keeps a centred dialog above the
 // bar, and adding it again left a 64 px empty band under the buttons on a Pixel 4.

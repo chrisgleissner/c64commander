@@ -174,6 +174,7 @@ import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import { usePlaylistLetterIndexSource } from "@/pages/playFiles/hooks/usePlaylistLetterIndexSource";
 import {
   isBackgroundExecutionEnabled,
   resolveBackgroundExecutionAction,
@@ -2450,6 +2451,12 @@ export default function PlayFilesPage() {
     query: playlistFilterText,
     previewLimit: listPreviewLimit,
   });
+  const playlistLetterIndexSource = usePlaylistLetterIndexSource({
+    playlist,
+    playlistTypeFilters,
+    query: playlistFilterText,
+    ensureLoaded: queryFilteredPlaylist.ensureViewAllLoaded,
+  });
 
   const effectivePlaylistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => pendingDurationOverrideMs ?? playlistItemDuration(item, index),
@@ -2862,6 +2869,7 @@ export default function PlayFilesPage() {
                 onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
                 hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
                 onViewAllEndReached={queryFilteredPlaylist.loadMoreViewAllResults}
+                letterIndexSource={playlistLetterIndexSource}
               />
             </div>
           </ProfileSplitSection>

@@ -110,7 +110,10 @@
     .startup-launch-sequence,
     .progress-indeterminate,
     :focus-visible,
-    [data-search-landed]
+    [data-search-landed],
+    .scroll-position-indicator,
+    .scroll-position-thumb,
+    .letter-index-bubble
   ) {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
@@ -1464,4 +1467,63 @@ button:focus-visible,
       outline-color 150ms ease-out,
       box-shadow 150ms ease-out;
   }
+}
+
+/* Page and surface scroll position (ScrollPositionIndicator). Muted foreground meets 3:1 against
+   every palette's background, card and muted surface; the halo keeps it legible over content. */
+.scroll-position-indicator {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 150;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.scroll-position-indicator[data-host="surface"] {
+  position: absolute;
+  z-index: 5;
+}
+
+.scroll-position-indicator[data-visible="true"] {
+  opacity: 1;
+  transition-duration: 80ms;
+}
+
+.scroll-position-thumb {
+  width: 3px;
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground));
+  box-shadow: 0 0 0 1px hsl(var(--background) / 0.85);
+  will-change: transform;
+}
+
+/* The scroll position drives the thumb directly, so it is not motion the reduced-motion setting
+   shortens: a time-based duration on a scroll-driven animation still spans the whole scroll range. */
+.scroll-position-thumb[data-mode="timeline"][data-tracking="true"] {
+  animation: scroll-position-travel linear both;
+  animation-timeline: var(--scroll-indicator-timeline);
+}
+
+@keyframes scroll-position-travel {
+  from {
+    transform: translate3d(var(--scroll-indicator-x), var(--scroll-indicator-from), 0);
+  }
+  to {
+    transform: translate3d(var(--scroll-indicator-x), var(--scroll-indicator-to), 0);
+  }
+}
+
+/* Playlist letter rail (LetterIndexRail): letters in a lane the list leaves free, so nothing is covered. */
+.letter-index-bubble {
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.letter-index-bubble[data-visible="true"] {
+  opacity: 1;
+  transition-duration: 60ms;
 }
