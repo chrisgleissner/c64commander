@@ -1168,6 +1168,36 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
   });
 
+  it("R4-4: logs the switch to offline once, not again for each sweep that finds the device still offline", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, noteDeviceUnreachable } =
+      await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+
+    const addLog = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    await noteDeviceUnreachable("not-answering");
+    for (let sweep = 0; sweep < 3; sweep += 1) {
+      void discoverConnection("resume");
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    }
+
+    const offlineEntries = addLog.mock.calls.filter(([, message]) => message === "Connection switched to offline");
+    expect(offlineEntries).toHaveLength(1);
+    addLog.mockRestore();
+  });
+
   it("background probe on READY state does nothing", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
