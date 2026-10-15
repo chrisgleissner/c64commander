@@ -126,7 +126,7 @@ With nothing connected, Home does not become a wall of "Not available": search s
     <td><img src="docs/img/app/home/sections/12-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/14-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/15-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>
