@@ -1764,6 +1764,57 @@ describe("SettingsPage", () => {
       expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
     });
 
+    const deferReachability = () => {
+      let answer: (value: { status: "reachable" }) => void = () => undefined;
+      mockEvaluateNewDeviceReachability.mockReturnValueOnce(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      return () => answer({ status: "reachable" });
+    };
+
+    it("saves and switches nothing when Add device is cancelled while the host is being checked", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      const answer = deferReachability();
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+      fireEvent.change(within(dialog).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "u2" } });
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+      await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-cancel"));
+      await waitFor(() => expect(screen.queryByTestId("settings-add-device-dialog")).toBeNull());
+      await act(async () => answer());
+
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+    });
+
+    it("keeps a reopened Add device dialog open when the cancelled check answers", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      const answer = deferReachability();
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const first = await screen.findByTestId("settings-add-device-dialog");
+      fireEvent.change(within(first).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "u2" } });
+      fireEvent.click(within(first).getByTestId("settings-add-device-confirm"));
+      await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+      fireEvent.click(within(first).getByTestId("settings-add-device-cancel"));
+      await waitFor(() => expect(screen.queryByTestId("settings-add-device-dialog")).toBeNull());
+
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const reopened = await screen.findByTestId("settings-add-device-dialog");
+      await act(async () => answer());
+
+      expect(screen.getByTestId("settings-add-device-dialog")).toBe(reopened);
+      expect(within(reopened).getByTestId("settings-add-device-confirm")).toHaveTextContent("Add");
+      expect(within(reopened).getByTestId("settings-add-device-confirm")).toBeEnabled();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+    });
+
     it("saves and connects to an added device once it answers", async () => {
       await seedStore(savedDevicesRef.current.devices, "saved-device-1");
       renderSettingsPage();

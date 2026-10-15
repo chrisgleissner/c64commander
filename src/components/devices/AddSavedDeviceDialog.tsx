@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import {
   validateSavedDeviceName,
 } from "@/lib/savedDevices/store";
 import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import { addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 
@@ -76,8 +77,11 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
   const [portError, setPortError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<{ address: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const attemptRef = useRef(0);
 
   useEffect(() => {
+    attemptRef.current += 1;
+    setBusy(false);
     if (!open) return;
     setDeviceId(createDeviceId());
     setDraft(buildEmptyDraft());
@@ -115,12 +119,19 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
     const host = typedHost ? stripPortFromDeviceHost(typedHost) : "";
     const httpPort = Number(draft.httpPort);
     if (!validateDraft(host, httpPort)) return;
+    const attempt = ++attemptRef.current;
+    const isCurrent = () => attemptRef.current === attempt;
+    let saved = false;
     setBusy(true);
     try {
       const reachability = await evaluateNewDeviceReachability({
         host,
         deviceHost: buildDeviceHostWithHttpPort(host, httpPort),
       });
+      if (!isCurrent()) {
+        addLog("info", "Add device check finished after it was cancelled; nothing saved", { host });
+        return;
+      }
       if (reachability.status === "unreachable") {
         setSuggestion(reachability.suggestedAddress ? { address: reachability.suggestedAddress } : null);
         setHostError(
@@ -143,9 +154,18 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
         lastKnownUniqueId: null,
         hasPassword: false,
       });
+      saved = true;
       onOpenChange(false);
       await onAdded(deviceId);
     } catch (error) {
+      if (!saved && !isCurrent()) {
+        addLog("warn", "Add device check failed after it was cancelled", {
+          host,
+          error: (error as Error).message,
+          stack: (error as Error).stack,
+        });
+        return;
+      }
       reportUserError({
         operation: "DEVICE_ADD",
         title: "Unable to add device",
@@ -154,7 +174,7 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
         context: { host },
       });
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
 

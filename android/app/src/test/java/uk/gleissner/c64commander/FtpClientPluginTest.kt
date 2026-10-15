@@ -1443,6 +1443,36 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun resolveListingRejectsAFolderTheServerRefusesToListInsteadOfReportingItEmpty() {
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/SD/SD")).thenReturn(emptyArray())
+    `when`(ftpClient.replyCode).thenReturn(451)
+    `when`(ftpClient.replyString).thenReturn("451 Requested action aborted\r\n")
+
+    val thrown =
+            try {
+              method.invoke(plugin, ftpClient, "/SD/SD")
+              null
+            } catch (error: java.lang.reflect.InvocationTargetException) {
+              error.targetException
+            }
+
+    assertTrue(thrown is FtpListRefusedException)
+    assertEquals("FTP LIST /SD/SD refused (451): 451 Requested action aborted", thrown?.message)
+    verify(ftpClient, never()).mlistDir(any(String::class.java))
+    verify(ftpClient, never()).listNames(any(String::class.java))
+  }
+
+  @Test
   fun resolveListingFallsBackToMlistWhenListReturnsNull() {
     val plugin = FtpClientPlugin()
     val method =

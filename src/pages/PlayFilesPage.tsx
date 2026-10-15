@@ -199,6 +199,7 @@ import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
@@ -372,6 +373,7 @@ export default function PlayFilesPage() {
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
+  const gameModeAvailable = useGameModeAvailable();
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   // Claimed here as well as on Home: search publishes without navigating when Play is on screen.
   useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
@@ -540,7 +542,7 @@ export default function PlayFilesPage() {
    */
   const handleUserLaunchedItem = useCallback(
     (item: PlaylistItem) => {
-      if (!remoteInputEnabled) return;
+      if (!gameModeAvailable) return;
       if (
         !shouldEnterGameModeOnLaunch({
           category: item.category,
@@ -553,7 +555,7 @@ export default function PlayFilesPage() {
       }
       void startGameMode();
     },
-    [remoteInputEnabled],
+    [gameModeAvailable],
   );
 
   const resolveUnavailableConfigDecision = useCallback(
@@ -2745,13 +2747,13 @@ export default function PlayFilesPage() {
                     {remoteInputEnabled && isPlaying ? (
                       gameModeLeadsTransportRow ? (
                         <>
-                          {playGameModeButton}
+                          {gameModeAvailable ? playGameModeButton : null}
                           {playRemoteInputButton}
                         </>
                       ) : (
                         <>
                           {playRemoteInputButton}
-                          {playGameModeButton}
+                          {gameModeAvailable ? playGameModeButton : null}
                         </>
                       )
                     ) : null}

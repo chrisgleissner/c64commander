@@ -830,6 +830,10 @@ class FtpClientPlugin : Plugin() {
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
       val listed = client.listFiles(path)
+      // commons-net answers a refused LIST with an empty listing; the reply code is the only trace.
+      if (client.replyCode in refusedListReplyCodes) {
+        throw FtpListRefusedException(path, client.replyCode, client.replyString?.trim().orEmpty())
+      }
       if (listed != null) {
         listed
       } else {
@@ -848,7 +852,8 @@ class FtpClientPlugin : Plugin() {
       // stack (1541ultimate issue #364: "repeated FTP cycles fail until power-cycle").
       // Fail fast on a timeout so the firmware gets breathing room; only cascade for
       // genuine LIST-unsupported / capability errors (which surface as other errors).
-      if (error is SocketTimeoutException ||
+      if (error is FtpListRefusedException ||
+              error is SocketTimeoutException ||
               timeoutMessagePattern.containsMatchIn(error.message ?: "")) {
         throw error
       }
@@ -957,3 +962,9 @@ class FtpClientPlugin : Plugin() {
     super.handleOnDestroy()
   }
 }
+
+/** 450, 451 and 550 mean the server could not open the folder, not that it lacks LIST. */
+private val refusedListReplyCodes = setOf(450, 451, 550)
+
+class FtpListRefusedException(path: String, code: Int, reply: String) :
+        java.io.IOException("FTP LIST $path refused ($code): $reply")

@@ -30,6 +30,7 @@ import { useInRouterContext, useLocation } from "react-router-dom";
 
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/hooks/useFocusNavigation";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
@@ -213,8 +214,7 @@ const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: 
 export const KeypadGuidanceBar = () => {
   const context = useFocusNavigationContext();
   const connection = useConnectionState();
-  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
-  const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
+  const gameModeAvailable = useGameModeAvailable() && connection.state === "REAL_CONNECTED";
   const t9Enabled = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const rootRef = useRef<HTMLDivElement>(null);
   const breadcrumbRef = useRef<HTMLSpanElement>(null);

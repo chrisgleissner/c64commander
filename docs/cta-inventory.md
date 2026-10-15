@@ -152,7 +152,8 @@ F1 is the neutral `function1` action (see the F1 row).
   field is the ring's current item under key-navigation modality; every other
   key passes through.
 - **Always-reachable shortcuts:** digits `1`–`6` jump to a tab, `0` enters Game
-  Mode, `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
+  Mode (not on a device that cannot stream, such as a U2, the same gate as the Home
+  Game tile), `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
   same exclusions — never in a text field, never inside an open overlay.
 
 Reachability is **complete by construction**: the provider scans the active
@@ -415,7 +416,7 @@ not-connected / empty / single-device).
     when the dialog opens) and Reset (`hvsc-reset-confirm`); Reset removes the installed library
 - HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
 - **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
-- Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
+- Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying` and not on a device that cannot stream, such as a U2)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
 - Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — minimum 44px target height; tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered for audio this device renders (see _Listen on_ below), and on the C64 route once the app has found the Ultimate's SID player on screen for a tune with its own play routine on a machine that takes key input (a jump there restarts the tune when it goes back, then fast forwards). Otherwise the bar is a plain indicator (`playback-progress`) and not focusable.
@@ -1166,6 +1167,8 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
 `keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`.
+`keypad-quick-menu-game-mode` is absent on a device that cannot stream, such as a U2,
+like the Home Game tile; a function key assigned to Game Mode explains why there instead.
 
 ### 5.1 Lighting Studio (`lighting-studio-sheet`)
 
