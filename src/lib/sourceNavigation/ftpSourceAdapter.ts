@@ -110,11 +110,14 @@ const clearCachedEntriesUnderPrefix = (host: string, port: number | undefined, p
 
 const folderName = (path: string) => path.replace(/\/+$/, "").split("/").pop() ?? "";
 
+/** 450, 451 and 550 are the FTP replies for a folder the server could not open. */
+const isRefusedListing = (error: unknown) => /\b(450|451|550)\b/.test((error as Error).message ?? "");
+
 /*
  * The Ultimate's FTP server answers LIST for a folder it cannot open (an unreadable SD card) by
  * listing the parent filtered to the folder's own name (`vfs_opendir` in 1541ultimate), so the
- * folder appears to contain itself. A real folder holding one same-named folder lists that child's
- * contents one level down; the echo lists nothing there, or refuses with 451.
+ * folder appears to contain itself. One level down the parent is unreadable too, and the server
+ * refuses with 451. A real same-named child lists normally, even when it is empty.
  */
 const isUnreadableFolderEcho = async (
   request: { host: string; port: number; password: string },
@@ -125,14 +128,11 @@ const isUnreadableFolderEcho = async (
   if (path === "/" || entries.length !== 1 || only.type !== "dir") return false;
   if (only.name.toLowerCase() !== folderName(path).toLowerCase()) return false;
   try {
-    const child = await listFtpDirectory({ ...request, path: only.path });
-    return child.entries.length === 0;
+    await listFtpDirectory({ ...request, path: only.path });
+    return false;
   } catch (error) {
-    addLog("warn", "FTP folder lists only itself and its echo cannot be listed", {
-      path,
-      error: (error as Error).message,
-    });
-    return true;
+    if (isRefusedListing(error)) return true;
+    throw new Error(`Could not check whether ${path} can be read: ${(error as Error).message}`, { cause: error });
   }
 };
 

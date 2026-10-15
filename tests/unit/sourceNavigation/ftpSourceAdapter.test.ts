@@ -66,8 +66,10 @@ describe("ftpSourceAdapter", () => {
   describe("a folder the device cannot open", () => {
     const echo = (name: string, path: string) => ({ entries: [{ type: "dir" as const, name, path }] });
 
-    it("reports the folder as unreadable instead of listing it inside itself", async () => {
-      listFtpDirectoryMock.mockResolvedValueOnce(echo("SD", "/SD/SD")).mockResolvedValueOnce({ entries: [] });
+    it("reports the folder as unreadable when the device refuses its echo", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("SD", "/SD/SD"))
+        .mockRejectedValueOnce(new Error("FTP LIST /SD/SD refused (451): 451 Requested action aborted"));
 
       await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow(
         "The C64 could not read /SD. Check that its storage is inserted and readable.",
@@ -76,12 +78,26 @@ describe("ftpSourceAdapter", () => {
       expect(localStorage.getItem(FTP_CACHE_KEY) ?? "").not.toContain("/SD");
     });
 
-    it("reports the folder as unreadable when its echo is refused", async () => {
+    it("lists a folder whose only content is an empty folder of the same name", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("Demos", "/Usb0/Demos/Demos"))
+        .mockResolvedValueOnce({ entries: [] });
+
+      const entries = await createUltimateSourceLocation().listEntries("/Usb0/Demos");
+
+      expect(entries.map((entry) => entry.path)).toEqual(["/Usb0/Demos/Demos"]);
+    });
+
+    it("reports a timeout on the echo check as a timeout, not as unreadable storage", async () => {
       listFtpDirectoryMock
         .mockResolvedValueOnce(echo("SD", "/SD/SD"))
-        .mockRejectedValueOnce(new Error("451 Requested action aborted"));
+        .mockRejectedValueOnce(new Error("FTP listDirectory timed out after connect 5000ms / transfer 20000ms"));
 
-      await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow("could not read /SD");
+      const failure = createUltimateSourceLocation().listEntries("/SD");
+
+      await expect(failure).rejects.toThrow(
+        "Could not check whether /SD can be read: FTP listDirectory timed out after connect 5000ms / transfer 20000ms",
+      );
     });
 
     it("lists a readable folder whose only entry shares its name", async () => {
