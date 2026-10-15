@@ -311,6 +311,28 @@ describe("KeypadQuickMenu function-key summary", () => {
     expect(screen.getByTestId("settings-remote-function-actions")).toHaveAttribute("data-search-landed", "true");
   });
 
+  it("says so when Configure cannot find the function-key card on Settings", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<div data-testid="home-route" />} />
+          <Route path="/settings" element={<div data-testid="settings-route" />} />
+        </Routes>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+    await openMenu();
+
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-configure-function-keys"));
+
+    await waitFor(() => expect(screen.getByTestId("settings-route")).toBeInTheDocument());
+    await waitFor(
+      () =>
+        expect(toast).toHaveBeenCalledWith({ title: "Could not reach Remote function keys", variant: "destructive" }),
+      { timeout: 5000 },
+    );
+  });
+
   it("lists the function-key summary last, after the entries it scrolls with", async () => {
     renderMenu();
     await openMenu();
