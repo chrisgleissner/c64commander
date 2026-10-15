@@ -1264,9 +1264,9 @@ describe("FocusDiscoveryEngine while a list is still being built", () => {
     vi.restoreAllMocks();
   });
 
-  const LongList = () => createElement("div", null, useStagedRows(100_000).marker);
+  const LongList = () => createElement("div", { id: "list" }, useStagedRows(100_000).marker);
 
-  it("waits for the list before rescanning, but rescans at once when an overlay opens", async () => {
+  it("waits for the list before rescanning for its own rows, and rescans other changes after the paint", async () => {
     setStagedRowsEnabled(true);
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
     const page = mount(`<button id="first">First</button>`);
@@ -1275,7 +1275,7 @@ describe("FocusDiscoveryEngine while a list is still being built", () => {
     engine.start();
     const refresh = vi.spyOn(engine, "refresh");
 
-    page.insertAdjacentHTML("beforeend", `<button id="row">Row</button>`);
+    el("list").insertAdjacentHTML("afterbegin", `<button id="row">Row</button>`);
     await afterRingRescan();
     expect(refresh).not.toHaveBeenCalled();
 
@@ -1283,14 +1283,18 @@ describe("FocusDiscoveryEngine while a list is still being built", () => {
     await afterRingRescan();
     expect(refresh).toHaveBeenCalledTimes(1);
 
-    page.insertAdjacentHTML("beforeend", `<button id="later">Later</button>`);
+    page.insertAdjacentHTML("beforeend", `<button id="elsewhere">Elsewhere</button>`);
     await afterRingRescan();
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(2);
+
+    el("list").insertAdjacentHTML("afterbegin", `<button id="later">Later</button>`);
+    await afterRingRescan();
+    expect(refresh).toHaveBeenCalledTimes(2);
     act(() => {
       completeStagedRows();
     });
     await afterRingRescan();
-    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledTimes(3);
     engine.stop();
   });
 });

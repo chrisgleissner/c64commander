@@ -12,12 +12,14 @@ import { flushSync } from "react-dom";
 /**
  * Builds a long list of rows over several tasks instead of one. A config card's rows each carry a
  * select, a slider or a field, and opening every card on the keypad handset built 458 of them in one
- * task of almost a second, during which no key was handled. The first rows of the lists rendered in
- * one task are built at once, shared across lists so that opening every card does not multiply them.
- * Rows near the screen, or above it, are built before the next paint. The rest are built after it,
- * in document order, a few per task.
+ * task of almost a second, during which no key was handled. The first rows of the lists rendered for
+ * one commit are built at once, shared across lists so that opening every card does not multiply them.
+ * The allowance lasts until the commit, not for a task: React renders a page in 5 ms slices with a task
+ * boundary between them, and a per-task allowance was renewed for every slice. Rows near the screen,
+ * or above it, are built before the next paint. The rest are built after it, in document order, a few
+ * per task.
  */
-const INITIAL_ROWS_PER_TASK = 12;
+const INITIAL_ROWS_PER_COMMIT = 12;
 
 /** How far below the viewport a pending list still counts as on screen, in viewport heights. */
 const NEAR_VIEWPORT = 1.5;
@@ -48,9 +50,9 @@ type StagedList = {
 };
 
 let enabled = true;
-let initialRowsLeft = INITIAL_ROWS_PER_TASK;
+let initialRowsLeft = INITIAL_ROWS_PER_COMMIT;
 let nearRowsLeft = NEAR_ROWS_PER_TASK;
-let initialBudgetResetScheduled = false;
+let nearBudgetResetScheduled = false;
 let msPerRowEstimate = 2;
 let drainScheduled = false;
 let draining = false;
@@ -65,25 +67,23 @@ export const setStagedRowsEnabled = (value: boolean) => {
   enabled = value;
 };
 
-const resetBudgetsAfterThisTask = () => {
-  if (initialBudgetResetScheduled) return;
-  initialBudgetResetScheduled = true;
+const resetNearBudgetAfterThisTask = () => {
+  if (nearBudgetResetScheduled) return;
+  nearBudgetResetScheduled = true;
   queueMicrotask(() => {
-    initialRowsLeft = INITIAL_ROWS_PER_TASK;
     nearRowsLeft = NEAR_ROWS_PER_TASK;
-    initialBudgetResetScheduled = false;
+    nearBudgetResetScheduled = false;
   });
 };
 
 const claimInitialRows = (wanted: number): number => {
-  resetBudgetsAfterThisTask();
   const granted = Math.min(wanted, initialRowsLeft);
   initialRowsLeft -= granted;
   return granted;
 };
 
 const claimNearRows = (): number => {
-  resetBudgetsAfterThisTask();
+  resetNearBudgetAfterThisTask();
   const granted = Math.min(NEAR_STEP, nearRowsLeft);
   nearRowsLeft -= granted;
   return granted;
@@ -92,10 +92,6 @@ const claimNearRows = (): number => {
 const growNear = (list: StagedList) => {
   const rows = claimNearRows();
   if (rows > 0) list.grow(rows);
-};
-
-const refundInitialRows = (rows: number) => {
-  if (initialBudgetResetScheduled) initialRowsLeft = Math.min(INITIAL_ROWS_PER_TASK, initialRowsLeft + rows);
 };
 
 const afterNextPaint = (run: () => void) => {
@@ -120,6 +116,14 @@ const inDocumentOrder = (lists: StagedList[]) =>
 const runSettleCallbacks = () => {
   if (pending.size > 0) return;
   for (const callback of settleCallbacks.splice(0)) callback();
+};
+
+/** Whether `node` is inside a list that still has rows to build. */
+export const isInsidePendingList = (node: Node): boolean => {
+  for (const list of pending) {
+    if (list.marker?.parentElement?.contains(node)) return true;
+  }
+  return false;
 };
 
 /**
@@ -257,15 +261,19 @@ export const useStagedRows = (total: number, demandedIndex = -1): StagedRows => 
   }
   const list = listRef.current;
 
+  // Every claim of a render is made before its commit, so the next render starts with a full allowance.
+  useLayoutEffect(() => {
+    initialRowsLeft = INITIAL_ROWS_PER_COMMIT;
+  });
+
   useLayoutEffect(() => {
     list.marker = markerRef.current;
     list.count = count;
     list.remaining = total - count;
     if (!list.marker) {
-      // Not on the page: its card is closed. The rows it claimed go back for a list that is shown, and
-      // it starts over when it is shown again, as a card that keeps its owner mounted when closed would not.
+      // Not on the page: its card is closed. It starts over when it is shown again; a card that keeps
+      // the list's owner mounted while closed would otherwise show every row it had built at once.
       unregister(list);
-      if (enabled && initialRef.current !== null) refundInitialRows(initialRef.current);
       initialRef.current = null;
       setGrown(0);
       return;
@@ -297,8 +305,9 @@ export const useStagedRows = (total: number, demandedIndex = -1): StagedRows => 
 export const resetStagedRowsForTests = () => {
   pending.clear();
   settleCallbacks.splice(0);
-  initialRowsLeft = INITIAL_ROWS_PER_TASK;
+  initialRowsLeft = INITIAL_ROWS_PER_COMMIT;
   nearRowsLeft = NEAR_ROWS_PER_TASK;
+  nearBudgetResetScheduled = false;
   msPerRowEstimate = 2;
   drainScheduled = false;
   scrollCheckScheduled = false;

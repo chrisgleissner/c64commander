@@ -1931,14 +1931,15 @@ describe("FocusNavigationProvider with rows still being built inside a card", ()
 
   const ROWS = 30;
 
-  const StagedCard = ({ name }: { name: string }) => {
-    const staged = useStagedRows(ROWS);
+  const StagedCard = ({ name, removedRow }: { name: string; removedRow?: number }) => {
+    const rows = Array.from({ length: ROWS }, (_, index) => index + 1).filter((row) => row !== removedRow);
+    const staged = useStagedRows(rows.length);
     return (
       <div data-section-scope="fixture" data-section-id={name} data-section-label={name}>
         <button type="button">{name} header</button>
-        {Array.from({ length: staged.count }, (_, index) => (
-          <button key={index} type="button">
-            {`${name} row ${index + 1}`}
+        {rows.slice(0, staged.count).map((row) => (
+          <button key={row} type="button">
+            {`${name} row ${row}`}
           </button>
         ))}
         {staged.marker}
@@ -1975,6 +1976,70 @@ describe("FocusNavigationProvider with rows still being built inside a card", ()
     expect(staged.builtBeforeWalking).toBeLessThan(ROWS);
     expect(staged.labels).toContain(`Second row ${ROWS}`);
     expect(staged.labels).toEqual(eager.labels);
+  });
+
+  const selectedLabel = () => document.querySelector(`[${SELECTED}="true"]`)?.textContent ?? "";
+
+  it("a row removed after the walk entered a partly built card hands the selection to the next row, and the walk still reaches the last row", async () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const cards = (removedRow?: number) => (
+      <FocusNavigationProvider>
+        <StagedCard name="First" />
+        <StagedCard name="Second" removedRow={removedRow} />
+      </FocusNavigationProvider>
+    );
+    const view = render(cards());
+    expect(screen.queryAllByRole("button", { name: /^Second row/ }).length).toBeLessThan(ROWS);
+    for (const code of ["ArrowDown", "Enter", "ArrowDown", "ArrowDown", "ArrowDown"]) {
+      fireEvent.keyDown(document.body, { code });
+    }
+    expect(selectedLabel()).toBe("Second row 3");
+
+    view.rerender(cards(3));
+    await act(afterRingRescan);
+    expect(selectedLabel()).toBe("Second row 4");
+
+    const labels: string[] = [];
+    for (let step = 0; step < ROWS; step++) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      labels.push(selectedLabel());
+    }
+    expect(labels).toContain(`Second row ${ROWS}`);
+    expect(labels).not.toContain("Second row 3");
+  });
+
+  it("a route change lands on the new page's first stop while the page left still has a list being built", async () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const LongList = () => <div>{useStagedRows(100_000).marker}</div>;
+    const slots = (onHome: boolean) => (
+      <FocusNavigationProvider>
+        <div data-slot-active={onHome ? "false" : "true"} hidden={onHome}>
+          <button type="button">Settings first</button>
+          <button type="button">Settings second</button>
+          <LongList />
+        </div>
+        <div data-slot-active={onHome ? "true" : "false"} hidden={!onHome}>
+          <button type="button">Home first</button>
+          <button type="button">Home second</button>
+        </div>
+        <nav data-focus-scope="tabbar">
+          <button type="button">Home tab</button>
+          <button type="button">Settings tab</button>
+        </nav>
+      </FocusNavigationProvider>
+    );
+    const view = render(slots(false));
+    for (let step = 0; step < 4 && selectedLabel() !== "Settings second"; step++) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    }
+    expect(selectedLabel()).toBe("Settings second");
+
+    view.rerender(slots(true));
+    await act(afterRingRescan);
+
+    expect(selectedLabel()).toBe("Home first");
   });
 });
 
