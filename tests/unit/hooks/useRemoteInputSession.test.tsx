@@ -34,6 +34,7 @@ vi.mock("@/lib/logging", () => ({
 // assertions stay exact.
 vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
   runSerializedMachineInput: (dispatch: () => unknown) => Promise.resolve(dispatch()),
+  hasWaitingMachineInput: () => false,
 }));
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
@@ -852,6 +853,105 @@ describe("useRemoteInputSession", () => {
         expect.objectContaining({ eventCount: expect.any(Number) }),
       );
       expect(addErrorLogMock).not.toHaveBeenCalled();
+    });
+
+    const tapCalls = () =>
+      sendMachineInputBatchMock.mock.calls.filter(([batch]) =>
+        (batch as { events: Array<{ transition?: string }> }).events.some((event) => event.transition === "tap"),
+      ).length;
+    const deferredNoAnswer = () => {
+      let fail: () => void = () => undefined;
+      sendMachineInputBatchMock.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = () => reject(noAnswer());
+          }),
+      );
+      return () => fail();
+    };
+
+    it.each([
+      { title: "RETURN", send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendChar("\r") },
+      {
+        title: "a function key",
+        send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendSpecialKey("f1"),
+      },
+      {
+        title: "a cursor key",
+        send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendCursor("down"),
+      },
+      {
+        title: "a CTRL chord",
+        send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendKeyboardInputs(["ctrl", "1"]),
+      },
+    ])("never sends $title twice, because a second delivery acts again", async ({ send }) => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => send(result.current));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+      expect(result.current.connectionStatus).toBe("error");
+    });
+
+    it("is not sent again after a release-all while its first attempt was waiting", async () => {
+      const fail = deferredNoAnswer();
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+
+      act(() => result.current.releaseAll());
+      await act(async () => {
+        fail();
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+    });
+
+    it("is not sent again after another batch failed while its first attempt was waiting", async () => {
+      const fail = deferredNoAnswer();
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+      sendMachineInputBatchMock.mockRejectedValueOnce(new Error("device offline"));
+      act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      await act(async () => {
+        fail();
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+    });
+
+    it("is not sent again after Remote Input closed while its first attempt was waiting", async () => {
+      const fail = deferredNoAnswer();
+      const { result, unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+
+      unmount();
+      await act(async () => {
+        fail();
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
     });
 
     it("is retried only once, then reported as an error", async () => {

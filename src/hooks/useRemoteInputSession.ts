@@ -44,7 +44,7 @@ import {
 } from "@/lib/remoteInput/autofire";
 import type { SpecialKeyboardKey } from "@/lib/remoteInput/specialKeyMapping";
 import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remoteInput/specialKeyMapping";
-import { runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
+import { hasWaitingMachineInput, runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
 
@@ -123,19 +123,41 @@ export type RemoteInputSession = {
  * through one short debounce window so a drag gesture or a fast burst of
  * keystrokes collapses into a single POST rather than one request per
  * pointermove/keystroke — the C64U's embedded HTTP task is single-threaded
- * and load-fragile (see REVIEW.md "never wedge the hardware"). Never retries
- * a failed batch: on error the local held-set model resets to empty and the
- * next real change re-syncs from a clean slate (drop-coalesce, not queue).
+ * and load-fragile (see REVIEW.md "never wedge the hardware"). On error the
+ * local held-set model resets to empty and the next real change re-syncs from a
+ * clean slate (drop-coalesce, not queue); only typed characters that got no
+ * answer may be sent once more, see `mayRetryAfterNoAnswer`.
  */
 
+const PRINTABLE_SYMBOL_KEYS: ReadonlySet<KeyboardInputName> = new Set<KeyboardInputName>([
+  "plus",
+  "minus",
+  "period",
+  "colon",
+  "at",
+  "comma",
+  "pound",
+  "star",
+  "semicolon",
+  "equals",
+  "arrow_up",
+  "slash",
+  "arrow_left",
+  "space",
+  "left_shift",
+  "right_shift",
+]);
+const isPrintableKey = (name: KeyboardInputName) => /^[0-9a-z]$/.test(name) || PRINTABLE_SYMBOL_KEYS.has(name);
+
 /**
- * A batch of typed key taps that got no answer in time is sent once more. A tap is atomic on the device, so a second
- * attempt cannot leave a key held; at worst a tap the device applied before its answer was lost appears twice, which
- * the listener sees and can delete, whereas a dropped key went unnoticed. Anything that can hold an input is not
- * retried: its failure path resets the held state and recovers with a release_all instead.
+ * A batch of typed characters that got no answer in time may be sent once more. At worst a character the device applied
+ * before its answer was lost appears twice, which the listener sees and can delete. RETURN, editing, cursor, function,
+ * CTRL/C= chords, RUN/STOP and RESTORE are never sent twice: a second delivery runs a BASIC line again or acts again.
  */
-const retriesOnceAfterNoAnswer = (batch: MachineInputEvent[], error: unknown) =>
-  batch.every((event) => event.kind === "keyboard" && event.transition === "tap") &&
+const mayRetryAfterNoAnswer = (batch: MachineInputEvent[], error: unknown) =>
+  batch.every(
+    (event) => event.kind === "keyboard" && event.transition === "tap" && event.inputs.every(isPrintableKey),
+  ) &&
   error instanceof Error &&
   error.message.includes(DEVICE_NO_ANSWER_PHRASE);
 
@@ -195,6 +217,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // reflect it. Each coalesced dispatch captures the generation at schedule time
   // and drops itself if an immediate send has since superseded it.
   const sendGenerationRef = useRef(0);
+  /** Cleared on unmount, which releases only what was held, so a retry decided later sees that Remote Input closed. */
+  const sessionOpenRef = useRef(true);
 
   // `immediate` bypasses the device-safeguard cooldown (Settings → device
   // safety → machine input cooldown): safety-critical releases (panic
@@ -218,9 +242,16 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
             recordInputLatencySample(performance.now() - batchGestureAtMs, performance.now());
           }
           const send = () => getC64API().sendMachineInputBatch({ events: batch });
+          // Not after an immediate send (a release-all, a port swap) or another failure has superseded this one, not after
+          // Remote Input closed, and never while newer input waits behind it.
+          const retryStillWanted = () =>
+            generation === sendGenerationRef.current &&
+            sessionOpenRef.current &&
+            flushTimerRef.current === null &&
+            !hasWaitingMachineInput();
           return send()
             .catch((error) => {
-              if (!retriesOnceAfterNoAnswer(batch, error)) throw error;
+              if (!mayRetryAfterNoAnswer(batch, error) || !retryStillWanted()) throw error;
               addLog(
                 "warn",
                 "Remote input key taps got no answer in time; sending them once more",
@@ -686,7 +717,9 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   }, [releaseAll]);
 
   useEffect(() => {
+    sessionOpenRef.current = true;
     return () => {
+      sessionOpenRef.current = false;
       if (flushTimerRef.current !== null) window.clearTimeout(flushTimerRef.current);
       // HARD13-001: a non-empty last-sent set is only ever populated by the
       // full-tier relay, so it alone signals "we owe the device a release" -
