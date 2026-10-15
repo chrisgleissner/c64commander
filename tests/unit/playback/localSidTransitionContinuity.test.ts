@@ -360,4 +360,25 @@ describe("one continuous stream of samples across a track change", () => {
     expect(change.some((e) => e.method === "fadeIn")).toBe(false);
     checkGolden("cut", { sampleRate: RATE, fadeMs: CUT_DECLICK_MS, transcript });
   });
+
+  it("records the playlist moving on with crossfade Off, where the outgoing tune plays on to its songlength", async () => {
+    localStorage.setItem("c64u_playback_crossfade_ms", "0");
+    const { backend, transcript } = createRecordingFeed();
+    const engine = buildEngine(backend);
+    await playSettled(engine, 0);
+    const changeAt = transcript.length;
+    const endsAtSeconds = engine.getStats().positionSeconds + 2.4;
+    FakeWorker.openDelayMs = 800;
+    const next = engine.play(new ArrayBuffer(8), 1, {}, undefined, endsAtSeconds);
+    await settle(60, 2000);
+    await next;
+    await settle(60, 2000);
+    const change = transcript.slice(changeAt);
+    const outgoing = transcript.find((e) => e.method === "openSession")!.serial;
+    const transition = change.find((e) => e.method === "beginTransition")!;
+    expect(transition).toMatchObject({ serial: outgoing, playOutDeclickSeconds: CUT_DECLICK_MS / 1000 });
+    expect(transition.seconds as number).toBeCloseTo(2.4, 1);
+    expect(methodsOf(change, ["takeTail", "release", "adoptTail"])).toHaveLength(3);
+    checkGolden("cut-play-out", { sampleRate: RATE, fadeMs: CUT_DECLICK_MS, transcript });
+  });
 });
