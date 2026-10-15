@@ -78,6 +78,22 @@ describe("ftpSourceAdapter", () => {
       expect(localStorage.getItem(FTP_CACHE_KEY) ?? "").not.toContain("/SD");
     });
 
+    it("recognises a refusal that the bridge rejects with as a plain string", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("SD", "/SD/"))
+        .mockRejectedValueOnce("451 Requested action aborted");
+
+      await expect(createUltimateSourceLocation().listEntries("/SD/")).rejects.toThrow("The C64 could not read /SD/.");
+    });
+
+    it("names a non-refusal string rejection when the echo check cannot finish", async () => {
+      listFtpDirectoryMock.mockResolvedValueOnce(echo("SD", "/SD/SD")).mockRejectedValueOnce("connection reset");
+
+      await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow(
+        "Could not check whether /SD can be read: connection reset",
+      );
+    });
+
     it("lists a folder whose only content is an empty folder of the same name", async () => {
       listFtpDirectoryMock
         .mockResolvedValueOnce(echo("Demos", "/Usb0/Demos/Demos"))

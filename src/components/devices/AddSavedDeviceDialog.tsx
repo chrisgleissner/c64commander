@@ -31,6 +31,7 @@ import { normalizeSavedDeviceHostInput } from "@/lib/savedDevices/host";
 import {
   addSavedDevice,
   buildSavedDevicePrimaryLabel,
+  createSavedDeviceId,
   type SavedDevice,
   validateSavedDeviceName,
 } from "@/lib/savedDevices/store";
@@ -38,10 +39,6 @@ import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
-
-const createDeviceId = () =>
-  (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
-  `${Date.now().toString(36)}-${Math.round(Math.random() * 1e6).toString(36)}`;
 
 const buildEmptyDraft = (): SavedDeviceEditorDraft =>
   buildSavedDeviceEditorDraft(
@@ -70,7 +67,7 @@ type Props = {
 };
 
 export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput, onAdded }: Props) {
-  const [deviceId, setDeviceId] = useState(createDeviceId);
+  const [deviceId, setDeviceId] = useState(createSavedDeviceId);
   const [draft, setDraft] = useState(buildEmptyDraft);
   const [nameError, setNameError] = useState<string | null>(null);
   const [hostError, setHostError] = useState<string | null>(null);
@@ -83,7 +80,7 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
     attemptRef.current += 1;
     setBusy(false);
     if (!open) return;
-    setDeviceId(createDeviceId());
+    setDeviceId(createSavedDeviceId());
     setDraft(buildEmptyDraft());
     setNameError(null);
     setHostError(null);
@@ -114,7 +111,6 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
   };
 
   const handleAdd = async () => {
-    if (busy) return;
     const typedHost = draft.host.trim();
     const host = typedHost ? stripPortFromDeviceHost(typedHost) : "";
     const httpPort = Number(draft.httpPort);
