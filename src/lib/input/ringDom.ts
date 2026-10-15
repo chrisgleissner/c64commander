@@ -25,6 +25,30 @@ export const DIALOG_ANCESTOR_SELECTOR = '[role="dialog"],[role="alertdialog"]';
 export const ENTER_IGNORING_CONTROL_SELECTOR = '[role="checkbox"],[role="radio"]';
 
 /**
+ * A field row in an overlay: the keypad stops on the row, and OK hands focus to its input. Focusing
+ * the input on arrival opened the system keyboard for a numeric field and halved the screen.
+ */
+export const FIELD_FRAME_ATTR = "data-field-frame";
+const FIELD_FRAME_SELECTOR = `[${FIELD_FRAME_ATTR}]`;
+
+/** The input a field frame edits, or null when the element is not a field frame. */
+export const fieldOfFrame = (element: Element | null): HTMLElement | null =>
+  element instanceof HTMLElement && element.matches(FIELD_FRAME_SELECTOR)
+    ? element.querySelector<HTMLElement>("input,textarea")
+    : null;
+
+/** The field frame whose input this is, or null for anything else. */
+export const frameOfField = (element: Element | null): HTMLElement | null =>
+  element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+    ? element.closest<HTMLElement>(FIELD_FRAME_SELECTOR)
+    : null;
+
+const overlayStops = (overlay: Element): HTMLElement[] =>
+  [...overlay.querySelectorAll<HTMLElement>(`${INTERACTIVE_SELECTOR},${FIELD_FRAME_SELECTOR}`)].filter(
+    (element) => isFocusVisible(element) && !isFocusDisabled(element) && frameOfField(element) === null,
+  );
+
+/**
  * Move focus to the next/previous tabbable inside `overlay`, wrapping at the ends.
  *
  * The global ring is deliberately inert inside a Radix overlay — that overlay owns the
@@ -33,11 +57,10 @@ export const ENTER_IGNORING_CONTROL_SELECTOR = '[role="checkbox"],[role="radio"]
  * closes it, so a text field with focus becomes a dead end: no key reaches anything else.
  * This walks the overlay's own tab order instead of touching the ring.
  */
-export const stepFocusWithinOverlay = (overlay: Element, from: Element, forward: boolean): boolean => {
-  const tabbables = [...overlay.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR)].filter(
-    (element) => isFocusVisible(element) && !isFocusDisabled(element),
-  );
+export const stepFocusWithinOverlay = (overlay: Element, fromElement: Element, forward: boolean): boolean => {
+  const tabbables = overlayStops(overlay);
   if (tabbables.length === 0) return false;
+  const from = frameOfField(fromElement) ?? fromElement;
   const index = tabbables.indexOf(from as HTMLElement);
   // `from` is not itself tabbable right after a Radix dialog opens — it autofocuses its
   // content wrapper (tabIndex -1), not a real control. Land on the first/last tabbable

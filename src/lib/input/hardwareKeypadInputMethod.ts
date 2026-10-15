@@ -35,11 +35,27 @@ export const noteHardwareKeypadKey = (event: KeyboardEvent): void => {
   hardwareKeypadUsed = true;
 };
 
+const KEYPAD_DIGIT_INPUT_MODES = new Set(["numeric", "decimal", "tel"]);
+
+/** A number field takes the keypad's digits as they are, so it needs no input method either. */
+const isKeypadDigitField = (target: EventTarget | null): target is HTMLInputElement =>
+  target instanceof HTMLInputElement &&
+  !target.readOnly &&
+  !target.disabled &&
+  (target.type === "number" || target.type === "tel" || KEYPAD_DIGIT_INPUT_MODES.has(target.inputMode));
+
 export const keepPlatformInputMethodAway = (target: EventTarget | null): void => {
-  // isT9Field already leaves numeric, decimal and tel fields alone; a text-like inputmode a field
-  // set for itself still summons the platform's multi-tap, so it gives way too.
-  if (!hardwareKeypadUsed || !isT9Field(target)) return;
-  target.setAttribute("inputmode", "none");
+  // A text-like inputmode a field set for itself still summons the platform's multi-tap, and a
+  // numeric one summons its keyboard, which halved the screen in a dialog; both give way.
+  if (!hardwareKeypadUsed) return;
+  if (isKeypadDigitField(target)) {
+    // With its numeric inputmode gone the field would read as a text field; the keypad's digits
+    // must still type digits, not cycle letters.
+    target.dataset.t9 = "off";
+    target.setAttribute("inputmode", "none");
+    return;
+  }
+  if (isT9Field(target)) target.setAttribute("inputmode", "none");
 };
 
 export const resetHardwareKeypadUseForTests = (): void => {

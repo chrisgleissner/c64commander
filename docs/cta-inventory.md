@@ -613,7 +613,9 @@ past it to anything below.
   **Add device** dialog (`settings-add-device-dialog`), which saves nothing and leaves
   the connection alone until the new device answers: the shared saved-device editor
   fields `add-device-*` (name, host in T9 hostname mode, HTTP/FTP/Telnet ports, and
-  `add-device-use-suggested-address` when an unreachable hostname is found on the LAN),
+  `add-device-use-suggested-address` when an unreachable hostname is found on the LAN;
+  the keypad stops on each field's row (`add-device-*-field`) without focusing its input,
+  OK starts editing and OK or Back returns to the row, as on the Settings card),
   Cancel — button — `settings-add-device-cancel`, and Add — button —
   `settings-add-device-confirm`, which probes the host, saves the device and connects
   to it _(dialog code-verified, not yet hardware-verified)_ ; Delete device — button —
@@ -890,8 +892,9 @@ filter text it indexes the loaded results.
 **New disk dialog** (`new-disk-*`, Content Explorer, behind `new_disk_enabled`;
 opened from the Disks library's "New disk" button): Type — select — `new-disk-type`
 — R✅ I✅ ; File name — text — `new-disk-name` — R✅ I✅ ; Disk label — text —
-`new-disk-label` — R✅ I✅ ; Tracks — number — `new-disk-tracks` — R✅ I✅
-`[visible for D64/DNP types only]` ; Storage folder — text — `new-disk-folder` —
+`new-disk-label` — R✅ I✅ ; Tracks — number — row `new-disk-tracks-field`, input
+`new-disk-tracks` — R✅ I✅ `[visible for D64/DNP types only]` _(the keypad stops on the
+row; OK starts editing the input, OK or Back returns to the row)_ ; Storage folder — text — `new-disk-folder` —
 R✅ I✅ ; Cancel — button — R✅ I✅ ; Create & mount — button — `new-disk-create`
 — R✅ I✅ `[disabled until a non-empty file name is entered / while creating]`.
 Selecting the D64 or DNP type reveals the Tracks field; a successful create adds
