@@ -222,37 +222,105 @@ test.describe("Small screen layout integrity", () => {
     });
   }
 
+  const seedTwoNamedDevices = (page: Page, connectedName: string) =>
+    page.addInitScript(
+      ({ host, name }: { host: string; name: string }) => {
+        const device = (id: string, deviceName: string, deviceHost: string) => ({
+          id,
+          name: deviceName,
+          nameSource: "USER",
+          host: deviceHost,
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 23,
+          lastSuccessfulConnectionAt: null,
+          lastUsedAt: null,
+          hasPassword: false,
+        });
+        localStorage.setItem(
+          "c64u_saved_devices:v1",
+          JSON.stringify({
+            version: 1,
+            selectedDeviceId: "device-a",
+            devices: [device("device-a", name, host), device("device-b", "Living rm", "c64u-other")],
+            summaries: {},
+            summaryLru: [],
+            hasEverHadMultipleDevices: true,
+          }),
+        );
+      },
+      { host: new URL(server.baseUrl).host, name: connectedName },
+    );
+
+  /**
+   * While Live View streams, the header badge carries its mark. A separate indicator used to sit
+   * beside the badge and took 48 px from the device name, which was drawn as "c6…" for "c64u" on
+   * the smallest screen. The name must stay whole where it fits and keep at least six characters
+   * on every page, including a ten-character name of wide letters.
+   */
+  for (const deviceName of ["Workshop 2", "WWWWWWWWWW"]) {
+    test(`the header keeps "${deviceName}" readable while Live View streams @layout`, async ({ page }) => {
+      await setup(page, server.baseUrl, { developerMode: true });
+      await seedTwoNamedDevices(page, deviceName);
+      await installLiveViewStreamStub(page);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page);
+
+      const liveView = page.locator('[data-slot-active="true"]').getByTestId("live-view-card");
+      await expect(liveView).toBeVisible({ timeout: 15_000 });
+      await liveView.scrollIntoViewIfNeeded();
+      const liveViewToggle = liveView.getByTestId("home-section-toggle-live-view");
+      if ((await liveViewToggle.getAttribute("aria-expanded")) !== "true") await liveViewToggle.click();
+      await liveView.getByTestId("av-video-toggle").click();
+
+      for (const route of TAB_ROUTES) {
+        await page.getByTestId(`tab-${route.label.toLowerCase()}`).click();
+        await expect(page).toHaveURL(new RegExp(`${route.path}$`));
+        await settle(page);
+        const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+        await expect(badge.getByTestId("unified-health-badge-live")).toBeVisible({ timeout: 15_000 });
+        await expect(badge).toHaveAttribute("aria-label", /, Live View on$/);
+        const name = badge.getByTestId("unified-health-badge-device");
+        await expect(name).toHaveText(deviceName);
+        const { scrollWidth, clientWidth } = await name.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        const visibleCharacters = Math.floor((clientWidth / scrollWidth) * deviceName.length);
+        expect(visibleCharacters, `${route.label}: characters of "${deviceName}" left visible`).toBeGreaterThanOrEqual(
+          6,
+        );
+        if (deviceName === "Workshop 2") {
+          expect(scrollWidth, `${route.label}: "${deviceName}" is cut`).toBeLessThanOrEqual(clientWidth);
+        }
+        const rowHeight = await page
+          .locator('[data-panel-position="1"]')
+          .getByTestId("app-bar-row")
+          .evaluate((row) => row.getBoundingClientRect().height);
+        expect(rowHeight, `${route.label}: the two-line badge made the header taller`).toBeLessThanOrEqual(44);
+        await auditAndAssert(page, `${route.label} header while Live View streams, device "${deviceName}"`);
+      }
+
+      // The separate indicator stopped Live View on a tap. That action is now in the Quick menu.
+      await page.getByTestId("app-bar-quick-menu").click();
+      const stop = page.getByTestId("keypad-quick-menu-stop-live-view");
+      await expect(stop).toBeVisible();
+      // Polled because the menu opens with a short zoom, during which every entry measures smaller.
+      await expect
+        .poll(async () => (await stop.boundingBox())?.height ?? 0, { message: "Stop Live View is shorter than 44 px" })
+        .toBeGreaterThanOrEqual(44);
+      await stop.click();
+      await expect(page.getByTestId("unified-health-badge-live")).toHaveCount(0, { timeout: 15_000 });
+    });
+  }
+
   /**
    * With two devices saved, the badge names the connected one by a short label of up to ten
    * characters. The longest label must still leave every page title whole on the smallest screen.
    */
   test("the header fits a ten-character device name beside every page title @layout", async ({ page }) => {
     await setup(page, server.baseUrl);
-    await page.addInitScript((host: string) => {
-      const device = (id: string, name: string, deviceHost: string) => ({
-        id,
-        name,
-        nameSource: "USER",
-        host: deviceHost,
-        httpPort: 80,
-        ftpPort: 21,
-        telnetPort: 23,
-        lastSuccessfulConnectionAt: null,
-        lastUsedAt: null,
-        hasPassword: false,
-      });
-      localStorage.setItem(
-        "c64u_saved_devices:v1",
-        JSON.stringify({
-          version: 1,
-          selectedDeviceId: "device-a",
-          devices: [device("device-a", "Workshop 2", host), device("device-b", "Living rm", "c64u-other")],
-          summaries: {},
-          summaryLru: [],
-          hasEverHadMultipleDevices: true,
-        }),
-      );
-    }, new URL(server.baseUrl).host);
+    await seedTwoNamedDevices(page, "Workshop 2");
 
     // The compact screen, then a 393 px phone on the medium profile, whose header type is larger.
     for (const profile of ["compact", "medium"] as const) {

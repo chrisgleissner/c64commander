@@ -202,10 +202,15 @@ persistent status badge that appear on every page).
 | Tab: Settings         | tab (button) | `tab-settings`         | ✅        | ✅                 |                                                                            |
 | Tab: Docs             | tab (button) | `tab-docs`             | ✅        | ✅                 | OK on a focused tab switches route (verified).                             |
 
-> **Conditional app-bar CTA — A/V mirror live pip** (`av-mirror-live-pip`): a tiny
-> indicator that appears in the header next to the status badge on every page **only
-> while an A/V mirror stream is live** (Content Explorer). Tapping it stops all
-> mirroring. Invisible — and not counted above — when nothing is streaming.
+> **Live View in the app bar** (`unified-health-badge-live`): while an A/V mirror
+> stream is live, the status badge carries a mark (a screen for the picture, a speaker
+> for sound alone) and its accessible name ends ", Live View on". It is not a control.
+> The one-tap stop that a separate app-bar indicator used to offer is **Stop Live View**
+> in the Quick menu (`keypad-quick-menu-stop-live-view`), listed only while a stream is
+> live and reachable from every page by touch (`app-bar-quick-menu`) and by keypad
+> (Menu). On a narrow header, a badge that names the device puts the name on its own
+> line above the marks (`unified-health-badge-stacked`), so a streaming mark no longer
+> takes width from the name.
 
 ---
 
@@ -1166,7 +1171,8 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
-`keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`.
+`keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`,
+`keypad-quick-menu-stop-live-view` (only while Live View streams; stops picture and sound).
 `keypad-quick-menu-game-mode` is absent on a device that cannot stream, such as a U2,
 like the Home Game tile; a function key assigned to Game Mode explains why there instead.
 

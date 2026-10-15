@@ -899,7 +899,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The badge in the top right corner tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. If the app is offline, the same tap also tries to reconnect.",
     "",
-    "If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.",
+    "If you have saved more than one device, the badge does a little more. It shows the name of the device you are using; on a narrow screen the name has the top line of the badge to itself. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.",
     "",
     "### Moving Between Pages",
     "",
@@ -1556,7 +1556,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           ...(includeFeature(features, "audio_mirror_enabled")
             ? [
-                "- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a matching dot in the top bar reminds you it is playing; tap it to stop everything at once.",
+                "- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a speaker mark in the header badge reminds you it is playing.",
               ]
             : []),
           ...(includeFeature(features, "video_mirror_enabled")
@@ -1567,7 +1567,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           image("Live View on Home", profile, "home/content-explorer/profiles/{profile}/01-live-view.png"),
           "",
-          "While either is playing, a **Reset** in the card's header stops both, without opening the card.",
+          "While either is playing, the header badge carries a small mark, a screen for the picture or a speaker for the sound alone, and a **Reset** in the card's header stops both without opening the card. From any other page, **Stop Live View** in the Quick menu does the same.",
           "",
           `If the stream stops reaching ${appDeviceSubject(
             variant,
