@@ -215,7 +215,7 @@ const isC64uRemoteVariant = (variant) => variant.id === "c64u-remote";
 // a compact, keypad-first phone, so its manual always speaks of a "phone" and
 // never names a model. The broad C64 Commander edition also runs on tablets, so
 // it keeps the wider "phone or tablet" phrasing unchanged.
-const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
+export const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
 
 /**
  * The SID emulation choices, led by the edition's default. Fast & accurate exists only on Android,
@@ -245,7 +245,7 @@ export const sidEmulationProse = (variant) => {
 // name one of them.
 const appDeviceSubject = (variant) => (isC64uRemoteVariant(variant) ? "your phone" : "the device running the app");
 
-const targetDeviceDescription = (variant) =>
+export const targetDeviceDescription = (variant) =>
   isC64uRemoteVariant(variant)
     ? "a Commodore 64 Ultimate"
     : "a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II";
@@ -264,7 +264,7 @@ const targetDeviceDescription = (variant) =>
 const manualSubtitle = (variant) =>
   `Play SID music, run games and demos, mount disks, and control ${targetDeviceDescription(variant)} from one app.`;
 
-const targetDeviceShortName = (variant) =>
+export const targetDeviceShortName = (variant) =>
   isC64uRemoteVariant(variant) ? "the Commodore 64 Ultimate" : "the connected Ultimate-family device";
 
 const targetDevicePasswordName = (variant) =>
@@ -1149,9 +1149,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Docs overview", profile, "docs/profiles/{profile}/01-overview.png"),
     "",
+    "It has a chapter of numbered steps for each main task: getting started, playing from HVSC, finding a tune, the playlist, SID Radio, where the sound plays, disks, Remote Input, Game Mode, Live View, Config, saving and restoring, devices, connection problems, the keypad keys, the status badge, and Diagnostics. **Contents**, at the top, jumps straight to a chapter.",
+    "",
     isC64uRemoteVariant(variant)
-      ? "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping."
-      : "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.",
+      ? "On the keypad, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it."
+      : "With a keypad or keyboard, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it. The page ends with links to the official device manuals and reference material.",
     "",
     "### Diagnostics",
     "",

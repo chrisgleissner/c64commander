@@ -1,9 +1,21 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { resetCardMemory } from "../helpers/cards";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { openAllCards, resetCardMemory } from "../helpers/cards";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import DocsPage from "@/pages/DocsPage";
 import type { FeatureFlags } from "@/lib/config/featureFlags";
+import { buildGuideChapters } from "@/lib/docs/guide/chapters";
+import type { GuideBlock, GuideChapter } from "@/lib/docs/guide/types";
+import { appDeviceName, targetDeviceDescription } from "@/lib/docs/deviceNames";
+import { jumpToChapter } from "@/pages/docs/DocsContents";
+import { ANCHOR_WAIT_CEILING_MS } from "@/lib/search/navigate";
+
+const addLogMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addLog: addLogMock,
+}));
 
 const defaultFlags: FeatureFlags = {
   background_execution_enabled: true,
@@ -19,7 +31,10 @@ const defaultFlags: FeatureFlags = {
   keypad_input_enabled: true,
   lighting_studio_enabled: false,
   ram_snapshots_enabled: true,
-};
+  remote_input_enabled: true,
+  live_view_enabled: true,
+  disk_explorer_enabled: true,
+} as FeatureFlags;
 
 const featureFlagsRef = vi.hoisted(() => ({
   flags: {} as FeatureFlags,
@@ -69,35 +84,188 @@ vi.mock("@/lib/tracing/userTrace", () => ({
   wrapUserEvent: (handler: () => void) => handler,
 }));
 
+const VARIANTS = ["c64commander", "c64u-remote"] as const;
+
+const setVariant = (id: string) => {
+  variantRef.id = id;
+  variantRef.displayName = id === "c64u-remote" ? "C64U Remote" : "C64 Commander";
+};
+
+const blockText = (block: GuideBlock): string[] => {
+  switch (block.kind) {
+    case "text":
+    case "tip":
+      return [block.text];
+    case "steps":
+      return [block.heading ?? "", ...block.items];
+    case "keys":
+      return [block.heading ?? "", ...block.items.flatMap((item) => [item.key, item.action])];
+  }
+};
+
+const chapterText = (chapters: readonly GuideChapter[]) =>
+  chapters.flatMap((chapter) => [chapter.title, chapter.navLabel, ...chapter.blocks.flatMap(blockText)]).join(" ");
+
+/** Words that keep their capitals in sentence case: product feature names, acronyms and page names. */
+const PROPER_WORDS = new Set([
+  ...["HVSC", "SID", "C64", "T9"],
+  ...["Radio", "Remote", "Input", "Game", "Mode", "Live", "View"],
+  ...["Home", "Play", "Disks", "Config", "Settings", "Docs"],
+]);
+
+const sentenceCaseViolations = (text: string): string[] => {
+  const [first, ...rest] = text.split(/\s+/);
+  const violations = /^[A-Z0-9]/.test(first ?? "") ? [] : [first ?? ""];
+  return violations.concat(rest.filter((word) => /^[A-Z]/.test(word) && !PROPER_WORDS.has(word.replace(/'s$/, ""))));
+};
+
+const BRITISH_SPELLINGS =
+  /\b(colour|favourite|behaviour|organis|recognis|centre|licence|analogue|catalogue|grey|whilst|towards|cancelled|travelled)\w*/i;
+
+/** The shape of a handset model, a capitalized word and a four-digit number, as the manual test guards it. */
+const PHONE_MODELS = /\b[A-Z][a-z]+ \d{4}\b/;
+
 describe("DocsPage", () => {
   beforeEach(() => {
     resetCardMemory();
     featureFlagsRef.flags = { ...defaultFlags };
-    variantRef.id = "c64commander";
-    variantRef.displayName = "C64 Commander";
+    setVariant("c64commander");
     // Card open/closed state now persists to localStorage (CollapsibleSection), where
     // it previously reset on every mount - clear it so one test's clicks cannot leak
     // into the next test's expectations.
     localStorage.clear();
   });
 
-  it("renders the docs shell and expands help sections on demand", () => {
+  it("renders the docs shell, a contents list, and every chapter closed until asked for", () => {
     render(<DocsPage />);
 
     expect(screen.getByTestId("docs-app-bar")).toHaveTextContent("Docs");
+    expect(screen.getByTestId("docs-card-contents")).toHaveAttribute("data-open", "true");
+    const chapters = buildGuideChapters({ variantId: "c64commander", flags: defaultFlags });
+    for (const chapter of chapters) {
+      expect(screen.getByTestId(`docs-contents-link-${chapter.id}`)).toHaveTextContent(chapter.navLabel);
+      expect(screen.getByTestId(`docs-card-${chapter.id}`)).toHaveAttribute("data-open", "false");
+    }
     expect(screen.queryByText(/Save & Connect/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
-
-    expect(screen.getByText(/Save & Connect/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("docs-toggle-devices"));
+    expect(screen.getAllByText(/Save & Connect/).length).toBeGreaterThan(0);
   });
 
-  it("renders diagnostics guidance and upstream resource links", () => {
+  it.each(VARIANTS)("renders every %s chapter with numbered steps a keypad ring can stop on", (variantId) => {
+    setVariant(variantId);
     render(<DocsPage />);
+    openAllCards();
 
-    fireEvent.click(screen.getByTestId("docs-toggle-diagnostics"));
+    const chapters = buildGuideChapters({ variantId, flags: defaultFlags });
+    expect(chapters.length).toBeGreaterThanOrEqual(16);
+    for (const chapter of chapters) {
+      const body = screen.getByTestId(`docs-chapter-body-${chapter.id}`);
+      const steps = body.querySelectorAll("ol > li[data-guide-step]");
+      expect(steps.length, `${chapter.id} has no numbered steps`).toBeGreaterThanOrEqual(2);
+      const stops = body.querySelectorAll("[data-key-nav-reading]");
+      expect(stops.length).toBeGreaterThanOrEqual(steps.length);
+      for (const stop of stops) expect(stop).toHaveAttribute("tabindex", "0");
+      // Markup is rendered, never shown as asterisks or backticks.
+      expect(body.textContent).not.toMatch(/\*\*|`/);
+    }
+  });
 
-    expect(screen.getByText(/Device health, app activity and support data/)).toBeInTheDocument();
+  it("says at least ten times what the previous orientation page said", () => {
+    // The page this replaced held about 190 words across eight one-line chapters.
+    for (const variantId of VARIANTS) {
+      const words = chapterText(buildGuideChapters({ variantId, flags: defaultFlags }))
+        .split(/\s+/)
+        .filter(Boolean).length;
+      expect(words, `${variantId} guide is ${words} words`).toBeGreaterThanOrEqual(1900);
+    }
+  });
+
+  it.each(VARIANTS)("writes %s chapter titles, headings and contents labels in sentence case", (variantId) => {
+    for (const chapter of buildGuideChapters({ variantId, flags: defaultFlags })) {
+      const headings = chapter.blocks.flatMap((block) =>
+        (block.kind === "steps" || block.kind === "keys") && block.heading ? [block.heading] : [],
+      );
+      for (const text of [chapter.title, chapter.navLabel, ...headings]) {
+        expect(sentenceCaseViolations(text), `"${text}" is not sentence case`).toEqual([]);
+      }
+    }
+  });
+
+  it.each(VARIANTS)("uses American English and names no phone model in the %s guide", (variantId) => {
+    const text = chapterText(buildGuideChapters({ variantId, flags: defaultFlags }));
+    expect(text).not.toMatch(BRITISH_SPELLINGS);
+    expect(text).not.toMatch(PHONE_MODELS);
+  });
+
+  it("names both machines through the manual's variant helpers", () => {
+    const keypad = chapterText(buildGuideChapters({ variantId: "c64u-remote", flags: defaultFlags }));
+    const broad = chapterText(buildGuideChapters({ variantId: "c64commander", flags: defaultFlags }));
+
+    expect(keypad).toContain(targetDeviceDescription("c64u-remote"));
+    expect(keypad).toContain(`your ${appDeviceName("c64u-remote")}`);
+    expect(keypad).not.toMatch(/tablet|Ultimate 64 Elite|Ultimate-II/);
+
+    expect(broad).toContain(targetDeviceDescription("c64commander"));
+    expect(broad).toContain(`your ${appDeviceName("c64commander")}`);
+  });
+
+  it("describes the soft keys and T9 only in the keypad edition", () => {
+    const keypad = chapterText(buildGuideChapters({ variantId: "c64u-remote", flags: defaultFlags }));
+    const broad = chapterText(buildGuideChapters({ variantId: "c64commander", flags: defaultFlags }));
+    expect(keypad).toMatch(/Right Soft Key/);
+    expect(keypad).toMatch(/In a text field/);
+    expect(broad).not.toMatch(/Soft Key|In a text field/);
+  });
+
+  it("jumps from the contents list to a chapter, opens it, and focuses its header", async () => {
+    render(<DocsPage />);
+    const card = screen.getByTestId("docs-card-diagnostics");
+    card.scrollIntoView = vi.fn();
+
+    fireEvent.click(screen.getByTestId("docs-contents-link-diagnostics"));
+
+    await waitFor(() => expect(card).toHaveAttribute("data-open", "true"));
+    await waitFor(() => expect(screen.getByTestId("docs-toggle-diagnostics")).toHaveFocus());
+    expect(card.scrollIntoView).toHaveBeenCalledWith({ block: "start", inline: "nearest" });
+  });
+
+  it("leaves out chapters for features that are switched off", () => {
+    const ids = (flags: Partial<FeatureFlags>) =>
+      buildGuideChapters({ variantId: "c64commander", flags: { ...defaultFlags, ...flags } }).map(
+        (chapter) => chapter.id,
+      );
+    expect(ids({})).toEqual(expect.arrayContaining(["play", "find-tune", "sid-radio", "live-view", "game-mode"]));
+    expect(ids({ hvsc_enabled: false })).not.toEqual(expect.arrayContaining(["play"]));
+    expect(ids({ hvsc_enabled: false })).not.toContain("sid-radio");
+    expect(ids({ remote_input_enabled: false })).not.toContain("game-mode");
+    expect(ids({ live_view_enabled: false })).not.toContain("live-view");
+    expect(ids({ keypad_input_enabled: false })).not.toContain("keypad");
+
+    const text = (flags: Partial<FeatureFlags>) =>
+      chapterText(buildGuideChapters({ variantId: "c64commander", flags: { ...defaultFlags, ...flags } }));
+    expect(text({})).toMatch(/Disk Explorer/);
+    expect(text({ disk_explorer_enabled: false })).not.toMatch(/Disk Explorer/);
+    expect(text({})).toMatch(/Save the C64's memory/);
+    expect(text({ ram_snapshots_enabled: false })).not.toMatch(/Save the C64's memory/);
+  });
+
+  it("logs and gives up when the contents list names a chapter that is not on the page", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = jumpToChapter("no-such-chapter");
+      await vi.advanceTimersByTimeAsync(ANCHOR_WAIT_CEILING_MS + 1);
+      await expect(result).resolves.toBe(false);
+      expect(addLogMock).toHaveBeenCalledWith("warn", "Docs contents could not find the chapter it links to", {
+        chapterId: "no-such-chapter",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders upstream resource links in the broad edition", () => {
+    render(<DocsPage />);
 
     // External resources is closed on a first visit: it points at other people's documentation,
     // read once if at all, and the page's own chapters are what a reader came for.
@@ -123,42 +291,21 @@ describe("DocsPage", () => {
     expect(screen.queryByTestId("docs-external-resource-c64u-user-guide")).not.toBeInTheDocument();
   });
 
-  /*
-   * The three tests that used to live here asserted that the Docs page grew a bullet for each
-   * enabled feature flag — a list of Home's actions, of Settings' chapters, of Play's steps. That
-   * documentation was removed deliberately: it restated control labels the reader can already see,
-   * and the app ships a full generated manual that says all of it properly. What is left is an
-   * orientation index, so that is what is tested.
-   */
-  it("gives every chapter a short description rather than a procedure", () => {
-    render(<DocsPage />);
-
-    for (const id of ["getting-started", "home", "play", "disks", "config", "settings", "diagnostics"]) {
-      fireEvent.click(screen.getByTestId(`docs-toggle-${id}`));
-      const card = screen.getByTestId(`docs-card-${id}`);
-      // Something is said...
-      expect(card.textContent?.trim().length ?? 0).toBeGreaterThan(20);
-      // ...and it is not a numbered or bulleted procedure, which belongs in the manual.
-      expect(card.querySelectorAll("li")).toHaveLength(0);
-    }
-  });
-
-  it("always says the app runs with no network, and mentions Demo Mode only while its flag is on", () => {
-    featureFlagsRef.flags = { demo_mode_enabled: true };
+  it("mentions Demo Mode only while its flag is on", () => {
+    featureFlagsRef.flags = { ...defaultFlags, demo_mode_enabled: true };
     const { unmount } = render(<DocsPage />);
     fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
     expect(screen.getByText(/With no network at all/)).toBeInTheDocument();
-    expect(screen.getByText(/Demo Mode can also offer/)).toBeInTheDocument();
     unmount();
 
     // CollapsibleSection persists open/closed state, so without this the second click
     // would close the card the first one opened and the negative assertion below would
     // pass against an unrendered section rather than an absent sentence.
     localStorage.clear();
-    featureFlagsRef.flags = { demo_mode_enabled: false };
+    featureFlagsRef.flags = { ...defaultFlags, demo_mode_enabled: false };
     render(<DocsPage />);
     fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
-    expect(screen.getByText(/With no network at all/)).toBeInTheDocument();
-    expect(screen.queryByText(/Demo Mode can also offer/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Web Remote Control Service/)).toBeInTheDocument();
+    expect(screen.queryByText(/With no network at all/)).not.toBeInTheDocument();
   });
 });

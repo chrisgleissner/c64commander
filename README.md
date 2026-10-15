@@ -299,13 +299,13 @@ Configure connections, appearance, diagnostics, playback, HVSC, and device safet
 
 ### Docs
 
-Built-in guides for setup, workflows, and day-to-day usage.
+A built-in guide with step-by-step chapters for the main tasks, from the first connection to SID Radio, Game Mode and sharing a diagnostics report, with a contents list that jumps to each chapter.
 
 <table>
   <tr>
     <td><img src="docs/img/app/docs/01-overview.png" alt="Docs overview" width="360"/></td>
-    <td><img src="docs/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="360"/></td>
-    <td><img src="docs/img/app/docs/sections/05-swapping-disks.png" alt="Docs swapping disks" width="360"/></td>
+    <td><img src="docs/img/app/docs/sections/02-get-started.png" alt="Docs get started" width="360"/></td>
+    <td><img src="docs/img/app/docs/sections/08-mount-and-run-a-disk.png" alt="Docs mount and run a disk" width="360"/></td>
   </tr>
 </table>
 
