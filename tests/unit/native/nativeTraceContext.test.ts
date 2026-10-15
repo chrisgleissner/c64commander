@@ -10,7 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const getTraceContextSnapshotMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/tracing/traceContext", () => ({
+vi.mock("@/lib/tracing/traceContext", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/tracing/traceContext")>()),
   getTraceContextSnapshot: getTraceContextSnapshotMock,
 }));
 
@@ -30,6 +31,7 @@ describe("resolveNativeTraceContext", () => {
   it("returns action and playback identifiers when present", () => {
     getTraceContextSnapshotMock.mockReturnValue({
       playback: {
+        isPlaying: true,
         trackInstanceId: 42,
         playlistItemId: "item-42",
       },
@@ -39,6 +41,18 @@ describe("resolveNativeTraceContext", () => {
       correlationId: "corr-42",
       trackInstanceId: 42,
       playlistItemId: "item-42",
+    });
+  });
+
+  it("leaves out the playlist's current tune while nothing is playing", () => {
+    getTraceContextSnapshotMock.mockReturnValue({
+      playback: { isPlaying: false, trackInstanceId: 0, playlistItemId: "radio:/MUSICIANS/B/Bizet/Hyper_Speed.sid#1" },
+    });
+
+    expect(resolveNativeTraceContext({ correlationId: "browse-1" } as never)).toEqual({
+      correlationId: "browse-1",
+      trackInstanceId: null,
+      playlistItemId: null,
     });
   });
 });

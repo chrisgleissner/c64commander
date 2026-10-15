@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-vi.mock("@/lib/ftp/ftpClient", () => ({
+vi.mock("@/lib/ftp/ftpClient", async (importOriginal) => ({
+  isRefusedFtpListing: (await importOriginal<typeof import("@/lib/ftp/ftpClient")>()).isRefusedFtpListing,
   listFtpDirectory: vi.fn(),
   listFtpDirectoryRecursive: vi.fn(),
 }));
@@ -74,8 +75,15 @@ describe("ftpSourceAdapter", () => {
       await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow(
         "The C64 could not read /SD. Check that its storage is inserted and readable.",
       );
-      expect(listFtpDirectoryMock).toHaveBeenLastCalledWith(expect.objectContaining({ path: "/SD/SD" }));
+      expect(listFtpDirectoryMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ path: "/SD/SD", refusalExpected: true }),
+      );
       expect(localStorage.getItem(FTP_CACHE_KEY) ?? "").not.toContain("/SD");
+      expect(addLogMock).toHaveBeenCalledWith("info", "The C64 could not read a folder", {
+        path: "/SD",
+        checkedWith: "/SD/SD",
+        error: "FTP LIST /SD/SD refused (451): 451 Requested action aborted",
+      });
     });
 
     it("recognises a refusal that the bridge rejects with as a plain string", async () => {

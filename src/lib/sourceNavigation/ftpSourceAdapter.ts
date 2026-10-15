@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
+import { isRefusedFtpListing, listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
@@ -111,9 +111,6 @@ const clearCachedEntriesUnderPrefix = (host: string, port: number | undefined, p
 const folderName = (path: string) => path.replace(/\/+$/, "").replace(/^.*\//, "");
 const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** 450, 451 and 550 are the FTP replies for a folder the server could not open. */
-const isRefusedListing = (error: unknown) => /\b(450|451|550)\b/.test(describeError(error));
-
 /*
  * The Ultimate's FTP server answers LIST for a folder it cannot open (an unreadable SD card) by
  * listing the parent filtered to the folder's own name (`vfs_opendir` in 1541ultimate), so the
@@ -129,10 +126,13 @@ const isUnreadableFolderEcho = async (
   if (path === "/" || entries.length !== 1 || only.type !== "dir") return false;
   if (only.name.toLowerCase() !== folderName(path).toLowerCase()) return false;
   try {
-    await listFtpDirectory({ ...request, path: only.path });
+    await listFtpDirectory({ ...request, path: only.path, refusalExpected: true });
     return false;
   } catch (error) {
-    if (isRefusedListing(error)) return true;
+    if (isRefusedFtpListing(error)) {
+      addLog("info", "The C64 could not read a folder", { path, checkedWith: only.path, error: describeError(error) });
+      return true;
+    }
     throw new Error(`Could not check whether ${path} can be read: ${describeError(error)}`, { cause: error });
   }
 };

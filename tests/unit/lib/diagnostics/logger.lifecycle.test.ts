@@ -41,6 +41,7 @@ describe("logger lifecycle state (jsdom)", () => {
   it("records lifecycleState as background when document.hidden is true", async () => {
     const spyInfo = vi.spyOn(console, "info").mockImplementation(() => undefined);
     getPlaybackTraceSnapshot.mockReturnValue({
+      isPlaying: true,
       sourceKind: "hvsc",
       localAccessMode: "file",
       trackInstanceId: "track-bg",
@@ -59,6 +60,7 @@ describe("logger lifecycle state (jsdom)", () => {
   it("records lifecycleState as foreground when document is visible and focused", async () => {
     const spyInfo = vi.spyOn(console, "info").mockImplementation(() => undefined);
     getPlaybackTraceSnapshot.mockReturnValue({
+      isPlaying: true,
       sourceKind: "hvsc",
       localAccessMode: "file",
       trackInstanceId: "track-fg",

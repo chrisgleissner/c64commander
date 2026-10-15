@@ -7,7 +7,7 @@
  */
 
 import type { TraceActionContext } from "@/lib/tracing/types";
-import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
+import { getTraceContextSnapshot, playingTraceContext } from "@/lib/tracing/traceContext";
 
 export type NativeTraceContext = {
   correlationId: string | null;
@@ -16,7 +16,7 @@ export type NativeTraceContext = {
 };
 
 export const resolveNativeTraceContext = (action?: TraceActionContext | null): NativeTraceContext => {
-  const playback = getTraceContextSnapshot().playback;
+  const playback = playingTraceContext(getTraceContextSnapshot().playback);
   return {
     correlationId: action?.correlationId ?? null,
     trackInstanceId: playback?.trackInstanceId ?? null,

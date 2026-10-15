@@ -47,6 +47,10 @@ export const setTraceFeatureFlags = (flags: Record<string, boolean>) => {
   emit();
 };
 
+/** The tune that is playing, if one is. A stopped playlist's current item says nothing about what a log entry is for. */
+export const playingTraceContext = (playback: TracePlaybackContext | null | undefined) =>
+  playback?.isPlaying ? playback : null;
+
 export const setTracePlaybackContext = (playback: TracePlaybackContext | null) => {
   snapshot = { ...snapshot, playback };
   emit();

@@ -95,6 +95,34 @@ describe("ftpClient", () => {
       expect(decrementFtpInFlight).toHaveBeenCalled();
     });
 
+    it("does not report the refusal a readability check expects as an error", async () => {
+      vi.mocked(FtpClient.listDirectory).mockRejectedValue(
+        new Error("FTP LIST /SD/SD refused (451): 451 Requested action aborted"),
+      );
+
+      await expect(listFtpDirectory({ ...mockListOptions, path: "/SD/SD", refusalExpected: true })).rejects.toThrow(
+        "refused (451)",
+      );
+
+      expect(addErrorLog).not.toHaveBeenCalled();
+      expect(recordTraceError).not.toHaveBeenCalled();
+      expect(vi.mocked(addLog).mock.calls.map(([level, message]) => [level, message])).toContainEqual([
+        "debug",
+        "FTP listing refused, as the readability check expected",
+      ]);
+    });
+
+    it("still reports a readability check that fails for another reason", async () => {
+      vi.mocked(FtpClient.listDirectory).mockRejectedValue(new Error("FTP listDirectory timed out"));
+
+      await expect(listFtpDirectory({ ...mockListOptions, path: "/SD/SD", refusalExpected: true })).rejects.toThrow(
+        "timed out",
+      );
+
+      expect(vi.mocked(addErrorLog).mock.calls.map(([message]) => message)).toEqual(["FTP listing failed"]);
+      expect(recordTraceError).toHaveBeenCalled();
+    });
+
     it("logs one list failure when the FTP gateway retry still fails", async () => {
       vi.mocked(withFtpInteraction).mockImplementationOnce(async (_ctx, fn) => {
         await expect(fn()).rejects.toThrow("FTP bridge request timed out");

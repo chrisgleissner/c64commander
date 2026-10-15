@@ -209,6 +209,7 @@ class FtpClientPlugin : Plugin() {
     val path = call.getString("path") ?: "/"
     val timeoutMs = resolveTransferTimeoutMs(call)
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
+    val refusalExpected = call.getBoolean("refusalExpected", false) == true
 
     runTask(
             Runnable {
@@ -237,14 +238,25 @@ class FtpClientPlugin : Plugin() {
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectory", error, connectTimeoutMs, timeoutMs)
-                AppLogger.error(
-                        pluginContextOrNull(),
-                        logTag,
-                        "FTP listDirectory failed",
-                        "FtpClientPlugin",
-                        error,
-                        traceFields(call),
-                )
+                // A readability check lists a folder expecting the refusal that says it cannot be opened.
+                if (refusalExpected && error is FtpListRefusedException) {
+                  AppLogger.info(
+                          pluginContextOrNull(),
+                          logTag,
+                          "FTP listDirectory refused, as the readability check expected: $message",
+                          "FtpClientPlugin",
+                          traceFields(call),
+                  )
+                } else {
+                  AppLogger.error(
+                          pluginContextOrNull(),
+                          logTag,
+                          "FTP listDirectory failed",
+                          "FtpClientPlugin",
+                          error,
+                          traceFields(call),
+                  )
+                }
                 call.reject(message, error)
               } finally {
                 try {
