@@ -312,6 +312,19 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
 };
 
 /**
+ * A short name a control gives the guidance bar, where its accessible name is a full sentence. The
+ * health badge is named "Connected to c64u, system healthy" for assistive technology, which the
+ * bar's one line on a 320 px screen cut to "Connected to c64u, s…".
+ */
+export const GUIDANCE_LABEL_ATTR = "data-guidance-label";
+
+/** The breadcrumb's name for the current element: its short guidance label, else its accessible name. */
+export const guidanceLabelFor = (element: Element | null): string | null => {
+  const short = element ? nonBlank(element.getAttribute(GUIDANCE_LABEL_ATTR)) : null;
+  return short ? tidyLabel(short) : accessibleLabelFor(element);
+};
+
+/**
  * The context-menu trigger of `element`: itself, one in its `[data-key-nav-menu-host]`, or one inside
  * a single ring stop. A group has none: its triggers belong to the rows inside it.
  */

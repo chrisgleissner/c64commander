@@ -11,6 +11,7 @@ import {
   deriveTelnetContributorHealth,
   eventMatchesDeviceScope,
   getBadgeAriaLabel,
+  getBadgeGuidanceLabel,
   getBadgeLabel,
   getBadgeTextContract,
   getContributorSupportingPhrase,
@@ -1045,6 +1046,29 @@ describe("getBadgeLabel", () => {
 // ──────────────────────────────────────────────────────────────────────────────
 // getBadgeAriaLabel
 // ──────────────────────────────────────────────────────────────────────────────
+describe("getBadgeGuidanceLabel", () => {
+  it.each([
+    ["Healthy", "Online", 0, "c64u: healthy"],
+    ["Degraded", "Online", 1, "c64u: 1 problem"],
+    ["Unhealthy", "Online", 3, "c64u: unhealthy, 3 problems"],
+    ["Idle", "Online", 0, "c64u: idle"],
+    ["Unavailable", "Online", 0, "c64u: no diagnostics"],
+  ] as const)("names a %s device in a %s state as the device and its state", (health, connectivity, count, label) => {
+    expect(getBadgeGuidanceLabel(health, connectivity, count, null, "c64u")).toBe(label);
+  });
+
+  it("names the states without a device in one or two words", () => {
+    expect(getBadgeGuidanceLabel("Healthy", "Offline", 0, null, "c64u")).toBe("Offline");
+    expect(getBadgeGuidanceLabel("Healthy", "Auth", 0, null, "c64u")).toBe("Password required");
+    expect(getBadgeGuidanceLabel("Healthy", "Not yet connected", 0, null, "c64u")).toBe("Not connected");
+    expect(getBadgeGuidanceLabel("Healthy", "Checking", 0, null, "c64u")).toBe("Connecting to c64u");
+  });
+
+  it("stays short enough for the guidance bar on the compact screen", () => {
+    expect(getBadgeGuidanceLabel("Unhealthy", "Online", 12, null, "c64u").length).toBeLessThanOrEqual(28);
+  });
+});
+
 describe("getBadgeAriaLabel", () => {
   it("Offline → Offline, device not reachable", () => {
     expect(getBadgeAriaLabel("Unavailable", "Offline", 0)).toBe("Offline, device not reachable");

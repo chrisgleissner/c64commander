@@ -38,6 +38,7 @@ import { HEALTH_CHECK_CONTEXTS, type HealthCheckRunResult } from "@/lib/diagnost
 import {
   HEALTH_GLYPHS,
   getBadgeAriaLabel,
+  getBadgeGuidanceLabel,
   getBadgeTextContract,
   selectPreferredBadgeHealth,
   type HealthState,
@@ -479,6 +480,13 @@ export function UnifiedHealthBadge({ className }: Props) {
   const mirror = useAvMirror();
   const LiveMarkIcon = mirror.videoLive ? Tv : Volume2;
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
+  const guidanceLabel = getBadgeGuidanceLabel(
+    state,
+    connectivity,
+    problemCount,
+    deviceInfo?.product,
+    connectedDeviceLabel,
+  );
   const glyphColor = HEALTH_COLOR[state];
   const badgeText = getBadgeTextContract(
     state,
@@ -707,6 +715,7 @@ export function UnifiedHealthBadge({ className }: Props) {
         type="button"
         role="button"
         aria-label={mirror.anyLive ? `${ariaLabel}, Live View on` : ariaLabel}
+        data-guidance-label={guidanceLabel}
         data-testid="unified-health-badge"
         data-diagnostics-open-trigger="true"
         data-connection-state={rawConnectionState}

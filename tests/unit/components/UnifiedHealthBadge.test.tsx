@@ -16,6 +16,7 @@ import {
   forgetConnectedDeviceAnnouncementForTests,
 } from "@/components/UnifiedHealthBadge";
 import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
 const mockToast = vi.hoisted(() => vi.fn());
@@ -289,6 +290,16 @@ describe("UnifiedHealthBadge", () => {
 
     expect(screen.queryByTestId("unified-health-badge-demo")).toBeNull();
     expect(screen.getByTestId("unified-health-badge").textContent).not.toContain("C64U");
+  });
+
+  it("gives the keypad guidance bar a short name: the device and its state, not the full sentence", () => {
+    render(<UnifiedHealthBadge />);
+    const badge = screen.getByTestId("unified-health-badge");
+
+    const short = badge.getAttribute("data-guidance-label") ?? "";
+    expect(short.length).toBeGreaterThan(0);
+    expect(short.length).toBeLessThan(badge.getAttribute("aria-label")!.length);
+    expect(guidanceLabelFor(badge)).toBe(short);
   });
 
   describe("Live View in the badge", () => {

@@ -35,6 +35,7 @@ import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/h
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
   accessibleLabelFor,
+  guidanceLabelFor,
   classifyFocusKind,
   getInputModality,
   hasContextMenu,
@@ -68,8 +69,8 @@ const buildGuidanceState = (
   // Breadcrumb: the ancestor group labels we are inside, then the current item.
   const breadcrumb = engine.currentScopeChain().map((item) => item.group ?? item.id);
   const currentLabel = isGroup
-    ? (current?.group ?? accessibleLabelFor(currentElement))
-    : accessibleLabelFor(currentElement);
+    ? (current?.group ?? guidanceLabelFor(currentElement))
+    : guidanceLabelFor(currentElement);
   if (currentLabel) breadcrumb.push(currentLabel);
 
   // OK on a card with a single control presses that control, so the bar names what it does.
@@ -185,8 +186,16 @@ const reserveGuidanceHeight = (reserved: boolean): void => {
  * "Back Back". On a 320 px screen that redundancy is not free: it pushed the row past the viewport
  * and truncated the next key's word to "Acti…", which is the one that actually needed saying.
  */
+const isCompactProfile = (): boolean =>
+  typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
+
+/**
+ * On the smallest screen "Activate" is dropped as well: OK on a button presses it, which the cap says,
+ * and the word took the 60 px the breadcrumb needed to name the control at all.
+ */
 const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
-  setTextIfChanged(action, label.trim().toLowerCase() === cap.toLowerCase() ? "" : label);
+  const repeatsCap = label.trim().toLowerCase() === cap.toLowerCase();
+  setTextIfChanged(action, repeatsCap || (label === "Activate" && isCompactProfile()) ? "" : label);
 };
 
 /**
@@ -199,8 +208,7 @@ const setActionText = (action: HTMLElement | null, cap: string, label: string): 
  */
 const formatBreadcrumb = (segments: readonly string[]): string => {
   if (segments.length === 0) return "Navigation";
-  const compact = typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
-  return compact ? segments[segments.length - 1] : segments.join("  ›  ");
+  return isCompactProfile() ? segments[segments.length - 1] : segments.join("  ›  ");
 };
 
 /** Show/hide a soft-key slot and set its action text, each guarded by a value bail. */

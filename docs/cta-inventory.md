@@ -96,7 +96,10 @@ F1 is the neutral `function1` action (see the F1 row).
   soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate, or
   Expand/Collapse on a control with `aria-expanded` (by control kind; on a card
   whose only control is its header, by that control), right = Menu only where the focused control has a menu of its
-  own. While a single-line field on a page has focus, left and center read Done;
+  own. The breadcrumb names the selected control by its accessible name, or by a
+  shorter `data-guidance-label` where that name is a sentence (the health badge
+  reads "C64U: healthy"). On the compact profile the center key's "Activate" is
+  left out, so the breadcrumb has room. While a single-line field on a page has focus, left and center read Done;
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
   exactly when the user is driving by keys.

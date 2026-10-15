@@ -796,6 +796,35 @@ export const getBadgeAriaLabel = (
   }
 };
 
+/** The badge's short name for the keypad guidance bar: the device and its state, without the sentence around them. */
+export const getBadgeGuidanceLabel = (
+  health: HealthState,
+  connectivity: ConnectivityState,
+  problemCount: number,
+  product?: string | null,
+  connectedDeviceLabel?: string | null,
+): string => {
+  if (connectivity === "Auth") return "Password required";
+  if (connectivity === "Offline") return "Offline";
+  if (connectivity === "Not yet connected") return "Not connected";
+  const deviceLabel = connectedDeviceLabel ?? inferConnectedDeviceLabel(product) ?? "C64U";
+  if (connectivity === "Checking") return `Connecting to ${deviceLabel}`;
+  const subject = connectivity === "Online" ? deviceLabel : DEMO_MODE_DEVICE_LABEL;
+  const problems = `${problemCount} problem${problemCount !== 1 ? "s" : ""}`;
+  switch (health) {
+    case "Healthy":
+      return `${subject}: healthy`;
+    case "Degraded":
+      return `${subject}: ${problems}`;
+    case "Unhealthy":
+      return `${subject}: unhealthy, ${problems}`;
+    case "Idle":
+      return `${subject}: idle`;
+    case "Unavailable":
+      return `${subject}: no diagnostics`;
+  }
+};
+
 // §10.6 — Supporting phrase for contributor rows
 export const getContributorSupportingPhrase = (contributor: ContributorKey, health: ContributorHealth): string => {
   if (health.state === "Idle") return "Idle";

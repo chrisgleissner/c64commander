@@ -125,6 +125,30 @@ describe("KeypadGuidanceBar", () => {
     expect(actionText("keypad-guidance-center")).toBe("Open");
   });
 
+  it("names a control by its short guidance label, and drops 'Activate' on the compact screen only", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button aria-label="Connected to c64u, system healthy" data-guidance-label="c64u: healthy">
+          c64u
+        </button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(breadcrumb()).toHaveTextContent("c64u: healthy");
+    expect(actionText("keypad-guidance-center")).toBe("Activate");
+
+    document.documentElement.dataset.displayProfile = "compact";
+    try {
+      fireEvent.keyDown(document.body, { code: "ArrowUp" });
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(actionText("keypad-guidance-center")).toBe("");
+      expect(screen.getByTestId("keypad-guidance-center")).not.toHaveAttribute("hidden");
+    } finally {
+      delete document.documentElement.dataset.displayProfile;
+    }
+  });
+
   /*
    * The tour owns the keys while it runs, so this bar advertises actions that do not happen — and
    * on a 320 x 427 screen it is drawn over the tour's own caption, covering the title of the step
