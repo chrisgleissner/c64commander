@@ -366,6 +366,67 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  describe("a route change", () => {
+    const startOnSecondStop = () => {
+      const onSelectionMovedByScan = vi.fn();
+      const controller = new FocusController();
+      const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
+      engine.start();
+      const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+      controller.setCurrent(idOf("settings-b"));
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { controller, engine, selected, onSelectionMovedByScan };
+    };
+    const tabBar = `<nav data-focus-scope="tabbar"><button id="tab-home">Home</button><button id="tab-settings">Settings</button></nav>`;
+
+    it("lands on the new page's first stop, not on the tab bar, when the page is replaced", () => {
+      const page = mount(
+        `<main id="page"><button id="settings-a">A</button><button id="settings-b">B</button><button id="settings-c">C</button></main>${tabBar}`,
+      );
+      const { engine, selected, onSelectionMovedByScan } = startOnSecondStop();
+
+      page.querySelector("#page")!.innerHTML =
+        `<button id="home-first">Home first</button><button id="home-second">Home second</button>`;
+      engine.refresh();
+
+      expect(selected()).toBe("home-first");
+      expect(onSelectionMovedByScan).not.toHaveBeenCalled();
+      engine.stop();
+    });
+
+    it("lands on the new page's first stop when the page left is kept, hidden, in its own slot", () => {
+      mount(`
+        <div data-slot-active="true" id="settings-slot"><button id="settings-a">A</button><button id="settings-b">B</button></div>
+        <div data-slot-active="false" id="home-slot" hidden><button id="home-first">Home first</button></div>
+        ${tabBar}`);
+      const { engine, selected, onSelectionMovedByScan } = startOnSecondStop();
+
+      el("settings-slot").setAttribute("data-slot-active", "false");
+      el("settings-slot").setAttribute("hidden", "");
+      el("home-slot").setAttribute("data-slot-active", "true");
+      el("home-slot").removeAttribute("hidden");
+      engine.refresh();
+
+      expect(selected()).toBe("home-first");
+      expect(onSelectionMovedByScan).not.toHaveBeenCalled();
+      engine.stop();
+    });
+
+    it("still moves to the nearest stop on the same page when the selected one is removed", () => {
+      mount(
+        `<main id="page"><button id="settings-a">A</button><button id="settings-b">B</button><button id="settings-c">C</button></main>${tabBar}`,
+      );
+      const { engine, selected, onSelectionMovedByScan } = startOnSecondStop();
+
+      el("settings-b").remove();
+      engine.refresh();
+
+      expect(selected()).toBe("settings-c");
+      expect(onSelectionMovedByScan).toHaveBeenCalledTimes(1);
+      engine.stop();
+    });
+  });
+
   describe("a selected control that is disabled or removed", () => {
     const mountGroup = () => {
       mount(`

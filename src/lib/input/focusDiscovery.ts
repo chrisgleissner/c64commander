@@ -161,6 +161,9 @@ const labelledByText = (element: Element): string | undefined => {
   return text || undefined;
 };
 
+/** The page slot, or the tab bar, that holds a stop; null outside both, as in a plain document. */
+const regionOf = (element: Element): Element | null => element.closest(`[data-slot-active],${TABBAR_SCOPE_SELECTOR}`);
+
 /**
  * A childList record that only swaps text or comment nodes, as setting `textContent` on a readout
  * does. It cannot add or remove a stop, and a readout that updates while sound plays would otherwise
@@ -192,6 +195,8 @@ export class FocusDiscoveryEngine {
   private shimmed = new Set<HTMLElement>();
   private resolvers = new Map<string, () => HTMLElement | null>();
   private sources = new Map<string, FocusDiscoverySource>();
+  /** The page slot or tab bar each stop sat in when it was scanned; see {@link regionOf}. */
+  private regions = new Map<string, Element | null>();
   private scopeChain: FocusItem[] = [];
   /** The scope the last scan resolved, so the observer can tell which skipped subtrees matter. */
   private lastScope: Element | null = null;
@@ -262,6 +267,7 @@ export class FocusDiscoveryEngine {
     this.removeAllShims();
     this.resolvers.clear();
     this.sources.clear();
+    this.regions.clear();
     this.groupLabelElements = [];
     this.groupElements.clear();
     this.controller.clear();
@@ -374,6 +380,8 @@ export class FocusDiscoveryEngine {
     this.applyShims(items.shimTargets);
     this.resolvers = items.resolvers;
     this.sources = items.sources;
+    const previousRegions = this.regions;
+    this.regions = new Map(nodes.map((node) => [node.id, regionOf(node.element)]));
     this.groupLabelElements = items.groupLabelElements;
     this.groupElements = new Set(nodes.filter((node) => node.isGroup).map((node) => node.element));
     this.controller.setItems(items.focusItems);
@@ -394,7 +402,7 @@ export class FocusDiscoveryEngine {
     } else if (!scopeChanged) {
       returnedTo =
         this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers) ??
-        this.followVanishedStop(leavingId, previousItems);
+        this.followVanishedStop(leavingId, previousItems, previousRegions);
       returnedTo = this.retryPendingReturn(scope.element) ?? returnedTo;
     }
     returnedTo ??= this.restoreStandingAfterEmptyRing(
@@ -443,7 +451,11 @@ export class FocusDiscoveryEngine {
    * group's first stop, which can be far off screen; it moves to the nearest remaining sibling instead,
    * the following one first.
    */
-  private followVanishedStop(leavingId: string | undefined, previousItems: readonly FocusItem[]): string | undefined {
+  private followVanishedStop(
+    leavingId: string | undefined,
+    previousItems: readonly FocusItem[],
+    previousRegions: ReadonlyMap<string, Element | null>,
+  ): string | undefined {
     if (!leavingId || this.controller.current()?.id === leavingId) return undefined;
     const leaving = previousItems.find((item) => item.id === leavingId);
     const parentId = leaving?.parentId ?? null;
@@ -454,7 +466,12 @@ export class FocusDiscoveryEngine {
         .filter((item) => !item.disabled && (item.parentId ?? null) === parentId)
         .map((item) => item.id),
     );
-    const siblings = previousItems.filter((item) => (item.parentId ?? null) === parentId);
+    // A route change leaves the page scope in place and removes every stop of the page, so the only
+    // siblings left are the tab bar's. The default selection, the new page's first stop, is right then.
+    const region = previousRegions.get(leavingId) ?? null;
+    const siblings = previousItems.filter(
+      (item) => item === leaving || ((item.parentId ?? null) === parentId && this.regions.get(item.id) === region),
+    );
     const at = siblings.indexOf(leaving);
     for (let distance = 1; distance < siblings.length; distance += 1) {
       for (const candidate of [siblings[at + distance], siblings[at - distance]]) {
