@@ -660,7 +660,7 @@ export function UnifiedHealthBadge({ className }: Props) {
       ) : null}
       <HealthStateShape
         state={state}
-        className={showShortDeviceLabel ? "text-[0.8rem]" : "text-[1rem]"}
+        className={showShortDeviceLabel ? "text-[12.8px]" : "text-[1rem]"}
         overlayCritical
       />
       {badgeText.countLabel ? (
@@ -668,7 +668,10 @@ export function UnifiedHealthBadge({ className }: Props) {
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
             {" "}
           </span>
-          <span className={cn("shrink-0 text-xs font-semibold leading-none", glyphColor)} data-overlay-critical="badge">
+          <span
+            className={cn("shrink-0 text-xs font-semibold !leading-none", glyphColor)}
+            data-overlay-critical="badge"
+          >
             {badgeText.countLabel}
           </span>
         </>
@@ -752,7 +755,7 @@ export function UnifiedHealthBadge({ className }: Props) {
               data-testid="unified-health-badge-stacked"
             >
               <span
-                className="min-w-0 max-w-full truncate text-xs font-semibold leading-tight text-foreground"
+                className="min-w-0 max-w-full truncate pb-[0.2em] text-xs font-semibold !leading-none text-foreground"
                 data-overlay-critical="badge"
                 data-testid="unified-health-badge-device"
               >

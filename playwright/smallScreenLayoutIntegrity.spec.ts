@@ -301,6 +301,17 @@ test.describe("Small screen layout integrity", () => {
         await auditAndAssert(page, `${route.label} header while Live View streams, device "${deviceName}"`);
       }
 
+      // A 393 px phone is on the medium profile, whose larger type also takes the two-line badge.
+      await applyDisplayProfileViewport(page, "medium");
+      await settle(page, "medium");
+      const mediumBadge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+      await expect(mediumBadge.getByTestId("unified-health-badge-stacked")).toBeVisible();
+      const mediumRowHeight = await page
+        .locator('[data-panel-position="1"]')
+        .getByTestId("app-bar-row")
+        .evaluate((row) => row.getBoundingClientRect().height);
+      expect(mediumRowHeight, "medium profile: the two-line badge made the header taller").toBeLessThanOrEqual(44);
+
       // The separate indicator stopped Live View on a tap. That action is now in the Quick menu.
       await page.getByTestId("app-bar-quick-menu").click();
       const stop = page.getByTestId("keypad-quick-menu-stop-live-view");
