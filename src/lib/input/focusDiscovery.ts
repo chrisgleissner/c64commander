@@ -373,6 +373,7 @@ export class FocusDiscoveryEngine {
     const leavingId = this.controller.current()?.id;
     const leavingElement = leavingId ? this.elementForId(leavingId) : null;
     const previousItems = this.controller.list();
+    const leavingWasDefault = this.controller.currentIsDefaultSelection();
     if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
     // A selected control that is disabled while the work it started runs (Pause, Menu) stays the
@@ -407,7 +408,7 @@ export class FocusDiscoveryEngine {
     } else if (!scopeChanged) {
       returnedTo =
         this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers) ??
-        this.followVanishedStop(leavingId, previousItems, previousRegions);
+        (leavingWasDefault ? undefined : this.followVanishedStop(leavingId, previousItems, previousRegions));
       returnedTo = this.retryPendingReturn(scope.element) ?? returnedTo;
     }
     returnedTo ??= this.restoreStandingAfterEmptyRing(
@@ -454,14 +455,15 @@ export class FocusDiscoveryEngine {
   /**
    * The selected stop went away (Remove selected items, an inline editor's Cancel). The ring took the
    * group's first stop, which can be far off screen; it moves to the nearest remaining sibling instead,
-   * the following one first.
+   * the following one first. Only a stop that is gone counts: a default selection that moved on to the
+   * page's first stop when the page came back behind a closed dialog used to take the next tab.
    */
   private followVanishedStop(
     leavingId: string | undefined,
     previousItems: readonly FocusItem[],
     previousRegions: ReadonlyMap<string, Element | null>,
   ): string | undefined {
-    if (!leavingId || this.controller.current()?.id === leavingId) return undefined;
+    if (!leavingId || this.controller.list().some((item) => item.id === leavingId)) return undefined;
     const leaving = previousItems.find((item) => item.id === leavingId);
     const parentId = leaving?.parentId ?? null;
     if (!leaving || this.controller.currentScopeParentId() !== parentId) return undefined;

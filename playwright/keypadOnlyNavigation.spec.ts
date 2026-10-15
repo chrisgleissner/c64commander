@@ -526,6 +526,44 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
   });
 
+  test("closing a dialog by Back returns the selection to its opener, not to the tab bar @layout", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openers = [
+      { opener: page.getByTestId("unified-health-badge"), dialog: page.getByTestId("diagnostics-sheet") },
+      {
+        opener: page.locator('[data-slot-active="true"]').getByTestId("home-save-ram"),
+        dialog: page.getByTestId("save-ram-dialog"),
+      },
+    ];
+    for (const { opener, dialog } of openers) {
+      expect(await ringFocus(page, opener), "The ring could not reach the opener").toBe(true);
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      await waitForAnimations(page);
+      // On the keypad handset the first scan after the dialog has gone still sees the page hidden and
+      // only the tab bar; desktop Chromium unhides the page first. This hides the page for that scan.
+      await page.evaluate(() => {
+        const slot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
+        const observer = new MutationObserver(() => {
+          if (document.querySelector('[role="dialog"]')) return;
+          observer.disconnect();
+          slot?.setAttribute("aria-hidden", "true");
+          setTimeout(() => slot?.removeAttribute("aria-hidden"), 300);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await page.waitForTimeout(800);
+      await expect(opener).toHaveAttribute(SELECTED, "true");
+    }
+  });
+
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
     page,
   }) => {
