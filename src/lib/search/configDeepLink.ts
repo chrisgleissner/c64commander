@@ -54,10 +54,8 @@ const subscribeDemand = (onChange: () => void) => {
 
 /** The item of `category` a deep link is landing on, which its list renders at once; null for none. */
 export const useDemandedConfigItem = (category: string | null | undefined): string | null =>
-  useSyncExternalStore(
-    subscribeDemand,
-    () => (category && demandedItem?.category === category ? demandedItem.itemName : null),
-    () => null,
+  useSyncExternalStore(subscribeDemand, () =>
+    category && demandedItem?.category === category ? demandedItem.itemName : null,
   );
 
 export const requestConfigItemFocus = (category: string, itemName: string): void => {

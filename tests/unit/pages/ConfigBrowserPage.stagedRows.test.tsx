@@ -120,6 +120,16 @@ describe("ConfigBrowserPage builds a large category's rows in stages", () => {
     await waitFor(() => expect(builtRows()).toEqual(itemNames));
   });
 
+  it("builds the row a search result lands on at once when the card is already open with rows still waiting", () => {
+    renderPage();
+    act(() => fireEvent.click(screen.getByTestId("config-category-big")));
+    expect(builtRows()).not.toContain("Item 38");
+
+    act(() => requestConfigItemFocus("Big", "Item 38"));
+
+    expect(builtRows()).toEqual(itemNames.slice(0, 38));
+  });
+
   it("builds the row a search result lands on in the opening commit, however far down the card it is", () => {
     requestConfigItemFocus("Big", "Item 38");
     renderPage();

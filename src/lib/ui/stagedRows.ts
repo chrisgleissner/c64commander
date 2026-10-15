@@ -43,7 +43,6 @@ const MIN_ROWS_PER_TASK = 6;
 const MAX_ROWS_PER_TASK = 32;
 
 type StagedList = {
-  marker: HTMLElement | null;
   count: number;
   remaining: number;
   grow: (rows: number) => void;
@@ -59,7 +58,8 @@ let draining = false;
 let scrollCheckScheduled = false;
 let watchingScroll = false;
 
-const pending = new Set<StagedList>();
+/** Each list still building, with the marker where its unbuilt rows start. */
+const pending = new Map<StagedList, HTMLElement>();
 const settleCallbacks: Array<() => void> = [];
 
 /** Build every row at once. For tests that assert on a list's content right after rendering it. */
@@ -107,11 +107,10 @@ const isAboveScreen = (marker: HTMLElement) => marker.getBoundingClientRect().to
 const isNearScreen = (marker: HTMLElement) =>
   typeof window === "undefined" || marker.getBoundingClientRect().top < window.innerHeight * NEAR_VIEWPORT;
 
-const inDocumentOrder = (lists: StagedList[]) =>
-  lists.sort((a, b) => {
-    if (!a.marker || !b.marker) return 0;
-    return a.marker.compareDocumentPosition(b.marker) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-  });
+const inDocumentOrder = () =>
+  [...pending]
+    .sort(([, a], [, b]) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+    .map(([list]) => list);
 
 const runSettleCallbacks = () => {
   if (pending.size > 0) return;
@@ -120,8 +119,8 @@ const runSettleCallbacks = () => {
 
 /** Whether `node` is inside a list that still has rows to build. */
 export const isInsidePendingList = (node: Node): boolean => {
-  for (const list of pending) {
-    if (list.marker?.parentElement?.contains(node)) return true;
+  for (const marker of pending.values()) {
+    if (marker.parentElement?.contains(node)) return true;
   }
   return false;
 };
@@ -141,7 +140,7 @@ export const afterStagedRowsSettle = (callback: () => void): void => {
 
 const drain = () => {
   drainScheduled = false;
-  const lists = inDocumentOrder([...pending]);
+  const lists = inDocumentOrder();
   if (lists.length === 0) return;
   let rowsLeft = Math.max(
     MIN_ROWS_PER_TASK,
@@ -163,21 +162,22 @@ const drain = () => {
   } finally {
     draining = false;
   }
-  if (granted > 0) msPerRowEstimate = (msPerRowEstimate + (performance.now() - started) / granted) / 2;
-  scheduleDrain(false);
+  msPerRowEstimate = (msPerRowEstimate + (performance.now() - started) / granted) / 2;
+  // A list that finished in this task does not render again to schedule the next one for the others.
+  scheduleDrain();
 };
 
-const scheduleDrain = (afterPaint: boolean) => {
+/** One task per frame: a list that grew in a task has already asked for the next one after the paint. */
+const scheduleDrain = () => {
   if (drainScheduled || pending.size === 0) return;
   drainScheduled = true;
-  if (afterPaint) afterNextPaint(drain);
-  else setTimeout(drain, 0);
+  afterNextPaint(drain);
 };
 
 /** A list scrolled toward the screen before its turn is built at once, so the reader never meets a gap. */
 const buildWhatScrolledNear = () => {
   scrollCheckScheduled = false;
-  const near = [...pending].filter((list) => list.marker && isNearScreen(list.marker));
+  const near = [...pending].filter(([, marker]) => isNearScreen(marker)).map(([list]) => list);
   if (near.length > 0) flushSync(() => near.forEach(growNear));
 };
 
@@ -199,10 +199,10 @@ const watchScroll = (watch: boolean) => {
   }
 };
 
-const register = (list: StagedList) => {
-  pending.add(list);
+const register = (list: StagedList, marker: HTMLElement) => {
+  pending.set(list, marker);
   watchScroll(true);
-  scheduleDrain(true);
+  scheduleDrain();
 };
 
 const unregister = (list: StagedList) => {
@@ -217,7 +217,7 @@ const unregister = (list: StagedList) => {
  * at the last row that happened to be built. Returns whether anything was built.
  */
 export const completeStagedRows = (scope?: Element): boolean => {
-  const lists = [...pending].filter((list) => !scope || (list.marker !== null && scope.contains(list.marker)));
+  const lists = [...pending].filter(([, marker]) => !scope || scope.contains(marker)).map(([list]) => list);
   if (lists.length === 0) return false;
   flushSync(() => lists.forEach((list) => list.grow(Number.POSITIVE_INFINITY)));
   return true;
@@ -252,7 +252,6 @@ export const useStagedRows = (total: number, demandedIndex = -1): StagedRows => 
   const listRef = useRef<StagedList | null>(null);
   if (listRef.current === null) {
     const created: StagedList = {
-      marker: null,
       count: 0,
       remaining: 0,
       grow: (rows) => setGrown((current) => Math.max(current, created.count) + rows),
@@ -267,10 +266,10 @@ export const useStagedRows = (total: number, demandedIndex = -1): StagedRows => 
   });
 
   useLayoutEffect(() => {
-    list.marker = markerRef.current;
+    const marker = markerRef.current;
     list.count = count;
     list.remaining = total - count;
-    if (!list.marker) {
+    if (!marker) {
       // Not on the page: its card is closed. It starts over when it is shown again; a card that keeps
       // the list's owner mounted while closed would otherwise show every row it had built at once.
       unregister(list);
@@ -282,11 +281,11 @@ export const useStagedRows = (total: number, demandedIndex = -1): StagedRows => 
       unregister(list);
       return;
     }
-    register(list);
+    register(list, marker);
     // The drain builds in document order anyway; measuring here would lay out the page once per task.
     if (draining) return;
-    if (isAboveScreen(list.marker)) list.grow(Number.POSITIVE_INFINITY);
-    else if (isNearScreen(list.marker)) growNear(list);
+    if (isAboveScreen(marker)) list.grow(Number.POSITIVE_INFINITY);
+    else if (isNearScreen(marker)) growNear(list);
   }, [count, list, total, markerElement]);
 
   useLayoutEffect(() => () => unregister(list), [list]);
