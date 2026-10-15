@@ -564,6 +564,30 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     }
   });
 
+  test("a page jump by number key lands on the new page's first own stop, not on the app bar @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    for (const digit of ["2", "6", "1"]) {
+      await page.keyboard.press(digit);
+      await page.waitForTimeout(600);
+      const selected = await page.evaluate(() => {
+        const element = document.querySelector('[data-key-selected="true"]');
+        return {
+          id: element?.getAttribute("data-testid") ?? "",
+          inAppBar: element?.closest('[data-testid="app-bar-row"]') !== null,
+          inTabBar: element?.closest('[data-focus-scope="tabbar"]') !== null,
+        };
+      });
+      expect(selected.inAppBar || selected.inTabBar, `After ${digit} the selection is ${selected.id}`).toBe(false);
+    }
+  });
+
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
     page,
   }) => {

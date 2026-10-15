@@ -154,7 +154,9 @@ F1 is the neutral `function1` action (see the F1 row).
 - **Always-reachable shortcuts:** digits `1`–`6` jump to a tab, `0` enters Game
   Mode (not on a device that cannot stream, such as a U2, the same gate as the Home
   Game tile), `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
-  same exclusions — never in a text field, never inside an open overlay.
+  same exclusions — never in a text field, never inside an open overlay. A tab jump
+  selects the new page's first own stop: the app bar's Quick menu button and badge
+  (`data-focus-chrome`) are passed over by the default selection and stay one Up away.
 
 Reachability is **complete by construction**: the provider scans the active
 scope (topmost dialog/menu/sheet, else the routed page + bottom TabBar) and

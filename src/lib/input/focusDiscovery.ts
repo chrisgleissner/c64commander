@@ -127,6 +127,9 @@ const OBSERVED_ATTRIBUTES = [
   "aria-label",
 ];
 
+/** Marks app chrome repeated on every page; see {@link FocusItem.chrome}. */
+export const FOCUS_CHROME_ATTR = "data-focus-chrome";
+
 /*
  * The overlays that take the ring when they open. Deliberately NOT OVERLAY_SELECTOR: that includes
  * listbox, and the search overlay is a skipped subtree whose listbox rows are rewritten on every
@@ -714,6 +717,7 @@ export class FocusDiscoveryEngine {
         group: descriptor?.label ?? descriptor?.group ?? implicitGroupLabel,
         parentId: parentId ?? undefined,
         disabled: descriptor?.disabled || (!node.isGroup && isFocusDisabled(element)) || undefined,
+        chrome: element.closest(`[${FOCUS_CHROME_ATTR}]`) !== null || undefined,
         activate,
       });
       resolvers.set(node.id, () => element);

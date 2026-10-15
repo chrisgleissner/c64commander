@@ -369,6 +369,17 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  it("marks the stops of an app-chrome region, so the default selection passes over them", () => {
+    mount(`<header><div data-focus-chrome=""><button id="quick-menu">Quick menu</button></div></header>
+      <main><button id="first-card">First card</button></main>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("first-card");
+    expect(controller.list().map((entry) => entry.chrome ?? false)).toEqual([true, false]);
+    engine.stop();
+  });
+
   describe("closing a dialog whose page reappears after the tab bar", () => {
     const tabBar = `<nav data-focus-scope="tabbar"><button id="tab-home">Home</button><button id="tab-play">Play</button></nav>`;
     const openAndClose = () => {
