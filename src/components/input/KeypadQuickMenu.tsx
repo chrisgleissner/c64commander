@@ -31,7 +31,7 @@ import { requestSearchOpen } from "@/lib/search/overlayState";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { toast } from "@/hooks/use-toast";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
-import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { variant } from "@/generated/variant";
 import { APP_SETTINGS_KEYS, loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
@@ -90,7 +90,7 @@ export function KeypadQuickMenu() {
   const navigate = useNavigate();
   const location = useLocation();
   const savedDevices = useSavedDevices();
-  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
+  const gameModeAvailable = useGameModeAvailable();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
   const [functionActions, setFunctionActions] = useState(
@@ -275,7 +275,7 @@ export function KeypadQuickMenu() {
           ) : null}
           {/* Carried here as well as on `0`, so the shortcut is discoverable without
               reading the manual — in the same place the page jumps already are. */}
-          {remoteInputEnabled ? (
+          {gameModeAvailable ? (
             <Button
               variant="ghost"
               className="justify-start gap-3"

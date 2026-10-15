@@ -28,6 +28,13 @@ export interface GameModeStartResult {
 
 const GAME_MODE_REQUEST_EVENT = "c64u-game-mode-request";
 
+/**
+ * Game Mode is the picture plus joystick relay, and a cartridge has neither, so it is offered only
+ * on a device that streams. An unidentified device is given the benefit of the doubt.
+ */
+export const deviceSupportsGameMode = (deviceInfo: Parameters<typeof identifiedDeviceStreams>[0]): boolean =>
+  identifiedDeviceStreams(deviceInfo);
+
 const flagEnabled = (id: "live_view_enabled" | "audio_mirror_enabled" | "video_mirror_enabled"): boolean =>
   Boolean(featureFlagManager.getSnapshot().flags[id]);
 

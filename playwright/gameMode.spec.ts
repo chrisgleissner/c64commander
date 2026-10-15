@@ -376,3 +376,46 @@ test.describe("Game Mode", () => {
     await expect(override).toHaveAttribute("data-rotation", "0");
   });
 });
+
+test.describe("Game Mode on a U2", () => {
+  let cartridge: Awaited<ReturnType<typeof createMockC64Server>>;
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    cartridge = await createMockC64Server(
+      {},
+      {},
+      { deviceInfo: { product: "Ultimate II+L", core_version: null }, omitConfigCategories: ["Data Streams"] },
+    );
+    await seedUiMocks(page, cartridge.baseUrl);
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    try {
+      await saveCoverageFromPage(page, testInfo.title);
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await cartridge.close();
+    }
+  });
+
+  test("is offered by neither the Home tile, the Quick menu nor the 0 key", async ({ page }, testInfo) => {
+    allowWarnings(testInfo, "A cartridge has no Data Streams category, so its config read answers 404.");
+    await enableKeypad(page);
+    await page.goto("/");
+    await waitForConnected(page);
+    await expect(page.getByTestId("home-machine-inline-openRemoteInput")).toBeVisible();
+    await expect(page.getByTestId("home-machine-inline-openGameMode")).toHaveCount(0);
+
+    await page.getByTestId("app-bar-quick-menu").click();
+    await expect(page.getByTestId("keypad-quick-menu")).toBeVisible();
+    await expect(page.getByTestId("keypad-quick-menu-game-mode")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("keypad-quick-menu")).toBeHidden();
+
+    await page.keyboard.press("0");
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId("remote-input-sheet")).toBeHidden();
+  });
+});
