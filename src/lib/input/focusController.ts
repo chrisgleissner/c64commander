@@ -242,6 +242,7 @@ export class FocusController {
   }
 
   private step(delta: number): FocusItem | null {
+    this.leaveScopeHoldingOnlyCurrent();
     const scopedItems = this.itemsInScope(this.scopeParentId);
     if (scopedItems.length === 0 || !scopedItems.some(isEnabled)) return null;
     const found = this.findStep(delta);
@@ -249,6 +250,17 @@ export class FocusController {
     this.currentId = found.item.id;
     this.currentIsDefault = false;
     return this.toFocusItem(found.item);
+  }
+
+  /**
+   * A group whose only enabled stop is the selected one, as a Config category is once its header collapses
+   * it from inside, would hold Up and Down on that stop until Back. The step is taken among the group's
+   * siblings instead.
+   */
+  private leaveScopeHoldingOnlyCurrent(): void {
+    if (this.scopeParentId === null) return;
+    const enabled = this.itemsInScope(this.scopeParentId).filter(isEnabled);
+    if (enabled.length === 1 && enabled[0].id === this.currentId) this.focusParent();
   }
 
   /**

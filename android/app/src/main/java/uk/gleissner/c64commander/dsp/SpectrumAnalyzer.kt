@@ -92,6 +92,8 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       val stepSamples: Int,
       /** The shortest span the level readout (peak, RMS, clip) covers. */
       val levelSamples: Int,
+      /** The longest span one level readout catches up over: as long as a clip stays latched. */
+      val clipHoldSamples: Int,
       /** Mono downmix, indexed by sample count modulo its power-of-two size. */
       val history: FloatArray,
       /** Signed stereo samples, retained separately so opposite-phase audio cannot cancel a meter. */
@@ -105,9 +107,12 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
 
   /** Installed while opening a pipeline, never lazily by the real-time writer. */
   @Volatile private var configuration: Configuration? = null
-  /** A seqlock around the history: even values describe stable samples. */
-  @Volatile private var publication = 0L
   @Volatile private var writeCount = 0L
+  /**
+   * Set by the writer before it stores a chunk: samples below this, less the history size, may be
+   * overwritten. A read is invalid only if it used one of those, not merely because a feed overlapped it.
+   */
+  @Volatile private var writingUpTo = 0L
   @Volatile private var lastFeedNanos = Long.MIN_VALUE
   /** A seqlock around the speaker report, which the writer updates without allocating. 0: no report. */
   @Volatile private var anchorVersion = 0L
@@ -143,7 +148,6 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     val resolutions = resolutionsFor(sampleRate, fftSize)
     val historySize = historySizeFor(sampleRate, fftSize, speakerLagFrames)
     val previous = configuration
-    publication++
     val history = previous?.history?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
     val left = previous?.left?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
     val right = previous?.right?.takeIf { it.size == historySize }?.also { it.fill(0.0f) } ?: FloatArray(historySize)
@@ -153,11 +157,13 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
             resolutions,
             maxOf(1, sampleRate / stepsPerSecond),
             maxOf(1, sampleRate / LEVEL_SPANS_PER_SECOND),
+            (sampleRate * CLIP_HOLD_NANOS / 1_000_000_000L).toInt(),
             history,
             left,
             right,
         )
     writeCount = 0
+    writingUpTo = 0
     lastFeedNanos = Long.MIN_VALUE
     lastClipNanos = Long.MIN_VALUE
     channelClipNanos.fill(Long.MIN_VALUE)
@@ -167,7 +173,6 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     cached = null
     cachedSeq = -1
     configuration = next
-    publication++
   }
 
   /**
@@ -189,9 +194,9 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     if (config == null || config.sampleRate != sampleRate) return
     val history = config.history
     val mask = config.mask
-    publication++
     var at = offset
     var count = writeCount
+    writingUpTo = count + frames
     for (i in 0 until frames) {
       val l = ((data[at].toInt() and 0xFF) or (data[at + 1].toInt() shl 8)).toShort() * INV_FULL_SCALE
       val r = ((data[at + 2].toInt() and 0xFF) or (data[at + 3].toInt() shl 8)).toShort() * INV_FULL_SCALE
@@ -204,7 +209,6 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     }
     writeCount = count
     lastFeedNanos = nanoTime()
-    publication++
   }
 
   /**
@@ -292,66 +296,66 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     return readerAnchorKnown
   }
 
+  /** Analyses samples up to [newest]; null when the writer overwrote any of them meanwhile. */
   private fun analyseStable(config: Configuration, end: Long, newest: Long, now: Long): SpectrumFrame? {
     val history = config.history
     val mask = config.mask
     val bands = IntArray(SpectrumBands.COUNT)
-    repeat(MAX_READ_RETRIES) {
-      val first = publication
-      if ((first and 1L) != 0L) return@repeat
-      var shortfall = 0L
-      for (resolution in config.resolutions) {
-        val size = resolution.fft.size
-        val window = resolution.fft.window
-        val wanted = end + size / 2
-        val windowEnd = minOf(wanted, newest)
-        shortfall = maxOf(shortfall, wanted - windowEnd)
-        val start = windowEnd - size
-        for (n in 0 until size) {
-          val index = start + n
-          re[n] = if (index < 0) 0.0f else history[(index and mask).toInt()] * window[n]
-          im[n] = 0.0f
-        }
-        resolution.fft.transform(re, im)
-        val powerScale = resolution.fft.powerScale
-        for (k in resolution.binFrom..resolution.binTo) power[k] = (re[k] * re[k] + im[k] * im[k]) * powerScale
-        resolution.plan.fill(power, resolution.bands, bands)
+    var oldestRead = Long.MAX_VALUE
+    var shortfall = 0L
+    for (resolution in config.resolutions) {
+      val size = resolution.fft.size
+      val window = resolution.fft.window
+      val wanted = end + size / 2
+      val windowEnd = minOf(wanted, newest)
+      shortfall = maxOf(shortfall, wanted - windowEnd)
+      val start = windowEnd - size
+      oldestRead = minOf(oldestRead, start)
+      for (n in 0 until size) {
+        val index = start + n
+        re[n] = if (index < 0) 0.0f else history[(index and mask).toInt()] * window[n]
+        im[n] = 0.0f
       }
-      // Every sample heard since the last analysis counts, so a clip between two polls is not missed.
-      val levelsEnd = minOf(end + config.levelSamples / 2, newest)
-      val from = maxOf(0L, minOf(levelsEnd - config.levelSamples, levelsReadTo), writeCount - history.size)
-      var sumSq = 0.0
-      var leftPeak = 0.0f
-      var rightPeak = 0.0f
-      var leftSumSq = 0.0
-      var rightSumSq = 0.0
-      for (index in from until levelsEnd) {
-        val slot = (index and mask).toInt()
-        val mono = history[slot]
-        val l = config.left[slot]
-        val r = config.right[slot]
-        sumSq += mono * mono
-        leftPeak = maxOf(leftPeak, kotlin.math.abs(l))
-        rightPeak = maxOf(rightPeak, kotlin.math.abs(r))
-        leftSumSq += l * l
-        rightSumSq += r * r
-      }
-      if (first == publication) {
-        val peak = maxOf(leftPeak, rightPeak)
-        if (peak >= CLIP_LEVEL) lastClipNanos = now
-        if (leftPeak >= CLIP_LEVEL) channelClipNanos[0] = now
-        if (rightPeak >= CLIP_LEVEL) channelClipNanos[1] = now
-        levelsReadTo = levelsEnd
-        val span = levelsEnd - from
-        val rms = if (span > 0) sqrt(sumSq / span) else 0.0
-        return SpectrumFrame(true, true, end / config.stepSamples, config.sampleRate, bands, toDb(peak.toDouble()), toDb(rms), false,
-            arrayOf(
-                SpectrumChannelLevel("left", toDb(if (span > 0) sqrt(leftSumSq / span) else 0.0), toDb(leftPeak.toDouble()), leftPeak >= CLIP_LEVEL),
-                SpectrumChannelLevel("right", toDb(if (span > 0) sqrt(rightSumSq / span) else 0.0), toDb(rightPeak.toDouble()), rightPeak >= CLIP_LEVEL),
-            ), now, shortfall.toInt())
-      }
+      resolution.fft.transform(re, im)
+      val powerScale = resolution.fft.powerScale
+      for (k in resolution.binFrom..resolution.binTo) power[k] = (re[k] * re[k] + im[k] * im[k]) * powerScale
+      resolution.plan.fill(power, resolution.bands, bands)
     }
-    return null
+    // Every sample heard since the last analysis counts, so a clip between two polls is not missed, but only as far
+    // back as a clip stays latched, so a pause in reading cannot make the next analysis cover the whole history.
+    val levelsEnd = minOf(end + config.levelSamples / 2, newest)
+    val sinceLastAnalysis = minOf(levelsEnd - config.levelSamples, levelsReadTo)
+    val from = maxOf(0L, sinceLastAnalysis, levelsEnd - config.clipHoldSamples, newest - config.reach)
+    oldestRead = minOf(oldestRead, from)
+    var sumSq = 0.0
+    var leftPeak = 0.0f
+    var rightPeak = 0.0f
+    var leftSumSq = 0.0
+    var rightSumSq = 0.0
+    for (index in from until levelsEnd) {
+      val slot = (index and mask).toInt()
+      val mono = history[slot]
+      val l = config.left[slot]
+      val r = config.right[slot]
+      sumSq += mono * mono
+      leftPeak = maxOf(leftPeak, kotlin.math.abs(l))
+      rightPeak = maxOf(rightPeak, kotlin.math.abs(r))
+      leftSumSq += l * l
+      rightSumSq += r * r
+    }
+    if (writingUpTo - history.size > oldestRead) return null
+    val peak = maxOf(leftPeak, rightPeak)
+    if (peak >= CLIP_LEVEL) lastClipNanos = now
+    if (leftPeak >= CLIP_LEVEL) channelClipNanos[0] = now
+    if (rightPeak >= CLIP_LEVEL) channelClipNanos[1] = now
+    levelsReadTo = levelsEnd
+    val span = levelsEnd - from
+    val rms = if (span > 0) sqrt(sumSq / span) else 0.0
+    return SpectrumFrame(true, true, end / config.stepSamples, config.sampleRate, bands, toDb(peak.toDouble()), toDb(rms), false,
+        arrayOf(
+            SpectrumChannelLevel("left", toDb(if (span > 0) sqrt(leftSumSq / span) else 0.0), toDb(leftPeak.toDouble()), leftPeak >= CLIP_LEVEL),
+            SpectrumChannelLevel("right", toDb(if (span > 0) sqrt(rightSumSq / span) else 0.0), toDb(rightPeak.toDouble()), rightPeak >= CLIP_LEVEL),
+        ), now, shortfall.toInt())
   }
 
   /**

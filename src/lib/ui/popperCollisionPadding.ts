@@ -19,10 +19,24 @@ const readInsetPx = (style: CSSStyleDeclaration, name: string): number => {
 const CACHE_MS = 1000;
 let cached: { at: number; reserveKey: string; padding: CollisionPadding } | null = null;
 
+/** How far up from the bottom of the window the fixed tab bar and guidance bar reach, 0 when neither is on screen. */
+const bottomChromeHeightPx = (): number => {
+  const viewportHeight = window.innerHeight;
+  let top = viewportHeight;
+  for (const selector of ['[data-testid="tab-bar"]', '[data-testid="keypad-guidance-bar"][data-visible="true"]']) {
+    const element = document.querySelector<HTMLElement>(selector);
+    const elementTop = element?.getBoundingClientRect().top;
+    if (typeof elementTop === "number" && Number.isFinite(elementTop) && elementTop > 0) {
+      top = Math.min(top, elementTop);
+    }
+  }
+  return Math.max(0, viewportHeight - top);
+};
+
 /**
  * The room a menu, popover or select list must leave free at each screen edge: the system bars the
- * app draws under, and the keypad guidance bar while it shows. Without it a tall menu was placed at
- * y=0, under the status bar, with a height that counted space the user cannot read.
+ * app draws under, the tab bar and the keypad guidance bar while it shows. Without it a tall menu
+ * was placed at y=0, under the status bar, or ran under the tab bar with its last items hidden.
  */
 export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
   const reserveKey = document.documentElement.style.getPropertyValue("--keypad-guidance-reserved-height");
@@ -32,7 +46,10 @@ export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
   const padding = {
     top: readInsetPx(style, "--safe-area-inset-top"),
     right: readInsetPx(style, "--safe-area-inset-right"),
-    bottom: readInsetPx(style, "--safe-area-inset-bottom") + readKeypadGuidanceReservePx(),
+    bottom: Math.max(
+      readInsetPx(style, "--safe-area-inset-bottom") + readKeypadGuidanceReservePx(),
+      bottomChromeHeightPx(),
+    ),
     left: readInsetPx(style, "--safe-area-inset-left"),
   };
   cached = { at: now, reserveKey, padding };

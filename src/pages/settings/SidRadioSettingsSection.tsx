@@ -33,6 +33,7 @@ import {
   saveSidRadioMinSeconds,
 } from "@/lib/config/appSettings";
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useLearnedDeviceSidModel, useLocalSidModel } from "@/lib/playback/useLocalSidModel";
@@ -127,6 +128,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
   // set a value that silently does nothing.
   const crossfadeUnavailable = playbackEngine === "c64";
   const [cleared, setCleared] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const handleClear = async () => {
     await clearAllRankings();
@@ -378,11 +380,20 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             size="sm"
             className="shrink-0"
             data-testid="settings-clear-rankings"
-            onClick={handleClear}
+            onClick={() => setClearConfirmOpen(true)}
           >
             {cleared ? "Cleared" : "Clear"}
           </Button>
         </div>
+        <ConfirmDestructiveDialog
+          open={clearConfirmOpen}
+          onOpenChange={setClearConfirmOpen}
+          onConfirm={() => void handleClear()}
+          title="Clear my rankings?"
+          description="Every ♥ and ✕ you have given is removed. SID Radio picks tunes as if you had never ranked any."
+          confirmLabel="Clear"
+          idPrefix="clear-rankings"
+        />
       </div>
     </SettingsSection>
   );

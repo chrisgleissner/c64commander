@@ -121,6 +121,8 @@ import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPl
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
+import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
+import { usePlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
@@ -197,6 +199,7 @@ import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
@@ -299,8 +302,8 @@ export default function PlayFilesPage() {
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { setElapsedMs, setPlayedMs } = playbackTime;
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
   const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
@@ -370,6 +373,7 @@ export default function PlayFilesPage() {
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
+  const gameModeAvailable = useGameModeAvailable();
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   // Claimed here as well as on Home: search publishes without navigating when Play is on screen.
   useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
@@ -538,7 +542,7 @@ export default function PlayFilesPage() {
    */
   const handleUserLaunchedItem = useCallback(
     (item: PlaylistItem) => {
-      if (!remoteInputEnabled) return;
+      if (!gameModeAvailable) return;
       if (
         !shouldEnterGameModeOnLaunch({
           category: item.category,
@@ -551,7 +555,7 @@ export default function PlayFilesPage() {
       }
       void startGameMode();
     },
-    [remoteInputEnabled],
+    [gameModeAvailable],
   );
 
   const resolveUnavailableConfigDecision = useCallback(
@@ -584,6 +588,7 @@ export default function PlayFilesPage() {
     seekToFraction,
     scrubTargetMs,
     playlistEnded,
+    setPlaylistEnded,
     playlistItemDuration,
     chosenTrackLaunching,
     setDurationMsItemId,
@@ -597,10 +602,7 @@ export default function PlayFilesPage() {
     isPaused,
     setIsPaused,
     setIsPlaylistLoading,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setCurrentSubsongCount,
@@ -640,6 +642,7 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs,
     resumingFromPauseRef,
     ensureUnmuted,
+    isManualMuteHeld,
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
@@ -1771,7 +1774,6 @@ export default function PlayFilesPage() {
       currentIndex,
       currentItemId: currentItem?.id ?? null,
       isPlaying,
-      elapsedMs,
       durationMs: currentDurationMs ?? null,
       sourceKind,
       localAccessMode,
@@ -1782,7 +1784,6 @@ export default function PlayFilesPage() {
     currentDurationMs,
     currentIndex,
     currentItem?.id,
-    elapsedMs,
     isPlaying,
     playlist.length,
     sourceKind,
@@ -1790,7 +1791,7 @@ export default function PlayFilesPage() {
     trackInstanceId,
   ]);
 
-  usePublishedPlaybackTrace(playbackTraceContext);
+  usePublishedPlaybackTrace(playbackTraceContext, playbackTime);
   useEffect(() => {
     setPlaybackContext({
       sourceBucket:
@@ -1925,7 +1926,7 @@ export default function PlayFilesPage() {
     paused: isPaused,
     trackInstanceId,
     deviceInfo: status.deviceInfo,
-    elapsedMs,
+    playbackTime,
     durationMs: currentDurationMs,
     rebasePlaybackPosition,
   });
@@ -1961,20 +1962,6 @@ export default function PlayFilesPage() {
       ? Math.min(100, (renderedSeconds * 1000 * 100) / currentDurationMs)
       : undefined;
 
-  // While a seek waits for the renderer, the engine is silent and the elapsed clock must sit at the
-  // last position that was genuinely heard. It cannot read its own clock for this: the scheduler was
-  // reset to the target when the seek was accepted, so every position source already reports the
-  // target. A clock advancing normally through a silence is exactly what a listener reads as
-  // playback having died, which is why the target is shown separately on the bar instead.
-  const displayElapsedMs = chosenTrackLaunching
-    ? 0
-    : isScrubbing
-      ? shownScrubTargetMs
-      : (pendingSeek?.audibleMs ?? elapsedMs);
-
-  const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
-  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
-  const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
   // On-device playback attenuates its own PCM before it reaches the speaker, so the Play page's
   // volume control drives whichever route is sounding. Android's media volume is never touched:
   // that dial belongs to the person holding the phone, not to this app.
@@ -2268,10 +2255,7 @@ export default function PlayFilesPage() {
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setDurationMsItemId,
@@ -2297,6 +2281,8 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef,
     setTrackInstanceId,
     setAutoAdvanceDueAtMs,
+    playlistEnded,
+    setPlaylistEnded,
     setSessionRestoreSettled,
   });
   const stationHandover = useStationPlaylistHandover({
@@ -2467,11 +2453,17 @@ export default function PlayFilesPage() {
     [pendingDurationOverrideMs, playlistItemDuration],
   );
 
-  const playlistTotals = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
+  const playlistTotalsAt = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
     currentIndex,
-    elapsedMs: displayElapsedMs,
     shuffleEnabled: traversalOrdering.shuffleEnabled,
     shuffleSeed,
+  });
+  const timeline = usePlaybackTimeline(playbackTime, {
+    durationMs: currentDurationMs,
+    launching: chosenTrackLaunching,
+    scrubTargetMs: shownScrubTargetMs,
+    heldAtMs: pendingSeek?.audibleMs,
+    playlistTotalsAt,
   });
 
   const previewFilteredPlaylist = queryFilteredPlaylist.previewPlaylist;
@@ -2625,13 +2617,9 @@ export default function PlayFilesPage() {
                   onScrubEnd: () => void endScrub(),
                 })}
                 isScrubbing={isScrubbing}
-                progressPercent={progressPercent}
+                timeline={timeline}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
-                elapsedLabel={formatTime(displayElapsedMs)}
-                remainingLabel={remainingLabel}
-                totalLabel={formatTime(playlistTotals.total)}
-                remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
@@ -2759,13 +2747,13 @@ export default function PlayFilesPage() {
                     {remoteInputEnabled && isPlaying ? (
                       gameModeLeadsTransportRow ? (
                         <>
-                          {playGameModeButton}
+                          {gameModeAvailable ? playGameModeButton : null}
                           {playRemoteInputButton}
                         </>
                       ) : (
                         <>
                           {playRemoteInputButton}
-                          {playGameModeButton}
+                          {gameModeAvailable ? playGameModeButton : null}
                         </>
                       )
                     ) : null}
@@ -2859,6 +2847,7 @@ export default function PlayFilesPage() {
                 onToggleFilter={togglePlaylistTypeFilter}
                 formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
+                playlistLoading={!playlistHydrated}
                 playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
                 onClearPlaylist={() => {

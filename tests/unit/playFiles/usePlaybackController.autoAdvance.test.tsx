@@ -14,6 +14,7 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -82,8 +83,8 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
-    const [elapsedMs, setElapsedMs] = useState(0);
-    const [playedMs, setPlayedMs] = useState(0);
+    const [playbackTime] = useState(createPlaybackTimeStore);
+    const { elapsedMs, playedMs } = usePlaybackTime(playbackTime);
     const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
     const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
     const [trackInstanceId, setTrackInstanceId] = useState(0);
@@ -121,10 +122,7 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       isPaused,
       setIsPaused,
       setIsPlaylistLoading: vi.fn(),
-      elapsedMs,
-      setElapsedMs,
-      playedMs,
-      setPlayedMs,
+      playbackTime,
       durationMs,
       setDurationMs,
       setCurrentSubsongCount,
@@ -142,6 +140,8 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
       snapshotToUpdates: vi.fn().mockReturnValue({}),
       resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+      enabledSidVolumeItems: [],
+      isManualMuteHeld: () => false,
       dispatchVolume: vi.fn(),
       sidEnablement: {} as never,
       pauseMuteSnapshotRef: { current: null },
@@ -435,6 +435,72 @@ describe("usePlaybackController auto advance", () => {
 
     expect(machineReset).toHaveBeenCalledTimes(1);
     expect(result.current.isPlaying).toBe(false);
+  });
+
+  it("keeps the clock stopped at the song's end when the machine is paused and resumed after the playlist ended", async () => {
+    const { setMachineExecutionPaused, resumeMachineExecutionIfPausedBy, resetMachineExecution } =
+      await import("@/lib/deviceInteraction/machineExecutionStore");
+    resetMachineExecution();
+    const playlist = [
+      {
+        ...createPlaylistItem("one", 1_000),
+        category: "sid" as const,
+        request: { source: "ultimate" as const, path: "/MUSIC/one.sid" },
+      },
+    ];
+    const { result } = renderPlaybackHarness(playlist);
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+    expect(result.current.playlistEnded).toBe(true);
+    expect(result.current.isPlaying).toBe(true);
+
+    act(() => setMachineExecutionPaused({ pausedBy: "menu" }));
+    expect(result.current.isPaused).toBe(true);
+    act(() => {
+      resumeMachineExecutionIfPausedBy("menu");
+    });
+
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.trackStartedAtRef.current).toBeNull();
+    expect(result.current.elapsedMs).toBe(1_000);
+    resetMachineExecution();
+  });
+
+  it("keeps the clock stopped at the song's end when Pause and Resume are pressed after the playlist ended", async () => {
+    const playlist = [
+      {
+        ...createPlaylistItem("one", 1_000),
+        category: "sid" as const,
+        request: { source: "ultimate" as const, path: "/MUSIC/one.sid" },
+      },
+    ];
+    const { result } = renderPlaybackHarness(playlist);
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+    vi.mocked(getC64API).mockReturnValue({
+      machinePause: vi.fn().mockResolvedValue(undefined),
+      machineResume: vi.fn().mockResolvedValue(undefined),
+    } as any);
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+    expect(result.current.isPaused).toBe(true);
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.trackStartedAtRef.current).toBeNull();
+    expect(result.current.elapsedMs).toBe(1_000);
   });
 
   it("wraps back to the first playlist item when repeat is enabled", async () => {

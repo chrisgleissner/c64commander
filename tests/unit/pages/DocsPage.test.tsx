@@ -57,6 +57,7 @@ vi.mock("@/components/layout/AppChromeContext", () => ({
 
 vi.mock("@/components/layout/PageContainer", () => ({
   PageContainer: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+  PageStack: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("@/hooks/useFeatureFlags", () => ({

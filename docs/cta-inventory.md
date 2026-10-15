@@ -61,8 +61,8 @@ one forwarded as `SoftRight`. The keypad profile binds `F21` and `F23` by code.
 
 | Physical key          | Android keycode      | Semantic action   | Behaviour in app                                                                                                                                                                                                                                                  |
 | --------------------- | -------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-pad **Up**          | `DPAD_UP` 19         | `dpadUp`          | Move to previous sibling CTA/group in scope (wraps). On the page's first stop, scrolls the page up while it has content above, before moving to the app bar. On a focused slider thumb: **moves focus** (does not change value).                                                                                                                                          |
-| D-pad **Down**        | `DPAD_DOWN` 20       | `dpadDown`        | Move to next sibling CTA/group in scope (wraps). On the page's last active stop, each Down press scrolls one viewport (clamped at the end) while it has content below, before moving to the tab bar, so text below the last control stays reachable. In a dialog or sheet whose body scrolls, Down on the body's last control scrolls the body one viewport per press to its end before moving on to the footer buttons or wrapping (Up likewise toward its top).                                                                                                                                                                                                                  |
+| D-pad **Up**          | `DPAD_UP` 19         | `dpadUp`          | Move to previous sibling CTA/group in scope (wraps). On the page's first stop, scrolls the page up while it has content above, never so far that the selected stop leaves the screen, before moving to the app bar. On a focused slider thumb: **moves focus** (does not change value).                                                                                                                                          |
+| D-pad **Down**        | `DPAD_DOWN` 20       | `dpadDown`        | Move to next sibling CTA/group in scope (wraps). On the page's last active stop, Down scrolls the page toward content below it, by at most one viewport and never so far that the selected stop leaves the screen, before moving to the tab bar. In a dialog or sheet whose body scrolls, Down on the body's last control scrolls the body the same way before moving on to the footer buttons or wrapping (Up likewise toward its top).                                                                                                                                                                                                                  |
 | D-pad **Left**        | `DPAD_LEFT` 21       | `dpadLeft`        | On a value control (slider/tabs/segmented): **decrement / previous**. Otherwise previous sibling.                                                                                                                                                                 |
 | D-pad **Right**       | `DPAD_RIGHT` 22      | `dpadRight`       | On a value control: **increment / next**. Otherwise next sibling.                                                                                                                                                                                                 |
 | D-pad **OK / Center** | `DPAD_CENTER` 23 or `ENTER` 66 | `center` / `enter`         | **"OK goes in":** descend into the focused group, or activate the focused leaf. On a Select: opens the dropdown.                                                                                                                                                  |
@@ -93,8 +93,9 @@ F1 is the neutral `function1` action (see the F1 row).
   clears it the same frame.
 - **Guidance bar:** a fixed bar above the TabBar (at the screen edge while a
   dialog or sheet hides the TabBar) showing the breadcrumb plus the contextual
-  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate (by
-  control kind), right = Menu only where the focused control has a menu of its
+  soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate, or
+  Expand/Collapse on a control with `aria-expanded` (by control kind; on a card
+  whose only control is its header, by that control), right = Menu only where the focused control has a menu of its
   own. While a single-line field on a page has focus, left and center read Done;
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
@@ -111,11 +112,16 @@ F1 is the neutral `function1` action (see the F1 row).
   taller than that area is aligned by its top edge.
 - **`aria-disabled` controls:** stay ring stops, as WAI-ARIA requires. Up/Down
   skip them and OK does nothing on them, but a selection already on one stays
-  there (the Play/Stop button while a Stop is pending).
+  there (the Play/Stop button while a Stop is pending). A selected control that is
+  natively disabled while the work it started runs (Home's Pause, Resume and Menu
+  tiles) is held the same way. When the selected control is removed, the
+  selection moves to the nearest remaining stop in its group, the following one
+  first, and is scrolled into view.
 - **OK acts on the highlight:** while keys drive the ring, OK activates the
   highlighted stop even when DOM focus was left on a different stop.
 - **Closing a dialog or sheet:** the selection and DOM focus return to the
-  control that was selected when it opened.
+  control that was selected when it opened, also when Remote Input is closed
+  from its keypad menu or after its "Other controls".
 - **Destructive confirmations open on Cancel:** Reset and the other machine
   actions, Power off, Clear flash, Remove disk(s), Delete config, Delete device,
   Clear diagnostics, Clear custom edits, Clear playlist and Reset HVSC all open
@@ -126,7 +132,9 @@ F1 is the neutral `function1` action (see the F1 row).
 ## 2. Navigation model (summary)
 
 - **Up/Down** (and Tab/Shift+Tab) move between sibling CTAs and groups in the
-  active scope and wrap.
+  active scope and wrap. In a group whose only enabled stop is the selected one
+  (a Config category collapsed from inside), they move among the group's
+  siblings instead.
 - **OK/Center/Call** descend into a group (a container with ≥1 enabled child) or
   activate a leaf. A group with a single enabled leaf activates it directly.
 - **OK** in a single-line field on a page leaves the field after the field has
@@ -144,7 +152,8 @@ F1 is the neutral `function1` action (see the F1 row).
   field is the ring's current item under key-navigation modality; every other
   key passes through.
 - **Always-reachable shortcuts:** digits `1`–`6` jump to a tab, `0` enters Game
-  Mode, `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
+  Mode (not on a device that cannot stream, such as a U2, the same gate as the Home
+  Game tile), `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
   same exclusions — never in a text field, never inside an open overlay.
 
 Reachability is **complete by construction**: the provider scans the active
@@ -162,7 +171,7 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |                        CTAs | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | -------- | ----------- | --------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |                    117 (+4) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. **Screen colors** (`home-video-screen-colors`) was added as the first row of the Quick Config → Video card, taking the page from 113 to 114; it is unconditional and works while disconnected, and the controls of the sheet it opens are an overlay scope counted separately (§4.1). `+1` **Game Mode** tile behind `remote_input_enabled`, first in the Quick Actions grid (§3.2.1 order: safe first, destructive last). `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). `+4` the promoted tiles (Radio, Last, Recent, Live) moved into the Quick Actions grid in 0.10.0-rc2 when the "Listen and play" section was removed. `-1` net from folding **Reboot** and **Power Off** into a single **Power** tile: two tiles out, one in. Power Cycle and Reboot (Clr Mem) were already flag-gated and out of this count. The four rows of the Power sheet are an overlay scope counted separately (§4.1). This total is derived from those deltas rather than re-counted on device.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Home     | `/`         |                    117 (+4) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. **Screen colors** (`home-video-screen-colors`) was added as the first row of the Quick Config → Video card, taking the page from 113 to 114; it is unconditional and works while disconnected, and the controls of the sheet it opens are an overlay scope counted separately (§4.1). `+1` **Game Mode** tile behind `remote_input_enabled` and the device's streaming capability, first in the Quick Actions grid (§3.2.1 order: safe first, destructive last). `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). `+4` the promoted tiles (Radio, Last, Recent, Live) moved into the Quick Actions grid in 0.10.0-rc2 when the "Listen and play" section was removed. `-1` net from folding **Reboot** and **Power Off** into a single **Power** tile: two tiles out, one in. Power Cycle and Reboot (Clr Mem) were already flag-gated and out of this count. The four rows of the Power sheet are an overlay scope counted separately (§4.1). This total is derived from those deltas rather than re-counted on device.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Settings | `/settings` |                    92 (+12) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. The Crossfade group gained a fifth length (4 s), taking the page from 80 to 81. `+5` the Text size choice (four buttons) and the Allow-circuit-override checkbox, which gained a `data-testid` when its row became the target, taking it to 86. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below). `+4` the Game Mode block in **Remote Input**: `settings-joystick-key-layout`, `settings-game-mode-joystick`, `settings-game-mode-on-launch`, and (for a Custom layout) the nine press-to-bind slots `settings-joystick-bind-<slot>` with their `settings-joystick-clear-<slot>` companions. The **Keep device settings after a restart** checkbox (`settings-persist-config-to-flash`) in Device safety is unconditional and takes the page from 86 to 87. The Screen colors select (`settings-vic-palette`) was removed from the Live View streaming block and its controls now live on Home (§4.1); it sat among the mirror-gated stream controls that the `(+N)` tallies above never counted, so its removal changes no number here. `+2` the `demo_mode_enabled` flag (already in the `stable` group) flipped from off to on by default, so the **Automatic Demo Mode** checkbox and a new **Preview Demo Mode** button in the Devices group are now counted for the first time, taking the page from 87 to 89. `+1` the **Mute C64 seeking** select (`settings-c64-seek-mute`) below Disk first-PRG load in Play and Disk, taking it to 90. `+2` the **SID emulation** choice (`settings-sid-engine-residfp`, `settings-sid-engine-sidlite`), which was developer-only and is now shown whenever on-device playback is on, taking it to 92. On Android the same group has a third button, **Fast & accurate** (`settings-sid-engine-sidplayez`), shown only where libSidplayEZ runs; it is not counted in the 92, which is measured on the web build. |
 | Play     | `/play`     | 31 (+2, +20 SID Radio, +16) | Transport, volume, playback flags, playlist, type filters, HVSC. Include subfolders moved off this page into the Add items sheet (32 → 31). `+2` the **Game Mode** and Remote Input buttons, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`. `+16` **Find a tune** (open, search box, per-row play and seed-a-station), the composer and the tune position on the metadata lines, the tune-notes reveal, **Play all N tunes**, and the six sleep-timer choices. The playback settings' own tune list was removed when the credits-line one arrived, so the net count is unchanged by it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Config   | `/config`   |                          30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -235,7 +244,7 @@ not-connected / empty / single-device).
 - **Quick Actions** (`data-section-label="Quick Actions"` group — listed in RING ORDER, which
   follows the DOM: frequent and safe first, destructive last in increasing severity)
   - Live — button — `home-tile-home.section.live-view` — R✅ I✅ _(flag `live_view_enabled`; needs a connected, streaming-capable device)_ — opens the **Live View** card
-  - Game Mode — button — `home-machine-inline-openGameMode` — R✅ I✅ _(flag `remote_input_enabled`; disabled while disconnected)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5)
+  - Game Mode — button — `home-machine-inline-openGameMode` — R✅ I✅ _(flag `remote_input_enabled`; shown only when the device supports streaming, the same gate as Live View, so not on a U2; disabled while disconnected)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5)
   - Input — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`; stable, enabled and visible by default in C64 Commander, disabled+hidden in C64U Remote)_ — opens the **Remote Input sheet** (§5)
   - Radio — button — `home-tile-action.sid-radio` — R✅ I✅ _(app setting `sid_radio_enabled`)_ — needs no C64
   - Last — button — `home-tile-action.resume-session` — R✅ I✅ _(needs a restorable playback session)_ — needs no C64
@@ -329,7 +338,7 @@ not-connected / empty / single-device).
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
   - _Live View precedence:_ while Live View is receiving a feed (VIC↔video, Audio↔audio) that row goes **read-only** — edit/start/stop are hidden/disabled, replaced by a `home-stream-liveview-badge-*` chip + `home-stream-liveview-note-*` explanation (display-only); controls return when Live View stops.
 - **Live View** (`live-view-card`) _(Content Explorer A/V Mirror; mounted only when the device advertises streaming and `audio_mirror_enabled` or `video_mirror_enabled` is on)_
-  - Reset — button — `live-view-stop` — R✅ I✅ `[visible while a feed is live or has failed]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
+  - Stop — button — `live-view-stop` — R✅ I✅ `[visible while a feed is live or has failed]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Stop", not "Reset", because it sits under Home's machine Reset and leaves the C64 alone; the accessible name is "Stop Live View" — it stops both feeds, releasing the multicast receiver and the audio track
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
   - Adopt this sender — button — `av-mirror-adopt-sender` `[only while packets arrive from a
@@ -407,7 +416,7 @@ not-connected / empty / single-device).
     when the dialog opens) and Reset (`hvsc-reset-confirm`); Reset removes the installed library
 - HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
 - **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
-- Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
+- Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying` and not on a device that cannot stream, such as a U2)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
 - Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — minimum 44px target height; tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered for audio this device renders (see _Listen on_ below), and on the C64 route once the app has found the Ultimate's SID player on screen for a tune with its own play routine on a machine that takes key input (a jump there restarts the tune when it goes back, then fast forwards). Otherwise the bar is a plain indicator (`playback-progress`) and not focusable.
@@ -582,9 +591,17 @@ past it to anything below.
   flash write. Enabling it reveals the warning block
   `settings-persist-config-to-flash-warning`, which is display-only and explains
   the hold-RESTORE-at-power-up recovery)_
-- **Devices**: Add device — button — `settings-add-device` — R✅ I✅ ; Delete
-  device — button — `settings-delete-device` — R✅ I✅ `[disabled: single device]`
-  ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
+- **Devices**: Add device — button — `settings-add-device` — R✅ I✅ — opens the
+  **Add device** dialog (`settings-add-device-dialog`), which saves nothing and leaves
+  the connection alone until the new device answers: the shared saved-device editor
+  fields `add-device-*` (name, host in T9 hostname mode, HTTP/FTP/Telnet ports, and
+  `add-device-use-suggested-address` when an unreachable hostname is found on the LAN),
+  Cancel — button — `settings-add-device-cancel`, and Add — button —
+  `settings-add-device-confirm`, which probes the host, saves the device and connects
+  to it _(dialog code-verified, not yet hardware-verified)_ ; Delete device — button —
+  `settings-delete-device` — R✅ I✅ `[disabled: single device]` — the confirmation
+  names the device selected when it opened, by name and address, and deletes that
+  device even if the selection changes while it is open ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
   `settings-device-host` — R✅ I✅ (T9 hostname) ; HTTP/FTP/Telnet ports — text —
   `settings-device-http|ftp|telnet` — R✅ I✅ ; password — password — R✅ I✅ ;
   device-editor reachability hint — status panel —
@@ -665,7 +682,9 @@ assignments are refused. Defaults are F1 Play/Pause and F3 Next tune.
   `settings-sid-radio-min-seconds-input` (`settings-sid-radio-min-seconds`) — R✅ I✅
   _(always shown: SID Radio reached GA, so what a station will offer is a listener's
   setting, not a developer one)_ ; Clear my rankings — button —
-  `settings-clear-rankings` — R✅ I✅ ; Enable SID Radio — checkbox —
+  `settings-clear-rankings` — R✅ I✅ — opens the **Clear my rankings confirmation**
+  (`clear-rankings-dialog`; Cancel `clear-rankings-cancel` takes focus, Clear
+  `clear-rankings-confirm` removes every ♥/✕) ; Enable SID Radio — checkbox —
   `settings-sid-radio-enabled` — R✅ I✅ `[developer-mode only]` ; Show ♥/✕ ranking —
   checkbox — `settings-sid-ranking-enabled` — R✅ I✅ `[developer-mode only; shown only
 when SID Radio is on]` ;
@@ -1111,7 +1130,8 @@ What it holds depends on how it was opened. From the keypad it lists jump-to-pag
 (×6), and each entry names the key that reaches it directly — `1`–`6` for the
 pages, `8` for Pause / Resume machine, `9` for Reset machine, `0` for Game Mode,
 `✱` for Diagnostics, `#` for Switch device — which puts those shortcuts somewhere
-they can be discovered without reading the manual. From
+they can be discovered without reading the manual. The same keys press those
+entries while the menu is open (`7` presses Search). From
 the app-bar button the page jumps are omitted: a reader who tapped it is holding
 a touchscreen and has the TabBar in front of them.
 
@@ -1147,6 +1167,8 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
 `keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`.
+`keypad-quick-menu-game-mode` is absent on a device that cannot stream, such as a U2,
+like the Home Game tile; a function key assigned to Game Mode explains why there instead.
 
 ### 5.1 Lighting Studio (`lighting-studio-sheet`)
 
@@ -1378,9 +1400,11 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 - _On the compact profile the three are 44px icon buttons (Up, Root, Refresh, keeping those
   accessible names) on the same row as the path, and the browser takes the whole screen below
   the status bar._
-- Entry row — `source-entry-row` — a focusable row for a folder (Enter opens it) and a
-  plain row for a file, whose checkbox carries the selection. Its expanded detail is
-  `source-entry-detail`. A folder row's "Open <folder>" button fills the row's height, at least 44px
+- Entry row — `source-entry-row` — not a keypad stop itself: a folder row has two, its
+  checkbox and its "Open <folder>" button, and a file row has one, its checkbox, which
+  carries the selection. A tap anywhere else on a folder row opens it. Its expanded detail
+  is `source-entry-detail`. A folder row's "Open <folder>" button fills the row's height,
+  at least 44px
 - Back (the keypad Back key, or Escape) — goes up one folder while the browser is below the source
   root, and closes the browser at the root. While a folder is loading it does neither
 - Load more — button — `add-items-load-more` `[only while the source has more entries]`

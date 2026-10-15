@@ -15,14 +15,17 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
     removeSelectedLabel,
     headerActions,
     hiddenItemCount,
+    emptyLabel,
   }: {
     filterHeader: React.ReactNode;
     viewAllFilterHeader?: React.ReactNode;
     removeSelectedLabel?: string;
     headerActions?: React.ReactNode;
     hiddenItemCount?: number;
+    emptyLabel: string;
   }) => (
     <div>
+      <div data-testid="playlist-empty-label">{emptyLabel}</div>
       <div data-testid="playlist-hidden-item-count">{hiddenItemCount}</div>
       <div data-testid="playlist-filter-header">{filterHeader}</div>
       <div data-testid="playlist-view-all-filter-header">{viewAllFilterHeader}</div>
@@ -54,6 +57,7 @@ type HarnessProps = {
   playlistFilterText?: string;
   hiddenItemCount?: number;
   playlistItemCount?: number;
+  playlistLoading?: boolean;
 };
 
 const PlaylistPanelHarness = ({
@@ -67,6 +71,7 @@ const PlaylistPanelHarness = ({
   playlistFilterText = "",
   hiddenItemCount = 0,
   playlistItemCount = items.length,
+  playlistLoading = false,
 }: HarnessProps) => {
   const { setOverride } = useDisplayProfilePreference();
 
@@ -98,6 +103,7 @@ const PlaylistPanelHarness = ({
         })[category] ?? category
       }
       hasPlaylist={hasPlaylist}
+      playlistLoading={playlistLoading}
       playlistItemCount={playlistItemCount}
       onAddItems={onAddItems}
       onClearPlaylist={onClearPlaylist}
@@ -117,6 +123,16 @@ const renderPanel = (props?: HarnessProps) =>
   );
 
 describe("PlaylistPanel", () => {
+  it("says the playlist is loading, not empty, while the saved playlist is still being read", () => {
+    renderPanel({ hasPlaylist: false, playlistItemCount: 0, playlistLoading: true });
+    expect(screen.getByTestId("playlist-empty-label")).toHaveTextContent("Loading playlist…");
+  });
+
+  it("says the playlist is empty once the saved playlist has been read", () => {
+    renderPanel({ hasPlaylist: false, playlistItemCount: 0, playlistLoading: false });
+    expect(screen.getByTestId("playlist-empty-label")).toHaveTextContent("No tracks in playlist yet.");
+  });
+
   it("shortens category labels only inside the compact playlist sheet", () => {
     renderPanel({ compact: true });
 

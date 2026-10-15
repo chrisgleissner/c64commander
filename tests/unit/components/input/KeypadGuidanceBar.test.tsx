@@ -92,6 +92,39 @@ describe("KeypadGuidanceBar", () => {
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
   });
 
+  it("names what OK does on a card whose only control is its header: collapse, not open", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <section data-section-label="Spectrum">
+          <button aria-expanded="true">Spectrum</button>
+          <p>Available for sound played on this phone.</p>
+        </section>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(breadcrumb()).toHaveTextContent("Spectrum");
+    expect(actionText("keypad-guidance-center")).toBe("Collapse");
+  });
+
+  it("still names Open on a card with several controls, where OK goes into the card", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <section data-section-label="Drives">
+          <button aria-expanded="true">Drives</button>
+          <button>Mount</button>
+        </section>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(actionText("keypad-guidance-center")).toBe("Open");
+  });
+
   /*
    * The tour owns the keys while it runs, so this bar advertises actions that do not happen — and
    * on a 320 x 427 screen it is drawn over the tour's own caption, covering the title of the step

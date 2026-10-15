@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   MAX_BREADCRUMB_SEGMENTS,
@@ -172,6 +172,9 @@ describe("classifyFocusKind", () => {
     ["<a>No href</a>", "button"],
     ["<button>Press</button>", "button"],
     ['<div role="button"></div>', "button"],
+    ['<button aria-expanded="true">Spectrum</button>', "collapse"],
+    ['<button aria-expanded="false">Spectrum</button>', "expand"],
+    ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "button"],
   ] as const)("%s → %s", (html, kind) => {
     expect(classifyFocusKind(el(html), false)).toBe(kind);
   });
@@ -204,6 +207,76 @@ describe("accessibleLabelFor", () => {
     Object.defineProperty(toggle, "innerText", { value: "Connection\nSaved devices" });
 
     expect(accessibleLabelFor(toggle)).toBe("Connection");
+  });
+
+  it("names an entry by its label, not by the key cap drawn before it", () => {
+    const entry = make("<button><kbd>6</kbd>Docs</button>");
+    Object.defineProperty(entry, "innerText", { value: "6\nDocs" });
+
+    expect(accessibleLabelFor(entry)).toBe("Docs");
+  });
+
+  it("names a close button by its screen-reader text, not the glyph it hides from screen readers", () => {
+    const close = make('<button><span aria-hidden="true">×</span><span class="sr-only">Close</span></button>');
+    Object.defineProperty(close, "innerText", { value: "×\nClose" });
+
+    expect(accessibleLabelFor(close)).toBe("Close");
+  });
+
+  describe("a control named by another element", () => {
+    const mountInDocument = (html: string) => {
+      const host = document.createElement("div");
+      host.innerHTML = html;
+      document.body.appendChild(host);
+      return host;
+    };
+    afterEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it("names a checkbox by its <label for>, not 'Navigation'", () => {
+      mountInDocument(`
+        <div><label for="hide-status-bar">Hide status bar</label><p>Extend the app over the status bar.</p></div>
+        <button role="checkbox" id="hide-status-bar" data-testid="box"></button>`);
+      expect(accessibleLabelFor(document.querySelector('[data-testid="box"]'))).toBe("Hide status bar");
+    });
+
+    it("names a number field by its <label for> before its placeholder", () => {
+      mountInDocument(`<label for="retries">Config write retries</label><input id="retries" placeholder="3" />`);
+      expect(accessibleLabelFor(document.getElementById("retries"))).toBe("Config write retries");
+    });
+
+    it("names a select by aria-labelledby before the value it shows", () => {
+      mountInDocument(`<span id="mode-label">Mode</span>
+        <button role="combobox" aria-labelledby="mode-label" id="mode">Fixed Color</button>`);
+      expect(accessibleLabelFor(document.getElementById("mode"))).toBe("Mode");
+    });
+
+    it("prefers aria-labelledby over aria-label, as the accessible name does", () => {
+      mountInDocument(
+        `<span id="title">Drive A</span><button aria-labelledby="title" aria-label="Drive" id="b"></button>`,
+      );
+      expect(accessibleLabelFor(document.getElementById("b"))).toBe("Drive A");
+    });
+
+    it("names a control by its wrapping <label>, without the options inside it", () => {
+      mountInDocument(
+        `<label>Interval <select id="interval"><option>Daily</option><option>Weekly</option></select></label>`,
+      );
+      expect(accessibleLabelFor(document.getElementById("interval"))).toBe("Interval");
+    });
+
+    it("falls back to the control's own text when the labelled-by element is missing or empty", () => {
+      mountInDocument(`<span id="empty"> </span><button aria-labelledby="missing empty" id="b">Save</button>`);
+      expect(accessibleLabelFor(document.getElementById("b"))).toBe("Save");
+    });
+  });
+
+  it("still names a control that shows nothing but a key cap", () => {
+    const key = make("<button><kbd>F1</kbd></button>");
+    Object.defineProperty(key, "innerText", { value: "F1" });
+
+    expect(accessibleLabelFor(key)).toBe("F1");
   });
 
   it("reads the text of an element that is not an HTML element, such as an SVG label", () => {

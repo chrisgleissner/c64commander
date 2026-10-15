@@ -355,7 +355,7 @@ test.describe("HVSC perf scenarios S1-S11", () => {
     scenarioResults.push({
       scenario: "S1-download",
       wallClockMs,
-      timings: timings.filter((t) => t.scope === "download" || t.scope === "download:checksum"),
+      timings: timings.filter((t) => t.scope === "download"),
     });
   });
 

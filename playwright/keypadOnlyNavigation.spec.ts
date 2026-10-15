@@ -186,6 +186,51 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     expect(textBottom, "the empty Liked Tunes text is under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
   });
 
+  /*
+   * The guidance bar's height is reserved at the bottom of `.page-stack`. Docs laid its cards out
+   * without one, so its last card could not scroll clear of the bar and stayed 18 px under it.
+   */
+  test("every page's selected stop scrolls clear of the guidance bar @layout", async ({ page }) => {
+    test.setTimeout(240_000);
+    const covered: string[] = [];
+    for (const route of TAB_ROUTES) {
+      await page.goto(route.path, { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await page.keyboard.press("ArrowDown");
+      await expect(page.getByTestId("keypad-guidance-bar")).toHaveAttribute("data-visible", "true");
+      const seen = new Set<string>();
+      for (let step = 0; step < 45; step += 1) {
+        await page.waitForTimeout(150);
+        const stop = await page.evaluate(() => {
+          const selected = document.querySelector('[data-key-selected="true"]');
+          const scroller = selected?.closest('[data-page-scroll-container="true"]');
+          const bar = document.querySelector('[data-testid="keypad-guidance-bar"]');
+          if (!selected || !scroller || !bar) return null;
+          const rect = selected.getBoundingClientRect();
+          const barTop = bar.getBoundingClientRect().top;
+          const marginTop = Number.parseFloat(getComputedStyle(selected).scrollMarginTop) || 0;
+          const fits = rect.height + marginTop <= barTop - scroller.getBoundingClientRect().top;
+          return {
+            id: selected.getAttribute("data-testid") ?? selected.textContent?.trim().slice(0, 40) ?? "",
+            bottom: rect.bottom,
+            barTop,
+            fits,
+          };
+        });
+        if (stop && stop.fits && !seen.has(stop.id)) {
+          seen.add(stop.id);
+          if (stop.bottom > stop.barTop + 0.5) {
+            covered.push(
+              `${route.path} ${stop.id}: bottom ${Math.round(stop.bottom)} > bar ${Math.round(stop.barTop)}`,
+            );
+          }
+        }
+        await page.keyboard.press("ArrowDown");
+      }
+    }
+    expect(covered, `Selected stops left under the guidance bar:\n  ${covered.join("\n  ")}`).toEqual([]);
+  });
+
   test("the last Recent row selected by keypad is clear of the guidance bar @layout", async ({ page }) => {
     await page.addInitScript(() => {
       const entries = Array.from({ length: 12 }, (_, index) => ({
@@ -253,10 +298,14 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const trigger = page.locator('[data-slot-active="true"]').getByRole("button", { name: "Item actions" }).first();
     await expect(trigger).toBeAttached({ timeout: 15_000 });
     expect(await ringFocus(page, trigger), "the ring could not reach the row's menu button").toBe(true);
+    // Near the top, so the tall menu opens downward and has to stop at the bars at the bottom.
+    await trigger.evaluate((element) => element.scrollIntoView({ block: "start" }));
     await page.keyboard.press("Enter");
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await waitForAnimations(page);
+    const menuBottom = await menu.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(menuBottom, "the menu runs under the guidance bar").toBeLessThanOrEqual((await guidanceBarTop(page)) + 0.5);
 
     const clipped = await menu
       .locator('[data-menu-detail="true"]')
@@ -372,6 +421,8 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const count = await items.count();
     expect(count).toBeGreaterThanOrEqual(4);
     await expect(items.first()).toBeFocused();
+    // The menu zooms in from 95%, so a box measured before that settles reads as low as 41.8 px.
+    await waitForAnimations(page);
     const bar = page.getByTestId("keypad-guidance-bar");
     await expect(bar).toHaveAttribute("data-visible", "true");
     await expect(bar.getByTestId("keypad-guidance-center")).toContainText("Select");
@@ -423,5 +474,80 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();
     await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+  });
+
+  test("closing Remote Input from its keypad menu returns the selection to the Home control that opened it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openRemoteInput = page
+      .locator('[data-slot-active="true"]')
+      .getByTestId("home-machine-inline-openRemoteInput");
+    expect(await ringFocus(page, openRemoteInput), "The ring could not reach Remote Input on Home").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(sheet).toBeVisible();
+
+    await page.keyboard.press("F2");
+    const close = page.getByTestId("remote-input-controls-menu").getByTestId("remote-input-menu-close");
+    await expect(close).toBeVisible();
+    for (
+      let step = 0;
+      step < 10 && !(await close.evaluate((element) => element === document.activeElement));
+      step += 1
+    ) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(sheet).toBeHidden();
+    await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+  });
+
+  test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    await page.keyboard.press("ContextMenu");
+    const docs = page.getByTestId("keypad-quick-menu-tab-docs");
+    await expect(docs).toBeVisible();
+    await expect(docs.locator("kbd")).toHaveText("6");
+    for (
+      let step = 0;
+      step < 20 && !(await docs.evaluate((element) => element === document.activeElement));
+      step += 1
+    ) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(docs).toBeFocused();
+    await expect(page.getByTestId("keypad-guidance-breadcrumb")).toHaveText("Docs");
+  });
+
+  test("a breadcrumb squeezed to a few characters shows nothing rather than a fragment @layout", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    const crumb = page.getByTestId("keypad-guidance-breadcrumb").locator(".keypad-guidance-breadcrumb-text");
+    await expect(crumb).toBeVisible();
+
+    // Widen the key legend until the breadcrumb beside it has 2rem left, as Remote Input's Keys mode does.
+    await page.addStyleTag({
+      content: ".keypad-guidance-keys { min-width: calc(100vw - 1.5rem - 0.75rem - 2rem); }",
+    });
+    expect(
+      await page.getByTestId("keypad-guidance-breadcrumb").evaluate((element) => element.clientWidth),
+    ).toBeLessThanOrEqual(32);
+    await expect(crumb).toBeHidden();
   });
 });

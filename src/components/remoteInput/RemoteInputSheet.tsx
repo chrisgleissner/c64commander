@@ -30,11 +30,7 @@ import { useRemoteInputKeypadControls } from "@/hooks/useRemoteInputKeypadContro
 import { useRemoteInputGameMode } from "@/hooks/useRemoteInputGameMode";
 import { useDeviceRotation } from "@/hooks/useDeviceRotation";
 import { useAutoHide } from "@/hooks/useAutoHide";
-import {
-  remoteInputSupportsJoystick,
-  REMOTE_INPUT_AUTH_REQUIRED_HINT,
-  REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT,
-} from "@/lib/remoteInput/capabilityTier";
+import { remoteInputSupportsJoystick, resolveJoystickUnavailableHint } from "@/lib/remoteInput/capabilityTier";
 import {
   DEFAULT_REMOTE_INPUT_CONTROL_SIZE,
   gameModeControlScale,
@@ -99,14 +95,10 @@ const ROTATION_CHOICES: ReadonlyArray<{ label: string; value: DeviceRotation | "
  * on-screen joystick according to how the game is being played (spec §5.1).
  */
 export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) => {
-  const { tier, loading: tierLoading, resolved } = useRemoteInputCapabilityTier(open);
+  const { tier, loading: tierLoading, resolved, status: inputStatus } = useRemoteInputCapabilityTier(open);
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
-  // Lead F3: auth-required needs the same password Type mode's fallback
-  // injection would also need, so the generic "The Keys tab still works" hint
-  // is wrong on this tier specifically.
-  const joystickUnavailableHint =
-    tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
+  const joystickUnavailableHint = resolveJoystickUnavailableHint(tier, inputStatus ?? null);
   const showJoystickUnavailableReason = resolved && !tierLoading && !joystickAvailable && session.outputMode === "type";
   // On a compact (small) display the Joystick / Keys / Release All buttons are
   // too wide to share one non-scrolling row, so drop the leading icons on the
@@ -768,8 +760,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                  the resolver used to ignore `hidden` here. The space carries the reason,
                  the switch that fixes it and the quick keys instead — all reachable from
                  a keypad, which the on-screen joystick is not. */
+              // Auto margins, not justify-center: centred content taller than the sheet overflowed above
+              // the scroll origin, where no key could reach it. Clears the "Show controls" handle at the top.
               <div
-                className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-4"
+                className={cn("my-auto flex shrink-0 flex-col gap-3 px-4", chromeHidden && "pt-12")}
                 data-testid="remote-input-no-picture-panel"
               >
                 <p className="text-sm font-medium">The picture is off</p>

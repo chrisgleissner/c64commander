@@ -6,7 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -23,7 +31,7 @@ import { requestSearchOpen } from "@/lib/search/overlayState";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { toast } from "@/hooks/use-toast";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
-import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { variant } from "@/generated/variant";
 import { APP_SETTINGS_KEYS, loadRemoteFunction1Action, loadRemoteFunction3Action } from "@/lib/config/appSettings";
@@ -45,6 +53,24 @@ const REMOTE_FUNCTION_SETTINGS_TARGET = {
   testId: "settings-remote-function-actions",
 } as const;
 
+/** Names the key, as `KeyboardEvent.key` reports it, that presses an entry while the menu is open. */
+const SHORTCUT_KEY_ATTR = "data-quick-menu-key";
+
+/**
+ * Presses the entry whose keycap matches the key. The keycaps name the keys that reach each entry
+ * from anywhere, but an open overlay owns the keyboard, so with the menu open they did nothing.
+ */
+const pressEntryForKey = (event: ReactKeyboardEvent<HTMLElement>): void => {
+  if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+  const entry = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(`[${SHORTCUT_KEY_ATTR}]`)).find(
+    (candidate) => candidate.getAttribute(SHORTCUT_KEY_ATTR) === event.key,
+  );
+  if (!entry || entry.disabled) return;
+  event.preventDefault();
+  event.stopPropagation();
+  entry.click();
+};
+
 /** The physical key that reaches this entry directly, drawn as the keycap it is. */
 const ShortcutKey = ({ children }: { children: ReactNode }) => (
   <kbd className="inline-flex min-w-6 shrink-0 items-center justify-center rounded-sm border border-border bg-muted px-1 py-0.5 font-sans text-xs font-semibold text-muted-foreground">
@@ -64,7 +90,7 @@ export function KeypadQuickMenu() {
   const navigate = useNavigate();
   const location = useLocation();
   const savedDevices = useSavedDevices();
-  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
+  const gameModeAvailable = useGameModeAvailable();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
   const [functionActions, setFunctionActions] = useState(
@@ -145,6 +171,7 @@ export function KeypadQuickMenu() {
       <DialogContent
         className="flex max-h-[85dvh] max-w-xs flex-col overflow-hidden"
         data-testid="keypad-quick-menu"
+        onKeyDown={pressEntryForKey}
         /*
          * Focus is normally restored to whatever opened this menu. Not when the menu is closing in
          * order to open the search overlay or land on a Settings control: this dialog animates out
@@ -164,31 +191,6 @@ export function KeypadQuickMenu() {
             {fromKeypad ? "Jump to a page or open a high-value action." : "Actions for this page."}
           </DialogDescription>
         </DialogHeader>
-        {String(variant.id) === "c64u-remote" ? (
-          <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
-            F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
-            {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
-            <Button
-              variant="link"
-              className="ml-1 h-auto min-h-11 px-1"
-              data-testid="keypad-quick-menu-configure-function-keys"
-              onClick={() => {
-                handingOverFocusRef.current = true;
-                run(
-                  () =>
-                    void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
-                      navigate,
-                      currentPath: location.pathname,
-                      label: "Remote function keys",
-                      onToast: (message) => toast({ title: message, variant: "destructive" }),
-                    }),
-                );
-              }}
-            >
-              Configure
-            </Button>
-          </div>
-        ) : null}
         <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
           {/*
             The top entry, on both sources: search is the way around the app for someone who does
@@ -201,6 +203,7 @@ export function KeypadQuickMenu() {
             variant="ghost"
             className="justify-start gap-3"
             data-testid="keypad-quick-menu-search"
+            data-quick-menu-key={fromKeypad ? "7" : undefined}
             onClick={() => {
               handingOverFocusRef.current = true;
               setOpen(false);
@@ -235,6 +238,7 @@ export function KeypadQuickMenu() {
                   variant="ghost"
                   className="justify-start gap-3"
                   data-testid={`keypad-quick-menu-tab-${route.label.toLowerCase()}`}
+                  data-quick-menu-key={String(index + 1)}
                   onClick={() => run(() => navigate(route.path))}
                 >
                   <ShortcutKey>{index + 1}</ShortcutKey>
@@ -251,6 +255,7 @@ export function KeypadQuickMenu() {
                 variant="ghost"
                 className="justify-start gap-3"
                 data-testid="keypad-quick-menu-machine-pause"
+                data-quick-menu-key="8"
                 onClick={() => run(() => requestMachineCommand("pauseResume"))}
               >
                 <ShortcutKey>8</ShortcutKey>
@@ -260,6 +265,7 @@ export function KeypadQuickMenu() {
                 variant="ghost"
                 className="justify-start gap-3"
                 data-testid="keypad-quick-menu-machine-reset"
+                data-quick-menu-key="9"
                 onClick={() => run(() => requestMachineCommand("reset"))}
               >
                 <ShortcutKey>9</ShortcutKey>
@@ -269,11 +275,12 @@ export function KeypadQuickMenu() {
           ) : null}
           {/* Carried here as well as on `0`, so the shortcut is discoverable without
               reading the manual — in the same place the page jumps already are. */}
-          {remoteInputEnabled ? (
+          {gameModeAvailable ? (
             <Button
               variant="ghost"
               className="justify-start gap-3"
               data-testid="keypad-quick-menu-game-mode"
+              data-quick-menu-key={fromKeypad ? "0" : undefined}
               onClick={() =>
                 run(() => {
                   // Only Home and Play mount the Remote Input sheet that answers the request.
@@ -321,6 +328,7 @@ export function KeypadQuickMenu() {
             variant="ghost"
             className="justify-start"
             data-testid="keypad-quick-menu-diagnostics"
+            data-quick-menu-key={fromKeypad ? "*" : undefined}
             onClick={() => run(() => requestDiagnosticsOpen("header"))}
           >
             {fromKeypad ? <ShortcutKey>✱</ShortcutKey> : null}
@@ -331,11 +339,38 @@ export function KeypadQuickMenu() {
               variant="ghost"
               className="justify-start gap-3"
               data-testid="keypad-quick-menu-switch-device"
+              data-quick-menu-key={fromKeypad ? "#" : undefined}
               onClick={() => run(() => requestDeviceSwitcherOpen())}
             >
               {fromKeypad ? <ShortcutKey>#</ShortcutKey> : null}
               Switch device
             </Button>
+          ) : null}
+          {/* Last: reference for the two function keys, not a destination; the entries above are what the menu is opened for. */}
+          {String(variant.id) === "c64u-remote" ? (
+            <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
+              F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
+              {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
+              <Button
+                variant="link"
+                className="ml-1 h-auto min-h-11 px-1"
+                data-testid="keypad-quick-menu-configure-function-keys"
+                onClick={() => {
+                  handingOverFocusRef.current = true;
+                  run(
+                    () =>
+                      void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
+                        navigate,
+                        currentPath: location.pathname,
+                        label: "Remote function keys",
+                        onToast: (message) => toast({ title: message, variant: "destructive" }),
+                      }),
+                  );
+                }}
+              >
+                Configure
+              </Button>
+            </div>
           ) : null}
         </div>
       </DialogContent>

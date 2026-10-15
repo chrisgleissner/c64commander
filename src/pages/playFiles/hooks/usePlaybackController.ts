@@ -76,6 +76,7 @@ import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
+import type { PlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -96,6 +97,7 @@ import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFile
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
 import { autoAdvanceDelayMs, crossfadeLeadMs, deferralToTuneEndMs } from "@/pages/playFiles/crossfadeLead";
+import { resumedTrackStartedAtMs, usePlaylistEnded } from "@/pages/playFiles/hooks/usePlaylistEnded";
 import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
 import { isChosenTrackLaunching, resolveShownItemDurationMs } from "@/pages/playFiles/shownTrackDuration";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
@@ -115,6 +117,7 @@ import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
+import { usePauseMute, type SidMuteSnapshot } from "@/pages/playFiles/hooks/usePauseMute";
 
 type HandledUiError = Error & { c64uHandled?: boolean };
 
@@ -126,11 +129,6 @@ const markHandledUiError = (error: unknown) => {
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
   error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
-
-type SidMuteSnapshot = {
-  volumes: Record<string, string | number>;
-  enablement: SidEnablement;
-};
 
 type AutoAdvanceGuard = {
   trackInstanceId: number;
@@ -190,10 +188,7 @@ interface UsePlaybackControllerProps {
   setIsPaused: (v: boolean) => void;
   setIsPlaylistLoading: (v: boolean) => void;
 
-  elapsedMs: number;
-  setElapsedMs: (v: number) => void;
-  playedMs: number;
-  setPlayedMs: (v: number) => void;
+  playbackTime: PlaybackTimeStore;
   durationMs: number | undefined;
   setDurationMs: (v: number | undefined) => void;
   setCurrentSubsongCount: (v: number | null) => void;
@@ -261,6 +256,8 @@ interface UsePlaybackControllerProps {
   pausingFromPauseRef: MutableRefObject<boolean>;
   resumingFromPauseRef: MutableRefObject<boolean>;
   ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
+  /** Whether the listener's own Mute is on, which a pause must hand back rather than undo. */
+  isManualMuteHeld: () => boolean;
 
   // Refs
   // HARD12-007: the second parameter is `reset` (whether to zero the cumulative
@@ -308,10 +305,7 @@ export function usePlaybackController({
   isPaused,
   setIsPaused,
   setIsPlaylistLoading,
-  elapsedMs,
-  setElapsedMs,
-  playedMs,
-  setPlayedMs,
+  playbackTime,
   durationMs,
   setDurationMs,
   setCurrentSubsongCount,
@@ -342,6 +336,7 @@ export function usePlaybackController({
   pausingFromPauseRef,
   resumingFromPauseRef,
   ensureUnmuted,
+  isManualMuteHeld,
   playedClockRef,
   trackStartedAtRef,
   trackInstanceIdRef,
@@ -418,10 +413,7 @@ export function usePlaybackController({
     engineNoticeShownRef.current.add(notice);
     toast({ title: "Playback engine", description: ENGINE_FALLBACK_MESSAGES[notice] });
   }, []);
-  // HARD12-018: tracks that the last song in the playlist auto-ended so that
-  // background execution can stop even though `isPlaying` stays true (the Stop
-  // affordance must remain available). Reset whenever a new track starts.
-  const [playlistEnded, setPlaylistEnded] = useState(false);
+  const { playlistEnded, setPlaylistEnded, playlistEndedRef } = usePlaylistEnded();
   const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const userTransportQueueRef = useRef(Promise.resolve());
   const latestQueuedUserSkipRef = useRef(0);
@@ -448,13 +440,11 @@ export function usePlaybackController({
   isPlayingRef.current = isPlaying;
   isPausedRef.current = isPaused;
 
-  // HARD19-009: refs synced during render so the machine-execution subscription
-  // below can re-arm auto-advance on an external resume without depending on
-  // (and re-subscribing for) every elapsed/duration change.
+  // HARD19-009: synced during render so the machine-execution subscription below can re-arm
+  // auto-advance on an external resume without re-subscribing for every duration change.
   const durationMsRef = useRef(durationMs);
   durationMsRef.current = durationMs;
-  const elapsedMsRef = useRef(elapsedMs);
-  elapsedMsRef.current = elapsedMs;
+  const { setElapsedMs, setPlayedMs } = playbackTime;
   // Set while Play performs its OWN machine-execution write so the subscription
   // ignores it and only mirrors EXTERNAL transitions (e.g. a Home pause).
   const playInitiatedMachineTransitionRef = useRef(false);
@@ -522,112 +512,20 @@ export function usePlaybackController({
     [withTimeout],
   );
 
-  const muteBeforeMachinePause = useCallback(async () => {
-    if (!enabledSidVolumeItems.length) {
-      pauseMuteSnapshotRef.current = null;
-      pausingFromPauseRef.current = false;
-      resumingFromPauseRef.current = false;
-      addLog("warn", "Playback pause mute skipped because no cached SID mixer items are available");
-      return;
-    }
-    const items = enabledSidVolumeItems;
-    const snapshot = captureSidMuteSnapshot(items, sidEnablement);
-    const updates = buildEnabledSidMuteUpdates(items, sidEnablement);
-    pauseMuteSnapshotRef.current = snapshot;
-    pausingFromPauseRef.current = true;
-    resumingFromPauseRef.current = false;
-    dispatchVolume({ type: "mute", reason: "pause" });
-    if (Object.keys(updates).length) {
-      await applyAudioMixerUpdates(updates, "Pause mute");
-    }
-    addLog("info", "Playback pause mute applied", {
-      sidOutputCount: items.length,
-      updateCount: Object.keys(updates).length,
-    });
-  }, [
-    applyAudioMixerUpdates,
-    buildEnabledSidMuteUpdates,
-    captureSidMuteSnapshot,
-    dispatchVolume,
+  const { muteBeforeMachinePause, unmuteAfterMachineResume, rollbackMuteAfterFailedPause } = usePauseMute({
     enabledSidVolumeItems,
-    pauseMuteSnapshotRef,
-    pausingFromPauseRef,
-    resumingFromPauseRef,
     sidEnablement,
-  ]);
-
-  const unmuteAfterMachineResume = useCallback(async () => {
-    const snapshot = pauseMuteSnapshotRef.current;
-    const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
-    let updates = snapshotToUpdates(snapshot, currentItems);
-    if (!Object.keys(updates).length && snapshot) {
-      updates = snapshotToUpdates(snapshot);
-    }
-    if (Object.keys(updates).length) {
-      await applyAudioMixerUpdates(updates, "Resume unmute");
-    } else {
-      await ensureUnmuted({ force: true, refreshItems: true });
-    }
-    pauseMuteSnapshotRef.current = null;
-    pausingFromPauseRef.current = false;
-    resumingFromPauseRef.current = true;
-    dispatchVolume({ type: "unmute", reason: "pause" });
-    addLog("info", "Playback resume unmute applied", {
-      updateCount: Object.keys(updates).length,
-    });
-  }, [
+    captureSidMuteSnapshot,
+    buildEnabledSidMuteUpdates,
+    snapshotToUpdates,
     applyAudioMixerUpdates,
-    dispatchVolume,
-    enabledSidVolumeItems,
     ensureUnmuted,
+    isManualMuteHeld,
+    dispatchVolume,
     pauseMuteSnapshotRef,
     pausingFromPauseRef,
     resumingFromPauseRef,
-    snapshotToUpdates,
-  ]);
-
-  const rollbackMuteAfterFailedPause = useCallback(
-    async (pauseError: unknown) => {
-      const snapshot = pauseMuteSnapshotRef.current;
-      if (!snapshot && !pausingFromPauseRef.current) return;
-      try {
-        const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
-        let updates = snapshotToUpdates(snapshot, currentItems);
-        if (!Object.keys(updates).length && snapshot) {
-          updates = snapshotToUpdates(snapshot);
-        }
-        if (Object.keys(updates).length) {
-          await applyAudioMixerUpdates(updates, "Pause mute rollback");
-        } else {
-          await ensureUnmuted({ force: true, refreshItems: true });
-        }
-        dispatchVolume({ type: "unmute", reason: "pause" });
-        addLog("warn", "Playback pause mute rolled back after machine pause failed", {
-          updateCount: Object.keys(updates).length,
-          pauseError: pauseError instanceof Error ? pauseError.message : String(pauseError),
-        });
-      } catch (rollbackError) {
-        addErrorLog("Playback pause mute rollback failed", {
-          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-          pauseError: pauseError instanceof Error ? pauseError.message : String(pauseError),
-        });
-      } finally {
-        pauseMuteSnapshotRef.current = null;
-        pausingFromPauseRef.current = false;
-        resumingFromPauseRef.current = false;
-      }
-    },
-    [
-      applyAudioMixerUpdates,
-      dispatchVolume,
-      enabledSidVolumeItems,
-      ensureUnmuted,
-      pauseMuteSnapshotRef,
-      pausingFromPauseRef,
-      resumingFromPauseRef,
-      snapshotToUpdates,
-    ],
-  );
+  });
 
   const stopMachineWithGracePeriod = useCallback(
     async (api: ReturnType<typeof getC64API>, shouldReboot: boolean) => {
@@ -1732,8 +1630,8 @@ export function usePlaybackController({
         setAutoAdvanceDueAtMs(null);
       } else {
         setIsPaused(false);
-        const currentElapsedMs = elapsedMsRef.current;
-        trackStartedAtRef.current = now - currentElapsedMs;
+        const currentElapsedMs = playbackTime.read().elapsedMs;
+        trackStartedAtRef.current = resumedTrackStartedAtMs(playlistEndedRef.current, now, currentElapsedMs);
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
         const currentDurationMs = durationMsRef.current;
@@ -1755,7 +1653,7 @@ export function usePlaybackController({
     autoAdvanceGuardRef,
     trackStartedAtRef,
     durationMsRef,
-    elapsedMsRef,
+    playbackTime,
   ]);
 
   // Defined below; read by Resume after a restart, which starts the tune again where it was.
@@ -1770,7 +1668,7 @@ export function usePlaybackController({
       const item = playlistRef.current[currentIndexRef.current];
       if (restartedItemId && item?.id === restartedItemId) {
         // Resumed the machine before, which was not playing it, and the page showed a tune playing in silence.
-        const resumeAtSeconds = elapsedMs / 1000;
+        const resumeAtSeconds = playbackTime.read().elapsedMs / 1000;
         try {
           await playItem(item, { playlistIndex: currentIndexRef.current });
         } catch (error) {
@@ -1796,6 +1694,7 @@ export function usePlaybackController({
           await local.resume();
           setIsPaused(false);
           writeMachineExecutionFromPlay("running");
+          const { elapsedMs } = playbackTime.read();
           trackStartedAtRef.current = now - elapsedMs;
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
@@ -1856,7 +1755,8 @@ export function usePlaybackController({
               // HARD12-020: publish the resumed state so Home's pause/resume converges with Play.
               writeMachineExecutionFromPlay("running");
               const now = Date.now();
-              trackStartedAtRef.current = now - elapsedMs;
+              const { elapsedMs } = playbackTime.read();
+              trackStartedAtRef.current = resumedTrackStartedAtMs(playlistEndedRef.current, now, elapsedMs);
               playedClockRef.current.resume(now);
               setPlayedMs(playedClockRef.current.current(now));
               if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
@@ -1912,7 +1812,7 @@ export function usePlaybackController({
     }),
     [
       durationMs,
-      elapsedMs,
+      playbackTime,
       isPaused,
       isPlaying,
       trace,
@@ -2324,13 +2224,13 @@ export function usePlaybackController({
   // Neither wall clock behind the progress display knows the engine; a seek that skips this looks like it did nothing.
   const rebasePlaybackPosition = useCallback(
     (positionMs: number) => {
-      const clockTarget = { positionMs, elapsedMs: elapsedMsRef.current, paused: isPausedRef.current, now: Date.now() };
+      const { elapsedMs } = playbackTime.read();
+      const clockTarget = { positionMs, elapsedMs, paused: isPausedRef.current, now: Date.now() };
       setPlayedMs(seekPlaybackClocks(playedClockRef.current, trackStartedAtRef, clockTarget));
-      elapsedMsRef.current = positionMs;
       setElapsedMs(positionMs);
       rescheduleAutoAdvance(positionMs);
     },
-    [playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
+    [playbackTime, playedClockRef, setPlayedMs, setElapsedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
 
   /**
@@ -2526,6 +2426,7 @@ export function usePlaybackController({
     handleSeekBy,
     rebasePlaybackPosition,
     playlistEnded,
+    setPlaylistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,
     playlistItemDuration,

@@ -63,6 +63,7 @@ vi.mock("@/lib/playback/remoteSeek/activeRemoteSidSeek", async (importOriginal) 
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { cancelRemoteSidSeek } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
+import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 
 const SEEKABLE = Uint8Array.from(readFileSync(path.resolve("playwright/fixtures/remote-seek/seekable.sid")));
 const DEVICE_INFO = { product: "C64 Ultimate", core_version: "1.50", firmware_version: "1.2.1" } as never;
@@ -96,18 +97,21 @@ const rsid = () => {
 
 const render = (options: { item?: PlaylistItem; active?: boolean; elapsedMs?: number; durationMs?: number } = {}) => {
   const rebasePlaybackPosition = vi.fn();
+  const playbackTime = createPlaybackTimeStore();
   const hook = renderHook(
-    (props: { active: boolean; elapsedMs: number; paused?: boolean }) =>
-      useRemoteSidSeek({
+    (props: { active: boolean; elapsedMs: number; paused?: boolean }) => {
+      playbackTime.setElapsedMs(props.elapsedMs);
+      return useRemoteSidSeek({
         item: options.item === null ? undefined : (options.item ?? item()),
         active: props.active,
         paused: props.paused ?? false,
         trackInstanceId: 1,
         deviceInfo: ("deviceInfo" in options ? options.deviceInfo : DEVICE_INFO) as never,
-        elapsedMs: props.elapsedMs,
+        playbackTime,
         durationMs: "durationMs" in options ? options.durationMs : 180_000,
         rebasePlaybackPosition,
-      }),
+      });
+    },
     { initialProps: { active: options.active ?? true, elapsedMs: options.elapsedMs ?? 0 } },
   );
   return { ...hook, rebasePlaybackPosition };
@@ -894,7 +898,7 @@ describe("useRemoteSidSeek", () => {
           active: true,
           trackInstanceId: 1,
           deviceInfo: DEVICE_INFO,
-          elapsedMs: 0,
+          playbackTime: createPlaybackTimeStore(),
           durationMs: 180_000,
           rebasePlaybackPosition: vi.fn(),
         }),

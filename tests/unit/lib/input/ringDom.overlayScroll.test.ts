@@ -11,11 +11,11 @@ import { stepFocusWithinOverlay } from "@/lib/input/ringDom";
 
 type Box = { scrollHeight: number; clientHeight: number; scrollTop: number };
 
-const button = (label: string) => {
+const button = (label: string, top = 10) => {
   const element = document.createElement("button");
   element.textContent = label;
   element.getBoundingClientRect = () =>
-    ({ top: 10, bottom: 54, width: 100, height: 44, left: 0, right: 100 }) as DOMRect;
+    ({ top, bottom: top + 44, width: 100, height: 44, left: 0, right: 100 }) as DOMRect;
   return element;
 };
 
@@ -38,12 +38,12 @@ const text = () => {
 };
 
 /** A dialog whose only controls sit in its scrolling body, with text after the last one. */
-const dialogWithScrollingBody = (scrollTop: number, scrollHeight = 900) => {
+const dialogWithScrollingBody = (scrollTop: number, scrollHeight = 900, lastTop = 200) => {
   const dialog = document.createElement("div");
   dialog.setAttribute("role", "dialog");
   const body = scrolling({ scrollHeight, clientHeight: 300, scrollTop });
   const first = button("First");
-  const last = button("Last");
+  const last = button("Last", lastTop);
   body.element.append(first, last, text());
   dialog.append(body.element);
   document.body.append(dialog);
@@ -55,7 +55,7 @@ const dialogWithFooter = (scrollTop: number) => {
   const dialog = document.createElement("div");
   dialog.setAttribute("role", "dialog");
   const body = scrolling({ scrollHeight: 900, clientHeight: 300, scrollTop });
-  const option = button("Option");
+  const option = button("Option", 200);
   body.element.append(option, text());
   const footer = document.createElement("div");
   const save = button("Save");
@@ -75,8 +75,17 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     last.focus();
 
     expect(stepFocusWithinOverlay(dialog, last, true)).toBe(true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 300 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 200 });
     expect(document.activeElement).toBe(last);
+  });
+
+  it("scrolls no further than keeps the last control in view, then wraps", () => {
+    const { dialog, first, last, scrollBy } = dialogWithScrollingBody(0, 900, 0);
+    last.focus();
+
+    expect(stepFocusWithinOverlay(dialog, last, true)).toBe(true);
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(first);
   });
 
   it("wraps to the first control once the body is at its end", () => {
@@ -93,7 +102,7 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     option.focus();
 
     stepFocusWithinOverlay(dialog, option, true);
-    expect(scrollBy).toHaveBeenCalledWith({ top: 300 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: 200 });
     expect(document.activeElement).toBe(option);
   });
 
@@ -111,7 +120,7 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     first.focus();
 
     stepFocusWithinOverlay(dialog, first, false);
-    expect(scrollBy).toHaveBeenCalledWith({ top: -300 });
+    expect(scrollBy).toHaveBeenCalledWith({ top: -246 });
     expect(document.activeElement).toBe(first);
   });
 

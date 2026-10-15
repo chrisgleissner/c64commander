@@ -30,6 +30,7 @@ import { useInRouterContext, useLocation } from "react-router-dom";
 
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/hooks/useFocusNavigation";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
@@ -71,11 +72,18 @@ const buildGuidanceState = (
     : accessibleLabelFor(currentElement);
   if (currentLabel) breadcrumb.push(currentLabel);
 
+  // OK on a card with a single control presses that control, so the bar names what it does.
+  const children = current && isGroup ? focus.enabledChildrenOf(current.id) : [];
+  const onlyControl = children.length === 1 && !focus.hasEnabledChildren(children[0].id) ? children[0] : null;
+  const currentKind = onlyControl
+    ? classifyFocusKind(engine.elementForId(onlyControl.id), false)
+    : classifyFocusKind(currentElement, isGroup);
+
   return {
     enabled,
     modality: getInputModality(),
     hasCurrent: current !== null,
-    currentKind: classifyFocusKind(currentElement, isGroup),
+    currentKind,
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),
@@ -206,11 +214,10 @@ const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: 
 export const KeypadGuidanceBar = () => {
   const context = useFocusNavigationContext();
   const connection = useConnectionState();
-  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
-  const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
+  const gameModeAvailable = useGameModeAvailable() && connection.state === "REAL_CONNECTED";
   const t9Enabled = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const rootRef = useRef<HTMLDivElement>(null);
-  const breadcrumbRef = useRef<HTMLDivElement>(null);
+  const breadcrumbRef = useRef<HTMLSpanElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
   const centerSlotRef = useRef<HTMLSpanElement>(null);
   const centerActionRef = useRef<HTMLSpanElement>(null);
@@ -298,7 +305,9 @@ export const KeypadGuidanceBar = () => {
       aria-hidden="true"
     >
       {inRouter ? <RouteChangeRefresh onRouteChange={refresh} /> : null}
-      <div ref={breadcrumbRef} className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb" />
+      <div className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb">
+        <span ref={breadcrumbRef} className="keypad-guidance-breadcrumb-text" />
+      </div>
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">
           <kbd className="keypad-guidance-cap">Back</kbd>

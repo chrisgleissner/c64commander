@@ -13,7 +13,7 @@ import { AppBar } from "@/components/AppBar";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { PageContainer } from "@/components/layout/PageContainer";
+import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { getDocsExternalResourceLinks } from "@/lib/docs/externalResources";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
@@ -173,57 +173,59 @@ export default function DocsPage() {
     <div className={pageShellClassName}>
       <AppBar title="Docs" />
 
-      {/* `py-6` overrides `.page-shell`'s own profile padding and `space-y-4` fixes the card
+      {/* `py-6` overrides `.page-shell`'s own profile padding and `gap-4` fixes the card
           gap at 16px, so this is the one page that opts out of the profile spacing. Both are
           kept where the page was tuned; on compact the profile's padding applies again. */}
-      <PageContainer className={profile === "compact" ? "space-y-2" : "py-6 space-y-4"}>
-        {/* First, because someone on Docs is looking for a way in and the tour is the shortest
+      <PageContainer className={profile === "compact" ? undefined : "py-6"}>
+        <PageStack className={profile === "compact" ? "gap-2" : "gap-4"}>
+          {/* First, because someone on Docs is looking for a way in and the tour is the shortest
             one. Restartable at any time, which is the point of section 8's D10. */}
-        <TourRestartCard />
+          <TourRestartCard />
 
-        {docSections.map((section, index) => (
-          <motion.div
-            key={section.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-          >
-            <DocSectionCard section={section} />
-          </motion.div>
-        ))}
+          {docSections.map((section, index) => (
+            <motion.div
+              key={section.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              <DocSectionCard section={section} />
+            </motion.div>
+          ))}
 
-        {/* External Links. Omitted on c64u-remote: that edition's only external link is
+          {/* External Links. Omitted on c64u-remote: that edition's only external link is
             the C64U User Guide, already reachable from Settings -> About, so a whole
             standalone card for one duplicate link is not worth the space. */}
-        {variantId !== "c64u-remote" && (
-          <CollapsibleSection
-            scope="docs"
-            id="external-resources"
-            title="External resources"
-            summary={`Official device manuals and API references used by ${variant.displayName}.`}
-            icon={ExternalLink}
-            testId="docs-external-resources"
-            // Closed on a first visit: these are references to other people's documentation, read
-            // once if at all, and the page's own chapters are what a reader came for.
-            defaultOpen={false}
-          >
-            <div className="space-y-2">
-              {externalResourceLinks.map((link) => (
-                <a
-                  key={link.id}
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
-                  data-testid={link.testId}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          </CollapsibleSection>
-        )}
+          {variantId !== "c64u-remote" && (
+            <CollapsibleSection
+              scope="docs"
+              id="external-resources"
+              title="External resources"
+              summary={`Official device manuals and API references used by ${variant.displayName}.`}
+              icon={ExternalLink}
+              testId="docs-external-resources"
+              // Closed on a first visit: these are references to other people's documentation, read
+              // once if at all, and the page's own chapters are what a reader came for.
+              defaultOpen={false}
+            >
+              <div className="space-y-2">
+                {externalResourceLinks.map((link) => (
+                  <a
+                    key={link.id}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
+                    data-testid={link.testId}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            </CollapsibleSection>
+          )}
+        </PageStack>
       </PageContainer>
     </div>
   );

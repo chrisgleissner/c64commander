@@ -64,6 +64,7 @@ export function SectionHeader({
           ref={resetFocusRef}
           variant="outline"
           size="sm"
+          className="px-2 text-xs"
           onClick={resetAction}
           disabled={resetDisabled}
           data-testid={resetTestId}

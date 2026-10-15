@@ -290,8 +290,9 @@ export const FocusNavigationProvider = ({
           adoptFocusAwaitingRingRef.current();
           notifyRing();
         },
-        // Radix may hand DOM focus back to a different stop; focusing the opener makes the ring's return hold.
-        onReturnToOpener: (id) => {
+        // Radix may hand DOM focus back to a different stop; focusing the stop makes the ring's move hold,
+        // and brings a stop the ring moved to on its own into view.
+        onSelectionMovedByScan: (id) => {
           if (getInputModality() === "key-navigation") focusRingElement(ringElementFor(id));
         },
       }),

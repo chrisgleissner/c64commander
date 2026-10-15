@@ -846,6 +846,23 @@ describe("HomeDiskManager UI & Interactions", () => {
     expect(screen.getByText("/other/")).toBeInTheDocument();
   });
 
+  it("gives a folder that recurs in the sorted disk list a header with its own key", () => {
+    const disks = ["/a/A.d64", "/a/b/x.d64", "/a/c.d64"].map((path, index) =>
+      createMockDisk({ id: `d${index + 1}`, name: path.split("/").pop(), path }),
+    );
+    (useDiskLibrary as any).mockReturnValue({ disks, runtimeFiles: {} });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    render(<HomeDiskManager />);
+
+    expect(screen.getAllByTestId("list-header").map((header) => header.textContent)).toEqual(["/a/", "/a/b/", "/a/"]);
+    const duplicateKeyWarnings = consoleError.mock.calls.filter((call) =>
+      String(call[0]).includes("Encountered two children with the same key"),
+    );
+    consoleError.mockRestore();
+    expect(duplicateKeyWarnings).toEqual([]);
+  });
+
   it("handles mount failure with error report", async () => {
     const disk = createMockDisk({ id: "d1", name: "Disk 1" });
 

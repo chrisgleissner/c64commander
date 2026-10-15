@@ -366,6 +366,145 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  describe("a route change", () => {
+    const startOnSecondStop = () => {
+      const onSelectionMovedByScan = vi.fn();
+      const controller = new FocusController();
+      const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
+      engine.start();
+      const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+      controller.setCurrent(idOf("settings-b"));
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { controller, engine, selected, onSelectionMovedByScan };
+    };
+    const tabBar = `<nav data-focus-scope="tabbar"><button id="tab-home">Home</button><button id="tab-settings">Settings</button></nav>`;
+
+    it("lands on the new page's first stop, not on the tab bar, when the page is replaced", () => {
+      const page = mount(
+        `<main id="page"><button id="settings-a">A</button><button id="settings-b">B</button><button id="settings-c">C</button></main>${tabBar}`,
+      );
+      const { engine, selected, onSelectionMovedByScan } = startOnSecondStop();
+
+      page.querySelector("#page")!.innerHTML =
+        `<button id="home-first">Home first</button><button id="home-second">Home second</button>`;
+      engine.refresh();
+
+      expect(selected()).toBe("home-first");
+      expect(onSelectionMovedByScan).not.toHaveBeenCalled();
+      engine.stop();
+    });
+
+    it("lands on the new page's first stop when the page left is kept, hidden, in its own slot", () => {
+      mount(`
+        <div data-slot-active="true" id="settings-slot"><button id="settings-a">A</button><button id="settings-b">B</button></div>
+        <div data-slot-active="false" id="home-slot" hidden><button id="home-first">Home first</button></div>
+        ${tabBar}`);
+      const { engine, selected, onSelectionMovedByScan } = startOnSecondStop();
+
+      el("settings-slot").setAttribute("data-slot-active", "false");
+      el("settings-slot").setAttribute("hidden", "");
+      el("home-slot").setAttribute("data-slot-active", "true");
+      el("home-slot").removeAttribute("hidden");
+      engine.refresh();
+
+      expect(selected()).toBe("home-first");
+      expect(onSelectionMovedByScan).not.toHaveBeenCalled();
+      engine.stop();
+    });
+
+    it("still moves to the nearest stop on the same page when the selected one is removed", () => {
+      mount(
+        `<main id="page"><button id="settings-a">A</button><button id="settings-b">B</button><button id="settings-c">C</button></main>${tabBar}`,
+      );
+      const { engine, selected, onSelectionMovedByScan } = startOnSecondStop();
+
+      el("settings-b").remove();
+      engine.refresh();
+
+      expect(selected()).toBe("settings-c");
+      expect(onSelectionMovedByScan).toHaveBeenCalledTimes(1);
+      engine.stop();
+    });
+  });
+
+  describe("a selected control that is disabled or removed", () => {
+    const mountGroup = () => {
+      mount(`
+        <section data-section-label="Quick Actions" id="card">
+          <button id="toggle">Quick Actions</button>
+          <button id="game">Game</button>
+          <button id="pause">Pause</button>
+          <button id="backup">Backup</button>
+        </section>
+      `);
+      const onSelectionMovedByScan = vi.fn();
+      const controller = new FocusController();
+      const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
+      engine.start();
+      controller.setCurrent(controller.list().find((item) => item.parentId === undefined)!.id);
+      controller.focusFirstChild();
+      const select = (domId: string) =>
+        controller.setCurrent(controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id);
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { controller, engine, select, selected, onSelectionMovedByScan };
+    };
+
+    it("keeps the selection on a control natively disabled while its work runs, and after it is enabled", () => {
+      const { controller, engine, select, selected } = mountGroup();
+      select("pause");
+
+      el("pause").setAttribute("disabled", "");
+      el("backup").setAttribute("disabled", "");
+      engine.refresh();
+      expect(selected()).toBe("pause");
+      expect(controller.activateCurrent()).toBe(false);
+
+      el("pause").textContent = "Resume";
+      el("pause").removeAttribute("disabled");
+      engine.refresh();
+      expect(selected()).toBe("pause");
+      engine.stop();
+    });
+
+    it("drops a disabled control that is not selected, and lets navigation move off a held one", () => {
+      const { controller, engine, select, selected } = mountGroup();
+      select("pause");
+      el("pause").setAttribute("disabled", "");
+      el("backup").setAttribute("disabled", "");
+      engine.refresh();
+
+      expect(controller.list().some((item) => engine.elementForId(item.id)?.id === "backup")).toBe(false);
+      controller.focusPrevious();
+      expect(selected()).toBe("game");
+      engine.refresh();
+      expect(controller.list().some((item) => engine.elementForId(item.id)?.id === "pause")).toBe(false);
+      engine.stop();
+    });
+
+    it("moves to the following stop when the selected one is removed, and reports the move", () => {
+      const { controller, engine, select, selected, onSelectionMovedByScan } = mountGroup();
+      select("pause");
+
+      el("pause").remove();
+      engine.refresh();
+
+      expect(selected()).toBe("backup");
+      expect(onSelectionMovedByScan).toHaveBeenLastCalledWith(controller.current()!.id);
+      engine.stop();
+    });
+
+    it("moves to the preceding stop when the removed one was the last in its group", () => {
+      const { engine, select, selected } = mountGroup();
+      select("backup");
+
+      el("backup").remove();
+      engine.refresh();
+
+      expect(selected()).toBe("pause");
+      engine.stop();
+    });
+  });
+
   it("returns the ring to the item that opened an overlay once the overlay closes", () => {
     mount(`<button id="first">first</button><button id="opener">opener</button><button id="last">last</button>`);
     const { controller, engine } = makeEngine();
@@ -454,8 +593,8 @@ describe("FocusDiscoveryEngine", () => {
   it("reports the opener it returns to, at once or once the opener is enabled again", () => {
     mount(`<button id="first">first</button><button id="opener">opener</button>`);
     const controller = new FocusController();
-    const onReturnToOpener = vi.fn();
-    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onReturnToOpener });
+    const onSelectionMovedByScan = vi.fn();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
     engine.start();
     const openerId = controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id;
     controller.setCurrent(openerId);
@@ -464,7 +603,7 @@ describe("FocusDiscoveryEngine", () => {
     engine.refresh();
     dialog.remove();
     engine.refresh();
-    expect(onReturnToOpener).toHaveBeenLastCalledWith(openerId);
+    expect(onSelectionMovedByScan).toHaveBeenLastCalledWith(openerId);
 
     controller.setCurrent(openerId);
     const second = mount(`<div role="dialog"><button>close</button></div>`);
@@ -472,11 +611,11 @@ describe("FocusDiscoveryEngine", () => {
     el("opener").setAttribute("disabled", "");
     second.remove();
     engine.refresh();
-    expect(onReturnToOpener).toHaveBeenCalledTimes(1);
+    expect(onSelectionMovedByScan).toHaveBeenCalledTimes(1);
     el("opener").removeAttribute("disabled");
     engine.refresh();
-    expect(onReturnToOpener).toHaveBeenCalledTimes(2);
-    expect(onReturnToOpener).toHaveBeenLastCalledWith(openerId);
+    expect(onSelectionMovedByScan).toHaveBeenCalledTimes(2);
+    expect(onSelectionMovedByScan).toHaveBeenLastCalledWith(openerId);
     engine.stop();
   });
 
@@ -543,6 +682,64 @@ describe("FocusDiscoveryEngine", () => {
 
     expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
     engine.stop();
+  });
+
+  describe("a key-owning sheet closed from its own menu", () => {
+    const openSheetFromOpener = () => {
+      const page = mount(`<div id="page"><button id="first">first</button><button id="opener">Input</button></div>`);
+      const { controller, engine } = makeEngine();
+      engine.start();
+      controller.setCurrent(controller.list().find((item) => engine.elementForId(item.id)?.id === "opener")!.id);
+      const sheetHost = mount(
+        `<div role="dialog" data-key-nav-skip=""><button id="restore">Show controls</button></div>`,
+      );
+      const sheet = sheetHost.firstElementChild!;
+      page.setAttribute("aria-hidden", "true");
+      engine.refresh();
+      expect(controller.list()).toHaveLength(0);
+      const openMenu = () => {
+        const menu = mount(`<div role="menu"><button>Other controls</button><button>Close Remote Input</button></div>`);
+        engine.refresh();
+        expect(controller.list()).toHaveLength(2);
+        return menu;
+      };
+      const closeSheet = () => {
+        sheetHost.remove();
+        page.removeAttribute("aria-hidden");
+        engine.refresh();
+      };
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { controller, engine, sheet, openMenu, closeSheet, selected };
+    };
+
+    it("returns to the opener after Close Remote Input in the menu", () => {
+      const { engine, openMenu, closeSheet, selected } = openSheetFromOpener();
+      const menu = openMenu();
+      menu.remove();
+      engine.refresh();
+      closeSheet();
+
+      expect(selected()).toBe("opener");
+      engine.stop();
+    });
+
+    it("returns to the opener after Other controls, then Back twice", () => {
+      const { controller, engine, sheet, openMenu, closeSheet, selected } = openSheetFromOpener();
+      const menu = openMenu();
+      menu.remove();
+      sheet.removeAttribute("data-key-nav-skip");
+      engine.refresh();
+      expect(selected()).toBe("restore");
+      controller.focusNext();
+
+      sheet.setAttribute("data-key-nav-skip", "");
+      engine.refresh();
+      expect(controller.list()).toHaveLength(0);
+      closeSheet();
+
+      expect(selected()).toBe("opener");
+      engine.stop();
+    });
   });
 
   it("keeps the selection on a card whose own stop moves inside it as it opens", () => {
@@ -642,6 +839,72 @@ describe("FocusDiscoveryEngine", () => {
     controller.focusFirstChild();
     engine.refresh(); // recompute chain from the controller's scope
     expect(engine.currentScopeChain().map((i) => i.id)).toEqual(["settings"]);
+    engine.stop();
+  });
+});
+
+describe("aria-label changes", () => {
+  const start = (html: string) => {
+    document.body.innerHTML = html;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+    return { controller, engine, onAfterAssemble, refresh };
+  };
+
+  it("notify the guidance bar without a rescan when the selected control is renamed", async () => {
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="like" aria-label="Like this tune">♥</button><button id="next">Next</button></div>`,
+    );
+
+    el("like").setAttribute("aria-label", "Remove like");
+    await afterRingRescan();
+
+    expect(onAfterAssemble).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("neither notify nor rescan when a control that is not selected is renamed", async () => {
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="like" aria-label="Like this tune">♥</button><button id="next">Next</button></div>`,
+    );
+
+    el("next").setAttribute("aria-label", "Next tune");
+    await afterRingRescan();
+
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("neither notify nor rescan when the same name is written again", async () => {
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="like" aria-label="Like this tune">♥</button></div>`,
+    );
+
+    el("like").setAttribute("aria-label", "Like this tune");
+    await afterRingRescan();
+
+    expect(onAfterAssemble).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("rescan when a group is renamed, because its breadcrumb label is read during a scan", async () => {
+    const { controller, engine, refresh } = start(
+      `<section id="card" data-focus-group="card" aria-label="Drive A"><button>Mount</button></section>`,
+    );
+    expect(controller.current()?.group).toBe("Drive A");
+
+    el("card").setAttribute("aria-label", "Drive B");
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalled();
+    expect(controller.current()?.group).toBe("Drive B");
     engine.stop();
   });
 });

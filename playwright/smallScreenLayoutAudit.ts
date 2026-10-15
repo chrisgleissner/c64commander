@@ -250,6 +250,8 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
       let node = element.parentElement;
       while (node && node !== document.body) {
         const style = window.getComputedStyle(node);
+        // A sideways scroller between the text and a clipping box is what clips it, on purpose.
+        if (style.overflowX === "auto" || style.overflowX === "scroll") return null;
         if (style.overflowX === "hidden" || style.overflowX === "clip") return node;
         node = node.parentElement;
       }

@@ -648,6 +648,34 @@ describe("web server platform runtime", () => {
   // HARD27-030 LAN policy widened it to any private-range host, which makes the
   // configured device's password reachable by a browser session that names
   // another host, and makes that host's own password unusable.
+  it("relays the FTP reply when the device refuses a folder listing", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    const ftpRoot = await makeTempDir("c64-web-ftp-refused-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
+    await mkdir(path.join(ftpRoot, "SD"), { mode: 0o000 });
+    const ftp = await createMockFtpServer({ rootDir: ftpRoot, password: "pw", pasvMin: 40470, pasvMax: 40500 });
+    ftpServers.push(ftp);
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "pw",
+      C64U_DEVICE_HOST: ftp.host,
+    });
+    const cookie = await loginAndGetCookie(server.baseUrl, "pw");
+
+    const response = await fetch(`${server.baseUrl}/api/ftp/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ host: ftp.host, port: ftp.port, username: "tester", path: "/SD" }),
+    });
+
+    expect(response.status).toBe(502);
+    expect(((await response.json()) as { error: string }).error).toMatch(/^FTP list failed: .*\b(450|451|550)\b/);
+  });
+
   it("sends the configured password over FTP only to the configured device", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");

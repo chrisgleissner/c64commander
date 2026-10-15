@@ -9,6 +9,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ItemSelectionView } from "@/components/itemSelection/ItemSelectionView";
+import { discoverInteractiveElements } from "@/lib/input/discovery";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 const entries: SourceEntry[] = [
@@ -53,7 +54,7 @@ describe("ItemSelectionView", () => {
 
     const openDemosRow = screen.getByRole("button", { name: /open demos/i });
     fireEvent.click(openDemosRow);
-    fireEvent.keyDown(screen.getAllByTestId("source-entry-row")[1], { key: "Enter" });
+    fireEvent.click(screen.getAllByTestId("source-entry-row")[1]);
 
     expect(onNavigateRoot).toHaveBeenCalledTimes(1);
     expect(onNavigateUp).toHaveBeenCalledTimes(1);
@@ -65,6 +66,34 @@ describe("ItemSelectionView", () => {
     expect(screen.getByTestId("source-path-label")).toHaveTextContent("/music");
     expect(screen.queryByText(/^Path:/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Select Demos")).toBeInTheDocument();
+  });
+
+  it("gives a folder row two keypad stops, its checkbox and Open, not a third that also opens it", () => {
+    render(
+      <ItemSelectionView
+        path="/music"
+        rootPath="/"
+        entries={[entries[1]]}
+        isLoading={false}
+        showLoadingIndicator={false}
+        selection={new Map()}
+        onToggleSelect={vi.fn()}
+        onOpen={vi.fn()}
+        onNavigateUp={vi.fn()}
+        onNavigateRoot={vi.fn()}
+        onRefresh={vi.fn()}
+        showFolderSelect
+        emptyLabel="Empty"
+      />,
+    );
+
+    const row = screen.getByTestId("source-entry-row");
+    const stops = discoverInteractiveElements(row.parentElement as HTMLElement);
+
+    expect(stops).toEqual([
+      screen.getByRole("checkbox", { name: "Select Demos" }),
+      screen.getByRole("button", { name: "Open Demos" }),
+    ]);
   });
 
   it("disables selection and navigation at root when loading", () => {

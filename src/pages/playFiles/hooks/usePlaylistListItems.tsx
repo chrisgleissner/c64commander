@@ -76,7 +76,8 @@ export const usePlaylistListItems = ({
       const folderPath = getParentPath(item.path);
       if (folderPath !== lastFolder) {
         items.push({
-          id: `folder:${folderPath}`,
+          // A folder can recur further down the list, so its path alone is not a unique React key.
+          id: `folder:${folderPath}:${item.id}`,
           title: folderPath,
           variant: "header",
           icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,

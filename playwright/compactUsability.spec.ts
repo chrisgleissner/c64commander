@@ -829,6 +829,11 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await audit.check(page, "Settings / Delete device?", deleteDevice, "confirmation");
     await dismiss(page, deleteDevice);
 
+    await page.getByTestId("settings-add-device").click();
+    const addDevice = page.getByTestId("settings-add-device-dialog");
+    await audit.check(page, "Settings / Add device", addDevice, "form");
+    await dismiss(page, addDevice);
+
     // The Device Safety card holds exactly one Select, so the combobox role is unambiguous.
     const safety = page.getByTestId("settings-section-device-safety");
     await safety.scrollIntoViewIfNeeded();

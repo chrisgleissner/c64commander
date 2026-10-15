@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
 import { addLog } from "@/lib/logging";
@@ -66,6 +66,11 @@ describe("PlaybackEngineToggle", () => {
     renderChooser();
     expect(screen.getByTestId("playback-engine-c64")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("playback-engine-local")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("opens on the destination already in use, so OK does not switch it", async () => {
+    renderChooser();
+    await waitFor(() => expect(screen.getByTestId("playback-engine-c64")).toHaveFocus());
   });
 
   it("persists and reflects a switch to the local engine", () => {

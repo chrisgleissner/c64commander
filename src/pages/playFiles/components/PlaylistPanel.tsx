@@ -30,6 +30,8 @@ export type PlaylistPanelProps = {
   onToggleFilter: (category: PlayFileCategory) => void;
   formatCategory: (category: PlayFileCategory) => string;
   hasPlaylist: boolean;
+  /** The saved playlist is still being read, so an empty list does not yet mean there is nothing in it. */
+  playlistLoading: boolean;
   playlistItemCount: number;
   onAddItems: () => void;
   onClearPlaylist: () => void;
@@ -59,6 +61,7 @@ export const PlaylistPanel = ({
   onToggleFilter,
   formatCategory,
   hasPlaylist,
+  playlistLoading,
   playlistItemCount,
   onAddItems,
   onClearPlaylist,
@@ -120,7 +123,7 @@ export const PlaylistPanel = ({
         viewAllItems={viewAllItems}
         totalItemCount={totalItemCount}
         hiddenItemCount={hiddenItemCount}
-        emptyLabel="No tracks in playlist yet."
+        emptyLabel={playlistLoading ? "Loading playlist…" : "No tracks in playlist yet."}
         selectAllLabel="Select all"
         deselectAllLabel="Deselect all"
         removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const sendMachineInputBatchMock = vi.fn(async () => ({ errors: [], keyboard: { inputs: [] }, joysticks: [] }));
 const injectAutostartMock = vi.fn(async () => undefined);
 const addErrorLogMock = vi.fn();
+const addLogMock = vi.fn();
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({ sendMachineInputBatch: sendMachineInputBatchMock, getDeviceHost: () => "test-host" }),
@@ -23,6 +24,7 @@ vi.mock("@/lib/playback/autostart", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: (...args: unknown[]) => addErrorLogMock(...args),
+  addLog: (...args: unknown[]) => addLogMock(...args),
   buildErrorLogDetails: (error: Error, context: Record<string, unknown>) => ({ error: error.message, ...context }),
 }));
 
@@ -32,6 +34,7 @@ vi.mock("@/lib/logging", () => ({
 // assertions stay exact.
 vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
   runSerializedMachineInput: (dispatch: () => unknown) => Promise.resolve(dispatch()),
+  hasWaitingMachineInput: () => false,
 }));
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
@@ -822,6 +825,164 @@ describe("useRemoteInputSession", () => {
 
     expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
     expect(result.current.connectionStatus).toBe("error");
+  });
+
+  describe("a typed key whose batch got no answer in time", () => {
+    const noAnswer = () => new Error("The C64 did not answer within 1.5 s");
+    beforeEach(() => {
+      addLogMock.mockClear();
+      addErrorLogMock.mockClear();
+    });
+
+    it("is sent once more, with a warning and no error, instead of being dropped", async () => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(sendMachineInputBatchMock.mock.calls[1]).toEqual(sendMachineInputBatchMock.mock.calls[0]);
+      expect(result.current.connectionStatus).toBe("idle");
+      expect(addLogMock).toHaveBeenCalledWith(
+        "warn",
+        "Remote input key taps got no answer in time; sending them once more",
+        expect.objectContaining({ eventCount: expect.any(Number) }),
+      );
+      expect(addErrorLogMock).not.toHaveBeenCalled();
+    });
+
+    const tapCalls = () =>
+      sendMachineInputBatchMock.mock.calls.filter(([batch]) =>
+        (batch as { events: Array<{ transition?: string }> }).events.some((event) => event.transition === "tap"),
+      ).length;
+    const deferredNoAnswer = () => {
+      let fail: () => void = () => undefined;
+      sendMachineInputBatchMock.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = () => reject(noAnswer());
+          }),
+      );
+      return () => fail();
+    };
+
+    it.each([
+      { title: "RETURN", send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendChar("\r") },
+      {
+        title: "a function key",
+        send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendSpecialKey("f1"),
+      },
+      {
+        title: "a cursor key",
+        send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendCursor("down"),
+      },
+      {
+        title: "a CTRL chord",
+        send: (session: ReturnType<typeof useRemoteInputSession>) => session.sendKeyboardInputs(["ctrl", "1"]),
+      },
+    ])("never sends $title twice, because a second delivery acts again", async ({ send }) => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => send(result.current));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+      expect(result.current.connectionStatus).toBe("error");
+    });
+
+    it("is not sent again after a release-all while its first attempt was waiting", async () => {
+      const fail = deferredNoAnswer();
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+
+      act(() => result.current.releaseAll());
+      await act(async () => {
+        fail();
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+    });
+
+    it("is not sent again after another batch failed while its first attempt was waiting", async () => {
+      const fail = deferredNoAnswer();
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+      sendMachineInputBatchMock.mockRejectedValueOnce(new Error("device offline"));
+      act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      await act(async () => {
+        fail();
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+    });
+
+    it("is not sent again after Remote Input closed while its first attempt was waiting", async () => {
+      const fail = deferredNoAnswer();
+      const { result, unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+
+      unmount();
+      await act(async () => {
+        fail();
+        await flushMicrotasks();
+      });
+
+      expect(tapCalls()).toBe(1);
+    });
+
+    it("is retried only once, then reported as an error", async () => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer()).mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(result.current.connectionStatus).toBe("error");
+      expect(addErrorLogMock).toHaveBeenCalledWith("Remote input batch send failed", expect.any(Object));
+    });
+
+    it("leaves a held joystick press to the release_all recovery rather than sending it again", async () => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({ events: [{ kind: "release_all" }] });
+      expect(addLogMock).not.toHaveBeenCalled();
+    });
   });
 
   it("does not loop when the recovery release_all's own batch fails (single-shot, no retry)", async () => {

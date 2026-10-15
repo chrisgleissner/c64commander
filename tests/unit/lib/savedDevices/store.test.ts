@@ -916,3 +916,26 @@ describe("savedDevices store", () => {
     expect(next.selectedDeviceId).toBe(next.devices[0]!.id);
   });
 });
+
+describe("createSavedDeviceId", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("uses crypto.randomUUID where the page offers it", async () => {
+    vi.stubGlobal("crypto", { randomUUID: () => "11111111-2222-3333-4444-555555555555" });
+    const { createSavedDeviceId } = await loadStore();
+
+    expect(createSavedDeviceId()).toBe("11111111-2222-3333-4444-555555555555");
+  });
+
+  // randomUUID exists only in a secure context, and the self-hosted web build is often served over plain http.
+  it("still makes distinct ids where crypto.randomUUID is missing", async () => {
+    vi.stubGlobal("crypto", {});
+    const { createSavedDeviceId } = await loadStore();
+
+    const first = createSavedDeviceId();
+    const second = createSavedDeviceId();
+
+    expect(first).toMatch(/^[0-9a-z]+-[0-9a-z]+$/);
+    expect(second).not.toBe(first);
+  });
+});

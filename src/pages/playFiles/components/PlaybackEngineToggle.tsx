@@ -184,6 +184,13 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
         align="start"
         className={cn("p-1", carriedOnNote ? "w-56" : "w-40")}
         data-testid="playback-engine-options"
+        // Opens on the destination in use: opened on the first option, one OK moved the sound.
+        onOpenAutoFocus={(event) => {
+          const current = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[aria-pressed="true"]');
+          if (!current) return;
+          event.preventDefault();
+          current.focus({ preventScroll: true });
+        }}
       >
         {carriedOnNote ? (
           <p className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground" data-testid="playback-engine-carried-on-note">

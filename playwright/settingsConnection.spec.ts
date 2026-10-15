@@ -85,6 +85,42 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "url-saved");
   });
 
+  test("Add device saves and switches only once the new host answers", async ({
+    page,
+  }: {
+    page: Page;
+  }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "The first host typed into Add device does not resolve.");
+    const port = portFromHost(hostFromBaseUrl(server.baseUrl));
+    const savedDeviceHosts = () =>
+      page.evaluate(() =>
+        (JSON.parse(localStorage.getItem("c64u_saved_devices:v1") ?? "{}").devices ?? []).map(
+          (device: { host: string }) => device.host,
+        ),
+      );
+    await page.goto("/settings");
+    await expect(page.getByTestId("settings-device-host")).toBeVisible();
+    const before = await savedDeviceHosts();
+
+    await page.getByTestId("settings-add-device").click();
+    const dialog = page.getByTestId("settings-add-device-dialog");
+    await expect(dialog).toBeVisible();
+    expect(await savedDeviceHosts()).toEqual(before);
+
+    await dialog.getByTestId("add-device-host").fill("no-such-ultimate.invalid");
+    await dialog.getByTestId("add-device-http").fill(port);
+    await dialog.getByTestId("settings-add-device-confirm").click();
+    await expect(dialog.getByText(/couldn.t reach .no-such-ultimate\.invalid./i)).toBeVisible({ timeout: 20_000 });
+    expect(await savedDeviceHosts()).toEqual(before);
+    await snap(page, testInfo, "add-device-unreachable");
+
+    await dialog.getByTestId("add-device-host").fill("localhost");
+    await dialog.getByTestId("settings-add-device-confirm").click();
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
+    await expect.poll(savedDeviceHosts).toEqual([...before, "localhost"]);
+    await snap(page, testInfo, "add-device-added");
+  });
+
   test("invalid host format shows validation or accepts input", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
