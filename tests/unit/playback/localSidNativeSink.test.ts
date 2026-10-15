@@ -347,6 +347,17 @@ describe("the native sink controller", () => {
     expect(of("fadeIn")).toEqual([{ serial: expect.any(Number), seq: expect.any(Number), ms: 1500 }]);
   });
 
+  it("asks the feed for a play-out, with its declick, when the tune ends by itself", async () => {
+    const { audio, of } = build();
+    audio.beginCrossfadeTailPlayout!(2.4, 0.01);
+    audio.beginCrossfadeTailPlayout!(4.6);
+    await flush();
+    expect(of("beginTransition").map((o) => [o.seconds, o.playOutDeclickSeconds])).toEqual([
+      [2.4, 0.01],
+      [4.6, undefined],
+    ]);
+  });
+
   it("passes a crossfade tail from one session to the next by id, in the order the engine asks", async () => {
     const outgoing = build();
     const incoming = createNativeLocalSidSink(RATE, outgoing.backend, "sidplayez")!;
