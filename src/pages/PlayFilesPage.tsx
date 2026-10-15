@@ -205,7 +205,6 @@ import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
-  CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
   DURATION_SLIDER_STEPS,
   SHARED_PLAYLIST_STORAGE_KEY,
@@ -2851,10 +2850,8 @@ export default function PlayFilesPage() {
                 onToggleSelectAll={toggleSelectAllPlaylist}
                 onRemoveSelected={handleRemoveSelectedPlaylist}
                 maxVisible={listPreviewLimit}
-                categoryOptions={CATEGORY_OPTIONS}
                 playlistTypeFilters={playlistTypeFilters}
                 onToggleFilter={togglePlaylistTypeFilter}
-                formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
                 playlistLoading={!playlistHydrated}
                 playlistItemCount={playlistIds.length}

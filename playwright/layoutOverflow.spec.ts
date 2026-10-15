@@ -263,6 +263,7 @@ test.describe("Layout overflow safeguards", () => {
     const dialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, dialog);
 
+    await page.getByTestId("view-all-filter-toggle").click();
     const filter = page.getByTestId("view-all-filter-input");
     await filter.fill("Track_0");
     await snap(page, testInfo, "view-all-filter");
@@ -666,21 +667,21 @@ test.describe("Layout overflow safeguards", () => {
 
     const row = page.getByTestId("disk-row").first();
     await row.getByRole("button", { name: "Item actions" }).click();
-    await page.getByRole("menuitem", { name: "Set group…" }).click();
+    await page.getByTestId("action-list-item-sheet").getByRole("button", { name: "Set group…" }).click();
     const groupDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, groupDialog);
     await snap(page, testInfo, "disk-group-dialog");
     await closeDialog(groupDialog);
 
     await row.getByRole("button", { name: "Item actions" }).click();
-    await page.getByRole("menuitem", { name: "Rename disk…" }).click();
+    await page.getByTestId("action-list-item-sheet").getByRole("button", { name: "Rename disk…" }).click();
     const renameDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, renameDialog);
     await snap(page, testInfo, "disk-rename-dialog");
     await closeDialog(renameDialog);
 
     await row.getByRole("button", { name: "Item actions" }).click();
-    await page.getByRole("menuitem", { name: "Remove from collection" }).click();
+    await page.getByTestId("action-list-item-sheet").getByRole("button", { name: "Remove from collection" }).click();
     const deleteDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, deleteDialog);
     await snap(page, testInfo, "disk-delete-dialog");

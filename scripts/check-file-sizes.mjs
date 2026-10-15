@@ -91,9 +91,9 @@ export const GRANDFATHERED = new Map([
   ["android/app/src/main/java/uk/gleissner/c64commander/StreamUdpPlugin.kt", 1175],
   ["src/pages/playFiles/handlers/addFileSelections.ts", 1239],
   ["src/lib/savedDevices/store.ts", 1205],
-  ["src/lib/deviceInteraction/deviceInteractionManager.ts", 1176],
   ["src/pages/ConfigBrowserPage.tsx", 1154],
   ["src/lib/streams/subjectTracker.ts", 1150],
+  ["src/lib/deviceInteraction/deviceInteractionManager.ts", 1087],
   ["android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt", 1061],
 ]);
 

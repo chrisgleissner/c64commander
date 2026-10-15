@@ -217,15 +217,21 @@ export function LetterIndexRail({
     if (pending && landOn(pending.id, pending.select)) pendingRef.current = null;
   }, [landOn]);
 
+  // Letters are read against the rail as it was when the finger went down. A jump can fold the
+  // sheet's filter and so make the rail taller mid-drag, which would otherwise move every letter
+  // under a finger that has not moved.
+  const touchRectRef = useRef<DOMRect | null>(null);
   const handlePointer = (event: React.PointerEvent<HTMLDivElement>) => {
     const rail = railRef.current;
     if (!rail) return;
     const rect = rail.getBoundingClientRect();
-    const fraction = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
+    const mapped = touchRectRef.current ?? rect;
+    const fraction = mapped.height > 0 ? (event.clientY - mapped.top) / mapped.height : 0;
     const letter = letterAtRailFraction(index.letters, fraction);
     if (!letter) return;
     const changed = letter !== activeLetterRef.current;
-    showBubble(letter, Math.min(Math.max(fraction, 0), 1));
+    const fingerFraction = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
+    showBubble(letter, Math.min(Math.max(fingerFraction, 0), 1));
     if (changed || event.type === "pointerdown") jumpTo(letter, false);
   };
 
@@ -301,16 +307,21 @@ export function LetterIndexRail({
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture?.(event.pointerId);
         clearTimeout(hideTimerRef.current);
+        touchRectRef.current = event.currentTarget.getBoundingClientRect();
         handlePointer(event);
       }}
       onPointerMove={(event) => {
         if (event.currentTarget.hasPointerCapture?.(event.pointerId)) handlePointer(event);
       }}
       onPointerUp={() => {
+        touchRectRef.current = null;
         selectLanded();
         scheduleHide();
       }}
-      onPointerCancel={scheduleHide}
+      onPointerCancel={() => {
+        touchRectRef.current = null;
+        scheduleHide();
+      }}
     >
       <div className={cn("flex h-full flex-col items-center", letterColumnClassName)}>
         {slots.map((slot, position) =>

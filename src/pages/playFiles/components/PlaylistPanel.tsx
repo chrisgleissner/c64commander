@@ -11,10 +11,16 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
-import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import type { DisplayProfile } from "@/lib/displayProfiles";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { ClearPlaylistDialog } from "@/pages/playFiles/components/ClearPlaylistDialog";
 import type { LetterIndexSource } from "@/lib/lists/letterIndex";
+import {
+  PLAYLIST_TYPE_GROUPS,
+  describePlaylistTypeFilter,
+  isPlaylistTypeGroupShown,
+  playlistTypeGroupToggles,
+} from "@/pages/playFiles/playlistTypeGroups";
 
 export type PlaylistPanelProps = {
   previewItems: ActionListItem[];
@@ -26,10 +32,8 @@ export type PlaylistPanelProps = {
   onToggleSelectAll: () => void;
   onRemoveSelected: () => void;
   maxVisible: number;
-  categoryOptions: PlayFileCategory[];
   playlistTypeFilters: PlayFileCategory[];
   onToggleFilter: (category: PlayFileCategory) => void;
-  formatCategory: (category: PlayFileCategory) => string;
   hasPlaylist: boolean;
   /** The saved playlist is still being read, so an empty list does not yet mean there is nothing in it. */
   playlistLoading: boolean;
@@ -48,6 +52,8 @@ const PLAY_PLAYLIST_FOCUS_ORDER = {
   clear: 310,
 } as const;
 
+const COLLAPSIBLE_FILTER_PROFILES: readonly DisplayProfile[] = ["compact"];
+
 export const PlaylistPanel = ({
   previewItems,
   viewAllItems,
@@ -58,10 +64,8 @@ export const PlaylistPanel = ({
   onToggleSelectAll,
   onRemoveSelected,
   maxVisible,
-  categoryOptions,
   playlistTypeFilters,
   onToggleFilter,
-  formatCategory,
   hasPlaylist,
   playlistLoading,
   playlistItemCount,
@@ -73,7 +77,6 @@ export const PlaylistPanel = ({
   onViewAllEndReached,
   letterIndexSource,
 }: PlaylistPanelProps) => {
-  const { profile } = useDisplayProfile();
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const addItemsFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-playlist-add-items",
@@ -86,34 +89,21 @@ export const PlaylistPanel = ({
     group: "play-playlist",
   });
 
-  const compactSheetCategoryLabels: Partial<Record<PlayFileCategory, string>> = {
-    sid: "SID",
-    mod: "MOD",
-    prg: "PRG",
-    crt: "CRT",
-    disk: "Disks",
-  };
-
-  const renderCategoryFilters = (useCompactSheetLabels: boolean) => (
-    <div className="flex flex-wrap gap-2">
-      {categoryOptions.map((category) => {
-        const label = useCompactSheetLabels
-          ? (compactSheetCategoryLabels[category] ?? formatCategory(category))
-          : formatCategory(category);
-        return (
-          // min-h-11 gives the 44px target size. The checkbox itself is small, but the label
-          // is what the user presses, so the floor belongs here.
-          <label key={category} className="flex min-h-11 items-center gap-1 text-xs text-muted-foreground">
-            <Checkbox
-              checked={playlistTypeFilters.includes(category)}
-              onCheckedChange={() => onToggleFilter(category)}
-              aria-label={label}
-              data-testid={`playlist-type-${category}`}
-            />
-            {label}
-          </label>
-        );
-      })}
+  const typeFilters = (
+    <div className="flex flex-wrap gap-x-3 gap-y-0">
+      {PLAYLIST_TYPE_GROUPS.map((group) => (
+        // min-h-11 gives the 44px target size. The checkbox itself is small, but the label
+        // is what the user presses, so the floor belongs here.
+        <label key={group.id} className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox
+            checked={isPlaylistTypeGroupShown(playlistTypeFilters, group)}
+            onCheckedChange={() => playlistTypeGroupToggles(playlistTypeFilters, group).forEach(onToggleFilter)}
+            aria-label={group.label}
+            data-testid={`playlist-type-${group.id}`}
+          />
+          {group.label}
+        </label>
+      ))}
     </div>
   );
 
@@ -138,8 +128,9 @@ export const PlaylistPanel = ({
         viewAllTitle="Playlist"
         listTestId="playlist-list"
         rowTestId="playlist-item"
-        filterHeader={renderCategoryFilters(false)}
-        viewAllFilterHeader={profile === "compact" ? renderCategoryFilters(true) : undefined}
+        filterHeader={typeFilters}
+        filterHeaderSummary={describePlaylistTypeFilter(playlistTypeFilters)}
+        collapsibleFilterProfiles={COLLAPSIBLE_FILTER_PROFILES}
         filterValue={playlistFilterText}
         onFilterValueChange={onPlaylistFilterTextChange}
         viewAllFilterValue={playlistFilterText}

@@ -141,21 +141,17 @@ const playingTitle = (page: Page) =>
   );
 
 /**
- * Drags along the rail from its top to the band of `letter`, as a finger would. The rail is measured
- * again once the finger is down: a touch ends keypad mode, the guidance bar goes, and the list and
- * its rail grow into the space it leaves.
+ * Drags along the rail from its top to the band of `letter`, as a finger would. The rail reads
+ * letters against where it was when the finger went down, even when a jump then folds the sheet's
+ * filter or ends keypad mode and the rail grows.
  */
 const dragRailTo = async (page: Page, letter: string, letters: readonly string[]) => {
-  const rail = page.getByTestId("alphabet-rail");
-  const start = await rail.boundingBox();
-  if (!start) throw new Error("The letter rail has no box");
-  await page.mouse.move(start.x + start.width / 2, start.y + 2);
-  await page.mouse.down();
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const box = await rail.boundingBox();
+  const box = await page.getByTestId("alphabet-rail").boundingBox();
   if (!box) throw new Error("The letter rail has no box");
-  const y = box.y + ((letters.indexOf(letter) + 0.5) / letters.length) * box.height;
-  await page.mouse.move(box.x + box.width / 2, y, { steps: 8 });
+  const x = box.x + box.width / 2;
+  await page.mouse.move(x, box.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + ((letters.indexOf(letter) + 0.5) / letters.length) * box.height, { steps: 8 });
   await page.mouse.up();
 };
 
@@ -238,6 +234,21 @@ test.describe("List navigation affordances on the smallest screen", () => {
     });
     expect(hits.length, "no row control was on screen to hit-test").toBeGreaterThanOrEqual(3);
     for (const hit of hits) expect(hit.ownHit, `${hit.name} is covered`).toBe(true);
+  });
+
+  test("the letter rail stays clear of the folded filter row @layout", async ({ page }) => {
+    await seedLongPlaylist(page);
+    await openPlaylistSheet(page);
+    await scroller(page).locator('[data-row-title="true"]').first().focus();
+    await page.keyboard.press("m");
+    await expect.poll(() => focusedTitle(page), { timeout: 15_000 }).toBe(firstTitleOf("Monty"));
+    const toggle = page.getByTestId("view-all-filter-toggle");
+    await expect(toggle).toBeVisible();
+    await waitForAnimations(page);
+    const railBox = await page.getByTestId("alphabet-rail").boundingBox();
+    const toggleBox = await toggle.evaluate((node) => node.getBoundingClientRect());
+    expect(railBox).not.toBeNull();
+    expect(overlapArea(railBox!, toggleBox), "the rail lies over the folded filter row").toBe(0);
   });
 
   test("dragging the rail lands on the letter's first item and its play button plays it @layout", async ({ page }) => {
@@ -406,6 +417,21 @@ test.describe("List navigation affordances on the smallest screen", () => {
       }
     });
   }
+
+  test("a playlist item's sheet shows the indicator while its body scrolls @layout", async ({ page }) => {
+    await seedLongPlaylist(page);
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+    const row = page.locator('[data-slot-active="true"]').getByTestId("playlist-item").first();
+    await row.getByRole("button", { name: "Item actions" }).click();
+    const sheet = page.getByTestId("action-list-item-sheet");
+    await expect(sheet).toBeVisible();
+    const body = sheet.locator('[data-surface-body="true"]');
+    expect(await body.evaluate((node) => node.scrollHeight > node.clientHeight + 1)).toBe(true);
+    await body.evaluate((node) => node.scrollBy(0, 80));
+    await expect(indicator(page, sheet)).toHaveAttribute("data-visible", "true");
+    await expect(indicator(page, sheet)).toHaveAttribute("data-visible", "false", { timeout: 3_000 });
+  });
 
   test("a scrolling sheet shows its own indicator and a sheet that fits shows none @layout", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });

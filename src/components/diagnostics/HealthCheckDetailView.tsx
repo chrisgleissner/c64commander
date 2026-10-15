@@ -13,6 +13,8 @@ import type {
 } from "@/lib/diagnostics/healthCheckEngine";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { Loader2 } from "lucide-react";
+import { SkippedProbeStatus } from "@/components/diagnostics/SkippedProbeStatus";
+import { cn } from "@/lib/utils";
 
 type Props = {
   result: HealthCheckRunResult | null;
@@ -88,11 +90,8 @@ export function HealthCheckDetailView({
                 probe = result?.probes[probeName];
               }
 
-              const reasonText =
-                liveStatus === "running" || liveStatus === "pending"
-                  ? ""
-                  : (executionState?.reason ?? probe?.reason ?? "");
-              const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
+              const settled = liveStatus !== "running" && liveStatus !== "pending";
+              const recordedReason = executionState?.reason ?? probe?.reason ?? "";
               const durationLabel =
                 liveStatus === "running" || liveStatus === "pending"
                   ? "—"
@@ -120,6 +119,10 @@ export function HealthCheckDetailView({
                     outcomeColorClass[probe?.outcome ?? ""] ??
                     "text-foreground")
                   : (outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground");
+              const skipped = settled && finalStatusLabel === "Skipped";
+              const reasonText = settled && !skipped ? recordedReason : "";
+              const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
+              const ReasonElement = isDetailRow ? "p" : "span";
 
               const statusContent =
                 liveStatus === "running" ? (
@@ -129,6 +132,12 @@ export function HealthCheckDetailView({
                   </span>
                 ) : liveStatus === "pending" ? (
                   <span className="text-muted-foreground">Pending</span>
+                ) : skipped && (probe || executionState?.state === "CANCELLED") ? (
+                  <SkippedProbeStatus
+                    probe={probeName}
+                    reason={recordedReason}
+                    testId={`health-check-probe-info-${probeName.toLowerCase()}`}
+                  />
                 ) : probe ? (
                   <span className={finalStatusClass}>{finalStatusLabel}</span>
                 ) : executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED" ? (
@@ -144,33 +153,29 @@ export function HealthCheckDetailView({
                   data-testid={`health-check-probe-${probeName.toLowerCase()}`}
                   data-live-status={liveStatus ?? undefined}
                 >
-                  <div className="grid grid-cols-[4rem_minmax(0,1fr)_4rem] items-start gap-2 sm:hidden">
-                    <span className="font-medium">{probeName}</span>
-                    <div className="min-w-0 space-y-0.5">
-                      {statusContent}
-                      {reasonText ? (
-                        <span className="block text-muted-foreground break-words leading-snug" title={reasonText}>
-                          {reasonText}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className="text-right font-mono">{durationLabel}</span>
-                  </div>
-                  <div className="hidden grid-cols-[4rem_5.5rem_minmax(0,1fr)_4rem] items-start gap-2 sm:grid">
-                    <span className="font-medium">{probeName}</span>
-                    {statusContent}
-                    {isDetailRow ? (
-                      <span />
-                    ) : (
-                      <span className="text-muted-foreground break-words leading-snug" title={reasonText}>
-                        {reasonText}
-                      </span>
+                  <div
+                    className={cn(
+                      "grid grid-cols-[4rem_minmax(0,1fr)_4rem] gap-x-2 gap-y-0.5 sm:grid-cols-[4rem_5.5rem_minmax(0,1fr)_4rem]",
+                      skipped ? "items-center" : "items-start",
                     )}
-                    <span className="text-right font-mono">{durationLabel}</span>
+                  >
+                    <span className="col-start-1 row-start-1 font-medium">{probeName}</span>
+                    <div className={cn("col-start-2 row-start-1 min-w-0", skipped && "sm:col-end-4")}>
+                      {statusContent}
+                    </div>
+                    <span className="col-start-3 row-start-1 text-right font-mono sm:col-start-4">{durationLabel}</span>
+                    {reasonText ? (
+                      <ReasonElement
+                        className={cn(
+                          "col-start-2 row-start-2 text-muted-foreground break-words leading-snug",
+                          isDetailRow ? "sm:col-end-5" : "sm:col-start-3 sm:row-start-1",
+                        )}
+                        title={reasonText}
+                      >
+                        {reasonText}
+                      </ReasonElement>
+                    ) : null}
                   </div>
-                  {isDetailRow ? (
-                    <p className="mt-0.5 pl-[4rem] text-muted-foreground break-words leading-snug">{reasonText}</p>
-                  ) : null}
                 </div>
               );
             })}

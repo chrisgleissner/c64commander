@@ -1453,6 +1453,18 @@ const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: strin
   }
 };
 
+const clickVisibleDocsToggle = (page: Page, controlId: string) =>
+  page.evaluate((id) => {
+    const visibleButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${id}"]`),
+    ).find((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      const style = getComputedStyle(candidate);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    });
+    visibleButton?.click();
+  }, controlId);
+
 const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
   const sections = await page.evaluate(() =>
     Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-controls^="docs-section-"]'))
@@ -1489,16 +1501,9 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
     const slug = sanitizeSegment(section.label);
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, button);
-    await page.evaluate((controlId) => {
-      const visibleButton = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
-      ).find((candidate) => {
-        const rect = candidate.getBoundingClientRect();
-        const style = getComputedStyle(candidate);
-        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-      });
-      visibleButton?.click();
-    }, section.controlId);
+    // The contents list starts open; every chapter starts closed and is closed again after its capture.
+    const startedOpen = (await getVisibleButtonExpandedState()) === "true";
+    if (!startedOpen) await clickVisibleDocsToggle(page, section.controlId);
     await expect.poll(getVisibleButtonExpandedState).toBe("true");
     await waitForStableRender(page);
     await scrollHeadingIntoView(page, button);
@@ -1511,16 +1516,8 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
         locator: card,
       },
     );
-    await page.evaluate((controlId) => {
-      const visibleButton = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
-      ).find((candidate) => {
-        const rect = candidate.getBoundingClientRect();
-        const style = getComputedStyle(candidate);
-        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-      });
-      visibleButton?.click();
-    }, section.controlId);
+    if (startedOpen) continue;
+    await clickVisibleDocsToggle(page, section.controlId);
     await expect.poll(getVisibleButtonExpandedState).toBe("false");
     await waitForStableRender(page);
   }
