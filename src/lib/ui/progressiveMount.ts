@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { SECTION_OPEN_REQUEST_EVENT, type SectionOpenRequestDetail } from "./collapsibleSectionStore";
+import { completeStagedRows, setStagedRowsEnabled } from "./stagedRows";
 
 /**
  * Lets a page draw at once and fill in behind the first paint. Rendering a page with every card open
@@ -44,6 +45,7 @@ let drainScheduled = false;
 /** Mount everything at once. For tests that assert on a page's content right after rendering it. */
 export const setProgressiveMountEnabled = (value: boolean) => {
   enabled = value;
+  setStagedRowsEnabled(value);
 };
 
 export type ProgressiveCard = { scope: string; id: string };
@@ -161,20 +163,23 @@ const queueMount = (entry: WaitingMount): (() => void) => {
 };
 
 /**
- * Builds every waiting card now. A navigation key calls this before the focus ring reads the page:
- * a card's own labelled sections are ring stops once its body is built, so a key pressed while cards
- * were still waiting took a different path through the page. Returns whether anything was built.
+ * Builds every waiting card now, and the rows still waiting inside built cards. A navigation key calls
+ * this before the focus ring reads the page: a card's own labelled sections and rows are ring stops
+ * once they are built, so a key pressed while they were still waiting took a different path through
+ * the page. Returns whether anything was built.
  */
 export const mountAllWaiting = (scope?: Element): boolean => {
   const entries = waiting.filter((entry) => !scope || (entry.anchor.current && scope.contains(entry.anchor.current)));
-  if (entries.length === 0) return false;
   for (const entry of entries) {
     waiting.splice(waiting.indexOf(entry), 1);
     if (entry.anchor.current) viewportObserver?.unobserve(entry.anchor.current);
   }
-  if (waiting.length === 0) stopWatchingScroll();
-  flushSync(() => entries.forEach((entry) => entry.mount()));
-  return true;
+  if (entries.length > 0) {
+    if (waiting.length === 0) stopWatchingScroll();
+    flushSync(() => entries.forEach((entry) => entry.mount()));
+  }
+  const builtRows = completeStagedRows(scope);
+  return entries.length > 0 || builtRows;
 };
 
 /**

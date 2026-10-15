@@ -13,6 +13,7 @@ import { BACKGROUND_REQUEST_TIMEOUT_MS } from "@/lib/c64api";
 import type { ConfigCategory, ConfigResponse } from "@/lib/c64api";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { ConfigLeafRow } from "./ConfigLeafRow";
+import { useStagedConfigRows } from "./stagedConfigRows";
 import { DHCP_STATIC_FIELDS, type MenuBlockSpec } from "./menuBlocks";
 
 const BLOCK_QUERY_OPTIONS = { ...VISIBLE_C64_QUERY_OPTIONS, timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS };
@@ -66,6 +67,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
     () => block.leaves.filter((leaf) => Object.prototype.hasOwnProperty.call(liveItems, leaf.item)),
     [block.leaves, liveItems],
   );
+  const staged = useStagedConfigRows(category, resolved, (leaf) => leaf.item);
 
   const hasContent = resolved.length > 0 || block.menuOnly.length > 0;
   if (category && isLoading && resolved.length === 0 && block.menuOnly.length === 0) {
@@ -86,7 +88,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
         <h4 className="px-1 pb-1 pt-3 text-xs font-semibold text-muted-foreground">{block.title}</h4>
       ) : null}
       <div className="divide-y divide-border" data-testid="config-group-list">
-        {resolved.map((leaf) => {
+        {resolved.slice(0, staged.count).map((leaf) => {
           const live = liveItems[leaf.item];
           const readOnly = dhcpEnabled && DHCP_STATIC_FIELDS.has(leaf.item);
           return (
@@ -105,16 +107,19 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
             />
           );
         })}
-        {block.menuOnly.map((entry) => (
-          <div
-            key={`menu-only-${entry.label}`}
-            className="flex flex-wrap items-center justify-between gap-x-2 py-3 opacity-60"
-            data-testid="config-menu-only"
-          >
-            <span className="text-sm">{entry.label}</span>
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">On device</span>
-          </div>
-        ))}
+        {staged.marker}
+        {staged.count < resolved.length
+          ? null
+          : block.menuOnly.map((entry) => (
+              <div
+                key={`menu-only-${entry.label}`}
+                className="flex flex-wrap items-center justify-between gap-x-2 py-3 opacity-60"
+                data-testid="config-menu-only"
+              >
+                <span className="text-sm">{entry.label}</span>
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">On device</span>
+              </div>
+            ))}
       </div>
     </div>
   );

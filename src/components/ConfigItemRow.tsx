@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -95,7 +95,7 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number, profile: 
   return { layout, containerRef, labelRef };
 };
 
-export function ConfigItemRow({
+export const ConfigItemRow = memo(function ConfigItemRow({
   name,
   category,
   value,
@@ -672,4 +672,4 @@ export function ConfigItemRow({
       </div>
     </div>
   );
-}
+});
