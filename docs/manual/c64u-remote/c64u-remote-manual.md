@@ -312,7 +312,9 @@ Docs is the built-in help page: a pocket version of this manual, inside the app.
 
 ![Docs overview](../../img/app/docs/profiles/compact/01-overview.png)
 
-It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping.
+It has a chapter of numbered steps for each main task: getting started, playing from HVSC, finding a tune, the playlist, SID Radio, where the sound plays, disks, Remote Input, Game Mode, Live View, Config, saving and restoring, devices, connection problems, the keypad keys, the status badge, and Diagnostics. **Contents**, at the top, jumps straight to a chapter.
+
+On the keypad, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it.
 
 ### Diagnostics
 

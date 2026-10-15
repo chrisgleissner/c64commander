@@ -28,6 +28,7 @@
 
 import type { InputModality } from "./inputModality";
 import { selectorPresence } from "./selectorPresence";
+import { READING_STOP_ATTR } from "./discovery";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
@@ -199,7 +200,7 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   const role = element.getAttribute("role");
   const tag = element.tagName;
   if (role === "slider") return "slider";
-  if (role === "status") return "status";
+  if (role === "status" || element.hasAttribute(READING_STOP_ATTR)) return "status";
   if (role === "tab") return "tab";
   if (
     role === "switch" ||

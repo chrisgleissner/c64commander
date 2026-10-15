@@ -178,6 +178,11 @@ describe("classifyFocusKind", () => {
   ] as const)("%s → %s", (html, kind) => {
     expect(classifyFocusKind(el(html), false)).toBe(kind);
   });
+
+  it("reads a guide paragraph the ring stops on as text, so the bar offers OK no action there", () => {
+    const paragraph = el('<p tabindex="0" data-key-nav-reading="true">Press OK to open a card.</p>');
+    expect(classifyFocusKind(paragraph, false)).toBe("status");
+  });
 });
 
 describe("accessibleLabelFor", () => {

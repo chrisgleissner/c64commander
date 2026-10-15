@@ -35,6 +35,9 @@ export const SKIP_ATTR = "data-key-nav-skip";
  */
 export const OWNS_KEYS_ATTR = "data-key-nav-owns-keys";
 
+/** Marks text the ring stops on so it can be read, not operated: OK has nothing to do there. */
+export const READING_STOP_ATTR = "data-key-nav-reading";
+
 /** Declares an element a focus group (its discovered descendants become children). Value is an optional id. */
 export const GROUP_ATTR = "data-focus-group";
 
