@@ -153,6 +153,9 @@ vi.mock("@/pages/home/SidCard", () => ({
   SidCard: (props: any) => (
     <div data-testid={`sid-card-${props.testIdSuffix}`}>
       <span data-testid="sid-card-name">{props.name}</span>
+      <span data-testid="sid-card-shaping-labels">
+        {(props.shapingControls ?? []).map((control: { label: string }) => control.label).join("|")}
+      </span>
       <span data-testid="sid-card-power">{props.power ? "ON" : "OFF"}</span>
       <button data-testid="power-toggle" onClick={props.onPowerToggle}>
         Toggle
@@ -411,6 +414,32 @@ describe("AudioMixer", () => {
           { clearPendingOnSuccess: true },
         );
       });
+    });
+  });
+
+  describe("shaping row labels", () => {
+    const shapingLabelsFor = (key: string, name: string) => {
+      mockSidControlEntries.mockReturnValue({
+        sidControlEntries: [baseSidEntry(key, name)],
+        sidSilenceTargets: [],
+        sidAddressingCategory: undefined,
+        ultiSidCategory: undefined,
+        sidSocketsCategory: undefined,
+      });
+      render(<AudioMixer {...defaultProps} />);
+      return screen.getByTestId("sid-card-shaping-labels").textContent?.split("|");
+    };
+
+    it("name the UltiSID settings in the device's words, not abbreviations", () => {
+      expect(shapingLabelsFor("ultiSid1", "UltiSID 1")).toEqual([
+        "Filter Resonance",
+        "Combined Waveforms",
+        "Digis Level",
+      ]);
+    });
+
+    it("name the SID socket settings in the device's words, not abbreviations", () => {
+      expect(shapingLabelsFor("socket2", "SID Socket 2")).toEqual(["1K Ohm Resistor", "Capacitors"]);
     });
   });
 
