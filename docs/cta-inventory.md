@@ -1291,6 +1291,10 @@ DOM order.
   device is reachable]` — pins Demo Mode
 - Expand/collapse — button — `diagnostics-header-toggle` `[rendered only once a health
   check has run or is running]` — reveals `diagnostics-header-expanded`
+  - Health check detail (`health-check-detail-view`) — Why was _check_ skipped? —
+    button — `health-check-probe-info-<probe>` `[only on a skipped check that recorded a
+    reason]` — opens a popover (`health-check-probe-info-<probe>-explanation`) that says
+    in plain language why the check did not run; Back/Escape or a tap outside closes it
 
 **Filter bar** (`filters-collapsed-bar`)
 
@@ -1338,7 +1342,10 @@ so Back has a target inside the dialog before it reaches the dialog itself.
   Resync / repair — button — `decision-state-repair`
 - Health history (`health-history-popup`) — Zoom in — button — `health-history-zoom-in` ;
   Zoom out — button — `health-history-zoom-out` (each disabled at its end of the
-  zoom-window list)
+  zoom-window list). Each event row's toggle expands its checks below it; a skipped
+  check there carries Why was _check_ skipped? — button —
+  `health-history-probe-info-<event>-<probe>` — with the same popover as the health
+  check detail
 - Latency — funnel — button — `open-latency-filters` — the same filter editor pattern
   as the main list
 - ← Diagnostics — button — `analytic-popup-return` — the return control shared by every
@@ -1352,6 +1359,23 @@ renders them and they are not part of the keypad surface. The launcher
 `VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON` is set; the page carries `switch-lab-from-device`,
 `switch-lab-to-device`, `switch-lab-iterations`, `switch-lab-delay-ms` and
 `switch-lab-run-soak`.
+
+### 5.2.1 Device switcher (`switch-device-sheet`)
+
+Opened by long-pressing the status badge, the keypad **#** key, or Quick Menu →
+Switch device (§1). Shown only when more than one device is saved. Code-verified
+against source; the R/I marks are omitted, as in §5.1.
+
+- Close — button — the sheet's shared close control
+- Per saved device, in list order:
+  - Device row — button — `switch-device-row-<id>` — switches to that device
+  - Expand/collapse device health detail — button — `switch-device-expand-<id>` —
+    reveals that device's health check detail (`health-check-detail-view`)
+  - Why was _check_ skipped? — button — `health-check-probe-info-<probe>` `[inside the
+    expanded detail, only on a skipped check that recorded a reason]` — opens the
+    plain-language explanation popover described in §5.2; on this sheet Telnet and
+    Config are always skipped, because the switcher does not open Telnet sessions or
+    change settings
 
 ---
 

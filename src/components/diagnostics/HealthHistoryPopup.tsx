@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
 import { Button } from "@/components/ui/button";
+import { SkippedProbeStatus } from "@/components/diagnostics/SkippedProbeStatus";
 import { formatActionDuration } from "@/lib/diagnostics/actionSummaryDisplay";
 import { getHealthHistory, type HealthHistoryEntry } from "@/lib/diagnostics/healthHistory";
 import {
@@ -323,42 +324,53 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                                   <span className="font-mono text-muted-foreground">p99 {entry.latency.p99}ms</span>
                                 </div>
                               </div>
-
-                              {expanded ? (
-                                <div className="space-y-2 border-t border-border/70 pt-3">
-                                  <div className="grid gap-2 text-xs sm:grid-cols-2">
-                                    {PROBE_PRESENTATION.map((probe) => {
-                                      const result = entry.probes[probe.key];
-                                      return (
-                                        <div
-                                          key={probe.key}
-                                          className="rounded-lg border border-border/60 bg-background px-2.5 py-2"
-                                          data-testid={`health-history-event-probe-${event.id}-${probe.key}`}
-                                        >
-                                          <div className="flex items-center justify-between gap-2">
-                                            <span className="font-medium text-foreground">{probe.label}</span>
-                                            <span className={OUTCOME_TONE[result.outcome] ?? "text-foreground"}>
-                                              {result.outcome}
-                                            </span>
-                                          </div>
-                                          <div className="mt-1 flex items-center justify-between gap-2 text-muted-foreground">
-                                            {result.reason ? (
-                                              <span className="break-words">{result.reason}</span>
-                                            ) : (
-                                              <span />
-                                            )}
-                                            <span className="shrink-0 font-mono">
-                                              {result.durationMs != null ? `${result.durationMs}ms` : "-"}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ) : null}
                             </div>
                           </button>
+                          {expanded ? (
+                            <div
+                              className="mx-3 mb-3 ml-10 border-t border-border/70 pt-3"
+                              data-testid={`health-history-event-probes-${event.id}`}
+                            >
+                              <div className="grid gap-2 text-xs sm:grid-cols-2">
+                                {PROBE_PRESENTATION.map((probe) => {
+                                  const result = entry.probes[probe.key];
+                                  const skipped = result.outcome === "Skipped";
+                                  return (
+                                    <div
+                                      key={probe.key}
+                                      className="rounded-lg border border-border/60 bg-background px-2.5 py-2"
+                                      data-testid={`health-history-event-probe-${event.id}-${probe.key}`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-medium text-foreground">{probe.label}</span>
+                                        {skipped ? (
+                                          <SkippedProbeStatus
+                                            probe={probe.label}
+                                            reason={result.reason}
+                                            testId={`health-history-probe-info-${event.id}-${probe.key}`}
+                                          />
+                                        ) : (
+                                          <span className={OUTCOME_TONE[result.outcome] ?? "text-foreground"}>
+                                            {result.outcome}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="mt-1 flex items-center justify-between gap-2 text-muted-foreground">
+                                        {result.reason && !skipped ? (
+                                          <span className="break-words">{result.reason}</span>
+                                        ) : (
+                                          <span />
+                                        )}
+                                        <span className="shrink-0 font-mono">
+                                          {result.durationMs != null ? `${result.durationMs}ms` : "-"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}

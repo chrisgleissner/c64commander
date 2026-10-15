@@ -1340,7 +1340,10 @@ describe("UnifiedHealthBadge", () => {
       "aria-label",
       "Collapse device health detail",
     );
-    expect(screen.getByTestId("health-check-probe-config").textContent).toContain("Passive");
+    const configRow = screen.getByTestId("health-check-probe-config");
+    expect(configRow).toHaveTextContent("Skipped");
+    expect(configRow).not.toHaveTextContent("Passive");
+    expect(within(configRow).getByRole("button", { name: "Why was Config skipped?" })).toBeVisible();
   });
 
   it("resets expanded device details when the picker closes", async () => {
