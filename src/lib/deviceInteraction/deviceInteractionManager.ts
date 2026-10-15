@@ -31,6 +31,8 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import {
   buildRestRequestIdentity,
   canonicalizeRestPath,
+  deviceScopeOfHost,
+  resolveRestDeviceScope,
   isConfigMutationPath,
   isMachineControlPath,
   isReadOnlyRestMethod,
@@ -39,8 +41,13 @@ import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { publishDeviceWrite, TELNET_DEVICE_ACTION } from "@/lib/deviceInteraction/deviceWriteEvents";
 import { DEVICE_NO_ANSWER_PHRASE } from "@/lib/c64api/requestFailureMessage";
+import {
+  InteractionCancelledError,
+  PerDeviceInteractionScheduler,
+  type InteractionIntent,
+} from "@/lib/deviceInteraction/interactionScheduler";
 
-export type InteractionIntent = "user" | "system" | "background";
+export { InteractionCancelledError, type InteractionIntent };
 
 type RestRequestMeta = {
   action: TraceActionContext;
@@ -49,6 +56,12 @@ type RestRequestMeta = {
   normalizedUrl: string;
   intent: InteractionIntent;
   baseUrl: string;
+  /**
+   * The device the request is for. Its host name picks the REST slot, so a device that does not answer
+   * cannot hold the slot another device needs. On web every request goes through one proxy `baseUrl`,
+   * so the host has to come from here; without it the host is taken from `baseUrl`.
+   */
+  deviceHost?: string;
   allowDuringDiscovery?: boolean;
   allowDuringError?: boolean;
   bypassCache?: boolean;
@@ -122,14 +135,6 @@ type InflightEntry<T> = {
   generation: number;
 };
 
-type QueueTask<T> = {
-  run: () => Promise<T>;
-  resolve?: (value: T) => void;
-  reject?: (error: Error) => void;
-  intent: InteractionIntent;
-  getReadyAtMs?: () => number;
-};
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isAutomatedEnv = () => {
@@ -180,127 +185,6 @@ export const isDeviceSafetyGovernorEnabled = (): boolean => {
 };
 
 const isGovernorBypassed = () => !isDeviceSafetyGovernorEnabled();
-
-// PH10: thrown when queued interaction tasks are cancelled by a device-state
-// reset (e.g. saved-device switch). Classified as cancellation, not failure,
-// so callers and diagnostics can distinguish "stale, ignored" from "broken".
-export class InteractionCancelledError extends Error {
-  readonly isCancellation = true as const;
-  constructor(
-    message: string,
-    readonly reason: string,
-  ) {
-    super(message);
-    this.name = "InteractionCancelledError";
-  }
-}
-
-class InteractionScheduler {
-  private running = 0;
-  private deferredDrainTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly queues: Record<InteractionIntent, Array<QueueTask<unknown>>> = {
-    user: [],
-    system: [],
-    background: [],
-  };
-
-  constructor(
-    private readonly maxConcurrency: () => number,
-    private readonly label: string = "scheduler",
-  ) {}
-
-  schedule<T>(task: QueueTask<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const entry: QueueTask<unknown> = {
-        ...task,
-        resolve,
-        reject,
-      } as QueueTask<unknown>;
-      this.queues[task.intent].push(entry);
-      this.drain();
-    });
-  }
-
-  // PH10: reject every queued (not-yet-running) task with a cancellation
-  // error so a saved-device switch doesn't leak old-host work into the new
-  // device's context. Running tasks cannot be revoked here — they complete
-  // or fail naturally; their late results are handled by the caller (or
-  // simply ignored when state has moved on).
-  cancelAll(reason: string, intents: readonly InteractionIntent[] = ["user", "system", "background"]): number {
-    this.clearDeferredDrainTimer();
-    let cancelled = 0;
-    for (const intent of intents) {
-      const queue = this.queues[intent];
-      while (queue.length > 0) {
-        const task = queue.shift();
-        if (!task) continue;
-        cancelled += 1;
-        const error = new InteractionCancelledError(`${this.label} queued task cancelled: ${reason}`, reason);
-        // Promise reject cannot throw synchronously, so no try/catch is needed.
-        task.reject?.(error);
-      }
-    }
-    return cancelled;
-  }
-
-  private clearDeferredDrainTimer() {
-    if (this.deferredDrainTimer) {
-      clearTimeout(this.deferredDrainTimer);
-      this.deferredDrainTimer = null;
-    }
-  }
-
-  private scheduleDeferredDrain(nextReadyAtMs: number | null) {
-    this.clearDeferredDrainTimer();
-    if (nextReadyAtMs === null) return;
-    this.deferredDrainTimer = setTimeout(
-      () => {
-        this.deferredDrainTimer = null;
-        this.drain();
-      },
-      Math.max(0, nextReadyAtMs - Date.now()),
-    );
-  }
-
-  private takeNext(): { task: QueueTask<unknown> | null; nextReadyAtMs: number | null } {
-    const now = Date.now();
-    let nextReadyAtMs: number | null = null;
-    for (const intent of ["user", "system", "background"] as const) {
-      const queue = this.queues[intent];
-      for (let index = 0; index < queue.length; index += 1) {
-        const candidate = queue[index];
-        const readyAtMs = candidate.getReadyAtMs?.() ?? now;
-        if (readyAtMs <= now) {
-          queue.splice(index, 1);
-          return { task: candidate, nextReadyAtMs: null };
-        }
-        nextReadyAtMs = nextReadyAtMs === null ? readyAtMs : Math.min(nextReadyAtMs, readyAtMs);
-      }
-    }
-    return { task: null, nextReadyAtMs };
-  }
-
-  private drain() {
-    this.clearDeferredDrainTimer();
-    const limit = Math.max(1, this.maxConcurrency());
-    while (this.running < limit) {
-      const { task, nextReadyAtMs } = this.takeNext();
-      if (!task) {
-        this.scheduleDeferredDrain(nextReadyAtMs);
-        return;
-      }
-      this.running += 1;
-      void task
-        .run()
-        .then((value) => task.resolve?.(value))
-        .catch((error) => task.reject?.(error))
-        .finally(() => {
-          this.running = Math.max(0, this.running - 1);
-          this.drain();
-        });
-    }
-  }
-}
 
 let config: DeviceSafetyConfig = loadDeviceSafetyConfig();
 let lastLoggedEffectivePresetSignature: string | null = null;
@@ -400,9 +284,11 @@ const TELNET_MAX_CONCURRENCY = 1;
 const MACHINE_CONTROL_COOLDOWN_MS = 250;
 export const FTP_TRANSIENT_RETRY_DELAY_MS = 250;
 
-const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
-const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
-const telnetScheduler = new InteractionScheduler(() => TELNET_MAX_CONCURRENCY, "telnet");
+// Each lane protects one Ultimate's network task, so each device has its own lanes. With one REST slot for every
+// device, a saved device that did not answer held it until its timeout while the reachable device's probes timed out.
+const restScheduler = new PerDeviceInteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
+const ftpScheduler = new PerDeviceInteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
+const telnetScheduler = new PerDeviceInteractionScheduler(() => TELNET_MAX_CONCURRENCY, "telnet");
 
 const restCache = new Map<string, CacheEntry<unknown>>();
 const restInflight = new Map<string, InflightEntry<unknown>>();
@@ -541,7 +427,7 @@ const resetTelnetFailure = () => {
   telnetCircuitUntilMs = 0;
 };
 
-const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
+const resolveRestPolicy = (method: string, path: string, baseUrl: string, deviceScope: string) => {
   const canonicalPath = canonicalizeRestPath(path, baseUrl);
   const normalizedPath = canonicalPath.split("?")[0];
   if (method === "GET" && normalizedPath === "/v1/info") {
@@ -569,7 +455,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
     // One cooldown per device, but never one answer: concurrent reads of different addresses shared it,
     // and the shared value is a Response whose body only one caller can read.
     return {
-      key: `${baseUrl}:rest-machine-readmem`,
+      key: `${deviceScope}:rest-machine-readmem`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
       unshared: true,
@@ -577,21 +463,21 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
   }
   if (normalizedPath === "/v1/machine:writemem") {
     return {
-      key: `${baseUrl}:rest-machine-writemem`,
+      key: `${deviceScope}:rest-machine-writemem`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
     };
   }
   if (!isReadOnlyRestMethod(method) && isMachineControlPath(canonicalPath)) {
     return {
-      key: `${baseUrl}:rest-machine-control`,
+      key: `${deviceScope}:rest-machine-control`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
     };
   }
   if (!isReadOnlyRestMethod(method) && isConfigMutationPath(canonicalPath)) {
     return {
-      key: `${baseUrl}:rest-config-mutation`,
+      key: `${deviceScope}:rest-config-mutation`,
       cacheMs: 0,
       cooldownMs: config.configsCooldownMs,
     };
@@ -775,7 +661,8 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
-  const resolvedPolicy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const deviceScope = resolveRestDeviceScope(meta);
+  const resolvedPolicy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl, deviceScope);
   const policy =
     meta.seekCpuSpeedWrite && resolvedPolicy.key?.endsWith(":rest-config-mutation")
       ? { ...resolvedPolicy, cooldownMs: seekCpuSpeedWriteIntervalMs(config) }
@@ -892,7 +779,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   // is still enforced by the caller's serializeMachineInputRequest lane.
   const scheduledPromise = meta.useInputLane
     ? scheduleTask()
-    : restScheduler.schedule<T>({
+    : restScheduler.forDevice(deviceScope).schedule<T>({
         intent: meta.intent,
         run: scheduleTask,
         getReadyAtMs: () => {
@@ -1089,7 +976,7 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     }
   };
 
-  const scheduledPromise = ftpScheduler.schedule<T>({
+  const scheduledPromise = ftpScheduler.forDevice(deviceScopeOfHost(meta.host ?? "any")).schedule<T>({
     intent: meta.intent,
     run: scheduleTask,
   });
@@ -1188,7 +1075,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       }
     };
 
-    return await telnetScheduler.schedule<T>({
+    return await telnetScheduler.forDevice(deviceScopeOfHost(meta.host ?? "any")).schedule<T>({
       intent: meta.intent,
       run: scheduleTask,
     });
