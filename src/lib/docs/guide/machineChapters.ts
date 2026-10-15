@@ -197,7 +197,7 @@ export const liveViewChapter = ({ variantId }: GuideContext): GuideChapter => ({
     },
     {
       kind: "text",
-      text: "Live View keeps playing on other pages. A small TV or speaker icon in the top bar shows it is on; tap it to stop.",
+      text: "Live View keeps playing on other pages. While it does, the status badge carries a small screen or speaker mark, and **Stop Live View** in the Quick menu ends it from any page.",
     },
     {
       kind: "text",
