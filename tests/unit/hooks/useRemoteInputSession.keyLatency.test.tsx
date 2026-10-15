@@ -18,6 +18,7 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/lib/remoteInput/machineInputThrottle", () => ({
   runSerializedMachineInput: (dispatch: () => unknown) => Promise.resolve(dispatch()),
+  hasWaitingMachineInput: () => false,
 }));
 
 import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";

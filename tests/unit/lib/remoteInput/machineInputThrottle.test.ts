@@ -14,7 +14,11 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: () => loadDeviceSafetyConfigMock(),
 }));
 
-import { resetMachineInputThrottleForTests, runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
+import {
+  hasWaitingMachineInput,
+  resetMachineInputThrottleForTests,
+  runSerializedMachineInput,
+} from "@/lib/remoteInput/machineInputThrottle";
 
 describe("runSerializedMachineInput", () => {
   beforeEach(() => {
@@ -52,6 +56,26 @@ describe("runSerializedMachineInput", () => {
     await vi.advanceTimersByTimeAsync(0);
     await Promise.all([first, second]);
     expect(started).toEqual(["first", "second"]);
+  });
+
+  it("reports a dispatch waiting behind the running one only until that dispatch starts", async () => {
+    let resolveFirst!: () => void;
+    const first = runSerializedMachineInput(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(hasWaitingMachineInput()).toBe(false);
+
+    const second = runSerializedMachineInput(() => Promise.resolve());
+    expect(hasWaitingMachineInput()).toBe(true);
+
+    resolveFirst();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.all([first, second]);
+    expect(hasWaitingMachineInput()).toBe(false);
   });
 
   // Issue 3d: with the default 0ms cooldown the only spacing is the real call

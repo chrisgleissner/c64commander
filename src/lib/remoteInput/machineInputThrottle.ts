@@ -10,6 +10,7 @@ import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 
 let lastCompletedAtMs: number | null = null;
 let queue: Promise<void> = Promise.resolve();
+let waitingDispatches = 0;
 
 /**
  * HARD12-017 device-safeguard entry for `POST /v1/machine:input` (the remote
@@ -31,7 +32,9 @@ let queue: Promise<void> = Promise.resolve();
  * still keeps the queue healthy so one failed call cannot wedge the chain.
  */
 export const runSerializedMachineInput = (dispatch: () => Promise<unknown> | unknown): Promise<void> => {
+  waitingDispatches += 1;
   const run = async () => {
+    waitingDispatches -= 1;
     const cooldownMs = loadDeviceSafetyConfig().machineInputCooldownMs;
     if (cooldownMs > 0 && lastCompletedAtMs !== null) {
       const waitMs = cooldownMs - (Date.now() - lastCompletedAtMs);
@@ -48,7 +51,11 @@ export const runSerializedMachineInput = (dispatch: () => Promise<unknown> | unk
   return next;
 };
 
+/** True while a dispatch is queued behind the one running, which anything that extends the running one would delay. */
+export const hasWaitingMachineInput = () => waitingDispatches > 0;
+
 export const resetMachineInputThrottleForTests = () => {
   lastCompletedAtMs = null;
   queue = Promise.resolve();
+  waitingDispatches = 0;
 };
