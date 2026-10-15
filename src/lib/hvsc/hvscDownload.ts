@@ -8,7 +8,6 @@
 
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor } from "@capacitor/core";
-import SparkMD5 from "spark-md5";
 import type { HvscProgressEvent } from "./hvscTypes";
 import {
   getHvscCacheDir,
@@ -127,23 +126,6 @@ export const concatChunks = (chunks: Uint8Array[], totalLength?: number | null) 
     offset += chunk.length;
   });
   return buffer;
-};
-
-const toHashableArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
-
-export const computeArchiveChecksumMd5 = (bytes: Uint8Array) => SparkMD5.ArrayBuffer.hash(toHashableArrayBuffer(bytes));
-
-type SparkMd5ArrayBufferAccumulator = {
-  append: (buffer: ArrayBuffer) => void;
-  end: () => string;
-};
-
-const SparkMd5ArrayBufferCtor = SparkMD5.ArrayBuffer as unknown as {
-  new (): SparkMd5ArrayBufferAccumulator;
 };
 
 const readHeapUsageBytes = () => {
@@ -345,17 +327,6 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
       if (stat.type === "file" || stat.type === "directory") {
         const marker = await readCachedArchiveMarker(name);
         const statSize = stat.size ?? null;
-        const resolvedChecksumMd5 =
-          marker?.checksumMd5 && stat.type === "file"
-            ? await computeCachedArchiveChecksumMd5(name, statSize).catch((error) => {
-                addLog("warn", "HVSC cached archive checksum validation failed", {
-                  name,
-                  statSize,
-                  error: (error as Error).message,
-                });
-                return null;
-              })
-            : null;
         const hasSizeMismatch =
           typeof marker?.sizeBytes === "number" &&
           marker.sizeBytes > 0 &&
@@ -366,17 +337,13 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
           marker.expectedSizeBytes > 0 &&
           statSize !== null &&
           statSize < marker.expectedSizeBytes * 0.99;
-        const hasChecksumMismatch =
-          Boolean(marker?.checksumMd5) && (resolvedChecksumMd5 === null || resolvedChecksumMd5 !== marker?.checksumMd5);
-        if (marker && !hasSizeMismatch && !violatesExpectedSize && !hasChecksumMismatch) return name;
-        if (marker && (hasSizeMismatch || violatesExpectedSize || hasChecksumMismatch)) {
+        if (marker && !hasSizeMismatch && !violatesExpectedSize) return name;
+        if (marker) {
           addLog("warn", "HVSC cached archive marker validation failed", {
             name,
             statSize,
             markerSizeBytes: marker.sizeBytes ?? null,
             markerExpectedSizeBytes: marker.expectedSizeBytes ?? null,
-            markerChecksumMd5: marker.checksumMd5 ?? null,
-            resolvedChecksumMd5,
           });
         }
         await deleteCachedArchive(name);
@@ -425,62 +392,6 @@ export const getCacheStatusInternal = async () => {
 };
 
 // ── Archive read-back ────────────────────────────────────────────
-
-export const computeCachedArchiveChecksumMd5 = async (archivePath: string, sizeHintBytes?: number | null) => {
-  const cacheDir = getHvscCacheDir();
-  const relativeArchivePath = `${cacheDir}/${archivePath}`;
-  let statSize = sizeHintBytes ?? null;
-  if (statSize === null) {
-    try {
-      const stat = await Filesystem.stat({
-        directory: Directory.Data,
-        path: relativeArchivePath,
-      });
-      statSize = stat?.size ?? null;
-    } catch (error) {
-      addLog("warn", "Failed to stat archive before checksum validation", {
-        archivePath,
-        error: (error as Error).message,
-      });
-    }
-  }
-
-  if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES && shouldUseNativeDownload()) {
-    const digest = new SparkMd5ArrayBufferCtor();
-    let offsetBytes = 0;
-    let decodedBytes = 0;
-    while (offsetBytes < statSize) {
-      const chunk = await HvscIngestion.readArchiveChunk({
-        relativeArchivePath,
-        offsetBytes,
-        lengthBytes: Math.min(HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES, statSize - offsetBytes),
-      });
-      if (chunk.sizeBytes <= 0) break;
-      const decodedChunk = decodeBase64ToUint8Chunked(chunk.data);
-      if (decodedChunk.byteLength !== chunk.sizeBytes) {
-        throw new Error(
-          `HVSC native chunk size mismatch for ${archivePath}: decoded ${decodedChunk.byteLength} bytes, expected ${chunk.sizeBytes}`,
-        );
-      }
-      digest.append(toHashableArrayBuffer(decodedChunk));
-      offsetBytes += chunk.sizeBytes;
-      decodedBytes += decodedChunk.byteLength;
-      if (chunk.eof) break;
-    }
-    if (decodedBytes !== statSize) {
-      throw new Error(
-        `HVSC native chunk read incomplete for ${archivePath}: expected ${statSize} bytes, received ${decodedBytes}`,
-      );
-    }
-    return digest.end();
-  }
-
-  const archiveData = await Filesystem.readFile({
-    directory: Directory.Data,
-    path: relativeArchivePath,
-  });
-  return computeArchiveChecksumMd5(decodeBase64ToUint8Chunked(archiveData.data));
-};
 
 export const readArchiveBuffer = async (archivePath: string) => {
   const heapBefore = readHeapUsageBytes();
@@ -709,7 +620,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
   const ensureNotCancelled = () => ensureNotCancelledWith(cancelTokens, cancelToken);
   let inMemoryBuffer: Uint8Array | null = null;
   let expectedSizeBytes: number | null = null;
-  let downloadedBufferForMarker: Uint8Array | null = null;
   const downloadPerfScope = beginHvscPerfScope("download", {
     archiveName,
     archivePath,
@@ -766,7 +676,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
           ensureNotCancelled,
         });
         expectedSizeBytes = fallback.expectedSizeBytes ?? expectedSizeBytes;
-        downloadedBufferForMarker = fallback.buffer;
         inMemoryBuffer = retainInMemoryBuffer ? fallback.buffer : null;
       }
       // The sidecar only outlives a download that was interrupted; a promotion by rename has
@@ -806,7 +715,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
         }
         await writeCachedArchive(archivePath, buffer);
         emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
-        downloadedBufferForMarker = buffer;
         inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
       } else {
         const reader = response.body.getReader();
@@ -837,7 +745,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
         }
         await writeCachedArchive(archivePath, buffer);
         emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
-        downloadedBufferForMarker = buffer;
         inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
       }
     }
@@ -852,30 +759,17 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
     });
     addLog("info", "HVSC download completed", { archiveName });
 
-    const checksumPerfScope = beginHvscPerfScope("download:checksum", {
-      archiveName,
-      archivePath,
-    });
-    let checksumError: Error | null = null;
     const cacheDir = getHvscCacheDir();
     try {
       const stat = await Filesystem.stat({
         directory: Directory.Data,
         path: `${cacheDir}/${archivePath}`,
       });
-      const checksumMd5 = downloadedBufferForMarker
-        ? computeArchiveChecksumMd5(downloadedBufferForMarker)
-        : await computeCachedArchiveChecksumMd5(archivePath, stat.size ?? null);
-      if (!checksumMd5) {
-        await deleteCachedArchive(archivePath);
-        throw new Error(`HVSC archive checksum validation failed for "${archiveName}". Please re-download.`);
-      }
       await writeCachedArchiveMarker(archivePath, {
         version: plan.version,
         type: plan.type,
         sizeBytes: stat.size,
         expectedSizeBytes,
-        checksumMd5,
         sourceUrl: downloadUrl,
         completedAt: new Date().toISOString(),
       });
@@ -888,27 +782,19 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
         percent: 100,
       });
     } catch (error) {
-      checksumError = error as Error;
       addLog("warn", "Failed to write HVSC cache marker", {
         archivePath,
         error: (error as Error).message,
+        stack: (error as Error).stack,
       });
       await writeCachedArchiveMarker(archivePath, {
         version: plan.version,
         type: plan.type,
         sizeBytes: null,
         expectedSizeBytes,
-        checksumMd5: null,
         sourceUrl: downloadUrl,
         completedAt: new Date().toISOString(),
       });
-    } finally {
-      endHvscPerfScope(
-        checksumPerfScope,
-        checksumError
-          ? { outcome: "error", errorMessage: checksumError.message }
-          : { outcome: "success", expectedSizeBytes },
-      );
     }
 
     return inMemoryBuffer;

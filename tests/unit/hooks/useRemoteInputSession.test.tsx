@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const sendMachineInputBatchMock = vi.fn(async () => ({ errors: [], keyboard: { inputs: [] }, joysticks: [] }));
 const injectAutostartMock = vi.fn(async () => undefined);
 const addErrorLogMock = vi.fn();
+const addLogMock = vi.fn();
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({ sendMachineInputBatch: sendMachineInputBatchMock, getDeviceHost: () => "test-host" }),
@@ -23,6 +24,7 @@ vi.mock("@/lib/playback/autostart", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: (...args: unknown[]) => addErrorLogMock(...args),
+  addLog: (...args: unknown[]) => addLogMock(...args),
   buildErrorLogDetails: (error: Error, context: Record<string, unknown>) => ({ error: error.message, ...context }),
 }));
 
@@ -822,6 +824,65 @@ describe("useRemoteInputSession", () => {
 
     expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
     expect(result.current.connectionStatus).toBe("error");
+  });
+
+  describe("a typed key whose batch got no answer in time", () => {
+    const noAnswer = () => new Error("The C64 did not answer within 1.5 s");
+    beforeEach(() => {
+      addLogMock.mockClear();
+      addErrorLogMock.mockClear();
+    });
+
+    it("is sent once more, with a warning and no error, instead of being dropped", async () => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(sendMachineInputBatchMock.mock.calls[1]).toEqual(sendMachineInputBatchMock.mock.calls[0]);
+      expect(result.current.connectionStatus).toBe("idle");
+      expect(addLogMock).toHaveBeenCalledWith(
+        "warn",
+        "Remote input key taps got no answer in time; sending them once more",
+        expect.objectContaining({ eventCount: expect.any(Number) }),
+      );
+      expect(addErrorLogMock).not.toHaveBeenCalled();
+    });
+
+    it("is retried only once, then reported as an error", async () => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer()).mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.sendChar("1"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(result.current.connectionStatus).toBe("error");
+      expect(addErrorLogMock).toHaveBeenCalledWith("Remote input batch send failed", expect.any(Object));
+    });
+
+    it("leaves a held joystick press to the release_all recovery rather than sending it again", async () => {
+      sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+      act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+        await flushMicrotasks();
+      });
+
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({ events: [{ kind: "release_all" }] });
+      expect(addLogMock).not.toHaveBeenCalled();
+    });
   });
 
   it("does not loop when the recovery release_all's own batch fails (single-shot, no retry)", async () => {

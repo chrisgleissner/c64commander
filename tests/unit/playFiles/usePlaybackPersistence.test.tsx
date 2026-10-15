@@ -49,6 +49,7 @@ const usePlaybackPersistenceHarness = ({
   localEntriesBySourceId,
   localSourceTreeUris,
   initialAutoAdvanceDueAtMs = null,
+  setPlaylistEnded,
 }: {
   resolvedDeviceId?: string | null;
   playlistStorageKey: string;
@@ -66,6 +67,7 @@ const usePlaybackPersistenceHarness = ({
   >;
   localSourceTreeUris: Map<string, string | null>;
   initialAutoAdvanceDueAtMs?: number | null;
+  setPlaylistEnded?: (ended: boolean) => void;
 }) => {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -105,6 +107,7 @@ const usePlaybackPersistenceHarness = ({
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
+    setPlaylistEnded,
     setSessionRestoreSettled: sessionRestoreSettledSpy,
     resolvedDeviceId,
     playlistStorageKey,
@@ -155,6 +158,7 @@ const usePlaybackPersistenceHarness = ({
     durationMs,
     durationMsItemId,
     trackStartedAtRef,
+    autoAdvanceGuardRef,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
 };
@@ -1701,6 +1705,60 @@ describe("usePlaybackPersistence", () => {
     expect(positionMs).toBeGreaterThanOrEqual(30_000);
     expect(positionMs).toBeLessThan(32_000);
     expect(result.current.elapsedMs).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it("keeps the clock stopped at the song's end when a session whose playlist ended is restored", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/last.sid",
+            name: "last.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 26_000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/last.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 26_000,
+        playedMs: 26_000,
+        durationMs: 26_000,
+        autoAdvanceDueAtMs: null,
+        playlistEnded: true,
+        updatedAt: new Date(Date.now() - 7_000).toISOString(),
+      }),
+    );
+    const setPlaylistEnded = vi.fn();
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+        setPlaylistEnded,
+      }),
+    );
+
+    await waitFor(() => expect(sessionRestoreSettledSpy).toHaveBeenCalledWith(true));
+    expect(result.current.isPlaying).toBe(true);
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.elapsedMs).toBe(26_000);
+    expect(result.current.trackStartedAtRef.current).toBeNull();
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(setPlaylistEnded).toHaveBeenCalledWith(true);
   });
 
   // A Chess II session playing on the phone came back after the app was restarted and launched the next tune on the C64.

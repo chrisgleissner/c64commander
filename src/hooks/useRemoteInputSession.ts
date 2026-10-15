@@ -9,7 +9,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getC64API } from "@/lib/c64api";
 import type { KeyboardInputName, MachineInputEvent } from "@/lib/c64api";
-import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
+import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { DEVICE_NO_ANSWER_PHRASE } from "@/lib/c64api/requestFailureMessage";
 import type { RemoteInputTier } from "@/lib/remoteInput/capabilityTier";
 import { remoteInputSupportsJoystick } from "@/lib/remoteInput/capabilityTier";
 import {
@@ -126,6 +127,18 @@ export type RemoteInputSession = {
  * a failed batch: on error the local held-set model resets to empty and the
  * next real change re-syncs from a clean slate (drop-coalesce, not queue).
  */
+
+/**
+ * A batch of typed key taps that got no answer in time is sent once more. A tap is atomic on the device, so a second
+ * attempt cannot leave a key held; at worst a tap the device applied before its answer was lost appears twice, which
+ * the listener sees and can delete, whereas a dropped key went unnoticed. Anything that can hold an input is not
+ * retried: its failure path resets the held state and recovers with a release_all instead.
+ */
+const retriesOnceAfterNoAnswer = (batch: MachineInputEvent[], error: unknown) =>
+  batch.every((event) => event.kind === "keyboard" && event.transition === "tap") &&
+  error instanceof Error &&
+  error.message.includes(DEVICE_NO_ANSWER_PHRASE);
+
 export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): RemoteInputSession => {
   const [outputMode, setOutputModeState] = useState<RemoteInputOutputMode>("joystick");
   const [port, setPortState] = useState<1 | 2>(2);
@@ -204,8 +217,17 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
           if (batchGestureAtMs !== undefined) {
             recordInputLatencySample(performance.now() - batchGestureAtMs, performance.now());
           }
-          return getC64API()
-            .sendMachineInputBatch({ events: batch })
+          const send = () => getC64API().sendMachineInputBatch({ events: batch });
+          return send()
+            .catch((error) => {
+              if (!retriesOnceAfterNoAnswer(batch, error)) throw error;
+              addLog(
+                "warn",
+                "Remote input key taps got no answer in time; sending them once more",
+                buildErrorLogDetails(error as Error, { eventCount: batch.length }),
+              );
+              return send();
+            })
             .then(() => setConnectionStatus("idle"))
             .catch((error) => {
               addErrorLog(
@@ -240,7 +262,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
               // check instead of re-asserting a stale press once the device
               // recovers from this failure.
               sendGenerationRef.current += 1;
-              // Drop-coalesce, not retry: forget what we thought was held so the
+              // Held state is not retried: forget what we thought was held so the
               // next real change re-syncs cleanly instead of compounding drift.
               lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
               pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;

@@ -586,6 +586,7 @@ export default function PlayFilesPage() {
     seekToFraction,
     scrubTargetMs,
     playlistEnded,
+    setPlaylistEnded,
     playlistItemDuration,
     chosenTrackLaunching,
     setDurationMsItemId,
@@ -2278,6 +2279,8 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef,
     setTrackInstanceId,
     setAutoAdvanceDueAtMs,
+    playlistEnded,
+    setPlaylistEnded,
     setSessionRestoreSettled,
   });
   const stationHandover = useStationPlaylistHandover({
@@ -2842,6 +2845,7 @@ export default function PlayFilesPage() {
                 onToggleFilter={togglePlaylistTypeFilter}
                 formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
+                playlistLoading={!playlistHydrated}
                 playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
                 onClearPlaylist={() => {

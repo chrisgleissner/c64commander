@@ -1744,6 +1744,34 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-restored");
   });
 
+  test("a saved playlist reads as loading, never as empty, while it is restored after a reload", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/play");
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { playlistTextsSeen: string[] }).playlistTextsSeen = seen;
+      new MutationObserver(() => {
+        const text = document.querySelector('[data-testid="playlist-list"]')?.textContent;
+        if (text && seen[seen.length - 1] !== text) seen.push(text);
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    await page.reload();
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+
+    await page.waitForTimeout(1_000);
+    const seen = await page.evaluate(() => (window as unknown as { playlistTextsSeen: string[] }).playlistTextsSeen);
+    expect(seen.some((text) => text.includes("No tracks in playlist yet."))).toBe(false);
+    await snap(page, testInfo, "playlist-restored-without-empty-state");
+  });
+
   test("playlist persists across navigation", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);

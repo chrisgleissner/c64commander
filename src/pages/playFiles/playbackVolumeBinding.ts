@@ -22,7 +22,11 @@
  */
 
 import type { SidVolumeOption } from "@/lib/config/sidVolumeControl";
-import { LOCAL_VOLUME_STEPS, localVolumeLabelForIndex } from "@/lib/playback/localPlaybackVolume";
+import {
+  LOCAL_VOLUME_STEPS,
+  LOCAL_VOLUME_OFF_LABEL,
+  localVolumeLabelForIndex,
+} from "@/lib/playback/localPlaybackVolume";
 import type { PlaybackRoute } from "@/lib/playback/playbackEngineRouting";
 import type { VolumeControlsProps } from "@/pages/playFiles/components/VolumeControls";
 
@@ -108,7 +112,8 @@ export const resolvePlaybackVolumeBinding = ({
       onVolumeDraftChange: local.onIndexChange,
       onVolumePreview: local.onIndexChange,
       onVolumeCommit: local.onIndexChange,
-      volumeLabel: localVolumeLabelForIndex(local.index),
+      // The slider keeps the step that unmuting returns to; the readout says what is heard, as the C64 route's does.
+      volumeLabel: local.muted ? LOCAL_VOLUME_OFF_LABEL : localVolumeLabelForIndex(local.index),
       volumeValueFormatter: (value: number) => localVolumeLabelForIndex(Math.round(value)),
     };
   }

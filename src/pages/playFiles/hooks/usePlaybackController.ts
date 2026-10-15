@@ -97,6 +97,7 @@ import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFile
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
 import { autoAdvanceDelayMs, crossfadeLeadMs, deferralToTuneEndMs } from "@/pages/playFiles/crossfadeLead";
+import { resumedTrackStartedAtMs, usePlaylistEnded } from "@/pages/playFiles/hooks/usePlaylistEnded";
 import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
 import { isChosenTrackLaunching, resolveShownItemDurationMs } from "@/pages/playFiles/shownTrackDuration";
 import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
@@ -412,10 +413,7 @@ export function usePlaybackController({
     engineNoticeShownRef.current.add(notice);
     toast({ title: "Playback engine", description: ENGINE_FALLBACK_MESSAGES[notice] });
   }, []);
-  // HARD12-018: tracks that the last song in the playlist auto-ended so that
-  // background execution can stop even though `isPlaying` stays true (the Stop
-  // affordance must remain available). Reset whenever a new track starts.
-  const [playlistEnded, setPlaylistEnded] = useState(false);
+  const { playlistEnded, setPlaylistEnded, playlistEndedRef } = usePlaylistEnded();
   const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const userTransportQueueRef = useRef(Promise.resolve());
   const latestQueuedUserSkipRef = useRef(0);
@@ -1633,7 +1631,7 @@ export function usePlaybackController({
       } else {
         setIsPaused(false);
         const currentElapsedMs = playbackTime.read().elapsedMs;
-        trackStartedAtRef.current = now - currentElapsedMs;
+        trackStartedAtRef.current = resumedTrackStartedAtMs(playlistEndedRef.current, now, currentElapsedMs);
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
         const currentDurationMs = durationMsRef.current;
@@ -1758,7 +1756,7 @@ export function usePlaybackController({
               writeMachineExecutionFromPlay("running");
               const now = Date.now();
               const { elapsedMs } = playbackTime.read();
-              trackStartedAtRef.current = now - elapsedMs;
+              trackStartedAtRef.current = resumedTrackStartedAtMs(playlistEndedRef.current, now, elapsedMs);
               playedClockRef.current.resume(now);
               setPlayedMs(playedClockRef.current.current(now));
               if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
@@ -2428,6 +2426,7 @@ export function usePlaybackController({
     handleSeekBy,
     rebasePlaybackPosition,
     playlistEnded,
+    setPlaylistEnded,
     resolveSidMetadata,
     resolveUltimateSidDurationByMd5,
     playlistItemDuration,
