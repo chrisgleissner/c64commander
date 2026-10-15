@@ -229,6 +229,31 @@ describe("KeypadGuidanceBar", () => {
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
   });
 
+  it("names the selected entry of that menu, and on the compact screen shows the entry alone", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-skip="" data-key-nav-soft-key-menu="softRight" />
+        <div role="dialog" aria-labelledby="entry-menu-title" data-key-nav-soft-key-menu-panel="">
+          <h2 id="entry-menu-title">Remote Input</h2>
+          <button data-testid="entry-keys">Keys</button>
+          <button data-testid="entry-close">Close Remote Input</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("entry-keys").focus());
+    expect(breadcrumb()).toHaveTextContent("Remote Input › Keys");
+
+    document.documentElement.dataset.displayProfile = "compact";
+    try {
+      act(() => screen.getByTestId("entry-close").focus());
+      expect(breadcrumb().textContent?.trim()).toBe("Close Remote Input");
+    } finally {
+      delete document.documentElement.dataset.displayProfile;
+    }
+  });
+
   it("names the Menu soft key while the keypad walks the controls of a dialog that offers a menu", () => {
     render(
       <FocusNavigationProvider enabled>

@@ -458,6 +458,10 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
           fontPx: Number.parseFloat(window.getComputedStyle(element).fontSize),
         };
       });
+      await expect(
+        page.getByTestId("keypad-guidance-breadcrumb"),
+        "The guidance bar names the selected entry",
+      ).toHaveText(measured.label);
       if (measured.width < 44 || measured.height < 44) {
         problems.push(`${measured.label}: ${Math.round(measured.width)}x${Math.round(measured.height)}`);
       }

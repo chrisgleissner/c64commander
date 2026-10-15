@@ -133,7 +133,10 @@ const dialogTitle = (dialog: Element): string | null =>
 const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
   const focused = document.activeElement;
   const panel = focused?.closest(`[role="dialog"][${SOFT_KEY_MENU_PANEL_ATTR}]`);
-  if (panel) return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel));
+  if (panel) {
+    const entry = focused !== panel ? accessibleLabelFor(focused) : null;
+    return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel), entry);
+  }
   const overlay = focused?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`);
   if (!overlay) return null;
   const menuKey = overlay.getAttribute(SOFT_KEY_MENU_ATTR) === "back" ? "back" : "softRight";

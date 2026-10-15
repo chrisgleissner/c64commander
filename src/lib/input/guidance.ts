@@ -144,9 +144,13 @@ export const resolveSoftKeyMenuOverlayLabels = (
 });
 
 /** PURE: the labels while that menu is open. */
-export const resolveSoftKeyMenuPanelLabels = (visible: boolean, menuTitle: string | null): GuidanceLabels => ({
+export const resolveSoftKeyMenuPanelLabels = (
+  visible: boolean,
+  menuTitle: string | null,
+  entryLabel: string | null = null,
+): GuidanceLabels => ({
   visible,
-  breadcrumb: menuTitle ? [menuTitle] : [],
+  breadcrumb: [menuTitle, entryLabel].filter((segment): segment is string => Boolean(segment)),
   left: "Close",
   center: "Select",
   right: null,

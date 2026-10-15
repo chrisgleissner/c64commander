@@ -378,4 +378,11 @@ describe("resolveSoftKeyMenuPanelLabels", () => {
     });
     expect(resolveSoftKeyMenuPanelLabels(false, null).breadcrumb).toEqual([]);
   });
+
+  it("adds the selected entry after the menu's title", () => {
+    expect(resolveSoftKeyMenuPanelLabels(true, "Remote Input", "Release all").breadcrumb).toEqual([
+      "Remote Input",
+      "Release all",
+    ]);
+  });
 });
