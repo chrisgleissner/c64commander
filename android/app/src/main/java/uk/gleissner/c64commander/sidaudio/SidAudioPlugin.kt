@@ -272,7 +272,8 @@ class SidAudioPlugin : Plugin() {
   @PluginMethod
   fun beginTransition(call: PluginCall) {
     val serial = call.serial() ?: return
-    feed.beginTransition(serial, call.seq() ?: return, call.getDouble("seconds") ?: 0.0)
+    val seq = call.seq() ?: return
+    feed.beginTransition(serial, seq, call.getDouble("seconds") ?: 0.0, call.getDouble("playOutDeclickSeconds") ?: 0.0)
     call.resolve(JSObject())
   }
 

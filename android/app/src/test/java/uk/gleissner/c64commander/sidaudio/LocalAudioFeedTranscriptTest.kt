@@ -48,6 +48,8 @@ class LocalAudioFeedTranscriptTest {
     private var bufferedUntilNanos = 0L
     private var started = false
     var underrunMs = 0.0
+    /** Frames offered before the last flush: everything from there on was heard. */
+    var offeredAtLastFlush = 0
     private var heldFrames = 0L
     private var lastDrainNanos = 0L
 
@@ -69,6 +71,7 @@ class LocalAudioFeedTranscriptTest {
 
     override fun flush() {
       drain()
+      offeredAtLastFlush = played.size() / 4
       heldFrames = 0
       bufferedUntilNanos = clock.now
     }
@@ -155,7 +158,7 @@ class LocalAudioFeedTranscriptTest {
       "flush" -> feed.flush(serial, e.getLong("seq"))
       "pause" -> feed.pause(serial)
       "resume" -> feed.resume(serial)
-      "beginTransition" -> feed.beginTransition(serial, e.getLong("seq"), e.getDouble("seconds"))
+      "beginTransition" -> feed.beginTransition(serial, e.getLong("seq"), e.getDouble("seconds"), e.optDouble("playOutDeclickSeconds", 0.0))
       "takeTail" -> feed.takeTail(serial, e.getLong("seq"), e.getInt("tailId"), e.getDouble("maxSeconds"))
       "adoptTail" -> feed.adoptTail(serial, e.getLong("seq"), e.getInt("tailId"), e.getDouble("seconds"))
       "release" -> feed.release(serial, e.getLong("seq"))
@@ -192,4 +195,21 @@ class LocalAudioFeedTranscriptTest {
   @Test fun `the outgoing tune covers a slow open and still fades under the next`() = assertSeamlessCrossfade("crossfade-1500-slow-open")
 
   @Test fun `crossfade Off keeps the outgoing tune sounding through a slow open then blends for 10 ms`() = assertSeamlessCrossfade("cut")
+
+  @Test
+  fun `crossfade Off at a tune's end plays the outgoing tune on to its songlength, then the next tune without a gap`() {
+    val scenario = JSONObject(File(fixtures, "cut-play-out.json").readText()).getJSONArray("transcript")
+    val transition = (0 until scenario.length()).map { scenario.getJSONObject(it) }.single { it.getString("method") == "beginTransition" }
+    val replay = replay("cut-play-out")
+    val speaker = replay.host.outputs.single()
+    assertEquals("the speaker never ran dry", 0.0, speaker.underrunMs, 0.0)
+    val heard = speaker.leftChannel().drop(speaker.offeredAtLastFlush)
+    val firstOfNext = heard.indexOf(12000)
+    assertEquals("the outgoing tune played on for what was left of it", (transition.getDouble("seconds") * replay.rate).toLong().toInt(), firstOfNext)
+    val declick = replay.rate / 100
+    assertTrue("full level up to the declick", heard.take(firstOfNext - declick).all { it == 8000 })
+    val ramp = heard.subList(firstOfNext - declick, firstOfNext)
+    assertTrue("the ramp falls to silence: ${ramp.first()}..${ramp.last()}", ramp.zipWithNext().all { (a, b) -> b <= a } && ramp.last() < 100)
+    assertTrue("only the next tune after it, never both mixed", heard.drop(firstOfNext).all { it == 12000 })
+  }
 }

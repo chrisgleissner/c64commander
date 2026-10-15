@@ -8,10 +8,10 @@ const pageSource = readFileSync(resolve(dirname(testFilePath), "../../../../src/
 
 describe("PlayFilesPage now-playing metadata (HARD27-040)", () => {
   it("publishes the tune the transport shows, not the raw playlist label alone", () => {
-    expect(pageSource).toContain("const nowPlayingTitle = currentDisplay?.title ?? currentItem?.label ?? null;");
+    expect(pageSource).toContain("const nowPlayingTitle = currentDisplay?.title ?? shownItem?.label ?? null;");
     expect(pageSource).toContain("const nowPlayingArtist = currentItemCredits.author;");
     expect(pageSource).toContain(
-      "{ title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: currentDurationMs ?? null }",
+      "{ title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: shownNowPlaying.durationMs ?? null }",
     );
   });
 
@@ -20,6 +20,6 @@ describe("PlayFilesPage now-playing metadata (HARD27-040)", () => {
       pageSource.indexOf("void setBackgroundExecutionNowPlaying("),
       pageSource.indexOf("// How much of the tune the on-device engine has rendered"),
     );
-    expect(effect).toContain("}, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);");
+    expect(effect).toContain("}, [shownNowPlaying.durationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);");
   });
 });

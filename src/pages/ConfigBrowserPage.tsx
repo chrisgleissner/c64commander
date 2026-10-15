@@ -72,6 +72,7 @@ import {
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
 import { rollbackAudioMixerItem } from "@/pages/config/audioMixerRollback";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
+import { useRowChangeCallbacks, useStagedConfigRows } from "@/pages/config/stagedConfigRows";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
@@ -814,6 +815,8 @@ const CategorySection = memo(function CategorySection({
     [audioConfiguredItems, authoritativeValues, categoryName, isAudioMixer, items],
   );
   const sectionId = `config-section-${configCategorySectionId(categoryName)}`;
+  const stagedRows = useStagedConfigRows(categoryName, displayItems, (item) => item.name);
+  const rowChangeFor = useRowChangeCallbacks({ handleValueChange, handleAudioValueChange });
 
   return (
     <CollapsibleSection
@@ -870,7 +873,7 @@ const CategorySection = memo(function CategorySection({
         <div className="py-4 text-center text-sm text-muted-foreground">No settings available</div>
       ) : (
         <div className="divide-y divide-border" data-testid="config-group-list">
-          {displayItems.map((item) => {
+          {displayItems.slice(0, stagedRows.count).map((item) => {
             const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
             const isSoloed = isSidVolume && soloState.soloItem === item.name;
             const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
@@ -915,14 +918,9 @@ const CategorySection = memo(function CategorySection({
                 value={item.value}
                 options={item.options}
                 details={item.details}
-                onValueChange={(v) =>
-                  isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
-                }
-                // Per-item pending only - setConfig.isPending is the section's
-                // SHARED mutation state, so keying disablement off it disabled
-                // every row in the category while any single item's write was
-                // in flight (spaced by the write throttle), making unrelated
-                // rows appear dead. See HARD9-085.
+                onValueChange={rowChangeFor(isSidVolume ? "handleAudioValueChange" : "handleValueChange", item.name)}
+                // Per-item pending only: the section's shared setConfig.isPending disabled every
+                // row while any one item's write was in flight (HARD9-085).
                 isLoading={Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])}
                 readOnly={isReadOnly}
                 className={rowClassName}
@@ -932,6 +930,7 @@ const CategorySection = memo(function CategorySection({
               />
             );
           })}
+          {stagedRows.marker}
         </div>
       )}
     </CollapsibleSection>

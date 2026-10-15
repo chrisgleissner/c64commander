@@ -94,7 +94,7 @@ describe("LocalSidPlaybackController", () => {
     const result = await controller.play(byteSource(bytes), 2, {});
     // The cache key goes in with the tune, not after it: opening is where a warmed lead-in is poured
     // into the buffer, so a key that arrives later is a warm cache that is never found.
-    expect(engine.play).toHaveBeenCalledWith(bytes, 2, {}, undefined);
+    expect(engine.play).toHaveBeenCalledWith(bytes, 2, {}, undefined, undefined);
     expect(result).toEqual(RESULT);
   });
 
@@ -106,7 +106,16 @@ describe("LocalSidPlaybackController", () => {
     engine.prerender = vi.fn();
     await controller.play(byteSource(bytes), 1, {}, { prerenderKey: "tune#1", durationSeconds: 30 });
 
-    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, "tune#1");
+    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, "tune#1", undefined);
+  });
+
+  it("tells the engine where the outgoing tune ends, so it can play that tune on to there", async () => {
+    const engine = fakeEngine();
+    const controller = new LocalSidPlaybackController(() => engine);
+
+    await controller.play(byteSource(), 1, {}, { outgoingEndsAtSeconds: 120 });
+
+    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, undefined, 120);
   });
 
   it("reuses the same engine across plays", async () => {

@@ -528,6 +528,106 @@ class LocalAudioFeedTest {
     assertEquals("only the next tune after the ramp", 3000, after[rate / 100 + 10].toInt())
   }
 
+  private fun left(output: FakeOutput, from: Int = 0) = output.samples().filterIndexed { i, _ -> i % 2 == 0 }.drop(from).map { it.toInt() }
+
+  /** The next tune's level: negative, so no step of the outgoing tune's declick can be mistaken for it. */
+  private val NEXT = -3000
+
+  /**
+   * A tune whose songlength is 2.5 s, rendered on past it (8000 up to the songlength, 9000 after), 1 s
+   * played, then a play-out transition for the rest: returns the output and where the transition began.
+   */
+  private fun playOutFromOneSecondIn(): Pair<FakeOutput, Int> {
+    feed.openSession(1, settings)
+    feed.enqueue(1, 1, segment(rate * 5 / 2, 8000))
+    feed.enqueue(1, 2, segment(rate * 2, 9000))
+    pump()
+    advance(1000)
+    val output = host.current!!
+    val remaining = 2.5 - feed.stats(1)!!.playedFrames.toDouble() / rate
+    val before = output.samples().size / 2
+    feed.beginTransition(1, 3, remaining, 0.01)
+    pump()
+    return output to before
+  }
+
+  @Test
+  fun `crossfade Off at a tune's end plays it to its songlength, then the next tune, with no gap and no audio past it`() {
+    val (output, before) = playOutFromOneSecondIn()
+    feed.openSession(2, settings)
+    advance(300)
+    feed.takeTail(1, 4, 9, 4.01)
+    feed.release(1, 5)
+    feed.adoptTail(2, 1, 9, 0.01)
+    feed.enqueue(2, 2, segment(rate, NEXT))
+    advance(3000)
+    val heard = left(output, before)
+    val firstOfNext = heard.indexOf(NEXT)
+    assertEquals("the outgoing tune played on to its songlength", rate * 3 / 2, firstOfNext)
+    assertTrue("audio past the songlength was played", heard.none { it == 9000 })
+    assertTrue("the outgoing tune was cut before its end", heard.take(firstOfNext - rate / 100).all { it == 8000 })
+    val declick = heard.subList(firstOfNext - rate / 100, firstOfNext)
+    assertTrue("the end ramps down: ${declick.first()}..${declick.last()}", declick.first() > 7000 && declick.last() < 100)
+    assertTrue("the end only falls", declick.zipWithNext().all { (a, b) -> b <= a })
+    assertEquals("the next tune follows whole", rate, heard.drop(firstOfNext).count { it == NEXT })
+  }
+
+  @Test
+  fun `crossfade Off at a tune's end - the next tune's clock starts with its own audio, not with the play-out`() {
+    playOutFromOneSecondIn()
+    feed.openSession(2, settings)
+    feed.takeTail(1, 4, 9, 4.01)
+    feed.release(1, 5)
+    feed.adoptTail(2, 1, 9, 0.01)
+    feed.enqueue(2, 2, segment(rate, NEXT))
+    advance(1000)
+    assertEquals("the play-out is not the next tune's audio", 0L, feed.stats(2)!!.playedFrames)
+    advance(3000)
+    assertEquals(rate.toLong(), feed.stats(2)!!.playedFrames)
+  }
+
+  @Test
+  fun `crossfade Off at a tune's end - a next tune that is late finds the outgoing one ended on its declick`() {
+    val (output, before) = playOutFromOneSecondIn()
+    feed.openSession(2, settings)
+    advance(2000)
+    val heard = left(output, before)
+    assertEquals("the outgoing tune played on to its songlength", rate * 3 / 2, heard.size)
+    assertTrue("it ends at silence, not on a step: ${heard.last()}", heard.last() < 100)
+    feed.takeTail(1, 4, 9, 4.01)
+    feed.release(1, 5)
+    feed.adoptTail(2, 1, 9, 0.01)
+    feed.enqueue(2, 2, segment(rate / 10, NEXT))
+    advance(500)
+    assertEquals("nothing past the songlength, then the next tune", List(rate / 10) { NEXT }, left(output, before + heard.size))
+  }
+
+  @Test
+  fun `crossfade Off at a tune's end counts what the track still holds as played out already`() {
+    host.trackMs = 200.0
+    val (output, before) = playOutFromOneSecondIn()
+    advance(2000)
+    val written = left(output, before)
+    assertEquals("the track's 200 ms plus what was written after it", rate * 3 / 2 - rate / 5, written.size)
+  }
+
+  @Test
+  fun `a seek in the next tune drops what is left of the previous tune's play-out`() {
+    playOutFromOneSecondIn()
+    feed.openSession(2, settings)
+    feed.takeTail(1, 4, 9, 4.01)
+    feed.release(1, 5)
+    feed.adoptTail(2, 1, 9, 0.01)
+    feed.enqueue(2, 2, segment(rate, NEXT))
+    advance(200)
+    val output = host.current!!
+    val atSeek = output.samples().size / 2
+    feed.flush(2, 3)
+    feed.enqueue(2, 4, segment(rate / 10, 4000))
+    advance(1000)
+    assertEquals("only the new position after the seek", List(rate / 10) { 4000 }, left(output, atSeek))
+  }
+
   @Test
   fun `crossfade - clamps rather than wraps when both tunes peak together`() {
     feed.openSession(1, settings)

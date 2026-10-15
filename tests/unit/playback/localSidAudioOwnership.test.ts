@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LocalSidEngine, __hasLocalSidAudioOwner } from "@/lib/playback/localSidEngine";
+import { CUT_DECLICK_MS, LocalSidEngine, __hasLocalSidAudioOwner } from "@/lib/playback/localSidEngine";
+import { playOutSeconds, readLocalPlayOut } from "@/lib/playback/localPlayOut";
 import {
   getSharedLocalSidPlaybackController,
   resetSharedLocalSidPlaybackController,
@@ -211,6 +212,86 @@ describe("crossfade is opt-in", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  const recordingTailSinks = (playouts: unknown[][]) => () => ({
+    sink: {
+      currentTime: 0,
+      sampleRate: 48000,
+      createBuffer: (channels: number, frames: number) => {
+        const data = Array.from({ length: channels }, () => new Float32Array(frames));
+        return { getChannelData: (c: number) => data[c]! } as unknown as AudioBuffer;
+      },
+      createSource: () => ({ start() {}, stop() {}, onended: null }) as never,
+    },
+    resume: () => {},
+    fadeIn: () => {},
+    beginCrossfadeTailPlayout: (...args: unknown[]) => playouts.push(args),
+    takeCrossfadeTail: () => ({ frames: 0 }),
+    adoptCrossfadeTail: () => {},
+    releaseForHandover: () => {},
+    close: () => {},
+  });
+
+  // The next tune starts 2.5 s before the songlength. Cut there, every tune but the last lost its ending.
+  it("with the crossfade off, plays the outgoing tune on to where it ends when the playlist moves on", async () => {
+    const playouts: unknown[][] = [];
+    const engine = new LocalSidEngine({
+      workerFactory: () => new FakeWorker() as never,
+      audioSinkFactory: recordingTailSinks(playouts) as never,
+    });
+
+    await engine.play(new ArrayBuffer(8), 0);
+    await engine.play(new ArrayBuffer(8), 1, {}, undefined, 2.4);
+
+    expect(playouts).toEqual([[2.4, CUT_DECLICK_MS / 1000]]);
+  });
+
+  it("holds the play-out signal from the outgoing tune's stop until the next sink hears its own first sample", async () => {
+    const heardListeners: (() => void)[] = [];
+    const engine = new LocalSidEngine({
+      workerFactory: () => new FakeWorker() as never,
+      audioSinkFactory: (() => ({
+        ...recordingTailSinks([])(),
+        onOwnAudioHeard: (listener: () => void) => heardListeners.push(listener),
+      })) as never,
+    });
+
+    await engine.play(new ArrayBuffer(8), 0);
+    expect(heardListeners).toHaveLength(0);
+    await engine.play(new ArrayBuffer(8), 1, {}, undefined, 2.4);
+    expect(readLocalPlayOut()).not.toBeNull();
+    expect(heardListeners).toHaveLength(1);
+    heardListeners[0]();
+    expect(readLocalPlayOut()).toBeNull();
+
+    await engine.play(new ArrayBuffer(8), 0, {}, undefined, 2.4);
+    expect(readLocalPlayOut()).not.toBeNull();
+    await engine.play(new ArrayBuffer(8), 1);
+    expect(readLocalPlayOut()).toBeNull();
+    expect(heardListeners).toHaveLength(2);
+    engine.stop();
+  });
+
+  it("with the crossfade off, a skip by the listener still cuts at once over the declick", async () => {
+    const playouts: unknown[][] = [];
+    const engine = new LocalSidEngine({
+      workerFactory: () => new FakeWorker() as never,
+      audioSinkFactory: recordingTailSinks(playouts) as never,
+    });
+
+    await engine.play(new ArrayBuffer(8), 0);
+    await engine.play(new ArrayBuffer(8), 1);
+
+    expect(playouts).toHaveLength(1);
+    expect(playouts[0]).toHaveLength(1);
+  });
+
+  it("measures what is left of the outgoing tune from its position, within the tail budget", () => {
+    expect(playOutSeconds(undefined, 10, 4)).toBe(0);
+    expect(playOutSeconds(120, 117.6, 4)).toBeCloseTo(2.4);
+    expect(playOutSeconds(120, 121, 4)).toBe(0);
+    expect(playOutSeconds(120, 30, 4)).toBe(4);
   });
 
   // A paused tune holds the shared native track paused. Faded under the next tune, it came back for the fade,

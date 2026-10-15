@@ -20,6 +20,7 @@
  * the ring) when it is off — preserving the Prime Directive byte-for-byte.
  */
 
+import { afterStagedRowsSettle, isInsidePendingList } from "@/lib/ui/stagedRows";
 import type { FocusController, FocusItem } from "./focusController";
 import {
   GROUP_ATTR,
@@ -241,7 +242,7 @@ export class FocusDiscoveryEngine {
           if (records.some((record) => this.relabelsCurrent(record))) this.onAfterAssemble?.();
           return;
         }
-        this.scheduleRefresh();
+        this.scheduleRefresh(records.some((record) => !isInsidePendingList(record.target)));
       });
       this.observer.observe(this.doc.body, {
         childList: true,
@@ -311,12 +312,16 @@ export class FocusDiscoveryEngine {
   /**
    * Coalesces DOM mutations into one re-scan after the next paint. Run in a microtask, the scan landed
    * before the first paint of every page and dialog: on a Pixel 4, 70 to 135 ms each, run up to seven
-   * times while a page loaded. A key runs a pending scan first (see flushPendingRefresh).
+   * times while a page loaded. A key runs a pending scan first (see flushPendingRefresh). A change made
+   * only by a list still building its rows a few per task waits until the list is finished; any other
+   * change, such as an overlay or a route change, is scanned after the next paint as before.
    */
-  scheduleRefresh(): void {
-    if (!this.started || this.scheduled) return;
+  scheduleRefresh(urgent = false): void {
+    if (!this.started || (this.scheduled && !urgent)) return;
     this.scheduled = true;
-    scheduleAfterNextPaint(() => this.flushPendingRefresh());
+    scheduleAfterNextPaint(() =>
+      urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
+    );
   }
 
   /** Re-scans now, for a caller that has just changed the DOM itself; any scheduled re-scan is dropped. */
