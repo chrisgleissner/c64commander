@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
@@ -45,6 +45,55 @@ const setViewportWidth = (width: number) => {
     value: width,
   });
 };
+
+describe("Escape in a field frame inside an app dialog or sheet", () => {
+  const FieldFrameIn = ({
+    kind,
+    onOpenChange,
+  }: {
+    kind: "dialog" | "sheet";
+    onOpenChange: (open: boolean) => void;
+  }) => {
+    const field = (
+      <div data-field-frame="" tabIndex={-1} data-testid="frame">
+        <input data-testid="field" aria-label="HTTP port" />
+      </div>
+    );
+    return kind === "dialog" ? (
+      <AppDialog open onOpenChange={onOpenChange}>
+        <AppDialogContent>
+          <AppDialogTitle>Add device</AppDialogTitle>
+          <AppDialogDescription>Ports</AppDialogDescription>
+          {field}
+        </AppDialogContent>
+      </AppDialog>
+    ) : (
+      <AppSheet open onOpenChange={onOpenChange}>
+        <AppSheetContent>
+          <AppSheetTitle>Device</AppSheetTitle>
+          <AppSheetDescription>Ports</AppSheetDescription>
+          {field}
+        </AppSheetContent>
+      </AppSheet>
+    );
+  };
+
+  it.each(["dialog", "sheet"] as const)(
+    "returns to the frame from its input in an app %s, and closes on the next Escape",
+    (kind) => {
+      const onOpenChange = vi.fn();
+      renderWithProviders(<FieldFrameIn kind={kind} onOpenChange={onOpenChange} />);
+      act(() => screen.getByTestId("field").focus());
+
+      fireEvent.keyDown(screen.getByTestId("field"), { key: "Escape", code: "Escape" });
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(screen.getByTestId("frame"));
+
+      fireEvent.keyDown(screen.getByTestId("frame"), { key: "Escape", code: "Escape" });
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    },
+  );
+});
 
 describe("App surface primitives", () => {
   it("renders AppSheet as a bottom sheet on medium widths", () => {
