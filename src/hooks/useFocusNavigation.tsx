@@ -545,12 +545,9 @@ export const FocusNavigationProvider = ({
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target) && !leavesPageField) {
-        // Up/Down inside a SINGLE-LINE field move focus rather than being swallowed. The caret
-        // cannot move vertically there, so the key would otherwise do nothing at all — and inside
-        // an overlay that is a dead end, because the ring is inert there and Escape belongs to the
-        // dialog. A keypad user who landed in the host field of the discovery dialog could reach
-        // nothing else, including its own Connect button. Textareas, selects and contenteditable
-        // keep their vertical keys, which do mean something in those.
+        // Up/Down in a single-line field, where the caret cannot move vertically, move focus: in a
+        // dialog the field was otherwise a dead end (the discovery dialog's host field could not reach
+        // Connect). Textareas, selects and contenteditable keep their vertical keys.
         if ((action === "dpadUp" || action === "dpadDown") && isSingleLineField(event.target)) {
           const overlay = (event.target as Element).closest(OPEN_OVERLAY_ANCESTOR_SELECTOR);
           // Except where the overlay has opted out with `data-key-nav-skip`, which says it drives
@@ -758,15 +755,19 @@ export const FocusNavigationProvider = ({
       // Focus the ring moves itself during a dispatch is already where the ring wants it; adopting
       // it again would, for one, descend into a card whose single control OK just activated.
       dispatchingRef.current = true;
-      let handled = false;
+      let outcome: ReturnType<NavigationController["dispatch"]> = { type: "ignored" };
       try {
-        handled = controller.dispatch(action).type !== "ignored";
+        outcome = controller.dispatch(action);
       } finally {
         dispatchingRef.current = false;
       }
+      const handled = outcome.type !== "ignored";
       if (handled) {
+        const firstKey = getInputModality() === "pointer";
         setInputModality("key-navigation");
         notifyRing();
+        // The guidance bar reserves its room once it shows, after the first key scrolled the stop into view.
+        if (firstKey && outcome.type === "focusMoved") focusRingElement(ringElementFor(outcome.item.id));
         event.preventDefault();
       }
       emitKeyInputDiagnostics({
@@ -781,8 +782,7 @@ export const FocusNavigationProvider = ({
         activeElement,
       });
     };
-    // Pointer/touch always wins: capture-phase so it flips modality (and clears
-    // the highlight + guidance bar via the subscription) before any other handler.
+    // Pointer/touch always wins: capture phase, so modality flips before any other handler runs.
     const handlePointer = () => setInputModality("pointer");
     // Focus the app moves by itself is where the user is: menus and listboxes move it on Up/Down,
     // and a closing menu hands it back to its trigger. The highlight follows it, or OK would act on

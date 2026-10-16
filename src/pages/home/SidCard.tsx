@@ -170,6 +170,7 @@ export function SidCard({
             disabled={!isConnected || powerPending}
             className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
+            aria-label={`${name} power: ${power ? "on" : "off"}`}
           >
             {power ? "ON" : "OFF"}
           </Button>
@@ -180,6 +181,7 @@ export function SidCard({
             disabled={true}
             className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
+            aria-label={`${name} power: ${power ? "on" : "off"}`}
           >
             {power ? "ON" : "OFF"}
           </Button>

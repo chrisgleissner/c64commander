@@ -144,9 +144,13 @@ export const resolveSoftKeyMenuOverlayLabels = (
 });
 
 /** PURE: the labels while that menu is open. */
-export const resolveSoftKeyMenuPanelLabels = (visible: boolean, menuTitle: string | null): GuidanceLabels => ({
+export const resolveSoftKeyMenuPanelLabels = (
+  visible: boolean,
+  menuTitle: string | null,
+  entryLabel: string | null = null,
+): GuidanceLabels => ({
   visible,
-  breadcrumb: menuTitle ? [menuTitle] : [],
+  breadcrumb: [menuTitle, entryLabel].filter((segment): segment is string => Boolean(segment)),
   left: "Close",
   center: "Select",
   right: null,
@@ -305,6 +309,19 @@ export const accessibleLabelFor = (element: Element | null): string | null => {
     nonBlank(element.getAttribute("placeholder")) ??
     nonBlank(element.getAttribute("title"));
   return name ? tidyLabel(name) : null;
+};
+
+/**
+ * A short name a control gives the guidance bar, where its accessible name is a full sentence. The
+ * health badge is named "Connected to c64u, system healthy" for assistive technology, which the
+ * bar's one line on a 320 px screen cut to "Connected to c64u, s…".
+ */
+export const GUIDANCE_LABEL_ATTR = "data-guidance-label";
+
+/** The breadcrumb's name for the current element: its short guidance label, else its accessible name. */
+export const guidanceLabelFor = (element: Element | null): string | null => {
+  const short = element ? nonBlank(element.getAttribute(GUIDANCE_LABEL_ATTR)) : null;
+  return short ? tidyLabel(short) : accessibleLabelFor(element);
 };
 
 /**

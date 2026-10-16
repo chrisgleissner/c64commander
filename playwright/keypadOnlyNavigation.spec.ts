@@ -458,6 +458,10 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
           fontPx: Number.parseFloat(window.getComputedStyle(element).fontSize),
         };
       });
+      await expect(
+        page.getByTestId("keypad-guidance-breadcrumb"),
+        "The guidance bar names the selected entry",
+      ).toHaveText(measured.label);
       if (measured.width < 44 || measured.height < 44) {
         problems.push(`${measured.label}: ${Math.round(measured.width)}x${Math.round(measured.height)}`);
       }
@@ -524,6 +528,103 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
 
     await expect(sheet).toBeHidden();
     await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+  });
+
+  test("closing a dialog by Back returns the selection to its opener, not to the tab bar @layout", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openers = [
+      { opener: page.getByTestId("unified-health-badge"), dialog: page.getByTestId("diagnostics-sheet") },
+      {
+        opener: page.locator('[data-slot-active="true"]').getByTestId("home-save-ram"),
+        dialog: page.getByTestId("save-ram-dialog"),
+      },
+    ];
+    for (const { opener, dialog } of openers) {
+      expect(await ringFocus(page, opener), "The ring could not reach the opener").toBe(true);
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      await waitForAnimations(page);
+      // On the keypad handset the first scan after the dialog has gone still sees the page hidden and
+      // only the tab bar; desktop Chromium unhides the page first. This hides the page for that scan.
+      await page.evaluate(() => {
+        const slot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
+        const observer = new MutationObserver(() => {
+          if (document.querySelector('[role="dialog"]')) return;
+          observer.disconnect();
+          slot?.setAttribute("aria-hidden", "true");
+          setTimeout(() => slot?.removeAttribute("aria-hidden"), 300);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await page.waitForTimeout(800);
+      await expect(opener).toHaveAttribute(SELECTED, "true");
+    }
+  });
+
+  test("a page jump by number key lands on the new page's first own stop, not on the app bar @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    for (const digit of ["2", "6", "1"]) {
+      await page.keyboard.press(digit);
+      await page.waitForTimeout(600);
+      const selected = await page.evaluate(() => {
+        const element = document.querySelector('[data-key-selected="true"]');
+        return {
+          id: element?.getAttribute("data-testid") ?? "",
+          inAppBar: element?.closest('[data-testid="app-bar-row"]') !== null,
+          inTabBar: element?.closest('[data-focus-scope="tabbar"]') !== null,
+        };
+      });
+      expect(selected.inAppBar || selected.inTabBar, `After ${digit} the selection is ${selected.id}`).toBe(false);
+    }
+  });
+
+  test("the guidance bar names Home's controls by what they act on, and the badge without cutting it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const crumb = page.getByTestId("keypad-guidance-breadcrumb");
+    const home = page.locator('[data-slot-active="true"]');
+
+    const badge = page.getByTestId("unified-health-badge");
+    for (let step = 0; step < 10 && (await badge.getAttribute(SELECTED)) !== "true"; step += 1) {
+      await page.keyboard.press("ArrowUp");
+    }
+    await expect(badge).toHaveAttribute(SELECTED, "true");
+    await expect(crumb).toHaveText(/^C64U: /);
+    expect(
+      await page
+        .locator(".keypad-guidance-breadcrumb-text")
+        .evaluate((text) => text.scrollWidth <= text.clientWidth + 1),
+      "The badge's name is drawn whole in the guidance bar",
+    ).toBe(true);
+
+    const expected: Array<[string, RegExp]> = [
+      ["home-drives-reset", /^Drives: reset$/],
+      ["home-drive-toggle-a", /^Drive A power: (on|off)$/],
+      ["home-drive-status-a", /^Drive A status: /],
+    ];
+    for (const [testId, name] of expected) {
+      expect(await ringFocus(page, home.getByTestId(testId), 160), `The ring could not reach ${testId}`).toBe(true);
+      await expect(crumb, testId).toHaveText(name);
+    }
   });
 
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({

@@ -10,6 +10,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StreamStatus } from "@/pages/home/components/StreamStatus";
 import { writeSectionState } from "@/lib/ui/collapsibleSectionStore";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 // Streams is closed by default now that it is a collapsible CollapsibleSection - these
 // tests exercise its content, not the collapse mechanism (which has its own tests), so
@@ -77,8 +78,8 @@ vi.mock("framer-motion", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, disabled, "data-testid": testId }: any) => (
-    <button onClick={onClick} disabled={disabled} data-testid={testId}>
+  Button: ({ children, onClick, disabled, "data-testid": testId, "aria-label": ariaLabel }: any) => (
+    <button onClick={onClick} disabled={disabled} data-testid={testId} aria-label={ariaLabel}>
       {children}
     </button>
   ),
@@ -134,6 +135,12 @@ describe("StreamStatus", () => {
     expect(screen.getByTestId("home-stream-stop-sid")).toBeInTheDocument();
     expect(screen.getByTestId("home-stream-start-iec")).toBeInTheDocument();
     expect(screen.getByTestId("home-stream-stop-iec")).toBeInTheDocument();
+  });
+
+  it("names Start and Stop by their stream, so the guidance bar does not read only Start", () => {
+    render(<StreamStatus isConnected={true} />);
+    expect(guidanceLabelFor(screen.getByTestId("home-stream-start-sid"))).toMatch(/^Start .+ stream$/);
+    expect(guidanceLabelFor(screen.getByTestId("home-stream-stop-sid"))).toMatch(/^Stop .+ stream$/);
   });
 
   it("displays the endpoint for each stream", () => {

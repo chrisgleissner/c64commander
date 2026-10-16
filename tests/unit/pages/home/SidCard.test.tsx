@@ -11,11 +11,12 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { SidCard, type SidCardProps } from "@/pages/home/SidCard";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 // Mock UI components
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, disabled }: any) => (
-    <button data-testid="button" onClick={onClick} disabled={disabled}>
+  Button: ({ children, onClick, disabled, "aria-label": ariaLabel }: any) => (
+    <button data-testid="button" onClick={onClick} disabled={disabled} aria-label={ariaLabel}>
       {children}
     </button>
   ),
@@ -81,6 +82,11 @@ describe("SidCard", () => {
     isConnected: true,
     testIdSuffix: "foo",
   };
+
+  it("names the power toggle by its socket and state, so the keypad guidance bar does not read only ON", () => {
+    render(<SidCard {...defaultProps} />);
+    expect(guidanceLabelFor(screen.getByText("ON").closest("button"))).toBe("SID 1 power: on");
+  });
 
   it("renders basic info", () => {
     render(<SidCard {...defaultProps} />);

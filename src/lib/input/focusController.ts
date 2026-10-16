@@ -35,6 +35,11 @@ export interface FocusItem {
    */
   readonly parentId?: string;
   readonly disabled?: boolean;
+  /**
+   * App chrome repeated on every page, such as the app bar's Quick menu button and device badge. A default
+   * selection passes over it to the page's first own stop; Up still reaches it.
+   */
+  readonly chrome?: boolean;
   readonly activate: () => void;
 }
 
@@ -284,7 +289,8 @@ export class FocusController {
   }
 
   private firstEnabledIdInScope(parentId: string | null): string | null {
-    return this.itemsInScope(parentId).find(isEnabled)?.id ?? null;
+    const enabled = this.itemsInScope(parentId).filter(isEnabled);
+    return (enabled.find((item) => !item.chrome) ?? enabled[0])?.id ?? null;
   }
 
   private itemsInScope(parentId: string | null): InternalItem[] {

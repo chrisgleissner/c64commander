@@ -369,6 +369,62 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  it("marks the stops of an app-chrome region, so the default selection passes over them", () => {
+    mount(`<header><div data-focus-chrome=""><button id="quick-menu">Quick menu</button></div></header>
+      <main><button id="first-card">First card</button></main>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("first-card");
+    expect(controller.list().map((entry) => entry.chrome ?? false)).toEqual([true, false]);
+    engine.stop();
+  });
+
+  describe("closing a dialog whose page reappears after the tab bar", () => {
+    const tabBar = `<nav data-focus-scope="tabbar"><button id="tab-home">Home</button><button id="tab-play">Play</button></nav>`;
+    const openAndClose = () => {
+      const page = mount(`<main id="page"><button id="badge">Badge</button><button id="backup">Backup</button></main>`);
+      mount(tabBar);
+      const onSelectionMovedByScan = vi.fn();
+      const controller = new FocusController();
+      const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
+      engine.start();
+      const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+      controller.setCurrent(idOf("backup"));
+      const dialog = mount(
+        `<div role="dialog"><button id="cancel">Cancel</button><button id="save">Save</button></div>`,
+      );
+      page.setAttribute("aria-hidden", "true");
+      engine.refresh();
+      dialog.remove();
+      engine.refresh();
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { page, engine, selected, onSelectionMovedByScan };
+    };
+
+    it("returns to the opener, not to the next tab, once the page is back", () => {
+      const { page, engine, selected } = openAndClose();
+      expect(selected()).toBe("tab-home");
+
+      page.removeAttribute("aria-hidden");
+      engine.refresh();
+
+      expect(selected()).toBe("backup");
+      engine.stop();
+    });
+
+    it("lands on the page's first stop, not on a tab, when the opener is gone", () => {
+      const { page, engine, selected } = openAndClose();
+      el("backup").remove();
+
+      page.removeAttribute("aria-hidden");
+      engine.refresh();
+
+      expect(selected()).toBe("badge");
+      engine.stop();
+    });
+  });
+
   describe("a route change", () => {
     const startOnSecondStop = () => {
       const onSelectionMovedByScan = vi.fn();

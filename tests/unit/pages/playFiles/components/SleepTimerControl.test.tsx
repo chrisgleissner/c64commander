@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { SLEEP_TIMER_OFF, type SleepTimerMode } from "@/lib/playback/sleepTimer";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -35,6 +36,13 @@ describe("SleepTimerControl", () => {
     expect(armed.minutes).toBe(15);
     // A full fifteen minutes from now, not fifteen minutes from a stale clock.
     expect(armed.endsAtMs - realNowMs).toBe(15 * 60_000);
+  });
+
+  it("names every choice as a sleep timer setting, so the guidance bar does not read only Off or 15m", () => {
+    render(<SleepTimerControl mode={SLEEP_TIMER_OFF} onChange={vi.fn()} nowMs={0} isPlaying />);
+    expect(guidanceLabelFor(screen.getByTestId("sleep-timer-off"))).toBe("Sleep timer: off");
+    expect(guidanceLabelFor(screen.getByTestId("sleep-timer-after-tune"))).toBe("Sleep timer: this tune");
+    expect(guidanceLabelFor(screen.getByTestId("sleep-timer-m15"))).toBe("Sleep timer: 15 minutes");
   });
 
   it("offers off and after-this-tune alongside the timed choices", () => {

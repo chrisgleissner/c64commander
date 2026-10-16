@@ -96,7 +96,10 @@ F1 is the neutral `function1` action (see the F1 row).
   soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate, or
   Expand/Collapse on a control with `aria-expanded` (by control kind; on a card
   whose only control is its header, by that control), right = Menu only where the focused control has a menu of its
-  own. While a single-line field on a page has focus, left and center read Done;
+  own. The breadcrumb names the selected control by its accessible name, or by a
+  shorter `data-guidance-label` where that name is a sentence (the health badge
+  reads "C64U: healthy"). On the compact profile the center key's "Activate" is
+  left out, so the breadcrumb has room. While a single-line field on a page has focus, left and center read Done;
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
   exactly when the user is driving by keys.
@@ -154,7 +157,9 @@ F1 is the neutral `function1` action (see the F1 row).
 - **Always-reachable shortcuts:** digits `1`–`6` jump to a tab, `0` enters Game
   Mode (not on a device that cannot stream, such as a U2, the same gate as the Home
   Game tile), `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
-  same exclusions — never in a text field, never inside an open overlay.
+  same exclusions — never in a text field, never inside an open overlay. A tab jump
+  selects the new page's first own stop: the app bar's Quick menu button and badge
+  (`data-focus-chrome`) are passed over by the default selection and stay one Up away.
 
 Reachability is **complete by construction**: the provider scans the active
 scope (topmost dialog/menu/sheet, else the routed page + bottom TabBar) and

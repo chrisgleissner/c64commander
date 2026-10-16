@@ -232,6 +232,41 @@ describe("FocusController — a group whose only stop is the selected one", () =
   });
 });
 
+describe("FocusController — app chrome and the default selection", () => {
+  const page = () => [
+    { ...item("quick-menu", 0), chrome: true },
+    { ...item("badge", 1), chrome: true },
+    item("first-card", 2),
+    item("tab-home", 3),
+  ];
+
+  it("defaults to the page's first own stop, not the app bar before it", () => {
+    const controller = new FocusController();
+    controller.setItems(page());
+    expect(controller.current()?.id).toBe("first-card");
+  });
+
+  it("lands on the page's first own stop after a reset to the default, as a page jump makes", () => {
+    const controller = new FocusController();
+    controller.setItems(page());
+    controller.setCurrent("tab-home");
+    controller.resetToDefault();
+    expect(controller.current()?.id).toBe("first-card");
+  });
+
+  it("still defaults to the app bar on a page with no stop of its own", () => {
+    const controller = new FocusController();
+    controller.setItems(page().filter((entry) => entry.id !== "first-card" && entry.id !== "tab-home"));
+    expect(controller.current()?.id).toBe("quick-menu");
+  });
+
+  it("keeps the app bar reachable by Up from the first stop", () => {
+    const controller = new FocusController();
+    controller.setItems(page());
+    expect(controller.focusPrevious()?.id).toBe("badge");
+  });
+});
+
 describe("FocusController.setItems — DOM-order batch population", () => {
   it("traverses in the given array (DOM) order regardless of `order`", () => {
     const controller = new FocusController();

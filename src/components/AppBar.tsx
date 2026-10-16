@@ -132,6 +132,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
         <div
           className={cn("flex items-center justify-between gap-2", isCompact ? "min-h-0" : "min-h-11")}
           data-testid="app-bar-row"
+          data-focus-chrome=""
         >
           {/* Never narrower than the title's longest word, so the badge gives way rather than the title breaking inside a word. */}
           <div

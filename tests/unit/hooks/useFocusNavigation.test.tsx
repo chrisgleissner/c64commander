@@ -2156,3 +2156,33 @@ describe("the selected stop goes away", () => {
     scrollIntoView.mockRestore();
   });
 });
+
+describe("the first key after pointer use", () => {
+  afterEach(() => {
+    resetInputModality();
+    document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+  });
+
+  it("scrolls the stop it moved to again once the guidance bar has reserved its room", () => {
+    const reserveAtScroll: Array<[string, string]> = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      reserveAtScroll.push([
+        this.textContent ?? "",
+        document.documentElement.style.getPropertyValue("--keypad-guidance-reserved-height"),
+      ]);
+    });
+    render(
+      <FocusNavigationProvider>
+        <button>First card</button>
+        <button>Second card</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(button("Second card")).toHaveAttribute(SELECTED, "true");
+    const last = reserveAtScroll.filter(([label]) => label === "Second card").at(-1);
+    expect(last?.[1]).toBe("var(--keypad-guidance-bar-height)");
+    scrollIntoView.mockRestore();
+  });
+});
