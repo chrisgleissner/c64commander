@@ -317,8 +317,22 @@ const comparePositions = (a: Element, pa: ReadingPosition, b: Element, pb: Readi
  * relative to source still traverses the way the user sees it. With no geometry
  * (jsdom / zero-box) it is pure DOM order, keeping unit tests deterministic.
  */
-export const compareFocusables = (a: Element, b: Element): number =>
-  comparePositions(a, readingPosition(a), b, readingPosition(b));
+export const compareFocusables = (a: Element, b: Element): number => compareReadingOrder(a, b);
+
+const compareReadingOrder = (a: Element, b: Element, scan?: DiscoveryScan): number => {
+  const aCard = a.closest(SECTION_SCOPE_SELECTOR);
+  const bCard = b.closest(SECTION_SCOPE_SELECTOR);
+  // A growing card lays out its children at full height before its animated wrapper reaches that
+  // height. Comparing those children with the next card interleaves their stops, and the ring keeps
+  // that order after the animation finishes. Compare cards first so their stops stay contiguous;
+  // geometry still determines reading order within a card and between cards.
+  if (aCard !== bCard) {
+    const aAnchor = aCard ?? a;
+    const bAnchor = bCard ?? b;
+    return comparePositions(aAnchor, readingPosition(aAnchor, scan), bAnchor, readingPosition(bAnchor, scan));
+  }
+  return comparePositions(a, readingPosition(a, scan), b, readingPosition(b, scan));
+};
 
 /**
  * Sort into reading order, measuring each element once.
@@ -332,8 +346,7 @@ export const sortIntoReadingOrder = <T extends Element>(
   scan: DiscoveryScan = createDiscoveryScan(),
 ): T[] => {
   for (const element of elements) readingPosition(element, scan);
-  const at = (element: Element): ReadingPosition => readingPosition(element, scan);
-  return elements.sort((a, b) => comparePositions(a, at(a), b, at(b)));
+  return elements.sort((a, b) => compareReadingOrder(a, b, scan));
 };
 
 export type ActiveScopeKind = "overlay" | "page";

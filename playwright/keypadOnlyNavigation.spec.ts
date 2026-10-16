@@ -83,6 +83,72 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await server.close();
   });
 
+  test("Lighting exposes both Case Light and Keyboard Light after opening by keypad @layout", async ({ page }) => {
+    await page.goto("/");
+    await settle(page);
+    const lighting = page.getByTestId("home-lighting-group");
+    expect(await ringFocus(page, lighting)).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(lighting).toHaveAttribute("data-open", "true");
+    await page.waitForTimeout(400);
+    // Opening a card is enough to freeze an animation-time scan. Do not force a new scan or
+    // use DOM focus: that would repair the stale order before the test can observe it.
+    expect(await ringFocus(page, page.getByTestId("home-led-summary"))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-led-mode")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("home-led-summary")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByTestId("home-keyboard-lighting-summary")).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(page.getByTestId("home-keyboard-lighting-mode"))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-keyboard-lighting-mode")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByTestId("home-led-summary")).toHaveAttribute(SELECTED, "true");
+  });
+
+  test("every enabled control in both lighting groups is selected and visible using only keys @layout", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settle(page);
+    expect(await ringFocus(page, page.getByTestId("home-lighting-group"))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-lighting-group")).toHaveAttribute("data-open", "true");
+    for (const prefix of ["home-led", "home-keyboard-lighting"]) {
+      const group = page.getByTestId(`${prefix}-summary`);
+      expect(await ringFocus(page, group)).toBe(true);
+      // Inventory the rendered controls independently of the app's discovery engine. A missing
+      // registration must fail here instead of being absent from both the expected and actual sets.
+      const inventory = await group.evaluateHandle((element) =>
+        Array.from(
+          element.querySelectorAll<HTMLElement>("button,input:not([type=hidden]),select,textarea,[role=slider]"),
+        )
+          .filter((control) => !control.matches(":disabled,[aria-disabled=true]"))
+          .filter((control) => !control.closest("[data-key-nav-skip]"))
+          .filter((control) => control.getBoundingClientRect().height > 0),
+      );
+      const count = await inventory.evaluate((controls) => controls.length);
+      expect(count).toBeGreaterThan(0);
+      await page.keyboard.press("Enter");
+      const reached = new Set<number>();
+      for (let step = 0; step <= count; step++) {
+        const index = await inventory.evaluate((controls) =>
+          controls.indexOf(document.querySelector('[data-key-selected="true"]') as HTMLElement),
+        );
+        expect(index, `${prefix}: the ring must select an inventoried control`).toBeGreaterThanOrEqual(0);
+        if (reached.has(index)) break;
+        reached.add(index);
+        expect(await isOnScreen(page.locator(`[${SELECTED}="true"]`))).toBe(true);
+        await page.keyboard.press("ArrowDown");
+      }
+      expect(reached.size, `${prefix}: every enabled rendered control must be reachable`).toBe(count);
+      await inventory.dispose();
+      await page.keyboard.press("Escape");
+    }
+  });
+
   test("every primary page is reachable using only the keypad @layout", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/", { waitUntil: "domcontentloaded" });

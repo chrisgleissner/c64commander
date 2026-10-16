@@ -163,10 +163,18 @@ F1 is the neutral `function1` action (see the F1 row).
   selects the new page's first own stop: the app bar's Quick menu button and badge
   (`data-focus-chrome`) are passed over by the default selection and stay one Up away.
 
-Reachability is **complete by construction**: the provider scans the active
+Discovery is automatic: the provider scans the active
 scope (topmost dialog/menu/sheet, else the routed page + bottom TabBar) and
 discovers every interactive element; `useFocusItem`/`useFocusGroup` only refine
 id/order/label/grouping/activation.
+
+Discovery alone does not prove reachability. Verify each scenario by independently
+inventorying its enabled rendered controls, walking every group using only
+Up/Down, OK and Back, and comparing the visited controls with that inventory.
+Check visibility on each selection, both traversal directions, and order after
+expanding or collapsing cards. Keep each card's stops together even during its
+height animation. Dialogs, menus, conditional controls and device capability
+variants need their own scenarios; reaching all six tabs does not cover them.
 
 ---
 
@@ -323,6 +331,7 @@ not-connected / empty / single-device).
   - WASD/Cursors — select — `home-user-interface-wasd-cursors` — R✅ I✅
   - Color Scheme — select — `home-user-interface-color-scheme` — R✅ I✅
 - **LED — Case Light / Keyboard Light** _(flag `lighting_studio_enabled`)_
+  - Opening Lighting keeps Case Light and Keyboard Light together before Drives in the keypad order, including while the card expands. OK enters either light's controls; Back returns to its group, and Down/Up moves to the other light. `keypadOnlyNavigation.spec.ts` covers both directions and independently walks every enabled control at 320 × 426 CSS px. The shared reading-order regression also covers animation-time overlap with later cards.
   - Mode / Music Detect / Pattern / Color / Tint / SID select — select/checkbox — `home-led-*`, `home-keyboard-lighting-*` — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
   - Color slider, Intensity slider — slider ×2 each — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
 - **Drives** (`data-section-label="Drives"`) — per drive A / B / Soft-IEC:
