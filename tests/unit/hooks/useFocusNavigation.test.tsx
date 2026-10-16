@@ -2185,6 +2185,12 @@ describe("the selected stop goes away", () => {
 });
 
 describe("the first key after pointer use", () => {
+  beforeEach(async () => {
+    // A reservation queued by an earlier test applies in a microtask; let it land before resetting.
+    await Promise.resolve();
+    resetInputModality();
+    document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+  });
   afterEach(() => {
     resetInputModality();
     document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");

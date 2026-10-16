@@ -283,13 +283,6 @@ export default function OpenSourceLicensesPage() {
             ) : (
               blocks.map((block, blockIndex) => {
                 if (block.type === "heading") {
-                  if (block.level === 1) {
-                    return (
-                      <h2 key={`h-${blockIndex}`} className="break-words text-2xl font-semibold tracking-tight">
-                        {block.text}
-                      </h2>
-                    );
-                  }
                   if (block.level === 2) {
                     return (
                       <h3 key={`h-${blockIndex}`} className="break-words pt-2 text-xl font-semibold">

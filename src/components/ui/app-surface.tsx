@@ -12,7 +12,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
 import { ScrollPositionIndicator } from "@/components/ScrollPositionIndicator";
-import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
+import { composeFieldFrameEscape, composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
   INTERSTITIAL_Z_INDEX,
@@ -199,7 +199,17 @@ type AppSheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitiv
 
 const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppSheetContentProps>(
   (
-    { className, children, onOpenAutoFocus, showClose = true, closeTestId, style, fullScreen = false, ...props },
+    {
+      className,
+      children,
+      onOpenAutoFocus,
+      onEscapeKeyDown,
+      showClose = true,
+      closeTestId,
+      style,
+      fullScreen = false,
+      ...props
+    },
     ref,
   ) => {
     const {
@@ -234,6 +244,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
             data-interstitial-depth={layer?.depth ?? 1}
             data-sheet-presentation="sheet"
             onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
+            onEscapeKeyDown={composeFieldFrameEscape(onEscapeKeyDown)}
             {...props}
           >
             {children}
@@ -310,7 +321,17 @@ type AppDialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimiti
 
 const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppDialogContentProps>(
   (
-    { className, children, onOpenAutoFocus, showClose = true, closeTestId, hideClose = false, style, ...props },
+    {
+      className,
+      children,
+      onOpenAutoFocus,
+      onEscapeKeyDown,
+      showClose = true,
+      closeTestId,
+      hideClose = false,
+      style,
+      ...props
+    },
     ref,
   ) => {
     const {
@@ -337,6 +358,7 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
               zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface,
             }}
             onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
+            onEscapeKeyDown={composeFieldFrameEscape(onEscapeKeyDown)}
             {...props}
           >
             {children}

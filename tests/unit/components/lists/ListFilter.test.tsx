@@ -17,9 +17,12 @@ const TOGGLE = "filter-toggle";
 const Harness = ({
   initialText = "",
   headerSummary = null,
+  listMounted = true,
 }: {
   initialText?: string;
   headerSummary?: string | null;
+  /** False until a virtualised list has mounted its scroller, which it does after the filter. */
+  listMounted?: boolean;
 }) => {
   const [text, setText] = useState(initialText);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -43,11 +46,13 @@ const Harness = ({
         headerSummary={headerSummary}
         region={region}
       />
-      <div ref={scrollerRef} data-testid="scroller" style={{ overflowY: "auto" }}>
-        <div ref={anchorRef} data-testid="anchor">
-          <button type="button">First row</button>
+      {listMounted ? (
+        <div ref={scrollerRef} data-testid="scroller" style={{ overflowY: "auto" }}>
+          <div ref={anchorRef} data-testid="anchor">
+            <button type="button">First row</button>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 };
@@ -115,6 +120,16 @@ describe("CollapsibleListFilter", () => {
     render(<Harness />);
     expand();
     scrollListTo(30, { byReader: true });
+    expect(isExpanded()).toBe(false);
+  });
+
+  it("folds when the reader scrolls a list whose scroller mounted after the filter unfolded", () => {
+    const view = render(<Harness listMounted={false} />);
+    expand();
+    view.rerender(<Harness listMounted />);
+
+    scrollListTo(30, { byReader: true });
+
     expect(isExpanded()).toBe(false);
   });
 

@@ -174,9 +174,10 @@ export const CollapsibleListFilter = ({
     return () => document.removeEventListener("focusin", handleFocusIn);
   }, [collapseAutomatically, state.expanded]);
 
+  // `region` changes when a virtualised list mounts its scroller, which can be after the filter unfolds.
   useEffect(() => {
     if (!state.expanded) return undefined;
-    const scroller = regionRef.current.scrollAnchor()?.scroller;
+    const scroller = region.scrollAnchor()?.scroller;
     if (!scroller) return undefined;
     const target = scrollEventTarget(scroller);
     let baseline = scroller.scrollTop;
@@ -208,7 +209,7 @@ export const CollapsibleListFilter = ({
       intentEvents.forEach((name) => target.removeEventListener(name, markIntent));
       target.removeEventListener("scroll", handleScroll);
     };
-  }, [collapseAutomatically, state.expanded]);
+  }, [collapseAutomatically, region, state.expanded]);
 
   const toggleLabel = state.expanded ? "Hide filter" : summary ? `Filter: ${summary}` : "Filter files";
 

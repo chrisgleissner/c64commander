@@ -122,6 +122,8 @@ F1 is the neutral `function1` action (see the F1 row).
   first, and is scrolled into view.
 - **OK acts on the highlight:** while keys drive the ring, OK activates the
   highlighted stop even when DOM focus was left on a different stop.
+- **Field rows in a dialog or sheet:** Back while a field row's input is being edited
+  returns to the row and keeps the dialog open; the next Back closes the dialog.
 - **Closing a dialog or sheet:** the selection and DOM focus return to the
   control that was selected when it opened, also when Remote Input is closed
   from its keypad menu or after its "Other controls".
@@ -901,7 +903,7 @@ opened from the Disks library's "New disk" button): Type — select — `new-dis
 — R✅ I✅ ; File name — text — `new-disk-name` — R✅ I✅ ; Disk label — text —
 `new-disk-label` — R✅ I✅ ; Tracks — number — row `new-disk-tracks-field`, input
 `new-disk-tracks` — R✅ I✅ `[visible for D64/DNP types only]` _(the keypad stops on the
-row; OK starts editing the input, OK or Back returns to the row)_ ; Storage folder — text — `new-disk-folder` —
+row; OK starts editing the input, OK or Back returns to the row and keeps the dialog open; a second Back closes it)_ ; Storage folder — text — `new-disk-folder` —
 R✅ I✅ ; Cancel — button — R✅ I✅ ; Create & mount — button — `new-disk-create`
 — R✅ I✅ `[disabled until a non-empty file name is entered / while creating]`.
 Selecting the D64 or DNP type reveals the Tracks field; a successful create adds

@@ -174,9 +174,10 @@ let reserveWanted: boolean | null = null;
 /*
  * Applied once the current script has finished. Opening a dialog hid the bar and showed it again
  * within one task, and each write of this variable on <html> restyles the whole document: two
- * full style recalculations, about 130 ms each at 6x CPU throttling, for no visible change.
+ * full style recalculations, about 130 ms each at 6x CPU throttling, for no visible change. The
+ * ring flushes it early before it scrolls the first key's stop, which must clear the bar just shown.
  */
-const applyReservedGuidanceHeight = (): void => {
+export const flushReservedGuidanceHeight = (): void => {
   const reserved = reserveWanted;
   reserveWanted = null;
   if (reserved === null) return;
@@ -190,7 +191,7 @@ const applyReservedGuidanceHeight = (): void => {
 
 export const reserveGuidanceHeight = (reserved: boolean): void => {
   if (typeof document === "undefined") return;
-  if (reserveWanted === null) queueMicrotask(applyReservedGuidanceHeight);
+  if (reserveWanted === null) queueMicrotask(flushReservedGuidanceHeight);
   reserveWanted = reserved;
 };
 

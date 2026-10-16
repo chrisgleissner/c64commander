@@ -102,6 +102,29 @@ test.describe("Numeric fields in dialogs on the keypad", () => {
     expect(await activeTestId(page)).toBe("new-disk-tracks");
   });
 
+  test("Back while editing New disk Tracks returns to the row and keeps the dialog; a second Back closes it", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem("c64u_feature_flag:new_disk_enabled", "1"));
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await page.locator('[data-slot-active="true"]').getByTestId("new-disk-open").click();
+    const dialog = page.getByRole("dialog", { name: "New disk" });
+    await expect(dialog).toBeVisible();
+    await page.waitForTimeout(400);
+    await pressDownUntil(page, "new-disk-tracks-field", 16);
+    await page.keyboard.press("Enter");
+    expect(await activeTestId(page)).toBe("new-disk-tracks");
+    await page.getByTestId("new-disk-tracks").fill("40");
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    expect(await activeTestId(page)).toBe("new-disk-tracks-field");
+    await expect(page.getByTestId("new-disk-tracks")).toHaveValue("40");
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
   /*
    * Where the system keyboard does open (a tap on a touch phone), it leaves about 213 of the 427 px.
    * The field being edited must stay in sight inside the dialog, not under its title or buttons.

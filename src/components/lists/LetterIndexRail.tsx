@@ -95,14 +95,22 @@ export const useLetterRailModel = (
   };
 };
 
-/** Focuses the title of a row once the virtualised list has rendered it, so OK plays that row. */
-export const focusRowTitleWhenRendered = (scroller: HTMLElement, id: string, framesLeft = ROW_RENDER_FRAMES) => {
-  const title = scroller.querySelector<HTMLElement>(`${rowSelectorFor(id)} ${ROW_TITLE_SELECTOR}`);
-  if (title) {
-    title.focus({ preventScroll: true });
-    return;
-  }
-  if (framesLeft > 0) requestAnimationFrame(() => focusRowTitleWhenRendered(scroller, id, framesLeft - 1));
+/**
+ * Focuses the title of a row once the virtualised list has rendered it, so OK plays that row. Returns a
+ * cancel: a later jump cancels this one, whose row could otherwise render afterwards and take focus back.
+ */
+export const focusRowTitleWhenRendered = (scroller: HTMLElement, id: string): (() => void) => {
+  let frame = 0;
+  const attempt = (framesLeft: number) => {
+    const title = scroller.querySelector<HTMLElement>(`${rowSelectorFor(id)} ${ROW_TITLE_SELECTOR}`);
+    if (title) {
+      title.focus({ preventScroll: true });
+      return;
+    }
+    if (framesLeft > 0) frame = requestAnimationFrame(() => attempt(framesLeft - 1));
+  };
+  attempt(ROW_RENDER_FRAMES);
+  return () => cancelAnimationFrame(frame);
 };
 
 type LetterIndexRailProps = {
@@ -179,6 +187,9 @@ export function LetterIndexRail({
     }, LETTER_BUBBLE_IDLE_MS);
   }, []);
 
+  const cancelRowFocusRef = useRef<() => void>(() => undefined);
+  useEffect(() => () => cancelRowFocusRef.current(), []);
+
   // Selecting moves focus, which the dialog's focus trap and the keypad ring both react to, so a
   // drag selects only where the finger lifts, not at every letter it passes.
   const landOn = useCallback(
@@ -187,7 +198,8 @@ export function LetterIndexRail({
       if (listIndex === undefined) return false;
       scrollToListIndex(listIndex);
       landedIdRef.current = id;
-      if (select && scroller) focusRowTitleWhenRendered(scroller, id);
+      cancelRowFocusRef.current();
+      if (select && scroller) cancelRowFocusRef.current = focusRowTitleWhenRendered(scroller, id);
       return true;
     },
     [listIndexById, scrollToListIndex, scroller],
@@ -199,6 +211,7 @@ export function LetterIndexRail({
       const target = position === undefined ? undefined : entries[position];
       if (!target || position === undefined) return;
       pendingRef.current = null;
+      cancelRowFocusRef.current();
       if (landOn(target.id, select) || !ensureLoaded) return;
       pendingRef.current = { id: target.id, select };
       // Loading rebuilds every row up to the letter, which can take a few frames; the bubble shows first.
@@ -209,7 +222,10 @@ export function LetterIndexRail({
 
   const selectLanded = useCallback(() => {
     if (pendingRef.current) pendingRef.current = { ...pendingRef.current, select: true };
-    else if (landedIdRef.current && scroller) focusRowTitleWhenRendered(scroller, landedIdRef.current);
+    else if (landedIdRef.current && scroller) {
+      cancelRowFocusRef.current();
+      cancelRowFocusRef.current = focusRowTitleWhenRendered(scroller, landedIdRef.current);
+    }
   }, [scroller]);
 
   useEffect(() => {

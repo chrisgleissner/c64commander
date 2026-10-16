@@ -64,7 +64,7 @@ import {
 } from "@/lib/input";
 import { useInputProfile } from "@/hooks/useInputProfile";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
-import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
+import { KeypadGuidanceBar, flushReservedGuidanceHeight } from "@/components/input/KeypadGuidanceBar";
 import {
   isAnyOverlayOpen,
   isEditableTarget,
@@ -758,8 +758,11 @@ export const FocusNavigationProvider = ({
         const firstKey = getInputModality() === "pointer";
         setInputModality("key-navigation");
         notifyRing();
-        // The guidance bar reserves its room once it shows, after the first key scrolled the stop into view.
-        if (firstKey && outcome.type === "focusMoved") focusRingElement(ringElementFor(outcome.item.id));
+        // The first key shows the guidance bar; its reserved room is applied before the stop is scrolled again.
+        if (firstKey && outcome.type === "focusMoved") {
+          flushReservedGuidanceHeight();
+          focusRingElement(ringElementFor(outcome.item.id));
+        }
         event.preventDefault();
       }
       emitKeyInputDiagnostics({
