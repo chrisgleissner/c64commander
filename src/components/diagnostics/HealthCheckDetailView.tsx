@@ -12,6 +12,7 @@ import type {
   HealthCheckProbeRecord,
 } from "@/lib/diagnostics/healthCheckEngine";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { SkippedProbeStatus } from "@/components/diagnostics/SkippedProbeStatus";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,9 @@ export function HealthCheckDetailView({
 }: Props) {
   const healthCheckState = useHealthCheckState();
   const activeProbeStates = probeStates ?? healthCheckState.probeStates;
+  // The open explanation and the reason it shows. The Switch device list starts a new run every 10 s, which turns a
+  // skipped row back into Pending; holding the row as it was keeps its info button, and so the popover, in place.
+  const [openSkipInfo, setOpenSkipInfo] = useState<{ probe: HealthCheckProbeType; reason: string } | null>(null);
   // During a live run, show liveProbes overlaid over any previous result.
   // A probe is "done" if it appears in liveProbes, "running" if it's the first
   // missing probe in presentation order, and "pending" otherwise.
@@ -119,32 +123,35 @@ export function HealthCheckDetailView({
                     outcomeColorClass[probe?.outcome ?? ""] ??
                     "text-foreground")
                   : (outcomeColorClass[probe?.outcome ?? ""] ?? "text-foreground");
-              const skipped = settled && finalStatusLabel === "Skipped";
+              const heldOpenSkipInfo = openSkipInfo?.probe === probeName ? openSkipInfo : null;
+              const skipped = Boolean(heldOpenSkipInfo) || (settled && finalStatusLabel === "Skipped");
               const reasonText = settled && !skipped ? recordedReason : "";
               const isDetailRow = reasonText.length > REASON_COMPACT_LIMIT;
               const ReasonElement = isDetailRow ? "p" : "span";
 
-              const statusContent =
-                liveStatus === "running" ? (
-                  <span className="flex items-center gap-1 text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                    Running
-                  </span>
-                ) : liveStatus === "pending" ? (
-                  <span className="text-muted-foreground">Pending</span>
-                ) : skipped && (probe || executionState?.state === "CANCELLED") ? (
-                  <SkippedProbeStatus
-                    probe={probeName}
-                    reason={recordedReason}
-                    testId={`health-check-probe-info-${probeName.toLowerCase()}`}
-                  />
-                ) : probe ? (
-                  <span className={finalStatusClass}>{finalStatusLabel}</span>
-                ) : executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED" ? (
-                  <span className={finalStatusClass}>{finalStatusLabel}</span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                );
+              const showsSkipInfo = heldOpenSkipInfo || (skipped && (probe || executionState?.state === "CANCELLED"));
+              const statusContent = showsSkipInfo ? (
+                <SkippedProbeStatus
+                  probe={probeName}
+                  reason={heldOpenSkipInfo?.reason ?? recordedReason}
+                  testId={`health-check-probe-info-${probeName.toLowerCase()}`}
+                  open={Boolean(heldOpenSkipInfo)}
+                  onOpenChange={(open) => setOpenSkipInfo(open ? { probe: probeName, reason: recordedReason } : null)}
+                />
+              ) : liveStatus === "running" ? (
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  Running
+                </span>
+              ) : liveStatus === "pending" ? (
+                <span className="text-muted-foreground">Pending</span>
+              ) : probe ? (
+                <span className={finalStatusClass}>{finalStatusLabel}</span>
+              ) : executionState?.state === "TIMEOUT" || executionState?.state === "CANCELLED" ? (
+                <span className={finalStatusClass}>{finalStatusLabel}</span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              );
 
               return (
                 <div

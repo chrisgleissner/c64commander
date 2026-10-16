@@ -217,4 +217,29 @@ test.describe("Switch device health detail on a 320x427 screen", () => {
     await expect(explanation).toBeHidden();
     await expect(sheet).toBeVisible();
   });
+
+  test("keeps a tapped explanation open through the list's next check, and Back closes only the explanation", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const sheet = await openSwitcher(page);
+    await sheet.getByTestId("switch-device-expand-device-reachable").click();
+    const telnet = probeRow(sheet, "telnet");
+    await expect(telnet).toContainText("Skipped", { timeout: 30_000 });
+    await expect(probeRow(sheet, "jiffy")).toContainText("Success", { timeout: 30_000 });
+
+    await telnet.getByRole("button", { name: "Why was Telnet skipped?" }).click();
+    const explanation = page.getByTestId("health-check-probe-info-telnet-explanation");
+    await expect(explanation).toBeVisible();
+
+    // The list checks every saved device again every 10 s, which used to rebuild this row and close the explanation.
+    await expect(probeRow(sheet, "rest")).toHaveAttribute("data-live-status", /running|done/, { timeout: 15_000 });
+    await expect(probeRow(sheet, "jiffy")).toContainText("Success", { timeout: 30_000 });
+    await expect(explanation).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(explanation).toBeHidden();
+    await expect(sheet).toBeVisible();
+  });
 });

@@ -16,16 +16,19 @@ type Props = {
   probe: string;
   reason: string | null | undefined;
   testId: string;
+  /** Controlled open state, for a list that is re-rendered while the explanation is open. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /** "Skipped" with an info button that says why, so the reason is not printed into a narrow row. */
-export function SkippedProbeStatus({ probe, reason, testId }: Props) {
+export function SkippedProbeStatus({ probe, reason, testId, open, onOpenChange }: Props) {
   const explanation = explainSkippedProbe(reason);
   return (
     <span className="inline-flex items-center gap-1 text-muted-foreground">
       <span className="whitespace-nowrap">Skipped</span>
       {explanation ? (
-        <Popover>
+        <Popover open={open} onOpenChange={onOpenChange}>
           <PopoverTrigger asChild>
             <Button
               type="button"

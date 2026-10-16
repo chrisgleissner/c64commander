@@ -10,7 +10,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
-import { resetHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import {
+  resetHealthCheckProbeStates,
+  resetHealthCheckStateSnapshot,
+  setHealthCheckStateSnapshot,
+} from "@/lib/diagnostics/healthCheckState";
 import type {
   HealthCheckProbeRecord,
   HealthCheckProbeType,
@@ -423,6 +427,32 @@ describe("HealthCheckDetailView", () => {
         "Not checked here, because this check changes a setting briefly and puts it back. To include it, open the status badge and choose Run health check.",
       );
       expect(screen.getAllByText(/changes a setting briefly/)).toHaveLength(1);
+    });
+
+    it("keeps an open explanation, and its info button, through the next run of the list", () => {
+      const view = render(<HealthCheckDetailView result={skippedResult()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Why was Telnet skipped?" }));
+      expect(screen.getByTestId("health-check-probe-info-telnet-explanation")).toBeVisible();
+
+      view.rerender(
+        <HealthCheckDetailView
+          result={skippedResult()}
+          liveProbes={{}}
+          isRunning
+          probeStates={resetHealthCheckProbeStates()}
+        />,
+      );
+
+      expect(screen.getByTestId("health-check-probe-info-telnet-explanation")).toHaveTextContent(
+        "doesn't open extra connections",
+      );
+      expect(screen.getByRole("button", { name: "Why was Telnet skipped?" })).toBeVisible();
+      expect(screen.getByTestId("health-check-probe-config")).toHaveTextContent("Pending");
+
+      fireEvent.keyDown(screen.getByTestId("health-check-probe-info-telnet-explanation"), { key: "Escape" });
+
+      expect(screen.queryByTestId("health-check-probe-info-telnet-explanation")).toBeNull();
+      expect(screen.getByTestId("health-check-probe-telnet")).toHaveTextContent("Pending");
     });
 
     it("shows a skipped probe without a reason as plain Skipped", () => {
