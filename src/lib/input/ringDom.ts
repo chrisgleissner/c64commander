@@ -43,6 +43,17 @@ export const frameOfField = (element: Element | null): HTMLElement | null =>
     ? element.closest<HTMLElement>(FIELD_FRAME_SELECTOR)
     : null;
 
+export const isActivation = (action: string | null): boolean =>
+  action === "enter" || action === "center" || action === "activate";
+
+/** OK on a field row in a dialog edits its input; OK in that input returns to the row. */
+export const toggleFieldFrameEditing = (target: EventTarget | null): boolean => {
+  if (!(target instanceof Element) || target.closest(OPEN_OVERLAY_ANCESTOR_SELECTOR) === null) return false;
+  const next = fieldOfFrame(target) ?? frameOfField(target);
+  next?.focus();
+  return next !== null;
+};
+
 const overlayStops = (overlay: Element): HTMLElement[] =>
   [...overlay.querySelectorAll<HTMLElement>(`${INTERACTIVE_SELECTOR},${FIELD_FRAME_SELECTOR}`)].filter(
     (element) => isFocusVisible(element) && !isFocusDisabled(element) && frameOfField(element) === null,
