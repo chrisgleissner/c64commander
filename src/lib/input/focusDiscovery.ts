@@ -20,12 +20,17 @@
  * the ring) when it is off — preserving the Prime Directive byte-for-byte.
  */
 
+import { afterNextPaint } from "@/lib/ui/afterNextPaint";
 import { afterStagedRowsSettle, isInsidePendingList } from "@/lib/ui/stagedRows";
 import type { FocusController, FocusItem } from "./focusController";
 import {
   GROUP_ATTR,
   GROUP_CONTAINER_SELECTOR,
+  INTERACTIVE_SELECTOR,
+  OVERLAY_SELECTOR,
+  SCOPE_ATTR,
   SECTION_LABEL_ATTR,
+  SECTION_SCOPE_SELECTOR,
   SKIP_ATTR,
   TABBAR_SCOPE_SELECTOR,
   createDiscoveryScan,
@@ -137,14 +142,6 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
 
-const scheduleAfterNextPaint = (run: () => void): void => {
-  if (typeof requestAnimationFrame !== "function") {
-    queueMicrotask(run);
-    return;
-  }
-  requestAnimationFrame(() => setTimeout(run, 0));
-};
-
 const labellingElements = (element: Element): HTMLElement[] =>
   (element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [])
     .map((id) => element.ownerDocument.getElementById(id))
@@ -175,6 +172,31 @@ const changesOnlyText = (record: MutationRecord): boolean => {
   const isElement = (node: Node) => node.nodeType === Node.ELEMENT_NODE;
   return !Array.from(record.addedNodes).some(isElement) && !Array.from(record.removedNodes).some(isElement);
 };
+
+/**
+ * Everything a scan can find or be steered by. A node that is none of these and holds none of them
+ * cannot add, remove or regroup a ring stop: an icon swapped inside a button, a checkbox's tick, a
+ * count or a status line. Explicit `useFocusItem` registrations schedule their own re-scan.
+ */
+const RING_STRUCTURE_SELECTOR = [
+  INTERACTIVE_SELECTOR,
+  GROUP_CONTAINER_SELECTOR,
+  OVERLAY_SELECTOR,
+  SECTION_SCOPE_SELECTOR,
+  `[${SCOPE_ATTR}]`,
+  `[${SKIP_ATTR}]`,
+  "[data-slot-active]",
+].join(",");
+
+const holdsRingStructure = (node: Node): boolean =>
+  node instanceof Element &&
+  (node.matches(RING_STRUCTURE_SELECTOR) || node.querySelector(RING_STRUCTURE_SELECTOR) !== null);
+
+/** A child list change whose added and removed nodes hold no ring structure. */
+export const changesNoRingStructure = (record: MutationRecord): boolean =>
+  record.type === "childList" &&
+  !Array.from(record.addedNodes).some(holdsRingStructure) &&
+  !Array.from(record.removedNodes).some(holdsRingStructure);
 
 /** React writes an input's `type` on every render, which is no change and must not rescan the page. */
 const rewritesAttributeWithSameValue = (record: MutationRecord): boolean =>
@@ -278,7 +300,8 @@ export class FocusDiscoveryEngine {
     const currentId = this.controller.current()?.id;
     const current = currentId ? this.elementForId(currentId) : null;
     const relabels =
-      changesOnlyText(record) || (record.attributeName === "aria-label" && !rewritesAttributeWithSameValue(record));
+      changesNoRingStructure(record) ||
+      (record.attributeName === "aria-label" && !rewritesAttributeWithSameValue(record));
     return current !== null && relabels && current.contains(record.target);
   }
 
@@ -297,6 +320,7 @@ export class FocusDiscoveryEngine {
    */
   private cannotChangeRing(record: MutationRecord): boolean {
     if (changesOnlyText(record)) return !this.renamesAGroup(record);
+    if (changesNoRingStructure(record)) return !this.renamesAGroup(record);
     if (rewritesAttributeWithSameValue(record)) return true;
     if (record.attributeName === "aria-label") return !this.groupElements.has(record.target as Element);
     if (record.attributeName === SKIP_ATTR) return false;
@@ -319,7 +343,7 @@ export class FocusDiscoveryEngine {
   scheduleRefresh(urgent = false): void {
     if (!this.started || (this.scheduled && !urgent)) return;
     this.scheduled = true;
-    scheduleAfterNextPaint(() =>
+    afterNextPaint(() =>
       urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
     );
   }

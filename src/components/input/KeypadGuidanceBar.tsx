@@ -165,14 +165,29 @@ const setAttrIfChanged = (element: HTMLElement | null, name: string, value: stri
  * on `.page-shell` itself: that scroll box must not gain a bottom reservation of any kind (BUG-066
  * and BUG-072 both did and were reverted; `tests/unit/pageShellClearance.test.ts` locks it).
  */
-const reserveGuidanceHeight = (reserved: boolean): void => {
-  if (typeof document === "undefined") return;
+let reserveWanted: boolean | null = null;
+
+/*
+ * Applied once the current script has finished. Opening a dialog hid the bar and showed it again
+ * within one task, and each write of this variable on <html> restyles the whole document: two
+ * full style recalculations, about 130 ms each at 6x CPU throttling, for no visible change.
+ */
+const applyReservedGuidanceHeight = (): void => {
+  const reserved = reserveWanted;
+  reserveWanted = null;
+  if (reserved === null) return;
   const root = document.documentElement;
   const next = reserved ? "var(--keypad-guidance-bar-height)" : "0px";
   if (root.style.getPropertyValue("--keypad-guidance-reserved-height") === next) return;
   root.style.setProperty("--keypad-guidance-reserved-height", next);
   // Dialogs are placed in JavaScript and have to be placed again when the bar appears under them.
   window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+};
+
+export const reserveGuidanceHeight = (reserved: boolean): void => {
+  if (typeof document === "undefined") return;
+  if (reserveWanted === null) queueMicrotask(applyReservedGuidanceHeight);
+  reserveWanted = reserved;
 };
 
 /**

@@ -1298,3 +1298,73 @@ describe("FocusDiscoveryEngine while a list is still being built", () => {
     engine.stop();
   });
 });
+
+describe("child list changes that hold no ring structure", () => {
+  const start = (html: string) => {
+    document.body.innerHTML = html;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+    return { controller, engine, onAfterAssemble, refresh };
+  };
+
+  it("do not rescan when a selected button swaps its icon, and notify the guidance bar", async () => {
+    // Mute swaps the speaker icon inside its button; each swap rescanned the whole Play page.
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="mute" aria-label="Mute"><svg id="icon"></svg></button><button>Next</button></div>`,
+    );
+
+    el("icon").replaceWith(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(onAfterAssemble).toHaveBeenCalledTimes(1);
+    engine.stop();
+  });
+
+  it("do not rescan when a checkbox draws its tick or a status line appears", async () => {
+    const { engine, refresh } = start(
+      `<div id="page"><button id="box" role="checkbox"></button><div id="status"></div><button>Next</button></div>`,
+    );
+
+    el("box").appendChild(document.createElement("span"));
+    const note = document.createElement("p");
+    note.innerHTML = "<strong>1</strong> selected";
+    el("status").appendChild(note);
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it.each([
+    ["a button", "<button id='added'>Remove selected</button>"],
+    ["a wrapper holding a link", "<div><a id='added' href='#x'>More</a></div>"],
+    ["a labelled section", "<section data-section-label='Extra'><span>text</span></section>"],
+    ["a dialog", "<div role='dialog'><span>text</span></div>"],
+  ])("rescan when %s is added", async (_name, html) => {
+    const { engine, refresh } = start(`<div id="page"><button>Play</button><div id="slot"></div></div>`);
+
+    el("slot").innerHTML = html;
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    engine.stop();
+  });
+
+  it("rescan when a node holding a control is removed", async () => {
+    const { controller, engine, refresh } = start(
+      `<div id="page"><button>Play</button><div id="extra"><button id="gone">Gone</button></div></div>`,
+    );
+
+    el("extra").remove();
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(controller.list()).toHaveLength(1);
+    engine.stop();
+  });
+});

@@ -784,17 +784,17 @@ export const FocusNavigationProvider = ({
     // Pointer/touch always wins: capture-phase so it flips modality (and clears
     // the highlight + guidance bar via the subscription) before any other handler.
     const handlePointer = () => setInputModality("pointer");
-    // Focus the app moves by itself is where the user is: menus and listboxes move it on Up/Down,
-    // and a closing menu hands it back to its trigger. The highlight follows it, or OK would act on
-    // the focused control while the highlight showed another. A menu also focuses its first item on
-    // open without scrolling to it, so inside an overlay the item is brought into view: on a short
-    // screen a tall menu opened with the focused item below the fold.
+    // Focus the app moves itself (a menu on Up/Down, a closing menu back to its trigger) is followed by the
+    // highlight, or OK would act on another control. Inside an overlay it is brought into view, as a tall menu
+    // opens with its first item below the fold; not the overlay's own surface as it opens, which is on screen
+    // and which, scrolled, forced a second full style and layout pass.
     const handleFocusIn = (event: FocusEvent) => {
       if (dispatchingRef.current) return;
       if (getInputModality() !== "key-navigation" || !(event.target instanceof HTMLElement)) return;
       focusAwaitingRingRef.current = adoptActiveElement() ? null : event.target;
       notifyRing();
-      if (isWithinOpenOverlay(event.target)) event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (isWithinOpenOverlay(event.target) && !event.target.matches(OPEN_OVERLAY_ANCESTOR_SELECTOR))
+        event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
     };
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keydown", handleFieldDone);

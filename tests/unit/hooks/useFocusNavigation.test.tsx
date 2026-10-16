@@ -1373,6 +1373,33 @@ describe("the keypad highlight follows focus that a menu moves itself", () => {
   });
 });
 
+describe("a dialog focusing its own surface as it opens", () => {
+  afterEach(() => resetInputModality());
+
+  it("is not scrolled into view, which forced a second style and layout pass on every open", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Diagnostics" tabIndex={-1}>
+          <button type="button">Close</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+    const dialogScroll = vi.fn();
+    const closeScroll = vi.fn();
+    dialog.scrollIntoView = dialogScroll;
+    close.scrollIntoView = closeScroll;
+
+    dialog.focus();
+    expect(dialogScroll).not.toHaveBeenCalled();
+
+    close.focus();
+    expect(closeScroll).toHaveBeenCalled();
+  });
+});
+
 describe("the keypad highlight follows focus moved to a control the ring has not scanned yet", () => {
   afterEach(() => resetInputModality());
 
