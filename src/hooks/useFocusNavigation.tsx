@@ -73,6 +73,7 @@ import {
 } from "@/lib/input/eventTargets";
 import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { DefaultStopFollower } from "@/lib/input/defaultStopFollower";
 import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
@@ -183,6 +184,7 @@ export const FocusNavigationProvider = ({
   }, []);
 
   const ringElementFor = useCallback((id: string) => engineRef.current?.elementForId(id) ?? null, []);
+  const defaultStop = useMemo(() => new DefaultStopFollower(), []);
 
   const controller = useMemo(() => {
     const created: NavigationController = new NavigationController({
@@ -275,6 +277,8 @@ export const FocusNavigationProvider = ({
         onAfterAssemble: () => {
           adoptFocusAwaitingRingRef.current();
           notifyRing();
+          if (getInputModality() === "key-navigation")
+            defaultStop.afterScan(controller.focus, ringElementFor, focusRingElement);
         },
         // Radix may hand DOM focus back to a different stop; focusing the stop makes the ring's move hold,
         // and brings a stop the ring moved to on its own into view.
@@ -282,7 +286,7 @@ export const FocusNavigationProvider = ({
           if (getInputModality() === "key-navigation") focusRingElement(ringElementFor(id));
         },
       }),
-    [controller, notifyRing, ringElementFor],
+    [controller, defaultStop, notifyRing, ringElementFor],
   );
   engineRef.current = engine;
 
@@ -648,6 +652,7 @@ export const FocusNavigationProvider = ({
         // The tab bar stays in the ring across routes, so a ring standing on it would stay there;
         // a jump lands on the page it opened instead.
         controller.focus.resetToDefault();
+        defaultStop.arm();
         shortcuts.jumpToTab(shortcutDigit - 1);
         setInputModality("key-navigation");
         notifyRing();
@@ -803,7 +808,7 @@ export const FocusNavigationProvider = ({
       window.removeEventListener("touchstart", handlePointer, true);
       window.removeEventListener("focusin", handleFocusIn, true);
     };
-  }, [adoptActiveElement, controller, enabled, keymap, notifyRing, ringElementFor, startEngine]);
+  }, [adoptActiveElement, controller, defaultStop, enabled, keymap, notifyRing, ringElementFor, startEngine]);
 
   const value = useMemo<FocusNavigationContextValue>(
     () => ({

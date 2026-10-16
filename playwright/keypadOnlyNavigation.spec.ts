@@ -693,6 +693,48 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     }
   });
 
+  test("a tab jump to a page left scrolled down shows the stop it selects @layout", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const scrolledBy = await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>(
+        '[data-slot-active="true"] [data-page-scroll-container="true"]',
+      );
+      if (!scroller) return 0;
+      scroller.scrollTop = scroller.scrollHeight;
+      return scroller.scrollTop;
+    });
+    expect(scrolledBy, "Play must be long enough to leave scrolled").toBeGreaterThan(200);
+
+    for (const digit of ["1", "2"]) {
+      await page.keyboard.press(digit);
+      await page.waitForTimeout(800);
+      const placement = await page.evaluate(() => {
+        const selected = document.querySelector<HTMLElement>('[data-key-selected="true"]');
+        const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"]');
+        const header = document.querySelector<HTMLElement>('[data-slot-active="true"] header');
+        if (!selected || !bar) return null;
+        const rect = selected.getBoundingClientRect();
+        return {
+          id: selected.getAttribute("data-testid") ?? selected.textContent?.trim().slice(0, 30) ?? "",
+          top: Math.round(rect.top),
+          bottom: Math.round(rect.bottom),
+          headerBottom: Math.round(header?.getBoundingClientRect().bottom ?? 0),
+          barTop: Math.round(bar.getBoundingClientRect().top),
+        };
+      });
+      expect(placement, `After ${digit} nothing is selected`).not.toBeNull();
+      const { id, top, bottom, headerBottom, barTop } = placement!;
+      expect(
+        top >= headerBottom - 1 && Math.min(bottom, top + 44) <= barTop + 1,
+        `After ${digit} ${id} is at ${top}..${bottom}, outside ${headerBottom}..${barTop}`,
+      ).toBe(true);
+    }
+  });
+
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
     page,
   }) => {
