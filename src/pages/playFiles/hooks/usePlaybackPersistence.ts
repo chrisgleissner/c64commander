@@ -151,9 +151,11 @@ export function usePlaybackPersistence({
   const { setElapsedMs, setPlayedMs } = playbackTime;
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
-  // True once the stored session has been read and either applied or rejected;
-  // until then the persist effect must not delete the stored session.
+  // True once the stored session has been read and either applied or rejected; until then the persist effect must
+  // not delete the stored session. State, not only a ref: the persist effect of the commit that applies the restore
+  // still holds the mount's stopped state, and deleted the playing session it was about to rewrite.
   const sessionRestoreSettledRef = useRef(false);
+  const [sessionRestoreApplied, setSessionRestoreApplied] = useState(false);
   const setSessionRestoreSettledRef = useRef(setSessionRestoreSettled);
   setSessionRestoreSettledRef.current = setSessionRestoreSettled;
   // One place flips the flag, so the ref the persist effect reads and the state
@@ -161,6 +163,7 @@ export function usePlaybackPersistence({
   const markSessionRestoreSettled = useCallback(() => {
     if (sessionRestoreSettledRef.current) return;
     sessionRestoreSettledRef.current = true;
+    setSessionRestoreApplied(true);
     setSessionRestoreSettledRef.current(true);
   }, []);
   const hydratedPlaylistKeyRef = useRef<string | null>(null);
@@ -672,7 +675,7 @@ export function usePlaybackPersistence({
         // A freshly mounted instance starts not-playing; deleting the stored
         // session here would destroy a live session before the async restore
         // applies it (navigation remounts the page — playback must survive).
-        if (!sessionRestoreSettledRef.current) return;
+        if (!sessionRestoreApplied) return;
         clearStoredPlaybackSession();
         return;
       }
@@ -711,6 +714,7 @@ export function usePlaybackPersistence({
       playlistStorageKey,
       repeatEnabled,
       restoreVersion,
+      sessionRestoreApplied,
       shuffleEnabled,
       shuffleSeed,
     ],

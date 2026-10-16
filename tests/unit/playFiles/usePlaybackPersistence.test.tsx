@@ -1658,6 +1658,63 @@ describe("usePlaybackPersistence", () => {
   });
 
   // Play page left for the Home tab for 15 s while a tune played on: coming back, the clock read 15 s behind the tune.
+  // Re-selecting the Play tab remounts the page. In the commit that applied the restore, the session effect still saw
+  // the mount's stopped state and deleted the stored session, which the next render wrote again.
+  it("never deletes a playing session from storage while restoring it", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/kept.sid",
+            name: "kept.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 120000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/kept.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 15000,
+        playedMs: 15000,
+        durationMs: 120000,
+        autoAdvanceDueAtMs: Date.now() + 90_000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem");
+    try {
+      const { result } = renderHook(() =>
+        usePlaybackPersistenceHarness({
+          playlistStorageKey,
+          localEntriesBySourceId: new Map(),
+          localSourceTreeUris: new Map(),
+        }),
+      );
+      await waitFor(() => expect(result.current.isPlaying).toBe(true));
+      await waitFor(() => expect(result.current.trackStartedAtRef.current).not.toBeNull());
+
+      const sessionRemovals = removeItem.mock.calls.filter(
+        ([key], index) => key === PLAYBACK_SESSION_KEY && removeItem.mock.contexts[index] === localStorage,
+      );
+      expect(sessionRemovals).toEqual([]);
+      expect(readStoredPlaybackSession()?.isPlaying).toBe(true);
+    } finally {
+      removeItem.mockRestore();
+    }
+  });
+
   it("carries the clock of a playing session on by the time since it was written", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
