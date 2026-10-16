@@ -2046,7 +2046,7 @@ export const HomeDiskManager = () => {
                     className={cn(
                       "min-w-0 overflow-hidden text-xs text-muted-foreground",
                       profile === "compact"
-                        ? "grid gap-2 whitespace-normal"
+                        ? "grid grid-cols-[auto_1fr] items-center justify-items-start gap-x-3 gap-y-1 whitespace-normal"
                         : // flex-wrap: each label/control pair stays whole (whitespace-nowrap) but
                           // the row moves them onto a second line instead of running past the card
                           // and the viewport, which it did by 53 px at the largest text size.
