@@ -58,7 +58,7 @@ export const APP_DIALOG_CONTENT_CLASS = `fixed left-[50dvw] flex max-h-[calc(100
  * which left the bottom fifth of a 427px screen blank below the Diagnostics log.
  */
 export const APP_SHEET_CONTENT_CLASS = [
-  "fixed inset-x-0 bottom-[var(--keypad-guidance-reserved-height,0px)] flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
+  "fixed inset-x-0 bottom-[var(--app-bottom-overlay-reserved-height,0px)] flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
   "rounded-t-[var(--interstitial-radius)] shadow-[var(--interstitial-shadow)]",
   "sm:left-1/2 sm:right-auto sm:w-[min(100vw-2rem,56rem)] sm:-translate-x-1/2",
   "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",

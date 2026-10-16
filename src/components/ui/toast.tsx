@@ -14,8 +14,9 @@ import { cn } from "@/lib/utils";
 
 const ToastProvider = ToastPrimitives.Provider;
 
-// The viewport is a strip directly above the tab bar, and the Toaster reserves its height out of the
-// page area (`--app-toast-reserved-height`), so a toast never lies over a page control. Floating
+// The viewport is a strip directly above the tab bar and the keypad guidance bar, and the Toaster reserves its
+// height out of the page area and out of any open dialog (`--app-toast-reserved-height`), so a toast never lies over
+// a control. It is drawn above dialogs: under them an error raised while one was open was invisible. Floating
 // below the app bar, a persistent error toast covered Play's "Stop radio" button and absorbed taps
 // aimed at it. pointer-events-none: the viewport is a container, not a surface; each toast opts
 // back in (toastVariants), so a gap in the strip never swallows a tap. The strip is capped at 40% of
@@ -28,7 +29,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "toast-viewport pointer-events-none fixed inset-x-0 bottom-[var(--app-tab-bar-frame-height,0px)] z-[100] mx-auto flex w-full max-w-[min(100vw,32rem)] max-h-[40dvh] flex-col gap-2 overflow-y-auto overflow-x-hidden overscroll-contain px-[calc(0.5rem+var(--safe-area-inset-left))] py-2 empty:p-0",
+      "toast-viewport pointer-events-none fixed inset-x-0 bottom-[var(--app-toast-strip-bottom,0px)] z-[800] mx-auto flex w-full max-w-[min(100vw,32rem)] max-h-[40dvh] flex-col gap-2 overflow-y-auto overflow-x-hidden overscroll-contain px-[calc(0.5rem+var(--safe-area-inset-left))] py-2 empty:p-0",
       className,
     )}
     {...props}

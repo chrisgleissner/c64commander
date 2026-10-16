@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { readKeypadGuidanceReservePx } from "@/lib/ui/keypadGuidanceReserve";
+import { readBottomOverlayReservePx } from "@/lib/ui/keypadGuidanceReserve";
 
 export type CollisionPadding = { top: number; right: number; bottom: number; left: number };
 
@@ -39,7 +39,8 @@ const bottomChromeHeightPx = (): number => {
  * was placed at y=0, under the status bar, or ran under the tab bar with its last items hidden.
  */
 export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
-  const reserveKey = document.documentElement.style.getPropertyValue("--keypad-guidance-reserved-height");
+  const rootStyle = document.documentElement.style;
+  const reserveKey = `${rootStyle.getPropertyValue("--keypad-guidance-reserved-height")}|${rootStyle.getPropertyValue("--app-toast-reserved-height")}`;
   const now = Date.now();
   if (cached && cached.reserveKey === reserveKey && now - cached.at < CACHE_MS) return cached.padding;
   const style = getComputedStyle(document.documentElement);
@@ -47,7 +48,7 @@ export const resolveSafeAreaCollisionPadding = (): CollisionPadding => {
     top: readInsetPx(style, "--safe-area-inset-top"),
     right: readInsetPx(style, "--safe-area-inset-right"),
     bottom: Math.max(
-      readInsetPx(style, "--safe-area-inset-bottom") + readKeypadGuidanceReservePx(),
+      readInsetPx(style, "--safe-area-inset-bottom") + readBottomOverlayReservePx(),
       bottomChromeHeightPx(),
     ),
     left: readInsetPx(style, "--safe-area-inset-left"),

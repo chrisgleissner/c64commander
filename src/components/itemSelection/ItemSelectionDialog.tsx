@@ -156,19 +156,14 @@ export const ItemSelectionDialog = ({
   const archiveConfig = source ? (archiveConfigs?.[source.id] ?? null) : null;
 
   const browser = useSourceNavigator(isArchiveSource ? null : source);
+  const clearBrowseErrorRef = useRef(browser.clearError);
+  clearBrowseErrorRef.current = browser.clearError;
 
-  useEffect(() => {
-    if (!browser.error || !open) return;
-    reportUserError({
-      operation: "BROWSE",
-      title: "Browse failed",
-      description: browser.error,
-      context: { sourceId: selectedSourceId },
-    });
-  }, [browser.error, open, reportUserError, selectedSourceId]);
-
+  // A browse failure is shown inside the sheet (and logged by the navigator). As a toast it was drawn under the
+  // sheet, so nothing happened on screen, and it was raised again each time the sheet reopened.
   useEffect(() => {
     if (!open) return;
+    clearBrowseErrorRef.current();
     setSelectedSourceId(initialSourceId);
     setSelection(new Map());
     setArchiveSelection(new Map());
@@ -782,28 +777,39 @@ export const ItemSelectionDialog = ({
                   onClearSelection={() => setArchiveSelection(new Map())}
                 />
               ) : (
-                <ItemSelectionView
-                  path={browser.path}
-                  rootPath={source.rootPath}
-                  entries={visibleEntries}
-                  isLoading={browser.isLoading}
-                  showLoadingIndicator={browser.showLoadingIndicator}
-                  selection={selection}
-                  onToggleSelect={toggleSelection}
-                  onOpen={browser.navigateTo}
-                  onNavigateUp={browser.navigateUp}
-                  onNavigateRoot={browser.navigateRoot}
-                  goUpOnBackRef={goUpOnBackRef}
-                  onRefresh={browser.refresh}
-                  showFolderSelect={allowFolderSelection && !browser.isSearching}
-                  emptyLabel={
-                    browser.isSearching
-                      ? "Nothing found. Try a shorter search, or part of the composer's name."
-                      : browser.searchScope === "source" && !browser.searchIsInstant
-                        ? "Type what you are looking for, then Scan."
-                        : "No matching items in this folder."
-                  }
-                />
+                <>
+                  {browser.error ? (
+                    <p
+                      role="alert"
+                      className="mb-2 rounded-md border border-destructive/60 bg-destructive/10 px-3 py-2 text-base leading-snug text-destructive"
+                      data-testid="item-selection-browse-error"
+                    >
+                      {browser.error}
+                    </p>
+                  ) : null}
+                  <ItemSelectionView
+                    path={browser.path}
+                    rootPath={source.rootPath}
+                    entries={visibleEntries}
+                    isLoading={browser.isLoading}
+                    showLoadingIndicator={browser.showLoadingIndicator}
+                    selection={selection}
+                    onToggleSelect={toggleSelection}
+                    onOpen={browser.navigateTo}
+                    onNavigateUp={browser.navigateUp}
+                    onNavigateRoot={browser.navigateRoot}
+                    goUpOnBackRef={goUpOnBackRef}
+                    onRefresh={browser.refresh}
+                    showFolderSelect={allowFolderSelection && !browser.isSearching}
+                    emptyLabel={
+                      browser.isSearching
+                        ? "Nothing found. Try a shorter search, or part of the composer's name."
+                        : browser.searchScope === "source" && !browser.searchIsInstant
+                          ? "Type what you are looking for, then Scan."
+                          : "No matching items in this folder."
+                    }
+                  />
+                </>
               )}
               {!isArchiveSource && browser.hasMore ? (
                 <div className="pt-2">

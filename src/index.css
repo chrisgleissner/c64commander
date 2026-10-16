@@ -59,6 +59,12 @@
   --keypad-guidance-bar-height: calc(
     (2 * var(--keypad-guidance-padding-y)) + (var(--keypad-guidance-font-size) * 1.3) + 0.1rem + 3px
   );
+  /* What a dialog or sheet stands on: the guidance bar while it shows, and above it the toast strip. */
+  --app-bottom-overlay-reserved-height: calc(
+    var(--keypad-guidance-reserved-height, 0px) + var(--app-toast-reserved-height, 0px)
+  );
+  /* The toast strip sits on the guidance bar, so a toast never moves the bar. */
+  --app-toast-strip-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-reserved-height, 0px));
   /* Keeps a keypad-focused control clear of the guidance bar and tab bar (`.keypad-scroll-anchor`). */
   --keypad-scroll-margin-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-bar-height) + 0.5rem);
 }
@@ -659,12 +665,16 @@ button:focus-visible,
   bottom: var(--safe-area-inset-bottom, 0px);
 }
 
+:root[data-interstitial-active="true"] {
+  --app-toast-strip-bottom: calc(var(--safe-area-inset-bottom, 0px) + var(--keypad-guidance-reserved-height, 0px));
+}
+
 .keypad-guidance-bar {
   position: fixed;
   left: 0;
   right: 0;
-  /* Above the toast strip, which sits directly on the tab bar and is 0px tall without a toast. */
-  bottom: calc(var(--app-tab-bar-frame-height, 0px) + var(--app-toast-reserved-height, 0px));
+  /* Directly on the tab bar. The toast strip sits on this bar, so a toast never pushes it up the screen. */
+  bottom: var(--app-tab-bar-frame-height, 0px);
   z-index: 900;
   display: flex;
   align-items: center;

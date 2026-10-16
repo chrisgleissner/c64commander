@@ -29,6 +29,7 @@ vi.mock("@/lib/sourceNavigation/useSourceNavigator", () => ({
     navigateUp: navigator.navigateUp,
     navigateRoot: vi.fn(),
     refresh: vi.fn(),
+    clearError: vi.fn(),
   }),
 }));
 

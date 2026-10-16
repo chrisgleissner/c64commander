@@ -73,7 +73,7 @@ describe("App surface primitives", () => {
     expect(dialog.className).toContain("pb-[max(1rem,var(--safe-area-inset-bottom))]");
     expect(dialog.className).not.toContain("pb-[var(--app-sheet-bottom-clearance)]");
     // ...and stands on the keypad guidance bar while that shows.
-    expect(dialog.className).toContain("bottom-[var(--keypad-guidance-reserved-height,0px)]");
+    expect(dialog.className).toContain("bottom-[var(--app-bottom-overlay-reserved-height,0px)]");
     // Game Mode still opts in to the old 5rem clearance for its edge-anchored controls.
     expect(dialog.getAttribute("style")).toContain(
       "--app-sheet-bottom-clearance: calc(5rem + var(--safe-area-inset-bottom))",
@@ -114,7 +114,7 @@ describe("App surface primitives", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(dialog.className).toContain("bottom-[var(--keypad-guidance-reserved-height,0px)]");
+    expect(dialog.className).toContain("bottom-[var(--app-bottom-overlay-reserved-height,0px)]");
     expect(dialog.className).toContain("sm:w-[min(100vw-2rem,56rem)]");
   });
 

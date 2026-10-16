@@ -33,7 +33,7 @@ describe("SheetContent", () => {
 
     const className = screen.getByTestId("sheet").className;
     expect(className).toContain(
-      "bottom-[calc(var(--safe-area-inset-bottom)+var(--keypad-guidance-reserved-height,0px))]",
+      "bottom-[calc(var(--safe-area-inset-bottom)+var(--app-bottom-overlay-reserved-height,0px))]",
     );
     expect(className).not.toMatch(/p[tb]-\[calc\([^\]]*safe-area-inset/);
   });
@@ -56,10 +56,10 @@ describe("SheetContent", () => {
 
     const className = screen.getByTestId("sheet").className;
     expect(className).toContain(
-      "bottom-[calc(var(--safe-area-inset-bottom)+var(--keypad-guidance-reserved-height,0px))]",
+      "bottom-[calc(var(--safe-area-inset-bottom)+var(--app-bottom-overlay-reserved-height,0px))]",
     );
     expect(className).toContain(
-      "max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom)-var(--keypad-guidance-reserved-height,0px))]",
+      "max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom)-var(--app-bottom-overlay-reserved-height,0px))]",
     );
     expect(className).not.toContain("max-h-[calc(100dvh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))]");
     expect(className).not.toContain("max-h-[100dvh]");
@@ -84,6 +84,6 @@ describe("SheetContent", () => {
 
     const className = screen.getByTestId("sheet").className;
     expect(className).toContain("bottom-[var(--safe-area-inset-bottom)]");
-    expect(className).not.toContain("keypad-guidance-reserved-height");
+    expect(className).not.toContain("app-bottom-overlay-reserved-height");
   });
 });
