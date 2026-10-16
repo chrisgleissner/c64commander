@@ -115,3 +115,16 @@ export const composeT9Key = (event: KeyboardEvent, keymap: Keymap, now: number):
   }
   return true;
 };
+
+/**
+ * How long until the letter being cycled in `target` is settled, in the composer's clock
+ * (`performance.now()`); 0 when nothing is pending. Pressing the same key again within this time
+ * replaces the letter, so work keyed to the field's value can wait instead of running for a letter
+ * the next press throws away.
+ */
+export const msUntilT9LetterSettles = (target: EventTarget | null, now: number = performance.now()): number => {
+  if (!isT9Field(target)) return 0;
+  const pending = composers.get(target)?.state.pending;
+  if (!pending) return 0;
+  return Math.max(0, pending.startedAt + DEFAULT_T9_CONFIG.multiTapTimeoutMs - now);
+};

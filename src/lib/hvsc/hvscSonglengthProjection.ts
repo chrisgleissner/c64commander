@@ -12,6 +12,7 @@ import {
   createEmptyHvscBrowseIndexSnapshot,
   createSeededSong,
   normalizePath,
+  noteHvscBrowseSongsChanged,
   updateHvscBrowseSong,
   type HvscBrowseIndexedSong,
   type HvscBrowseIndexSnapshot,
@@ -52,6 +53,7 @@ export const mergeSonglengthDurations = (
       updateHvscBrowseSong(snapshot, normalizedPath, { durationsSeconds });
     } else {
       snapshot.songs[normalizedPath] = createSeededSong(normalizedPath, durationsSeconds);
+      noteHvscBrowseSongsChanged(snapshot);
     }
   });
   if (changed) {

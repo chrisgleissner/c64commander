@@ -151,4 +151,19 @@ describe("usePlaylistListItems row reuse", () => {
     rerender({ ...baseOptions, isPlaylistLoading: true });
     expect(result.current.filter((row) => row.variant !== "header").every((row) => row.disableActions)).toBe(true);
   });
+
+  it("keeps every row when only the start function is rebuilt, and rows call the newest one", () => {
+    // PlayFilesPage rebuilt startPlaylist on every mute and unmute, and each rebuild re-rendered every row.
+    const { result, rerender } = renderRows();
+    const before = rowsById(result.current);
+    const newestStart = vi.fn();
+
+    rerender({ ...baseOptions, startPlaylist: newestStart });
+    const after = rowsById(result.current);
+
+    for (const item of playlist.slice(0, 2)) expect(after.get(item.id)).toBe(before.get(item.id));
+    after.get(playlist[1].id)?.onAction?.();
+    expect(newestStart).toHaveBeenCalledWith(playlist, 1);
+    expect(baseOptions.startPlaylist).not.toHaveBeenCalled();
+  });
 });

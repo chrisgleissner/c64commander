@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useLatestCallback } from "@/hooks/useLatestCallback";
 import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
@@ -66,7 +67,7 @@ export const usePlaylistListItems = ({
   onAttachUltimateConfig,
   onOpenConfig,
   onRemoveConfig,
-  startPlaylist,
+  startPlaylist: startPlaylistLatest,
   playlistItemDuration,
   formatTime,
   formatPlayCategory,
@@ -75,6 +76,7 @@ export const usePlaylistListItems = ({
   getParentPath,
   currentPlayingItemId,
 }: PlaylistListItemsOptions) => {
+  const startPlaylist = useLatestCallback(startPlaylistLatest);
   const playlistIndexById = useMemo(() => new Map(playlist.map((entry, index) => [entry.id, index])), [playlist]);
   const friendlyNames = useFriendlySidNames();
   // Rows outlive one call: the view-all list grows a page at a time, and rebuilding every row on each

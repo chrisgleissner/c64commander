@@ -10,6 +10,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
+import { resolveInputProfile } from "@/lib/input/profiles";
+import { composeT9Key } from "@/lib/input/t9FieldComposer";
 import { searchHvscSongs } from "@/lib/hvsc";
 import { saveRecentlyPlayed, toRecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 
@@ -256,5 +258,28 @@ describe("recently played", () => {
       element.className.includes("fixed inset-0"),
     );
     expect(overlay?.style.backgroundColor).toBe("hsl(var(--interstitial-scrim) / 0.4)");
+  });
+
+  it("does not search for a keypad letter that is still being cycled", async () => {
+    // Each multi-tap press used to start a scan of the whole archive for a letter the next press replaced.
+    answerWith([hit("/MUSICIANS/H/Hubbard_Rob/Commando.sid", "Commando", "Rob Hubbard")]);
+    renderSheet();
+    const input = screen.getByTestId("hvsc-search-input") as HTMLInputElement;
+    input.focus();
+    const keypad = resolveInputProfile("keypad");
+    const pressSeven = () => {
+      const listener = (event: KeyboardEvent) => composeT9Key(event, keypad, performance.now());
+      document.addEventListener("keydown", listener);
+      input.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "7", code: "Digit7" }));
+      document.removeEventListener("keydown", listener);
+    };
+
+    pressSeven();
+    expect(input.value).toBe("p");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(searchHvscSongs).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(searchHvscSongs).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(vi.mocked(searchHvscSongs).mock.calls[0]?.[0]).toMatchObject({ query: "p" });
   });
 });

@@ -23,8 +23,25 @@ const SETTLE_MS = 3000;
 const positions = new Map<number, PagePositionRecord>();
 type CardHeight = { height: number; layout: string };
 const cardHeights = new Map<string, CardHeight>();
+/*
+ * Read once and then on resize. Every collapsible card asks for its remembered height while it
+ * renders, and reading `innerWidth` there forced a layout of the whole page in the middle of a
+ * render: 41 ms of the key press that opens Remote Input, at 6x CPU throttling.
+ */
+let viewportWidth: number | null = null;
+let followingResize = false;
+const currentViewportWidth = () => {
+  if (!followingResize) {
+    followingResize = true;
+    window.addEventListener("resize", () => {
+      viewportWidth = window.innerWidth;
+    });
+  }
+  viewportWidth ??= window.innerWidth;
+  return viewportWidth;
+};
 const layoutKey = () =>
-  `${window.innerWidth}:${document.documentElement.dataset.displayProfile ?? ""}:${document.documentElement.dataset.textScale ?? ""}`;
+  `${currentViewportWidth()}:${document.documentElement.dataset.displayProfile ?? ""}:${document.documentElement.dataset.textScale ?? ""}`;
 const discardNextRecord = new Set<number>();
 
 const cardKey = (scope: string, id: string) => `${scope}:${id}`;
@@ -157,6 +174,7 @@ export const rememberedCardHeight = (scope: string, id: string): number | undefi
 };
 
 export const resetPagePositionsForTests = (): void => {
+  viewportWidth = null;
   positions.clear();
   cardHeights.clear();
   discardNextRecord.clear();

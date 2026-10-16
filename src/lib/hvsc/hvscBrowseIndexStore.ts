@@ -809,6 +809,16 @@ export const buildHvscBrowseIndexFromSonglengthSnapshot = (
   };
 };
 
+const songRevisions = new WeakMap<HvscBrowseIndexSnapshot, number>();
+
+/** Call after changing `snapshot.songs` in place, so a search does not narrow from matches it held before. */
+export const noteHvscBrowseSongsChanged = (snapshot: HvscBrowseIndexSnapshot) => {
+  songRevisions.set(snapshot, (songRevisions.get(snapshot) ?? 0) + 1);
+};
+
+/** Changes each time {@link noteHvscBrowseSongsChanged} is called for `snapshot`. */
+export const hvscBrowseSongsRevision = (snapshot: HvscBrowseIndexSnapshot) => songRevisions.get(snapshot) ?? 0;
+
 export const updateHvscBrowseSong = (
   snapshot: HvscBrowseIndexSnapshot,
   virtualPath: string,
@@ -846,6 +856,7 @@ export const updateHvscBrowseSong = (
   next.searchTextSeed = buildSeedSearchText(next);
   next.searchTextFull = buildFullSearchText(next);
   snapshot.songs[normalizedPath] = next;
+  noteHvscBrowseSongsChanged(snapshot);
   return next;
 };
 
@@ -872,9 +883,11 @@ export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") 
         sidMetadata: song.sidMetadata ?? null,
         trackSubsongs: song.trackSubsongs ?? null,
       };
+      noteHvscBrowseSongsChanged(snapshot);
     },
     deleteSong: (virtualPath: string) => {
       delete snapshot.songs[normalizePath(virtualPath)];
+      noteHvscBrowseSongsChanged(snapshot);
     },
     finalize: async () => {
       snapshot.updatedAt = new Date().toISOString();
@@ -899,7 +912,7 @@ export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") 
  */
 const FOLDED_SEARCH_TEXT = "__foldedSearchText";
 
-const songSearchText = (song: HvscBrowseIndexedSong): string => {
+export const songSearchText = (song: HvscBrowseIndexedSong): string => {
   const cached = (song as unknown as Record<string, unknown>)[FOLDED_SEARCH_TEXT];
   if (typeof cached === "string") return cached;
   const base = song.searchTextFull ?? song.searchTextSeed ?? "";
@@ -924,7 +937,7 @@ const songSearchText = (song: HvscBrowseIndexedSong): string => {
 export const searchQueryTokens = (query: string): string[] =>
   foldForSearch(query.trim().toLowerCase()).split(/\s+/).filter(Boolean);
 
-const matchesTokens = (text: string, tokens: string[]): boolean => {
+export const matchesTokens = (text: string, tokens: string[]): boolean => {
   for (const token of tokens) if (!text.includes(token)) return false;
   return true;
 };
@@ -979,138 +992,6 @@ export const listFolderFromBrowseIndex = (
     })),
     totalFolders: folders.length,
     totalSongs: matchedSongs.length,
-    offset,
-    limit,
-    query: normalizedQuery,
-  };
-};
-
-/**
- * Search every song in the archive, not only the folder on screen.
- *
- * `listFolderFromBrowseIndex` filters one folder row, which is the right behaviour for narrowing a
- * long folder and the wrong behaviour for finding a tune. HVSC is roughly sixty thousand files
- * arranged by composer, so "find Commando" only works if you already know it is filed under
- * MUSICIANS/H/Hubbard_Rob — which is exactly the thing a search is for.
- *
- * The scan is a linear pass over the song table. That sounds expensive and is not: each song's
- * searchable text — its path, file name, title, author, release and raw SID header — is built once
- * and cached by {@link songSearchText}, so the hot loop is one `includes` per token per song and
- * nothing is allocated for the misses. Ranking runs only over what survived, which is a few hundred
- * rows rather than sixty thousand.
- *
- * Tokens are combined with AND, so "hubbard commando" narrows rather than widens. Each token may
- * match anywhere — including inside a word, so "mando" finds Commando — which is what makes an
- * author-plus-title query work without the caller having to say which word was which. Case and
- * accents are folded on both sides.
- */
-export type HvscSongSearchPage = {
-  songs: HvscBrowseIndexedSong[];
-  /** How many songs matched in total, before `offset`/`limit`. */
-  totalSongs: number;
-  offset: number;
-  limit: number;
-  query: string;
-};
-
-/**
- * Where a token matched, lowest first.
- *
- * A search for "commando" should put the tune called Commando above every tune whose *path* happens
- * to contain the word, and a search for "hubbard" should put that composer's tunes above a tune
- * called "Hubbard Tribute" by somebody else. Ordering by where the match landed is what does that;
- * ordering by name alone buries the obvious answer under alphabetically earlier accidents.
- */
-const TITLE_PREFIX = 0;
-const AUTHOR_PREFIX = 1;
-const TITLE_MATCH = 2;
-const AUTHOR_MATCH = 3;
-/**
- * The floor, not a rejection: a song only reaches scoring once every token was found somewhere in
- * its search text, so a token that is in neither the title nor the author matched the path.
- */
-const PATH_MATCH = 4;
-
-const scoreToken = (token: string, title: string, author: string): number => {
-  if (title.startsWith(token)) return TITLE_PREFIX;
-  if (author.startsWith(token)) return AUTHOR_PREFIX;
-  if (title.includes(token)) return TITLE_MATCH;
-  if (author.includes(token)) return AUTHOR_MATCH;
-  return PATH_MATCH;
-};
-
-type RankedMatch = { song: HvscBrowseIndexedSong; score: number; title: string };
-
-/**
- * Order two results: where the match landed, then title, then path.
- *
- * Plain comparison rather than `localeCompare`, which on a sixty-thousand-row sort was the single
- * most expensive thing this function did. Both operands are already lowercased and accent-folded to
- * ASCII by the time they get here, so a collator has nothing left to decide — and the path is a
- * tie-break of last resort whose only job is to be stable.
- */
-const compareRanked = (a: RankedMatch, b: RankedMatch): number => {
-  if (a.score !== b.score) return a.score - b.score;
-  if (a.title !== b.title) return a.title < b.title ? -1 : 1;
-  if (a.song.virtualPath === b.song.virtualPath) return 0;
-  return a.song.virtualPath < b.song.virtualPath ? -1 : 1;
-};
-
-export const searchSongsFromBrowseIndex = (
-  snapshot: HvscBrowseIndexSnapshot,
-  query: string,
-  options: { path?: string; offset?: number; limit?: number } = {},
-): HvscSongSearchPage => {
-  const normalizedQuery = query.trim().toLowerCase();
-  const offset = Math.max(0, Math.floor(options.offset ?? 0));
-  const limit = Math.max(1, Math.floor(options.limit ?? 200));
-  const empty: HvscSongSearchPage = { songs: [], totalSongs: 0, offset, limit, query: normalizedQuery };
-  if (!normalizedQuery) return empty;
-
-  const tokens = searchQueryTokens(query);
-  if (tokens.length === 0) return empty;
-
-  // A subtree restriction, so the same scan can answer "everywhere" and "everywhere under here".
-  const scope = options.path ? normalizeFolderPath(options.path) : "/";
-  const scopePrefix = scope === "/" ? "/" : `${scope}/`;
-
-  // Only this many need to be in order. A one-letter query matches sixty thousand tunes and shows a
-  // hundred; ranking all sixty thousand to throw away 99.8% of the work is the difference between a
-  // search that is felt and one that is not. The total is still counted exactly — it is what tells
-  // the listener to narrow the search — but ordering is bounded to the page being asked for.
-  const keep = offset + limit;
-  const best: RankedMatch[] = [];
-  let totalSongs = 0;
-
-  for (const song of Object.values(snapshot.songs)) {
-    if (scopePrefix !== "/" && !song.virtualPath.startsWith(scopePrefix)) continue;
-    if (!matchesTokens(songSearchText(song), tokens)) continue;
-    totalSongs += 1;
-
-    // Folded, because the tokens are: an accented title must still be able to score as a title.
-    const title = foldForSearch(getHvscDisplayTitle(song).toLowerCase());
-    const author = foldForSearch((getHvscDisplayAuthor(song) ?? "").toLowerCase());
-    let score = 0;
-    for (const token of tokens) score += scoreToken(token, title, author);
-    const candidate: RankedMatch = { song, score, title };
-
-    // The common case for a broad query: worse than everything already held, rejected on one
-    // integer comparison.
-    if (best.length >= keep && compareRanked(candidate, best[best.length - 1]) >= 0) continue;
-    let low = 0;
-    let high = best.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (compareRanked(candidate, best[mid]) < 0) high = mid;
-      else low = mid + 1;
-    }
-    best.splice(low, 0, candidate);
-    if (best.length > keep) best.pop();
-  }
-
-  return {
-    songs: best.slice(offset).map((match) => match.song),
-    totalSongs,
     offset,
     limit,
     query: normalizedQuery,

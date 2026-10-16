@@ -40,7 +40,8 @@ export type HvscSearchHit = {
 
 export type HvscArchiveSearchState = {
   query: string;
-  setQuery: (query: string) => void;
+  /** `settleMs`: how long the last letter may still change (a multi-tap letter being cycled). */
+  setQuery: (query: string, settleMs?: number) => void;
   hits: HvscSearchHit[];
   /** How many matched in total, which can exceed what is shown. */
   totalCount: number;
@@ -89,6 +90,7 @@ export const useHvscArchiveSearch = (
   // Only the newest query may write results; a slower earlier one has to be dropped rather than
   // allowed to replace what the person is now looking at.
   const runRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback(() => {
     setHits([]);
@@ -101,9 +103,13 @@ export const useHvscArchiveSearch = (
   const run = useCallback(async (nextQuery: string) => {
     const run = runRef.current + 1;
     runRef.current = run;
+    // A newer search makes this one's answer worthless, so its remaining slices are not run.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setIsSearching(true);
     try {
-      const page = await searchHvscSongs({ query: nextQuery, limit: RESULT_LIMIT });
+      const page = await searchHvscSongs({ query: nextQuery, limit: RESULT_LIMIT, signal: controller.signal });
       if (runRef.current !== run) return;
       if (!page) {
         setIndexUnavailable(true);
@@ -146,19 +152,23 @@ export const useHvscArchiveSearch = (
   }, []);
 
   const setQuery = useCallback(
-    (nextQuery: string) => {
+    (nextQuery: string, settleMs = 0) => {
       setQueryState(nextQuery);
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
       if (!enabled || !nextQuery.trim()) {
         // Bump the run counter so a search already in flight cannot land after the box was cleared.
         runRef.current += 1;
+        abortRef.current?.abort();
         reset();
         return;
       }
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null;
-        void run(nextQuery);
-      }, DEBOUNCE_MS);
+      timerRef.current = window.setTimeout(
+        () => {
+          timerRef.current = null;
+          void run(nextQuery);
+        },
+        Math.max(DEBOUNCE_MS, settleMs),
+      );
     },
     [enabled, reset, run],
   );
@@ -167,6 +177,7 @@ export const useHvscArchiveSearch = (
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
     runRef.current += 1;
+    abortRef.current?.abort();
     setQueryState("");
     reset();
   }, [reset]);
@@ -188,6 +199,7 @@ export const useHvscArchiveSearch = (
       // staleness guard after the sheet had gone and write its results into a hook nobody is
       // reading — a search over 60,000 songs can easily outlive the sheet that started it.
       runRef.current += 1;
+      abortRef.current?.abort();
     },
     [],
   );

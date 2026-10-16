@@ -1546,3 +1546,16 @@ button:focus-visible,
   opacity: 1;
   transition-duration: 60ms;
 }
+
+/* Dialogs lock page scrolling on <body> (react-remove-scroll), but pages scroll inside .page-shell and
+   the body never scrolls. The lock still switched the body's overflow, position, margin and a custom
+   property, which re-laid out and restyled the whole document on every dialog open and close. These
+   keep the body as it was; the lock's event blocking is unaffected. */
+html body[data-scroll-locked] {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  overscroll-behavior: auto;
+  position: static !important;
+  margin: 0 !important;
+  --removed-body-scroll-bar-size: initial;
+}

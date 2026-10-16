@@ -582,6 +582,8 @@ export const searchHvscSongs = async (options: {
   path?: string;
   offset?: number;
   limit?: number;
+  /** Abandons the scan between slices once the caller no longer wants the answer. */
+  signal?: AbortSignal;
 }): Promise<ReturnType<typeof hvscIndex.searchSongs>> => {
   // Timed by stage, because "the search is slow" has three completely different causes and only one
   // of them is the search: waiting for the songlengths, materialising the browse index, and the scan
@@ -595,7 +597,7 @@ export const searchHvscSongs = async (options: {
   const snapshot = await hvscIndex.loadBrowseSnapshot();
   const scanAt = performance.now();
   markSearchStage("scan", options.query);
-  const page = snapshot ? hvscIndex.searchSongs(options) : null;
+  const page = snapshot ? await hvscIndex.searchSongsInSlices(options) : null;
   markSearchStage("done", options.query);
   addLog("info", "HVSC search timing", {
     query: options.query,
