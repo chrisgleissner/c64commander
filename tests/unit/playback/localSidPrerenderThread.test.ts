@@ -8,8 +8,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LocalSidEngine, MAX_PRERENDER_SECONDS, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
-import type { RenderedTuneCache } from "@/lib/playback/renderedTuneCache";
+import { LocalSidEngine, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
+import { MAX_PRERENDER_SECONDS, type RenderedTuneCache } from "@/lib/playback/renderedTuneCache";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 
 /**

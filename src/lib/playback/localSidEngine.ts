@@ -73,7 +73,7 @@ const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
 export const CUT_DECLICK_MS = 10;
 /** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
 const CUT_CLOSE_MARGIN_MS = 30;
-import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { playbackSidEmulation, prerenderSecondsFor, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 import { beginLocalPlayOut, endLocalPlayOut, playOutSeconds } from "./localPlayOut";
 
 /**
@@ -319,14 +319,6 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number, r
 const RENDER_RATE_SAMPLES = 4096;
 
 const DEFAULT_CHUNK_SECONDS = 0.5;
-
-/**
- * The longest stretch of a tune that is pre-rendered. The native PCM store keeps it on the Java heap,
- * where 240 s of 48 kHz stereo is 46 MB and fits the smallest budget the store gives itself (48 MB).
- * A longer tune is cached as a lead-in and played on by the live renderer, the way a lead-in already is.
- * Rendering a tune of twenty minutes whole needed 230 MB and ended in an out-of-memory crash.
- */
-export const MAX_PRERENDER_SECONDS = 240;
 /**
  * How far ahead of the audio clock to keep the schedule.
  *
@@ -2327,7 +2319,7 @@ export class LocalSidEngine {
     this.prerenderId += 1;
     this.prerenderKey = key;
     this.prerenderFraction = 0;
-    const renderSeconds = Math.min(seconds, MAX_PRERENDER_SECONDS);
+    const renderSeconds = prerenderSecondsFor(seconds);
     this.prerenderPartialSeconds = renderSeconds < seconds ? renderSeconds : null;
     this.releaseIfUnused(this.prerenderPcm.reset());
     const renderer = this.fixedRenderer ?? playbackSidEmulation();
