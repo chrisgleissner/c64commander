@@ -48,7 +48,8 @@ env:
 - assertVisible: "Path:"
 - assertVisible:
     id: "navigate-root"
-- assertNotVisible: "Browse failed"
+- assertNotVisible:
+    id: "item-selection-browse-error"
 - assertNotVisible: "Add items failed"
 - assertVisible:
     id: "source-entry-row"

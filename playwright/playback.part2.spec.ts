@@ -1520,8 +1520,10 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "reshuffle-momentary");
   });
 
-  test("FTP failure shows error toast", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, "Expected error toast for FTP failure.");
+  test("FTP failure shows the browse error inside the browser", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected browse error for FTP failure.");
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port + 25,
@@ -1533,7 +1535,9 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "C64 Ultimate");
-    await expect(page.getByText("Browse failed", { exact: true }).first()).toBeVisible();
+    const browseError = page.getByRole("dialog").getByTestId("item-selection-browse-error");
+    await expect(browseError).toBeVisible();
+    await expect(browseError).toHaveAttribute("role", "alert");
     await snap(page, testInfo, "browse-failed");
   });
 
