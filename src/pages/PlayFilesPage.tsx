@@ -1585,11 +1585,17 @@ export default function PlayFilesPage() {
               if (nextGuard.trackInstanceId === expectedTrackInstanceId) {
                 setAutoAdvanceDueAtMs(null);
                 await queueBackgroundDueAtUpdateRef.current(null);
-                addLog("warn", "Background auto-advance did not move to a new track instance; cleared stale watchdog", {
-                  expectedTrackInstanceId,
-                  dueAtMs: event.dueAtMs,
-                  nextDueAtMs: nextGuard.dueAtMs,
-                });
+                addLog(
+                  nextGuard.autoFired ? "debug" : "warn",
+                  nextGuard.autoFired
+                    ? "Background auto-advance fired while the app's own advance to the next track was under way"
+                    : "Background auto-advance did not move to a new track instance; cleared stale watchdog",
+                  {
+                    expectedTrackInstanceId,
+                    dueAtMs: event.dueAtMs,
+                    nextDueAtMs: nextGuard.dueAtMs,
+                  },
+                );
                 return;
               }
               setAutoAdvanceDueAtMs(nextGuard.dueAtMs);
