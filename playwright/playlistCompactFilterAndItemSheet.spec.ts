@@ -191,7 +191,9 @@ test.describe("Playlist filter and item actions on the smallest screen", () => {
     await filterToggle(page).click();
     const input = active(page).getByTestId("list-filter-input");
     await input.click();
-    await input.pressSequentially("Tune_00");
+    // Touch keyboards deliver text through input events. Raw digit keydowns are deliberately
+    // multi-tap input in the Remote edition, where two quick zeros compose one character.
+    await input.fill("Tune_00");
     await wheelOverPage(page, 80);
     await page.waitForTimeout(200);
     await expect(filterPanel(page)).toHaveAttribute("data-expanded", "true");
