@@ -735,6 +735,46 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     }
   });
 
+  test("closing Remote Input from its menu after closing Backup returns to the Input tile, not to Backup @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const home = page.locator('[data-slot-active="true"]');
+
+    const backup = home.getByTestId("home-save-ram");
+    expect(await ringFocus(page, backup), "The ring could not reach Backup").toBe(true);
+    await page.keyboard.press("Enter");
+    const backupDialog = page.getByTestId("save-ram-dialog");
+    await expect(backupDialog).toBeVisible();
+    await waitForAnimations(page);
+    await page.keyboard.press("Escape");
+    await expect(backupDialog).toBeHidden();
+    await page.waitForTimeout(500);
+    await expect(backup).toHaveAttribute(SELECTED, "true");
+
+    const openRemoteInput = home.getByTestId("home-machine-inline-openRemoteInput");
+    expect(await ringFocus(page, openRemoteInput), "The ring could not reach Remote Input").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press("F2");
+    const close = page.getByTestId("remote-input-controls-menu").getByTestId("remote-input-menu-close");
+    await expect(close).toBeVisible();
+    for (let step = 0; step < 10 && !(await close.evaluate((e) => e === document.activeElement)); step += 1) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeHidden();
+    await page.waitForTimeout(500);
+
+    await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+    await expect(backup).not.toHaveAttribute(SELECTED, "true");
+  });
+
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({
     page,
   }) => {

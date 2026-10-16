@@ -422,6 +422,8 @@ export class FocusDiscoveryEngine {
     // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad
     // user where they were.
     const returningTo = scopeChanged ? this.currentWhenLeft.get(scope.element) : undefined;
+    // Used once: kept, it outlived later openers, and closing Remote Input's menu went back to Backup.
+    if (returningTo) this.currentWhenLeft.delete(scope.element);
     let returnedTo: string | undefined;
     if (returningTo && this.controller.setCurrent(returningTo)) {
       returnedTo = returningTo;
@@ -523,7 +525,10 @@ export class FocusDiscoveryEngine {
    */
   private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
     if (itemCount === 0) {
-      if (leavingId) this.standingWhenRingEmptied = { scope, id: leavingId };
+      if (leavingId) {
+        this.standingWhenRingEmptied = { scope, id: leavingId };
+        this.currentWhenLeft.delete(scope);
+      }
       return undefined;
     }
     const standing = this.standingWhenRingEmptied;
