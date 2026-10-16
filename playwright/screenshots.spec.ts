@@ -819,6 +819,14 @@ const waitForStableRender = async (page: Page) => {
   await page.waitForTimeout(200);
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
+  // The scroll position thumb appears for 600 ms after any scroll, including the one that framed
+  // this capture. Its travel is a scroll-driven animation, which `animations: "disabled"` cancels,
+  // so a capture taken while it shows draws it at the top-left corner over the app bar.
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-testid="scroll-position-indicator"][data-visible="true"]').length === 0,
+    undefined,
+    { timeout: 5000 },
+  );
 };
 
 const applyDisplayProfileViewport = async (page: Page, profileId: DisplayProfileViewportId) => {
