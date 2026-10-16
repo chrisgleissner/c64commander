@@ -56,7 +56,7 @@ import {
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
-import { resolveRestDeviceScope } from "@/lib/deviceInteraction/restRequestIdentity";
+import { resolveRestDeviceScope } from "@/lib/deviceInteraction/deviceScope";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
@@ -1650,6 +1650,7 @@ export class C64API {
           path,
           readRequestKey,
         });
+        onDispatch?.(); // the request it joins is already with the device
         return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestSignal);
       }
     }

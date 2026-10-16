@@ -164,6 +164,30 @@ describe("C64API intent routing", () => {
     });
   });
 
+  it("counts a getInfo that joins one already in flight as dispatched, so its probe timeout starts", async () => {
+    let answer!: (response: Response) => void;
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const api = new C64API("http://c64u");
+    const dispatched: string[] = [];
+
+    const first = api.getInfo({ __c64uOnDispatch: () => dispatched.push("first") });
+    await Promise.resolve();
+    await Promise.resolve();
+    const joined = api.getInfo({ __c64uOnDispatch: () => dispatched.push("joined") });
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(dispatched).toEqual(["first", "joined"]);
+    answer(infoResponse());
+    await expect(first).resolves.toMatchObject({ product: "Ultimate 64" });
+    await expect(joined).resolves.toMatchObject({ product: "Ultimate 64" });
+  });
+
   it("reports dispatch when readMemory and getInfo leave the queue, before the device is asked", async () => {
     const events: string[] = [];
     fetchMock.mockImplementation(async (url: string) => {

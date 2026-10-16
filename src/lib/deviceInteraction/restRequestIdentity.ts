@@ -67,21 +67,3 @@ export const isConfigMutationPath = (path: string) =>
 
 export const isSerializedMutationRequest = (method: string, path: string) =>
   !isReadOnlyRestMethod(method) && (isMachineControlPath(path) || isConfigMutationPath(path));
-
-/** A device's host name without its port: every port of a host reaches the same network task. */
-export const deviceScopeOfHost = (host: string) => {
-  const normalized = host.trim().toLowerCase();
-  if (normalized.startsWith("[")) {
-    const closeBracketIndex = normalized.indexOf("]");
-    return closeBracketIndex === -1 ? normalized : normalized.slice(0, closeBracketIndex + 1);
-  }
-  const portSeparatorIndex = normalized.indexOf(":");
-  const hasSinglePortSeparator = portSeparatorIndex !== -1 && portSeparatorIndex === normalized.lastIndexOf(":");
-  return hasSinglePortSeparator ? normalized.slice(0, portSeparatorIndex) : normalized;
-};
-
-/** The device a REST request is for. On web every request has the proxy's `baseUrl`, so `deviceHost` comes first. */
-export const resolveRestDeviceScope = (target: { baseUrl: string; deviceHost?: string }) => {
-  const hostFromBaseUrl = target.baseUrl.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").split("/")[0] ?? "";
-  return deviceScopeOfHost(target.deviceHost?.trim() || hostFromBaseUrl);
-};
