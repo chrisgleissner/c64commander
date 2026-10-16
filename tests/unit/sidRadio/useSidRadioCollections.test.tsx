@@ -60,6 +60,7 @@ const paramsFor = (client: ReturnType<typeof makeClient>, overrides: Partial<Par
   appendItems: vi.fn(),
   currentIndex: 0,
   playlistLength: 3,
+  queueReady: true,
   clientFactory: () => client as never,
   resolvePath: (md5: string) => `/HVSC/${md5}.sid`,
   randomSeed: () => 4242,

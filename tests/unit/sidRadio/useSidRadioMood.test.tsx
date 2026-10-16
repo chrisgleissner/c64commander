@@ -103,6 +103,7 @@ const baseParams = (client: EngineClient, overrides: Record<string, unknown> = {
   advanceToNext: vi.fn(),
   currentIndex: 0,
   playlistLength: 10,
+  queueReady: true,
   clientFactory: () => client as never,
   resolvePath: (md5_48: string) => `/HVSC/${md5_48}.sid`,
   randomSeed: () => SHUFFLE_SEED,

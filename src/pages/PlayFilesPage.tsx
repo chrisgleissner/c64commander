@@ -300,6 +300,8 @@ export default function PlayFilesPage() {
   // rejected. Declared here because the transport latch below is declared long
   // before that hook runs.
   const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
+  // Read once the persistence hook below has restored the playlist; SID Radio is declared before it.
+  const [playlistRestored, setPlaylistRestored] = useState(false);
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
@@ -1669,6 +1671,7 @@ export default function PlayFilesPage() {
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
+    queueReady: playlistRestored && sessionRestoreSettled,
     // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
@@ -2288,6 +2291,7 @@ export default function PlayFilesPage() {
     setPlaylistEnded,
     setSessionRestoreSettled,
   });
+  useEffect(() => setPlaylistRestored(playlistHydrated), [playlistHydrated]);
   const stationHandover = useStationPlaylistHandover({
     queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
     playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
