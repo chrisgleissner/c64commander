@@ -109,4 +109,47 @@ test.describe("Re-selecting the current tab", () => {
     expect(server.sidplayRequests).toHaveLength(0);
     await attachStepScreenshot(page, testInfo, "play-reselected");
   });
+
+  // The remount re-owned the volume session before the playback session was restored, so the page's "playback ended"
+  // effect saw the initial stopped state and wrote the pre-playback mixer levels mid-tune, unmuting the C64.
+  test("keeps the C64 muted when the Play tab is re-selected during a muted tune", async ({
+    page,
+  }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      const payload = {
+        items: [{ source: "ultimate", path: "/Usb0/Demos/long.sid", name: "long.sid", durationMs: 600_000 }],
+        currentIndex: -1,
+      };
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
+      localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
+      localStorage.setItem("c64u_last_device_id", "TEST-123");
+    });
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+    const mute = page.getByTestId("volume-mute");
+    await mute.click();
+    await expect(mute).toHaveAttribute("aria-label", "Unmute");
+    const mixerLevels = () =>
+      Object.fromEntries(
+        Object.entries(server.getState()["Audio Mixer"]).map(([name, item]) => [
+          name,
+          (item as { value: unknown }).value,
+        ]),
+      );
+    await expect
+      .poll(() => [mixerLevels()["Vol Socket 1"], mixerLevels()["Vol Socket 2"], mixerLevels()["Vol UltiSid 2"]])
+      .toEqual(["-42 dB", "-42 dB", "-42 dB"]);
+    const muted = mixerLevels();
+
+    for (let round = 0; round < 2; round += 1) {
+      await page.getByTestId("tab-play").click();
+      await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
+    }
+    await page.waitForTimeout(2_000);
+
+    expect(mixerLevels()).toEqual(muted);
+    expect(server.sidplayRequests).toHaveLength(1);
+    await attachStepScreenshot(page, testInfo, "muted-after-reselect");
+  });
 });

@@ -116,6 +116,7 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
@@ -300,8 +301,7 @@ export default function PlayFilesPage() {
   // rejected. Declared here because the transport latch below is declared long
   // before that hook runs.
   const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
-  // Read once the persistence hook below has restored the playlist; SID Radio is declared before it.
-  const [playlistRestored, setPlaylistRestored] = useState(false);
+  const [playlistRestored, setPlaylistRestored] = useState(false); // Set below, after the persistence hook.
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
@@ -2319,11 +2319,13 @@ export default function PlayFilesPage() {
     shuffleSeed,
   );
 
-  useEffect(() => {
-    if (isPlaying || isPaused) return;
-    if (!volumeSessionActiveRef.current) return;
-    void restoreVolumeOverrides("playback-ended");
-  }, [isPaused, isPlaying, restoreVolumeOverrides]);
+  useRestoreVolumeWhenPlaybackEnds({
+    sessionRestoreSettled,
+    isPlaying,
+    isPaused,
+    volumeSessionActiveRef,
+    restoreVolumeOverrides,
+  });
 
   const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
   const navigateCleanupIsPlayingRef = useRef(isPlaying);
