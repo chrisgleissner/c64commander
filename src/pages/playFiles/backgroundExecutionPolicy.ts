@@ -54,11 +54,16 @@ export const resolveBackgroundExecutionPaused = ({
   return isPaused;
 };
 
+/**
+ * Whether the auto-advance deadline is mirrored to the native watchdog now. Not before the page has restored its stored
+ * session: a remount starts with no deadline, and sending that cleared the deadline of a tune still playing.
+ */
 export const shouldSyncBackgroundExecutionDueAt = (
   backgroundExecutionEnabled: boolean,
   _backgroundExecutionActive: boolean,
   isNativeAndroid: boolean,
-) => backgroundExecutionEnabled && isNativeAndroid;
+  sessionRestoreSettled: boolean,
+) => backgroundExecutionEnabled && isNativeAndroid && sessionRestoreSettled;
 
 /**
  * The single ordering of the four things a playback-state change can do to background execution.

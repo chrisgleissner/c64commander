@@ -214,9 +214,15 @@ describe("backgroundExecutionPolicy", () => {
   });
 
   it("syncs due-at timestamps whenever the enabled native Android path needs a new dueAtMs", () => {
-    expect(shouldSyncBackgroundExecutionDueAt(true, true, true)).toBe(true);
-    expect(shouldSyncBackgroundExecutionDueAt(false, true, true)).toBe(false);
-    expect(shouldSyncBackgroundExecutionDueAt(true, false, true)).toBe(true);
-    expect(shouldSyncBackgroundExecutionDueAt(true, true, false)).toBe(false);
+    expect(shouldSyncBackgroundExecutionDueAt(true, true, true, true)).toBe(true);
+    expect(shouldSyncBackgroundExecutionDueAt(false, true, true, true)).toBe(false);
+    expect(shouldSyncBackgroundExecutionDueAt(true, false, true, true)).toBe(true);
+    expect(shouldSyncBackgroundExecutionDueAt(true, true, false, true)).toBe(false);
+  });
+
+  // A remount (a re-selected Play tab) starts with no deadline. Sent before the restore, it cleared the native
+  // watchdog's deadline for a tune that was still playing.
+  it("keeps the native deadline until the remounted page has restored its session", () => {
+    expect(shouldSyncBackgroundExecutionDueAt(true, true, true, false)).toBe(false);
   });
 });

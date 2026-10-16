@@ -117,6 +117,7 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { useBackgroundDueAtSync } from "@/pages/playFiles/hooks/useBackgroundDueAtSync";
 import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
@@ -180,7 +181,6 @@ import { usePlaylistLetterIndexSource } from "@/pages/playFiles/hooks/usePlaylis
 import {
   isBackgroundExecutionEnabled,
   resolveBackgroundExecutionAction,
-  shouldSyncBackgroundExecutionDueAt,
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedPlaybackTrace";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
@@ -925,18 +925,14 @@ export default function PlayFilesPage() {
     [],
   );
 
-  useEffect(() => {
-    if (
-      !shouldSyncBackgroundExecutionDueAt(
-        backgroundExecutionEnabled,
-        backgroundExecutionActiveRef.current,
-        isNativePlatform() && getPlatform() === "android",
-      )
-    ) {
-      return;
-    }
-    void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
-  }, [autoAdvanceDueAtMs, backgroundExecutionEnabled, queueBackgroundDueAtUpdate]);
+  useBackgroundDueAtSync({
+    backgroundExecutionEnabled,
+    backgroundExecutionActiveRef,
+    isNativeAndroid: isNativePlatform() && getPlatform() === "android",
+    sessionRestoreSettled,
+    autoAdvanceDueAtMs,
+    queueBackgroundDueAtUpdate,
+  });
 
   useEffect(() => {
     if (!ACTIVE_ADD_ITEMS_PROGRESS_STATES.has(addItemsProgress.status)) return undefined;

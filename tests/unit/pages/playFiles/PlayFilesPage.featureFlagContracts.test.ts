@@ -13,7 +13,7 @@ describe("PlayFilesPage feature-flag contracts", () => {
       "const backgroundExecutionEnabled = isBackgroundExecutionEnabled(featureFlags);",
     );
     expect(playFilesPageSource).toContain("resolveBackgroundExecutionAction({");
-    expect(playFilesPageSource).toContain("shouldSyncBackgroundExecutionDueAt(");
+    expect(playFilesPageSource).toContain("useBackgroundDueAtSync({");
   });
 
   it("routes HVSC source and preparation behavior through the tightened HVSC feature policy", () => {
