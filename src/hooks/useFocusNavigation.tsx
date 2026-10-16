@@ -78,12 +78,14 @@ import {
   DIALOG_ANCESTOR_SELECTOR,
   ENTER_IGNORING_CONTROL_SELECTOR,
   focusRingElement,
+  isActivation,
+  toggleFieldFrameEditing,
   isNativelyActivatable,
   isWithinOpenOverlay,
   scrollInsteadOfLeavingPage,
   stepFocusWithinOverlay,
 } from "@/lib/input/ringDom";
-import { isOnActivePage } from "@/lib/navigation/activePage";
+import { pickRegistration, type DescriptorRegistration } from "@/lib/input/descriptorRegistration";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import { mountAllWaiting } from "@/lib/ui/progressiveMount";
@@ -92,22 +94,6 @@ import { mountAllWaiting } from "@/lib/ui/progressiveMount";
 const KEY_SELECTED_ATTR = "data-key-selected";
 /** DOM attribute outlining the enclosing group while the ring is descended inside it. */
 const KEY_SCOPE_ATTR = "data-key-scope";
-
-type DescriptorRegistration = { descriptor: FocusDescriptor; resolveElement: () => HTMLElement | null };
-
-/**
- * One registration per id reaches the ring. Two can share an id where the same control is on two pages, such as a
- * config row on Config and in Play's override editor; kept pages hold both at once. The one on the page on screen
- * wins, else the latest, and ending one leaves the other in place.
- */
-const pickRegistration = (registrations: readonly DescriptorRegistration[]): DescriptorRegistration => {
-  if (registrations.length === 1) return registrations[0];
-  for (let index = registrations.length - 1; index >= 0; index -= 1) {
-    const element = registrations[index].resolveElement();
-    if (element !== null && isOnActivePage(element)) return registrations[index];
-  }
-  return registrations[registrations.length - 1];
-};
 
 export interface FocusNavigationContextValue {
   readonly controller: NavigationController;
@@ -529,6 +515,12 @@ export const FocusNavigationProvider = ({
           event.preventDefault();
           return;
         }
+      }
+      // A field row in a dialog: OK edits its input, and OK in the input returns to the row.
+      if (isActivation(action) && toggleFieldFrameEditing(event.target)) {
+        followDialogFocus();
+        event.preventDefault();
+        return;
       }
       // Up/Down in a single-line field on a page leave the field and move the ring on from the
       // field's own stop: the caret cannot move vertically, and left to the WebView, spatial

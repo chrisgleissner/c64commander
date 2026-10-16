@@ -15,7 +15,6 @@ import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { cn } from "@/lib/utils";
 import {
   SECTION_DESCRIPTIONS_KEY,
-  announceSectionOpened,
   loadShowSectionDescriptions,
   subscribeSectionsBulk,
   subscribeSectionOpenRequest,
@@ -264,7 +263,6 @@ export const CollapsibleSection = ({
           if (current) return current;
           writeSectionState(scope, id, true);
           openedByUserRef.current = true;
-          announceSectionOpened(scope, id);
           return true;
         });
       }),
@@ -288,7 +286,6 @@ export const CollapsibleSection = ({
         writeSectionState(scope, id, next);
         if (next) {
           openedByUserRef.current = true;
-          announceSectionOpened(scope, id);
         }
         onToggle?.(next);
         return next;
@@ -307,8 +304,7 @@ export const CollapsibleSection = ({
    * It is gone because it took the choice away. A reader who wants two cards side by side to
    * compare them, or every card open to read straight down the page, could not have it: opening
    * the second closed the first, and the state was persisted so the closure outlived the visit.
-   * Long pages are what scrolling is for. `announceSectionOpened` still fires, so anything else
-   * that wants to know a card opened still hears it.
+   * Long pages are what scrolling is for.
    */
 
   // Mirrors `open` out to a caller that needs it, from an effect so every path that changes

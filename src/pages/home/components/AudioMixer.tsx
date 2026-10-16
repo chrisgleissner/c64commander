@@ -115,6 +115,13 @@ function MasterVolumeControl({
   );
 }
 
+/**
+ * A shaping row's label is the device's own item name without the SID it belongs to, which the card
+ * title already says, so the setting reads as it does in the machine's menu ("Filter Resonance").
+ */
+export const deviceItemLabel = (itemName: string, cardPrefix: string): string =>
+  itemName.startsWith(cardPrefix) ? itemName.slice(cardPrefix.length) : itemName;
+
 export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
   const api = getC64API();
   const trace = useActionTrace("AudioMixer");
@@ -444,9 +451,10 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
             const resonanceItem = `UltiSID ${ultiIndex} Filter Resonance`;
             const waveformItem = `UltiSID ${ultiIndex} Combined Waveforms`;
             const digisItem = `UltiSID ${ultiIndex} Digis Level`;
+            const ultiSidPrefix = `UltiSID ${ultiIndex} `;
 
             shapingControls.push({
-              label: "Reson",
+              label: deviceItemLabel(resonanceItem, ultiSidPrefix),
               value: String(resolveConfigValue(ultiSidCategory, "UltiSID Configuration", resonanceItem, "—")),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
@@ -464,7 +472,7 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
               pending: Boolean(configWritePending[buildConfigKey("UltiSID Configuration", resonanceItem)]),
             });
             shapingControls.push({
-              label: "Wave",
+              label: deviceItemLabel(waveformItem, ultiSidPrefix),
               value: String(resolveConfigValue(ultiSidCategory, "UltiSID Configuration", waveformItem, "—")),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
@@ -482,7 +490,7 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
               pending: Boolean(configWritePending[buildConfigKey("UltiSID Configuration", waveformItem)]),
             });
             shapingControls.push({
-              label: "Digis",
+              label: deviceItemLabel(digisItem, ultiSidPrefix),
               value: String(resolveConfigValue(ultiSidCategory, "UltiSID Configuration", digisItem, "—")),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
@@ -503,9 +511,10 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
             const socketIndex = entry.key === "socket1" ? 1 : 2;
             const resistorItem = `SID Socket ${socketIndex} 1K Ohm Resistor`;
             const capacitorItem = `SID Socket ${socketIndex} Capacitors`;
+            const socketPrefix = `SID Socket ${socketIndex} `;
 
             shapingControls.push({
-              label: "Resistor",
+              label: deviceItemLabel(resistorItem, socketPrefix),
               value: String(resolveConfigValue(sidSocketsCategory, "SID Sockets Configuration", resistorItem, "—")),
               options: readItemOptions(
                 sidSocketsCategory as Record<string, unknown> | undefined,
@@ -523,7 +532,7 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
               pending: Boolean(configWritePending[buildConfigKey("SID Sockets Configuration", resistorItem)]),
             });
             shapingControls.push({
-              label: "Cap",
+              label: deviceItemLabel(capacitorItem, socketPrefix),
               value: String(resolveConfigValue(sidSocketsCategory, "SID Sockets Configuration", capacitorItem, "—")),
               options: readItemOptions(
                 sidSocketsCategory as Record<string, unknown> | undefined,

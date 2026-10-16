@@ -8,9 +8,15 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from "react";
 import { addErrorLog } from "@/lib/logging";
-import { StatefulButton } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { createPortal } from "react-dom";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 
 type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
@@ -135,6 +141,11 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
   return blocks;
 };
 
+/** The file's own title and its note on how it is generated are for the repository, not the reader. */
+const isReaderContent = (block: MarkdownBlock): boolean =>
+  !(block.type === "heading" && block.level === 1) &&
+  !(block.type === "paragraph" && block.text.startsWith("This file is generated"));
+
 const renderTextWithBreaks = (text: string, keyPrefix: string) => {
   const lines = text.split("\n");
   return lines.flatMap((line, lineIndex) => {
@@ -146,7 +157,11 @@ const renderTextWithBreaks = (text: string, keyPrefix: string) => {
   });
 };
 
-const renderInlineText = (value: string) => {
+/** A link someone taps or selects on its own, so it gets the 44 px target. */
+const STANDALONE_LINK_CLASS = "inline-flex min-h-11 min-w-11 items-center break-all text-primary underline";
+const INLINE_LINK_CLASS = "break-all text-primary underline";
+
+const renderInlineText = (value: string, linkClassName = INLINE_LINK_CLASS) => {
   const tokenRegex = /(`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
   const nodes: ReactElement[] = [];
   let cursor = 0;
@@ -185,7 +200,7 @@ const renderInlineText = (value: string) => {
           href={linkMatch[2]}
           target="_blank"
           rel="noopener noreferrer"
-          className="break-all text-primary underline"
+          className={linkClassName}
         >
           {linkMatch[1]}
         </a>,
@@ -213,7 +228,10 @@ export default function OpenSourceLicensesPage() {
   const navigate = useNavigate();
   const [noticeText, setNoticeText] = useState<string>("Loading open source licenses...");
   const [hasError, setHasError] = useState(false);
-  const blocks = useMemo(() => (hasError ? [] : parseMarkdownBlocks(noticeText)), [noticeText, hasError]);
+  const blocks = useMemo(
+    () => (hasError ? [] : parseMarkdownBlocks(noticeText).filter(isReaderContent)),
+    [noticeText, hasError],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -242,197 +260,171 @@ export default function OpenSourceLicensesPage() {
     };
   }, []);
 
-  // Escape, and the Android Back key the app delivers as one, close the overlay. A second native
-  // Back listener here would run alongside the app's own, so Back did two things at once.
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      event.preventDefault();
-      navigate("/settings");
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [navigate]);
-
-  const content = (
-    <div
-      data-testid="open-source-licenses-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Open source licenses"
-      className="fixed inset-0 z-[1100] overflow-hidden bg-background/96 backdrop-blur-sm supports-[backdrop-filter]:bg-background/88"
+  return (
+    <AppSheet
+      open
+      onOpenChange={(open) => {
+        if (!open) navigate("/settings");
+      }}
     >
-      <div className="mx-auto flex h-full w-full max-w-6xl min-w-0 flex-col px-3 py-3 sm:px-6 sm:py-4">
-        <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-panel border border-border bg-card px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="break-words text-lg font-semibold">Open source licenses</h1>
-            <p className="break-words text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
-          </div>
-          <StatefulButton
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
-            onClick={() => navigate("/settings")}
-            aria-label="Close licenses overlay"
-          >
-            <span className="text-lg leading-none">×</span>
-          </StatefulButton>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-hidden rounded-panel border border-border bg-card">
-          <div
-            data-testid="open-source-licenses-scroll"
-            className="h-full w-full overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]"
-          >
-            <div className={`min-w-0 space-y-4 p-4 sm:p-6 ${hasError ? "text-destructive" : "text-foreground"}`}>
-              {hasError ? (
-                <p className="break-words text-sm">{noticeText}</p>
-              ) : (
-                blocks.map((block, blockIndex) => {
-                  if (block.type === "heading") {
-                    if (block.level === 1) {
-                      return (
-                        <h2 key={`h-${blockIndex}`} className="break-words text-2xl font-semibold tracking-tight">
-                          {block.text}
-                        </h2>
-                      );
-                    }
-                    if (block.level === 2) {
-                      return (
-                        <h3 key={`h-${blockIndex}`} className="break-words pt-2 text-xl font-semibold">
-                          {block.text}
-                        </h3>
-                      );
-                    }
+      <AppSheetContent
+        className="overflow-hidden p-0"
+        data-testid="open-source-licenses-overlay"
+        closeTestId="open-source-licenses-close"
+      >
+        <AppSheetHeader>
+          <AppSheetTitle>Open source licenses</AppSheetTitle>
+          <AppSheetDescription>The open source software this app uses, and the license of each.</AppSheetDescription>
+        </AppSheetHeader>
+        <AppSheetBody data-testid="open-source-licenses-scroll" className="overflow-x-hidden">
+          <div className={`min-w-0 space-y-4 p-4 sm:p-6 ${hasError ? "text-destructive" : "text-foreground"}`}>
+            {hasError ? (
+              <p className="break-words text-sm">{noticeText}</p>
+            ) : (
+              blocks.map((block, blockIndex) => {
+                if (block.type === "heading") {
+                  if (block.level === 1) {
                     return (
-                      <h4 key={`h-${blockIndex}`} className="break-words text-lg font-medium">
+                      <h2 key={`h-${blockIndex}`} className="break-words text-2xl font-semibold tracking-tight">
                         {block.text}
-                      </h4>
+                      </h2>
                     );
                   }
-
-                  if (block.type === "paragraph") {
+                  if (block.level === 2) {
                     return (
-                      <p key={`p-${blockIndex}`} className="break-words text-sm leading-6">
-                        {renderInlineText(block.text)}
-                      </p>
+                      <h3 key={`h-${blockIndex}`} className="break-words pt-2 text-xl font-semibold">
+                        {block.text}
+                      </h3>
                     );
                   }
+                  return (
+                    <h4 key={`h-${blockIndex}`} className="break-words text-lg font-medium">
+                      {block.text}
+                    </h4>
+                  );
+                }
 
-                  if (block.type === "list") {
+                if (block.type === "paragraph") {
+                  return (
+                    <p key={`p-${blockIndex}`} className="break-words text-sm leading-6">
+                      {renderInlineText(block.text)}
+                    </p>
+                  );
+                }
+
+                if (block.type === "list") {
+                  return (
+                    <ul key={`l-${blockIndex}`} className="list-disc space-y-2 pl-5 text-sm leading-6">
+                      {block.items.map((item, itemIndex) => (
+                        <li key={`li-${itemIndex}`} className="min-w-0 break-words">
+                          {renderInlineText(item)}
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                }
+
+                if (block.type === "table") {
+                  const normalizedHeaders = block.headers.map((header) => header.trim().toLowerCase());
+                  const isDependencyTable =
+                    normalizedHeaders.includes("ecosystem") &&
+                    normalizedHeaders.includes("package") &&
+                    normalizedHeaders.includes("version") &&
+                    normalizedHeaders.includes("license") &&
+                    (normalizedHeaders.includes("source") || normalizedHeaders.includes("source url"));
+
+                  if (isDependencyTable) {
+                    const getCell = (row: string[], header: string) => {
+                      const index = normalizedHeaders.indexOf(header);
+                      return index >= 0 ? (row[index] ?? "-") : "-";
+                    };
+
                     return (
-                      <ul key={`l-${blockIndex}`} className="list-disc space-y-2 pl-5 text-sm leading-6">
-                        {block.items.map((item, itemIndex) => (
-                          <li key={`li-${itemIndex}`} className="min-w-0 break-words">
-                            {renderInlineText(item)}
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  }
+                      <div
+                        key={`t-${blockIndex}`}
+                        data-testid="open-source-licenses-dependency-table"
+                        className="space-y-3"
+                      >
+                        {block.rows.map((row, rowIndex) => {
+                          const ecosystem = getCell(row, "ecosystem");
+                          const packageName = getCell(row, "package");
+                          const version = getCell(row, "version");
+                          const license = getCell(row, "license");
+                          const source =
+                            getCell(row, "source") !== "-" ? getCell(row, "source") : getCell(row, "source url");
 
-                  if (block.type === "table") {
-                    const normalizedHeaders = block.headers.map((header) => header.trim().toLowerCase());
-                    const isDependencyTable =
-                      normalizedHeaders.includes("ecosystem") &&
-                      normalizedHeaders.includes("package") &&
-                      normalizedHeaders.includes("version") &&
-                      normalizedHeaders.includes("license") &&
-                      (normalizedHeaders.includes("source") || normalizedHeaders.includes("source url"));
-
-                    if (isDependencyTable) {
-                      const getCell = (row: string[], header: string) => {
-                        const index = normalizedHeaders.indexOf(header);
-                        return index >= 0 ? (row[index] ?? "-") : "-";
-                      };
-
-                      return (
-                        <div
-                          key={`t-${blockIndex}`}
-                          data-testid="open-source-licenses-dependency-table"
-                          className="space-y-3"
-                        >
-                          {block.rows.map((row, rowIndex) => {
-                            const ecosystem = getCell(row, "ecosystem");
-                            const packageName = getCell(row, "package");
-                            const version = getCell(row, "version");
-                            const license = getCell(row, "license");
-                            const source =
-                              getCell(row, "source") !== "-" ? getCell(row, "source") : getCell(row, "source url");
-
-                            return (
-                              <article
-                                key={`t-${blockIndex}-row-${rowIndex}`}
-                                data-testid="open-source-license-card"
-                                className="rounded-panel border border-border/70 bg-muted/20 p-4 [contain-intrinsic-size:180px] [content-visibility:auto]"
-                              >
-                                <div className="flex flex-wrap items-start gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <h4 className="break-words text-base font-semibold">
-                                      {renderInlineText(packageName)}
-                                    </h4>
-                                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                      {renderInlineText(ecosystem)}
-                                    </p>
-                                  </div>
-                                  {version && version !== "-" ? (
-                                    <span className="rounded-full border border-border/70 px-2 py-1 text-xs font-medium text-muted-foreground">
-                                      {renderInlineText(version)}
-                                    </span>
-                                  ) : null}
+                          return (
+                            <article
+                              key={`t-${blockIndex}-row-${rowIndex}`}
+                              data-testid="open-source-license-card"
+                              className="rounded-panel border border-border/70 bg-muted/20 p-4 [contain-intrinsic-size:180px] [content-visibility:auto]"
+                            >
+                              <div className="flex flex-wrap items-start gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="break-words text-base font-semibold">
+                                    {renderInlineText(packageName)}
+                                  </h4>
+                                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                    {renderInlineText(ecosystem)}
+                                  </p>
                                 </div>
-                                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[auto,1fr]">
-                                  <dt className="font-medium text-muted-foreground">License</dt>
-                                  <dd className="min-w-0 break-words">{renderInlineText(license)}</dd>
-                                  <dt className="font-medium text-muted-foreground">Source</dt>
-                                  <dd className="min-w-0 break-words">{renderInlineText(source)}</dd>
-                                </dl>
-                              </article>
-                            );
-                          })}
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div key={`t-${blockIndex}`} className="overflow-x-auto rounded-panel border border-border/70">
-                        <table className="min-w-full border-collapse text-sm">
-                          <thead className="bg-muted/40 text-left">
-                            <tr>
-                              {block.headers.map((header, headerIndex) => (
-                                <th key={`th-${headerIndex}`} className="px-3 py-2 font-medium text-foreground">
-                                  {header}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {block.rows.map((row, rowIndex) => (
-                              <tr key={`tr-${rowIndex}`} className="border-t border-border/70 align-top">
-                                {row.map((cell, cellIndex) => (
-                                  <td key={`td-${rowIndex}-${cellIndex}`} className="px-3 py-2 break-words">
-                                    {renderInlineText(cell)}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                {version && version !== "-" ? (
+                                  <span className="rounded-full border border-border/70 px-2 py-1 text-xs font-medium text-muted-foreground">
+                                    {renderInlineText(version)}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[auto,1fr]">
+                                <dt className="font-medium text-muted-foreground">License</dt>
+                                <dd className="min-w-0 break-words">
+                                  {renderInlineText(license, STANDALONE_LINK_CLASS)}
+                                </dd>
+                                <dt className="font-medium text-muted-foreground">Source</dt>
+                                <dd className="min-w-0 break-words">
+                                  {renderInlineText(source, STANDALONE_LINK_CLASS)}
+                                </dd>
+                              </dl>
+                            </article>
+                          );
+                        })}
                       </div>
                     );
                   }
 
-                  return null;
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+                  return (
+                    <div key={`t-${blockIndex}`} className="overflow-x-auto rounded-panel border border-border/70">
+                      <table className="min-w-full border-collapse text-sm">
+                        <thead className="bg-muted/40 text-left">
+                          <tr>
+                            {block.headers.map((header, headerIndex) => (
+                              <th key={`th-${headerIndex}`} className="px-3 py-2 font-medium text-foreground">
+                                {header}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {block.rows.map((row, rowIndex) => (
+                            <tr key={`tr-${rowIndex}`} className="border-t border-border/70 align-top">
+                              {row.map((cell, cellIndex) => (
+                                <td key={`td-${rowIndex}-${cellIndex}`} className="px-3 py-2 break-words">
+                                  {renderInlineText(cell)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
 
-  if (typeof document === "undefined") return content;
-  return createPortal(content, document.body);
+                return null;
+              })
+            )}
+          </div>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
+  );
 }

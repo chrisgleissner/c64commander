@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { useState, useSyncExternalStore, type KeyboardEvent } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFieldFrame } from "@/hooks/useFieldFrame";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useT9Input } from "@/hooks/useT9Input";
 import { getInputModality, subscribeInputModality, type T9Mode } from "@/lib/input";
@@ -61,31 +62,6 @@ function T9ModeIndicator({
   );
 }
 
-const useFieldFocusTarget = (id: string, order: number, group: string) => {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const focusRef = useFocusItem<HTMLDivElement>({
-    id,
-    order,
-    group,
-    onActivate: () => inputRef.current?.focus(),
-  });
-  const setFrameRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      frameRef.current = element;
-      focusRef(element);
-    },
-    [focusRef],
-  );
-  const blurToFrame = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    event.currentTarget.blur();
-    frameRef.current?.focus();
-  }, []);
-  return { inputRef, setFrameRef, blurToFrame };
-};
-
 export function SavedDeviceEditorFields({
   draft,
   onChange,
@@ -119,8 +95,8 @@ export function SavedDeviceEditorFields({
     enabled: keypadInput,
   });
   const focusGroup = `${idPrefix}-fields`;
-  const nameFocus = useFieldFocusTarget(`${idPrefix}-name-field`, 200, focusGroup);
-  const hostFocus = useFieldFocusTarget(`${idPrefix}-host-field`, 201, focusGroup);
+  const nameFocus = useFieldFrame(`${idPrefix}-name-field`, 200, focusGroup);
+  const hostFocus = useFieldFrame(`${idPrefix}-host-field`, 201, focusGroup);
   // The reachability suggestion is a bare <button> nested inside the host field's
   // explicit focus-item frame, so auto-discovery would treat it as owned-by-subtree
   // and drop it from the ring. Register it explicitly so it stays D-pad/keypad
@@ -130,9 +106,9 @@ export function SavedDeviceEditorFields({
     order: 202,
     group: focusGroup,
   });
-  const httpFocus = useFieldFocusTarget(`${idPrefix}-http-field`, 203, focusGroup);
-  const ftpFocus = useFieldFocusTarget(`${idPrefix}-ftp-field`, 204, focusGroup);
-  const telnetFocus = useFieldFocusTarget(`${idPrefix}-telnet-field`, 205, focusGroup);
+  const httpFocus = useFieldFrame(`${idPrefix}-http-field`, 203, focusGroup);
+  const ftpFocus = useFieldFrame(`${idPrefix}-ftp-field`, 204, focusGroup);
+  const telnetFocus = useFieldFrame(`${idPrefix}-telnet-field`, 205, focusGroup);
   const handleNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     nameT9.onKeyDown(event);
     if (!event.defaultPrevented) nameFocus.blurToFrame(event);
@@ -144,8 +120,7 @@ export function SavedDeviceEditorFields({
   return (
     <div className="space-y-3">
       <div
-        ref={nameFocus.setFrameRef}
-        tabIndex={-1}
+        {...nameFocus.frameProps}
         className="space-y-2 rounded-md outline-none"
         data-testid={`${idPrefix}-name-field`}
       >
@@ -191,8 +166,7 @@ export function SavedDeviceEditorFields({
       </div>
 
       <div
-        ref={hostFocus.setFrameRef}
-        tabIndex={-1}
+        {...hostFocus.frameProps}
         className="space-y-2 rounded-md outline-none"
         data-testid={`${idPrefix}-host-field`}
       >
@@ -257,8 +231,7 @@ export function SavedDeviceEditorFields({
 
         <div className="grid grid-cols-3 gap-3">
           <div
-            ref={httpFocus.setFrameRef}
-            tabIndex={-1}
+            {...httpFocus.frameProps}
             className="space-y-1 rounded-md outline-none"
             data-testid={`${idPrefix}-http-field`}
           >
@@ -277,8 +250,7 @@ export function SavedDeviceEditorFields({
             />
           </div>
           <div
-            ref={ftpFocus.setFrameRef}
-            tabIndex={-1}
+            {...ftpFocus.frameProps}
             className="space-y-1 rounded-md outline-none"
             data-testid={`${idPrefix}-ftp-field`}
           >
@@ -297,8 +269,7 @@ export function SavedDeviceEditorFields({
             />
           </div>
           <div
-            ref={telnetFocus.setFrameRef}
-            tabIndex={-1}
+            {...telnetFocus.frameProps}
             className="space-y-1 rounded-md outline-none"
             data-testid={`${idPrefix}-telnet-field`}
           >

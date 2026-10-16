@@ -779,6 +779,23 @@ button:focus-visible,
 }
 
 /*
+ * A dialog on a screen the system keyboard has halved. With a fixed footer and header, the body
+ * between them was about 30 px at 213 px, too little for one field, so the field being typed into
+ * sat under the title or the buttons. Here the whole dialog scrolls instead, and its buttons are
+ * reached by scrolling, as they already are in the dialogs without a fixed footer.
+ */
+@media (max-height: 320px) {
+  [data-app-surface="dialog"] {
+    overflow-y: auto;
+  }
+
+  [data-app-surface="dialog"] > [data-surface-body="true"] {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+/*
  * The header shares its width between the page title, the connection host and the status word. On
  * a 393 px phone all three were drawn truncated at once, so the host — the one whose truncated
  * form ("192.168.1.…") carries no information, and which Home and Settings both show in full — is

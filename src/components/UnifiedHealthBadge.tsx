@@ -469,7 +469,10 @@ export function UnifiedHealthBadge({ className }: Props) {
     narrowHeader &&
     targetDevice.multiDevice &&
     targetDevice.shortLabel !== null &&
-    (connectivity === "Online" || connectivity === "Checking");
+    (connectivity === "Online" || connectivity === "Checking" || connectivity === "Offline" || connectivity === "Auth");
+  // The Docs give offline, and a device that wants its password, the dotted ring; the gray solid
+  // ring is Idle, for a session that has not connected yet.
+  const shapeState: HealthState = connectivity === "Offline" || connectivity === "Auth" ? "Unavailable" : state;
   const connectedAnnouncement = useConnectedDeviceAnnouncement(
     targetDevice,
     rawConnectionState === "REAL_CONNECTED",
@@ -667,7 +670,7 @@ export function UnifiedHealthBadge({ className }: Props) {
         </>
       ) : null}
       <HealthStateShape
-        state={state}
+        state={shapeState}
         className={showShortDeviceLabel ? "text-[12.8px]" : "text-[1rem]"}
         overlayCritical
       />

@@ -161,19 +161,6 @@ export const readSectionStates = (scope: string): Map<string, boolean> => {
 };
 
 /**
- * Fired when a section opens, so its siblings in the same scope can close themselves.
- *
- * Only used in the compact display profile — see `CollapsibleSection` for why one card at a time
- * is the right shape on a 320x427 screen and the wrong one on a tall phone.
- */
-export const SECTION_OPENED_EVENT = "c64u-collapsible-section-opened";
-
-export interface SectionOpenedDetail {
-  readonly scope: string;
-  readonly id: string;
-}
-
-/**
  * Asks every card currently on the page to open or close.
  *
  * Broadcast rather than scoped: a card answers only while its page is on screen, so "every card" and
@@ -196,11 +183,6 @@ export const subscribeSectionsBulk = (handler: (open: boolean) => void): (() => 
   const listener = (event: Event) => handler(Boolean((event as CustomEvent<SectionsBulkDetail>).detail?.open));
   window.addEventListener(SECTIONS_BULK_EVENT, listener);
   return () => window.removeEventListener(SECTIONS_BULK_EVENT, listener);
-};
-
-export const announceSectionOpened = (scope: string, id: string): void => {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent<SectionOpenedDetail>(SECTION_OPENED_EVENT, { detail: { scope, id } }));
 };
 
 export const writeSectionState = (scope: string, id: string, open: boolean): void => {
