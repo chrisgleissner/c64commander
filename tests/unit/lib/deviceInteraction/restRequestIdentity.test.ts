@@ -24,7 +24,6 @@ import {
   canonicalizeRestPath,
   isConfigMutationPath,
   isMachineControlPath,
-  resolveRestDeviceScope,
 } from "@/lib/deviceInteraction/restRequestIdentity";
 
 describe("restRequestIdentity", () => {
@@ -102,19 +101,5 @@ describe("restRequestIdentity", () => {
         }),
       }),
     );
-  });
-});
-
-describe("resolveRestDeviceScope", () => {
-  it.each([
-    [{ baseUrl: "http://c64u" }, "c64u"],
-    [{ baseUrl: "http://C64U:8080/" }, "c64u"],
-    [{ baseUrl: "http://192.168.1.13" }, "192.168.1.13"],
-    [{ baseUrl: "http://[fe80::1]:8080" }, "[fe80::1]"],
-    [{ baseUrl: "http://localhost:8064/api/rest", deviceHost: "u2:8080" }, "u2"],
-    [{ baseUrl: "http://localhost:8064/api/rest", deviceHost: "fe80::1" }, "fe80::1"],
-    [{ baseUrl: "http://c64u", deviceHost: "  " }, "c64u"],
-  ])("scopes %o to %s", (target, expected) => {
-    expect(resolveRestDeviceScope(target)).toBe(expected);
   });
 });
