@@ -192,6 +192,20 @@ describe("logger", () => {
     spy.mockRestore();
   });
 
+  it("tags the Play page's own actions with its current tune before it plays", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    getActiveAction.mockReturnValue({
+      correlationId: "play-1",
+      origin: "user",
+      name: "PlayFilesPage.anonymousAction",
+      componentName: "PlayFilesPage",
+    });
+    getPlaybackTraceSnapshot.mockReturnValue({ isPlaying: false, sourceKind: "ultimate", trackInstanceId: 0 });
+    logger.logger.info("starting a tune");
+    expect(addLog.mock.calls[0][2]).toMatchObject({ sourceKind: "ultimate", trackInstanceId: 0 });
+    spy.mockRestore();
+  });
+
   it("sets lifecycleState to null when no playback context", () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     getPlaybackTraceSnapshot.mockReturnValue(null);

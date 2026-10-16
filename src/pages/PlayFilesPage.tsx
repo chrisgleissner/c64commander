@@ -35,6 +35,7 @@ import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { PLAY_PAGE_TRACE_COMPONENT } from "@/lib/tracing/traceContext";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
@@ -366,7 +367,7 @@ export default function PlayFilesPage() {
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const { profile: displayProfile } = useDisplayProfile();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
-  const trace = useActionTrace("PlayFilesPage");
+  const trace = useActionTrace(PLAY_PAGE_TRACE_COMPONENT);
 
   const featureFlags = useFeatureFlags();
   const hvscControlsEnabled = shouldShowHvscControls(featureFlags);

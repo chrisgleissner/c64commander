@@ -55,4 +55,16 @@ describe("resolveNativeTraceContext", () => {
       playlistItemId: null,
     });
   });
+
+  it("keeps the current tune on the Play page's own actions, such as the read that starts it", () => {
+    getTraceContextSnapshotMock.mockReturnValue({
+      playback: { isPlaying: false, trackInstanceId: 0, playlistItemId: null },
+    });
+
+    expect(resolveNativeTraceContext({ correlationId: "play-1", componentName: "PlayFilesPage" } as never)).toEqual({
+      correlationId: "play-1",
+      trackInstanceId: 0,
+      playlistItemId: null,
+    });
+  });
 });
