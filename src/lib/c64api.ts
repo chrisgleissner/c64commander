@@ -1650,6 +1650,7 @@ export class C64API {
           path,
           readRequestKey,
         });
+        onDispatch?.(); // the request it joins is already with the device
         return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestSignal);
       }
     }
