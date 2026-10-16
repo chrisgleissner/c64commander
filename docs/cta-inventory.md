@@ -357,15 +357,19 @@ not-connected / empty / single-device).
   greyed row behind.
 - Duration — slider — `duration-slider` — R✅ I✅
 - Duration override — text — `duration-input` (`mm:ss`) — R✅ I✅ ; Change — button — R✅ I✅
-- Add items to playlist — button — `add-items-to-playlist` — R✅ I✅ (opens picker)
+- Add (aria-label "Add items to playlist") — button — `add-items-to-playlist` — R✅ I✅ (opens picker)
 - Include subfolders — checkbox — `playback-recurse` — R✅ I✅ — in the **Add items** sheet
   (`add-items-folder-options`), not on the Play page: it decides what selecting a folder means, so it
   is shown while folders are being chosen and at no other time. Rendered only once a source is open
   and only where folder selection is allowed.
 - Filter files — text — `list-filter-input` — R✅ I✅
-- Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
+- Filter by type — icon button — `list-filter-types-toggle` — R✅ I✅ — beside the filter field; shows a dot while
+  the type filters narrow the list. Reveals the type filters below it; collapsed by default. The **Playlist**
+  sheet has the same control (`view-all-filter-types-toggle`) at the top of its scrolling list.
+- Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅ — shown only once
+  **Filter by type** is open
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
-- Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
+- Clear (aria-label "Clear playlist") — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
   **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
   how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,
   not yet enumerated on hardware:

@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
@@ -112,10 +113,9 @@ export const PlaylistPanel = ({
   );
 
   return (
-    <div className="bg-card border border-border rounded-panel p-4 space-y-4">
+    <div className="bg-card border border-border rounded-panel p-3 space-y-3">
       <SelectableActionList
         title="Playlist"
-        selectionLabel="items"
         items={previewItems}
         viewAllItems={viewAllItems}
         totalItemCount={totalItemCount}
@@ -142,8 +142,9 @@ export const PlaylistPanel = ({
         hasMoreViewAllItems={hasMoreViewAllItems}
         onViewAllEndReached={onViewAllEndReached}
         viewAllMode="non-empty"
+        filterHeaderActive={playlistTypeFilters.length < categoryOptions.length}
         headerActions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <Button
               ref={addItemsFocusRef}
               variant="outline"
@@ -152,8 +153,10 @@ export const PlaylistPanel = ({
               aria-label="Add items to playlist"
               id="add-items-to-playlist"
               data-testid="add-items-to-playlist"
+              className="min-h-11"
             >
-              {hasPlaylist ? "Add more items" : "Add items"}
+              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+              Add
             </Button>
             {hasPlaylist ? (
               <Button
@@ -162,12 +165,13 @@ export const PlaylistPanel = ({
                 size="sm"
                 onClick={() => setClearConfirmOpen(true)}
                 aria-label="Clear playlist"
-                className="text-destructive hover:text-destructive"
+                className="min-h-11 text-destructive hover:text-destructive"
               >
-                Clear playlist
+                <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
+                Clear
               </Button>
             ) : null}
-          </div>
+          </>
         }
       />
       <ClearPlaylistDialog

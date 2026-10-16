@@ -2423,7 +2423,6 @@ export const HomeDiskManager = () => {
           <div className="bg-card border border-border rounded-panel p-4 space-y-4">
             <SelectableActionList
               title="Disk list"
-              selectionLabel="items"
               stackTitleProfiles={["compact", "medium"]}
               items={buildDiskListItems(sortedDisks, {
                 onMount: (entry) => {

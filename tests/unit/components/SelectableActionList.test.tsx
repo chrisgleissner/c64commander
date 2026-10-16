@@ -211,7 +211,7 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(filter).toHaveValue("");
   });
 
-  it("renders filter header content under filter input", () => {
+  it("reveals filter header content from the type-filter toggle beside the filter input", () => {
     const items: ActionListItem[] = [
       {
         id: "track-1",
@@ -235,6 +235,8 @@ describe("SelectableActionList view-all wrapping", () => {
       />,
     );
 
+    expect(screen.queryByTestId("filter-header")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Filter by type" }));
     expect(screen.getByTestId("filter-header")).toBeInTheDocument();
   });
 
@@ -762,15 +764,9 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(screen.getByTestId("header-action")).toBeInTheDocument();
   });
 
-  it("uses selectionLabel in no-selection text", () => {
+  it("says nothing about selection while nothing is selected", () => {
     const items: ActionListItem[] = [
-      {
-        id: "track-1",
-        title: "Track One",
-        selected: false,
-        actionLabel: "Play",
-        onAction: vi.fn(),
-      },
+      { id: "track-1", title: "Track One", selected: false, actionLabel: "Play", onAction: vi.fn() },
     ];
     render(
       <SelectableActionList
@@ -781,10 +777,9 @@ describe("SelectableActionList view-all wrapping", () => {
         allSelected={false}
         onToggleSelectAll={vi.fn()}
         maxVisible={10}
-        selectionLabel="tracks"
       />,
     );
-    expect(screen.getByText("No tracks selected")).toBeInTheDocument();
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
   });
 
   it("shows selected count when selectedCount > 0", () => {
@@ -889,6 +884,7 @@ describe("SelectableActionList view-all wrapping", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /view all/i }));
+    fireEvent.click(screen.getByTestId("view-all-filter-types-toggle"));
     const headers = screen.getAllByTestId("dialog-filter-header");
     expect(headers.length).toBeGreaterThan(0);
   });

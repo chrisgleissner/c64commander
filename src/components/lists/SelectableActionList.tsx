@@ -8,7 +8,7 @@
 
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { MoreVertical, Play, Search, X } from "lucide-react";
+import { MoreVertical, Play, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -101,6 +101,8 @@ export type SelectableActionListProps = {
   rowTestId?: string;
   headerActions?: React.ReactNode;
   filterHeader?: React.ReactNode;
+  /** Marks the type-filter toggle when the filters it holds are narrowing the list. */
+  filterHeaderActive?: boolean;
   viewAllFilterHeader?: React.ReactNode;
   filterPlaceholder?: string;
   filterValue?: string;
@@ -111,7 +113,6 @@ export type SelectableActionListProps = {
   hasMoreViewAllItems?: boolean;
   onViewAllEndReached?: () => void;
   showSelectionControls?: boolean;
-  selectionLabel?: string;
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
   stackTitleProfiles?: readonly DisplayProfile[];
@@ -338,6 +339,85 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
   );
 };
 
+type ListFilterRowProps = {
+  placeholder: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  categoryFilters?: React.ReactNode;
+  categoryFiltersActive: boolean;
+  categoryFiltersOpen: boolean;
+  onCategoryFiltersOpenChange: (open: boolean) => void;
+  inputTestId: string;
+  toggleTestId: string;
+};
+
+const ListFilterRow = ({
+  placeholder,
+  value,
+  onValueChange,
+  categoryFilters,
+  categoryFiltersActive,
+  categoryFiltersOpen,
+  onCategoryFiltersOpenChange,
+  inputTestId,
+  toggleTestId,
+}: ListFilterRowProps) => (
+  <div className="space-y-2">
+    <div className="flex items-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
+          className="pl-9 pr-11 h-11"
+          data-testid={inputTestId}
+        />
+        {value && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onValueChange("")}
+            className="absolute right-0 top-1/2 -translate-y-1/2 h-11 w-11 p-0"
+            aria-label="Clear filter"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      {categoryFilters ? (
+        <Button
+          variant="outline"
+          size="icon"
+          className="relative h-11 w-11 shrink-0"
+          onClick={() => onCategoryFiltersOpenChange(!categoryFiltersOpen)}
+          aria-label="Filter by type"
+          aria-expanded={categoryFiltersOpen}
+          data-testid={toggleTestId}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          {categoryFiltersActive ? (
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+          ) : null}
+        </Button>
+      ) : null}
+    </div>
+    {categoryFilters && categoryFiltersOpen ? (
+      <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{categoryFilters}</div>
+    ) : null}
+  </div>
+);
+
+type ViewAllFilterContext = ListFilterRowProps;
+
+const ViewAllVirtuosoHeader = ({ context }: { context?: ViewAllFilterContext }) =>
+  context ? (
+    <div className="mb-2">
+      <ListFilterRow {...context} />
+    </div>
+  ) : null;
+
 export const SelectableActionList = ({
   title,
   items,
@@ -359,6 +439,7 @@ export const SelectableActionList = ({
   rowTestId,
   headerActions,
   filterHeader,
+  filterHeaderActive = false,
   viewAllFilterHeader,
   filterPlaceholder = "Filter files...",
   filterValue,
@@ -369,7 +450,6 @@ export const SelectableActionList = ({
   hasMoreViewAllItems = false,
   onViewAllEndReached,
   showSelectionControls = true,
-  selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
 }: SelectableActionListProps) => {
@@ -377,6 +457,8 @@ export const SelectableActionList = ({
   const isCompact = profile === "compact";
   const stackTitles = stackTitleProfiles.includes(profile);
   const [viewAllOpen, setViewAllOpen] = useState(false);
+  const [filterHeaderOpen, setFilterHeaderOpen] = useState(false);
+  const [viewAllFilterHeaderOpen, setViewAllFilterHeaderOpen] = useState(false);
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
   const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
@@ -484,6 +566,17 @@ export const SelectableActionList = ({
   );
   const effectiveTotalItemCount =
     disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
+  const viewAllFilterContext: ViewAllFilterContext = {
+    placeholder: filterPlaceholder,
+    value: expandedFilterText,
+    onValueChange: setExpandedFilterText,
+    categoryFilters: viewAllFilterHeader ?? filterHeader,
+    categoryFiltersActive: filterHeaderActive,
+    categoryFiltersOpen: viewAllFilterHeaderOpen,
+    onCategoryFiltersOpenChange: setViewAllFilterHeaderOpen,
+    inputTestId: "view-all-filter-input",
+    toggleTestId: "view-all-filter-types-toggle",
+  };
   const shouldShowViewAll =
     Boolean(viewAllTitle) &&
     (viewAllMode === "non-empty" ? effectiveTotalItemCount > 0 : effectiveTotalItemCount > maxVisible);
@@ -519,17 +612,55 @@ export const SelectableActionList = ({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{title}</p>
-          {showSelectionControls ? (
-            <p className="text-xs text-muted-foreground">
-              {selectedCount ? `${selectedCount} selected` : `No ${selectionLabel || title.toLowerCase()} selected`}
-            </p>
+    <div className="space-y-2">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="min-w-0 text-sm" data-testid={listTestId ? `${listTestId}-summary` : undefined}>
+          <span className="font-medium">{title}</span>
+          {showSelectionControls && effectiveTotalItemCount ? (
+            <span className="text-muted-foreground">
+              {" · "}
+              <span>
+                {effectiveTotalItemCount} {effectiveTotalItemCount === 1 ? "item" : "items"}
+              </span>
+              {selectedCount ? (
+                <>
+                  {" · "}
+                  <span>{selectedCount} selected</span>
+                </>
+              ) : null}
+            </span>
           ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
+        </p>
+        {showSelectionControls ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRemoveSelected}
+                className="text-destructive hover:text-destructive"
+                id={removeSelectedId}
+                data-testid={removeSelectedId}
+              >
+                {removeSelectedLabel}
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onToggleSelectAll}
+              disabled={!items.length}
+              id={selectionToggleId}
+              data-testid={selectionToggleId}
+            >
+              {allSelected ? deselectAllLabel : selectAllLabel}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {headerActions || shouldShowViewAll ? (
+        <div className="grid min-w-0 grid-flow-col auto-cols-fr items-center gap-2 [&>*]:min-w-0 [&>*]:whitespace-nowrap [&>*]:px-2">
           {headerActions}
           {shouldShowViewAll && (
             <Button variant="outline" size="sm" onClick={() => setViewAllOpen(true)}>
@@ -537,73 +668,23 @@ export const SelectableActionList = ({
             </Button>
           )}
         </div>
-      </div>
-
-      {/* Text filter */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="text"
-          placeholder={filterPlaceholder}
-          value={inlineFilterText}
-          onChange={(e) => setInlineFilterText(e.target.value)}
-          className="pl-9 pr-9 h-9"
-          data-testid="list-filter-input"
-        />
-        {inlineFilterText && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setInlineFilterText("")}
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-            aria-label="Clear filter"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {filterHeader ? (
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
       ) : null}
 
-      {showSelectionControls ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className="text-muted-foreground min-w-0 break-words">
-              {/* Empty says so once, in the list body; the count reads "1 item", not "1 items". */}
-              {effectiveTotalItemCount
-                ? `${effectiveTotalItemCount} ${effectiveTotalItemCount === 1 ? "item" : "items"}`
-                : null}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onToggleSelectAll}
-              disabled={!items.length}
-              className="max-w-full whitespace-normal"
-              id={selectionToggleId}
-              data-testid={selectionToggleId}
-            >
-              {allSelected ? deselectAllLabel : selectAllLabel}
-            </Button>
-          </div>
-          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onRemoveSelected}
-              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
-              id={removeSelectedId}
-              data-testid={removeSelectedId}
-            >
-              {removeSelectedLabel}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+      <ListFilterRow
+        placeholder={filterPlaceholder}
+        value={inlineFilterText}
+        onValueChange={setInlineFilterText}
+        categoryFilters={filterHeader}
+        categoryFiltersActive={filterHeaderActive}
+        categoryFiltersOpen={filterHeaderOpen}
+        onCategoryFiltersOpenChange={setFilterHeaderOpen}
+        inputTestId="list-filter-input"
+        toggleTestId="list-filter-types-toggle"
+      />
 
-      <div className="bg-card border border-border rounded-panel p-4 overflow-hidden">{renderList(visibleItems)}</div>
+      <div className={cn("bg-card border border-border rounded-panel overflow-hidden", isCompact ? "p-2" : "p-4")}>
+        {renderList(visibleItems)}
+      </div>
 
       {viewAllTitle && (
         <AppSheet open={viewAllOpen} onOpenChange={setViewAllOpen}>
@@ -616,50 +697,30 @@ export const SelectableActionList = ({
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
-              <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
+              <AppSheetHeader>
                 <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
                 <AppSheetDescription>Review all items in this list.</AppSheetDescription>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    type="text"
-                    placeholder={filterPlaceholder}
-                    value={expandedFilterText}
-                    onChange={(e) => setExpandedFilterText(e.target.value)}
-                    className="pl-9 pr-9 h-9"
-                    data-testid="view-all-filter-input"
-                  />
-                  {expandedFilterText && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setExpandedFilterText("")}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                      aria-label="Clear filter"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                {(viewAllFilterHeader ?? filterHeader) ? (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    {viewAllFilterHeader ?? filterHeader}
-                  </div>
-                ) : null}
               </AppSheetHeader>
-              <AppSheetBody className={cn("flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
+              <AppSheetBody className={cn("flex flex-col", isCompact ? "px-2 py-2" : "px-6 py-4")}>
                 <div
                   className={cn(
                     "bg-card border border-border rounded-panel overflow-hidden flex-1 h-full min-h-0 flex flex-col",
-                    isCompact ? "p-3" : "p-4",
+                    isCompact ? "p-2" : "p-4",
                   )}
                 >
                   {viewAllFilteredItems.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                      <div className="mb-2">
+                        <ListFilterRow {...viewAllFilterContext} />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
+                    </div>
                   ) : (
                     <Virtuoso
                       ref={virtuosoRef}
                       style={{ height: "100%" }}
+                      context={viewAllFilterContext}
+                      components={{ Header: ViewAllVirtuosoHeader }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}
                       overscan={500}

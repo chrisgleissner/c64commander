@@ -58,11 +58,97 @@ describe("SelectableActionList", () => {
     const body = root.children[1];
     const card = body?.firstElementChild;
 
-    expect(header).toHaveClass("space-y-2");
     expect(header).not.toHaveClass("px-3");
     expect(header?.querySelector('[data-interstitial-header-row="true"]')).not.toBeNull();
-    expect(body).toHaveClass("px-3");
-    expect(card).toHaveClass("p-3");
+    expect(body).toHaveClass("px-2");
+    expect(card).toHaveClass("p-2");
+  });
+
+  it("marks the type-filter toggle only while the type filters narrow the list", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+    const renderWith = (filterHeaderActive: boolean) => (
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={10}
+          filterHeader={<div>Source filters</div>}
+          filterHeaderActive={filterHeaderActive}
+        />
+      </DisplayProfileProvider>
+    );
+    const { rerender } = render(renderWith(false));
+    const toggle = screen.getByRole("button", { name: "Filter by type" });
+    expect(toggle.querySelector("span[aria-hidden='true']")).toBeNull();
+    rerender(renderWith(true));
+    expect(toggle.querySelector("span[aria-hidden='true']")).not.toBeNull();
+  });
+
+  it("keeps the view-all filter field out of the pinned header so it scrolls away with the list", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={1}
+          viewAllTitle="All files"
+          filterHeader={<span data-testid="category-filters">Types</span>}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+
+    const header = screen.getByTestId("action-list-view-all").firstElementChild;
+    const input = screen.getByTestId("view-all-filter-input");
+
+    expect(header).not.toContainElement(input);
+    expect(screen.queryByTestId("category-filters")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-all-filter-types-toggle"));
+    const filters = screen.getByTestId("category-filters");
+    expect(header).not.toContainElement(filters);
+    expect(screen.getByTestId("action-list-view-all")).toContainElement(filters);
+    expect(header?.querySelector('[data-interstitial-header-row="true"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("still shows the view-all filter field when the filter matches nothing so it can be cleared", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={1}
+          viewAllTitle="All files"
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+    fireEvent.change(screen.getByTestId("view-all-filter-input"), { target: { value: "zzz-no-match" } });
+
+    expect(screen.getByTestId("view-all-filter-input")).toHaveValue("zzz-no-match");
+    fireEvent.click(screen.getAllByRole("button", { name: "Clear filter" }).at(-1)!);
+    expect(screen.getByTestId("view-all-filter-input")).toHaveValue("");
   });
 
   it("bounds the expanded view-all sheet by the sheet's own top clearance", () => {
@@ -192,6 +278,8 @@ describe("SelectableActionList", () => {
     );
 
     expect(screen.getByRole("button", { name: "Refresh" })).toBeVisible();
+    expect(screen.queryByText("Source filters")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Filter by type" }));
     expect(screen.getByText("Source filters")).toBeVisible();
 
     fireEvent.change(screen.getByTestId("list-filter-input"), { target: { value: "alp" } });

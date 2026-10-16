@@ -155,6 +155,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
+    await page.getByTestId("list-filter-types-toggle").click();
     const sidCategoryCheckbox = page.getByTestId("playlist-type-sid");
     await expect(sidCategoryCheckbox).toBeChecked();
     await sidCategoryCheckbox.click();
