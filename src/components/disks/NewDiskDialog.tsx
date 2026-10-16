@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { useFieldFrame } from "@/hooks/useFieldFrame";
 import { HardDriveDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,7 @@ export function NewDiskDialog({
   const [chosenFolder, setChosenFolder] = useState<string | null>(null);
   const folder = chosenFolder ?? initialFolder;
   const [tracks, setTracks] = useState("35");
+  const tracksFrame = useFieldFrame("new-disk-tracks-field", 30, "new-disk-fields");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -232,14 +234,20 @@ export function NewDiskDialog({
           </div>
 
           {needsTracks(kind) && (
-            <div className="space-y-2">
+            <div
+              {...tracksFrame.frameProps}
+              className="space-y-2 rounded-md outline-none"
+              data-testid="new-disk-tracks-field"
+            >
               <Label htmlFor="new-disk-tracks">Tracks {kind === "d64" ? "(35–41)" : "(1–255, required)"}</Label>
               <Input
+                ref={tracksFrame.inputRef}
                 id="new-disk-tracks"
                 data-testid="new-disk-tracks"
                 inputMode="numeric"
                 value={tracks}
                 onChange={(event) => setTracks(event.target.value)}
+                onKeyDown={tracksFrame.blurToFrame}
               />
             </div>
           )}

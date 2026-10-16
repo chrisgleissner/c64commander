@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Settings2,
   Joystick,
@@ -25,14 +25,12 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useRemoteInputCapabilityTier } from "@/hooks/useRemoteInputCapabilityTier";
 import { useRemoteInputSession, type RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 import { useRemoteInputPhysicalKeys } from "@/hooks/useRemoteInputPhysicalKeys";
+import { useRemoteInputKeypadTyping } from "@/hooks/useRemoteInputKeypadTyping";
+import { useRemoteInputKeypadControls } from "@/hooks/useRemoteInputKeypadControls";
 import { useRemoteInputGameMode } from "@/hooks/useRemoteInputGameMode";
 import { useDeviceRotation } from "@/hooks/useDeviceRotation";
 import { useAutoHide } from "@/hooks/useAutoHide";
-import {
-  remoteInputSupportsJoystick,
-  REMOTE_INPUT_AUTH_REQUIRED_HINT,
-  REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT,
-} from "@/lib/remoteInput/capabilityTier";
+import { remoteInputSupportsJoystick, resolveJoystickUnavailableHint } from "@/lib/remoteInput/capabilityTier";
 import {
   DEFAULT_REMOTE_INPUT_CONTROL_SIZE,
   gameModeControlScale,
@@ -60,7 +58,9 @@ import { AUTOFIRE_VISIBILITY_CHANGE_EVENT, loadShowAutofireButton } from "@/lib/
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
 import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
+import { RemoteInputControlsMenu } from "@/components/remoteInput/RemoteInputControlsMenu";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
@@ -95,14 +95,10 @@ const ROTATION_CHOICES: ReadonlyArray<{ label: string; value: DeviceRotation | "
  * on-screen joystick according to how the game is being played (spec §5.1).
  */
 export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) => {
-  const { tier, loading: tierLoading, resolved } = useRemoteInputCapabilityTier(open);
+  const { tier, loading: tierLoading, resolved, status: inputStatus } = useRemoteInputCapabilityTier(open);
   const session = useRemoteInputSession({ tier });
   const joystickAvailable = remoteInputSupportsJoystick(tier);
-  // Lead F3: auth-required needs the same password Type mode's fallback
-  // injection would also need, so the generic "The Keys tab still works" hint
-  // is wrong on this tier specifically.
-  const joystickUnavailableHint =
-    tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
+  const joystickUnavailableHint = resolveJoystickUnavailableHint(tier, inputStatus ?? null);
   const showJoystickUnavailableReason = resolved && !tierLoading && !joystickAvailable && session.outputMode === "type";
   // On a compact (small) display the Joystick / Keys / Release All buttons are
   // too wide to share one non-scrolling row, so drop the leading icons on the
@@ -400,6 +396,40 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
 
   const gameModeAvailable = joystickAvailable && session.outputMode === "joystick";
 
+  // The same rule as the app's text fields: the keypad composes letters only where T9 is on.
+  const keypadTypesOnTheC64 = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
+  const keypadTyping = useRemoteInputKeypadTyping({ sendChar: session.sendChar, sendCursor: session.sendCursor });
+  // The sheet stays mounted, so a letter still being chosen would otherwise reach the C64 after it closed.
+  const resetKeypadTyping = keypadTyping.reset;
+  useEffect(() => {
+    if (!open) resetKeypadTyping();
+  }, [open, resetKeypadTyping]);
+  const keypadControls = useRemoteInputKeypadControls({
+    open,
+    outputMode: session.outputMode,
+    keypadDrivesTheC64: session.outputMode === "joystick" || keypadTypesOnTheC64,
+    joystickAvailable,
+    gameModeAvailable,
+    immersive,
+    optionsFolded: foldJoystickOptions,
+    onOutputModeChange: (mode) => {
+      keypadTyping.reset();
+      handleOutputModeChange(mode);
+    },
+    onOpenOptions: () => setJoystickOptionsOpen(true),
+    onEnterGameMode: () => void startGameMode(),
+    onExitGameMode: () => exitGameMode(),
+    onReleaseAll: session.releaseAll,
+    onClose: () => handleOpenChange(false),
+  });
+  const handleSheetKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (keypadControls.interceptKeyDown(event)) return;
+    handleKeyDown(event);
+    if (!event.defaultPrevented && session.outputMode === "type" && keypadTypesOnTheC64) {
+      keypadTyping.handleKeyDown(event);
+    }
+  };
+
   /**
    * The way INTO Game Mode. The way out is {@link exitGameModeToggle}, which rides the
    * header row instead — the two never render together, and they share one testid so
@@ -521,9 +551,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         // Game Mode kept a further 5rem for its edge-anchored controls, which the action zone
         // already reserves room for; on a 320 x 427 screen those 80px were the picture's.
         className="pb-[var(--safe-area-inset-bottom)]"
-        onKeyDown={handleKeyDown}
+        {...keypadControls.sheetProps}
+        onKeyDown={handleSheetKeyDown}
         onKeyUp={handleKeyUp}
       >
+        <RemoteInputControlsMenu {...keypadControls.menu} />
         {/* Game Mode hides the header, the pinned toolbar and the mirror controls so only the
             live screen and whatever control surface applies remain. A single always-visible
             floating handle brings it all back — "pull the controls down" over the picture. */}
@@ -728,8 +760,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                  the resolver used to ignore `hidden` here. The space carries the reason,
                  the switch that fixes it and the quick keys instead — all reachable from
                  a keypad, which the on-screen joystick is not. */
+              // Auto margins, not justify-center: centred content taller than the sheet overflowed above
+              // the scroll origin, where no key could reach it. Clears the "Show controls" handle at the top.
               <div
-                className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-4"
+                className={cn("my-auto flex shrink-0 flex-col gap-3 px-4", chromeHidden && "pt-12")}
                 data-testid="remote-input-no-picture-panel"
               >
                 <p className="text-sm font-medium">The picture is off</p>

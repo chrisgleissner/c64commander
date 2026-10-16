@@ -13,7 +13,6 @@ import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { useLayoutEffect, useRef } from "react";
 import { rememberSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
-import { AvMirrorLivePip } from "@/components/streams/AvMirrorLivePip";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { cn } from "@/lib/utils";
@@ -133,6 +132,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
         <div
           className={cn("flex items-center justify-between gap-2", isCompact ? "min-h-0" : "min-h-11")}
           data-testid="app-bar-row"
+          data-focus-chrome=""
         >
           {/* Never narrower than the title's longest word, so the badge gives way rather than the title breaking inside a word. */}
           <div
@@ -159,7 +159,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
               </div>
             )}
           </div>
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="app-bar-actions flex min-w-0 items-center gap-1">
             {/*
               The Quick menu, in the same place on every page.
               It already existed for the keypad's Menu key — jump to a page, Game Mode,
@@ -181,8 +181,6 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
             >
               <MoreVertical className="h-5 w-5 text-muted-foreground" aria-hidden />
             </Button>
-            {/* Live A/V mirror indicator — renders only while a stream is active. */}
-            <AvMirrorLivePip />
             {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
             <UnifiedHealthBadge className="self-center" />
           </div>

@@ -110,7 +110,13 @@ export interface SidAudioPlugin {
   fade(options: { serial: number; seq: number; target: number; ms: number }): Promise<void>;
   fadeIn(options: { serial: number; seq: number; ms: number }): Promise<void>;
   resetSilence(options: { serial: number }): Promise<void>;
-  beginTransition(options: { serial: number; seq: number; seconds: number }): Promise<void>;
+  /** `playOutDeclickSeconds` above zero: the tune ends by itself, `seconds` from the playhead; see `LocalAudioFeed`. */
+  beginTransition(options: {
+    serial: number;
+    seq: number;
+    seconds: number;
+    playOutDeclickSeconds?: number;
+  }): Promise<void>;
   takeTail(options: { serial: number; seq: number; tailId: number; maxSeconds: number }): Promise<void>;
   adoptTail(options: { serial: number; seq: number; tailId: number; seconds: number }): Promise<void>;
   release(options: { serial: number; seq: number }): Promise<void>;

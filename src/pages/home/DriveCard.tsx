@@ -113,6 +113,7 @@ export function DriveCard({
   wide = false,
 }: DriveCardProps) {
   const { profile } = useDisplayProfile();
+  const labelId = React.useId();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
   // The enable toggle is registered as disabled while the toggle itself is
   // disabled (disconnected / pending) so the keypad ring skips it.
@@ -147,6 +148,7 @@ export function DriveCard({
           disabled={!isConnected || togglePending || loading}
           className={cn("px-3 text-xs", getOnOffButtonClass(enabled && !loading), "min-h-11 min-w-11")}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
+          aria-label={`${name} power: ${loading ? LOADING_LABEL : enabled ? "on" : "off"}`}
         >
           {loading ? LOADING_LABEL : enabled ? "ON" : "OFF"}
         </Button>
@@ -195,7 +197,9 @@ export function DriveCard({
           honestly in pixels is what exposed the column count as the real problem. */}
       <div className={cn("grid gap-2 text-xs", wide ? "grid-cols-2" : "grid-cols-1")}>
         <div className="inline-summary-label-value-pair flex items-center gap-2">
-          <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
+          <span id={`${labelId}-bus`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+            Bus ID
+          </span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
             <SelectTrigger
               className={cn(
@@ -209,6 +213,7 @@ export function DriveCard({
                 "min-h-11 min-w-11 shrink-0 justify-start",
               )}
               data-testid={`home-drive-bus-${testIdSuffix}`}
+              aria-labelledby={`${labelId}-bus`}
             >
               <SelectValue placeholder={busIdValue} />
             </SelectTrigger>
@@ -229,7 +234,9 @@ export function DriveCard({
         >
           {typeValue !== undefined && (
             <>
-              <span className="shrink-0 text-muted-foreground whitespace-nowrap">Type</span>
+              <span id={`${labelId}-type`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+                Type
+              </span>
               <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
                 <SelectTrigger
                   className={cn(
@@ -243,6 +250,7 @@ export function DriveCard({
                     "min-h-11 min-w-11 shrink-0 justify-start",
                   )}
                   data-testid={`home-drive-type-${testIdSuffix}`}
+                  aria-labelledby={`${labelId}-type`}
                 >
                   <SelectValue placeholder={typeValue} />
                 </SelectTrigger>
@@ -272,6 +280,7 @@ export function DriveCard({
             getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
           )}
           data-testid={`home-drive-status-${testIdSuffix}`}
+          aria-label={`${name} status: ${loading ? LOADING_LABEL : statusSummary}`}
         >
           {loading ? LOADING_LABEL : statusSummary}
         </button>

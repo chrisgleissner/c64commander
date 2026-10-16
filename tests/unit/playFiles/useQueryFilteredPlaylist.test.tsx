@@ -440,6 +440,38 @@ describe("useQueryFilteredPlaylist", () => {
     });
   });
 
+  it("keeps showing the restored playlist while the repository's first answer after its commit is pending", async () => {
+    markPlaylistRepositoryPhase(playlistId, "COMMITTING", { expectedCount: playlist.length });
+    let answer: (value: { rows: typeof queryRows; totalMatchCount: number }) => void = () => undefined;
+    repository.queryPlaylist.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useHarness());
+    await waitFor(() => expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2));
+    const restoredIds = result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id);
+
+    act(() => {
+      markReady(playlist.length, 2);
+    });
+    await waitFor(() => expect(repository.queryPlaylist).toHaveBeenCalledTimes(1));
+
+    expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual(
+      restoredIds,
+    );
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(2);
+
+    await act(async () => {
+      answer({ rows: queryRows.slice(0, 1), totalMatchCount: 1 });
+    });
+    expect(result.current.queryFilteredPlaylist.viewAllPlaylist.map((item: PlaylistItem) => item.id)).toEqual([
+      "sid-1",
+    ]);
+    expect(result.current.queryFilteredPlaylist.totalMatchCount).toBe(1);
+  });
+
   it("keeps filtering in memory while the repository is background committing", async () => {
     markPlaylistRepositoryPhase(playlistId, "BACKGROUND_COMMITTING", {
       expectedCount: playlist.length,

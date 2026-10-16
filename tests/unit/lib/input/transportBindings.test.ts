@@ -62,6 +62,21 @@ describe("function-key bindings", () => {
     expect(findBinding(keypadProfile, press("F3"))?.action).toBe("function3");
   });
 
+  it("resolves an F1 / F3 row reported as F21 / F23 to the same function actions", () => {
+    // Measured on a keypad handset: the WebView sends these with no key name and no key code.
+    const fromKernelF2x = (code: string) => ({
+      key: "Unidentified",
+      code,
+      keyCode: 0,
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+    });
+
+    expect(findBinding(keypadProfile, fromKernelF2x("F21"))?.action).toBe("function1");
+    expect(findBinding(keypadProfile, fromKernelF2x("F23"))?.action).toBe("function3");
+  });
+
   it("leaves the Commodore key unbound rather than guessing at a code", () => {
     // Section 9.3: a guessed real code would shadow a key that already works. No binding in either
     // profile names openSearch, so nothing has been guessed at.

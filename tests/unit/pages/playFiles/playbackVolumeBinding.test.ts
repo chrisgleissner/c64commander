@@ -97,7 +97,7 @@ describe("which route the Play page's volume control reaches", () => {
     expect(labels[labels.length - 1]).toBe("+6 dB");
   });
 
-  it("shows on-device mute without moving the slider off the step the listener chose", () => {
+  it("reads OFF while the phone is muted, without moving the slider off the step the listener chose", () => {
     const binding = resolvePlaybackVolumeBinding({
       route: "local",
       local: buildLocal({ index: 9, muted: true }),
@@ -106,7 +106,8 @@ describe("which route the Play page's volume control reaches", () => {
 
     expect(binding.volumeMuted).toBe(true);
     expect(binding.volumeIndex).toBe(9);
-    expect(binding.volumeLabel).toBe(LOCAL_VOLUME_STEPS[9].label);
+    expect(binding.volumeLabel).toBe("OFF");
+    expect(binding.volumeValueFormatter?.(9)).toBe(LOCAL_VOLUME_STEPS[9].label);
   });
 
   it("leaves the C64 route exactly as it was", () => {

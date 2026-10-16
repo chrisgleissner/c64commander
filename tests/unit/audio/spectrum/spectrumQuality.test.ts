@@ -32,20 +32,20 @@ const feed = (
 
 describe("spectrum quality tiers", () => {
   it("describes the four tiers of the contract", () => {
-    expect(SPECTRUM_TIERS.map((t) => [t.drawFps, t.dataHz, t.bars, t.glow, t.gradient])).toEqual([
-      [60, 30, 48, true, true],
-      [30, 20, 48, false, true],
-      [20, 15, 24, false, true],
-      [12, 10, 12, false, false],
+    expect(SPECTRUM_TIERS.map((t) => [t.drawFps, t.bars, t.glow, t.gradient])).toEqual([
+      [60, 48, true, true],
+      [30, 48, false, true],
+      [20, 24, false, true],
+      [12, 12, false, false],
     ]);
   });
 
-  it("starts at tier 1 on the compact profile and on weak devices, otherwise at tier 0", () => {
-    expect(initialSpectrumTier({ profile: "compact" }).index).toBe(1);
-    expect(initialSpectrumTier({ profile: "medium", hardwareConcurrency: 4 }).index).toBe(1);
-    expect(initialSpectrumTier({ profile: "medium", deviceMemory: 2 }).index).toBe(1);
-    expect(initialSpectrumTier({ profile: "medium", hardwareConcurrency: 8, deviceMemory: 8 }).index).toBe(0);
-    expect(initialSpectrumTier({ profile: "expanded" }).index).toBe(0);
+  it("starts at tier 1 on weak devices only, whatever the display profile", () => {
+    expect(initialSpectrumTier({}).index).toBe(0);
+    expect(initialSpectrumTier({ hardwareConcurrency: 4 }).index).toBe(1);
+    expect(initialSpectrumTier({ deviceMemory: 2 }).index).toBe(1);
+    expect(initialSpectrumTier({ hardwareConcurrency: 8, deviceMemory: 8 }).index).toBe(0);
+    expect(initialSpectrumTier({ hardwareConcurrency: 16 }).index).toBe(0);
   });
 
   it("drops a tier after one second of frames over budget, and not before", () => {

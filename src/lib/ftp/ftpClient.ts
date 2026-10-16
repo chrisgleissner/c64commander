@@ -43,6 +43,10 @@ export type FtpRecursiveListResult = FtpListResult & {
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
 
+/** 450, 451 and 550 are the FTP replies for a folder the server could not open. */
+export const isRefusedFtpListing = (error: unknown) =>
+  /\b(450|451|550)\b/.test(error instanceof Error ? error.message : String(error));
+
 export type FtpReadProgress = { bytesRead: number; totalBytes: number };
 
 // Read options plus optional progress reporting and cancellation. onProgress is
@@ -113,13 +117,10 @@ const executeFtpList = async (
     return { path: normalizedPath, entries: response.entries };
   } catch (error) {
     const err = error as Error;
-    addErrorLog(
-      "FTP listing failed",
-      buildErrorLogDetails(err, {
-        host: ftpOptions.host,
-        path: normalizedPath,
-      }),
-    );
+    const expectedRefusal = Boolean(ftpOptions.refusalExpected) && isRefusedFtpListing(err);
+    const details = buildErrorLogDetails(err, { host: ftpOptions.host, path: normalizedPath });
+    if (expectedRefusal) addLog("debug", "FTP listing refused, as the readability check expected", details);
+    else addErrorLog("FTP listing failed", details);
     recordFtpOperation(action, {
       operation: "list",
       command: "LIST",
@@ -135,7 +136,7 @@ const executeFtpList = async (
       requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
       error: err,
     });
-    recordTraceError(action, err);
+    if (!expectedRefusal) recordTraceError(action, err);
     throw error;
   } finally {
     decrementFtpInFlight();

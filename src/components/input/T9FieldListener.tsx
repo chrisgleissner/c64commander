@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { resolveInputProfile } from "@/lib/input/profiles";
 import { setInputModality } from "@/lib/input/inputModality";
+import { keepPlatformInputMethodAway, noteHardwareKeypadKey } from "@/lib/input/hardwareKeypadInputMethod";
 import { composeT9Key, endT9Composition } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 
@@ -25,9 +26,14 @@ export const T9FieldListener = () => {
       setInputModality("key-navigation");
     };
     const onFocusOut = (event: FocusEvent) => endT9Composition(event.target);
+    const onFocusIn = (event: FocusEvent) => keepPlatformInputMethodAway(event.target);
+    window.addEventListener("keydown", noteHardwareKeypadKey, true);
+    document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("focusout", onFocusOut);
     return () => {
+      window.removeEventListener("keydown", noteHardwareKeypadKey, true);
+      document.removeEventListener("focusin", onFocusIn, true);
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("focusout", onFocusOut);
     };

@@ -184,8 +184,6 @@ internal class AudioPipeline(
   @Volatile private var refusedBytes: Long = 0
   @Volatile private var discardedBytes: Long = 0
   @Volatile private var concealedFrames: Long = 0
-  @Volatile private var trackUnderruns: Int = 0
-  @Volatile private var trackQueuedFrames: Long = 0
   @Volatile private var appliedRatio: Double = 1.0
 
   /**
@@ -260,8 +258,10 @@ internal class AudioPipeline(
     ring = ByteArray(ringFrames * BYTES_PER_FRAME)
     pitchPeriod = RingPitchPeriod(ring, ringFrames, sourceRate)
     fx.ensureCapacity(maxOf(writeFramesPerChunk, trackBufferFrames))
-    fxHub.analyzer.prepare(outputRate)
+    fxHub.analyzer.prepareFor(live = correctDrift, sourceRate = sourceRate, outputRate = outputRate, speakerLagFrames = trackBufferFrames)
   }
+
+  private val trackReadings = TrackReadings(track, SpectrumSpeakerAnchor(fxHub.analyzer))
 
   /** Output latency this pipeline targets once primed (ms) — ring target plus the track's buffer. */
   val bufferCapacityMs: Double
@@ -352,6 +352,7 @@ internal class AudioPipeline(
     val frames = length / BYTES_PER_FRAME
     if (frames <= 0) return
     synchronized(producerLock) {
+      if (!running) return
       val free = ringFrames - (writeFrames - readFrames).toInt()
       if (frames > free) {
         refusedBytes += length.toLong()
@@ -367,6 +368,7 @@ internal class AudioPipeline(
         System.arraycopy(data, offset + tail, ring, 0, bytes - tail)
       }
       writeFrames += frames.toLong()
+      if (correctDrift && fxHub.spectrumEnabled) fxHub.analyzer.feed(data, frames, sourceRate, offset)
       blendIntoConcealment(frames)
     }
   }
@@ -489,10 +491,10 @@ internal class AudioPipeline(
   fun stats(): Stats {
     val ringDepth = (writeFrames - readFrames).coerceAtLeast(0)
     val jitterMs = ringDepth * 1000.0 / sourceRate
-    val trackMs = trackQueuedFrames.coerceAtLeast(0) * 1000.0 / outputRate
+    val trackMs = trackReadings.queuedFrames * 1000.0 / outputRate
     return Stats(
         bufferedMs = jitterMs + trackMs,
-        underruns = trackUnderruns,
+        underruns = trackReadings.underruns,
         droppedBytes = refusedBytes + discardedBytes,
         concealedMs = concealedFrames * 1000.0 / outputRate,
         trackSampleRate = track.sampleRate,
@@ -515,7 +517,8 @@ internal class AudioPipeline(
    * the way out. The join bounds the wait.
    */
   fun close() {
-    running = false
+    // Under the lock, so no packet is still being analysed when the next pipeline prepares the analyser.
+    synchronized(producerLock) { running = false }
     val playerThread = player
     player = null
     try {
@@ -876,42 +879,14 @@ internal class AudioPipeline(
     lastWriteNanos = clock.nanoTime()
     if (written > 0) totalFramesWritten += (written / BYTES_PER_FRAME).toLong()
     outputCapture?.record(data, written)
-    if (fxHub.spectrumEnabled) fxHub.analyzer.feed(data, maxOf(written, 0) / BYTES_PER_FRAME, outputRate)
+    if (!correctDrift && fxHub.spectrumEnabled) fxHub.analyzer.feed(data, maxOf(written, 0) / BYTES_PER_FRAME, outputRate)
     if (written < length) {
       discardedBytes += (length - maxOf(written, 0)).toLong()
       if (written <= 0) clock.park(POLL_NANOS)
     }
-    refreshTrackStatsOccasionally()
+    trackReadings.refreshOccasionally(clock.nanoTime(), totalFramesWritten, anchorSpectrum = !correctDrift && fxHub.spectrumEnabled)
   }
 
-  /**
-   * Read the track's counters every so often, not on every write.
-   *
-   * `underrunCount` and `playbackHeadPosition` are binder round trips to AudioFlinger. Writing one
-   * HAL burst at a time means ~200 writes a second, and asking both questions on each of them put
-   * ~400 IPCs a second on the realtime thread — enough that the thread was sometimes still waiting on
-   * the audio server when the DAC wanted its next burst, which is an underrun caused purely by
-   * measuring. Diagnostics must not be able to cause the fault they are there to report.
-   */
-  private fun refreshTrackStatsOccasionally() {
-    val now = clock.nanoTime()
-    if (now - lastStatsReadNanos < STATS_READ_INTERVAL_NANOS) return
-    lastStatsReadNanos = now
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-      try {
-        trackUnderruns = track.underrunCount
-      } catch (error: Exception) {
-        Log.d(TAG, "underrunCount unavailable", error)
-      }
-    }
-    try {
-      trackQueuedFrames = (totalFramesWritten - track.playbackHeadPosition.toLong()).coerceAtLeast(0)
-    } catch (error: Exception) {
-      Log.d(TAG, "playbackHeadPosition unavailable", error)
-    }
-  }
-
-  private var lastStatsReadNanos = 0L
   private var lastWriteNanos = 0L
 
   internal companion object {
@@ -981,9 +956,6 @@ internal class AudioPipeline(
     private const val CONCEAL_HOLD_MS = 30
 
     private const val POLL_NANOS = 500_000L // 0.5 ms
-
-    /** How often the track's own counters are worth a binder round trip. */
-    private const val STATS_READ_INTERVAL_NANOS = 100_000_000L // 100 ms
 
     /** How long to wait for a late packet before concealing (shorter than the track's own buffer). */
     private const val STARVE_LIMIT_NANOS = 8_000_000L // 8 ms

@@ -127,7 +127,8 @@ describe("PlayFilesPage on-device controls", () => {
     );
     expect(pageSource).not.toMatch(/playbackEngine\.engine === "local" && currentItem\?\.category === "sid"/);
     expect(pageSource).toContain(
-      "route: resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local),",
+      "const soundingRoute = resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local);",
     );
+    expect(pageSource.match(/\n\s*route: soundingRoute,/g)).toHaveLength(2);
   });
 });

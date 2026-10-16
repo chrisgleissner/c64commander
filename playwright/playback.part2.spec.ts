@@ -1520,8 +1520,10 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "reshuffle-momentary");
   });
 
-  test("FTP failure shows error toast", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, "Expected error toast for FTP failure.");
+  test("FTP failure shows the browse error inside the browser", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected browse error for FTP failure.");
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port + 25,
@@ -1533,7 +1535,9 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "C64 Ultimate");
-    await expect(page.getByText("Browse failed", { exact: true }).first()).toBeVisible();
+    const browseError = page.getByRole("dialog").getByTestId("item-selection-browse-error");
+    await expect(browseError).toBeVisible();
+    await expect(browseError).toHaveAttribute("role", "alert");
     await snap(page, testInfo, "browse-failed");
   });
 
@@ -1742,6 +1746,34 @@ test.describe("Playback file browser (part 2)", () => {
     await page.reload();
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     await snap(page, testInfo, "playlist-restored");
+  });
+
+  test("a saved playlist reads as loading, never as empty, while it is restored after a reload", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/play");
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { playlistTextsSeen: string[] }).playlistTextsSeen = seen;
+      new MutationObserver(() => {
+        const text = document.querySelector('[data-testid="playlist-list"]')?.textContent;
+        if (text && seen[seen.length - 1] !== text) seen.push(text);
+      }).observe(document, { subtree: true, childList: true, characterData: true });
+    });
+    await page.reload();
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+
+    await page.waitForTimeout(1_000);
+    const seen = await page.evaluate(() => (window as unknown as { playlistTextsSeen: string[] }).playlistTextsSeen);
+    expect(seen.some((text) => text.includes("No tracks in playlist yet."))).toBe(false);
+    await snap(page, testInfo, "playlist-restored-without-empty-state");
   });
 
   test("playlist persists across navigation", async ({ page }: { page: Page }, testInfo: TestInfo) => {

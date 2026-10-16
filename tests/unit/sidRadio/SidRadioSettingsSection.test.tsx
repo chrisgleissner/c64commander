@@ -89,12 +89,22 @@ describe("SidRadioSettingsSection", () => {
     expect(status).toHaveTextContent("Installed HVSC");
   });
 
-  it("Clear my rankings wipes every ranking", async () => {
+  it("Clear my rankings wipes every ranking once confirmed", async () => {
     await setRanking("0123456789abcdef0123456789abcdef", "like");
     render(<SidRadioSettingsSection developerMode />);
     fireEvent.click(screen.getByTestId("settings-clear-rankings"));
+    fireEvent.click(await screen.findByTestId("clear-rankings-confirm"));
     await waitFor(() => expect(getRanking("0123456789abcdef0123456789abcdef")).toBeNull());
     expect(screen.getByTestId("settings-clear-rankings")).toHaveTextContent("Cleared");
+  });
+
+  it("Clear my rankings keeps every ranking until the confirmation is accepted", async () => {
+    await setRanking("0123456789abcdef0123456789abcdef", "like");
+    render(<SidRadioSettingsSection developerMode />);
+    fireEvent.click(screen.getByTestId("settings-clear-rankings"));
+    fireEvent.click(await screen.findByTestId("clear-rankings-cancel"));
+    await waitFor(() => expect(screen.queryByTestId("clear-rankings-dialog")).toBeNull());
+    expect(getRanking("0123456789abcdef0123456789abcdef")).toBe("like");
   });
 });
 

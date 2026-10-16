@@ -31,6 +31,7 @@ import {
   readStilFile,
   resetStilStore,
   readDataFileText,
+  deleteDataFileIfPresent,
 } from "@/lib/hvsc/hvscFilesystem";
 import { saveHvscState } from "@/lib/hvsc/hvscStateStore";
 import * as logging from "@/lib/logging";
@@ -275,7 +276,6 @@ describe("hvscFilesystem", () => {
       type: "baseline",
       sizeBytes: 1024,
       expectedSizeBytes: 2048,
-      checksumMd5: "abc123",
       sourceUrl: "https://example.com/hvsc-baseline-85.7z",
       completedAt: new Date("2024-01-01T00:00:00Z").toISOString(),
     });
@@ -285,7 +285,6 @@ describe("hvscFilesystem", () => {
     expect(marker?.type).toBe("baseline");
     expect(marker?.sizeBytes).toBe(1024);
     expect(marker?.expectedSizeBytes).toBe(2048);
-    expect(marker?.checksumMd5).toBe("abc123");
     expect(marker?.sourceUrl).toBe("https://example.com/hvsc-baseline-85.7z");
   });
 
@@ -587,5 +586,37 @@ describe("readDataFileText", () => {
     );
     expect(await readDataFileText("hvsc/stil/fallback.json")).toBe("from the bridge");
     expect(Filesystem.readFile).toHaveBeenCalled();
+  });
+});
+
+describe("deleteDataFileIfPresent", () => {
+  beforeEach(() => {
+    files.clear();
+    vi.mocked(Filesystem.deleteFile).mockClear();
+  });
+
+  it("deletes a file that is there", async () => {
+    setFile("hvsc/index/ingested-sid-headers.json", "{}");
+
+    expect(await deleteDataFileIfPresent("hvsc/index/ingested-sid-headers.json")).toBe(true);
+    expect(files.has("hvsc/index/ingested-sid-headers.json")).toBe(false);
+  });
+
+  it("does not try to delete a file `stat` says is not there", async () => {
+    vi.mocked(Filesystem.stat).mockRejectedValueOnce(
+      Object.assign(new Error("'stat' failed because file at '/data/.../absent.json' does not exist."), {
+        code: "OS-PLUG-FILE-0008",
+      }),
+    );
+
+    expect(await deleteDataFileIfPresent("hvsc/index/absent.json")).toBe(false);
+    expect(Filesystem.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it("reports a delete that fails", async () => {
+    setFile("hvsc/index/busy.json", "{}");
+    vi.mocked(Filesystem.deleteFile).mockRejectedValueOnce(new Error("disk busy"));
+
+    await expect(deleteDataFileIfPresent("hvsc/index/busy.json")).rejects.toThrow("disk busy");
   });
 });

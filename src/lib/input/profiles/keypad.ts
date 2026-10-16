@@ -48,6 +48,10 @@ const keypadBindings: KeyBinding[] = [
   // command, Back, or a soft key.
   { key: "F1", action: "function1" },
   { key: "F3", action: "function3" },
+  // A keypad whose kernel reports its F1 / F3 row as KEY_F21 / KEY_F23 has no Android key code
+  // above F12 to map them to, so the WebView delivers `{ key: "Unidentified", code: "F21" }`.
+  { code: "F21", action: "function1" },
+  { code: "F23", action: "function3" },
 ];
 
 export const keypadProfile = mergeKeymaps(defaultKeyboardProfile, {

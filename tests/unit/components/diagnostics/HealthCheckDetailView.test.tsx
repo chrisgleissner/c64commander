@@ -6,11 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
-import { resetHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
+import {
+  resetHealthCheckProbeStates,
+  resetHealthCheckStateSnapshot,
+  setHealthCheckStateSnapshot,
+} from "@/lib/diagnostics/healthCheckState";
 import type {
   HealthCheckProbeRecord,
   HealthCheckProbeType,
@@ -383,6 +387,92 @@ describe("HealthCheckDetailView", () => {
       expect(row).toHaveTextContent("User aborted the probe");
       expect(row).toHaveTextContent("—");
       expect(screen.queryByText("User aborted the probe", { selector: "p" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("skipped probes", () => {
+    const telnetReason = "Skipped: switch-device-dialog does not probe Telnet (reduces device session churn)";
+    const configReason = "Skipped: switch-device-dialog health check is read-only";
+
+    const skippedResult = () => {
+      const result = makeResult();
+      result.probes.TELNET = makeProbe("TELNET", "Skipped", null, telnetReason);
+      result.probes.CONFIG = makeProbe("CONFIG", "Skipped", null, configReason);
+      return result;
+    };
+
+    it("shows Skipped with an info button instead of the technical reason", () => {
+      render(<HealthCheckDetailView result={skippedResult()} />);
+
+      const telnetRow = screen.getByTestId("health-check-probe-telnet");
+      expect(telnetRow).toHaveTextContent("Skipped");
+      expect(screen.queryByText(telnetReason)).not.toBeInTheDocument();
+      expect(screen.queryByText(configReason)).not.toBeInTheDocument();
+      expect(within(telnetRow).getAllByRole("button")).toHaveLength(1);
+      expect(within(telnetRow).getByRole("button", { name: "Why was Telnet skipped?" })).toBeVisible();
+      expect(
+        within(screen.getByTestId("health-check-probe-config")).getByRole("button", {
+          name: "Why was Config skipped?",
+        }),
+      ).toBeVisible();
+    });
+
+    it("explains a skipped probe in plain language, once, when its info button is pressed", () => {
+      render(<HealthCheckDetailView result={skippedResult()} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Why was Config skipped?" }));
+
+      const explanation = screen.getByTestId("health-check-probe-info-config-explanation");
+      expect(explanation).toHaveTextContent(
+        "Not checked here, because this check changes a setting briefly and puts it back. To include it, open the status badge and choose Run health check.",
+      );
+      expect(screen.getAllByText(/changes a setting briefly/)).toHaveLength(1);
+    });
+
+    it("keeps an open explanation, and its info button, through the next run of the list", () => {
+      const view = render(<HealthCheckDetailView result={skippedResult()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Why was Telnet skipped?" }));
+      expect(screen.getByTestId("health-check-probe-info-telnet-explanation")).toBeVisible();
+
+      view.rerender(
+        <HealthCheckDetailView
+          result={skippedResult()}
+          liveProbes={{}}
+          isRunning
+          probeStates={resetHealthCheckProbeStates()}
+        />,
+      );
+
+      expect(screen.getByTestId("health-check-probe-info-telnet-explanation")).toHaveTextContent(
+        "doesn't open extra connections",
+      );
+      expect(screen.getByRole("button", { name: "Why was Telnet skipped?" })).toBeVisible();
+      expect(screen.getByTestId("health-check-probe-config")).toHaveTextContent("Pending");
+
+      fireEvent.keyDown(screen.getByTestId("health-check-probe-info-telnet-explanation"), { key: "Escape" });
+
+      expect(screen.queryByTestId("health-check-probe-info-telnet-explanation")).toBeNull();
+      expect(screen.getByTestId("health-check-probe-telnet")).toHaveTextContent("Pending");
+    });
+
+    it("shows a skipped probe without a reason as plain Skipped", () => {
+      const result = makeResult();
+      result.probes.RASTER = makeProbe("RASTER", "Skipped", null, null);
+      render(<HealthCheckDetailView result={result} />);
+
+      const row = screen.getByTestId("health-check-probe-raster");
+      expect(row).toHaveTextContent("Skipped");
+      expect(within(row).queryByRole("button")).toBeNull();
+    });
+
+    it("renders a long failure reason once rather than once per layout", () => {
+      const result = makeResult();
+      const longReason = "REST probe exceeded the compact inline reason limit during diagnostics capture";
+      result.probes.REST = makeProbe("REST", "Fail", 42, longReason);
+      render(<HealthCheckDetailView result={result} />);
+
+      expect(screen.getAllByText(longReason)).toHaveLength(1);
+      expect(screen.getAllByText("Fail")).toHaveLength(1);
     });
   });
 

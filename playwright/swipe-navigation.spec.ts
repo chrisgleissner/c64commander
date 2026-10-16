@@ -198,7 +198,8 @@ test.describe("Swipe navigation", () => {
 
     await swipe(swipeContainer, centerX, y, centerX - swipeLen, y);
 
-    await waitForRouteIndex(page, 0);
+    await waitForCommittedRouteIndex(page, 0);
+    await expect(page.locator('body > [data-testid="scroll-position-indicator"][data-visible="true"]')).toHaveCount(1);
     await attachStepScreenshot(page, testInfo, "home-after-wrap");
     await expect(page).toHaveURL(/\/$/);
 

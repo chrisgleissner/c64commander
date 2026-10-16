@@ -122,11 +122,11 @@ With nothing connected, Home does not become a wall of "Not available": search s
   </tr>
   <tr>
     <td><img src="docs/img/app/home/sections/04-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/09-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/12-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/10-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/13-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/14-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/15-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>
@@ -205,9 +205,9 @@ Build playlists from local files, C64 Ultimate storage, HVSC, or CommoServe. Use
 
 #### Spectrum
 
-On Android, the Spectrum card on Play draws the sound your phone is playing as it plays, from bass on the left to treble on the right. Each bar is colored by its level, a small cap marks each pitch's recent peak, and Level, Peak and Clip readouts show the overall loudness. It covers tunes played on the phone and your C64's sound when Live View plays it there. Under Settings > Audio processing you can also normalize volume, adjust bass, mid and treble, widen the stereo image and add reverb.
+On Android, the Spectrum card on Play draws the sound your phone is playing as it plays, from bass on the left to treble on the right. Each bar is colored by its level, a small cap marks each pitch's recent peak, and a level meter for each of the left and right channels shows how loud the sound is, with a color change toward red near full scale. It covers tunes played on the phone and your C64's sound when Live View plays it there. Under Settings > Audio processing you can also normalize volume, adjust bass, mid and treble, widen the stereo image and add reverb.
 
-<img src="docs/img/app/play/spectrum/profiles/medium/01-spectrum.png" alt="Spectrum card on Play: colored bars from bass to treble with peak caps and Level, Peak and Clip readouts" width="360"/>
+<img src="docs/img/app/play/spectrum/profiles/medium/01-spectrum.png" alt="Spectrum card on Play: left and right level meters above colored bars from bass to treble with peak caps" width="360"/>
 
 ### SID Radio
 
@@ -299,13 +299,13 @@ Configure connections, appearance, diagnostics, playback, HVSC, and device safet
 
 ### Docs
 
-Built-in guides for setup, workflows, and day-to-day usage.
+A built-in guide with step-by-step chapters for the main tasks, from the first connection to SID Radio, Game Mode and sharing a diagnostics report, with a contents list that jumps to each chapter.
 
 <table>
   <tr>
     <td><img src="docs/img/app/docs/01-overview.png" alt="Docs overview" width="360"/></td>
-    <td><img src="docs/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="360"/></td>
-    <td><img src="docs/img/app/docs/sections/05-swapping-disks.png" alt="Docs swapping disks" width="360"/></td>
+    <td><img src="docs/img/app/docs/sections/02-get-started.png" alt="Docs get started" width="360"/></td>
+    <td><img src="docs/img/app/docs/sections/08-mount-and-run-a-disk.png" alt="Docs mount and run a disk" width="360"/></td>
   </tr>
 </table>
 

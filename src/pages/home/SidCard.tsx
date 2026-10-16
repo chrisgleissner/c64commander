@@ -125,6 +125,7 @@ export function SidCard({
   testIdSuffix,
 }: SidCardProps) {
   const { profile } = useDisplayProfile();
+  const labelId = React.useId();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
   const volumeDomain = React.useMemo(
     () => createNumericSliderDomain({ min: 0, max: volumeMax, round: volumeRound }),
@@ -169,6 +170,7 @@ export function SidCard({
             disabled={!isConnected || powerPending}
             className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
+            aria-label={`${name} power: ${power ? "on" : "off"}`}
           >
             {power ? "ON" : "OFF"}
           </Button>
@@ -179,6 +181,7 @@ export function SidCard({
             disabled={true}
             className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
+            aria-label={`${name} power: ${power ? "on" : "off"}`}
           >
             {power ? "ON" : "OFF"}
           </Button>
@@ -196,7 +199,9 @@ export function SidCard({
           {/* shrink-0: the label cannot wrap, so a flex row that shrinks it clips the text.
               CI measured "Address" needing 68px in a 66px box on all four sockets. Let the
               Select absorb the shrink instead; it truncates cleanly, a bare label does not. */}
-          <span className="shrink-0 text-muted-foreground whitespace-nowrap">{identityLabel}</span>
+          <span id={`${labelId}-identity`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+            {identityLabel}
+          </span>
           {isIdentityReadOnly ? (
             <span className="font-medium text-muted-foreground" data-testid={`home-sid-type-${testIdSuffix}`}>
               {identityValue}
@@ -206,6 +211,7 @@ export function SidCard({
               <SelectTrigger
                 className={cn(inlineSelectTriggerClass, "min-w-0")}
                 data-testid={`home-sid-type-${testIdSuffix}`}
+                aria-labelledby={`${labelId}-identity`}
               >
                 <SelectValue placeholder={identityValue} />
               </SelectTrigger>
@@ -220,11 +226,14 @@ export function SidCard({
           )}
         </div>
         <div className="inline-summary-label-value-pair ml-auto flex shrink-0 items-center gap-2 justify-end">
-          <span className="shrink-0 text-muted-foreground whitespace-nowrap">Address</span>
+          <span id={`${labelId}-address`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+            Address
+          </span>
           <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
             <SelectTrigger
               className={cn(inlineSelectTriggerClass, "shrink-0")}
               data-testid={`home-sid-address-${testIdSuffix}`}
+              aria-labelledby={`${labelId}-address`}
             >
               <SelectValue placeholder={addressValue} />
             </SelectTrigger>
@@ -250,12 +259,15 @@ export function SidCard({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         {shapingControls.map((control, index) => (
           <div key={index} className="inline-summary-label-value-pair flex items-center gap-2">
-            <span className="shrink-0 text-muted-foreground whitespace-nowrap">{control.label}</span>
+            <span id={`${labelId}-shaping-${index}`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+              {control.label}
+            </span>
             {control.options && control.onChange ? (
               <Select value={control.value} onValueChange={control.onChange} disabled={!isConnected || control.pending}>
                 <SelectTrigger
                   className={inlineSelectTriggerClass}
                   data-testid={`home-sid-shaping-${testIdSuffix}-${index}`}
+                  aria-labelledby={`${labelId}-shaping-${index}`}
                 >
                   <SelectValue placeholder={control.value} />
                 </SelectTrigger>

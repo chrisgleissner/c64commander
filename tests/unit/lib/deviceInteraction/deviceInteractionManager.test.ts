@@ -816,10 +816,10 @@ describe("deviceInteractionManager", () => {
     const u64Result = withFtpInteraction({ ...baseMeta, host: "u64" }, handlerU64);
     const c64uResult = withFtpInteraction({ ...baseMeta, host: "c64u" }, handlerC64u);
 
+    // Each device has its own FTP lane, so both handlers run at once instead of one sharing the other's promise.
     await expect.poll(() => handlerU64.mock.calls.length).toBe(1);
-    expect(handlerC64u).not.toHaveBeenCalled();
-    releaseU64?.();
     await expect.poll(() => handlerC64u.mock.calls.length).toBe(1);
+    releaseU64?.();
     releaseC64u?.();
 
     await expect(u64Result).resolves.toBe("u64");
@@ -1855,7 +1855,7 @@ describe("deviceInteractionManager", () => {
         operation: "list",
         path: "/queued",
         intent: "system" as const,
-        host: "c64u",
+        host: "u64",
       },
       ftpQueuedHandler,
     );

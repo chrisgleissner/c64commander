@@ -78,6 +78,7 @@ const baseParams = (client: ReturnType<typeof makeClient>, overrides: Record<str
   clientFactory: () => client as never,
   resolvePath: (md5: string) => `/HVSC/${md5}.sid`,
   randomSeed: () => 12345,
+  queueReady: true,
   ...overrides,
 });
 
@@ -870,6 +871,67 @@ describe("useSidRadio drifts the query and persists its aim", () => {
     const saved = loadSidRadioSession();
     expect(saved?.recentOrdinals?.length).toBeGreaterThan(0);
     expect(saved?.excludeOrdinals).toEqual(expect.arrayContaining(saved!.recentOrdinals!));
+  });
+
+  // R5-5: re-selecting the Play tab remounts the page, which resumes the station while the playlist is still being
+  // read back. An empty queue at index -1 looked like a station at its tail, and 10 tunes were appended every time.
+  it("does not top up a resumed station while the playlist it continues is still being restored", async () => {
+    saveSidRadioSession({
+      seedKind: "style",
+      seedLabel: "Chill / Ambient",
+      seed: { kind: "style", styleBit: 0 },
+      styleFilter: 0,
+      shuffleSeed: 777,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [1, 2, 3],
+    });
+    const client = makeClient();
+    const appendItems = vi.fn();
+    const { result, rerender } = renderHook(
+      (props: { queueReady: boolean; length: number; index: number }) =>
+        useSidRadio(
+          baseParams(client, {
+            appendItems,
+            queueReady: props.queueReady,
+            playlistLength: props.length,
+            currentIndex: props.index,
+          }),
+        ),
+      { initialProps: { queueReady: false, length: 0, index: -1 } },
+    );
+    expect(result.current.active).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(client.compute).not.toHaveBeenCalled();
+
+    rerender({ queueReady: true, length: 28, index: 18 });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(client.compute).not.toHaveBeenCalled();
+    expect(appendItems).not.toHaveBeenCalled();
+  });
+
+  it("tops up a resumed station once its restored playlist is near the end", async () => {
+    saveSidRadioSession({
+      seedKind: "style",
+      seedLabel: "Chill / Ambient",
+      seed: { kind: "style", styleBit: 0 },
+      styleFilter: 0,
+      shuffleSeed: 777,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [1, 2, 3],
+    });
+    const client = makeClient();
+    const appendItems = vi.fn();
+    renderHook(() =>
+      useSidRadio(baseParams(client, { appendItems, queueReady: true, playlistLength: 28, currentIndex: 26 })),
+    );
+
+    await waitFor(() => expect(appendItems).toHaveBeenCalledTimes(1));
+    expect(appendItems.mock.calls[0][0]).toHaveLength(9);
   });
 
   it("hands a resumed provider its saved aim, not the tail of the exclude set", async () => {

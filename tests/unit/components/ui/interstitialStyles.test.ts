@@ -137,6 +137,16 @@ describe("interstitialStyles", () => {
     }
   });
 
+  it("ends a tall centred dialog above a toast shown over it, so the toast covers none of its buttons", () => {
+    document.documentElement.style.setProperty("--app-toast-reserved-height", "72px");
+    try {
+      const layout = resolveCenteredOverlayLayout(900, 427);
+      expect(layout.top + layout.maxHeight).toBeLessThanOrEqual(427 - 72);
+    } finally {
+      document.documentElement.style.removeProperty("--app-toast-reserved-height");
+    }
+  });
+
   it("assigns deterministic stacked dimming and z-index values by overlay depth", () => {
     expect(resolveInterstitialBackdropOpacity(1)).toBe(0.4);
     expect(resolveInterstitialBackdropOpacity(2)).toBe(0.25);

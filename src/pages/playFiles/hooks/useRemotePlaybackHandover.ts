@@ -151,9 +151,8 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
         positionSeconds: Math.round((Date.now() - startedAt) / 100) / 10,
       });
       const controller = current.getLocalSidPlayback();
-      const muted = controller.muted();
       // Silent until the seek lands, or the opening of the tune would be heard first.
-      controller.setMuted(true);
+      const releaseSilence = controller.holdSilence();
       try {
         await current.playItem(item, { playlistIndex: index, origin: "auto" });
         if (!current.currentPlaybackIsLocalRef.current) return;
@@ -164,7 +163,7 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
-        controller.setMuted(muted);
+        releaseSilence();
       }
     };
 

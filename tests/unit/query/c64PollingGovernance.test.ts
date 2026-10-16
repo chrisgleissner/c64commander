@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  getOfflineDiscoverySweepGapMs,
   getBackgroundRediscoveryDelayMs,
   getInfoRefreshMinIntervalMs,
   getNextBackgroundFailureCount,
@@ -82,5 +83,19 @@ describe("c64PollingGovernance", () => {
     expect(getBackgroundRediscoveryDelayMs(5000, 2)).toBe(20000);
     expect(getBackgroundRediscoveryDelayMs(5000, 4)).toBe(60000);
     expect(getBackgroundRediscoveryDelayMs(5000, 6)).toBe(60000);
+  });
+});
+
+describe("getOfflineDiscoverySweepGapMs", () => {
+  it("doubles the gap between offline sweeps from five minutes up to thirty", () => {
+    expect([1, 2, 3, 4, 5, 9].map(getOfflineDiscoverySweepGapMs)).toEqual([
+      5 * 60_000,
+      10 * 60_000,
+      20 * 60_000,
+      30 * 60_000,
+      30 * 60_000,
+      30 * 60_000,
+    ]);
+    expect(getOfflineDiscoverySweepGapMs(0)).toBe(5 * 60_000);
   });
 });

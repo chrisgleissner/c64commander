@@ -920,7 +920,7 @@ test.describe("Disk management", () => {
   });
 
   test("FTP login failure surfaces error @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, "Expected error toast for FTP login failure.");
+    allowWarnings(testInfo, "Expected browse error for FTP login failure.");
     const protectedServers = await startFtpTestServers({ password: "secret" });
     await seedFtpConfig(page, {
       host: protectedServers.ftpServer.host,
@@ -937,14 +937,16 @@ test.describe("Disk management", () => {
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
-    await expect(page.getByText("Browse failed", { exact: true })).toBeVisible();
+    // The failure is shown inside the browser: as a toast it was drawn under the dialog.
+    await expect(dialog.getByTestId("item-selection-browse-error")).toBeVisible();
+    await expect(dialog.getByTestId("item-selection-browse-error")).not.toBeEmpty();
     await snap(page, testInfo, "browse-failed");
 
     await protectedServers.close();
   });
 
   test("FTP server unavailable surfaces error @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, "Expected error toast for FTP server unavailable.");
+    allowWarnings(testInfo, "Expected browse error for FTP server unavailable.");
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port + 50,
@@ -960,7 +962,9 @@ test.describe("Disk management", () => {
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
-    await expect(page.getByText("Browse failed", { exact: true })).toBeVisible();
+    // The failure is shown inside the browser: as a toast it was drawn under the dialog.
+    await expect(dialog.getByTestId("item-selection-browse-error")).toBeVisible();
+    await expect(dialog.getByTestId("item-selection-browse-error")).not.toBeEmpty();
     await snap(page, testInfo, "browse-failed");
   });
 });

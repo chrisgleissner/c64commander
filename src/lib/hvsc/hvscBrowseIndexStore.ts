@@ -9,6 +9,15 @@
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
+import { createTimeSlicer, type TimeSlicer } from "@/lib/async/timeSlice";
+import {
+  buildFoldersFromSongs,
+  buildFoldersFromSongsSliced,
+  normalizeFolderPath,
+  normalizePath,
+} from "@/lib/hvsc/hvscBrowseFolders";
+
+export { buildFoldersFromSongs, normalizePath };
 import { withoutUnknownPlaceholder } from "@/lib/sid/unknownPlaceholder";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
@@ -125,13 +134,6 @@ export const getHvscDisplayTitle = (
 
 export const getHvscDisplayAuthor = (song: Pick<HvscBrowseIndexedSong, "displayAuthorSeed" | "canonicalAuthor">) =>
   normalizeDisplayValue(song.canonicalAuthor) ?? normalizeDisplayValue(song.displayAuthorSeed) ?? null;
-
-export const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
-const normalizeFolderPath = (path: string) => {
-  const normalized = normalizePath(path || "/");
-  if (normalized.length > 1 && normalized.endsWith("/")) return normalized.slice(0, -1);
-  return normalized;
-};
 
 const normalizeDisplayValue = (value: string | null | undefined) =>
   (value && withoutUnknownPlaceholder(value.replace(/_/g, " ").replace(/\s+/g, " ").trim())) || null;
@@ -280,54 +282,6 @@ const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => {
   };
 };
 
-export const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
-  const folderMap = new Map<string, { folders: Set<string>; songs: Set<string> }>();
-  const ensureFolder = (path: string) => {
-    const normalized = normalizeFolderPath(path);
-    const current = folderMap.get(normalized);
-    if (current) return current;
-    const next = { folders: new Set<string>(), songs: new Set<string>() };
-    folderMap.set(normalized, next);
-    return next;
-  };
-
-  const root = ensureFolder("/");
-  // Most tunes share a composer folder. Resolve each hierarchy once, rather than
-  // splitting and rebuilding the same parent chain for every one of 60,000 songs.
-  // This map belongs to this build only; no additional library stays resident.
-  const parents = new Map<string, ReturnType<typeof ensureFolder>>([["", root]]);
-  for (const song of Object.values(songs)) {
-    const normalizedSongPath = normalizePath(song.virtualPath);
-    const hierarchyPath = normalizedSongPath.endsWith("/")
-      ? normalizedSongPath.replace(/\/+$/, "")
-      : normalizedSongPath;
-    const parentPath = hierarchyPath.slice(0, hierarchyPath.lastIndexOf("/"));
-    let parent = parents.get(parentPath);
-    if (!parent) {
-      let currentPath = "/";
-      for (const folderName of parentPath.split("/").filter(Boolean)) {
-        const nextPath = normalizeFolderPath(`${currentPath === "/" ? "" : currentPath}/${folderName}`);
-        ensureFolder(currentPath).folders.add(nextPath);
-        currentPath = nextPath;
-      }
-      parent = ensureFolder(currentPath);
-      parents.set(parentPath, parent);
-    }
-    parent.songs.add(normalizedSongPath);
-  }
-
-  const folders: Record<string, HvscBrowseFolderRow> = {};
-  folderMap.forEach((value, path) => {
-    folders[path] = {
-      path,
-      folders: Array.from(value.folders).sort((a, b) => a.localeCompare(b)),
-      songs: Array.from(value.songs).sort((a, b) => a.localeCompare(b)),
-    };
-  });
-
-  return folders;
-};
-
 export const createEmptyHvscBrowseIndexSnapshot = (): HvscBrowseIndexSnapshot => ({
   schemaVersion: SCHEMA_VERSION,
   updatedAt: new Date().toISOString(),
@@ -402,48 +356,90 @@ const parseSnapshot = (raw: string | null) => {
   }
 };
 
+const readPersistedSidEntries = (raw: string): PersistedMediaIndexEntry[] | null => {
+  const parsed = JSON.parse(raw) as PersistedMediaIndexSnapshot;
+  if (!Array.isArray(parsed.entries)) return null;
+  return parsed.entries.filter((entry) => entry.type === "sid");
+};
+
+const toMediaEntry = (entry: PersistedMediaIndexEntry): MediaEntry => ({
+  path: entry.path,
+  name: entry.name,
+  type: "sid" as const,
+  durationSeconds: entry.durationSeconds ?? null,
+});
+
+/**
+ * Put the hydrated metadata back. Only for entries that carry it, which is nothing at all on a file written before this
+ * existed and grows as hydration progresses, so the common case costs one property read per song and no work.
+ */
+const restoreHydratedMetadata = (snapshot: HvscBrowseIndexSnapshot, entry: PersistedMediaIndexEntry) => {
+  if (!entry.hydrated && !entry.title && !entry.author && !entry.released && !entry.durations) return;
+  const song = snapshot.songs[normalizePath(entry.path)];
+  if (entry.durations && entry.durations.length > 1) {
+    // Restores the tune count with it, which is what the card, the subsong selector and "play
+    // all tunes" all read.
+    song.durationsSeconds = [...entry.durations];
+    song.subsongCount = entry.durations.length;
+    song.trackSubsongs = entry.durations.map((_, index) => ({ songNr: index + 1, isDefault: index === 0 }));
+  }
+  song.canonicalTitle = normalizeDisplayValue(entry.title);
+  song.canonicalAuthor = normalizeDisplayValue(entry.author);
+  song.released = normalizeDisplayValue(entry.released);
+  if (entry.hydrated) song.metadataStatus = "hydrated";
+  song.searchTextSeed = buildSeedSearchText(song);
+  song.searchTextFull = buildFullSearchText(song);
+};
+
+const warnMediaIndexParseFailed = (error: unknown) =>
+  addLog(
+    "warn",
+    "Failed to parse persisted HVSC media index snapshot; will rebuild",
+    describeError(error, { storagePath: MEDIA_INDEX_STORAGE_PATH }),
+  );
+
 const parseMediaIndexSnapshot = (raw: string | null) => {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as PersistedMediaIndexSnapshot;
-    if (!Array.isArray(parsed.entries)) return null;
-    const sidEntries = parsed.entries.filter((entry) => entry.type === "sid");
-    const snapshot = buildHvscBrowseIndexFromEntries(
-      sidEntries.map((entry) => ({
-        path: entry.path,
-        name: entry.name,
-        type: "sid" as const,
-        durationSeconds: entry.durationSeconds ?? null,
-      })),
-    );
-    // Put the hydrated metadata back. Only for entries that carry it, which is nothing at all on a
-    // file written before this existed and grows as hydration progresses — so the common case costs
-    // one property read per song and no work.
+    const sidEntries = readPersistedSidEntries(raw);
+    if (!sidEntries) return null;
+    const snapshot = buildHvscBrowseIndexFromEntries(sidEntries.map(toMediaEntry));
+    for (const entry of sidEntries) restoreHydratedMetadata(snapshot, entry);
+    return snapshot;
+  } catch (error) {
+    warnMediaIndexParseFailed(error);
+    return null;
+  }
+};
+
+/**
+ * {@link parseMediaIndexSnapshot} for the 60,000-song file read at startup: the same result, built in slices so that
+ * a key press or a paint is handled between them. Only the JSON text itself is parsed in one piece.
+ */
+const parseMediaIndexSnapshotSliced = async (raw: string | null, slice: TimeSlicer) => {
+  if (!raw) return null;
+  try {
+    const sidEntries = readPersistedSidEntries(raw);
+    if (!sidEntries) return null;
+    const songs: Record<string, HvscBrowseIndexedSong> = {};
     for (const entry of sidEntries) {
-      if (!entry.hydrated && !entry.title && !entry.author && !entry.released && !entry.durations) continue;
-      const song = snapshot.songs[normalizePath(entry.path)];
-      if (!song) continue;
-      if (entry.durations && entry.durations.length > 1) {
-        // Restores the tune count with it, which is what the card, the subsong selector and "play
-        // all tunes" all read.
-        song.durationsSeconds = [...entry.durations];
-        song.subsongCount = entry.durations.length;
-        song.trackSubsongs = entry.durations.map((_, index) => ({ songNr: index + 1, isDefault: index === 0 }));
-      }
-      song.canonicalTitle = normalizeDisplayValue(entry.title);
-      song.canonicalAuthor = normalizeDisplayValue(entry.author);
-      song.released = normalizeDisplayValue(entry.released);
-      if (entry.hydrated) song.metadataStatus = "hydrated";
-      song.searchTextSeed = buildSeedSearchText(song);
-      song.searchTextFull = buildFullSearchText(song);
+      if (slice.due()) await slice.yield();
+      const song = toIndexedSong(toMediaEntry(entry));
+      songs[song.virtualPath] = song;
+    }
+    const snapshot: HvscBrowseIndexSnapshot = {
+      schemaVersion: SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      songs,
+      folders: await buildFoldersFromSongsSliced(songs, slice),
+    };
+    for (const entry of sidEntries) {
+      if (slice.due()) await slice.yield();
+      restoreHydratedMetadata(snapshot, entry);
     }
     return snapshot;
   } catch (error) {
-    addLog(
-      "warn",
-      "Failed to parse persisted HVSC media index snapshot; will rebuild",
-      describeError(error, { storagePath: MEDIA_INDEX_STORAGE_PATH }),
-    );
+    warnMediaIndexParseFailed(error);
     return null;
   }
 };
@@ -483,6 +479,7 @@ const shouldPersistFullSnapshot = (snapshot: HvscBrowseIndexSnapshot) =>
  */
 export const __buildPersistedMediaIndexSnapshotForTest = buildPersistedMediaIndexSnapshot;
 export const __parseMediaIndexSnapshotForTest = parseMediaIndexSnapshot;
+export const __parseMediaIndexSnapshotSlicedForTest = parseMediaIndexSnapshotSliced;
 
 /**
  * Whether the last save already reported the downgrade, per persistence route.
@@ -528,7 +525,7 @@ const readFilesystemMediaIndexSnapshot = async () => {
       bytes: text?.length ?? 0,
       readMs: Math.round(parseAt - readAt),
     });
-    const snapshot = parseMediaIndexSnapshot(text);
+    const snapshot = await parseMediaIndexSnapshotSliced(text, createTimeSlicer());
     // The two halves are paid on completely different budgets — one is I/O, the other is main-thread
     // CPU over sixty thousand songs — so a single figure cannot say which one to go and reduce.
     addLog("info", "HVSC media index snapshot read", {
@@ -667,6 +664,7 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
  * song objects are shared, and nothing outside parsing changes one in place.
  */
 let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
+let snapshotEpoch = 0;
 
 const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
   ...snapshot,
@@ -675,6 +673,7 @@ const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapsho
 });
 
 const rememberSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
+  snapshotEpoch += 1;
   lastStoredSnapshot = snapshot ? copySnapshot(snapshot) : null;
 };
 
@@ -686,8 +685,9 @@ export const loadHvscBrowseIndexSnapshot = async () => {
   return runWithHvscPerfScope(
     "browse:load-snapshot",
     async () => {
+      const epochAtStart = snapshotEpoch;
       const loaded = await readStoredBrowseIndexSnapshot();
-      rememberSnapshot(loaded);
+      if (epochAtStart === snapshotEpoch) rememberSnapshot(loaded);
       return loaded;
     },
     {
@@ -809,6 +809,16 @@ export const buildHvscBrowseIndexFromSonglengthSnapshot = (
   };
 };
 
+const songRevisions = new WeakMap<HvscBrowseIndexSnapshot, number>();
+
+/** Call after changing `snapshot.songs` in place, so a search does not narrow from matches it held before. */
+export const noteHvscBrowseSongsChanged = (snapshot: HvscBrowseIndexSnapshot) => {
+  songRevisions.set(snapshot, (songRevisions.get(snapshot) ?? 0) + 1);
+};
+
+/** Changes each time {@link noteHvscBrowseSongsChanged} is called for `snapshot`. */
+export const hvscBrowseSongsRevision = (snapshot: HvscBrowseIndexSnapshot) => songRevisions.get(snapshot) ?? 0;
+
 export const updateHvscBrowseSong = (
   snapshot: HvscBrowseIndexSnapshot,
   virtualPath: string,
@@ -846,6 +856,7 @@ export const updateHvscBrowseSong = (
   next.searchTextSeed = buildSeedSearchText(next);
   next.searchTextFull = buildFullSearchText(next);
   snapshot.songs[normalizedPath] = next;
+  noteHvscBrowseSongsChanged(snapshot);
   return next;
 };
 
@@ -872,9 +883,11 @@ export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") 
         sidMetadata: song.sidMetadata ?? null,
         trackSubsongs: song.trackSubsongs ?? null,
       };
+      noteHvscBrowseSongsChanged(snapshot);
     },
     deleteSong: (virtualPath: string) => {
       delete snapshot.songs[normalizePath(virtualPath)];
+      noteHvscBrowseSongsChanged(snapshot);
     },
     finalize: async () => {
       snapshot.updatedAt = new Date().toISOString();
@@ -899,7 +912,7 @@ export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") 
  */
 const FOLDED_SEARCH_TEXT = "__foldedSearchText";
 
-const songSearchText = (song: HvscBrowseIndexedSong): string => {
+export const songSearchText = (song: HvscBrowseIndexedSong): string => {
   const cached = (song as unknown as Record<string, unknown>)[FOLDED_SEARCH_TEXT];
   if (typeof cached === "string") return cached;
   const base = song.searchTextFull ?? song.searchTextSeed ?? "";
@@ -924,7 +937,7 @@ const songSearchText = (song: HvscBrowseIndexedSong): string => {
 export const searchQueryTokens = (query: string): string[] =>
   foldForSearch(query.trim().toLowerCase()).split(/\s+/).filter(Boolean);
 
-const matchesTokens = (text: string, tokens: string[]): boolean => {
+export const matchesTokens = (text: string, tokens: string[]): boolean => {
   for (const token of tokens) if (!text.includes(token)) return false;
   return true;
 };
@@ -979,138 +992,6 @@ export const listFolderFromBrowseIndex = (
     })),
     totalFolders: folders.length,
     totalSongs: matchedSongs.length,
-    offset,
-    limit,
-    query: normalizedQuery,
-  };
-};
-
-/**
- * Search every song in the archive, not only the folder on screen.
- *
- * `listFolderFromBrowseIndex` filters one folder row, which is the right behaviour for narrowing a
- * long folder and the wrong behaviour for finding a tune. HVSC is roughly sixty thousand files
- * arranged by composer, so "find Commando" only works if you already know it is filed under
- * MUSICIANS/H/Hubbard_Rob — which is exactly the thing a search is for.
- *
- * The scan is a linear pass over the song table. That sounds expensive and is not: each song's
- * searchable text — its path, file name, title, author, release and raw SID header — is built once
- * and cached by {@link songSearchText}, so the hot loop is one `includes` per token per song and
- * nothing is allocated for the misses. Ranking runs only over what survived, which is a few hundred
- * rows rather than sixty thousand.
- *
- * Tokens are combined with AND, so "hubbard commando" narrows rather than widens. Each token may
- * match anywhere — including inside a word, so "mando" finds Commando — which is what makes an
- * author-plus-title query work without the caller having to say which word was which. Case and
- * accents are folded on both sides.
- */
-export type HvscSongSearchPage = {
-  songs: HvscBrowseIndexedSong[];
-  /** How many songs matched in total, before `offset`/`limit`. */
-  totalSongs: number;
-  offset: number;
-  limit: number;
-  query: string;
-};
-
-/**
- * Where a token matched, lowest first.
- *
- * A search for "commando" should put the tune called Commando above every tune whose *path* happens
- * to contain the word, and a search for "hubbard" should put that composer's tunes above a tune
- * called "Hubbard Tribute" by somebody else. Ordering by where the match landed is what does that;
- * ordering by name alone buries the obvious answer under alphabetically earlier accidents.
- */
-const TITLE_PREFIX = 0;
-const AUTHOR_PREFIX = 1;
-const TITLE_MATCH = 2;
-const AUTHOR_MATCH = 3;
-/**
- * The floor, not a rejection: a song only reaches scoring once every token was found somewhere in
- * its search text, so a token that is in neither the title nor the author matched the path.
- */
-const PATH_MATCH = 4;
-
-const scoreToken = (token: string, title: string, author: string): number => {
-  if (title.startsWith(token)) return TITLE_PREFIX;
-  if (author.startsWith(token)) return AUTHOR_PREFIX;
-  if (title.includes(token)) return TITLE_MATCH;
-  if (author.includes(token)) return AUTHOR_MATCH;
-  return PATH_MATCH;
-};
-
-type RankedMatch = { song: HvscBrowseIndexedSong; score: number; title: string };
-
-/**
- * Order two results: where the match landed, then title, then path.
- *
- * Plain comparison rather than `localeCompare`, which on a sixty-thousand-row sort was the single
- * most expensive thing this function did. Both operands are already lowercased and accent-folded to
- * ASCII by the time they get here, so a collator has nothing left to decide — and the path is a
- * tie-break of last resort whose only job is to be stable.
- */
-const compareRanked = (a: RankedMatch, b: RankedMatch): number => {
-  if (a.score !== b.score) return a.score - b.score;
-  if (a.title !== b.title) return a.title < b.title ? -1 : 1;
-  if (a.song.virtualPath === b.song.virtualPath) return 0;
-  return a.song.virtualPath < b.song.virtualPath ? -1 : 1;
-};
-
-export const searchSongsFromBrowseIndex = (
-  snapshot: HvscBrowseIndexSnapshot,
-  query: string,
-  options: { path?: string; offset?: number; limit?: number } = {},
-): HvscSongSearchPage => {
-  const normalizedQuery = query.trim().toLowerCase();
-  const offset = Math.max(0, Math.floor(options.offset ?? 0));
-  const limit = Math.max(1, Math.floor(options.limit ?? 200));
-  const empty: HvscSongSearchPage = { songs: [], totalSongs: 0, offset, limit, query: normalizedQuery };
-  if (!normalizedQuery) return empty;
-
-  const tokens = searchQueryTokens(query);
-  if (tokens.length === 0) return empty;
-
-  // A subtree restriction, so the same scan can answer "everywhere" and "everywhere under here".
-  const scope = options.path ? normalizeFolderPath(options.path) : "/";
-  const scopePrefix = scope === "/" ? "/" : `${scope}/`;
-
-  // Only this many need to be in order. A one-letter query matches sixty thousand tunes and shows a
-  // hundred; ranking all sixty thousand to throw away 99.8% of the work is the difference between a
-  // search that is felt and one that is not. The total is still counted exactly — it is what tells
-  // the listener to narrow the search — but ordering is bounded to the page being asked for.
-  const keep = offset + limit;
-  const best: RankedMatch[] = [];
-  let totalSongs = 0;
-
-  for (const song of Object.values(snapshot.songs)) {
-    if (scopePrefix !== "/" && !song.virtualPath.startsWith(scopePrefix)) continue;
-    if (!matchesTokens(songSearchText(song), tokens)) continue;
-    totalSongs += 1;
-
-    // Folded, because the tokens are: an accented title must still be able to score as a title.
-    const title = foldForSearch(getHvscDisplayTitle(song).toLowerCase());
-    const author = foldForSearch((getHvscDisplayAuthor(song) ?? "").toLowerCase());
-    let score = 0;
-    for (const token of tokens) score += scoreToken(token, title, author);
-    const candidate: RankedMatch = { song, score, title };
-
-    // The common case for a broad query: worse than everything already held, rejected on one
-    // integer comparison.
-    if (best.length >= keep && compareRanked(candidate, best[best.length - 1]) >= 0) continue;
-    let low = 0;
-    let high = best.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (compareRanked(candidate, best[mid]) < 0) high = mid;
-      else low = mid + 1;
-    }
-    best.splice(low, 0, candidate);
-    if (best.length > keep) best.pop();
-  }
-
-  return {
-    songs: best.slice(offset).map((match) => match.song),
-    totalSongs,
     offset,
     limit,
     query: normalizedQuery,

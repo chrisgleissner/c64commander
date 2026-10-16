@@ -879,80 +879,184 @@ entries:
   # ---------------------------------------------------------------------------------------------
   - id: docs.section.getting-started
     title_key: search.docs.gettingStarted
-    title: Getting started
+    title: Get started
     subtitle_key: search.docs.gettingStarted.subtitle
-    subtitle: Getting the app talking to your C64
+    subtitle: Network services, first connection and the six pages
     keywords: [setup, first, connect, network, begin, help]
     group: docs
     icon: wifi
     target: { kind: section, path: /docs, scope: docs, id: getting-started }
 
-  - id: docs.section.home
-    title_key: search.docs.home
-    title: About the Home page
-    subtitle_key: search.docs.home.subtitle
-    subtitle: What Home shows and what it controls
-    keywords: [help, home, explain]
-    group: docs
-    icon: home
-    target: { kind: section, path: /docs, scope: docs, id: home }
-
   - id: docs.section.play
     title_key: search.docs.play
-    title: About playing files
+    title: Play a tune from HVSC
     subtitle_key: search.docs.play.subtitle
-    subtitle: Playlists, transport and where sound comes out
-    keywords: [help, play, music, explain]
+    subtitle: Download the SID collection and add tunes
+    keywords: [help, hvsc, sid, music, download, install]
     group: docs
-    icon: play
+    icon: music
     target: { kind: section, path: /docs, scope: docs, id: play }
+    requires:
+      - { kind: flag, flag: hvsc_enabled }
+
+  - id: docs.section.find-tune
+    title_key: search.docs.findTune
+    title: Find a tune fast
+    subtitle_key: search.docs.findTune.subtitle
+    subtitle: Find a tune, app search and the playlist filter
+    keywords: [help, search, find, filter, composer]
+    group: docs
+    icon: search
+    target: { kind: section, path: /docs, scope: docs, id: find-tune }
+    requires:
+      - { kind: flag, flag: hvsc_enabled }
+
+  - id: docs.section.playlist
+    title_key: search.docs.playlist
+    title: Build and order a playlist
+    subtitle_key: search.docs.playlist.subtitle
+    subtitle: Add items, shuffle, repeat and remove
+    keywords: [help, playlist, queue, add, remove, shuffle, order]
+    group: docs
+    icon: list-music
+    target: { kind: section, path: /docs, scope: docs, id: playlist }
+
+  - id: docs.section.sid-radio
+    title_key: search.docs.sidRadio
+    title: Use SID Radio
+    subtitle_key: search.docs.sidRadio.subtitle
+    subtitle: Stations, likes and More like this
+    keywords: [help, radio, station, mood, like]
+    group: docs
+    icon: radio
+    target: { kind: section, path: /docs, scope: docs, id: sid-radio }
+    requires:
+      - { kind: flag, flag: hvsc_enabled }
+
+  - id: docs.section.audio-output
+    title_key: search.docs.audioOutput
+    title: Listen here or on your C64
+    subtitle_key: search.docs.audioOutput.subtitle
+    subtitle: Choose where a SID tune plays
+    keywords: [help, output, speaker, here, both, sound, local]
+    group: docs
+    icon: headphones
+    target: { kind: section, path: /docs, scope: docs, id: audio-output }
 
   - id: docs.section.disks
     title_key: search.docs.disks
-    title: About disks and drives
+    title: Mount and run a disk
     subtitle_key: search.docs.disks.subtitle
-    subtitle: Mounting images and managing the library
-    keywords: [help, disk, drive, explain]
+    subtitle: Drives, the disk collection and swapping disks
+    keywords: [help, disk, drive, mount, d64, swap, multi disk]
     group: docs
     icon: hard-drive
     target: { kind: section, path: /docs, scope: docs, id: disks }
 
-  - id: docs.section.disk-swapping
-    title_key: search.docs.diskSwapping
-    title: About swapping disks
-    subtitle_key: search.docs.diskSwapping.subtitle
-    subtitle: Multi-disk games and side changes
-    keywords: [help, swap, side, multi disk, explain]
+  - id: docs.section.remote-input
+    title_key: search.docs.remoteInput
+    title: Type on the C64 with Remote Input
+    subtitle_key: search.docs.remoteInput.subtitle
+    subtitle: The C64 keyboard on this device
+    keywords: [help, keyboard, type, keys, input]
     group: docs
-    icon: repeat
-    target: { kind: section, path: /docs, scope: docs, id: disk-swapping }
+    icon: keyboard
+    target: { kind: section, path: /docs, scope: docs, id: remote-input }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+
+  - id: docs.section.game-mode
+    title_key: search.docs.gameMode
+    title: Play a game with Game Mode
+    subtitle_key: search.docs.gameMode.subtitle
+    subtitle: Steer and fire with the number keys
+    keywords: [help, game, joystick, fire, keypad]
+    group: docs
+    icon: gamepad
+    target: { kind: section, path: /docs, scope: docs, id: game-mode }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+
+  - id: docs.section.live-view
+    title_key: search.docs.liveView
+    title: Watch your C64 with Live View
+    subtitle_key: search.docs.liveView.subtitle
+    subtitle: The C64's picture and sound on this device
+    keywords: [help, watch, listen, stream, screen, mirror]
+    group: docs
+    icon: monitor
+    target: { kind: section, path: /docs, scope: docs, id: live-view }
+    requires:
+      - { kind: flag, flag: live_view_enabled }
 
   - id: docs.section.config
     title_key: search.docs.config
-    title: About Config
+    title: Change a setting in Config
     subtitle_key: search.docs.config.subtitle
-    subtitle: How the machine's own settings are grouped
-    keywords: [help, config, explain]
+    subtitle: Find and change a machine setting
+    keywords: [help, config, setting, change]
     group: docs
     icon: sliders
     target: { kind: section, path: /docs, scope: docs, id: config }
 
-  - id: docs.section.settings
-    title_key: search.docs.settings
-    title: About Settings
-    subtitle_key: search.docs.settings.subtitle
-    subtitle: What each app setting decides
-    keywords: [help, settings, explain]
+  - id: docs.section.save-restore
+    title_key: search.docs.saveRestore
+    title: Save and restore configs and snapshots
+    subtitle_key: search.docs.saveRestore.subtitle
+    subtitle: Flash, Revert and RAM snapshots
+    keywords: [help, save, load, flash, snapshot, backup, restore]
     group: docs
-    icon: settings
-    target: { kind: section, path: /docs, scope: docs, id: settings }
+    icon: save
+    target: { kind: section, path: /docs, scope: docs, id: save-restore }
+
+  - id: docs.section.devices
+    title_key: search.docs.devices
+    title: Connect, switch and add devices
+    subtitle_key: search.docs.devices.subtitle
+    subtitle: Saved devices and the device switcher
+    keywords: [help, device, connect, switch, add, host, ip]
+    group: docs
+    icon: monitor-smartphone
+    target: { kind: section, path: /docs, scope: docs, id: devices }
+
+  - id: docs.section.connection-problems
+    title_key: search.docs.connectionProblems
+    title: Fix connection problems
+    subtitle_key: search.docs.connectionProblems.subtitle
+    subtitle: What to check when the C64 does not answer
+    keywords: [help, offline, unreachable, password, troubleshoot]
+    group: docs
+    icon: wifi-off
+    target: { kind: section, path: /docs, scope: docs, id: connection-problems }
+
+  - id: docs.section.keypad
+    title_key: search.docs.keypad
+    title: Keypad cheat sheet
+    subtitle_key: search.docs.keypad.subtitle
+    subtitle: Soft keys, OK, number keys, T9, star and pound
+    keywords: [help, keys, keypad, shortcuts, t9, soft key]
+    group: docs
+    icon: keyboard
+    target: { kind: section, path: /docs, scope: docs, id: keypad }
+    requires:
+      - { kind: flag, flag: keypad_input_enabled }
+
+  - id: docs.section.status-badge
+    title_key: search.docs.statusBadge
+    title: What the status badge colors mean
+    subtitle_key: search.docs.statusBadge.subtitle
+    subtitle: Healthy, degraded, unhealthy and offline
+    keywords: [help, badge, status, health, color, green]
+    group: docs
+    icon: circle-dot
+    target: { kind: section, path: /docs, scope: docs, id: status-badge }
 
   - id: docs.section.diagnostics
     title_key: search.docs.diagnostics
-    title: About Diagnostics
+    title: Diagnostics and sharing logs
     subtitle_key: search.docs.diagnostics.subtitle
-    subtitle: Reading health and exporting support data
-    keywords: [help, diagnostics, logs, explain]
+    subtitle: Health checks, filters and sharing a report
+    keywords: [help, diagnostics, logs, share, report]
     group: docs
     icon: activity
     target: { kind: section, path: /docs, scope: docs, id: diagnostics }

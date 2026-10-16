@@ -20,8 +20,8 @@ import { REMOTE_FUNCTION_ACTIONS } from "@/lib/config/appSettings";
 describe("C64U Remote function-key handlers", () => {
   const launchGameMode = vi.fn();
   let path = "/";
-  const build = (remoteInputEnabled = true) =>
-    createRemoteFunctionHandlers({ remoteInputEnabled, launchGameMode, currentPath: () => path });
+  const build = (remoteInputEnabled = true, gameModeSupported = true) =>
+    createRemoteFunctionHandlers({ remoteInputEnabled, gameModeSupported, launchGameMode, currentPath: () => path });
 
   beforeEach(() => {
     path = "/";
@@ -30,6 +30,18 @@ describe("C64U Remote function-key handlers", () => {
     transportCommandBus.reset();
   });
   afterEach(() => transportCommandBus.reset());
+
+  it("explains instead of starting Game Mode on a device that cannot stream", () => {
+    build(true, false).gameMode();
+
+    expect(launchGameMode).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Game Mode is not available",
+        description: "This device cannot stream its picture. Remote Input still sends keys.",
+      }),
+    );
+  });
 
   it("delivers Play/Pause and Next tune to a mounted Play page without latching them for later", () => {
     const seen: TransportCommand[] = [];

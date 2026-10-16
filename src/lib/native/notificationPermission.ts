@@ -13,17 +13,13 @@ import {
   type PermissionState,
 } from "@/lib/native/backgroundExecution";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
+import type { ConnectionState } from "@/lib/connection/connectionManager";
 
 /**
- * Without this grant Android drops the foreground service's notification (verified on API 36), and
- * that notification is the only sign playback is still running.
- *
- * Asked at most once. Android does NOT report "denied" after a single refusal — it reports
- * `prompt-with-rationale`, which means "explain yourself before asking again". Treating that as
- * askable fired the same system dialog, with no explanation, at the start of the next tune: a user
- * who refused once on the Play page was asked again the next time they pressed play. Refusing costs
- * the notification and nothing else — the foreground service still starts and playback is
- * unaffected — so a refusal is taken as the answer.
+ * Without this grant Android drops the foreground service's notification (verified on API 36). Android
+ * reports `prompt-with-rationale` after one refusal and `denied` after two; both are taken as the
+ * answer, because refusing costs only that notification. Below API 33 AndroidX reports the
+ * permission from whether notifications are enabled, so no prompt can appear there.
  */
 export const ensureNotificationPermission = async (): Promise<PermissionState> => {
   if (!isNativePlatform() || getPlatform() !== "android") return "granted";
@@ -44,3 +40,34 @@ export const ensureNotificationPermission = async (): Promise<PermissionState> =
     return "denied";
   }
 };
+
+let plannedRequest: Promise<PermissionState> | null = null;
+
+/**
+ * Asks at most once per app session. The platform's own state stops a later session from asking
+ * again after a refusal; this stops one session from asking twice while the first answer is pending.
+ */
+export const requestNotificationPermissionOnce = (): Promise<PermissionState> => {
+  plannedRequest ??= ensureNotificationPermission();
+  return plannedRequest;
+};
+
+export interface NotificationPermissionMomentInput {
+  connectionState: ConnectionState;
+  interstitialActive: boolean;
+  tourActive: boolean;
+  tourOfferPending: boolean;
+  playbackActive: boolean;
+}
+
+/**
+ * The system prompt takes every key press until it is answered, so it is raised only when nothing
+ * else is in progress: a device (or Demo Mode) is connected, no dialog, sheet or tour is open, and
+ * nothing is playing. Starting playback never asks.
+ */
+export const isNotificationPermissionMoment = (input: NotificationPermissionMomentInput): boolean =>
+  (input.connectionState === "REAL_CONNECTED" || input.connectionState === "DEMO_ACTIVE") &&
+  !input.interstitialActive &&
+  !input.tourActive &&
+  !input.tourOfferPending &&
+  !input.playbackActive;

@@ -198,11 +198,8 @@ const toDeviceDiscoveryTrigger = (trigger: DiscoveryTrigger): DeviceDiscoveryTri
   return "startup";
 };
 
-// HARD18-007: "manual" (the badge-tap recovery affordance) must be able to
-// escalate to the saved-device sweep and LAN scan, exactly like startup/
-// resume/settings - otherwise a device that changed IP (e.g. DHCP
-// re-assignment after the firmware-wedge power-cycle) strands the app
-// offline forever: every tap re-probes only the stale stored host.
+// HARD18-007: a badge tap ("manual") sweeps saved devices and the LAN like startup/resume/settings, or a device
+// that changed IP after a power-cycle strands the app offline: every tap re-probes only the stale stored host.
 const shouldAttemptAutomaticDeviceDiscovery = (trigger: DiscoveryTrigger) =>
   trigger === "startup" || trigger === "resume" || trigger === "settings" || trigger === "manual";
 
@@ -347,7 +344,8 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
   } else if (outcome.kind === "transport") {
     setSnapshot({ lastProbeError: outcome.result.error });
   }
-  return outcome.result.ok;
+  // Discovery promotes on this result, so an answer read after the network dropped counts as none, as in noteReachable.
+  return outcome.result.ok && !isNetworkKnownOffline();
 }
 
 /**
@@ -578,6 +576,8 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     });
     return;
   }
+  // An answer that lands after the phone reported no network was sent before it, so it does not show the device back.
+  if (isNetworkKnownOffline()) return;
 
   setSnapshot({
     lastProbeSucceededAtMs: Date.now(),
@@ -730,8 +730,12 @@ let connectionTransitionCount = 0;
 /** Changes with every state transition, so work that spans awaits can tell the connection moved on under it. */
 export const getConnectionTransitionCount = () => connectionTransitionCount;
 
+// The state before any discovery in between: a sweep while offline passes through DISCOVERING back to OFFLINE_NO_DEMO.
+let settledConnectionState: ConnectionState = "UNKNOWN";
+
 const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) => {
   connectionTransitionCount += 1;
+  if (state !== "DISCOVERING") settledConnectionState = state;
   setSnapshot({
     state,
     lastDiscoveryTrigger: trigger,
@@ -972,6 +976,7 @@ const tryAutomaticDeviceDiscoveryFallback = async (
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
+  const alreadyOffline = settledConnectionState === "OFFLINE_NO_DEMO";
   clearPinnedDemoMode();
   cancelActiveDiscovery();
   dismissDemoInterstitial();
@@ -980,7 +985,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   logDiscoveryDecision("OFFLINE_NO_DEMO", trigger, { mode: "offline" });
   await stopDemoServer();
   await applyC64APIConfigFromStorage();
-  addLog("info", "Connection switched to offline", { trigger });
+  if (!alreadyOffline) addLog("info", "Connection switched to offline", { trigger });
 };
 
 /** The network went away or the device stopped answering: show it offline until a probe finds it again. */
@@ -1188,8 +1193,7 @@ const isManualDiscoveryTrigger = (trigger: DiscoveryTrigger) => trigger === "man
 
 let backgroundProbeSuppressedWhileOffline = false;
 
-// Announced on the edge only: a five-second background schedule would otherwise
-// repeat one sentence until it crowded everything else out of the log.
+// Announced on the edge only: a 5 s background schedule repeating one sentence crowded out the log.
 const noteBackgroundProbeSuppressedWhileOffline = (suppressed: boolean) => {
   if (suppressed === backgroundProbeSuppressedWhileOffline) return;
   backgroundProbeSuppressedWhileOffline = suppressed;

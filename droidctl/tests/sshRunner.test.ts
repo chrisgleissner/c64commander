@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { RawExecRequest } from "../src/transport/adb.js";
+import type { RawExecRequest, RawSpawnRequest } from "../src/transport/adb.js";
 import type { SshEndpoint } from "../src/transport/sshCommands.js";
 import { MAX_CONTROL_DIR_LENGTH, SshCommandRunner } from "../src/transport/sshRunner.js";
 import type { CommandRecord } from "../src/transport/types.js";
@@ -23,7 +23,7 @@ function runner(
   system.privateDirOk = options.privateDirOk ?? true;
   const commands: CommandRecord[] = [];
   const requests: RawExecRequest[] = [];
-  const spawned: { file: string; args: readonly string[] }[] = [];
+  const spawned: RawSpawnRequest[] = [];
   const instance = new SshCommandRunner({
     sshPath: "/usr/bin/ssh",
     exec: async (request) => {
@@ -111,5 +111,11 @@ describe("the ssh command runner", () => {
     expect(spawned[0]!.args).toEqual(argv.slice(1));
     expect(argv).toContain("127.0.0.1:40000:127.0.0.1:5555");
     expect(commands[0]).toMatchObject({ exitCode: null, argv });
+  });
+
+  it("asks for the tunnel process to be detached from the event loop, so it cannot keep the caller running", () => {
+    const { instance, spawned } = runner(async () => ({ stdout: Buffer.alloc(0), stderr: "", exitCode: 0 }));
+    instance.spawnForward("ssh:t", PHONE, 40_000, { host: "127.0.0.1", port: 5555 });
+    expect(spawned[0]!.detachFromEventLoop).toBe(true);
   });
 });

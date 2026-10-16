@@ -819,6 +819,14 @@ const waitForStableRender = async (page: Page) => {
   await page.waitForTimeout(200);
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
+  // The scroll position thumb appears for 600 ms after any scroll, including the one that framed
+  // this capture. Its travel is a scroll-driven animation, which `animations: "disabled"` cancels,
+  // so a capture taken while it shows draws it at the top-left corner over the app bar.
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-testid="scroll-position-indicator"][data-visible="true"]').length === 0,
+    undefined,
+    { timeout: 5000 },
+  );
 };
 
 const applyDisplayProfileViewport = async (page: Page, profileId: DisplayProfileViewportId) => {
@@ -1453,6 +1461,18 @@ const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: strin
   }
 };
 
+const clickVisibleDocsToggle = (page: Page, controlId: string) =>
+  page.evaluate((id) => {
+    const visibleButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${id}"]`),
+    ).find((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      const style = getComputedStyle(candidate);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    });
+    visibleButton?.click();
+  }, controlId);
+
 const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
   const sections = await page.evaluate(() =>
     Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-controls^="docs-section-"]'))
@@ -1489,16 +1509,9 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
     const slug = sanitizeSegment(section.label);
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, button);
-    await page.evaluate((controlId) => {
-      const visibleButton = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
-      ).find((candidate) => {
-        const rect = candidate.getBoundingClientRect();
-        const style = getComputedStyle(candidate);
-        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-      });
-      visibleButton?.click();
-    }, section.controlId);
+    // The contents list starts open; every chapter starts closed and is closed again after its capture.
+    const startedOpen = (await getVisibleButtonExpandedState()) === "true";
+    if (!startedOpen) await clickVisibleDocsToggle(page, section.controlId);
     await expect.poll(getVisibleButtonExpandedState).toBe("true");
     await waitForStableRender(page);
     await scrollHeadingIntoView(page, button);
@@ -1511,16 +1524,8 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
         locator: card,
       },
     );
-    await page.evaluate((controlId) => {
-      const visibleButton = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
-      ).find((candidate) => {
-        const rect = candidate.getBoundingClientRect();
-        const style = getComputedStyle(candidate);
-        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-      });
-      visibleButton?.click();
-    }, section.controlId);
+    if (startedOpen) continue;
+    await clickVisibleDocsToggle(page, section.controlId);
     await expect.poll(getVisibleButtonExpandedState).toBe("false");
     await waitForStableRender(page);
   }
@@ -3223,7 +3228,15 @@ test.describe("App screenshots", () => {
       // Stop the clock now that the tune is up, so the elapsed time, the remaining
       // time and the progress bar cannot move between here and the shutter. See
       // FEATURED_SID for why this happens after connecting rather than before.
-      await page.clock.setFixedTime(Date.now());
+      // The app bar badge is part of this picture, so it has to have reached its verdict first.
+      const badge = page.getByTestId("unified-health-badge");
+      await expect(badge).toHaveAttribute("data-health-state", "Healthy");
+      // Pinned to the page's own clock, which installFixedClock already holds at FIXED_NOW_MS. The
+      // test runner's Date.now() is today: pinning to it moved the page two years on, every trace
+      // event fell out of the health window, and the badge dropped to Idle before the shutter.
+      const pageNowMs = await page.evaluate(() => Date.now());
+      await page.clock.setFixedTime(pageNowMs);
+      expect(await page.evaluate(() => Date.now())).toBe(pageNowMs);
 
       // Scrolled to the tune rather than photographed from the top of the page.
       //
@@ -3240,6 +3253,7 @@ test.describe("App screenshots", () => {
         await applyDisplayProfileViewport(page, profileId);
         await captureScreenshot(page, testInfo, profileScreenshotPath("play/sid-radio", profileId, "01-controls.png"));
       }
+      await expect(badge).toHaveAttribute("data-health-state", "Healthy");
 
       // The tunes inside the file, reached from "Tune 1 of 19" on the credits line. The seeded tune
       // holds nineteen, which is what makes the list worth having.

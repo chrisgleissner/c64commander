@@ -65,7 +65,7 @@ class FtpClientPlugin : Plugin() {
   private val completedReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
   private val maxTrackedCompletedReads = 256
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
-  internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
+  internal var ftpClientFactory: () -> FTPClient = { SocketClosingFtpClient() }
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
@@ -209,6 +209,7 @@ class FtpClientPlugin : Plugin() {
     val path = call.getString("path") ?: "/"
     val timeoutMs = resolveTransferTimeoutMs(call)
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
+    val refusalExpected = call.getBoolean("refusalExpected", false) == true
 
     runTask(
             Runnable {
@@ -237,14 +238,25 @@ class FtpClientPlugin : Plugin() {
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectory", error, connectTimeoutMs, timeoutMs)
-                AppLogger.error(
-                        pluginContextOrNull(),
-                        logTag,
-                        "FTP listDirectory failed",
-                        "FtpClientPlugin",
-                        error,
-                        traceFields(call),
-                )
+                // A readability check lists a folder expecting the refusal that says it cannot be opened.
+                if (refusalExpected && error is FtpListRefusedException) {
+                  AppLogger.info(
+                          pluginContextOrNull(),
+                          logTag,
+                          "FTP listDirectory refused, as the readability check expected: $message",
+                          "FtpClientPlugin",
+                          traceFields(call),
+                  )
+                } else {
+                  AppLogger.error(
+                          pluginContextOrNull(),
+                          logTag,
+                          "FTP listDirectory failed",
+                          "FtpClientPlugin",
+                          error,
+                          traceFields(call),
+                  )
+                }
                 call.reject(message, error)
               } finally {
                 try {
@@ -830,6 +842,10 @@ class FtpClientPlugin : Plugin() {
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
       val listed = client.listFiles(path)
+      // commons-net answers a refused LIST with an empty listing; the reply code is the only trace.
+      if (client.replyCode in refusedListReplyCodes) {
+        throw FtpListRefusedException(path, client.replyCode, client.replyString?.trim().orEmpty())
+      }
       if (listed != null) {
         listed
       } else {
@@ -848,7 +864,8 @@ class FtpClientPlugin : Plugin() {
       // stack (1541ultimate issue #364: "repeated FTP cycles fail until power-cycle").
       // Fail fast on a timeout so the firmware gets breathing room; only cascade for
       // genuine LIST-unsupported / capability errors (which surface as other errors).
-      if (error is SocketTimeoutException ||
+      if (error is FtpListRefusedException ||
+              error is SocketTimeoutException ||
               timeoutMessagePattern.containsMatchIn(error.message ?: "")) {
         throw error
       }
@@ -957,3 +974,9 @@ class FtpClientPlugin : Plugin() {
     super.handleOnDestroy()
   }
 }
+
+/** 450, 451 and 550 mean the server could not open the folder, not that it lacks LIST. */
+private val refusedListReplyCodes = setOf(450, 451, 550)
+
+class FtpListRefusedException(path: String, code: Int, reply: String) :
+        java.io.IOException("FTP LIST $path refused ($code): $reply")

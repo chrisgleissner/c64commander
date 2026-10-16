@@ -94,7 +94,7 @@ describe("LocalSidPlaybackController", () => {
     const result = await controller.play(byteSource(bytes), 2, {});
     // The cache key goes in with the tune, not after it: opening is where a warmed lead-in is poured
     // into the buffer, so a key that arrives later is a warm cache that is never found.
-    expect(engine.play).toHaveBeenCalledWith(bytes, 2, {}, undefined);
+    expect(engine.play).toHaveBeenCalledWith(bytes, 2, {}, undefined, undefined);
     expect(result).toEqual(RESULT);
   });
 
@@ -106,7 +106,16 @@ describe("LocalSidPlaybackController", () => {
     engine.prerender = vi.fn();
     await controller.play(byteSource(bytes), 1, {}, { prerenderKey: "tune#1", durationSeconds: 30 });
 
-    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, "tune#1");
+    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, "tune#1", undefined);
+  });
+
+  it("tells the engine where the outgoing tune ends, so it can play that tune on to there", async () => {
+    const engine = fakeEngine();
+    const controller = new LocalSidPlaybackController(() => engine);
+
+    await controller.play(byteSource(), 1, {}, { outgoingEndsAtSeconds: 120 });
+
+    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, undefined, 120);
   });
 
   it("reuses the same engine across plays", async () => {
@@ -190,6 +199,52 @@ describe("LocalSidPlaybackController engine loading", () => {
     await controller.play(byteSource(), 0);
     expect(engine.setVolume).toHaveBeenCalledWith(0.25);
     expect(engine.setMuted).toHaveBeenCalledWith(true);
+  });
+
+  const mutableEngine = () => {
+    const engine = fakeEngine();
+    let engineMuted = false;
+    Object.assign(engine, {
+      setMuted: vi.fn((muted: boolean) => {
+        engineMuted = muted;
+      }),
+      getMuted: () => engineMuted,
+    });
+    return engine as typeof engine & { setMuted: ReturnType<typeof vi.fn>; getMuted: () => boolean };
+  };
+
+  it("keeps a Mute set while a handover holds the output silent once the hold is released", async () => {
+    const engine = mutableEngine();
+    const controller = new LocalSidPlaybackController(async () => engine);
+    await controller.play(byteSource(), 0);
+
+    const release = controller.holdSilence();
+    expect(engine.getMuted()).toBe(true);
+    expect(controller.muted()).toBe(false);
+    controller.setMuted(true);
+    release();
+    release();
+
+    expect(controller.muted()).toBe(true);
+    expect(engine.getMuted()).toBe(true);
+  });
+
+  it("stays silent through an Unmute until the last hold is released", async () => {
+    const engine = mutableEngine();
+    const controller = new LocalSidPlaybackController(async () => engine);
+    controller.setMuted(true);
+    const first = controller.holdSilence();
+    const second = controller.holdSilence();
+    await controller.play(byteSource(), 0);
+    expect(engine.getMuted()).toBe(true);
+
+    controller.setMuted(false);
+    first();
+    expect(engine.getMuted()).toBe(true);
+    second();
+
+    expect(engine.getMuted()).toBe(false);
+    expect(controller.muted()).toBe(false);
   });
 
   it("queues a pre-render and a lead-in asked for before the engine has loaded", async () => {

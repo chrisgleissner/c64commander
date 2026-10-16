@@ -27,10 +27,23 @@
  */
 
 import type { InputModality } from "./inputModality";
+import { selectorPresence } from "./selectorPresence";
+import { READING_STOP_ATTR } from "./discovery";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
-  "group" | "button" | "link" | "field" | "select" | "switch" | "slider" | "tab" | "status" | "none";
+  | "group"
+  | "button"
+  | "expand"
+  | "collapse"
+  | "link"
+  | "field"
+  | "select"
+  | "switch"
+  | "slider"
+  | "tab"
+  | "status"
+  | "none";
 
 /** A plain, DOM-free snapshot of the ring the bar needs to choose its labels. */
 export interface GuidanceState {
@@ -82,6 +95,8 @@ export interface GuidanceLabels {
 const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   group: "Open",
   button: "Activate",
+  expand: "Expand",
+  collapse: "Collapse",
   link: "Open",
   field: "Edit",
   select: "Select",
@@ -94,6 +109,53 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
 
 /** The compact 480×640 profile only has room for the last few breadcrumb segments. */
 export const MAX_BREADCRUMB_SEGMENTS = 3;
+
+/**
+ * Set by an open overlay that opens its own menu, so the bar can say so. The value names the key
+ * that opens it: the right soft key, or Back, in which case the right soft key deletes as it does
+ * in a T9 field.
+ */
+export const SOFT_KEY_MENU_ATTR = "data-key-nav-soft-key-menu";
+
+/** Set on that menu itself while it is open. */
+export const SOFT_KEY_MENU_PANEL_ATTR = "data-key-nav-soft-key-menu-panel";
+
+export type SoftKeyMenuKey = "softRight" | "back";
+
+export const openOverlayOffersSoftKeyMenu = (doc: Document = document): boolean =>
+  selectorPresence(doc, `[${SOFT_KEY_MENU_ATTR}]`, [SOFT_KEY_MENU_ATTR]).isPresent();
+
+/**
+ * PURE: the labels while an overlay that drives its own keys offers a soft-key menu. The D-pad
+ * belongs to the overlay, so the bar names the way to the menu, the way out or the delete key, and
+ * OK only where it types RETURN.
+ */
+export const resolveSoftKeyMenuOverlayLabels = (
+  visible: boolean,
+  overlayTitle: string | null,
+  menuKey: SoftKeyMenuKey,
+): GuidanceLabels => ({
+  visible,
+  breadcrumb: overlayTitle ? [overlayTitle] : [],
+  left: menuKey === "back" ? "Menu" : "Close",
+  center: menuKey === "back" ? "Return" : null,
+  right: menuKey === "back" ? "Delete" : "Menu",
+  shortcut: null,
+});
+
+/** PURE: the labels while that menu is open. */
+export const resolveSoftKeyMenuPanelLabels = (
+  visible: boolean,
+  menuTitle: string | null,
+  entryLabel: string | null = null,
+): GuidanceLabels => ({
+  visible,
+  breadcrumb: [menuTitle, entryLabel].filter((segment): segment is string => Boolean(segment)),
+  left: "Close",
+  center: "Select",
+  right: null,
+  shortcut: null,
+});
 
 /** A context menu the ring can open for the current item / scope on `openMenu`. */
 export const CONTEXT_MENU_SELECTOR = '[data-key-nav-menu],[aria-haspopup="menu"],[aria-haspopup="true"]';
@@ -142,7 +204,7 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   const role = element.getAttribute("role");
   const tag = element.tagName;
   if (role === "slider") return "slider";
-  if (role === "status") return "status";
+  if (role === "status" || element.hasAttribute(READING_STOP_ATTR)) return "status";
   if (role === "tab") return "tab";
   if (
     role === "switch" ||
@@ -163,6 +225,9 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   if (tag === "TEXTAREA") return "field";
   if (element instanceof HTMLElement && element.isContentEditable) return "field";
   if (tag === "A") return element.hasAttribute("href") ? "link" : "button";
+  const expanded = element.hasAttribute("aria-haspopup") ? null : element.getAttribute("aria-expanded");
+  if (expanded === "true") return "collapse";
+  if (expanded === "false") return "expand";
   if (tag === "BUTTON" || role === "button" || role === "menuitem") return "button";
   return "button";
 };
@@ -178,34 +243,85 @@ const tidyLabel = (raw: string): string => {
  * under it without a space, and includes text the layout hides: a section header read
  * "ConnectionSaved devices, discov…". The rendered text keeps lines apart and leaves hidden text
  * out, and its first line is the title. Environments without layout fall back to `textContent`.
+ * Key caps and hidden glyphs are lines of their own in a flex row and never the control's name:
+ * the Quick menu's "6 Docs" entry read "6", and its close button read "×".
  */
 const renderedFirstLine = (element: Element): string | null => {
   const rendered = element instanceof HTMLElement ? element.innerText : undefined;
   const text = typeof rendered === "string" ? rendered : element.textContent;
+  const decorations = new Set(
+    Array.from(element.querySelectorAll('kbd, [aria-hidden="true"]'), (decoration) => decoration.textContent?.trim()),
+  );
+  const lines = text?.split("\n").map((line) => line.trim()) ?? [];
   return (
-    text
-      ?.split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? null
+    lines.find((line) => line.length > 0 && !decorations.has(line)) ?? lines.find((line) => line.length > 0) ?? null
   );
 };
 
+const nonBlank = (value: string | null | undefined): string | null => (value && value.trim() ? value : null);
+
+const labelledByName = (element: Element): string | null => {
+  const ids = element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [];
+  const texts = ids.map((id) => element.ownerDocument.getElementById(id)?.textContent?.trim() ?? "").filter(Boolean);
+  return texts.length > 0 ? texts.join(" ") : null;
+};
+
+/** A wrapping label's own words, without the text of the control inside it (a select's options). */
+const textAround = (label: Element, control: Element): string | null => {
+  const walker = label.ownerDocument.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (control.contains(node) || node.parentElement?.closest('kbd, [aria-hidden="true"]')) continue;
+    parts.push(node.textContent ?? "");
+  }
+  return nonBlank(parts.join(" "));
+};
+
+/** The `<label for>` or wrapping `<label>` that names a form control or a button-based switch. */
+const associatedLabelName = (element: Element): string | null => {
+  const forLabels = element.id
+    ? Array.from(element.ownerDocument.querySelectorAll<HTMLLabelElement>("label[for]")).filter(
+        (label) => label.htmlFor === element.id,
+      )
+    : [];
+  for (const label of [...forLabels, element.closest("label")]) {
+    if (!label) continue;
+    const name = label.contains(element) ? textAround(label, element) : renderedFirstLine(label);
+    if (name) return name;
+  }
+  return null;
+};
+
 /**
- * A short human label for the current element, for the breadcrumb tail. Prefers
- * an explicit accessible name (`aria-label`), then visible text, then
- * placeholder/title. Returns `null` when nothing readable is found.
+ * A short human label for the current element, for the breadcrumb tail, in the order an accessible
+ * name is computed: `aria-labelledby`, `aria-label`, an associated `<label>`, the element's own text,
+ * then placeholder and title. Settings rows name their checkboxes and fields with `<label for>`, so
+ * reading only `aria-label` and text left them as "Navigation", and a select as its value.
+ * Returns `null` when nothing readable is found.
  */
 export const accessibleLabelFor = (element: Element | null): string | null => {
   if (!element) return null;
-  const ariaLabel = element.getAttribute("aria-label");
-  if (ariaLabel && ariaLabel.trim()) return tidyLabel(ariaLabel);
-  const text = renderedFirstLine(element);
-  if (text) return tidyLabel(text);
-  const placeholder = element.getAttribute("placeholder");
-  if (placeholder && placeholder.trim()) return tidyLabel(placeholder);
-  const title = element.getAttribute("title");
-  if (title && title.trim()) return tidyLabel(title);
-  return null;
+  const name =
+    labelledByName(element) ??
+    nonBlank(element.getAttribute("aria-label")) ??
+    associatedLabelName(element) ??
+    renderedFirstLine(element) ??
+    nonBlank(element.getAttribute("placeholder")) ??
+    nonBlank(element.getAttribute("title"));
+  return name ? tidyLabel(name) : null;
+};
+
+/**
+ * A short name a control gives the guidance bar, where its accessible name is a full sentence. The
+ * health badge is named "Connected to c64u, system healthy" for assistive technology, which the
+ * bar's one line on a 320 px screen cut to "Connected to c64u, s…".
+ */
+export const GUIDANCE_LABEL_ATTR = "data-guidance-label";
+
+/** The breadcrumb's name for the current element: its short guidance label, else its accessible name. */
+export const guidanceLabelFor = (element: Element | null): string | null => {
+  const short = element ? nonBlank(element.getAttribute(GUIDANCE_LABEL_ATTR)) : null;
+  return short ? tidyLabel(short) : accessibleLabelFor(element);
 };
 
 /**

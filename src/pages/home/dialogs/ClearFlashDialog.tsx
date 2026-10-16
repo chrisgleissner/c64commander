@@ -34,7 +34,7 @@ export function ClearFlashDialog({ open, onOpenChange, onConfirm, isPending }: C
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-open-focus>
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending}>

@@ -19,7 +19,11 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import uk.gleissner.c64commander.dsp.AudioFxHub
+import uk.gleissner.c64commander.dsp.SpectrumAnalyzer
 import uk.gleissner.c64commander.dsp.TestSignals
 
 /** The pipeline's processing chain and spectrum tap, driven on virtual time against a recording track. */
@@ -211,5 +215,165 @@ class AudioPipelineFxTest {
     } finally {
       pipeline.close()
     }
+  }
+
+  @Test
+  fun aLiveStreamFeedsTheSpectrumAsPacketsArriveBeforeAnyIsPlayed() {
+    val hub = AudioFxHub().also { it.spectrumEnabled = true }
+    val speaker = RecordingTrack()
+    val pipeline =
+        AudioPipeline(rate, 60, rate, 240, speaker.factory, trackBursts = 2, correctDrift = true, clock = VirtualClock(), fxHub = hub)
+    try {
+      val tune = TestSignals.sine(rate / 4, rate, 1000.0, 0.5)
+      var at = 0
+      while (at + packetFrames * 4 <= tune.size) {
+        pipeline.offer(tune, at, packetFrames * 4)
+        at += packetFrames * 4
+      }
+      assertEquals(0, speaker.frames())
+      val frame = hub.analyzer.read(true)
+      assertTrue("sequence ${frame.sequence}", frame.sequence > 0)
+      assertTrue("1 kHz band read ${frame.bands.max()}", frame.bands.max() > -12)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun onDevicePlaybackAnalysesTheSampleTheTrackReportsAtTheSpeaker() {
+    val clock = VirtualClock()
+    val hub = AudioFxHub { clock.now }.also { it.spectrumEnabled = true }
+    val speaker = RecordingTrack()
+    // The speaker runs one second behind the writes, as a deep track buffer plus the mixer would.
+    `when`(speaker.track.getTimestamp(any(android.media.AudioTimestamp::class.java))).thenAnswer { call ->
+      val timestamp = call.getArgument<android.media.AudioTimestamp>(0)
+      timestamp.framePosition = maxOf(0L, speaker.frames().toLong() - rate)
+      timestamp.nanoTime = clock.now
+      true
+    }
+    val pipeline =
+        AudioPipeline(
+            rate, 60, rate, 240, speaker.factory, maxRingMs = 4000, trackBursts = 8, primeMs = 100, correctDrift = false,
+            clock = clock, fxHub = hub)
+    val tune = TestSignals.sine(5 * rate, rate, 1000.0, 0.5)
+    try {
+      // 2.5 s written: the speaker is 1.0 s behind. The clock moves on with
+      // each step, as real time would, so the pipeline takes its periodic track readings.
+      var offered = 0
+      while (speaker.frames() < rate * 5 / 2) {
+        while (offered + packetFrames <= tune.size / 4 && pipeline.stats().jitterBufferMs < 1000.0) {
+          pipeline.offer(tune, offered * 4, packetFrames * 4)
+          offered += packetFrames
+        }
+        pipeline.step()
+        clock.now += 5_000_000L
+      }
+      // The window ends where the track says the speaker is, a second behind the writes, give or
+      // take how far the analyser follows the speaker between readings.
+      val windowEnd = hub.analyzer.read(true).sequence * (rate / SpectrumAnalyzer.LIVE_STEPS_PER_SECOND)
+      val speakerAt = speaker.frames() - rate
+      assertTrue("window ends at $windowEnd, speaker at $speakerAt", Math.abs(windowEnd - speakerAt) <= rate / 4)
+      assertTrue("window ends at $windowEnd, newest write at ${speaker.frames()}", windowEnd < speaker.frames() - rate / 2)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun aLiveStreamAtTheOutputRateFeedsTheSpectrumOnArrivalOnly() {
+    val hub = AudioFxHub().also { it.spectrumEnabled = true }
+    val speaker = RecordingTrack()
+    val pipeline =
+        AudioPipeline(rate, 60, rate, 240, speaker.factory, trackBursts = 2, correctDrift = true, clock = VirtualClock(), fxHub = hub)
+    try {
+      val tune = TestSignals.sine(rate / 2, rate, 1000.0, 0.5)
+      var offered = 0
+      var guard = 0
+      while (offered * 4 < tune.size && guard++ < 20_000) {
+        if (pipeline.stats().jitterBufferMs < 200.0) {
+          pipeline.offer(tune, offered * 4, packetFrames * 4)
+          offered += packetFrames
+        }
+        pipeline.step()
+      }
+      assertTrue("played ${speaker.frames()} frames after $guard steps", speaker.frames() >= rate / 4)
+      val stepFrames = rate / SpectrumAnalyzer.LIVE_STEPS_PER_SECOND
+      assertEquals((rate / 2 / stepFrames).toLong(), hub.analyzer.read(true).sequence)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  private fun settledState(thread: Thread): Thread.State {
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+    while (System.nanoTime() < deadline) {
+      val state = thread.state
+      if (state == Thread.State.BLOCKED || state == Thread.State.TERMINATED) return state
+      Thread.sleep(1)
+    }
+    return thread.state
+  }
+
+  @Test
+  fun closeWaitsForAPacketThatIsStillBeingAnalysed() {
+    val inFeed = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    val feeder = AtomicReference<Thread>()
+    val hub =
+        AudioFxHub {
+              if (Thread.currentThread() === feeder.get()) {
+                inFeed.countDown()
+                release.await(5, TimeUnit.SECONDS)
+              }
+              0L
+            }
+            .also { it.spectrumEnabled = true }
+    val pipeline =
+        AudioPipeline(rate, 60, rate, 240, RecordingTrack().factory, trackBursts = 2, correctDrift = true, clock = VirtualClock(), fxHub = hub)
+    val packet = TestSignals.sine(packetFrames, rate, 1000.0, 0.5)
+    val offering = Thread { pipeline.offer(packet, 0, packet.size) }
+    val closing = Thread { pipeline.close() }
+    feeder.set(offering)
+    offering.start()
+    try {
+      assertTrue("the packet never reached the analyser", inFeed.await(5, TimeUnit.SECONDS))
+      closing.start()
+      assertEquals("close() returned while a packet was mid-analysis", Thread.State.BLOCKED, settledState(closing))
+    } finally {
+      release.countDown()
+      offering.join(5_000)
+      closing.join(5_000)
+    }
+  }
+
+  @Test
+  fun aPacketWaitingForTheRingWhileThePipelineClosesIsNotAnalysed() {
+    lateinit var pipeline: AudioPipeline
+    val stepFrames = rate / SpectrumAnalyzer.LIVE_STEPS_PER_SECOND
+    val packet = TestSignals.sine(stepFrames, rate, 1000.0, 0.5)
+    val second = Thread { pipeline.offer(packet, 0, packet.size) }
+    val secondStateAtClose = AtomicReference<Thread.State>()
+    val feeder = AtomicReference<Thread>()
+    // The first packet, mid-analysis and holding the ring, starts a second offer and closes the pipeline
+    // once that offer is waiting for the ring.
+    val hub =
+        AudioFxHub {
+              if (feeder.compareAndSet(Thread.currentThread(), null)) {
+                second.start()
+                secondStateAtClose.set(settledState(second))
+                pipeline.close()
+              }
+              0L
+            }
+            .also { it.spectrumEnabled = true }
+    pipeline =
+        AudioPipeline(rate, 60, rate, 240, RecordingTrack().factory, trackBursts = 2, correctDrift = true, clock = VirtualClock(), fxHub = hub)
+    val first = Thread { pipeline.offer(packet, 0, packet.size) }
+    feeder.set(first)
+    first.start()
+    first.join(10_000)
+    second.join(10_000)
+    assertEquals(Thread.State.BLOCKED, secondStateAtClose.get())
+    assertEquals("only the packet offered before close() is analysed", 1L, hub.analyzer.read(true).sequence)
   }
 }

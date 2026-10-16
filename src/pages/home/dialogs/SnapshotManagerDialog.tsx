@@ -304,14 +304,17 @@ export function SnapshotManagerDialog({
               data-testid="snapshot-filter-input"
             />
 
-            <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
+            {/* One row that scrolls sideways on compact: a second 44 px row left the list under half the dialog. */}
+            <div
+              className={compact ? "flex gap-1 overflow-x-auto" : "flex gap-1 flex-wrap"}
+              data-testid="snapshot-type-filters"
+            >
               {visibleFilters.map(({ value, label }) => (
                 <button
                   key={value}
                   data-testid={`snapshot-filter-type-${value}`}
-                  // 44 px tall, except where a second 44 px row of filters would leave too little of the list.
                   className={[
-                    compact ? "px-3 py-1" : "min-h-11 px-3",
+                    "min-h-11 shrink-0 px-3",
                     "rounded-full text-xs font-medium border transition-colors",
                     effectiveTypeFilter === value
                       ? "bg-primary text-primary-foreground border-primary"

@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  connectedDeviceInfo: { current: null as Record<string, string> | null },
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
   invalidateForVisibilityResume: vi.fn(),
@@ -107,6 +108,13 @@ vi.mock("@/hooks/useDisplayProfile", () => ({
     setOverride: vi.fn(),
   }),
 }));
+vi.mock("@/hooks/useConnectionState", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/hooks/useConnectionState")>();
+  return {
+    ...actual,
+    useConnectionState: () => ({ ...actual.useConnectionState(), deviceInfo: mocks.connectedDeviceInfo.current }),
+  };
+});
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlagValue: () => false,
   FeatureFlagsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -181,6 +189,9 @@ vi.mock("@/components/DeviceDiscoveryInterstitial", () => ({
   DeviceDiscoveryInterstitial: () => <div data-testid="device-discovery-interstitial" />,
 }));
 vi.mock("@/components/TraceContextBridge", () => ({ TraceContextBridge: mocks.traceContextBridge }));
+vi.mock("@/components/NotificationPermissionMoment", () => ({
+  NotificationPermissionMoment: () => <div data-testid="notification-permission-moment" />,
+}));
 vi.mock("@/components/diagnostics/GlobalDiagnosticsOverlay", () => ({
   GlobalDiagnosticsOverlay: () => <div data-testid="global-diagnostics-overlay" />,
 }));
@@ -331,6 +342,25 @@ describe("App runtime wiring", () => {
     beforeEach(() => {
       mocks.variantId.current = "c64u-remote";
       mocks.function1Action.current = "gameMode";
+      mocks.connectedDeviceInfo.current = null;
+    });
+
+    it("does not launch Game Mode from 0 or F1 on a U2, which cannot stream", async () => {
+      mocks.extraFlags = { keypad_input_enabled: true, remote_input_enabled: true };
+      mocks.connectedDeviceInfo.current = { product: "Ultimate-II+L", firmware_version: "3.14", hostname: "u2" };
+      render(<App />);
+      await screen.findByText("Home Page");
+
+      fireEvent.keyDown(document.body, { key: "0", code: "Digit0" });
+      fireEvent.keyDown(document.body, { key: "F1", code: "F1" });
+
+      expect(mocks.startGameMode).not.toHaveBeenCalled();
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Game Mode is not available",
+          description: "This device cannot stream its picture. Remote Input still sends keys.",
+        }),
+      );
     });
 
     it("launches Game Mode from F1 when it is assigned there, moving to Home from a page with no sheet", async () => {
@@ -430,6 +460,14 @@ describe("App runtime wiring", () => {
 
     render(<App />);
     expect(await screen.findByText("Coverage Probe Page")).toBeInTheDocument();
+  });
+
+  it("mounts the notification permission request app-wide rather than on the Play page", async () => {
+    window.history.pushState({}, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("notification-permission-moment")).toBeInTheDocument();
   });
 
   it("renders NotFound for unknown routes outside the swipe navigation pages", async () => {

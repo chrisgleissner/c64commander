@@ -59,6 +59,12 @@
   --keypad-guidance-bar-height: calc(
     (2 * var(--keypad-guidance-padding-y)) + (var(--keypad-guidance-font-size) * 1.3) + 0.1rem + 3px
   );
+  /* What a dialog or sheet stands on: the guidance bar while it shows, and above it the toast strip. */
+  --app-bottom-overlay-reserved-height: calc(
+    var(--keypad-guidance-reserved-height, 0px) + var(--app-toast-reserved-height, 0px)
+  );
+  /* The toast strip sits on the guidance bar, so a toast never moves the bar. */
+  --app-toast-strip-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-reserved-height, 0px));
   /* Keeps a keypad-focused control clear of the guidance bar and tab bar (`.keypad-scroll-anchor`). */
   --keypad-scroll-margin-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-bar-height) + 0.5rem);
 }
@@ -110,7 +116,10 @@
     .startup-launch-sequence,
     .progress-indeterminate,
     :focus-visible,
-    [data-search-landed]
+    [data-search-landed],
+    .scroll-position-indicator,
+    .scroll-position-thumb,
+    .letter-index-bubble
   ) {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
@@ -623,6 +632,23 @@ button:focus-visible,
   scroll-margin-bottom: var(--keypad-scroll-margin-bottom);
 }
 
+/* A sticky-chrome page scrolls in a box that already starts below the app bar and ends at the tab
+   bar; only the guidance bar lies over it. Counting the bars again made a card that fits scroll as
+   if it did not, leaving its bottom under the guidance bar. */
+[data-app-chrome="sticky"] .keypad-scroll-anchor {
+  scroll-margin-top: 0.5rem;
+  scroll-margin-bottom: calc(var(--keypad-guidance-reserved-height, 0px) + 0.5rem);
+}
+
+/* A Docs chapter the contents list jumps to lands with its header clear of the app bar. */
+.docs-chapter-anchor {
+  scroll-margin-top: calc(var(--safe-area-inset-top) + var(--app-bar-height, 72px) + 0.5rem);
+}
+
+[data-app-chrome="sticky"] .docs-chapter-anchor {
+  scroll-margin-top: 0.5rem;
+}
+
 /*
  * Context guidance bar (keypad_input_enabled). A fixed strip just above the bottom
  * tab bar that names the current scope and labels the Back / OK / Menu keys. The
@@ -639,12 +665,16 @@ button:focus-visible,
   bottom: var(--safe-area-inset-bottom, 0px);
 }
 
+:root[data-interstitial-active="true"] {
+  --app-toast-strip-bottom: calc(var(--safe-area-inset-bottom, 0px) + var(--keypad-guidance-reserved-height, 0px));
+}
+
 .keypad-guidance-bar {
   position: fixed;
   left: 0;
   right: 0;
-  /* Above the toast strip, which sits directly on the tab bar and is 0px tall without a toast. */
-  bottom: calc(var(--app-tab-bar-frame-height, 0px) + var(--app-toast-reserved-height, 0px));
+  /* Directly on the tab bar. The toast strip sits on this bar, so a toast never pushes it up the screen. */
+  bottom: var(--app-tab-bar-frame-height, 0px);
   z-index: 900;
   display: flex;
   align-items: center;
@@ -678,6 +708,20 @@ button:focus-visible,
   white-space: nowrap;
   text-overflow: ellipsis;
   color: hsl(var(--muted-foreground));
+  container-type: inline-size;
+}
+
+.keypad-guidance-breadcrumb-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Squeezed below a few characters, the breadcrumb showed one letter of "Remote Input": better none. */
+@container (max-width: 3rem) {
+  .keypad-guidance-breadcrumb-text {
+    display: none;
+  }
 }
 
 .keypad-guidance-crumb {
@@ -729,8 +773,34 @@ button:focus-visible,
  * the legend 7px past the right edge, which is why this is not gated on `compact` alone.
  */
 @media (max-width: 430px) {
+  /* A named two-line badge needs the space around the Quick menu; both controls keep 44px targets. */
+  .app-bar-actions:has([data-testid="unified-health-badge-stacked"]) {
+    gap: 0;
+  }
+
+  .app-bar-actions:has([data-testid="unified-health-badge-stacked"]) [data-testid="app-bar-quick-menu"] {
+    margin-inline-end: 0;
+  }
+
   .keypad-guidance-key[data-soft="shortcut"] {
     display: none;
+  }
+}
+
+/*
+ * A dialog on a screen the system keyboard has halved. With a fixed footer and header, the body
+ * between them was about 30 px at 213 px, too little for one field, so the field being typed into
+ * sat under the title or the buttons. Here the whole dialog scrolls instead, and its buttons are
+ * reached by scrolling, as they already are in the dialogs without a fixed footer.
+ */
+@media (max-height: 320px) {
+  [data-app-surface="dialog"] {
+    overflow-y: auto;
+  }
+
+  [data-app-surface="dialog"] > [data-surface-body="true"] {
+    flex: none;
+    overflow: visible;
   }
 }
 
@@ -1446,4 +1516,76 @@ button:focus-visible,
       outline-color 150ms ease-out,
       box-shadow 150ms ease-out;
   }
+}
+
+/* Page and surface scroll position (ScrollPositionIndicator). Muted foreground meets 3:1 against
+   every palette's background, card and muted surface; the halo keeps it legible over content. */
+.scroll-position-indicator {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 150;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.scroll-position-indicator[data-host="surface"] {
+  position: absolute;
+  z-index: 5;
+}
+
+.scroll-position-indicator[data-visible="true"] {
+  opacity: 1;
+  transition-duration: 80ms;
+}
+
+.scroll-position-thumb {
+  width: 3px;
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground));
+  box-shadow: 0 0 0 1px hsl(var(--background) / 0.85);
+  will-change: transform;
+}
+
+/* The scroll position drives the thumb directly, so it is not motion the reduced-motion setting
+   shortens: a time-based duration on a scroll-driven animation still spans the whole scroll range. */
+.scroll-position-thumb[data-mode="timeline"][data-tracking="true"] {
+  animation: scroll-position-travel linear both;
+  animation-timeline: var(--scroll-indicator-timeline);
+}
+
+@keyframes scroll-position-travel {
+  from {
+    transform: translate3d(var(--scroll-indicator-x), var(--scroll-indicator-from), 0);
+  }
+  to {
+    transform: translate3d(var(--scroll-indicator-x), var(--scroll-indicator-to), 0);
+  }
+}
+
+/* Playlist letter rail (LetterIndexRail): letters in a lane the list leaves free, so nothing is covered. */
+.letter-index-bubble {
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.letter-index-bubble[data-visible="true"] {
+  opacity: 1;
+  transition-duration: 60ms;
+}
+
+/* Dialogs lock page scrolling on <body> (react-remove-scroll), but pages scroll inside .page-shell and
+   the body never scrolls. The lock still switched the body's overflow, position, margin and a custom
+   property, which re-laid out and restyled the whole document on every dialog open and close. These
+   keep the body as it was; the lock's event blocking is unaffected. */
+html body[data-scroll-locked] {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  overscroll-behavior: auto;
+  position: static !important;
+  margin: 0 !important;
+  --removed-body-scroll-bar-size: initial;
 }

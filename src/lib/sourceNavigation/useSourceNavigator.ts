@@ -64,6 +64,8 @@ export type SourceNavigatorState = {
   navigateUp: () => void;
   navigateRoot: () => void;
   refresh: () => void;
+  /** Forget the last failure, which was reported already. The folder on screen is still the last one that worked. */
+  clearError: () => void;
 };
 
 const buildNavKey = (source: SourceLocation) => {
@@ -344,6 +346,8 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     goToFolder(path);
   }, [goToFolder, path, source]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   const cancelPendingSearch = useCallback(() => {
     // Both halves of "in flight": a keystroke that has not fired yet, and a walk that has.
     searchAbortRef.current?.abort();
@@ -445,5 +449,6 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     navigateUp,
     navigateRoot,
     refresh,
+    clearError,
   };
 };

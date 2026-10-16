@@ -537,6 +537,46 @@ describe("c64api branches", () => {
     expect(started).toEqual([1, 2]);
   });
 
+  it("serializeNativeDeviceRequest does not hold one device's request behind another device's held native call", async () => {
+    const started: string[] = [];
+    let settleUnreachableCall!: () => void;
+    const unreachableCall = new Promise<void>((resolve) => (settleUnreachableCall = resolve));
+
+    const unreachable = serializeNativeDeviceRequest(
+      (hold) => {
+        started.push("u2");
+        hold(unreachableCall, 10_000);
+        return Promise.reject(new Error("u2 timed out"));
+      },
+      1,
+      "u2",
+    );
+    const sameDevice = serializeNativeDeviceRequest(
+      () => {
+        started.push("u2-next");
+        return Promise.resolve("u2-next");
+      },
+      1,
+      "u2",
+    );
+    const otherDevice = serializeNativeDeviceRequest(
+      () => {
+        started.push("c64u");
+        return Promise.resolve("c64u");
+      },
+      1,
+      "c64u",
+    );
+
+    await expect(unreachable).rejects.toThrow("u2 timed out");
+    await expect(otherDevice).resolves.toBe("c64u");
+    expect(started).toEqual(["u2", "c64u"]);
+
+    settleUnreachableCall();
+    await expect(sameDevice).resolves.toBe("u2-next");
+    expect(started).toEqual(["u2", "c64u", "u2-next"]);
+  });
+
   it("serializeNativeDeviceRequest releases a held lane once the hold deadline passes", async () => {
     // A native call that never settles (a wedged bridge) must not stall the lane
     // forever, so the hold is bounded by an explicit deadline.

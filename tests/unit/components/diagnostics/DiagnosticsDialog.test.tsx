@@ -307,6 +307,19 @@ describe("DiagnosticsDialog", () => {
     setStoredTelnetPort(23);
   });
 
+  it("reports the first visible paint after that paint, not in the frame before it", async () => {
+    // Work started from the report (activity summaries, reconcilers) ran ahead of the first paint.
+    const onFirstVisible = vi.fn();
+    let callsDuringFirstFrame = -1;
+    renderDialog({ onFirstVisible });
+    requestAnimationFrame(() => {
+      callsDuringFirstFrame = onFirstVisible.mock.calls.length;
+    });
+
+    await waitFor(() => expect(onFirstVisible).toHaveBeenCalledTimes(1));
+    expect(callsDuringFirstFrame).toBe(0);
+  });
+
   it("reports the first visible paint once per open cycle", async () => {
     const onFirstVisible = vi.fn();
     const view = renderDialog({ onFirstVisible });
@@ -942,6 +955,16 @@ describe("DiagnosticsDialog", () => {
     const closing = heatMapPopupProps.calls.filter((call) => !call.open);
     expect(closing.length).toBeGreaterThan(0);
     expect(closing.every((call) => call.variant === "CONFIG")).toBe(true);
+  });
+
+  it("opens the Clear all confirmation on Cancel", async () => {
+    setViewportWidth(600);
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(screen.getByTestId("diagnostics-clear-all-trigger"));
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
   });
 
   it("keeps the primary diagnostics menu controls uniquely addressable", () => {

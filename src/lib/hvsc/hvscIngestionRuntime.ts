@@ -44,6 +44,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
+import { applyIngestedSidHeaders, discardIngestedSidHeaderIndex } from "./hvscIngestedSidHeaders";
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -201,6 +202,7 @@ const clearHvscLibraryData = async () => {
   await resetLibraryRoot();
   await resetHvscCache();
   await clearHvscBrowseIndexSnapshot();
+  await discardIngestedSidHeaderIndex();
   // STIL describes the library that is being removed. Leaving it behind would make a fresh install
   // of an older release look like it already had current tune notes.
   await clearStil();
@@ -813,48 +815,48 @@ const ingestArchivePathNative = async (options: {
           : { outcome: "success" },
       );
     }
-    ensureNotCancelled(cancelToken);
-
-    pipeline.transition("EXTRACTED");
-    pipeline.transition("INGESTING", { deletionCount: result.songsDeleted });
-
-    if (result.deletedVirtualPaths.length > 0) {
-      // HARD18-028: the native update path deletes files on disk (and their
-      // metadata DB rows) but never removed them from the JS browse-index
-      // snapshot that actually serves the Play page's HVSC browsing/search -
-      // deleted songs stayed listed/searchable forever, and moved songs
-      // appeared twice. Persisting the deletions BEFORE the songlengths
-      // reload below matters: that reload's load-merge-save round trip only
-      // ever ADDS paths, never removes them, so it must see an
-      // already-deletion-applied snapshot as its base. Mirrors the
-      // non-native ingestArchiveBuffer path's deleteSong/finalize sequence.
-      const browseIndex = await createHvscBrowseIndexMutable(plan.type);
-      result.deletedVirtualPaths.forEach((path) => browseIndex.deleteSong(path));
-      await browseIndex.finalize();
-    }
-
-    resetSonglengthsCache();
-    const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
-      archiveName,
-      archiveType: plan.type,
-      archiveVersion: plan.version,
-      mode: "native",
-    });
-    let nativeSonglengthsPerfError: Error | null = null;
     try {
-      // force: see ingestArchiveBuffer — installedVersion is set in applyIngestionSuccess()
-      // below, after this reload, so discovery must bypass the install-state gate.
-      await reloadHvscSonglengthsOnConfigChange({ force: true });
-    } catch (error) {
-      nativeSonglengthsPerfError = error as Error;
-      throw error;
+      ensureNotCancelled(cancelToken);
+
+      pipeline.transition("EXTRACTED");
+      pipeline.transition("INGESTING", { deletionCount: result.songsDeleted });
+
+      if (result.deletedVirtualPaths.length > 0) {
+        // HARD18-028: remove natively deleted songs from the browse index BEFORE the songlengths reload below,
+        // whose load-merge-save only ever adds paths. Mirrors ingestArchiveBuffer's deleteSong/finalize sequence.
+        const browseIndex = await createHvscBrowseIndexMutable(plan.type);
+        result.deletedVirtualPaths.forEach((path) => browseIndex.deleteSong(path));
+        await browseIndex.finalize();
+      }
+
+      resetSonglengthsCache();
+      const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
+        archiveName,
+        archiveType: plan.type,
+        archiveVersion: plan.version,
+        mode: "native",
+      });
+      let nativeSonglengthsPerfError: Error | null = null;
+      try {
+        // force: see ingestArchiveBuffer — installedVersion is set in applyIngestionSuccess()
+        // below, after this reload, so discovery must bypass the install-state gate.
+        await reloadHvscSonglengthsOnConfigChange({ force: true });
+      } catch (error) {
+        nativeSonglengthsPerfError = error as Error;
+        throw error;
+      } finally {
+        endHvscPerfScope(
+          nativeSonglengthsPerfScope,
+          nativeSonglengthsPerfError
+            ? { outcome: "error", errorMessage: nativeSonglengthsPerfError.message }
+            : { outcome: "success" },
+        );
+      }
+      if (result.sidHeaderIndexPath) {
+        await applyIngestedSidHeaders(result.sidHeaderIndexPath, () => ensureNotCancelled(cancelToken));
+      }
     } finally {
-      endHvscPerfScope(
-        nativeSonglengthsPerfScope,
-        nativeSonglengthsPerfError
-          ? { outcome: "error", errorMessage: nativeSonglengthsPerfError.message }
-          : { outcome: "success" },
-      );
+      if (result.sidHeaderIndexPath) await discardIngestedSidHeaderIndex(result.sidHeaderIndexPath);
     }
     if (result.failedSongs > 0) {
       applyIngestionFailureAndThrow({

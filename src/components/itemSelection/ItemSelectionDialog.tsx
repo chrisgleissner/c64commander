@@ -33,7 +33,7 @@ import type { SourceEntry, SelectedItem, SourceLocation } from "@/lib/sourceNavi
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
 import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
-import { ItemSelectionView } from "./ItemSelectionView";
+import { ItemSelectionView, type GoUpOnBack } from "./ItemSelectionView";
 import { ItemSelectionSearch } from "./ItemSelectionSearch";
 import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
@@ -121,6 +121,7 @@ export const ItemSelectionDialog = ({
   const autoConfirmInFlightRef = useRef(false);
   const [confirmInFlight, setConfirmInFlight] = useState(false);
   const confirmInFlightRef = useRef(false);
+  const goUpOnBackRef = useRef<GoUpOnBack | null>(null);
 
   const localSources = useMemo(
     () => sourceGroups.flatMap((group) => group.sources).filter((item) => item.type === "local"),
@@ -155,19 +156,14 @@ export const ItemSelectionDialog = ({
   const archiveConfig = source ? (archiveConfigs?.[source.id] ?? null) : null;
 
   const browser = useSourceNavigator(isArchiveSource ? null : source);
+  const clearBrowseErrorRef = useRef(browser.clearError);
+  clearBrowseErrorRef.current = browser.clearError;
 
-  useEffect(() => {
-    if (!browser.error || !open) return;
-    reportUserError({
-      operation: "BROWSE",
-      title: "Browse failed",
-      description: browser.error,
-      context: { sourceId: selectedSourceId },
-    });
-  }, [browser.error, open, reportUserError, selectedSourceId]);
-
+  // A browse failure is shown inside the sheet (and logged by the navigator). As a toast it was drawn under the
+  // sheet, so nothing happened on screen, and it was raised again each time the sheet reopened.
   useEffect(() => {
     if (!open) return;
+    clearBrowseErrorRef.current();
     setSelectedSourceId(initialSourceId);
     setSelection(new Map());
     setArchiveSelection(new Map());
@@ -676,10 +672,19 @@ export const ItemSelectionDialog = ({
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
       {/* A browser is its list: on the smallest screen it takes the header's height too. */}
-      <AppSheetContent className="overflow-hidden p-0" fullScreen={profile === "compact"}>
+      <AppSheetContent
+        className="overflow-hidden p-0"
+        fullScreen={profile === "compact"}
+        onEscapeKeyDown={(event) => {
+          if (goUpOnBackRef.current?.()) event.preventDefault();
+        }}
+      >
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {compactHeader ? (
             <AppSheetHeader
+              // Keep the list usable with system bars and wider fallback fonts. The header's
+              // controls retain their 44px targets; only the surrounding vertical space shrinks.
+              style={{ paddingTop: "2px", paddingBottom: "2px" }}
               actions={headerConfirmButton}
               titleContent={
                 <AppSheetTitle className="flex min-w-0 items-center gap-2 text-base" data-testid="add-items-title">
@@ -712,6 +717,7 @@ export const ItemSelectionDialog = ({
               "shrink-0 border-b border-border",
               compactHeader ? "space-y-2" : "space-y-3",
               bodyPaddingClassName,
+              compactHeader && "py-0",
             )}
           >
             {compactHeader ? null : (
@@ -781,27 +787,39 @@ export const ItemSelectionDialog = ({
                   onClearSelection={() => setArchiveSelection(new Map())}
                 />
               ) : (
-                <ItemSelectionView
-                  path={browser.path}
-                  rootPath={source.rootPath}
-                  entries={visibleEntries}
-                  isLoading={browser.isLoading}
-                  showLoadingIndicator={browser.showLoadingIndicator}
-                  selection={selection}
-                  onToggleSelect={toggleSelection}
-                  onOpen={browser.navigateTo}
-                  onNavigateUp={browser.navigateUp}
-                  onNavigateRoot={browser.navigateRoot}
-                  onRefresh={browser.refresh}
-                  showFolderSelect={allowFolderSelection && !browser.isSearching}
-                  emptyLabel={
-                    browser.isSearching
-                      ? "Nothing found. Try a shorter search, or part of the composer's name."
-                      : browser.searchScope === "source" && !browser.searchIsInstant
-                        ? "Type what you are looking for, then Scan."
-                        : "No matching items in this folder."
-                  }
-                />
+                <>
+                  {browser.error ? (
+                    <p
+                      role="alert"
+                      className="mb-2 rounded-md border border-destructive/60 bg-destructive/10 px-3 py-2 text-base leading-snug text-destructive"
+                      data-testid="item-selection-browse-error"
+                    >
+                      {browser.error}
+                    </p>
+                  ) : null}
+                  <ItemSelectionView
+                    path={browser.path}
+                    rootPath={source.rootPath}
+                    entries={visibleEntries}
+                    isLoading={browser.isLoading}
+                    showLoadingIndicator={browser.showLoadingIndicator}
+                    selection={selection}
+                    onToggleSelect={toggleSelection}
+                    onOpen={browser.navigateTo}
+                    onNavigateUp={browser.navigateUp}
+                    onNavigateRoot={browser.navigateRoot}
+                    goUpOnBackRef={goUpOnBackRef}
+                    onRefresh={browser.refresh}
+                    showFolderSelect={allowFolderSelection && !browser.isSearching}
+                    emptyLabel={
+                      browser.isSearching
+                        ? "Nothing found. Try a shorter search, or part of the composer's name."
+                        : browser.searchScope === "source" && !browser.searchIsInstant
+                          ? "Type what you are looking for, then Scan."
+                          : "No matching items in this folder."
+                    }
+                  />
+                </>
               )}
               {!isArchiveSource && browser.hasMore ? (
                 <div className="pt-2">

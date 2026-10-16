@@ -118,3 +118,10 @@ export const getBackgroundRediscoveryDelayMs = (baseIntervalMs: number, failureC
   const delay = safeBaseMs * 2 ** exponent;
   return Math.min(delay, BACKGROUND_REDISCOVERY_MAX_DELAY_MS);
 };
+
+const OFFLINE_DISCOVERY_SWEEP_FIRST_GAP_MS = 5 * 60_000;
+const OFFLINE_DISCOVERY_SWEEP_MAX_GAP_MS = 30 * 60_000;
+
+/** How long to wait after the `sweepsRun`-th saved-device sweep and LAN scan of one offline spell before the next. */
+export const getOfflineDiscoverySweepGapMs = (sweepsRun: number) =>
+  Math.min(OFFLINE_DISCOVERY_SWEEP_MAX_GAP_MS, OFFLINE_DISCOVERY_SWEEP_FIRST_GAP_MS * 2 ** Math.max(0, sweepsRun - 1));

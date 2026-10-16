@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { addErrorLog } from "@/lib/logging";
@@ -267,8 +267,6 @@ export const useQueryFilteredPlaylist = ({
     viewAllLimit,
   ]);
 
-  const activeViewAllPlaylist = repositoryReady ? queryFilteredPlaylist : memoryViewAllPlaylist;
-  const activeTotalMatchCount = repositoryReady ? totalMatchCount : memoryFilteredPlaylist.length;
   // A repository count left over from other inputs, or the 0 before the first query answers, is not a match count.
   const matchCountIsCurrent =
     !repositoryReady ||
@@ -276,7 +274,22 @@ export const useQueryFilteredPlaylist = ({
       repositoryResultInputs.playlistStorageKey === playlistStorageKey &&
       repositoryResultInputs.playlistTypeFilters === playlistTypeFilters &&
       repositoryResultInputs.query === query);
+  // Until the repository answers for these inputs, the list stays as last shown: switching to the repository when its
+  // commit turned ready showed its answer for the playlist before the restore, an empty list, as "No tracks".
+  const shownResultsRef = useRef({ viewAll: memoryViewAllPlaylist, total: memoryFilteredPlaylist.length });
+  if (matchCountIsCurrent) {
+    shownResultsRef.current = repositoryReady
+      ? { viewAll: queryFilteredPlaylist, total: totalMatchCount }
+      : { viewAll: memoryViewAllPlaylist, total: memoryFilteredPlaylist.length };
+  }
+  const activeViewAllPlaylist = shownResultsRef.current.viewAll;
+  const activeTotalMatchCount = shownResultsRef.current.total;
   const hiddenByFilterCount = matchCountIsCurrent && activeTotalMatchCount === 0 ? playlist.length : 0;
+  const ensureViewAllLoaded = useCallback(
+    (count: number) =>
+      setViewAllLimit((current) => (current >= count ? current : Math.ceil(count / viewAllPageSize) * viewAllPageSize)),
+    [viewAllPageSize],
+  );
   const previewPlaylist = useMemo(
     () => activeViewAllPlaylist.slice(0, previewLimit),
     [activeViewAllPlaylist, previewLimit],
@@ -289,5 +302,6 @@ export const useQueryFilteredPlaylist = ({
     hiddenByFilterCount,
     hasMoreViewAllResults: activeViewAllPlaylist.length < activeTotalMatchCount,
     loadMoreViewAllResults: () => setViewAllLimit((current) => current + viewAllPageSize),
+    ensureViewAllLoaded,
   };
 };

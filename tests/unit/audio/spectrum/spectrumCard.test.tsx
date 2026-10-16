@@ -127,7 +127,22 @@ describe("SpectrumCard", () => {
     expect(screen.getByTestId("spectrum-rms")).toHaveTextContent("-20");
     expect(screen.getByTestId("spectrum-peak")).toHaveTextContent("-3");
     expect(screen.getByTestId("spectrum-clip")).toHaveAttribute("data-clipping", "true");
+    act(() =>
+      lastOptions().onReadout({
+        rmsDb: -20,
+        peakDb: -3,
+        clipped: false,
+        channels: [
+          { label: "L", rmsDb: -21, peakDb: -7 },
+          { label: "R", rmsDb: null, peakDb: null },
+        ],
+      }),
+    );
+    expect(screen.getByTestId("spectrum-channel-readout")).toHaveTextContent(
+      "L: average -21 dBFS, peak -7 dBFS. R: average — dBFS, peak — dBFS",
+    );
     act(() => lastOptions().onReadout({ rmsDb: null, peakDb: null, clipped: false }));
+    expect(screen.getByTestId("spectrum-channel-readout")).toHaveTextContent("");
     expect(screen.getByTestId("spectrum-rms")).toHaveTextContent("—");
     expect(screen.getByTestId("spectrum-peak")).toHaveTextContent("—");
     expect(screen.getByTestId("spectrum-clip")).toHaveAttribute("data-clipping", "false");
@@ -172,8 +187,8 @@ describe("SpectrumCard", () => {
     const component = render(<SpectrumCard soundOnPhone paused={false} />);
     expect(created.views).toHaveLength(1);
     expect(lastOptions().profile).toBe("compact");
-    expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "150px" });
-    expect(screen.getByText("Clip")).toHaveClass("sr-only");
+    expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "194px" });
+    expect(screen.getByTestId("spectrum-readout")).toHaveClass("sr-only");
     const compactView = lastView();
     state.profile = "expanded";
     component.rerender(<SpectrumCard soundOnPhone paused={false} />);
@@ -181,11 +196,10 @@ describe("SpectrumCard", () => {
     expect(created.views).toHaveLength(2);
     expect(lastOptions().profile).toBe("expanded");
     expect(lastView().setState).toHaveBeenLastCalledWith({ visible: true, paused: false });
-    expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "240px" });
-    expect(screen.getByText("Clip")).not.toHaveClass("sr-only");
+    expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "324px" });
     state.profile = "unheard-of";
     component.rerender(<SpectrumCard soundOnPhone paused={false} />);
-    expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "190px" });
+    expect(screen.getByTestId("spectrum-canvas")).toHaveStyle({ height: "274px" });
   });
 
   it("releases the view and its observers on unmount", () => {

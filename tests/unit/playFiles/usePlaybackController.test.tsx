@@ -42,6 +42,7 @@ import {
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidVolumeSnapshot,
 } from "@/lib/config/sidVolumeControl";
+import { spiedPlaybackTime } from "../../helpers/playbackTime";
 
 const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
 const deviceInfoOverride = vi.hoisted(() => ({ current: undefined as Record<string, string> | undefined }));
@@ -185,6 +186,7 @@ const renderPlaybackController = (
     setAutoAdvanceDueAtMs?: ReturnType<typeof vi.fn>;
     ensurePlaybackConnection?: ReturnType<typeof vi.fn>;
     ensureUnmuted?: ReturnType<typeof vi.fn>;
+    isManualMuteHeld?: () => boolean;
     applyAudioMixerUpdates?: ReturnType<typeof vi.fn>;
     restoreVolumeOverrides?: ReturnType<typeof vi.fn>;
     dispatchVolume?: ReturnType<typeof vi.fn>;
@@ -236,10 +238,13 @@ const renderPlaybackController = (
       isPaused: options?.statefulPause ? pausedState : (options?.isPaused ?? false),
       setIsPaused: options?.statefulPause ? setPausedState : (options?.setIsPaused ?? vi.fn()),
       setIsPlaylistLoading: options?.setIsPlaylistLoading ?? vi.fn(),
-      elapsedMs: options?.elapsedMs ?? 0,
-      setElapsedMs: options?.setElapsedMs ?? vi.fn(),
-      playedMs: 0,
-      setPlayedMs: options?.setPlayedMs ?? vi.fn(),
+      playbackTime: useState(() =>
+        spiedPlaybackTime({
+          elapsedMs: options?.elapsedMs,
+          setElapsedMs: options?.setElapsedMs,
+          setPlayedMs: options?.setPlayedMs,
+        }),
+      )[0],
       durationMs: options?.durationMs,
       setDurationMs: options?.setDurationMs ?? vi.fn(),
       setCurrentSubsongCount: options?.setCurrentSubsongCount ?? vi.fn(),
@@ -295,6 +300,7 @@ const renderPlaybackController = (
       setTrackInstanceId: options?.setTrackInstanceId ?? vi.fn(),
       setAutoAdvanceDueAtMs: options?.setAutoAdvanceDueAtMs ?? vi.fn(),
       ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
+      isManualMuteHeld: options?.isManualMuteHeld ?? (() => false),
       localSidPlaybackController: options?.localSidPlaybackController as any,
       stationActiveRef: options?.stationActiveRef,
     });
@@ -1367,6 +1373,38 @@ describe("usePlaybackController", () => {
     expect(result.current.pauseShown).toBe(false);
   });
 
+  it("keeps the listener's own Mute when a failed pause rolls its mute back", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const dispatchVolume = vi.fn();
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getC64API).mockReturnValue({ machinePause: vi.fn().mockRejectedValue(new Error("pause failed")) } as any);
+    const pauseMuteSnapshotRef = { current: null };
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: false,
+      dispatchVolume,
+      applyAudioMixerUpdates,
+      ensureUnmuted,
+      isManualMuteHeld: () => true,
+      enabledSidVolumeItems: [{ name: "SID 1", value: "OFF", options: ["OFF", "-42 dB", "0 dB"] }],
+      pauseMuteSnapshotRef,
+      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({ "SID 1": "OFF" }),
+      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: { "SID 1": "0 dB" }, enablement: {} }),
+      snapshotToUpdates: vi.fn().mockReturnValue({ "SID 1": "0 dB" }),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(applyAudioMixerUpdates).not.toHaveBeenCalledWith(expect.anything(), "Pause mute rollback");
+    expect(ensureUnmuted).not.toHaveBeenCalled();
+    expect(dispatchVolume).toHaveBeenLastCalledWith({ type: "mute", reason: "manual" });
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+  });
+
   it("restores the pause mute snapshot when machine pause fails after muting", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
@@ -1472,6 +1510,41 @@ describe("usePlaybackController", () => {
     await result.current.handlePauseResume();
 
     expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
+    expect(pauseMuteSnapshotRef.current).toBeNull();
+  });
+
+  it("keeps the listener's own Mute on resume instead of restoring the volume saved before it", async () => {
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    const dispatchVolume = vi.fn();
+    const pauseMuteSnapshotRef = {
+      current: { volumes: { "Vol Master": "0 dB" }, enablement: {} },
+    };
+    vi.mocked(getC64API).mockReturnValue({ machineResume: vi.fn().mockResolvedValue(undefined) } as any);
+
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      applyAudioMixerUpdates,
+      ensureUnmuted,
+      dispatchVolume,
+      isManualMuteHeld: () => true,
+      pauseMuteSnapshotRef,
+      enabledSidVolumeItems: [{ name: "Vol Master", value: "OFF", options: ["OFF", "-42 dB", "0 dB", "+6 dB"] }],
+      snapshotToUpdates: vi.fn((snapshot: any) =>
+        buildEnabledSidUnmuteUpdates(snapshot?.volumes, snapshot?.enablement ?? {}),
+      ),
+    });
+
+    await result.current.handlePauseResume();
+
+    expect(applyAudioMixerUpdates).not.toHaveBeenCalledWith(expect.anything(), "Resume unmute");
+    expect(ensureUnmuted).not.toHaveBeenCalled();
+    expect(dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "manual" });
+    expect(dispatchVolume).not.toHaveBeenCalledWith({ type: "unmute", reason: "pause" });
     expect(pauseMuteSnapshotRef.current).toBeNull();
   });
 
@@ -3706,6 +3779,39 @@ describe("usePlaybackController", () => {
       expect(setIsPlaying).not.toHaveBeenCalledWith(false);
       expect(autoAdvanceGuardRef.current!.autoFired).toBe(false);
       expect(autoAdvanceGuardRef.current!.dueAtMs).toBe(trackStartedAtRef.current! + 120_000);
+    });
+
+    // The next tune starts the start margin before the songlength. With the crossfade off the phone has to
+    // play the outgoing tune on to that songlength, so it needs to know where that is.
+    it("tells the phone where the outgoing tune ends when the playlist moves on by itself", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const trackInstanceIdRef = { current: 0 };
+      const autoAdvanceGuardRef = { current: null as unknown };
+      const playlist = [sidItem(psid), sidItem(psid, 1, "sid-2")];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        trackInstanceIdRef,
+        autoAdvanceGuardRef,
+        durationMs: 120_000,
+      } as any);
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect((controller.play.mock.calls[0] as unknown[])[3]).toMatchObject({ outgoingEndsAtSeconds: undefined });
+      autoAdvanceGuardRef.current = {
+        trackInstanceId: trackInstanceIdRef.current,
+        dueAtMs: 0,
+        autoFired: false,
+        userCancelled: false,
+      };
+
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+
+      expect(controller.play).toHaveBeenCalledTimes(2);
+      expect((controller.play.mock.calls[1] as unknown[])[3]).toMatchObject({ outgoingEndsAtSeconds: 120 });
     });
 
     it("ends the last tune when it comes due again after being deferred once, as when its playhead has stalled", async () => {

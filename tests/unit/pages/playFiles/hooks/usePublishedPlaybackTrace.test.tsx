@@ -12,7 +12,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { getDecisionStateSnapshot } from "@/lib/diagnostics/decisionState";
 import type { TracePlaybackContext } from "@/lib/tracing/types";
-import { usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedPlaybackTrace";
+import { type PlaybackTraceState, usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedPlaybackTrace";
+import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import { getPlaybackTraceSnapshot, setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 
 const playing: TracePlaybackContext = {
@@ -23,10 +24,17 @@ const playing: TracePlaybackContext = {
   elapsedMs: 12_000,
 };
 
+const withoutElapsed = (context: TracePlaybackContext | null): PlaybackTraceState | null => {
+  if (!context) return null;
+  const { elapsedMs: _elapsedMs, ...state } = context;
+  return state;
+};
+
 const renderInPlaySlot = (context: TracePlaybackContext | null, initiallyOnScreen: boolean) => {
   let playOnScreen = initiallyOnScreen;
-  let published = context;
-  const rendered = renderHook(() => usePublishedPlaybackTrace(published), {
+  let published = withoutElapsed(context);
+  const playbackTime = createPlaybackTimeStore({ elapsedMs: context?.elapsedMs ?? 0, playedMs: 0 });
+  const rendered = renderHook(() => usePublishedPlaybackTrace(published, playbackTime), {
     wrapper: ({ children }: { children: React.ReactNode }) => (
       <ScreenActivityProvider active={playOnScreen}>{children}</ScreenActivityProvider>
     ),
@@ -37,8 +45,13 @@ const renderInPlaySlot = (context: TracePlaybackContext | null, initiallyOnScree
       rendered.rerender();
     },
     publish: (next: TracePlaybackContext | null) => {
-      published = next;
+      published = withoutElapsed(next);
+      playbackTime.setElapsedMs(next?.elapsedMs ?? 0);
       rendered.rerender();
+    },
+    tick: async (elapsedMs: number) => {
+      playbackTime.setElapsedMs(elapsedMs);
+      await Promise.resolve();
     },
     unmount: rendered.unmount,
   };
@@ -64,6 +77,13 @@ describe("usePublishedPlaybackTrace", () => {
     const advanced = { ...playing, currentIndex: 2, currentItemId: "tune-3" };
     play.publish(advanced);
     expect(getPlaybackTraceSnapshot()).toEqual(advanced);
+  });
+
+  it("publishes each new elapsed time without the page re-rendering", async () => {
+    const play = renderInPlaySlot(playing, true);
+    await play.tick(13_000);
+    expect(getPlaybackTraceSnapshot()).toEqual({ ...playing, elapsedMs: 13_000 });
+    expect(getDecisionStateSnapshot().playback.elapsedMs).toBe(13_000);
   });
 
   it("withdraws it when the page unmounts", () => {

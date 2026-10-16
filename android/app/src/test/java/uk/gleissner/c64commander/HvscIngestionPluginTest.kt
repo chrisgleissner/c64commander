@@ -11,6 +11,7 @@ import java.io.File
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.net.SocketException
+import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -21,6 +22,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -40,6 +43,7 @@ import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import uk.gleissner.c64commander.hvsc.ArchiveProfile
+import uk.gleissner.c64commander.hvsc.ExtractedSong
 import uk.gleissner.c64commander.hvsc.ExtractionProgress
 import uk.gleissner.c64commander.hvsc.ExtractionResult
 import uk.gleissner.c64commander.hvsc.HvscArchiveExtractor
@@ -862,6 +866,92 @@ class HvscIngestionPluginTest {
       assertEquals(1, deletedVirtualPaths.length())
       assertEquals("/MUSICIANS/T/Tester/Old.sid", deletedVirtualPaths.getString(0))
       assertTrue("deleted file must actually be removed from disk", !staleSong.exists())
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
+  }
+
+  private fun ingestUpdateResolving(extraction: ExtractionResult): JSObject {
+    val testablePlugin = TestableHvscIngestionPlugin()
+    injectBridge(testablePlugin, context)
+    testablePlugin.fakeExtractor = FakeHvscArchiveExtractor(extraction)
+    val archiveFile = File(context.filesDir, "hvsc-cache/fake-update.7z")
+    archiveFile.parentFile?.mkdirs()
+    archiveFile.writeText("not-a-real-archive-body")
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc-cache/fake-update.7z")
+    `when`(call.getString("mode")).thenReturn("update")
+    `when`(call.getBoolean("resetLibrary", false)).thenReturn(false)
+    `when`(call.getInt("progressEvery", 250)).thenReturn(250)
+    `when`(call.getInt("dbBatchSize", 500)).thenReturn(500)
+    `when`(call.getInt("minExpectedRows", 0)).thenReturn(0)
+    `when`(call.getBoolean("debugHeapLogging", false)).thenReturn(false)
+    val payloadHolder = arrayOfNulls<JSObject>(1)
+    doAnswer { invocation ->
+              payloadHolder[0] = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any(JSObject::class.java))
+
+    testablePlugin.ingestHvsc(call)
+    val deadline = System.currentTimeMillis() + 10_000
+    while (payloadHolder[0] == null && System.currentTimeMillis() < deadline) {
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+      Thread.sleep(10)
+    }
+    return payloadHolder[0] ?: error("ingestHvsc never resolved a payload")
+  }
+
+  private val ingestedSongs =
+          listOf(
+                  ExtractedSong(
+                          virtualPath = "/MUSICIANS/H/Hubbard_Rob/Stereo.sid",
+                          fileName = "Stereo.sid",
+                          songs = 5,
+                          startSong = 3,
+                          sidHeader = ByteArray(124) { (it * 7).toByte() },
+                  ),
+                  ExtractedSong(
+                          virtualPath = "/MUSICIANS/Q/Quote\"d/Short.sid",
+                          fileName = "Short.sid",
+                          songs = null,
+                          startSong = null,
+                          sidHeader = "PSID".toByteArray(Charsets.US_ASCII),
+                  ),
+          )
+
+  @Test
+  fun ingestHvscReportsAnIndexOfEachIngestedSongsRawSidHeader() {
+    try {
+      val payload =
+              ingestUpdateResolving(fakeExtractionResult(emptyList()).copy(extractedSongs = ingestedSongs))
+
+      assertEquals("hvsc/index/ingested-sid-headers.json", payload.getString("sidHeaderIndexPath"))
+      val index = JSONObject(File(context.filesDir, payload.getString("sidHeaderIndexPath")!!).readText())
+      assertEquals(ingestedSongs.size, index.length())
+      ingestedSongs.forEach { song ->
+        assertArrayEquals(song.sidHeader, Base64.getDecoder().decode(index.getString(song.virtualPath)))
+      }
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
+  }
+
+  @Test
+  fun ingestHvscStillResolvesWithoutAHeaderIndexWhenItCannotBeWritten() {
+    try {
+      File(context.filesDir, "hvsc").mkdirs()
+      File(context.filesDir, "hvsc/index").writeText("a file where the index directory belongs")
+
+      val payload =
+              ingestUpdateResolving(fakeExtractionResult(emptyList()).copy(extractedSongs = ingestedSongs))
+
+      assertFalse(payload.has("sidHeaderIndexPath"))
+      assertEquals(0, payload.getInt("songsDeleted"))
     } finally {
       File(context.filesDir, "hvsc").deleteRecursively()
       File(context.filesDir, "hvsc-cache").deleteRecursively()

@@ -58,6 +58,7 @@ export const createNormalNavigationFunctionShortcut = ({
 
 export interface RemoteFunctionHandlerOptions {
   remoteInputEnabled: boolean;
+  gameModeSupported: boolean;
   launchGameMode: () => void;
   currentPath: () => string;
 }
@@ -80,6 +81,7 @@ const publishTransport = (action: RemoteFunctionAction, command: TransportComman
 
 export const createRemoteFunctionHandlers = ({
   remoteInputEnabled,
+  gameModeSupported,
   launchGameMode,
   currentPath,
 }: RemoteFunctionHandlerOptions): FunctionShortcutHandlers => ({
@@ -88,6 +90,10 @@ export const createRemoteFunctionHandlers = ({
   gameMode: () => {
     if (!remoteInputEnabled) {
       explainUnavailable("gameMode", "Remote Input is turned off. Turn it on in Settings to use Game Mode.");
+      return;
+    }
+    if (!gameModeSupported) {
+      explainUnavailable("gameMode", "This device cannot stream its picture. Remote Input still sends keys.");
       return;
     }
     launchGameMode();

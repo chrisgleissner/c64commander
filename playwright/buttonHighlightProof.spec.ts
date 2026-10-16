@@ -166,7 +166,9 @@ test.describe("CTA highlight proof", () => {
   test("play-page change button clears retained pointer focus when the app regains focus", async ({ page }) => {
     await page.goto("/play");
 
-    const changeButton = page.getByTestId("play-section-playback").getByRole("button", { name: "Change", exact: true });
+    const changeButton = page
+      .getByTestId("play-section-playback")
+      .getByRole("button", { name: "Change songlengths file", exact: true });
     await expect(changeButton).toBeVisible();
 
     const state = await changeButton.evaluate((element, flashAttr) => {

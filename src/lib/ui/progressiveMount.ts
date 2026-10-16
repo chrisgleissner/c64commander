@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { SECTION_OPEN_REQUEST_EVENT, type SectionOpenRequestDetail } from "./collapsibleSectionStore";
+import { completeStagedRows, setStagedRowsEnabled } from "./stagedRows";
 
 /**
  * Lets a page draw at once and fill in behind the first paint. Rendering a page with every card open
@@ -17,8 +18,13 @@ import { SECTION_OPEN_REQUEST_EVENT, type SectionOpenRequestDetail } from "./col
  * screen below it, is built before the first paint, so nothing visible arrives late; the rest are
  * built one per task after it on the first visit, so a tap or a key is handled between them.
  * On return visits, measured distant bodies wait until needed, reserving their previous height.
+ *
+ * The allowance is per page and lasts until that page commits, not per task: React renders a page in
+ * 5 ms slices with a task boundary between them, so a per-task allowance was renewed every slice and
+ * Settings built all twelve open bodies before its first paint. It is held by card id, so a render
+ * React throws away and starts again gives the same two cards their bodies rather than none.
  */
-const IMMEDIATE_MOUNTS_PER_TASK = 2;
+const IMMEDIATE_MOUNTS_PER_COMMIT = 2;
 
 /** How far below the viewport a card still counts as on screen, in viewport heights. */
 const NEAR_VIEWPORT = 1.5;
@@ -30,8 +36,7 @@ const isNearViewport = (element: Element) => {
 };
 
 let enabled = true;
-let immediateMountsThisTask = 0;
-let taskEndScheduled = false;
+const immediateMountsByScope = new Map<string, Set<string>>();
 type WaitingMount = { mount: () => void; anchor: RefObject<Element | null>; reserveHeight: boolean };
 
 const waiting: WaitingMount[] = [];
@@ -40,19 +45,18 @@ let drainScheduled = false;
 /** Mount everything at once. For tests that assert on a page's content right after rendering it. */
 export const setProgressiveMountEnabled = (value: boolean) => {
   enabled = value;
+  setStagedRowsEnabled(value);
 };
 
-const claimImmediateMount = (): boolean => {
+export type ProgressiveCard = { scope: string; id: string };
+
+const claimImmediateMount = ({ scope, id }: ProgressiveCard): boolean => {
   if (!enabled) return true;
-  if (!taskEndScheduled) {
-    taskEndScheduled = true;
-    queueMicrotask(() => {
-      immediateMountsThisTask = 0;
-      taskEndScheduled = false;
-    });
-  }
-  if (immediateMountsThisTask >= IMMEDIATE_MOUNTS_PER_TASK) return false;
-  immediateMountsThisTask += 1;
+  const claimed = immediateMountsByScope.get(scope) ?? new Set<string>();
+  immediateMountsByScope.set(scope, claimed);
+  if (claimed.has(id)) return true;
+  if (claimed.size >= IMMEDIATE_MOUNTS_PER_COMMIT) return false;
+  claimed.add(id);
   return true;
 };
 
@@ -159,20 +163,23 @@ const queueMount = (entry: WaitingMount): (() => void) => {
 };
 
 /**
- * Builds every waiting card now. A navigation key calls this before the focus ring reads the page:
- * a card's own labelled sections are ring stops once its body is built, so a key pressed while cards
- * were still waiting took a different path through the page. Returns whether anything was built.
+ * Builds every waiting card now, and the rows still waiting inside built cards. A navigation key calls
+ * this before the focus ring reads the page: a card's own labelled sections and rows are ring stops
+ * once they are built, so a key pressed while they were still waiting took a different path through
+ * the page. Returns whether anything was built.
  */
 export const mountAllWaiting = (scope?: Element): boolean => {
   const entries = waiting.filter((entry) => !scope || (entry.anchor.current && scope.contains(entry.anchor.current)));
-  if (entries.length === 0) return false;
   for (const entry of entries) {
     waiting.splice(waiting.indexOf(entry), 1);
     if (entry.anchor.current) viewportObserver?.unobserve(entry.anchor.current);
   }
-  if (waiting.length === 0) stopWatchingScroll();
-  flushSync(() => entries.forEach((entry) => entry.mount()));
-  return true;
+  if (entries.length > 0) {
+    if (waiting.length === 0) stopWatchingScroll();
+    flushSync(() => entries.forEach((entry) => entry.mount()));
+  }
+  const builtRows = completeStagedRows(scope);
+  return entries.length > 0 || builtRows;
 };
 
 /**
@@ -181,13 +188,18 @@ export const mountAllWaiting = (scope?: Element): boolean => {
  * a card the user opens, is mounted at once.
  */
 export const useProgressiveMount = (
+  card: ProgressiveCard,
   wanted: boolean,
   anchor: RefObject<Element | null>,
   rememberedHeight?: number,
 ): boolean => {
   const [mounted, setMounted] = useState(
-    () => !enabled || !wanted || (!(rememberedHeight && rememberedHeight > 0) && claimImmediateMount()),
+    () => !enabled || !wanted || (!(rememberedHeight && rememberedHeight > 0) && claimImmediateMount(card)),
   );
+  const { scope } = card;
+  useLayoutEffect(() => {
+    immediateMountsByScope.delete(scope);
+  }, [scope]);
   useLayoutEffect(() => {
     if (!mounted && wanted && anchor.current && isNearViewport(anchor.current)) setMounted(true);
   }, [anchor, mounted, wanted]);

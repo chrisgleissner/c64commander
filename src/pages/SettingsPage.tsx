@@ -49,6 +49,7 @@ import { useAppStyleContext } from "@/components/AppStyleProvider";
 import { MATCH_MY_DEVICE_SENTINEL } from "@/lib/appStyles/matchMyDevice";
 import type { AppStyle, AppStyleColors, AppStyleMode } from "@/generated/appStyles";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
+import { AddSavedDeviceDialog } from "@/components/devices/AddSavedDeviceDialog";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -219,7 +220,7 @@ import {
 } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
-import { useConnectionState } from "@/hooks/useConnectionState";
+import { DemoProbeNote } from "@/pages/settings/DemoProbeNote";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
@@ -237,8 +238,8 @@ import {
   validateSavedDevicePorts,
 } from "@/lib/savedDevices/deviceEditor";
 import {
-  addSavedDevice,
   buildSavedDevicePrimaryLabel,
+  describeSavedDeviceForConfirmation,
   getSavedDevicesSnapshot,
   removeSavedDevice,
   resolveCanonicalProductFamilyCode,
@@ -331,7 +332,6 @@ export default function SettingsPage() {
   const [textScaleId, setTextScaleIdState] = useState(getTextScaleId);
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
-  const connectionSnapshot = useConnectionState();
   const deviceDiscovery = useDeviceDiscovery();
   const { theme, setTheme, resolvedTheme } = useThemeContext();
   const {
@@ -401,8 +401,6 @@ export default function SettingsPage() {
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
     null;
-  const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
-  const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
@@ -430,7 +428,11 @@ export default function SettingsPage() {
     disabled: deviceDiscovery.phase === "scanning",
   });
   const [deleteDependencySummary, setDeleteDependencySummary] = useState<SavedDeviceDependencySummary | null>(null);
-  const [deleteWarningOpen, setDeleteWarningOpen] = useState(false);
+  const [deleteTargetDeviceId, setDeleteTargetDeviceId] = useState<string | null>(null);
+  const deleteTargetDevice = savedDevices.devices.find((device) => device.id === deleteTargetDeviceId) ?? null;
+  const deleteTargetLabel = deleteTargetDevice ? describeSavedDeviceForConfirmation(deleteTargetDevice) : "this device";
+  const deleteReferenceCount = deleteDependencySummary?.totalCount ?? 0;
+  const [addDeviceOpen, setAddDeviceOpen] = useState(false);
   const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
@@ -908,31 +910,12 @@ export default function SettingsPage() {
     }
   });
 
-  const handleAddSavedDevice = trace(async function handleAddSavedDevice() {
-    const nextId =
-      (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
-      `${Date.now().toString(36)}-${Math.round(Math.random() * 1e6).toString(36)}`;
-    addSavedDevice({
-      id: nextId,
-      name: "",
-      host: C64_DEFAULTS.DEFAULT_DEVICE_HOST,
-      httpPort: C64_DEFAULTS.DEFAULT_HTTP_PORT,
-      ftpPort: getStoredFtpPort(),
-      telnetPort: getStoredTelnetPort(),
-      lastKnownProduct: null,
-      lastKnownHostname: null,
-      lastKnownUniqueId: null,
-      hasPassword: false,
-    });
-    await switchSavedDevice(nextId);
-  });
-
-  const performDeleteSelectedDevice = trace(async function performDeleteSelectedDevice() {
-    if (!selectedSavedDevice) return;
-    removeSavedDevice(selectedSavedDevice.id);
-    await clearPasswordForDevice(selectedSavedDevice.id);
+  const performDeleteDevice = trace(async function performDeleteDevice(deviceId: string) {
+    const selectedBeforeDelete = getSavedDevicesSnapshot().selectedDeviceId;
+    removeSavedDevice(deviceId);
+    await clearPasswordForDevice(deviceId);
     const nextSelected = getSavedDevicesSnapshot().selectedDeviceId;
-    if (nextSelected) {
+    if (nextSelected && nextSelected !== selectedBeforeDelete) {
       await switchSavedDevice(nextSelected);
     }
   });
@@ -944,7 +927,7 @@ export default function SettingsPage() {
     try {
       const summary = await getSavedDeviceDependencySummary(selectedSavedDevice.id);
       setDeleteDependencySummary(summary);
-      setDeleteWarningOpen(true);
+      setDeleteTargetDeviceId(selectedSavedDevice.id);
     } catch (error) {
       reportUserError({
         operation: "DEVICE_DELETE_DEPENDENCIES",
@@ -957,10 +940,11 @@ export default function SettingsPage() {
     }
   });
 
-  const confirmDeleteSelectedDevice = trace(async function confirmDeleteSelectedDevice() {
-    setDeleteWarningOpen(false);
+  const confirmDeleteDevice = trace(async function confirmDeleteDevice() {
+    const deviceId = deleteTargetDeviceId;
+    setDeleteTargetDeviceId(null);
     setDeleteDependencySummary(null);
-    await performDeleteSelectedDevice();
+    if (deviceId) await performDeleteDevice(deviceId);
   });
 
   const handleSelectSavedDevice = trace(async function handleSelectSavedDevice(deviceId: string) {
@@ -1634,7 +1618,7 @@ export default function SettingsPage() {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={handleAddSavedDevice}
+                        onClick={() => setAddDeviceOpen(true)}
                         aria-label="Add device"
                         title="Add device"
                         data-testid="settings-add-device"
@@ -1716,6 +1700,13 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
+                <AddSavedDeviceDialog
+                  open={addDeviceOpen}
+                  onOpenChange={setAddDeviceOpen}
+                  devices={savedDevices.devices}
+                  keypadInput={flags.keypad_input_enabled && isDefaultT9InputEnabled()}
+                  onAdded={handleSelectSavedDevice}
+                />
                 <div className="space-y-2">
                   <SavedDeviceEditorFields
                     draft={deviceDraft}
@@ -1738,13 +1729,11 @@ export default function SettingsPage() {
                   </HelperText>
                   {isDemoActive ? (
                     <HelperText>
-                      {isDemoModePinnedByUser()
-                        ? "Demo Mode stays on until you connect to a real device."
-                        : lastProbeSucceededAtMs
-                          ? "Real device detected during probe."
-                          : lastProbeFailedAtMs
-                            ? "No real device detected in recent probe."
-                            : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
+                      {isDemoModePinnedByUser() ? (
+                        "Demo Mode stays on until you connect to a real device."
+                      ) : (
+                        <DemoProbeNote />
+                      )}
                     </HelperText>
                   ) : null}
                 </div>
@@ -2036,10 +2025,10 @@ export default function SettingsPage() {
                 className={`break-words rounded-lg p-3 text-sm ${status.isConnected ? "bg-success/10 text-success" : isDemoActive ? "bg-primary/10 text-primary" : status.isConnecting ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}
               >
                 <AlertDialog
-                  open={deleteWarningOpen}
+                  open={deleteTargetDeviceId !== null}
                   onOpenChange={(open) => {
-                    setDeleteWarningOpen(open);
                     if (!open) {
+                      setDeleteTargetDeviceId(null);
                       setDeleteDependencySummary(null);
                     }
                   }}
@@ -2048,26 +2037,18 @@ export default function SettingsPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
                       {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
-                      <AlertDialogDescription
-                        className={(deleteDependencySummary?.totalCount ?? 0) > 0 ? undefined : "not-sr-only"}
-                      >
-                        {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
+                      <AlertDialogDescription className={deleteReferenceCount > 0 ? undefined : "not-sr-only"}>
+                        {deleteReferenceCount > 0 ? (
                           <>
-                            Removing{" "}
-                            {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}{" "}
-                            will disconnect {deleteDependencySummary?.totalCount ?? 0} saved item
-                            {(deleteDependencySummary?.totalCount ?? 0) === 1 ? "" : "s"} that still point to it.
+                            Removing {deleteTargetLabel} will disconnect {deleteReferenceCount} saved item
+                            {deleteReferenceCount === 1 ? "" : "s"} that still point to it.
                           </>
                         ) : (
-                          <>
-                            Remove{" "}
-                            {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"}{" "}
-                            from your saved devices? This can&apos;t be undone.
-                          </>
+                          <>Remove {deleteTargetLabel} from your saved devices? This can&apos;t be undone.</>
                         )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
+                    {deleteReferenceCount > 0 ? (
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <p>Those items will stay in your playlists and disk library.</p>
                         <p>
@@ -2085,10 +2066,10 @@ export default function SettingsPage() {
                       </div>
                     ) : null}
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => {
-                          void confirmDeleteSelectedDevice();
+                          void confirmDeleteDevice();
                         }}
                       >
                         Delete device

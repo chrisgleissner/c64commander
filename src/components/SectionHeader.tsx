@@ -64,9 +64,11 @@ export function SectionHeader({
           ref={resetFocusRef}
           variant="outline"
           size="sm"
+          className="px-2 text-xs"
           onClick={resetAction}
           disabled={resetDisabled}
           data-testid={resetTestId}
+          aria-label={`${title}: ${isResetting ? "resetting" : resetLabel.toLowerCase()}`}
         >
           {isResetting ? "Resetting…" : resetLabel}
         </Button>

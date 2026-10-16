@@ -130,6 +130,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private ticker: ReturnType<typeof setInterval> | null = null;
   private port: { postMessage(message: ArrayBuffer): void } | null = null;
   private sent = 0;
+  private ownAudioListener: (() => void) | null = null;
 
   constructor(
     readonly sampleRate: number,
@@ -246,7 +247,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
     if (this.ticker !== null || this.closed) return;
     this.ticker = setInterval(() => {
       if (this.closed) return;
-      if (performance.now() - this.lastPollAtMs >= STATS_POLL_MS) void this.poll();
+      // Every tick while a listener waits for this tune's first sample, so the page changes title with the sound.
+      if (this.ownAudioListener || performance.now() - this.lastPollAtMs >= STATS_POLL_MS) void this.poll();
       this.announceEndings();
     }, TICK_MS);
   }
@@ -260,6 +262,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
       if (this.closed || !stats.known) return;
       this.stats = stats;
       this.maxUnderruns = Math.max(this.maxUnderruns, stats.underruns ?? 0);
+      // The feed does not count a predecessor's play-out as this session's, so played frames mean its own audio.
+      const heard = this.ownAudioListener;
+      if (heard && stats.active && (stats.playedFrames ?? 0) > 0) {
+        this.ownAudioListener = null;
+        heard();
+      }
       if (!this.suspended) {
         this.playheadSec = (stats.playedFrames ?? 0) / this.sampleRate;
         this.playheadAtMs = performance.now();
@@ -365,13 +373,14 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return this.maxUnderruns;
   }
 
-  beginTailPlayout(seconds: number): void {
+  beginTailPlayout(seconds: number, playOutDeclickSeconds = 0): void {
     if (this.closed) return;
     const seq = this.nextSeq();
+    const playOut = playOutDeclickSeconds > 0 ? { playOutDeclickSeconds } : {};
     this.call("starting the crossfade tail", () =>
-      this.backend.feed.beginTransition({ serial: this.serial, seq, seconds }),
+      this.backend.feed.beginTransition({ serial: this.serial, seq, seconds, ...playOut }),
     );
-    traceLocalSid("tail-playout-begin", { seconds });
+    traceLocalSid("tail-playout-begin", { seconds, playOut: playOutDeclickSeconds > 0 });
   }
 
   takeTail(maxSeconds: number): NativeCrossfadeTail {
@@ -382,6 +391,11 @@ class NativeLocalSidSink implements AudioScheduleSink {
       this.backend.feed.takeTail({ serial: this.serial, seq, tailId, maxSeconds }),
     );
     return { tailId, frames: Math.round(maxSeconds * this.sampleRate) };
+  }
+
+  onOwnAudioHeard(listener: () => void): void {
+    this.ownAudioListener = listener;
+    this.startTicking();
   }
 
   adoptTail(tail: CrossfadeTail, seconds: number): void {
@@ -481,9 +495,11 @@ export const createNativeLocalSidSink = (
     audioUnderruns: () => sink.underruns(),
     isSilentFault: () => sink.isSilentFault(),
     takeCrossfadeTail: (seconds: number) => sink.takeTail(seconds),
-    beginCrossfadeTailPlayout: (seconds: number) => sink.beginTailPlayout(seconds),
+    beginCrossfadeTailPlayout: (seconds: number, playOutDeclickSeconds?: number) =>
+      sink.beginTailPlayout(seconds, playOutDeclickSeconds),
     releaseForHandover: () => sink.releaseForHandover(),
     adoptCrossfadeTail: (tail: CrossfadeTail, seconds: number) => sink.adoptTail(tail, seconds),
+    onOwnAudioHeard: (listener: () => void) => sink.onOwnAudioHeard(listener),
     resetSilence: () => sink.resetSilence(),
     resume: () => sink.resume(),
     suspend: () => sink.suspend(),

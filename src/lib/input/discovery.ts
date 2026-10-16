@@ -23,8 +23,20 @@
  * {@link FocusController}. Everything here works in jsdom so it is unit-testable.
  */
 
+import { isAnyOverlayOpen, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { selectorPresence } from "@/lib/input/selectorPresence";
+
 /** Marks a subtree as off-limits to the focus ring (skipped during discovery). */
 export const SKIP_ATTR = "data-key-nav-skip";
+
+/**
+ * Marks an open overlay that answers the D-pad and OK itself wherever focus is inside it, so the
+ * overlay navigation neither moves DOM focus nor presses OK there. {@link SKIP_ATTR} alone does not.
+ */
+export const OWNS_KEYS_ATTR = "data-key-nav-owns-keys";
+
+/** Marks text the ring stops on so it can be read, not operated: OK has nothing to do there. */
+export const READING_STOP_ATTR = "data-key-nav-reading";
 
 /** Declares an element a focus group (its discovered descendants become children). Value is an optional id. */
 export const GROUP_ATTR = "data-focus-group";
@@ -49,9 +61,12 @@ export const SCOPE_ATTR = "data-focus-scope";
 export const HORIZONTAL_OWNER_SELECTOR =
   "[role='slider'],[role='tablist'],[role='radiogroup'],[data-key-nav-horizontal]";
 
-/** Open Radix-style overlays that own the keyboard while focus is inside them. */
-export const OVERLAY_SELECTOR =
-  "[role='dialog'],[role='alertdialog'],[role='menu'],[role='listbox'],[data-radix-popper-content-wrapper]";
+/**
+ * Open Radix-style overlays that own the keyboard while focus is inside them. The same selector
+ * {@link isAnyOverlayOpen} tracks, because {@link resolveActiveScope} looks for overlays only when it
+ * reports one.
+ */
+export const OVERLAY_SELECTOR = OPEN_OVERLAY_ANCESTOR_SELECTOR;
 
 /**
  * Containers that should be traversed as groups without per-surface hook wiring:
@@ -100,6 +115,13 @@ export const INTERACTIVE_SELECTOR = [
 ].join(",");
 
 const TABBAR_SELECTOR = `[${SCOPE_ATTR}='tabbar']`;
+export const SECTION_SCOPE_SELECTOR = "[data-section-scope]";
+
+export const hasSectionScopeIn = (scope: Element): boolean =>
+  selectorPresence(scope.ownerDocument, SECTION_SCOPE_SELECTOR, ["data-section-scope"]).isPresent() &&
+  scope.querySelector(SECTION_SCOPE_SELECTOR) !== null;
+
+const PAGE_SCOPE_SELECTOR = `[${SCOPE_ATTR}='page']`;
 
 /**
  * Visible to the focus ring. Walks ancestors for `hidden` / `aria-hidden` /
@@ -172,12 +194,17 @@ const isChainVisible = (node: Element | null, scan: DiscoveryScan): boolean => {
   return visible;
 };
 
-/** Disabled for the ring: the `disabled` property/attribute or `aria-disabled="true"`. */
-export const isFocusDisabled = (element: Element): boolean => {
-  if ("disabled" in element && (element as { disabled?: boolean }).disabled === true) return true;
-  if (element.hasAttribute("disabled")) return true;
-  return element.getAttribute("aria-disabled") === "true";
-};
+/** Natively disabled: the browser cannot focus it, so it is not a ring stop at all. */
+export const isNativelyDisabled = (element: Element): boolean =>
+  ("disabled" in element && (element as { disabled?: boolean }).disabled === true) || element.hasAttribute("disabled");
+
+/**
+ * Disabled for the ring: natively disabled or `aria-disabled="true"`. An aria-disabled control stays focusable, as
+ * WAI-ARIA requires, so it remains a ring stop that navigation skips and activation refuses; a selection already on
+ * it stays there.
+ */
+export const isFocusDisabled = (element: Element): boolean =>
+  isNativelyDisabled(element) || element.getAttribute("aria-disabled") === "true";
 
 /** Within a `data-key-nav-skip` subtree (bounded at `scope`). */
 export const isSkipped = (element: Element, scope: Element): boolean => {
@@ -290,8 +317,22 @@ const comparePositions = (a: Element, pa: ReadingPosition, b: Element, pb: Readi
  * relative to source still traverses the way the user sees it. With no geometry
  * (jsdom / zero-box) it is pure DOM order, keeping unit tests deterministic.
  */
-export const compareFocusables = (a: Element, b: Element): number =>
-  comparePositions(a, readingPosition(a), b, readingPosition(b));
+export const compareFocusables = (a: Element, b: Element): number => compareReadingOrder(a, b);
+
+const compareReadingOrder = (a: Element, b: Element, scan?: DiscoveryScan): number => {
+  const aCard = a.closest(SECTION_SCOPE_SELECTOR);
+  const bCard = b.closest(SECTION_SCOPE_SELECTOR);
+  // A growing card lays out its children at full height before its animated wrapper reaches that
+  // height. Comparing those children with the next card interleaves their stops, and the ring keeps
+  // that order after the animation finishes. Compare cards first so their stops stay contiguous;
+  // geometry still determines reading order within a card and between cards.
+  if (aCard !== bCard) {
+    const aAnchor = aCard ?? a;
+    const bAnchor = bCard ?? b;
+    return comparePositions(aAnchor, readingPosition(aAnchor, scan), bAnchor, readingPosition(bAnchor, scan));
+  }
+  return comparePositions(a, readingPosition(a, scan), b, readingPosition(b, scan));
+};
 
 /**
  * Sort into reading order, measuring each element once.
@@ -305,8 +346,7 @@ export const sortIntoReadingOrder = <T extends Element>(
   scan: DiscoveryScan = createDiscoveryScan(),
 ): T[] => {
   for (const element of elements) readingPosition(element, scan);
-  const at = (element: Element): ReadingPosition => readingPosition(element, scan);
-  return elements.sort((a, b) => comparePositions(a, at(a), b, at(b)));
+  return elements.sort((a, b) => compareReadingOrder(a, b, scan));
 };
 
 export type ActiveScopeKind = "overlay" | "page";
@@ -339,9 +379,8 @@ const hasInteractive = (scope: Element, scan?: DiscoveryScan): boolean => {
  *     if present, else `document.body`.
  */
 export const resolveActiveScope = (doc: Document, scan?: DiscoveryScan): ActiveScope => {
-  const overlays = Array.from(doc.querySelectorAll(OVERLAY_SELECTOR)).filter(
-    (overlay) => isFocusVisible(overlay, scan) && hasInteractive(overlay, scan),
-  );
+  const candidates = isAnyOverlayOpen(doc) ? Array.from(doc.querySelectorAll(OVERLAY_SELECTOR)) : [];
+  const overlays = candidates.filter((overlay) => isFocusVisible(overlay, scan) && hasInteractive(overlay, scan));
   if (overlays.length > 0) {
     // Prefer an overlay not contained by a later one; among siblings, the last in
     // DOM order is on top.
@@ -351,7 +390,9 @@ export const resolveActiveScope = (doc: Document, scan?: DiscoveryScan): ActiveS
     }
     return { element: top, kind: "overlay" };
   }
-  const explicitPage = doc.querySelector(`[${SCOPE_ATTR}='page']`);
+  const explicitPage = selectorPresence(doc, PAGE_SCOPE_SELECTOR, [SCOPE_ATTR]).isPresent()
+    ? doc.querySelector(PAGE_SCOPE_SELECTOR)
+    : null;
   return { element: explicitPage ?? doc.body, kind: "page" };
 };
 
@@ -362,7 +403,7 @@ export interface DiscoverOptions {
 }
 
 /**
- * Every interactive element within `scope`, filtered (visible, enabled, not
+ * Every interactive element within `scope`, filtered (visible, not natively disabled, not
  * skipped, not inside an excluded subtree) and sorted into reading order.
  * Deduped by element identity.
  */
@@ -375,7 +416,7 @@ export const discoverInteractiveElements = (scope: Element, options: DiscoverOpt
     if (!(candidate instanceof HTMLElement)) continue;
     if (seen.has(candidate)) continue;
     if (!isFocusVisible(candidate, scan)) continue;
-    if (isFocusDisabled(candidate)) continue;
+    if (isNativelyDisabled(candidate)) continue;
     if (isSkipped(candidate, scope)) continue;
     if (excluded.some((selector) => candidate.closest(selector))) continue;
     seen.add(candidate);

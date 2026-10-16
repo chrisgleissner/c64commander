@@ -13,7 +13,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { type ModalSurface, resolveModalPresentation } from "@/lib/modalPresentation";
 import { cn } from "@/lib/utils";
 import { CloseControl } from "@/components/ui/modal-close-button";
-import { composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
+import { composeFieldFrameEscape, composeInterstitialOpenAutoFocus } from "@/components/ui/interstitialFocus";
 import {
   APP_INTERSTITIAL_BACKDROP_CLASSNAME,
   INTERSTITIAL_Z_INDEX,
@@ -122,7 +122,19 @@ function collectDialogHeaderSlots(children: React.ReactNode) {
 }
 
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
-  ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
+  (
+    {
+      className,
+      children,
+      onOpenAutoFocus,
+      onEscapeKeyDown,
+      showClose = true,
+      closeTestId,
+      surface = "default",
+      ...props
+    },
+    ref,
+  ) => {
     const { profile } = useDisplayProfile();
     const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
     const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(
@@ -145,6 +157,7 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
               data-modal-surface={surface}
               data-modal-presentation={presentation.mode}
               onOpenAutoFocus={composeInterstitialOpenAutoFocus(onOpenAutoFocus)}
+              onEscapeKeyDown={composeFieldFrameEscape(onEscapeKeyDown)}
               style={{ ...style, zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface }}
               {...props}
             >

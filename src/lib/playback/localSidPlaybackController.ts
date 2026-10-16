@@ -70,6 +70,7 @@ export class LocalSidPlaybackController {
   /** The level and mute asked for before the engine existed, applied when it does. */
   private heldVolume: number | null = null;
   private heldMuted: boolean | null = null;
+  private silenceHolds = 0;
   private readonly seekListeners = new Set<() => void>();
 
   constructor(private readonly engineFactory: LocalSidEngineFactory = loadDefaultEngine) {}
@@ -92,7 +93,7 @@ export class LocalSidPlaybackController {
             throw new Error("The local SID player was disposed while its engine was loading");
           }
           if (this.heldVolume !== null) engine.setVolume(this.heldVolume);
-          if (this.heldMuted !== null) engine.setMuted(this.heldMuted);
+          if (this.heldMuted !== null || this.silenceHolds > 0) engine.setMuted(this.silenced());
           this.engine = engine;
           return engine;
         },
@@ -129,7 +130,7 @@ export class LocalSidPlaybackController {
     file: SidByteSource,
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
-    options?: { prerenderKey?: string; durationSeconds?: number },
+    options?: { prerenderKey?: string; durationSeconds?: number; outgoingEndsAtSeconds?: number },
   ): Promise<LocalSidPlayResult> {
     const engine = await this.ensureEngine();
     // Timed separately from the engine open: opening measures 23-48 ms on a
@@ -146,7 +147,13 @@ export class LocalSidPlaybackController {
       readMs: performance.now() - readStartedAt,
       bytes: buffer.byteLength,
     });
-    const result = await engine.play(buffer, songIndex, callbacks, options?.prerenderKey);
+    const result = await engine.play(
+      buffer,
+      songIndex,
+      callbacks,
+      options?.prerenderKey,
+      options?.outgoingEndsAtSeconds,
+    );
     traceLocalSid("engine-play-returned", {
       ms: Math.round(performance.now() - readStartedAt),
       started: result.started,
@@ -242,11 +249,31 @@ export class LocalSidPlaybackController {
 
   setMuted(muted: boolean): void {
     this.heldMuted = muted;
-    this.engine?.setMuted(muted);
+    this.engine?.setMuted(this.silenced());
   }
 
   /**
-   * The level and mute state on-device playback is using, without building an engine to ask.
+   * Silences the output until the returned release is called, without touching the mute the listener
+   * chose: a Mute set while the hold is on still applies after it.
+   */
+  holdSilence(): () => void {
+    this.silenceHolds += 1;
+    this.engine?.setMuted(true);
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      this.silenceHolds -= 1;
+      this.engine?.setMuted(this.silenced());
+    };
+  }
+
+  private silenced(): boolean {
+    return this.silenceHolds > 0 || this.muted();
+  }
+
+  /**
+   * The level and the listener's mute for on-device playback, without building an engine to ask.
    *
    * Read while the Play page mounts, which is long before anyone has chosen to play anything here,
    * so it must not be the thing that pays for a worker and a WASM module. Before an engine exists
@@ -257,7 +284,7 @@ export class LocalSidPlaybackController {
   }
 
   muted(): boolean {
-    return this.engine?.getMuted() ?? this.heldMuted ?? false;
+    return this.heldMuted ?? false;
   }
 
   /** True while this device is actually rendering a tune. */

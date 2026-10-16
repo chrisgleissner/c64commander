@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const interactionCalls: Array<{ path: string; intent: string }> = [];
+const interactionMetas: Array<Record<string, unknown>> = [];
 
 const ensureWindow = () => {
   if (typeof window !== "undefined") {
@@ -73,6 +74,7 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", async (importOrigina
     ...actual,
     withRestInteraction: vi.fn(async (meta, run) => {
       interactionCalls.push({ path: meta.normalizedUrl ?? meta.path, intent: meta.intent });
+      interactionMetas.push(meta);
       return run();
     }),
     scheduleConfigWrite: vi.fn((run) => run()),
@@ -110,7 +112,97 @@ import { C64API } from "@/lib/c64api";
 describe("C64API intent routing", () => {
   beforeEach(() => {
     interactionCalls.length = 0;
+    interactionMetas.length = 0;
     fetchMock.mockReset();
+  });
+
+  const binaryResponse = () =>
+    new Response(Uint8Array.from([0x2a]).buffer, {
+      status: 200,
+      headers: { "content-type": "application/octet-stream" },
+    });
+
+  const infoResponse = () =>
+    new Response(JSON.stringify({ product: "Ultimate 64", errors: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  it("tells the REST gateway which device readMemory and getInfo are for", async () => {
+    fetchMock.mockImplementation(async (url: string) => (url.includes("readmem") ? binaryResponse() : infoResponse()));
+    const api = new C64API("http://u2", undefined, "u2");
+
+    await api.readMemory("D012", 1, { __c64uIntent: "system" });
+    await api.getInfo({ __c64uIntent: "system" });
+
+    expect(interactionMetas.map((meta) => meta.deviceHost)).toEqual(["u2", "u2"]);
+  });
+
+  it("passes the health probe flags of readMemory on to the REST gateway", async () => {
+    fetchMock.mockImplementation(async () => binaryResponse());
+    const api = new C64API("http://c64u");
+
+    await api.readMemory("D012", 1, {
+      __c64uIntent: "system",
+      __c64uRecoveryProbe: true,
+      __c64uSuppressCircuitContribution: true,
+    });
+    await api.readMemory("00A2", 3, { __c64uIntent: "user", __c64uForceProbe: true });
+
+    expect(interactionMetas[0]).toMatchObject({
+      bypassCircuit: true,
+      suppressCircuitContribution: true,
+      forceProbe: false,
+      bypassCooldown: false,
+    });
+    expect(interactionMetas[1]).toMatchObject({
+      forceProbe: true,
+      bypassCircuit: true,
+      bypassCooldown: true,
+      bypassBackoff: true,
+      suppressCircuitContribution: false,
+    });
+  });
+
+  it("counts a getInfo that joins one already in flight as dispatched, so its probe timeout starts", async () => {
+    let answer!: (response: Response) => void;
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const api = new C64API("http://c64u");
+    const dispatched: string[] = [];
+
+    const first = api.getInfo({ __c64uOnDispatch: () => dispatched.push("first") });
+    await Promise.resolve();
+    await Promise.resolve();
+    const joined = api.getInfo({ __c64uOnDispatch: () => dispatched.push("joined") });
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(dispatched).toEqual(["first", "joined"]);
+    answer(infoResponse());
+    await expect(first).resolves.toMatchObject({ product: "Ultimate 64" });
+    await expect(joined).resolves.toMatchObject({ product: "Ultimate 64" });
+  });
+
+  it("reports dispatch when readMemory and getInfo leave the queue, before the device is asked", async () => {
+    const events: string[] = [];
+    fetchMock.mockImplementation(async (url: string) => {
+      events.push(`fetch ${url.includes("readmem") ? "readmem" : "info"}`);
+      return url.includes("readmem") ? binaryResponse() : infoResponse();
+    });
+    const api = new C64API("http://c64u");
+
+    await api.readMemory("D012", 1, { __c64uOnDispatch: () => events.push("dispatch readmem") });
+    await api.getInfo({ __c64uBypassCache: true, __c64uOnDispatch: () => events.push("dispatch info") });
+
+    expect(events).toEqual(["dispatch readmem", "fetch readmem", "dispatch info", "fetch info"]);
+    fetchMock.mock.calls.forEach(([, init]) => {
+      expect(init).not.toHaveProperty("__c64uOnDispatch");
+    });
   });
 
   it("routes readMemory through the REST gateway with the caller intent", async () => {

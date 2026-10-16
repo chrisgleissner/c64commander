@@ -42,6 +42,7 @@ const makeContext = () => {
     lineTo: vi.fn(),
     stroke: vi.fn(),
     fillText: vi.fn(),
+    measureText: vi.fn((text: string) => ({ width: text.length * 4 })),
     createLinearGradient: vi.fn(() => gradient),
   };
   return ctx;
@@ -56,6 +57,10 @@ const frame = (overrides: Partial<SpectrumFrame> = {}): SpectrumFrame => ({
   peakDb: -6,
   rmsDb: -20,
   clipped: false,
+  channels: [
+    { id: "left", rmsDb: overrides.rmsDb ?? -20, peakDb: overrides.peakDb ?? -6, clipped: overrides.clipped ?? false },
+    { id: "right", rmsDb: overrides.rmsDb ?? -20, peakDb: overrides.peakDb ?? -6, clipped: overrides.clipped ?? false },
+  ],
   ...overrides,
 });
 
@@ -77,6 +82,8 @@ const setup = (
   let nowMs = 0;
   let pending: ((t: number) => void) | null = null;
   const reads: number[] = [];
+  const targets: Array<number | undefined> = [];
+  const requests: Array<{ targetNanos?: number; count?: number; stepNanos?: number } | undefined> = [];
   const readouts: SpectrumReadout[] = [];
   const active: boolean[] = [];
   const tiers: number[] = [];
@@ -87,8 +94,10 @@ const setup = (
     onReadout: (r) => readouts.push(r),
     onActiveChange: (a) => active.push(a),
     onTierChange: (t) => tiers.push(t.index),
-    read: async () => {
+    read: async (request?: { targetNanos?: number; count?: number; stepNanos?: number }) => {
       reads.push(nowMs);
+      targets.push(request?.targetNanos);
+      requests.push(request);
       if (options.read) return options.read();
       return options.frames ? options.frames() : frame({ sequence: reads.length });
     },
@@ -113,15 +122,17 @@ const setup = (
       const callback = pending;
       pending = null;
       callback?.(nowMs);
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let i = 0; i < 8; i++) await Promise.resolve();
     }
   };
   return {
     view,
+    canvas: canvas as HTMLCanvasElement & { __spectrumView?: unknown },
     ctx,
     layerCtx,
     reads,
+    targets,
+    requests,
     readouts,
     active,
     tiers,
@@ -153,6 +164,284 @@ describe("SpectrumView", () => {
     expect(t.ctx.drawImage.mock.calls.length).toBeGreaterThan(10);
     expect(t.ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
     expect(t.ctx.fills.some((f) => f.h > 20)).toBe(true);
+  });
+
+  it("draws live meters with held caps every spectrum frame without waiting for the text readout", async () => {
+    const t = setup();
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(85);
+    expect(t.readouts).toHaveLength(0);
+    const meters = t.ctx.fills.filter((f) => f.y === 10 || f.y === 34);
+    expect(meters.length).toBeGreaterThan(2);
+    expect(meters.some((f) => f.w > 100)).toBe(true);
+    expect(t.ctx.fills.some((f) => f.y === 8 && f.h === 18)).toBe(true);
+    t.view.dispose();
+  });
+
+  it("keeps stereo rows when equal channel levels later diverge during the same playback", async () => {
+    let different = false;
+    let sequence = 0;
+    const t = setup({
+      frames: () =>
+        frame({
+          sequence: ++sequence,
+          channels: [
+            { id: "left", rmsDb: -20, peakDb: -6, clipped: false },
+            { id: "right", rmsDb: different ? -40 : -20, peakDb: different ? -26 : -6, clipped: false },
+          ],
+        }),
+    });
+    t.view.resize(300, 234, 1);
+    const labelsDrawn = t.layerCtx.fillText.mock.calls.length;
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(150);
+    expect(t.readouts.at(-1)?.channels).toHaveLength(2);
+    different = true;
+    await t.advance(150);
+    expect(t.readouts.at(-1)?.channels?.map((channel) => channel.rmsDb)).toEqual([-20, -40]);
+    expect(t.layerCtx.fillText.mock.calls).toHaveLength(labelsDrawn);
+    t.view.dispose();
+  });
+
+  it("marks only the clipped channel's meter and releases the mark after the hold time", async () => {
+    let sequence = 0;
+    const t = setup({
+      frames: () =>
+        frame({
+          sequence: ++sequence <= 3 ? sequence : 3,
+          channels: [
+            { id: "left", rmsDb: -20, peakDb: -6, clipped: false },
+            { id: "right", rmsDb: -20, peakDb: -6, clipped: sequence <= 3 },
+          ],
+        }),
+    });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(100);
+    const clipBlocks = () => t.ctx.fills.filter((f) => f.w === 6 && f.h === 14);
+    expect(clipBlocks().length).toBeGreaterThan(0);
+    expect(new Set(clipBlocks().map((f) => f.y))).toEqual(new Set([34]));
+    t.ctx.fills.length = 0;
+    await t.advance(2500);
+    t.ctx.fills.length = 0;
+    await t.advance(100);
+    expect(clipBlocks()).toHaveLength(0);
+    t.view.dispose();
+  });
+
+  it("labels a bridge-reported mono channel Mono and keeps a single row", async () => {
+    const t = setup({ frames: () => frame({ channels: [{ id: "mono", rmsDb: -20, peakDb: -6, clipped: false }] }) });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(150);
+    expect(t.layerCtx.fillText.mock.calls.some(([text]) => text === "Mono")).toBe(true);
+    const rowLabels = t.layerCtx.fillText.mock.calls
+      .map(([text]) => text)
+      .filter((text) => ["L", "R", "Mix", "Mono"].includes(text));
+    expect(rowLabels.at(-1)).toBe("Mono");
+    t.view.dispose();
+  });
+
+  it("marks the single Mix meter as clipped when an older bridge reports clipping", async () => {
+    const t = setup({ frames: () => frame({ channels: undefined, clipped: true }) });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(100);
+    expect(t.ctx.fills.some((f) => f.w === 6 && f.h === 14)).toBe(true);
+    t.view.dispose();
+  });
+
+  it("asks for the sound audible when the frame will be shown once the native clock is known", async () => {
+    const nativeOffsetMs = 5000;
+    const t: ReturnType<typeof setup> = setup({
+      frames: () => frame({ timestampNanos: Math.round((t.nowMs + nativeOffsetMs) * 1e6) }),
+    });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(400);
+    expect(t.targets.length).toBeGreaterThan(5);
+    expect(t.targets[0]).toBe(0);
+    const lastIndex = t.targets.length - 1;
+    const askedAt = t.reads[lastIndex];
+    const aheadMs = t.targets[lastIndex]! / 1e6 - nativeOffsetMs - askedAt;
+    expect(aheadMs).toBeGreaterThan(30);
+    expect(aheadMs).toBeLessThan(36);
+    t.view.dispose();
+  });
+
+  describe("with a native path that can look ahead", () => {
+    const nativeOffsetMs = 5000;
+    const stepMs = 17;
+    const aligned = (t: ReturnType<typeof setup>, loud: boolean) => {
+      const request = t.requests.at(-1);
+      const sequences = (request?.count ?? 1) > 1 ? request!.count! : 1;
+      const base = 100 + Math.round(((request?.targetNanos ?? 0) / 1e6 - nativeOffsetMs) / stepMs);
+      const build = (k: number) =>
+        frame({
+          sequence: base + k,
+          aligned: true,
+          timestampNanos: Math.round((t.nowMs + nativeOffsetMs) * 1e6),
+          bands: new Array(48).fill(loud ? -10 : -80),
+        });
+      const first = build(0);
+      first.ahead = Array.from({ length: sequences - 1 }, (_, i) => build(i + 1));
+      return first;
+    };
+
+    it("asks for several frames at once and not on every display frame", async () => {
+      const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(1000);
+      const alignedRequests = t.requests.filter((request) => (request?.count ?? 1) > 1);
+      expect(alignedRequests.length).toBeGreaterThan(5);
+      expect(alignedRequests[0]!.count).toBe(8);
+      expect(alignedRequests[0]!.stepNanos).toBeGreaterThan(15e6);
+      expect(t.reads.length).toBeLessThan(35);
+      t.view.dispose();
+    });
+
+    it("keeps its estimate of the display frame period when one draw is late", async () => {
+      const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      await t.advance(1, 120);
+      await t.advance(150);
+      const steps = t.requests.filter((request) => (request?.count ?? 1) > 1).map((request) => request!.stepNanos!);
+      expect(steps.length).toBeGreaterThan(4);
+      for (const step of steps) {
+        expect(step).toBeGreaterThan(15e6);
+        expect(step).toBeLessThan(19e6);
+      }
+      t.view.dispose();
+    });
+
+    it("drops frames queued for an old position once the native path stops reporting a speaker", async () => {
+      let alignedReplies = true;
+      const t: ReturnType<typeof setup> = setup({
+        frames: () => {
+          const reply = aligned(t, true);
+          if (!alignedReplies) {
+            reply.aligned = false;
+            reply.ahead = undefined;
+          }
+          return reply;
+        },
+      });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      expect(t.view.pendingFrameCount).toBeGreaterThan(0);
+      alignedReplies = false;
+      await t.advance(100);
+      expect(t.view.pendingFrameCount).toBe(0);
+      t.view.dispose();
+    });
+
+    it("keeps a clip block up for one hold after the first report, not one hold per report", async () => {
+      let sequence = 0;
+      const t: ReturnType<typeof setup> = setup({
+        frames: () => {
+          const clipping = t.nowMs < 1000;
+          return frame({
+            sequence: ++sequence,
+            clipped: clipping,
+            channels: [
+              { id: "left", rmsDb: -20, peakDb: 0, clipped: clipping },
+              { id: "right", rmsDb: -20, peakDb: -6, clipped: false },
+            ],
+          });
+        },
+      });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      const clipBlocks = () => t.ctx.fills.filter((f) => f.w === 6 && f.h === 14);
+      await t.advance(200);
+      expect(clipBlocks().length).toBeGreaterThan(0);
+      await t.advance(2000);
+      t.ctx.fills.length = 0;
+      await t.advance(100);
+      expect(clipBlocks()).toHaveLength(0);
+      t.view.dispose();
+    });
+
+    it("records how far each draw was from the display time of the sound it showed", async () => {
+      const t: ReturnType<typeof setup> = setup({ frames: () => aligned(t, true) });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(600);
+      const errors = t.view.alignmentErrorsMs().sort((a, b) => a - b);
+      expect(errors.length).toBeGreaterThan(20);
+      const median = errors[errors.length >> 1];
+      expect(Math.abs(median)).toBeLessThanOrEqual(stepMs / 4);
+      t.view.dispose();
+    });
+
+    it("keeps frames for later display times waiting and shows each at its own tick", async () => {
+      let issued = 0;
+      const t: ReturnType<typeof setup> = setup({
+        frames: () => {
+          const first = aligned(t, true);
+          issued += 1;
+          return first;
+        },
+      });
+      t.view.resize(300, 234, 1);
+      t.view.setState({ visible: true, paused: false });
+      let mostWaiting = 0;
+      for (let tick = 0; tick < 20; tick++) {
+        await t.advance(17);
+        mostWaiting = Math.max(mostWaiting, t.view.pendingFrameCount);
+      }
+      expect(issued).toBeGreaterThan(1);
+      expect(mostWaiting).toBeGreaterThanOrEqual(2);
+      expect(mostWaiting).toBeLessThanOrEqual(14);
+      t.view.dispose();
+    });
+  });
+
+  it("exposes itself on its canvas only when test probes are enabled", () => {
+    const probeWindow = window as unknown as { __c64uTestProbeEnabled?: boolean };
+    const off = setup();
+    expect(off.canvas.__spectrumView).toBeUndefined();
+    probeWindow.__c64uTestProbeEnabled = true;
+    const on = setup();
+    expect(on.canvas.__spectrumView).toBe(on.view);
+    delete probeWindow.__c64uTestProbeEnabled;
+  });
+
+  it("raises the held meter peak to a one-frame transient at once", async () => {
+    let sequence = 0;
+    const t = setup({
+      frames: () =>
+        frame({
+          sequence: ++sequence,
+          channels: [
+            { id: "left", rmsDb: -60, peakDb: sequence === 3 ? 0 : -60, clipped: false },
+            { id: "right", rmsDb: -60, peakDb: -60, clipped: false },
+          ],
+        }),
+    });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(120);
+    const capWidth = 3;
+    const caps = t.ctx.fills.filter((f) => f.h === 18 && f.y === 8);
+    expect(
+      caps.some((f) => Math.abs(f.x + f.w - spectrumRenderer.computeLayout(300, 234, 14).plotRight) <= capWidth),
+    ).toBe(true);
+    t.view.dispose();
+  });
+
+  it("shows one honest Mix meter for an older bridge with only aggregate levels", async () => {
+    const t = setup({ frames: () => frame({ channels: undefined }) });
+    t.view.resize(300, 234, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(150);
+    expect(t.readouts.at(-1)?.channels).toEqual([{ label: "Mix", rmsDb: -20, peakDb: -6 }]);
+    t.view.dispose();
   });
 
   it("reuses draw options and reports frame timing as primitives", async () => {
@@ -197,29 +486,38 @@ describe("SpectrumView", () => {
     expect(t.hasFrameScheduled()).toBe(false);
   });
 
-  it("polls at the data rate of its tier, not at the draw rate", async () => {
+  it("polls at the fixed data rate, not at the draw rate", async () => {
     const t = setup();
     t.view.resize(300, 150, 1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(1000);
-    expect(t.reads.length).toBeGreaterThanOrEqual(25);
-    expect(t.reads.length).toBeLessThanOrEqual(32);
+    expect(t.reads.length).toBeGreaterThanOrEqual(50);
+    expect(t.reads.length).toBeLessThanOrEqual(62);
   });
 
-  it("starts at tier 1 on the compact profile and polls at 20 Hz", async () => {
+  it("starts at tier 0 on the compact profile and polls at 60 Hz", async () => {
     const t = setup({ profile: "compact" });
     t.view.resize(300, 150, 1);
-    expect(t.view.currentTier.index).toBe(1);
+    expect(t.view.currentTier.index).toBe(0);
     t.view.setState({ visible: true, paused: false });
     await t.advance(1000);
-    expect(t.reads.length).toBeLessThanOrEqual(22);
-    expect(t.reads.length).toBeGreaterThanOrEqual(16);
+    expect(t.reads.length).toBeGreaterThanOrEqual(50);
+    expect(t.reads.length).toBeLessThanOrEqual(62);
+  });
+
+  it.each([16.6, 11.1, 8.33])("polls at no more than 60 Hz when the display draws every %s ms", async (frameMs) => {
+    const t = setup();
+    t.view.resize(300, 150, 1);
+    t.view.setState({ visible: true, paused: false });
+    await t.advance(3000, frameMs);
+    expect(t.reads.length / 3).toBeGreaterThanOrEqual(44);
+    expect(t.reads.length / 3).toBeLessThanOrEqual(61);
   });
 
   it("does not draw a new target for a frame it already has", async () => {
     let calls = 0;
     const t = setup({ frames: () => frame({ sequence: 5, bands: new Array(48).fill(calls++ === 0 ? -20 : -90) }) });
-    t.view.resize(300, 150, 1);
+    t.view.resize(300, 234, 1);
     t.view.setState({ visible: true, paused: false });
     await t.advance(600);
     const loud = t.ctx.fills.filter((f) => f.h > 40);
@@ -489,7 +787,14 @@ describe("SpectrumView", () => {
       let n = 0;
       return () => {
         n += 1;
-        return frame({ sequence: n, active: n === 1, clipped: n === 1, bands: new Array(48).fill(-100) });
+        return frame({
+          sequence: n,
+          active: n === 1,
+          clipped: n === 1,
+          bands: new Array(48).fill(-100),
+          rmsDb: -100,
+          peakDb: -100,
+        });
       };
     };
 

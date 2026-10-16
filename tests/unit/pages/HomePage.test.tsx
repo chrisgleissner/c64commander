@@ -852,6 +852,14 @@ describe("HomePage config refresh", () => {
 describe("HomePage SID status", () => {
   vi.setConfig({ testTimeout: 30000 });
 
+  it("names the Config card's Save, Load and Reset tiles by what they act on", () => {
+    renderHomePage();
+    expect(screen.getByTestId("home-config-save-app")).toHaveAttribute("aria-label", "Save config to app");
+    expect(screen.getByTestId("home-config-load-app")).toHaveAttribute("aria-label", "Load config from app");
+    expect(screen.getByRole("button", { name: "Save config to flash" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset config to default" })).toBeInTheDocument();
+  });
+
   it("does not render a visible Home subtitle", () => {
     renderHomePage();
     expect(screen.queryByTestId("home-header-subtitle")).not.toBeInTheDocument();
@@ -2336,6 +2344,19 @@ describe("HomePage streaming capability gate", () => {
     connectDevice("Ultimate 64 Elite");
     renderHomePage();
     expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+
+  it("offers no Game tile on a U2, which has neither a picture to stream nor joystick relay", () => {
+    connectDevice("Ultimate II+", null);
+    renderHomePage();
+    expect(screen.queryByTestId("home-machine-inline-openGameMode")).toBeNull();
+    expect(screen.getByTestId("home-machine-inline-openRemoteInput")).toBeTruthy();
+  });
+
+  it("offers the Game tile on a C64U", () => {
+    connectDevice("C64 Ultimate");
+    renderHomePage();
+    expect(screen.getByTestId("home-machine-inline-openGameMode")).toBeTruthy();
   });
 
   it("shows streaming on a U2 when its REST config advertises VIC/audio (capability-driven, not family-driven)", () => {

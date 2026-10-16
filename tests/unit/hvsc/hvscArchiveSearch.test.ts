@@ -29,9 +29,9 @@ import {
   buildHvscBrowseIndexFromEntries,
   foldForSearch,
   listFolderFromBrowseIndex,
-  searchSongsFromBrowseIndex,
   updateHvscBrowseSong,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { searchSongsFromBrowseIndex } from "@/lib/hvsc/hvscSongSearch";
 
 /**
  * Finding a tune in HVSC.

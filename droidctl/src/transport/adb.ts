@@ -8,6 +8,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import { mkdir, stat } from "node:fs/promises";
+import { Socket } from "node:net";
 import path from "node:path";
 import { ToolExecutionError } from "../tools/errors.js";
 import { ALL_TOOL_NAMES } from "../tools/toolNames.js";
@@ -62,6 +63,10 @@ export function adbArgs(serial: string, rest: readonly string[]): string[] {
   return ["-s", serial, ...rest];
 }
 
+function disconnectArgs(serial: string): string[] {
+  return ["disconnect", serial];
+}
+
 export interface RawExecOutcome {
   readonly stdout: Buffer;
   readonly stderr: string;
@@ -82,6 +87,8 @@ export type RawExecRunner = (request: RawExecRequest) => Promise<RawExecOutcome>
 export interface RawSpawnRequest {
   readonly file: string;
   readonly args: readonly string[];
+  /** The child and its pipes do not keep the Node event loop alive, so the caller can exit while it runs. */
+  readonly detachFromEventLoop?: boolean;
 }
 
 export interface RawSpawnHandle {
@@ -134,6 +141,10 @@ export const nodeExecRunner: RawExecRunner = (request) =>
 
 export const nodeSpawnRunner: RawSpawnRunner = (request) => {
   const child = spawn(request.file, [...request.args], { stdio: ["ignore", "pipe", "pipe"] });
+  if (request.detachFromEventLoop === true) {
+    child.unref();
+    [child.stdout, child.stderr].filter((stream) => stream instanceof Socket).forEach((pipe) => pipe.unref());
+  }
   // A child that has already exited must still notify a late listener, or a stop
   // that arrives after the failure waits on a "close" event that has been and gone.
   let closed = false;
@@ -311,7 +322,12 @@ export class AdbTransport implements Transport {
   }
 
   async disconnectTcp(serial: string): Promise<void> {
-    await this.run(null, ["disconnect", serial], { timeoutMs: 15_000 });
+    await this.run(null, disconnectArgs(serial), { timeoutMs: 15_000 });
+  }
+
+  /** The `adb disconnect` command line, for a caller that has to run it synchronously. */
+  disconnectArgv(serial: string): readonly string[] {
+    return [this.adbPath, ...disconnectArgs(serial)];
   }
 
   private async withApiLevel(entry: AdbDeviceLine, fresh: Map<string, number>): Promise<TargetInfo> {

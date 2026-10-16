@@ -8,7 +8,7 @@
 
 import type { CSSProperties } from "react";
 import { activePageStyleRoot, queryAllOnActivePage, queryOnActivePage } from "@/lib/navigation/activePage";
-import { readKeypadGuidanceReservePx } from "@/lib/ui/keypadGuidanceReserve";
+import { readBottomOverlayReservePx } from "@/lib/ui/keypadGuidanceReserve";
 
 export type OverlayBounds = {
   top: number;
@@ -185,7 +185,7 @@ export const resolveCenteredOverlayLayout = (
   );
   // The viewport runs under the navigation bar; a dialog measured against all of it put New disk's
   // Cancel and Create buttons under the bar's buttons on a Pixel 4.
-  const usableHeight = viewportHeight - readCssNumber("--safe-area-inset-bottom", 0) - readKeypadGuidanceReservePx();
+  const usableHeight = viewportHeight - readCssNumber("--safe-area-inset-bottom", 0) - readBottomOverlayReservePx();
   const centeredTop = Math.round((usableHeight - contentHeight) / 2);
   const top = Math.max(minTop, centeredTop);
   const maxHeight = Math.max(MIN_CENTERED_OVERLAY_HEIGHT_PX, usableHeight - top - 12);

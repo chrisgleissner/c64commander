@@ -16,6 +16,9 @@ vi.mock("@/lib/input/keypadCommands", async (importOriginal) => ({
 vi.mock("@/hooks/useSavedDevices", () => ({ useSavedDevices: () => devices() }));
 vi.mock("@/hooks/use-toast", () => ({ toast }));
 
+const mirror = vi.hoisted(() => ({ anyLive: false, stopAll: vi.fn(async () => undefined) }));
+vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
+
 const variantId = vi.hoisted(() => ({ current: "c64commander" }));
 vi.mock("@/generated/variant", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/generated/variant")>();
@@ -55,6 +58,33 @@ describe("KeypadQuickMenu", () => {
 
     fireEvent.click(screen.getByTestId("keypad-quick-menu-diagnostics"));
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+  });
+
+  describe("Stop Live View", () => {
+    afterEach(() => {
+      mirror.anyLive = false;
+    });
+
+    it("is offered while Live View streams, and stops it and closes the menu", async () => {
+      mirror.anyLive = true;
+      renderMenu();
+      requestQuickMenuOpen();
+      const stop = await screen.findByTestId("keypad-quick-menu-stop-live-view");
+      expect(stop).toHaveTextContent("Stop Live View");
+
+      fireEvent.click(stop);
+
+      expect(mirror.stopAll).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+    });
+
+    it("is not offered while nothing streams", async () => {
+      renderMenu();
+      requestQuickMenuOpen();
+      await screen.findByTestId("keypad-quick-menu");
+
+      expect(screen.queryByTestId("keypad-quick-menu-stop-live-view")).toBeNull();
+    });
   });
 
   it("offers the newest notification's action, so a keypad can press Retry", async () => {
@@ -168,6 +198,47 @@ describe("KeypadQuickMenu", () => {
     unsubscribe();
   });
 
+  it("presses the entry whose keycap matches a key pressed while the menu is open", async () => {
+    const seen: MachineCommand[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => seen.push(command));
+    renderMenu();
+
+    requestQuickMenuOpen();
+    const menu = await screen.findByTestId("keypad-quick-menu");
+    fireEvent.keyDown(menu, { key: "*" });
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+    await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+
+    requestQuickMenuOpen();
+    fireEvent.keyDown(await screen.findByTestId("keypad-quick-menu"), { key: "8" });
+    await waitFor(() => expect(seen).toEqual(["pauseResume"]));
+
+    requestQuickMenuOpen();
+    fireEvent.keyDown(await screen.findByTestId("keypad-quick-menu"), { key: "#" });
+    expect(requestDeviceSwitcherOpen).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("ignores a held key and a key that names no entry", async () => {
+    renderMenu();
+    requestQuickMenuOpen();
+    const menu = await screen.findByTestId("keypad-quick-menu");
+
+    fireEvent.keyDown(menu, { key: "*", repeat: true });
+    fireEvent.keyDown(menu, { key: "x" });
+
+    expect(requestDiagnosticsOpen).not.toHaveBeenCalled();
+    expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument();
+  });
+
+  it("gives the keycaps no keys in the menu a pointer user opens, where no keycaps are drawn", async () => {
+    renderMenu();
+    requestQuickMenuOpen("pointer");
+    fireEvent.keyDown(await screen.findByTestId("keypad-quick-menu"), { key: "*" });
+
+    expect(requestDiagnosticsOpen).not.toHaveBeenCalled();
+  });
+
   it("leaves the machine actions out of the menu a pointer user opens, who has the grid in front of them", async () => {
     renderMenu();
 
@@ -268,6 +339,40 @@ describe("KeypadQuickMenu function-key summary", () => {
     await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
     await waitFor(() => expect(screen.getByTestId("settings-remote-function-1")).toHaveFocus());
     expect(screen.getByTestId("settings-remote-function-actions")).toHaveAttribute("data-search-landed", "true");
+  });
+
+  it("says so when Configure cannot find the function-key card on Settings", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<div data-testid="home-route" />} />
+          <Route path="/settings" element={<div data-testid="settings-route" />} />
+        </Routes>
+        <KeypadQuickMenu />
+      </MemoryRouter>,
+    );
+    await openMenu();
+
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-configure-function-keys"));
+
+    await waitFor(() => expect(screen.getByTestId("settings-route")).toBeInTheDocument());
+    await waitFor(
+      () =>
+        expect(toast).toHaveBeenCalledWith({ title: "Could not reach Remote function keys", variant: "destructive" }),
+      { timeout: 5000 },
+    );
+  });
+
+  it("lists the function-key summary last, after the entries it scrolls with", async () => {
+    renderMenu();
+    await openMenu();
+
+    const summary = screen.getByTestId("keypad-quick-menu-function-summary");
+    const entries = screen.getByTestId("keypad-quick-menu-search").parentElement;
+    expect(entries).toHaveClass("overflow-y-auto");
+    expect(summary.parentElement).toBe(entries);
+    expect(entries?.lastElementChild).toBe(summary);
+    expect(entries?.firstElementChild).not.toBe(summary);
   });
 
   it("has no function-key summary in C64 Commander", async () => {

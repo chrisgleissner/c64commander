@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-vi.mock("@/lib/ftp/ftpClient", () => ({
+vi.mock("@/lib/ftp/ftpClient", async (importOriginal) => ({
+  isRefusedFtpListing: (await importOriginal<typeof import("@/lib/ftp/ftpClient")>()).isRefusedFtpListing,
   listFtpDirectory: vi.fn(),
   listFtpDirectoryRecursive: vi.fn(),
 }));
@@ -61,6 +62,85 @@ describe("ftpSourceAdapter", () => {
     localStorage.clear();
     localStorage.setItem(DEVICE_HOST_KEY, "c64u");
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
+  });
+
+  describe("a folder the device cannot open", () => {
+    const echo = (name: string, path: string) => ({ entries: [{ type: "dir" as const, name, path }] });
+
+    it("reports the folder as unreadable when the device refuses its echo", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("SD", "/SD/SD"))
+        .mockRejectedValueOnce(new Error("FTP LIST /SD/SD refused (451): 451 Requested action aborted"));
+
+      await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow(
+        "The C64 could not read /SD. Check that its storage is inserted and readable.",
+      );
+      expect(listFtpDirectoryMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ path: "/SD/SD", refusalExpected: true }),
+      );
+      expect(localStorage.getItem(FTP_CACHE_KEY) ?? "").not.toContain("/SD");
+      expect(addLogMock).toHaveBeenCalledWith("info", "The C64 could not read a folder", {
+        path: "/SD",
+        checkedWith: "/SD/SD",
+        error: "FTP LIST /SD/SD refused (451): 451 Requested action aborted",
+      });
+    });
+
+    it("recognises a refusal that the bridge rejects with as a plain string", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("SD", "/SD/"))
+        .mockRejectedValueOnce("451 Requested action aborted");
+
+      await expect(createUltimateSourceLocation().listEntries("/SD/")).rejects.toThrow("The C64 could not read /SD/.");
+    });
+
+    it("names a non-refusal string rejection when the echo check cannot finish", async () => {
+      listFtpDirectoryMock.mockResolvedValueOnce(echo("SD", "/SD/SD")).mockRejectedValueOnce("connection reset");
+
+      await expect(createUltimateSourceLocation().listEntries("/SD")).rejects.toThrow(
+        "Could not check whether /SD can be read: connection reset",
+      );
+    });
+
+    it("lists a folder whose only content is an empty folder of the same name", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("Demos", "/Usb0/Demos/Demos"))
+        .mockResolvedValueOnce({ entries: [] });
+
+      const entries = await createUltimateSourceLocation().listEntries("/Usb0/Demos");
+
+      expect(entries.map((entry) => entry.path)).toEqual(["/Usb0/Demos/Demos"]);
+    });
+
+    it("reports a timeout on the echo check as a timeout, not as unreadable storage", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("SD", "/SD/SD"))
+        .mockRejectedValueOnce(new Error("FTP listDirectory timed out after connect 5000ms / transfer 20000ms"));
+
+      const failure = createUltimateSourceLocation().listEntries("/SD");
+
+      await expect(failure).rejects.toThrow(
+        "Could not check whether /SD can be read: FTP listDirectory timed out after connect 5000ms / transfer 20000ms",
+      );
+    });
+
+    it("lists a readable folder whose only entry shares its name", async () => {
+      listFtpDirectoryMock
+        .mockResolvedValueOnce(echo("Games", "/Usb0/Games/Games"))
+        .mockResolvedValueOnce({ entries: [{ type: "file", name: "giana.d64", path: "/Usb0/Games/Games/giana.d64" }] });
+
+      const entries = await createUltimateSourceLocation().listEntries("/Usb0/Games");
+
+      expect(entries.map((entry) => entry.path)).toEqual(["/Usb0/Games/Games"]);
+    });
+
+    it("does not probe a folder whose single entry has another name", async () => {
+      listFtpDirectoryMock.mockResolvedValueOnce(echo("Demos", "/Usb0/Demos"));
+
+      await createUltimateSourceLocation().listEntries("/Usb0");
+
+      expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("caches directory listings and reuses cache", async () => {

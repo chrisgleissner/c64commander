@@ -8,7 +8,7 @@
 
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { MoreVertical, Play, Search, SlidersHorizontal, X } from "lucide-react";
+import { Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,18 +19,12 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { PathWrap } from "@/components/PathWrap";
 import { NameWrap } from "@/components/NameWrap";
-import { AlphabetScrollbar } from "./AlphabetScrollbar";
+import { LetterIndexRail, useLetterRailModel } from "./LetterIndexRail";
+import type { LetterIndexSource } from "@/lib/lists/letterIndex";
+import { ActionListItemMenu } from "./ActionListItemMenu";
+import { CollapsibleListFilter, ListFilterField, nearestScroller, type ListFilterRegion } from "./ListFilter";
 import { getDisplayProfileLayoutTokens, type DisplayProfile } from "@/lib/displayProfiles";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -101,8 +95,6 @@ export type SelectableActionListProps = {
   rowTestId?: string;
   headerActions?: React.ReactNode;
   filterHeader?: React.ReactNode;
-  /** Marks the type-filter toggle when the filters it holds are narrowing the list. */
-  filterHeaderActive?: boolean;
   viewAllFilterHeader?: React.ReactNode;
   filterPlaceholder?: string;
   filterValue?: string;
@@ -113,12 +105,20 @@ export type SelectableActionListProps = {
   hasMoreViewAllItems?: boolean;
   onViewAllEndReached?: () => void;
   showSelectionControls?: boolean;
+  selectionLabel?: string;
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
   stackTitleProfiles?: readonly DisplayProfile[];
+  /** The whole list for the view-all letter rail when `viewAllItems` is paged. */
+  letterIndexSource?: LetterIndexSource;
+  /** Profiles on which the filter folds into one summary row once the reader moves on to the list. */
+  collapsibleFilterProfiles?: readonly DisplayProfile[];
+  /** What `filterHeader` currently restricts the list to, shown while the filter is folded; null for nothing. */
+  filterHeaderSummary?: string | null;
 };
 
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
+const NO_PROFILES: readonly DisplayProfile[] = [];
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
@@ -130,13 +130,22 @@ const resolveEmptyListLabel = (emptyLabel: string, hiddenItemCount: number) => {
   return `No items match the filter. ${hiddenItemCount} ${hiddenItemCount === 1 ? "item is" : "items are"} hidden.`;
 };
 
-type ActionListRowProps = { item: ActionListItem; rowTestId?: string; stackTitle: boolean };
+type ActionListRowProps = {
+  item: ActionListItem;
+  rowTestId?: string;
+  stackTitle: boolean;
+  menuPresentation: "dropdown" | "sheet";
+};
 
 // On a 320px screen the row's controls take about 150px of the 256px available, all at the 44px
 // target size, and left the name a 96px ribbon that broke most words in half. A stacked row gives
 // the name a line of its own, with the controls on the line below it.
-const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
-  const [actionsOpen, setActionsOpen] = useState(false);
+const ActionListRow = React.memo(function ActionListRow({
+  item,
+  rowTestId,
+  stackTitle,
+  menuPresentation,
+}: ActionListRowProps) {
   if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
@@ -211,54 +220,7 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
           </label>
         ) : null}
         {item.showMenu === false ? null : (
-          <DropdownMenu modal={false} open={actionsOpen} onOpenChange={setActionsOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 min-h-[44px] min-w-[44px]"
-                aria-label="Item actions"
-                disabled={item.disableActions}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  // The trigger opens on pointer-down or its own Enter; the keypad ring activates it
-                  // with a click, which carries no pointer (detail 0) and would otherwise do nothing.
-                  if (event.detail === 0) setActionsOpen(true);
-                }}
-                id={actionMenuTestId}
-                data-testid={actionMenuTestId}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {item.menuItems?.length
-                ? item.menuItems.map((entry, index) => {
-                    if (entry.type === "separator") return <DropdownMenuSeparator key={`sep-${index}`} />;
-                    if (entry.type === "label") {
-                      return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
-                    }
-                    if (entry.type === "info") {
-                      return (
-                        <DropdownMenuItem key={`info-${index}`} disabled>
-                          {entry.label}: {entry.value}
-                        </DropdownMenuItem>
-                      );
-                    }
-                    return (
-                      <DropdownMenuItem
-                        key={`action-${index}`}
-                        onSelect={entry.onSelect}
-                        disabled={entry.disabled}
-                        className={entry.destructive ? "text-destructive focus:text-destructive" : undefined}
-                      >
-                        {entry.label}
-                      </DropdownMenuItem>
-                    );
-                  })
-                : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
         )}
       </div>
       <div
@@ -269,6 +231,7 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
           <button
             type="button"
             className="text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex items-center gap-1"
+            data-row-title="true"
             onClick={wrapUserEvent(
               (event) => {
                 event.stopPropagation();
@@ -337,86 +300,7 @@ const ActionListRow = ({ item, rowTestId, stackTitle }: ActionListRowProps) => {
       </div>
     </div>
   );
-};
-
-type ListFilterRowProps = {
-  placeholder: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  categoryFilters?: React.ReactNode;
-  categoryFiltersActive: boolean;
-  categoryFiltersOpen: boolean;
-  onCategoryFiltersOpenChange: (open: boolean) => void;
-  inputTestId: string;
-  toggleTestId: string;
-};
-
-const ListFilterRow = ({
-  placeholder,
-  value,
-  onValueChange,
-  categoryFilters,
-  categoryFiltersActive,
-  categoryFiltersOpen,
-  onCategoryFiltersOpenChange,
-  inputTestId,
-  toggleTestId,
-}: ListFilterRowProps) => (
-  <div className="space-y-2">
-    <div className="flex items-center gap-2">
-      <div className="relative min-w-0 flex-1">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="text"
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => onValueChange(e.target.value)}
-          className="pl-9 pr-11 h-11"
-          data-testid={inputTestId}
-        />
-        {value && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onValueChange("")}
-            className="absolute right-0 top-1/2 -translate-y-1/2 h-11 w-11 p-0"
-            aria-label="Clear filter"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-      {categoryFilters ? (
-        <Button
-          variant="outline"
-          size="icon"
-          className="relative h-11 w-11 shrink-0"
-          onClick={() => onCategoryFiltersOpenChange(!categoryFiltersOpen)}
-          aria-label="Filter by type"
-          aria-expanded={categoryFiltersOpen}
-          data-testid={toggleTestId}
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-          {categoryFiltersActive ? (
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
-          ) : null}
-        </Button>
-      ) : null}
-    </div>
-    {categoryFilters && categoryFiltersOpen ? (
-      <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{categoryFilters}</div>
-    ) : null}
-  </div>
-);
-
-type ViewAllFilterContext = ListFilterRowProps;
-
-const ViewAllVirtuosoHeader = ({ context }: { context?: ViewAllFilterContext }) =>
-  context ? (
-    <div className="mb-2">
-      <ListFilterRow {...context} />
-    </div>
-  ) : null;
+});
 
 export const SelectableActionList = ({
   title,
@@ -439,7 +323,6 @@ export const SelectableActionList = ({
   rowTestId,
   headerActions,
   filterHeader,
-  filterHeaderActive = false,
   viewAllFilterHeader,
   filterPlaceholder = "Filter files...",
   filterValue,
@@ -450,18 +333,25 @@ export const SelectableActionList = ({
   hasMoreViewAllItems = false,
   onViewAllEndReached,
   showSelectionControls = true,
+  selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
+  letterIndexSource,
+  collapsibleFilterProfiles = NO_PROFILES,
+  filterHeaderSummary = null,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
   const stackTitles = stackTitleProfiles.includes(profile);
+  const collapsibleFilter = collapsibleFilterProfiles.includes(profile);
+  const menuPresentation = isCompact ? "sheet" : "dropdown";
+  const listRootRef = useRef<HTMLDivElement>(null);
+  const inlineListRef = useRef<HTMLDivElement>(null);
+  const viewAllBodyRef = useRef<HTMLDivElement>(null);
   const [viewAllOpen, setViewAllOpen] = useState(false);
-  const [filterHeaderOpen, setFilterHeaderOpen] = useState(false);
-  const [viewAllFilterHeaderOpen, setViewAllFilterHeaderOpen] = useState(false);
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
   const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
-  const viewAllScrollRef = useRef<HTMLDivElement>(null);
+  const [viewAllSheet, setViewAllSheet] = useState<HTMLElement | null>(null);
   /*
    * Virtuoso's first layout uses this estimate before it has measured a row, and the difference
    * between the estimate and the real height is corrected as a jump in scrollHeight. A row is
@@ -552,6 +442,19 @@ export const SelectableActionList = ({
     () => filterWithHeaders(expandedFilterText, effectiveViewAllItems),
     [effectiveViewAllItems, expandedFilterText, filterWithHeaders],
   );
+  const letterRail = useLetterRailModel(
+    viewAllFilteredItems,
+    estimatedItemHeight,
+    viewAllOpen ? letterIndexSource : undefined,
+  );
+  // The rail's 2.75rem strip spans the sheet's and card's right padding; rows give up only the rest,
+  // and its letters are centred over the card padding plus that lane.
+  const letterRailLaneClass = letterRail.eligible ? (isCompact ? "pr-5" : "pr-3") : undefined;
+  const letterColumnClass = isCompact ? "pr-3.5" : "pr-9";
+  // Level with the list itself, inside the card's rounded corners: body padding, border, card padding.
+  const letterRailBoundsClass = isCompact
+    ? "top-[calc(1.5rem+1px)] bottom-[calc(1.5rem+1px)]"
+    : "top-[calc(2rem+1px)] bottom-[calc(2rem+1px)]";
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
@@ -566,17 +469,6 @@ export const SelectableActionList = ({
   );
   const effectiveTotalItemCount =
     disableClientFiltering && typeof totalItemCount === "number" ? totalItemCount : filteredVisibleCount;
-  const viewAllFilterContext: ViewAllFilterContext = {
-    placeholder: filterPlaceholder,
-    value: expandedFilterText,
-    onValueChange: setExpandedFilterText,
-    categoryFilters: viewAllFilterHeader ?? filterHeader,
-    categoryFiltersActive: filterHeaderActive,
-    categoryFiltersOpen: viewAllFilterHeaderOpen,
-    onCategoryFiltersOpenChange: setViewAllFilterHeaderOpen,
-    inputTestId: "view-all-filter-input",
-    toggleTestId: "view-all-filter-types-toggle",
-  };
   const shouldShowViewAll =
     Boolean(viewAllTitle) &&
     (viewAllMode === "non-empty" ? effectiveTotalItemCount > 0 : effectiveTotalItemCount > maxVisible);
@@ -601,95 +493,138 @@ export const SelectableActionList = ({
     return { visibleItems: list };
   }, [filteredItems, maxVisible]);
 
+  const inlineFilterRegion = useMemo<ListFilterRegion>(
+    () => ({
+      focusRegion: () => listRootRef.current,
+      scrollAnchor: () => {
+        const anchor = inlineListRef.current;
+        return anchor ? { anchor, scroller: nearestScroller(anchor) } : null;
+      },
+    }),
+    [],
+  );
+
+  const viewAllScroller = letterRail.scroller;
+  const viewAllFilterRegion = useMemo<ListFilterRegion>(
+    () => ({
+      focusRegion: () => viewAllBodyRef.current,
+      scrollAnchor: () => {
+        const scroller = viewAllScroller;
+        const anchor = scroller?.firstElementChild;
+        return scroller && anchor instanceof HTMLElement ? { anchor, scroller } : null;
+      },
+    }),
+    [viewAllScroller],
+  );
+
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
       {list.length === 0 ? (
         <p className="text-xs text-muted-foreground">{inlineEmptyLabel}</p>
       ) : (
-        list.map((item) => <ActionListRow key={item.id} item={item} rowTestId={rowTestId} stackTitle={stackTitles} />)
+        list.map((item) => (
+          <ActionListRow
+            key={item.id}
+            item={item}
+            rowTestId={rowTestId}
+            stackTitle={stackTitles}
+            menuPresentation={menuPresentation}
+          />
+        ))
       )}
     </div>
   );
 
   return (
-    <div className="space-y-2">
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <p className="min-w-0 text-sm" data-testid={listTestId ? `${listTestId}-summary` : undefined}>
-          <span className="font-medium">{title}</span>
-          {showSelectionControls && effectiveTotalItemCount ? (
-            <span className="text-muted-foreground">
-              {" · "}
-              <span>
-                {effectiveTotalItemCount} {effectiveTotalItemCount === 1 ? "item" : "items"}
-              </span>
-              {selectedCount ? (
-                <>
-                  {" · "}
-                  <span>{selectedCount} selected</span>
-                </>
-              ) : null}
-            </span>
+    <div ref={listRootRef} className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{title}</p>
+          {showSelectionControls ? (
+            <p className="text-xs text-muted-foreground">
+              {selectedCount ? `${selectedCount} selected` : `No ${selectionLabel || title.toLowerCase()} selected`}
+            </p>
           ) : null}
-        </p>
-        {showSelectionControls ? (
-          <div className="flex shrink-0 items-center gap-2">
-            {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onRemoveSelected}
-                className="text-destructive hover:text-destructive"
-                id={removeSelectedId}
-                data-testid={removeSelectedId}
-              >
-                {removeSelectedLabel}
-              </Button>
-            ) : null}
-            {items.length ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onToggleSelectAll}
-                id={selectionToggleId}
-                data-testid={selectionToggleId}
-              >
-                {allSelected ? deselectAllLabel : selectAllLabel}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      {headerActions || shouldShowViewAll ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-2 [&>*]:flex-auto">
+        </div>
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           {headerActions}
           {shouldShowViewAll && (
-            <Button variant="outline" size="sm" className="whitespace-nowrap px-2" onClick={() => setViewAllOpen(true)}>
+            <Button variant="outline" size="sm" onClick={() => setViewAllOpen(true)}>
               {viewAllLabel}
             </Button>
           )}
         </div>
+      </div>
+
+      {collapsibleFilter ? (
+        <CollapsibleListFilter
+          value={inlineFilterText}
+          onChange={setInlineFilterText}
+          placeholder={filterPlaceholder}
+          testId="list-filter-input"
+          toggleTestId="list-filter-toggle"
+          header={filterHeader}
+          headerSummary={filterHeaderSummary}
+          region={inlineFilterRegion}
+        />
+      ) : (
+        <>
+          <ListFilterField
+            value={inlineFilterText}
+            onChange={setInlineFilterText}
+            placeholder={filterPlaceholder}
+            testId="list-filter-input"
+          />
+          {filterHeader ? (
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
+          ) : null}
+        </>
+      )}
+
+      {showSelectionControls ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-muted-foreground min-w-0 break-words">
+              {/* Empty says so once, in the list body; the count reads "1 item", not "1 items". */}
+              {effectiveTotalItemCount
+                ? `${effectiveTotalItemCount} ${effectiveTotalItemCount === 1 ? "item" : "items"}`
+                : null}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onToggleSelectAll}
+              disabled={!items.length}
+              className="max-w-full whitespace-normal"
+              id={selectionToggleId}
+              data-testid={selectionToggleId}
+            >
+              {allSelected ? deselectAllLabel : selectAllLabel}
+            </Button>
+          </div>
+          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRemoveSelected}
+              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
+              id={removeSelectedId}
+              data-testid={removeSelectedId}
+            >
+              {removeSelectedLabel}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
-      <ListFilterRow
-        placeholder={filterPlaceholder}
-        value={inlineFilterText}
-        onValueChange={setInlineFilterText}
-        categoryFilters={filterHeader}
-        categoryFiltersActive={filterHeaderActive}
-        categoryFiltersOpen={filterHeaderOpen}
-        onCategoryFiltersOpenChange={setFilterHeaderOpen}
-        inputTestId="list-filter-input"
-        toggleTestId="list-filter-types-toggle"
-      />
-
-      <div className={cn("bg-card border border-border rounded-panel overflow-hidden", isCompact ? "p-2" : "p-4")}>
+      <div ref={inlineListRef} className="bg-card border border-border rounded-panel p-4 overflow-hidden">
         {renderList(visibleItems)}
       </div>
 
       {viewAllTitle && (
         <AppSheet open={viewAllOpen} onOpenChange={setViewAllOpen}>
           <AppSheetContent
+            ref={setViewAllSheet}
             className={cn(
               "p-0 overflow-hidden",
               profile === "expanded"
@@ -698,30 +633,50 @@ export const SelectableActionList = ({
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
-              <AppSheetHeader>
+              <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
                 <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
                 <AppSheetDescription>Review all items in this list.</AppSheetDescription>
+                {collapsibleFilter ? (
+                  <CollapsibleListFilter
+                    value={expandedFilterText}
+                    onChange={setExpandedFilterText}
+                    placeholder={filterPlaceholder}
+                    testId="view-all-filter-input"
+                    toggleTestId="view-all-filter-toggle"
+                    header={viewAllFilterHeader ?? filterHeader}
+                    headerSummary={filterHeaderSummary}
+                    region={viewAllFilterRegion}
+                  />
+                ) : (
+                  <>
+                    <ListFilterField
+                      value={expandedFilterText}
+                      onChange={setExpandedFilterText}
+                      placeholder={filterPlaceholder}
+                      testId="view-all-filter-input"
+                    />
+                    {(viewAllFilterHeader ?? filterHeader) ? (
+                      <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+                        {viewAllFilterHeader ?? filterHeader}
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </AppSheetHeader>
-              <AppSheetBody className={cn("flex flex-col", isCompact ? "px-2 py-2" : "px-6 py-4")}>
+              <AppSheetBody className={cn("relative flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
                 <div
+                  ref={viewAllBodyRef}
                   className={cn(
                     "bg-card border border-border rounded-panel overflow-hidden flex-1 h-full min-h-0 flex flex-col",
-                    isCompact ? "p-2" : "p-4",
+                    isCompact ? "p-3" : "p-4",
                   )}
                 >
                   {viewAllFilteredItems.length === 0 ? (
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                      <div className="mb-2">
-                        <ListFilterRow {...viewAllFilterContext} />
-                      </div>
-                      <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
-                    </div>
+                    <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
                   ) : (
                     <Virtuoso
                       ref={virtuosoRef}
                       style={{ height: "100%" }}
-                      context={viewAllFilterContext}
-                      components={{ Header: ViewAllVirtuosoHeader }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}
                       overscan={500}
@@ -730,39 +685,30 @@ export const SelectableActionList = ({
                           onViewAllEndReached?.();
                         }
                       }}
-                      scrollerRef={(ref) => {
-                        if (ref && viewAllScrollRef) {
-                          (viewAllScrollRef as React.MutableRefObject<HTMLElement | null>).current = ref as HTMLElement;
-                        }
-                      }}
+                      scrollerRef={letterRail.setScroller}
                       itemContent={(index, item) => (
-                        <div className="mb-2 last:mb-0">
-                          <ActionListRow item={item} rowTestId={rowTestId} stackTitle={stackTitles} />
+                        <div className={cn("mb-2 last:mb-0", letterRailLaneClass)}>
+                          <ActionListRow
+                            item={item}
+                            rowTestId={rowTestId}
+                            stackTitle={stackTitles}
+                            menuPresentation={menuPresentation}
+                          />
                         </div>
                       )}
                     />
                   )}
                 </div>
+                {letterRail.eligible ? (
+                  <LetterIndexRail
+                    model={letterRail}
+                    scrollToListIndex={(index) => virtuosoRef.current?.scrollToIndex({ index, align: "start" })}
+                    keyScope={viewAllSheet}
+                    className={letterRailBoundsClass}
+                    letterColumnClassName={letterColumnClass}
+                  />
+                ) : null}
               </AppSheetBody>
-              <AlphabetScrollbar
-                items={viewAllFilteredItems
-                  .filter((item) => item.variant !== "header")
-                  .map((item) => ({ title: item.title, id: item.id }))}
-                scrollContainerRef={viewAllScrollRef}
-                onScrollToIndex={(index) => {
-                  const filtered = viewAllFilteredItems.filter((item) => item.variant !== "header");
-                  const targetItem = filtered[index];
-                  if (targetItem) {
-                    const originalIndex = viewAllFilteredItems.findIndex((item) => item.id === targetItem.id);
-                    if (originalIndex !== -1) {
-                      virtuosoRef.current?.scrollToIndex({
-                        index: originalIndex,
-                        align: "start",
-                      });
-                    }
-                  }
-                }}
-              />
             </div>
           </AppSheetContent>
         </AppSheet>

@@ -20,8 +20,8 @@ const engine = vi.hoisted(() => ({
   play: vi.fn(),
   seekTo: vi.fn(async () => undefined),
   stop: vi.fn(),
-  muted: vi.fn(() => false),
-  setMuted: vi.fn(),
+  holdSilence: vi.fn(),
+  releaseSilence: vi.fn(),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -111,7 +111,9 @@ describe("carrying a tune from the C64 on to the phone", () => {
     engine.play.mockResolvedValue({ started: true });
     engine.seekTo.mockClear();
     engine.stop.mockClear();
-    engine.setMuted.mockClear();
+    engine.releaseSilence.mockClear();
+    engine.holdSilence.mockReset();
+    engine.holdSilence.mockReturnValue(engine.releaseSilence);
     vi.mocked(markRemotePlaybackStopped).mockClear();
     vi.mocked(addLog).mockClear();
     resetRemoteTuneHandoverForTests();
@@ -134,7 +136,8 @@ describe("carrying a tune from the C64 on to the phone", () => {
     const [position] = engine.seekTo.mock.calls[0] as unknown as [number];
     expect(position).toBeGreaterThan(29);
     expect(position).toBeLessThan(31);
-    expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+    expect(engine.holdSilence).toHaveBeenCalledTimes(1);
+    expect(engine.releaseSilence).toHaveBeenCalledTimes(1);
     expect(takeTuneHandedOverWithoutPage()).toBe("waltz");
     expect(takeTuneHandedOverWithoutPage()).toBeNull();
   });
@@ -217,7 +220,8 @@ describe("carrying a tune from the C64 on to the phone", () => {
       }),
     );
     expect(engine.seekTo).not.toHaveBeenCalled();
-    expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+    expect(engine.holdSilence).toHaveBeenCalledTimes(1);
+    expect(engine.releaseSilence).toHaveBeenCalledTimes(1);
   });
 
   it("warns when the C64 refuses the reset for a reason other than the reconnect", async () => {

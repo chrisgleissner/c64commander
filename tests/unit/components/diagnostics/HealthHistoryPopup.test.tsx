@@ -237,4 +237,36 @@ describe("HealthHistoryPopup", () => {
     expect(restProbe).toHaveTextContent("Success");
     expect(restProbe).not.toHaveTextContent("OK");
   });
+
+  it("shows a skipped probe as Skipped with an info button that explains it once", () => {
+    const telnetReason = "Skipped: switch-device-dialog does not probe Telnet (reduces device session churn)";
+    vi.mocked(getHealthHistory).mockReturnValue([
+      makeEntry(10, "Healthy", {
+        probes: {
+          ...makeEntry(10, "Healthy").probes,
+          telnet: { outcome: "Skipped", durationMs: null, reason: telnetReason },
+        },
+      }),
+    ]);
+
+    render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
+    const healthySegment = screen
+      .getAllByTestId(/health-history-segment-/)
+      .find((node) => node.getAttribute("data-state") === "Healthy");
+    fireEvent.click(healthySegment!);
+    const row = screen.getByTestId(/health-history-event-row-/);
+    const toggle = within(row).getByRole("button");
+    fireEvent.click(toggle);
+
+    const telnetProbe = screen.getByTestId(/health-history-event-probe-.*-telnet/);
+    expect(telnetProbe).toHaveTextContent("Skipped");
+    expect(screen.queryByText(telnetReason)).not.toBeInTheDocument();
+    const info = within(telnetProbe).getByRole("button", { name: "Why was Telnet skipped?" });
+    expect(toggle).not.toContainElement(info);
+
+    vi.useRealTimers();
+    fireEvent.click(info);
+
+    expect(screen.getAllByText(/doesn't open extra connections to your C64/)).toHaveLength(1);
+  });
 });

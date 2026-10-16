@@ -7,7 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -20,6 +20,8 @@ import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
 import { Checkbox } from "@/components/ui/checkbox";
 import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
+import { resetStagedRowsForTests, useStagedRows } from "@/lib/ui/stagedRows";
+import { afterRingRescan } from "../helpers/ringRescan";
 
 const SELECTED = "data-key-selected";
 
@@ -89,6 +91,18 @@ const NestedToolbar = () => {
   );
 };
 
+/** Lays a control out `top()` px from the top of the viewport, 20 px tall. */
+const placeAt = (element: Element | undefined, top: () => number) => {
+  if (!element) return;
+  element.getBoundingClientRect = () => ({ top: top(), bottom: top() + 20, height: 20 }) as DOMRect;
+};
+
+/** A stop outside the scrolling page, as the tab bar is. */
+const TabBarStop = () => {
+  const ref = useFocusItem<HTMLButtonElement>({ id: "tab", order: 100 });
+  return <button ref={ref}>Tab</button>;
+};
+
 describe("FocusNavigationProvider + useFocusItem", () => {
   it("moves d-pad focus across enabled CTAs, skipping disabled ones and wrapping", () => {
     render(
@@ -110,6 +124,111 @@ describe("FocusNavigationProvider + useFocusItem", () => {
 
     // Back with nothing to dismiss and no onNavigateBack handler must not throw.
     expect(() => fireEvent.keyDown(document.body, { code: "Escape" })).not.toThrow();
+  });
+
+  it("scrolls a page that continues below its last CTA before Down leaves it for the tab bar", () => {
+    const scrollBy = vi.fn();
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1000 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = scrollBy as unknown as typeof page.scrollBy;
+      placeAt(page.querySelectorAll("button")[1], () => 300);
+    };
+    render(
+      <FocusNavigationProvider>
+        <div ref={measure} data-testid="page" style={{ overflowY: "auto" }}>
+          <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          <p>Text below the last control</p>
+        </div>
+        <TabBarStop />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+
+    // B is the page's last stop and the tab bar comes next, but the page still has 600 px below
+    // the fold: Down shows them instead of leaving the page, as far as keeps B in view.
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 300 });
+    expect(document.activeElement).toBe(button("B"));
+
+    // At the end of the page, Down moves on to the tab bar as before.
+    screen.getByTestId("page").scrollTop = 600;
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(scrollBy).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(button("Tab"));
+  });
+
+  it("scrolls past disabled CTAs until the last active CTA reaches the top, then moves on to the tab bar", () => {
+    const scrollPositions: number[] = [];
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = ({ top }: ScrollToOptions) => {
+        page.scrollTop = Math.min(1050, page.scrollTop + (top ?? 0));
+        scrollPositions.push(page.scrollTop);
+      };
+      placeAt(page.querySelectorAll("button")[1], () => 360 - page.scrollTop);
+    };
+    render(
+      <FocusNavigationProvider>
+        <div ref={measure} style={{ overflowY: "auto" }}>
+          <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          <p>HVSC download and ingestion progress below disabled controls</p>
+        </div>
+        <TabBarStop />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("B"));
+    expect(scrollPositions).toEqual([360]);
+
+    // A further page would leave B, still the selection, above the screen.
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Tab"));
+    expect(scrollPositions).toEqual([360]);
+  });
+
+  it("pages by the viewport height minus the keypad guidance bar so no row stays under the bar", () => {
+    document.documentElement.style.setProperty("--keypad-guidance-reserved-height", "calc(1rem + 24px)");
+    const probeHeight = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
+      const height =
+        this.getAttribute("aria-hidden") === "true" && this.parentElement === document.documentElement ? 40 : 0;
+      const top = this.textContent === "B" ? 380 : 0;
+      return { top, bottom: top + height, left: 0, right: 0, width: 0, height, x: 0, y: 0, toJSON: () => ({}) };
+    });
+    const scrollBy = vi.fn();
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 400 });
+      page.scrollBy = scrollBy;
+    };
+    try {
+      render(
+        <FocusNavigationProvider>
+          <div ref={measure} style={{ overflowY: "auto" }}>
+            <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          </div>
+          <TabBarStop />
+        </FocusNavigationProvider>,
+      );
+
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: 360 });
+    } finally {
+      probeHeight.mockRestore();
+      document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+    }
   });
 
   it("activates the focused CTA via center/enter (default = click the element)", () => {
@@ -1254,6 +1373,33 @@ describe("the keypad highlight follows focus that a menu moves itself", () => {
   });
 });
 
+describe("a dialog focusing its own surface as it opens", () => {
+  afterEach(() => resetInputModality());
+
+  it("is not scrolled into view, which forced a second style and layout pass on every open", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Diagnostics" tabIndex={-1}>
+          <button type="button">Close</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+    const dialogScroll = vi.fn();
+    const closeScroll = vi.fn();
+    dialog.scrollIntoView = dialogScroll;
+    close.scrollIntoView = closeScroll;
+
+    dialog.focus();
+    expect(dialogScroll).not.toHaveBeenCalled();
+
+    close.focus();
+    expect(closeScroll).toHaveBeenCalled();
+  });
+});
+
 describe("the keypad highlight follows focus moved to a control the ring has not scanned yet", () => {
   afterEach(() => resetInputModality());
 
@@ -1671,13 +1817,13 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
 
   const WaitingCard = ({ name }: { name: string }) => {
     const anchor = useRef<HTMLDivElement | null>(null);
-    const mounted = useProgressiveMount(true, anchor);
+    const mounted = useProgressiveMount({ scope: "fixture", id: name }, true, anchor);
     return <div ref={anchor}>{mounted ? <button type="button">{name}</button> : null}</div>;
   };
 
   const MeasuredCard = ({ name }: { name: string }) => {
     const anchor = useRef<HTMLDivElement | null>(null);
-    const mounted = useProgressiveMount(true, anchor, 400);
+    const mounted = useProgressiveMount({ scope: "fixture", id: name }, true, anchor, 400);
     return (
       <div ref={anchor} data-section-scope="fixture" data-section-id={name} data-section-label={name}>
         <button type="button">{name} header</button>
@@ -1799,5 +1945,356 @@ describe("FocusNavigationProvider with cards still waiting to be built", () => {
 
     expect(button("Third")).toBeInTheDocument();
     expect(document.activeElement).toBe(button("Third"));
+  });
+});
+
+describe("FocusNavigationProvider with rows still being built inside a card", () => {
+  afterEach(() => {
+    setProgressiveMountEnabled(false);
+    resetStagedRowsForTests();
+    vi.restoreAllMocks();
+    resetInputModality();
+  });
+
+  const ROWS = 30;
+
+  const StagedCard = ({ name, removedRow }: { name: string; removedRow?: number }) => {
+    const rows = Array.from({ length: ROWS }, (_, index) => index + 1).filter((row) => row !== removedRow);
+    const staged = useStagedRows(rows.length);
+    return (
+      <div data-section-scope="fixture" data-section-id={name} data-section-label={name}>
+        <button type="button">{name} header</button>
+        {rows.slice(0, staged.count).map((row) => (
+          <button key={row} type="button">
+            {`${name} row ${row}`}
+          </button>
+        ))}
+        {staged.marker}
+      </div>
+    );
+  };
+
+  const walkDown = (staged: boolean) => {
+    setProgressiveMountEnabled(staged);
+    const view = render(
+      <FocusNavigationProvider>
+        {["First", "Second"].map((name) => (
+          <StagedCard key={name} name={name} />
+        ))}
+      </FocusNavigationProvider>,
+    );
+    const builtBeforeWalking = screen.queryAllByRole("button", { name: /^Second row/ }).length;
+    const labels: string[] = [];
+    for (const code of ["ArrowDown", "Enter", ...Array.from({ length: ROWS + 2 }, () => "ArrowDown")]) {
+      fireEvent.keyDown(document.body, { code });
+      labels.push(document.querySelector('[data-key-selected="true"]')?.textContent ?? "");
+    }
+    view.unmount();
+    resetStagedRowsForTests();
+    resetInputModality();
+    return { builtBeforeWalking, labels };
+  };
+
+  it("Down from the last built row builds the rest of the card and reaches its last row", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const eager = walkDown(false);
+    const staged = walkDown(true);
+
+    expect(staged.builtBeforeWalking).toBeLessThan(ROWS);
+    expect(staged.labels).toContain(`Second row ${ROWS}`);
+    expect(staged.labels).toEqual(eager.labels);
+  });
+
+  const selectedLabel = () => document.querySelector(`[${SELECTED}="true"]`)?.textContent ?? "";
+
+  it("a row removed after the walk entered a partly built card hands the selection to the next row, and the walk still reaches the last row", async () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const cards = (removedRow?: number) => (
+      <FocusNavigationProvider>
+        <StagedCard name="First" />
+        <StagedCard name="Second" removedRow={removedRow} />
+      </FocusNavigationProvider>
+    );
+    const view = render(cards());
+    expect(screen.queryAllByRole("button", { name: /^Second row/ }).length).toBeLessThan(ROWS);
+    for (const code of ["ArrowDown", "Enter", "ArrowDown", "ArrowDown", "ArrowDown"]) {
+      fireEvent.keyDown(document.body, { code });
+    }
+    expect(selectedLabel()).toBe("Second row 3");
+
+    view.rerender(cards(3));
+    await act(afterRingRescan);
+    expect(selectedLabel()).toBe("Second row 4");
+
+    const labels: string[] = [];
+    for (let step = 0; step < ROWS; step++) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      labels.push(selectedLabel());
+    }
+    expect(labels).toContain(`Second row ${ROWS}`);
+    expect(labels).not.toContain("Second row 3");
+  });
+
+  it("a route change lands on the new page's first stop while the page left still has a list being built", async () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    const LongList = () => <div>{useStagedRows(100_000).marker}</div>;
+    const slots = (onHome: boolean) => (
+      <FocusNavigationProvider>
+        <div data-slot-active={onHome ? "false" : "true"} hidden={onHome}>
+          <button type="button">Settings first</button>
+          <button type="button">Settings second</button>
+          <LongList />
+        </div>
+        <div data-slot-active={onHome ? "true" : "false"} hidden={!onHome}>
+          <button type="button">Home first</button>
+          <button type="button">Home second</button>
+        </div>
+        <nav data-focus-scope="tabbar">
+          <button type="button">Home tab</button>
+          <button type="button">Settings tab</button>
+        </nav>
+      </FocusNavigationProvider>
+    );
+    const view = render(slots(false));
+    for (let step = 0; step < 4 && selectedLabel() !== "Settings second"; step++) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    }
+    expect(selectedLabel()).toBe("Settings second");
+
+    view.rerender(slots(true));
+    await act(afterRingRescan);
+
+    expect(selectedLabel()).toBe("Home first");
+  });
+});
+
+describe("returning from an overlay", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  const Tiles = ({ open, onLive, onGame }: { open: boolean; onLive?: () => void; onGame?: () => void }) => (
+    <>
+      <button onClick={onLive}>Live</button>
+      <button onClick={onGame}>Game</button>
+      <button>Input</button>
+      {open ? (
+        <div role="dialog" aria-label="Sheet">
+          <button>Close sheet</button>
+        </div>
+      ) : null}
+    </>
+  );
+
+  it("returns to the opener even when the closing overlay hands DOM focus to a different stop", async () => {
+    const view = render(
+      <FocusNavigationProvider>
+        <Tiles open={false} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+    expect(document.activeElement).toBe(button("Live"));
+
+    view.rerender(
+      <FocusNavigationProvider>
+        <Tiles open />
+      </FocusNavigationProvider>,
+    );
+    await act(afterRingRescan);
+    view.rerender(
+      <FocusNavigationProvider>
+        <Tiles open={false} />
+      </FocusNavigationProvider>,
+    );
+    // Radix gives focus back to the element that held it when the overlay opened, before the ring rescans.
+    button("Game").focus();
+    await act(afterRingRescan);
+
+    expect(document.activeElement).toBe(button("Live"));
+    expect(button("Live")).toHaveAttribute(SELECTED, "true");
+    expect(button("Game")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("activates the highlighted stop on OK, not a different stop that still holds DOM focus", () => {
+    const onLive = vi.fn();
+    const onGame = vi.fn();
+    render(
+      <FocusNavigationProvider>
+        <Tiles open={false} onLive={onLive} onGame={onGame} />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowUp" });
+    expect(button("Live")).toHaveAttribute(SELECTED, "true");
+
+    setInputModality("pointer");
+    button("Game").focus();
+    setInputModality("key-navigation");
+    fireEvent.keyDown(button("Game"), { code: "Enter" });
+
+    expect(onLive).toHaveBeenCalledTimes(1);
+    expect(onGame).not.toHaveBeenCalled();
+  });
+});
+
+describe("the selected stop goes away", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  const Rows = ({ withRemove }: { withRemove: boolean }) => (
+    <>
+      <button>Add items</button>
+      <button>Select all</button>
+      {withRemove ? <button>Remove selected items</button> : null}
+      <button>First item</button>
+    </>
+  );
+
+  it("highlights, focuses and scrolls into view the nearest remaining stop", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    const view = render(
+      <FocusNavigationProvider>
+        <Rows withRemove />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(button("Remove selected items")).toHaveAttribute(SELECTED, "true");
+    scrolled.length = 0;
+
+    view.rerender(
+      <FocusNavigationProvider>
+        <Rows withRemove={false} />
+      </FocusNavigationProvider>,
+    );
+    await act(afterRingRescan);
+
+    expect(button("First item")).toHaveAttribute(SELECTED, "true");
+    expect(button("Add items")).not.toHaveAttribute(SELECTED);
+    expect(document.activeElement).toBe(button("First item"));
+    expect(scrolled).toContain(button("First item"));
+    scrollIntoView.mockRestore();
+  });
+});
+
+describe("the first key after pointer use", () => {
+  beforeEach(async () => {
+    // A reservation queued by an earlier test applies in a microtask; let it land before resetting.
+    await Promise.resolve();
+    resetInputModality();
+    document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+  });
+  afterEach(() => {
+    resetInputModality();
+    document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+  });
+
+  it("scrolls the stop it moved to again once the guidance bar has reserved its room", () => {
+    const reserveAtScroll: Array<[string, string]> = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      reserveAtScroll.push([
+        this.textContent ?? "",
+        document.documentElement.style.getPropertyValue("--keypad-guidance-reserved-height"),
+      ]);
+    });
+    render(
+      <FocusNavigationProvider>
+        <button>First card</button>
+        <button>Second card</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(button("Second card")).toHaveAttribute(SELECTED, "true");
+    const last = reserveAtScroll.filter(([label]) => label === "Second card").at(-1);
+    expect(last?.[1]).toBe("var(--keypad-guidance-bar-height)");
+    scrollIntoView.mockRestore();
+  });
+});
+
+describe("a tab jump", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  /** The remembered scroll offset the Play page reopens at. */
+  const keepScrolledTo = (top: number) => (element: HTMLDivElement | null) => {
+    if (element) Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+  };
+
+  const TabbedPages = ({ scrolledTop = 0 }: { scrolledTop?: number }) => {
+    const [page, setPage] = useState(0);
+    const shortcuts = useMemo(() => ({ jumpToTab: (index: number) => setPage(index) }), []);
+    return (
+      <FocusNavigationProvider shortcuts={shortcuts}>
+        {page === 0 ? (
+          <main key="home">
+            <button>Home first</button>
+            <button>Home second</button>
+          </main>
+        ) : (
+          <div key="play" data-slot-active="true">
+            <div data-page-scroll-container="true" ref={keepScrolledTo(scrolledTop)}>
+              <button>Play first</button>
+              <button>Play second</button>
+            </div>
+          </div>
+        )}
+      </FocusNavigationProvider>
+    );
+  };
+
+  it("scrolls the new page's first stop into view once the page has been scanned", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    render(<TabbedPages />);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    scrolled.length = 0;
+
+    fireEvent.keyDown(document.body, { key: "2", code: "Digit2" });
+    await act(afterRingRescan);
+
+    expect(button("Play first")).toHaveAttribute(SELECTED, "true");
+    expect(scrolled).toContain(button("Play first"));
+    scrollIntoView.mockRestore();
+  });
+
+  it("keeps a page that reopens scrolled where it is and selects the first stop seen there", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    const boxes = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const top = this.hasAttribute("data-page-scroll-container")
+        ? 0
+        : this.textContent === "Play first"
+          ? -300
+          : this.textContent === "Play second"
+            ? 150
+            : 0;
+      const height = this.hasAttribute("data-page-scroll-container") ? 400 : 44;
+      return { top, bottom: top + height, height, left: 0, right: 100, width: 100, x: 0, y: top, toJSON: () => ({}) };
+    });
+    render(<TabbedPages scrolledTop={900} />);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    scrolled.length = 0;
+
+    fireEvent.keyDown(document.body, { key: "2", code: "Digit2" });
+    await act(afterRingRescan);
+
+    expect(button("Play second")).toHaveAttribute(SELECTED, "true");
+    expect(scrolled).not.toContain(button("Play first"));
+    boxes.mockRestore();
+    scrollIntoView.mockRestore();
   });
 });

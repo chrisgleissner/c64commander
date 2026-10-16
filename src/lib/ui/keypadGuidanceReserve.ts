@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-/** Dispatched on `window` when the bar starts or stops reserving its height. */
+/** Dispatched on `window` when the guidance bar or the toast strip changes the height reserved at the bottom. */
 export const KEYPAD_GUIDANCE_RESERVE_EVENT = "c64u:keypad-guidance-reserve";
 
 /**
@@ -19,4 +19,11 @@ export const readKeypadGuidanceReservePx = (): number => {
   if (reserved === "" || reserved === "0px") return 0;
   const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"][data-visible="true"]');
   return bar ? bar.getBoundingClientRect().height : 0;
+};
+
+/** What a dialog or menu stands on, in CSS px: the guidance bar while it shows and the toast strip above it. */
+export const readBottomOverlayReservePx = (): number => {
+  if (typeof document === "undefined") return readKeypadGuidanceReservePx();
+  const toastStrip = Number.parseFloat(document.documentElement.style.getPropertyValue("--app-toast-reserved-height"));
+  return readKeypadGuidanceReservePx() + (Number.isFinite(toastStrip) ? toastStrip : 0);
 };

@@ -97,5 +97,8 @@ export const localVolumeIndexForGain = (gain: number): number => {
   return best;
 };
 
+/** The readout while muted: the ladder's own silent step, as the C64 route reads a muted mixer. */
+export const LOCAL_VOLUME_OFF_LABEL = LOCAL_VOLUME_STEPS[0].label;
+
 /** The text beside the slider, e.g. "-6 dB". */
 export const localVolumeLabelForIndex = (index: number): string => LOCAL_VOLUME_STEPS[index]?.label ?? "—";

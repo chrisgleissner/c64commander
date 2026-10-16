@@ -38,6 +38,20 @@ describe("FocusController", () => {
     expect(controller.focusPrevious()?.id).toBe("c"); // wrap backward
   });
 
+  it("peeks at the next stop without moving, and says when the step wraps around the scope", () => {
+    const controller = new FocusController();
+    controller.register(item("a", 0));
+    controller.register(item("b", 1));
+    controller.register(item("c", 2, { disabled: true }));
+
+    expect(controller.peekStep(1)).toMatchObject({ item: { id: "b" }, wraps: false });
+    expect(controller.peekStep(-1)).toMatchObject({ item: { id: "b" }, wraps: true });
+    expect(controller.current()?.id).toBe("a");
+    controller.focusNext();
+    // The disabled item after "b" is not a stop, so the next stop is "a", reached by wrapping.
+    expect(controller.peekStep(1)).toMatchObject({ item: { id: "a" }, wraps: true });
+  });
+
   it("skips disabled items during navigation", () => {
     const controller = new FocusController();
     controller.register(item("a", 0));
@@ -178,6 +192,78 @@ describe("FocusController", () => {
     expect(parent?.id).toBe("root");
     expect(controller.currentScopeParentId()).toBeNull();
     expect(controller.current()?.id).toBe("root");
+  });
+});
+
+describe("FocusController — a group whose only stop is the selected one", () => {
+  const categories = (rowsDisabled: boolean) => [
+    item("memory", 0),
+    item("memory-header", 1, { parentId: "memory" }),
+    item("memory-row", 2, { parentId: "memory", disabled: rowsDisabled }),
+    item("wifi", 3),
+  ];
+
+  it("moves Down to the next group after the group was collapsed from inside", () => {
+    const controller = new FocusController();
+    controller.setItems(categories(false));
+    controller.setCurrent("memory-header");
+
+    controller.setItems(categories(false).filter((entry) => entry.id !== "memory-row"));
+
+    expect(controller.focusNext()?.id).toBe("wifi");
+    expect(controller.currentScopeParentId()).toBeNull();
+  });
+
+  it("moves Up to the previous group when every other stop in the group is disabled", () => {
+    const controller = new FocusController();
+    controller.setItems([item("before", -1), ...categories(true)]);
+    controller.setCurrent("memory-header");
+
+    expect(controller.focusPrevious()?.id).toBe("before");
+  });
+
+  it("stays inside a group that still has another enabled stop", () => {
+    const controller = new FocusController();
+    controller.setItems(categories(false));
+    controller.setCurrent("memory-header");
+
+    expect(controller.focusNext()?.id).toBe("memory-row");
+    expect(controller.currentScopeParentId()).toBe("memory");
+  });
+});
+
+describe("FocusController — app chrome and the default selection", () => {
+  const page = () => [
+    { ...item("quick-menu", 0), chrome: true },
+    { ...item("badge", 1), chrome: true },
+    item("first-card", 2),
+    item("tab-home", 3),
+  ];
+
+  it("defaults to the page's first own stop, not the app bar before it", () => {
+    const controller = new FocusController();
+    controller.setItems(page());
+    expect(controller.current()?.id).toBe("first-card");
+  });
+
+  it("lands on the page's first own stop after a reset to the default, as a page jump makes", () => {
+    const controller = new FocusController();
+    controller.setItems(page());
+    controller.setCurrent("tab-home");
+    controller.resetToDefault();
+    expect(controller.current()?.id).toBe("first-card");
+  });
+
+  it("still defaults to the app bar on a page with no stop of its own", () => {
+    const controller = new FocusController();
+    controller.setItems(page().filter((entry) => entry.id !== "first-card" && entry.id !== "tab-home"));
+    expect(controller.current()?.id).toBe("quick-menu");
+  });
+
+  it("keeps the app bar reachable by Up from the first stop", () => {
+    const controller = new FocusController();
+    controller.setItems(page());
+    expect(controller.focusPrevious()?.id).toBe("badge");
   });
 });
 

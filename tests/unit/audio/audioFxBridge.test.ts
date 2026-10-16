@@ -64,6 +64,22 @@ describe("audio fx bridge", () => {
     expect(await readSpectrum()).toEqual(frame);
   });
 
+  it("passes a look-ahead request to the plugin and keeps the frames ahead", async () => {
+    const withAhead = { ...frame, aligned: true, ahead: [{ ...frame, sequence: 8 }] };
+    plugin.readSpectrum.mockResolvedValue(withAhead);
+    const request = { targetNanos: 5e13, count: 4, stepNanos: 16.7e6 };
+    expect(await readSpectrum(request)).toEqual(withAhead);
+    expect(plugin.readSpectrum).toHaveBeenCalledWith(request);
+    await readSpectrum();
+    expect(plugin.readSpectrum).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("rejects a reply whose frames ahead are malformed instead of passing it on", async () => {
+    plugin.readSpectrum.mockResolvedValue({ ...frame, ahead: [{ sequence: 8 }] });
+    expect(await readSpectrum({ targetNanos: 5e13, count: 2, stepNanos: 16.7e6 })).toBeNull();
+    expect(addLog).toHaveBeenCalled();
+  });
+
   it("does nothing on the web or without the plugin", async () => {
     isNativePlatform.mockReturnValue(false);
     expect(isAudioFxAvailable()).toBe(false);

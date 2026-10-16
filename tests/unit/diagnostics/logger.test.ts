@@ -163,6 +163,7 @@ describe("logger", () => {
   it("includes playback lifecycle state when playback is active", () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     getPlaybackTraceSnapshot.mockReturnValue({
+      isPlaying: true,
       sourceKind: "hvsc",
       localAccessMode: "file",
       trackInstanceId: "track-1",
@@ -174,6 +175,34 @@ describe("logger", () => {
     expect(logged.localAccessMode).toBe("file");
     expect(logged.trackInstanceId).toBe("track-1");
     expect(logged.lifecycleState).not.toBeNull();
+    spy.mockRestore();
+  });
+
+  it("does not tag a log entry with the playlist's current tune while nothing is playing", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    getPlaybackTraceSnapshot.mockReturnValue({
+      isPlaying: false,
+      sourceKind: "hvsc",
+      trackInstanceId: 0,
+      playlistItemId: "radio:/MUSICIANS/B/Bizet/Hyper_Speed.sid#1",
+    });
+    logger.logger.error("FTP listDirectory failed", { details: { trackInstanceId: null, playlistItemId: null } });
+    const logged = addLog.mock.calls[0][2];
+    expect(logged).toMatchObject({ sourceKind: null, trackInstanceId: null, playlistItemId: null });
+    spy.mockRestore();
+  });
+
+  it("tags the Play page's own actions with its current tune before it plays", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    getActiveAction.mockReturnValue({
+      correlationId: "play-1",
+      origin: "user",
+      name: "PlayFilesPage.anonymousAction",
+      componentName: "PlayFilesPage",
+    });
+    getPlaybackTraceSnapshot.mockReturnValue({ isPlaying: false, sourceKind: "ultimate", trackInstanceId: 0 });
+    logger.logger.info("starting a tune");
+    expect(addLog.mock.calls[0][2]).toMatchObject({ sourceKind: "ultimate", trackInstanceId: 0 });
     spy.mockRestore();
   });
 

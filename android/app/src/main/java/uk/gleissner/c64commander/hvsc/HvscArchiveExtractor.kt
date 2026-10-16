@@ -41,12 +41,32 @@ data class ArchiveProfile(
         val estimatedRequiredBytes: Long,
 )
 
+/**
+ * The memory the 7-Zip extractor may use. It runs as its own native process, so the app's Java heap
+ * limits (memory class, runtime maximum) do not bound it; the system's available memory does. A
+ * compatibility runtime can report a 128 MiB memory class on a phone with 1.8 GB free, and capping
+ * by the heap then refused every HVSC extraction. The heap figures remain only as the fallback
+ * when the system reports no available memory.
+ */
+fun extractionMemoryBudget(availableBytes: Long, memoryClassBytes: Long, runtimeBytes: Long): MemoryBudget =
+        MemoryBudget(
+                maxExtractionBytes =
+                        if (availableBytes > 0L) availableBytes / 2L
+                        else maxOf(memoryClassBytes * 2L, runtimeBytes * 2L),
+                detail = "availMem=${availableBytes} memoryClass=${memoryClassBytes} runtimeMax=${runtimeBytes}",
+        )
+
 data class ExtractedSong(
         val virtualPath: String,
         val fileName: String,
         val songs: Int?,
         val startSong: Int?,
+        /** The file's first [SID_HEADER_BYTES] bytes, or all of it when it is shorter. */
+        val sidHeader: ByteArray,
 )
+
+/** The PSID/RSID v2+ header length, which is what the app's SID header parser requires. */
+const val SID_HEADER_BYTES = 0x7C
 
 data class ExtractionProgress(
         val processedEntries: Int,
@@ -600,13 +620,15 @@ class DefaultHvscArchiveExtractor(
               val targetFile = ensureWithinRoot(outputDir, File(outputDir, normalizedPath))
               targetFile.parentFile?.mkdirs()
               moveIntoPlace(candidate, targetFile)
-              val header = readSidHeader(targetFile)
+              val headerBytes = readSidHeaderBytes(targetFile)
+              val header = parseSubsongFields(headerBytes)
               extractedSongs.add(
                       ExtractedSong(
                               virtualPath = "/$normalizedPath",
                               fileName = targetFile.name,
                               songs = header?.songs,
                               startSong = header?.startSong,
+                              sidHeader = headerBytes,
                       )
               )
             }
@@ -663,23 +685,32 @@ class DefaultHvscArchiveExtractor(
     )
   }
 
-  private fun readSidHeader(file: File): SidHeader? {
-    BufferedInputStream(file.inputStream()).use { input ->
-      val headerBytes = ByteArray(0x80)
-      val headerLength = input.read(headerBytes)
-      if (headerLength < 0x12) {
-        return null
+  private fun readSidHeaderBytes(file: File): ByteArray {
+    file.inputStream().use { input ->
+      val headerBytes = ByteArray(SID_HEADER_BYTES)
+      var headerLength = 0
+      while (headerLength < headerBytes.size) {
+        val read = input.read(headerBytes, headerLength, headerBytes.size - headerLength)
+        if (read < 0) break
+        headerLength += read
       }
-      val magic = String(headerBytes, 0, 4, Charsets.US_ASCII)
-      if (magic != "PSID" && magic != "RSID") {
-        return null
-      }
-      val songs =
-              ((headerBytes[0x0E].toInt() and 0xFF) shl 8) or (headerBytes[0x0F].toInt() and 0xFF)
-      val startSong =
-              ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
-      return SidHeader(songs = songs, startSong = startSong)
+      return headerBytes.copyOf(headerLength)
     }
+  }
+
+  private fun parseSubsongFields(headerBytes: ByteArray): SidHeader? {
+    if (headerBytes.size < 0x12) {
+      return null
+    }
+    val magic = String(headerBytes, 0, 4, Charsets.US_ASCII)
+    if (magic != "PSID" && magic != "RSID") {
+      return null
+    }
+    val songs =
+            ((headerBytes[0x0E].toInt() and 0xFF) shl 8) or (headerBytes[0x0F].toInt() and 0xFF)
+    val startSong =
+            ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
+    return SidHeader(songs = songs, startSong = startSong)
   }
 
   private fun normalizeArchiveEntryPath(raw: String, mode: HvscArchiveMode): String {

@@ -55,15 +55,18 @@ export const SleepTimerControl = ({ mode, onChange, nowMs, isPlaying }: SleepTim
   const options: Array<{
     key: string;
     label: string;
+    /** Spoken and shown by the keypad guidance bar, which cannot see the "Sleep timer" heading. */
+    name: string;
     next: () => SleepTimerMode;
     active: boolean;
     disabled?: boolean;
     title?: string;
   }> = [
-    { key: "off", label: "Off", next: () => SLEEP_TIMER_OFF, active: mode.kind === "off" },
+    { key: "off", label: "Off", name: "Sleep timer: off", next: () => SLEEP_TIMER_OFF, active: mode.kind === "off" },
     {
       key: "after-tune",
       label: "This tune",
+      name: "Sleep timer: this tune",
       next: () => ({ kind: "after-tune" }),
       active: mode.kind === "after-tune",
       disabled: !isPlaying,
@@ -72,6 +75,7 @@ export const SleepTimerControl = ({ mode, onChange, nowMs, isPlaying }: SleepTim
     ...SLEEP_TIMER_MINUTES.map((minutes) => ({
       key: `m${minutes}`,
       label: `${minutes}m`,
+      name: `Sleep timer: ${minutes} minutes`,
       next: () => armTimed(minutes, Date.now()),
       active: mode.kind === "timed" && mode.minutes === minutes,
     })),
@@ -99,6 +103,7 @@ export const SleepTimerControl = ({ mode, onChange, nowMs, isPlaying }: SleepTim
             variant={option.active ? "default" : "outline"}
             className="h-8 px-2 text-xs"
             aria-pressed={option.active}
+            aria-label={option.name}
             disabled={option.disabled ?? false}
             {...(option.title ? { title: option.title } : {})}
             data-testid={`sleep-timer-${option.key}`}

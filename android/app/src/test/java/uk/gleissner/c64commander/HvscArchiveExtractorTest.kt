@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -102,6 +103,63 @@ class HvscArchiveExtractorTest {
       assertEquals(2, result.extractedSongs.single().songs)
       assertEquals(1, result.extractedSongs.single().startSong)
       assertTrue(File(outputDir, "MUSICIANS/T/Tester/Tiny.sid").exists())
+    } finally {
+      outputDir.deleteRecursively()
+      archive.delete()
+    }
+  }
+
+  @Test
+  fun `extraction hands over each song's first 124 header bytes, and all of a shorter file`() {
+    val psidV3 =
+            ByteArray(124 + 64) { index -> if (index < 124) 0 else 0xEA.toByte() }.also { bytes ->
+              "PSID".toByteArray(Charsets.US_ASCII).copyInto(bytes, 0)
+              bytes[0x05] = 3
+              bytes[0x07] = 0x7C
+              bytes[0x0F] = 5
+              bytes[0x11] = 3
+              "Stereo Tune".toByteArray(Charsets.US_ASCII).copyInto(bytes, 0x16)
+              bytes[0x16 + 11] = 0x99.toByte()
+              "1987 Firebird".toByteArray(Charsets.US_ASCII).copyInto(bytes, 0x56)
+              bytes[0x77] = 0x6C
+              bytes[0x7A] = 0x42
+            }
+    val truncated = "PSID".toByteArray(Charsets.US_ASCII)
+    val archive = File.createTempFile("hvsc-headers-", ".zip")
+    ZipOutputStream(archive.outputStream()).use { zip ->
+      zip.putNextEntry(ZipEntry("C64Music/MUSICIANS/H/Hubbard_Rob/Stereo.sid"))
+      zip.write(psidV3)
+      zip.closeEntry()
+      zip.putNextEntry(ZipEntry("C64Music/MUSICIANS/T/Tester/Truncated.sid"))
+      zip.write(truncated)
+      zip.closeEntry()
+    }
+
+    val outputDir = Files.createTempDirectory("hvsc-headers-out-").toFile()
+    try {
+      val songs =
+              extractor
+                      .extract(
+                              archiveFile = archive,
+                              outputDir = outputDir,
+                              mode = HvscArchiveMode.BASELINE,
+                              cancellationToken = AtomicBoolean(false),
+                              memoryBudget =
+                                      MemoryBudget(
+                                              maxExtractionBytes = 256L * 1024L * 1024L,
+                                              detail = "zip fixture"
+                                      ),
+                      )
+                      .extractedSongs
+                      .associateBy { it.virtualPath }
+
+      val stereo = songs.getValue("/MUSICIANS/H/Hubbard_Rob/Stereo.sid")
+      assertArrayEquals(psidV3.copyOf(124), stereo.sidHeader)
+      assertEquals(5, stereo.songs)
+      assertEquals(3, stereo.startSong)
+      val short = songs.getValue("/MUSICIANS/T/Tester/Truncated.sid")
+      assertArrayEquals(truncated, short.sidHeader)
+      assertEquals(null, short.songs)
     } finally {
       outputDir.deleteRecursively()
       archive.delete()

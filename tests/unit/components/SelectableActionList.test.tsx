@@ -211,7 +211,7 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(filter).toHaveValue("");
   });
 
-  it("reveals filter header content from the type-filter toggle beside the filter input", () => {
+  it("renders filter header content under filter input", () => {
     const items: ActionListItem[] = [
       {
         id: "track-1",
@@ -235,8 +235,6 @@ describe("SelectableActionList view-all wrapping", () => {
       />,
     );
 
-    expect(screen.queryByTestId("filter-header")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Filter by type" }));
     expect(screen.getByTestId("filter-header")).toBeInTheDocument();
   });
 
@@ -620,6 +618,51 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   });
 
+  /*
+   * A menu's arrow keys skip disabled items. The detail rows were disabled, so a keypad could not
+   * reach them, and on a short screen they sat scrolled above the menu's first action for good.
+   */
+  it("keeps detail rows reachable by the menu's arrow keys, and OK on one leaves the menu open", async () => {
+    const items: ActionListItem[] = [
+      {
+        id: "track-1",
+        title: "Track One",
+        selected: false,
+        actionLabel: "Play",
+        onAction: vi.fn(),
+        menuItems: [
+          { type: "info", label: "Duration", value: "3:45" },
+          { type: "action", label: "Delete", onSelect: vi.fn() },
+        ],
+      },
+    ];
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+      />,
+    );
+    await act(async () => {
+      screen.getByRole("button", { name: "Item actions" }).click();
+    });
+
+    const detail = screen.getByRole("menuitem", { name: "Duration: 3:45" });
+    expect(detail).not.toHaveAttribute("data-disabled");
+    expect(detail).not.toHaveAttribute("aria-disabled", "true");
+
+    await act(async () => {
+      fireEvent.keyDown(detail, { key: "Enter" });
+    });
+
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+  });
+
   it("renders item with icon, titleSuffix, subtitle, and meta", () => {
     const items: ActionListItem[] = [
       {
@@ -764,9 +807,15 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(screen.getByTestId("header-action")).toBeInTheDocument();
   });
 
-  it("says nothing about selection while nothing is selected", () => {
+  it("uses selectionLabel in no-selection text", () => {
     const items: ActionListItem[] = [
-      { id: "track-1", title: "Track One", selected: false, actionLabel: "Play", onAction: vi.fn() },
+      {
+        id: "track-1",
+        title: "Track One",
+        selected: false,
+        actionLabel: "Play",
+        onAction: vi.fn(),
+      },
     ];
     render(
       <SelectableActionList
@@ -777,9 +826,10 @@ describe("SelectableActionList view-all wrapping", () => {
         allSelected={false}
         onToggleSelectAll={vi.fn()}
         maxVisible={10}
+        selectionLabel="tracks"
       />,
     );
-    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+    expect(screen.getByText("No tracks selected")).toBeInTheDocument();
   });
 
   it("shows selected count when selectedCount > 0", () => {
@@ -884,7 +934,6 @@ describe("SelectableActionList view-all wrapping", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /view all/i }));
-    fireEvent.click(screen.getByTestId("view-all-filter-types-toggle"));
     const headers = screen.getAllByTestId("dialog-filter-header");
     expect(headers.length).toBeGreaterThan(0);
   });

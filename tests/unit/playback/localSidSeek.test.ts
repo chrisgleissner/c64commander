@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalSidChunkScheduler } from "@/lib/playback/localSidChunkScheduler";
+import { describePlaybackTime } from "@/pages/playFiles/playbackTimeline";
 
 /**
  * Seeking has to do two things the normal path never does: throw away audio
@@ -157,11 +158,32 @@ describe("scrub feedback contract", () => {
     // instead of letting it run on through the silence. Insisting on the old two-way expression
     // would have required the clock to advance normally while nothing was sounding, which is the
     // defect the pending-seek state exists to remove.
-    expect(page).toContain("const displayElapsedMs = isScrubbing ? shownScrubTargetMs :");
-    expect(page).toContain("pendingSeek?.audibleMs ?? elapsedMs");
-    // Both the bar and the timer must use it, or they disagree mid-gesture.
-    expect(page).toMatch(/progressPercent = currentDurationMs \? Math\.min\(100, \(displayElapsedMs/);
-    expect(page).toContain("elapsedLabel={formatTime(displayElapsedMs)}");
+    // Amended: while a skip's chosen track launches, the previous track's clock is not shown against it.
+    // Amended again: the shown time is worked out by `describePlaybackTime`, outside the page, so the
+    // per-second tick re-renders only the labels. It is called here instead of matching page source.
+    expect(page).toContain("scrubTargetMs: shownScrubTargetMs,");
+    expect(page).toContain("heldAtMs: pendingSeek?.audibleMs,");
+    const inputs = {
+      durationMs: 100_000,
+      launching: false,
+      scrubTargetMs: null as number | null,
+      heldAtMs: undefined as number | undefined,
+      playlistTotalsAt: () => ({ total: undefined, remaining: undefined }),
+    };
+    expect(describePlaybackTime(inputs, 20_000)).toMatchObject({ progressPercent: 20, elapsedLabel: "0:20" });
+    // Both the bar and the timer show the scrub target, or they disagree mid-gesture.
+    expect(describePlaybackTime({ ...inputs, scrubTargetMs: 40_000, heldAtMs: 30_000 }, 20_000)).toMatchObject({
+      progressPercent: 40,
+      elapsedLabel: "0:40",
+    });
+    expect(describePlaybackTime({ ...inputs, heldAtMs: 30_000 }, 20_000)).toMatchObject({
+      progressPercent: 30,
+      elapsedLabel: "0:30",
+    });
+    expect(describePlaybackTime({ ...inputs, launching: true, scrubTargetMs: 40_000 }, 20_000)).toMatchObject({
+      progressPercent: 0,
+      elapsedLabel: "0:00",
+    });
   });
 
   it("does not seek at all while the finger is down", async () => {

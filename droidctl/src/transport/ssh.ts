@@ -36,6 +36,7 @@ import {
 } from "./sshPrerequisites.js";
 import { type AttachRoute, type HostDiagnosis, HostProber, type SshRouteKind, endpointOf } from "./sshProbe.js";
 import { SshCommandRunner } from "./sshRunner.js";
+import { type TunnelReaper, processTunnelReaper } from "./tunnelReaper.js";
 import {
   type HostWindowState,
   hostWindowCommand,
@@ -208,6 +209,8 @@ export interface SshTransportOptions {
   readonly controlDir?: string | null;
   /** Largest file the attach route reads into memory. Default PULL_MAX_BYTES. */
   readonly pullMaxBytes?: number;
+  /** Ends the tunnels still open when the process exits. Default processTunnelReaper. */
+  readonly tunnelReaper?: TunnelReaper;
 }
 
 interface WantedHost {
@@ -259,7 +262,12 @@ export class SshTransport implements Transport {
       controlDir: options.controlDir === undefined ? path.join(os.tmpdir(), "droidctl-ssh") : options.controlDir,
       ...(options.onCommand === undefined ? {} : { onCommand: options.onCommand }),
     });
-    this.prober = new HostProber({ runner: this.runner, adb: this.adb, system: this.system });
+    this.prober = new HostProber({
+      runner: this.runner,
+      adb: this.adb,
+      system: this.system,
+      reaper: options.tunnelReaper ?? processTunnelReaper,
+    });
   }
 
   /** True for the adb serial of a tunnel this transport opened, which the adb transport then leaves unlisted. */

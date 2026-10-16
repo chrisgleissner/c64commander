@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { afterNextPaint } from "@/lib/ui/afterNextPaint";
 import {
   Fragment,
   lazy,
@@ -1307,14 +1308,13 @@ export function DiagnosticsDialog({
     if (!open || firstVisibleNotifiedRef.current) {
       return;
     }
-    const frameId = window.requestAnimationFrame(() => {
+    return afterNextPaint(() => {
       if (firstVisibleNotifiedRef.current) {
         return;
       }
       firstVisibleNotifiedRef.current = true;
       onFirstVisible?.();
     });
-    return () => window.cancelAnimationFrame(frameId);
   }, [onFirstVisible, open]);
 
   useEffect(() => {
@@ -1674,7 +1674,7 @@ export function DiagnosticsDialog({
               <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
                 Clear
               </AlertDialogAction>

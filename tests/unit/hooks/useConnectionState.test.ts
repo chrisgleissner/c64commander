@@ -42,16 +42,26 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: connectionMocks.getConnectionSnapshot,
 }));
 
-import { useConnectionState } from "@/hooks/useConnectionState";
+import { useConnectionProbeState, useConnectionState } from "@/hooks/useConnectionState";
 
 describe("useConnectionState", () => {
-  it("delegates to useSyncExternalStore with connection manager hooks", () => {
+  it("subscribes to the connection manager and reads the snapshot without probe timestamps", () => {
     connectionMocks.getConnectionSnapshot.mockReturnValue(snapshot);
     reactMocks.useSyncExternalStore.mockReturnValue(snapshot);
     const { result } = renderHook(() => useConnectionState());
 
     expect(result.current).toEqual(snapshot);
-    expect(reactMocks.useSyncExternalStore).toHaveBeenCalledWith(
+    const [subscribe, getSnapshot] = reactMocks.useSyncExternalStore.mock.calls.at(-1)!;
+    expect(subscribe).toBe(connectionMocks.subscribeConnection);
+    expect(getSnapshot()).not.toHaveProperty("lastProbeSucceededAtMs");
+  });
+
+  it("hands the whole snapshot to a reader of the probe state", () => {
+    connectionMocks.getConnectionSnapshot.mockReturnValue(snapshot);
+    reactMocks.useSyncExternalStore.mockReturnValue(snapshot);
+    renderHook(() => useConnectionProbeState());
+
+    expect(reactMocks.useSyncExternalStore).toHaveBeenLastCalledWith(
       connectionMocks.subscribeConnection,
       connectionMocks.getConnectionSnapshot,
       connectionMocks.getConnectionSnapshot,

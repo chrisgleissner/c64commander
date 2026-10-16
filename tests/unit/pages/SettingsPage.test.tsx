@@ -25,7 +25,7 @@ import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { toast } from "@/hooks/use-toast";
-import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
+import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   saveArchiveClientIdOverride,
@@ -280,6 +280,7 @@ vi.mock("@/lib/savedDevices/deviceDependencies", () => ({
 
 vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => connectionStateRef.current,
+  useConnectionProbeState: () => connectionStateRef.current,
 }));
 
 vi.mock("@/hooks/useDeviceDiscovery", () => ({
@@ -1578,6 +1579,25 @@ describe("SettingsPage", () => {
     expect(deleteDialog).toHaveAccessibleDescription(/from your saved devices\? This can.t be undone\./);
   });
 
+  it("opens the delete device confirmation on Cancel", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        ...savedDevicesRef.current.devices,
+        { ...savedDevicesRef.current.devices[0], id: "saved-device-2", name: "Backup U64", host: "backup-u64" },
+      ],
+    };
+    mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+    const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(deleteDialog).getByRole("button", { name: "Cancel" })),
+    );
+  });
+
   it("warns before deleting a device that is still referenced by playlists or disks", async () => {
     savedDevicesRef.current = {
       ...savedDevicesRef.current,
@@ -1632,6 +1652,261 @@ describe("SettingsPage", () => {
     ).toBeInTheDocument();
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
     expect(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY)).toBe(beforeDelete);
+  });
+
+  describe("adding and deleting saved devices", () => {
+    const placeholder = {
+      id: "saved-device-2",
+      name: "",
+      host: "c64u",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 64,
+      lastKnownProduct: null,
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      lastSuccessfulConnectionAt: null,
+      lastUsedAt: null,
+      hasPassword: false,
+    };
+
+    const seedStore = async (devices: (typeof savedDevicesRef.current)["devices"], selectedDeviceId: string) => {
+      savedDevicesRef.current = { ...savedDevicesRef.current, devices, selectedDeviceId };
+      localStorage.setItem(
+        SAVED_DEVICES_STORAGE_KEY,
+        JSON.stringify({ version: 1, selectedDeviceId, devices, summaries: {}, summaryLru: [] }),
+      );
+      (await import("@/lib/savedDevices/store")).resetSavedDevicesCacheForTests();
+    };
+
+    const persistedDeviceIds = () =>
+      (JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}").devices as Array<{ id: string }>).map(
+        (device) => device.id,
+      );
+
+    it("deletes the device the confirmation was opened for when a reconnect changes the selection meanwhile", async () => {
+      const original = { ...savedDevicesRef.current.devices[0], host: "192.168.1.146" };
+      await seedStore([original, placeholder], "saved-device-2");
+      mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+      const view = renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-delete-device"));
+      const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+      expect(deleteDialog).toHaveAccessibleDescription(/^Remove c64u from your saved devices\?/);
+
+      savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-1" };
+      view.rerender(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+      fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Delete device" }));
+
+      await waitFor(() => expect(persistedDeviceIds()).toEqual(["saved-device-1"]));
+    });
+
+    it("counts a single referring item in the singular", async () => {
+      await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
+      mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 1, playlistItemCount: 0, totalCount: 1 });
+
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+      const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+      expect(deleteDialog).toHaveTextContent(/will disconnect 1 saved item that still point to it\./);
+    });
+
+    it("names the device to delete by name and address when they differ", async () => {
+      const original = { ...savedDevicesRef.current.devices[0], host: "192.168.1.146" };
+      await seedStore([original, placeholder], "saved-device-1");
+      mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+      const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+      expect(deleteDialog).toHaveAccessibleDescription(/^Remove Office U64 \(192\.168\.1\.146\) from your saved/);
+    });
+
+    it("opens a form on Add device without saving a device or switching the connection", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+
+      expect(await screen.findByTestId("settings-add-device-dialog")).toBeInTheDocument();
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+    });
+
+    it("refuses to add a device whose host is empty or already saved", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+      expect(await within(dialog).findByText("Enter a host or IP address.")).toBeInTheDocument();
+
+      fireEvent.change(within(dialog).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "c64u" } });
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+      expect(await within(dialog).findByText("Already saved as Office U64.")).toBeInTheDocument();
+
+      expect(mockEvaluateNewDeviceReachability).not.toHaveBeenCalled();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+    });
+
+    it("keeps the current connection when the device to add does not answer", async () => {
+      mockEvaluateNewDeviceReachability.mockResolvedValue({
+        status: "unreachable",
+        suggestedAddress: null,
+        suggestedHostname: null,
+      });
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+
+      fireEvent.change(within(dialog).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "u2" } });
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+
+      expect(await within(dialog).findByText(/couldn.t reach .u2./i)).toBeInTheDocument();
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+    });
+
+    const deferReachability = () => {
+      let answer: (value: { status: "reachable" }) => void = () => undefined;
+      mockEvaluateNewDeviceReachability.mockReturnValueOnce(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      return () => answer({ status: "reachable" });
+    };
+
+    it("saves and switches nothing when Add device is cancelled while the host is being checked", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      const answer = deferReachability();
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+      fireEvent.change(within(dialog).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "u2" } });
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+      await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-cancel"));
+      await waitFor(() => expect(screen.queryByTestId("settings-add-device-dialog")).toBeNull());
+      await act(async () => answer());
+
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+    });
+
+    it("keeps a reopened Add device dialog open when the cancelled check answers", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      const answer = deferReachability();
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const first = await screen.findByTestId("settings-add-device-dialog");
+      fireEvent.change(within(first).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "u2" } });
+      fireEvent.click(within(first).getByTestId("settings-add-device-confirm"));
+      await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+      fireEvent.click(within(first).getByTestId("settings-add-device-cancel"));
+      await waitFor(() => expect(screen.queryByTestId("settings-add-device-dialog")).toBeNull());
+
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const reopened = await screen.findByTestId("settings-add-device-dialog");
+      await act(async () => answer());
+
+      expect(screen.getByTestId("settings-add-device-dialog")).toBe(reopened);
+      expect(within(reopened).getByTestId("settings-add-device-confirm")).toHaveTextContent("Add");
+      expect(within(reopened).getByTestId("settings-add-device-confirm")).toBeEnabled();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+    });
+
+    const openAddDialogWithHost = async (host: string) => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+      fireEvent.change(within(dialog).getByLabelText(/c64u hostname \/ ip/i), { target: { value: host } });
+      return dialog;
+    };
+
+    it("offers the address the device was found at when the typed host does not answer", async () => {
+      mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
+        status: "unreachable",
+        suggestedAddress: "192.168.1.150",
+        suggestedHostname: "u2",
+      });
+      const dialog = await openAddDialogWithHost("u2");
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+
+      fireEvent.click(await within(dialog).findByTestId("add-device-use-suggested-address"));
+
+      expect(within(dialog).getByLabelText(/c64u hostname \/ ip/i)).toHaveValue("192.168.1.150");
+      expect(within(dialog).queryByText(/couldn.t reach/i)).toBeNull();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+    });
+
+    it("reports a failed reachability check and saves nothing", async () => {
+      mockEvaluateNewDeviceReachability.mockRejectedValueOnce(new Error("probe crashed"));
+      const dialog = await openAddDialogWithHost("u2");
+
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+
+      await waitFor(() =>
+        expect(reportUserError).toHaveBeenCalledWith(
+          expect.objectContaining({ operation: "DEVICE_ADD", title: "Unable to add device", context: { host: "u2" } }),
+        ),
+      );
+      expect(within(dialog).getByTestId("settings-add-device-confirm")).toBeEnabled();
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+      expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+    });
+
+    it("logs, without reporting, a check that fails after Add device was cancelled", async () => {
+      let fail: (error: Error) => void = () => undefined;
+      mockEvaluateNewDeviceReachability.mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+      );
+      const dialog = await openAddDialogWithHost("u2");
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+      await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-cancel"));
+      await waitFor(() => expect(screen.queryByTestId("settings-add-device-dialog")).toBeNull());
+
+      await act(async () => fail(new Error("probe crashed")));
+
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Add device check failed after it was cancelled",
+        expect.objectContaining({ host: "u2", error: "probe crashed" }),
+      );
+      expect(reportUserError).not.toHaveBeenCalledWith(expect.objectContaining({ operation: "DEVICE_ADD" }));
+      expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
+    });
+
+    it("saves and connects to an added device once it answers", async () => {
+      await seedStore(savedDevicesRef.current.devices, "saved-device-1");
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+
+      fireEvent.change(within(dialog).getByLabelText(/c64u hostname \/ ip/i), { target: { value: "u2" } });
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+
+      await waitFor(() => expect(persistedDeviceIds()).toHaveLength(2));
+      const addedId = persistedDeviceIds()[1];
+      expect(mockEvaluateNewDeviceReachability).toHaveBeenCalledWith(
+        expect.objectContaining({ host: "u2", deviceHost: "u2" }),
+      );
+      await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalledWith(addedId));
+    });
   });
 
   it("uses icon-only saved-device actions and shows the HVSC override panel", () => {

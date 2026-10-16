@@ -50,6 +50,24 @@ const setup = (overrides: Partial<RemoteInputPhysicalKeysOptions> = {}) => {
 };
 
 describe("useRemoteInputPhysicalKeys function keys", () => {
+  it("relays an F1 / F3 row that arrives as F21 / F23 to the C64 as F1 / F3", () => {
+    const { hook, setHeldKeyboardInputs } = setup();
+    const kernelF2x = (code: "F21" | "F23") =>
+      ({
+        key: "Unidentified",
+        code,
+        repeat: false,
+        preventDefault: vi.fn(),
+      }) as unknown as ReactKeyboardEvent<HTMLDivElement>;
+
+    act(() => hook.result.current.handleKeyDown(kernelF2x("F21")));
+    expect(setHeldKeyboardInputs).toHaveBeenLastCalledWith(new Set(["f1"]));
+    act(() => hook.result.current.handleKeyDown(kernelF2x("F23")));
+    expect(setHeldKeyboardInputs).toHaveBeenLastCalledWith(new Set(["f1", "f3"]));
+    act(() => hook.result.current.handleKeyUp(kernelF2x("F21")));
+    expect(setHeldKeyboardInputs).toHaveBeenLastCalledWith(new Set(["f3"]));
+  });
+
   it("holds F1 on the full tier until key-up, keeping keyboard keys held by another source", () => {
     const { press, release, setHeldKeyboardInputs } = setup({
       heldKeyboardInputs: new Set<KeyboardInputName>(["return"]),

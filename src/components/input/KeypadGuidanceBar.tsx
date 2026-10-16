@@ -30,18 +30,26 @@ import { useInRouterContext, useLocation } from "react-router-dom";
 
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/hooks/useFocusNavigation";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
   accessibleLabelFor,
+  guidanceLabelFor,
   classifyFocusKind,
   getInputModality,
   hasContextMenu,
+  openOverlayOffersSoftKeyMenu,
   resolveGuidanceLabels,
+  resolveSoftKeyMenuOverlayLabels,
+  resolveSoftKeyMenuPanelLabels,
   SKIP_ATTR,
+  SOFT_KEY_MENU_ATTR,
+  SOFT_KEY_MENU_PANEL_ATTR,
+  type GuidanceLabels,
   type GuidanceState,
 } from "@/lib/input";
-import { isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isT9Field } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
@@ -61,20 +69,27 @@ const buildGuidanceState = (
   // Breadcrumb: the ancestor group labels we are inside, then the current item.
   const breadcrumb = engine.currentScopeChain().map((item) => item.group ?? item.id);
   const currentLabel = isGroup
-    ? (current?.group ?? accessibleLabelFor(currentElement))
-    : accessibleLabelFor(currentElement);
+    ? (current?.group ?? guidanceLabelFor(currentElement))
+    : guidanceLabelFor(currentElement);
   if (currentLabel) breadcrumb.push(currentLabel);
+
+  // OK on a card with a single control presses that control, so the bar names what it does.
+  const children = current && isGroup ? focus.enabledChildrenOf(current.id) : [];
+  const onlyControl = children.length === 1 && !focus.hasEnabledChildren(children[0].id) ? children[0] : null;
+  const currentKind = onlyControl
+    ? classifyFocusKind(engine.elementForId(onlyControl.id), false)
+    : classifyFocusKind(currentElement, isGroup);
 
   return {
     enabled,
     modality: getInputModality(),
     hasCurrent: current !== null,
-    currentKind: classifyFocusKind(currentElement, isGroup),
+    currentKind,
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),
     layerOpen: controller.layerDepth > 0,
-    hasMenu: hasContextMenu(currentElement, isGroup),
+    hasMenu: hasContextMenu(currentElement, isGroup) || openOverlayOffersSoftKeyMenu(),
     fieldDeletes: t9Enabled && isT9FieldWithText(document.activeElement),
     gameModeShortcut,
   };
@@ -112,6 +127,23 @@ const RouteChangeRefresh = ({ onRouteChange }: { onRouteChange: () => void }) =>
 
 const isGameModeShortcutPath = (pathname: string): boolean => GAME_MODE_SHORTCUT_PATHS.has(pathname);
 
+const dialogTitle = (dialog: Element): string | null =>
+  accessibleLabelFor(document.getElementById(dialog.getAttribute("aria-labelledby") ?? ""));
+
+/** Labels for a focused dialog that drives its own keys and opens a menu of its own, or for that menu. */
+const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
+  const focused = document.activeElement;
+  const panel = focused?.closest(`[role="dialog"][${SOFT_KEY_MENU_PANEL_ATTR}]`);
+  if (panel) {
+    const entry = focused !== panel ? accessibleLabelFor(focused) : null;
+    return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel), entry);
+  }
+  const overlay = focused?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`);
+  if (!overlay) return null;
+  const menuKey = overlay.getAttribute(SOFT_KEY_MENU_ATTR) === "back" ? "back" : "softRight";
+  return resolveSoftKeyMenuOverlayLabels(visible, dialogTitle(overlay), menuKey);
+};
+
 /**
  * Imperative writes with a VALUE-EQUALITY BAIL — only touch the DOM when the value
  * actually changed. This is load-bearing, not just an optimisation: the engine's
@@ -137,14 +169,30 @@ const setAttrIfChanged = (element: HTMLElement | null, name: string, value: stri
  * on `.page-shell` itself: that scroll box must not gain a bottom reservation of any kind (BUG-066
  * and BUG-072 both did and were reverted; `tests/unit/pageShellClearance.test.ts` locks it).
  */
-const reserveGuidanceHeight = (reserved: boolean): void => {
-  if (typeof document === "undefined") return;
+let reserveWanted: boolean | null = null;
+
+/*
+ * Applied once the current script has finished. Opening a dialog hid the bar and showed it again
+ * within one task, and each write of this variable on <html> restyles the whole document: two
+ * full style recalculations, about 130 ms each at 6x CPU throttling, for no visible change. The
+ * ring flushes it early before it scrolls the first key's stop, which must clear the bar just shown.
+ */
+export const flushReservedGuidanceHeight = (): void => {
+  const reserved = reserveWanted;
+  reserveWanted = null;
+  if (reserved === null) return;
   const root = document.documentElement;
   const next = reserved ? "var(--keypad-guidance-bar-height)" : "0px";
   if (root.style.getPropertyValue("--keypad-guidance-reserved-height") === next) return;
   root.style.setProperty("--keypad-guidance-reserved-height", next);
   // Dialogs are placed in JavaScript and have to be placed again when the bar appears under them.
   window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+};
+
+export const reserveGuidanceHeight = (reserved: boolean): void => {
+  if (typeof document === "undefined") return;
+  if (reserveWanted === null) queueMicrotask(flushReservedGuidanceHeight);
+  reserveWanted = reserved;
 };
 
 /**
@@ -154,8 +202,21 @@ const reserveGuidanceHeight = (reserved: boolean): void => {
  * "Back Back". On a 320 px screen that redundancy is not free: it pushed the row past the viewport
  * and truncated the next key's word to "Acti…", which is the one that actually needed saying.
  */
+const isCompactProfile = (): boolean =>
+  typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
+
+/**
+ * On the smallest screen "Activate" is dropped as well: OK on a button presses it, which the cap says,
+ * and the word took the 60 px the breadcrumb needed to name the control at all. So is "Select" on an
+ * entry of a soft-key menu, which cut "Close Remote Input" to "Close Remote…".
+ */
+const wordTheCapSays = (label: string): boolean =>
+  label === "Activate" ||
+  (label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null);
+
 const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
-  setTextIfChanged(action, label.trim().toLowerCase() === cap.toLowerCase() ? "" : label);
+  const repeatsCap = label.trim().toLowerCase() === cap.toLowerCase();
+  setTextIfChanged(action, repeatsCap || (isCompactProfile() && wordTheCapSays(label)) ? "" : label);
 };
 
 /**
@@ -168,8 +229,7 @@ const setActionText = (action: HTMLElement | null, cap: string, label: string): 
  */
 const formatBreadcrumb = (segments: readonly string[]): string => {
   if (segments.length === 0) return "Navigation";
-  const compact = typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
-  return compact ? segments[segments.length - 1] : segments.join("  ›  ");
+  return isCompactProfile() ? segments[segments.length - 1] : segments.join("  ›  ");
 };
 
 /** Show/hide a soft-key slot and set its action text, each guarded by a value bail. */
@@ -186,11 +246,10 @@ const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: 
 export const KeypadGuidanceBar = () => {
   const context = useFocusNavigationContext();
   const connection = useConnectionState();
-  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
-  const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
+  const gameModeAvailable = useGameModeAvailable() && connection.state === "REAL_CONNECTED";
   const t9Enabled = useFeatureFlagValue("keypad_input_enabled") && isDefaultT9InputEnabled();
   const rootRef = useRef<HTMLDivElement>(null);
-  const breadcrumbRef = useRef<HTMLDivElement>(null);
+  const breadcrumbRef = useRef<HTMLSpanElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
   const centerSlotRef = useRef<HTMLSpanElement>(null);
   const centerActionRef = useRef<HTMLSpanElement>(null);
@@ -208,9 +267,10 @@ export const KeypadGuidanceBar = () => {
     // The path is read at refresh time rather than through `useLocation`: the bar
     // already refreshes on every ring change and modality flip, and a router hook
     // would make this piece of chrome unrenderable outside a Router.
-    const labels = resolveGuidanceLabels(
+    const ringLabels = resolveGuidanceLabels(
       buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname()), t9Enabled),
     );
+    const labels = softKeyMenuOverlayLabels(ringLabels.visible) ?? ringLabels;
     /*
      * The tour owns the keys while it runs, so this bar would be advertising actions that do not
      * happen — and on a 320 x 427 screen it is drawn over the tour's own caption, covering the title
@@ -220,7 +280,8 @@ export const KeypadGuidanceBar = () => {
     const duringTour = document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE);
     // Search is a dialog that drives its own keys, so the ring's labels behind it (the control the
     // search was opened from) say nothing about what the keys do there.
-    const keysOwnedByDialog = document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
+    const keysOwnedByDialog =
+      labels === ringLabels && isAnyOverlayOpen() && document.querySelector(`[role="dialog"][${SKIP_ATTR}]`) !== null;
     if (!labels.visible || duringTour || keysOwnedByDialog) {
       setAttrIfChanged(root, "data-visible", "false");
       reserveGuidanceHeight(false);
@@ -276,7 +337,9 @@ export const KeypadGuidanceBar = () => {
       aria-hidden="true"
     >
       {inRouter ? <RouteChangeRefresh onRouteChange={refresh} /> : null}
-      <div ref={breadcrumbRef} className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb" />
+      <div className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb">
+        <span ref={breadcrumbRef} className="keypad-guidance-breadcrumb-text" />
+      </div>
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">
           <kbd className="keypad-guidance-cap">Back</kbd>

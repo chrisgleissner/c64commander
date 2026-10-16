@@ -35,6 +35,7 @@ import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { PLAY_PAGE_TRACE_COMPONENT } from "@/lib/tracing/traceContext";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
@@ -72,6 +73,7 @@ import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
 import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
 import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
+import { useShownNowPlaying } from "@/pages/playFiles/hooks/useShownNowPlaying";
 import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
@@ -115,12 +117,15 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
+import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
+import { usePlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
@@ -151,11 +156,16 @@ import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
 import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
+import { useC64MuteFollowsRoute } from "@/pages/playFiles/hooks/useC64MuteFollowsRoute";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
 import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOverlayState";
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { useOnPageLeft } from "@/hooks/useOnPageLeft";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import {
+  BACKGROUND_ADVANCE_LOG_MESSAGES,
+  resolveBackgroundAdvanceOutcome,
+} from "@/pages/playFiles/backgroundAdvanceOutcome";
 import { usePlaybackTimelineTicks } from "@/pages/playFiles/hooks/usePlaybackTimelineTicks";
 import { useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
 import { useRemoteSidSeek } from "@/pages/playFiles/hooks/useRemoteSidSeek";
@@ -166,6 +176,7 @@ import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import { usePlaylistLetterIndexSource } from "@/pages/playFiles/hooks/usePlaylistLetterIndexSource";
 import {
   isBackgroundExecutionEnabled,
   resolveBackgroundExecutionAction,
@@ -189,14 +200,13 @@ import {
 } from "@/lib/config/configFileReferenceSelection";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
-import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
+import { useDurationOverride } from "@/pages/playFiles/hooks/useDurationOverride";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
-  CATEGORY_OPTIONS,
-  DEFAULT_SONG_DURATION_MS,
   DURATION_SLIDER_STEPS,
   SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistItemId,
@@ -204,20 +214,14 @@ import {
   canAdvanceNext,
   canAdvancePrevious,
   shouldDetachPlaybackOnSavedDeviceSwitch,
-  applyDurationOverrideToPlaylist,
   mergeResolvedSonglengthDurations,
-  clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
   formatDate,
-  formatDurationSeconds,
   formatTime,
   isSongCategory,
-  normalizeDurationInputDraft,
   addThenMaybeLaunch,
   resolvePickerConfirm,
-  parseDurationInput,
-  sliderToDurationSeconds,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
@@ -294,18 +298,22 @@ export default function PlayFilesPage() {
   // rejected. Declared here because the transport latch below is declared long
   // before that hook runs.
   const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
+  const [playlistRestored, setPlaylistRestored] = useState(false); // Set below, after the persistence hook.
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [playedMs, setPlayedMs] = useState(0);
+  const [playbackTime] = useState(createPlaybackTimeStore);
+  const { setElapsedMs, setPlayedMs } = playbackTime;
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
-  const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
-  const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
-  const [durationSeconds, setDurationSeconds] = useState(() =>
-    Math.round(loadDefaultSongDurationMs(DEFAULT_SONG_DURATION_MS) / 1000),
-  );
-  const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(durationSeconds));
+  const {
+    pendingDurationOverrideMs,
+    durationSeconds,
+    durationInput,
+    handleDurationSliderChange,
+    handleDurationSliderCommit,
+    handleDurationInputChange,
+    handleDurationInputBlur,
+  } = useDurationOverride(setPlaylist, setDurationMs);
   const [songNrInput, setSongNrInput] = useState("");
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
   const {
@@ -360,7 +368,7 @@ export default function PlayFilesPage() {
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const { profile: displayProfile } = useDisplayProfile();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
-  const trace = useActionTrace("PlayFilesPage");
+  const trace = useActionTrace(PLAY_PAGE_TRACE_COMPONENT);
 
   const featureFlags = useFeatureFlags();
   const hvscControlsEnabled = shouldShowHvscControls(featureFlags);
@@ -368,6 +376,7 @@ export default function PlayFilesPage() {
   const { archiveConfig, commoserveEnabled } = useArchiveClientSettings();
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
+  const gameModeAvailable = useGameModeAvailable();
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   // Claimed here as well as on Home: search publishes without navigating when Play is on screen.
   useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
@@ -407,6 +416,8 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
+    isManualMuteHeld,
+    releaseManualMute,
   } = usePlayFilesVolumeBindings({ isPlaying, isPaused, resolvedDeviceId: getSelectedSavedDevice()?.id ?? null });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
@@ -534,7 +545,7 @@ export default function PlayFilesPage() {
    */
   const handleUserLaunchedItem = useCallback(
     (item: PlaylistItem) => {
-      if (!remoteInputEnabled) return;
+      if (!gameModeAvailable) return;
       if (
         !shouldEnterGameModeOnLaunch({
           category: item.category,
@@ -547,7 +558,7 @@ export default function PlayFilesPage() {
       }
       void startGameMode();
     },
-    [remoteInputEnabled],
+    [gameModeAvailable],
   );
 
   const resolveUnavailableConfigDecision = useCallback(
@@ -580,7 +591,10 @@ export default function PlayFilesPage() {
     seekToFraction,
     scrubTargetMs,
     playlistEnded,
+    setPlaylistEnded,
     playlistItemDuration,
+    chosenTrackLaunching,
+    setDurationMsItemId,
   } = usePlaybackController({
     playlist,
     setPlaylist,
@@ -591,10 +605,7 @@ export default function PlayFilesPage() {
     isPaused,
     setIsPaused,
     setIsPlaylistLoading,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
     setCurrentSubsongCount,
@@ -634,6 +645,7 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs,
     resumingFromPauseRef,
     ensureUnmuted,
+    isManualMuteHeld,
     resolveUnavailableConfigDecision,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
@@ -1573,28 +1585,16 @@ export default function PlayFilesPage() {
               await advanceOnTrackEndRef.current(expectedTrackInstanceId);
               if (cancelled) return;
               const nextGuard = autoAdvanceGuardRef.current;
-              if (!nextGuard) {
-                setAutoAdvanceDueAtMs(null);
-                await queueBackgroundDueAtUpdateRef.current(null);
-                addLog("debug", "Cleared background auto-advance watchdog after auto next with no remaining guard", {
-                  expectedTrackInstanceId,
-                  dueAtMs: event.dueAtMs,
-                });
-                return;
-              }
-              if (nextGuard.trackInstanceId === expectedTrackInstanceId) {
-                setAutoAdvanceDueAtMs(null);
-                await queueBackgroundDueAtUpdateRef.current(null);
+              const outcome = resolveBackgroundAdvanceOutcome(expectedTrackInstanceId, nextGuard);
+              if (!nextGuard || outcome === "in-flight" || outcome === "stuck") {
+                if (outcome !== "in-flight") {
+                  setAutoAdvanceDueAtMs(null);
+                  await queueBackgroundDueAtUpdateRef.current(null);
+                }
                 addLog(
-                  nextGuard.autoFired ? "debug" : "warn",
-                  nextGuard.autoFired
-                    ? "Background auto-advance fired while the app's own advance to the next track was under way"
-                    : "Background auto-advance did not move to a new track instance; cleared stale watchdog",
-                  {
-                    expectedTrackInstanceId,
-                    dueAtMs: event.dueAtMs,
-                    nextDueAtMs: nextGuard.dueAtMs,
-                  },
+                  outcome === "stuck" ? "warn" : "debug",
+                  BACKGROUND_ADVANCE_LOG_MESSAGES[outcome as "no-guard" | "in-flight" | "stuck"],
+                  { expectedTrackInstanceId, dueAtMs: event.dueAtMs, nextDueAtMs: nextGuard?.dueAtMs ?? null },
                 );
                 return;
               }
@@ -1671,6 +1671,7 @@ export default function PlayFilesPage() {
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
+    queueReady: playlistRestored && sessionRestoreSettled,
     // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
@@ -1761,6 +1762,8 @@ export default function PlayFilesPage() {
   );
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
+  const shownNowPlaying = useShownNowPlaying({ playlist, currentIndex, durationMs: currentDurationMs, playbackTime });
+  const shownItem = shownNowPlaying.item;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
     if (!currentItem) return null;
     return currentItem.request.source;
@@ -1777,7 +1780,6 @@ export default function PlayFilesPage() {
       currentIndex,
       currentItemId: currentItem?.id ?? null,
       isPlaying,
-      elapsedMs,
       durationMs: currentDurationMs ?? null,
       sourceKind,
       localAccessMode,
@@ -1788,7 +1790,6 @@ export default function PlayFilesPage() {
     currentDurationMs,
     currentIndex,
     currentItem?.id,
-    elapsedMs,
     isPlaying,
     playlist.length,
     sourceKind,
@@ -1796,7 +1797,7 @@ export default function PlayFilesPage() {
     trackInstanceId,
   ]);
 
-  usePublishedPlaybackTrace(playbackTraceContext);
+  usePublishedPlaybackTrace(playbackTraceContext, playbackTime);
   useEffect(() => {
     setPlaybackContext({
       sourceBucket:
@@ -1811,7 +1812,7 @@ export default function PlayFilesPage() {
       setPlaybackContext({ sourceBucket: null, activeItemLabel: null });
     };
   }, [currentItem, isPlaying, setPlaybackContext]);
-  const currentDurationLabel = formatTime(currentDurationMs);
+  const currentDurationLabel = formatTime(shownNowPlaying.durationMs);
   // While the user is scrubbing, the bar and the timer follow the FINGER rather
   // than the audio clock. The engine is deliberately behind — it is catching up
   // to the target in the background — and showing its position would make the
@@ -1842,14 +1843,14 @@ export default function PlayFilesPage() {
   useEffect(() => {
     let cancelled = false;
     setCurrentItemCredits({ itemId: null, author: null, released: null, chipCount: null, sidModels: [], clock: null });
-    const file = currentItem?.request.file;
-    if (!file || currentItem?.category !== "sid") return;
+    const file = shownItem?.request.file;
+    if (!file || shownItem?.category !== "sid") return;
     void (async () => {
       try {
         const header = parseSidHeaderMetadata(new Uint8Array(await file.arrayBuffer()));
         if (cancelled) return;
         setCurrentItemCredits({
-          itemId: currentItem.id,
+          itemId: shownItem.id,
           author: header.author || null,
           released: header.released || null,
           chipCount: header.sidChipCount === 2 || header.sidChipCount === 3 ? header.sidChipCount : 1,
@@ -1863,7 +1864,7 @@ export default function PlayFilesPage() {
       } catch (error) {
         // Not a readable SID header — nothing to show, which is the same as a tune that names nobody.
         addLog("debug", "Could not read tune credits from the SID header", {
-          item: currentItem?.label,
+          item: shownItem?.label,
           error: (error as Error)?.message ?? String(error),
         });
       }
@@ -1871,16 +1872,16 @@ export default function PlayFilesPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentItem?.id, currentItem?.request.file, currentItem?.category]);
+  }, [shownItem?.id, shownItem?.request.file, shownItem?.category]);
 
   // How the tune is named on screen. `currentItem.label` stays the raw file name — the session
   // persistence, the playlist and every lookup still use it — and only what the transport draws
   // changes.
   const friendlySidNames = useFriendlySidNames();
-  const currentDisplay = currentItem
+  const currentDisplay = shownItem
     ? resolveTrackDisplayName({
-        label: currentItem.label,
-        category: currentItem.category,
+        label: shownItem.label,
+        category: shownItem.category,
         friendlyNames: friendlySidNames,
         chipCount: currentItemCredits.chipCount,
       })
@@ -1888,7 +1889,7 @@ export default function PlayFilesPage() {
   useRecordRecentlyPlayed({
     trackInstanceId,
     item: currentItem,
-    title: currentDisplay?.title,
+    title: shownItem === currentItem ? currentDisplay?.title : undefined,
     credits: currentItemCredits,
   });
 
@@ -1899,11 +1900,11 @@ export default function PlayFilesPage() {
    * manager keeps the last tune and republishes it once a session starts, because the page names
    * the track in the commit before the one that starts playback.
    */
-  const nowPlayingTitle = currentDisplay?.title ?? currentItem?.label ?? null;
+  const nowPlayingTitle = currentDisplay?.title ?? shownItem?.label ?? null;
   const nowPlayingArtist = currentItemCredits.author;
   useEffect(() => {
     void setBackgroundExecutionNowPlaying(
-      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: currentDurationMs ?? null },
+      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: shownNowPlaying.durationMs ?? null },
       {
         source: "playback-controller",
         reason: "now-playing",
@@ -1921,7 +1922,7 @@ export default function PlayFilesPage() {
         background: true,
       });
     });
-  }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
+  }, [shownNowPlaying.durationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
 
   const activePlayback = useActivePlayback();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
@@ -1931,7 +1932,7 @@ export default function PlayFilesPage() {
     paused: isPaused,
     trackInstanceId,
     deviceInfo: status.deviceInfo,
-    elapsedMs,
+    playbackTime,
     durationMs: currentDurationMs,
     rebasePlaybackPosition,
   });
@@ -1967,16 +1968,6 @@ export default function PlayFilesPage() {
       ? Math.min(100, (renderedSeconds * 1000 * 100) / currentDurationMs)
       : undefined;
 
-  // While a seek waits for the renderer, the engine is silent and the elapsed clock must sit at the
-  // last position that was genuinely heard. It cannot read its own clock for this: the scheduler was
-  // reset to the target when the seek was accepted, so every position source already reports the
-  // target. A clock advancing normally through a silence is exactly what a listener reads as
-  // playback having died, which is why the target is shown separately on the bar instead.
-  const displayElapsedMs = isScrubbing ? shownScrubTargetMs : (pendingSeek?.audibleMs ?? elapsedMs);
-
-  const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
-  const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
-  const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
   // On-device playback attenuates its own PCM before it reaches the speaker, so the Play page's
   // volume control drives whichever route is sounding. Android's media volume is never touched:
   // that dial belongs to the person holding the phone, not to this app.
@@ -2003,9 +1994,20 @@ export default function PlayFilesPage() {
     });
   }, []);
 
+  const muteLocalOutput = useCallback(() => {
+    getSharedLocalSidPlaybackController().setMuted(true);
+    setLocalMuted(true);
+  }, []);
+  const soundingRoute = resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local);
+  useC64MuteFollowsRoute({
+    route: soundingRoute,
+    c64Mute: { volumeState, isManualMuteHeld, releaseManualMute },
+    sidPlaying: isPlaying && currentItem?.category === "sid",
+    muteHere: muteLocalOutput,
+  });
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeBinding = resolvePlaybackVolumeBinding({
-    route: resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local),
+    route: soundingRoute,
     local: {
       index: localVolumeIndex,
       muted: localMuted,
@@ -2119,12 +2121,12 @@ export default function PlayFilesPage() {
   // HVSC has STIL, so anything played from a device, a local file or an archive resolves to nothing
   // without a lookup.
   const stilInfo = useStilInfo({
-    virtualPath: currentItem?.request.source === "hvsc" ? currentItem.path : null,
+    virtualPath: shownItem?.request.source === "hvsc" ? shownItem.path : null,
     songNr: clampedSongNr ?? undefined,
   });
   // Everything the tune's own header says about itself, on one line under the title. The order and
   // the omission rules live in buildNowPlayingMetadataParts; this only supplies the fields.
-  const currentItemMetadataParts = currentItem
+  const currentItemMetadataParts = shownItem
     ? buildNowPlayingMetadataParts({
         author: currentItemCredits.author,
         released: currentItemCredits.released,
@@ -2235,13 +2237,8 @@ export default function PlayFilesPage() {
       if (!ids.size) return;
       const plan = planPlaylistItemRemoval(playlist, currentIndex, ids, isPlaying, isPaused);
       if (plan.shouldStopDevice) {
-        // Route through handleStop so the C64 actually stops instead of
-        // continuing to play a track the playlist no longer has, and so the
-        // native auto-advance watchdog due-time is cleared. handleStop
-        // performs the full teardown (resume-if-paused, device stop, volume
-        // restore, guard/due-at clear) that used to be partially and
-        // impurely duplicated as setState calls inside the setPlaylist
-        // updater below. See HARD9-030.
+        // HARD9-030: the full teardown, so the C64 stops a track the playlist no longer has and the
+        // native auto-advance due-time is cleared.
         stopPlayback();
       }
       setPlaylist(plan.next);
@@ -2272,12 +2269,10 @@ export default function PlayFilesPage() {
     setIsPlaying,
     isPaused,
     setIsPaused,
-    elapsedMs,
-    setElapsedMs,
-    playedMs,
-    setPlayedMs,
+    playbackTime,
     durationMs,
     setDurationMs,
+    setDurationMsItemId,
     autoAdvanceDueAtMs,
     setCurrentSubsongCount,
     setShuffleEnabled,
@@ -2300,8 +2295,11 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef,
     setTrackInstanceId,
     setAutoAdvanceDueAtMs,
+    playlistEnded,
+    setPlaylistEnded,
     setSessionRestoreSettled,
   });
+  useEffect(() => setPlaylistRestored(playlistHydrated), [playlistHydrated]);
   const stationHandover = useStationPlaylistHandover({
     queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
     playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
@@ -2329,11 +2327,13 @@ export default function PlayFilesPage() {
     shuffleSeed,
   );
 
-  useEffect(() => {
-    if (isPlaying || isPaused) return;
-    if (!volumeSessionActiveRef.current) return;
-    void restoreVolumeOverrides("playback-ended");
-  }, [isPaused, isPlaying, restoreVolumeOverrides]);
+  useRestoreVolumeWhenPlaybackEnds({
+    sessionRestoreSettled,
+    isPlaying,
+    isPaused,
+    volumeSessionActiveRef,
+    restoreVolumeOverrides,
+  });
 
   const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
   const navigateCleanupIsPlayingRef = useRef(isPlaying);
@@ -2362,19 +2362,6 @@ export default function PlayFilesPage() {
     [],
   );
 
-  const persistDurationOverride = useCallback(
-    (durationOverrideMs: number) => {
-      saveDefaultSongDurationMs(durationOverrideMs);
-      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, durationOverrideMs));
-    },
-    [setPlaylist],
-  );
-
-  useEffect(() => {
-    if (debouncedDurationOverrideMs === undefined) return;
-    persistDurationOverride(debouncedDurationOverrideMs);
-  }, [debouncedDurationOverrideMs, persistDurationOverride]);
-
   // Re-arm the auto-advance guard when the playing track's duration changes
   // mid-track (slider/input), so auto-advance fires at the new duration
   // instead of the stale one captured at track launch. No-op while paused
@@ -2400,63 +2387,6 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs(nextDueAtMs);
   }, [durationMs, isPaused, isPlaying, setAutoAdvanceDueAtMs]);
 
-  const handleDurationSliderChange = useCallback(
-    (value: number[]) => {
-      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
-      setDurationInput(formatDurationSeconds(nextSeconds));
-    },
-    [setDurationMs],
-  );
-
-  const handleDurationSliderCommit = useCallback(
-    (value: number[]) => {
-      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setDurationInput(formatDurationSeconds(nextSeconds));
-      persistDurationOverride(nextDurationMs);
-      setPendingDurationOverrideMs(undefined);
-    },
-    [persistDurationOverride, setDurationMs],
-  );
-
-  const handleDurationInputChange = useCallback(
-    (value: string) => {
-      const normalizedValue = normalizeDurationInputDraft(value);
-      setDurationInput(normalizedValue);
-      const parsed = parseDurationInput(normalizedValue);
-      if (parsed === undefined) return;
-      const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
-    },
-    [setDurationMs],
-  );
-
-  const handleDurationInputBlur = useCallback(() => {
-    const parsed = parseDurationInput(durationInput);
-    if (parsed === undefined) {
-      setDurationInput(formatDurationSeconds(durationSeconds));
-      return;
-    }
-    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-    const nextDurationMs = nextSeconds * 1000;
-    if (nextSeconds !== durationSeconds) {
-      setDurationSeconds(nextSeconds);
-    }
-    setDurationMs(nextDurationMs);
-    persistDurationOverride(nextDurationMs);
-    setPendingDurationOverrideMs(undefined);
-    setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [durationInput, durationSeconds, persistDurationOverride, setDurationMs]);
-
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
     playlist,
     playlistStorageKey,
@@ -2464,23 +2394,34 @@ export default function PlayFilesPage() {
     query: playlistFilterText,
     previewLimit: listPreviewLimit,
   });
+  const playlistLetterIndexSource = usePlaylistLetterIndexSource({
+    playlist,
+    playlistTypeFilters,
+    query: playlistFilterText,
+    ensureLoaded: queryFilteredPlaylist.ensureViewAllLoaded,
+  });
 
   const effectivePlaylistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => pendingDurationOverrideMs ?? playlistItemDuration(item, index),
     [pendingDurationOverrideMs, playlistItemDuration],
   );
 
-  const playlistTotals = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
-    currentIndex,
-    elapsedMs: displayElapsedMs,
+  const playlistTotalsAt = usePlaylistTotals(playlist, effectivePlaylistItemDuration, {
+    currentIndex: shownNowPlaying.index,
     shuffleEnabled: traversalOrdering.shuffleEnabled,
     shuffleSeed,
+  });
+  const timeline = usePlaybackTimeline(shownNowPlaying.time, {
+    durationMs: shownNowPlaying.durationMs,
+    launching: chosenTrackLaunching && shownNowPlaying.index === currentIndex,
+    scrubTargetMs: shownScrubTargetMs,
+    heldAtMs: pendingSeek?.audibleMs,
+    playlistTotalsAt,
   });
 
   const previewFilteredPlaylist = queryFilteredPlaylist.previewPlaylist;
   const filteredPlaylist = queryFilteredPlaylist.viewAllPlaylist;
-  const currentPlayingItemId =
-    (isPlaying || isPaused) && currentIndex >= 0 ? (playlist[currentIndex]?.id ?? null) : null;
+  const currentPlayingItemId = (isPlaying || isPaused) && shownNowPlaying.index >= 0 ? (shownItem?.id ?? null) : null;
 
   // Stable identities so usePlaylistListItems's useMemo isn't defeated by a
   // fresh inline arrow on every 1s elapsedMs tick during playback (HARD9-032).
@@ -2628,22 +2569,11 @@ export default function PlayFilesPage() {
                   onScrubEnd: () => void endScrub(),
                 })}
                 isScrubbing={isScrubbing}
-                progressPercent={progressPercent}
+                timeline={timeline}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
-                elapsedLabel={formatTime(displayElapsedMs)}
-                remainingLabel={remainingLabel}
-                totalLabel={formatTime(playlistTotals.total)}
-                remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
-                  // Bound to whichever route is sounding — see resolvePlaybackVolumeBinding. The two
-                  // routes must not be blended: while the C64 route's handlers also ran on this
-                  // device, its synchronisation loop pulled the slider back to the Ultimate's level
-                  // a moment after every drag.
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {/* Where the sound goes, then how loud it is — one row answering both. The
-                        chip used to be a three-button block at the top of the card, which spent
-                        30% of a 427 px screen on a preference and pushed the transport off it. */}
                     {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
                       <PlaybackEngineToggle />
                     ) : null}
@@ -2777,13 +2707,13 @@ export default function PlayFilesPage() {
                     {remoteInputEnabled && isPlaying ? (
                       gameModeLeadsTransportRow ? (
                         <>
-                          {playGameModeButton}
+                          {gameModeAvailable ? playGameModeButton : null}
                           {playRemoteInputButton}
                         </>
                       ) : (
                         <>
                           {playRemoteInputButton}
-                          {playGameModeButton}
+                          {gameModeAvailable ? playGameModeButton : null}
                         </>
                       )
                     ) : null}
@@ -2872,11 +2802,10 @@ export default function PlayFilesPage() {
                 onToggleSelectAll={toggleSelectAllPlaylist}
                 onRemoveSelected={handleRemoveSelectedPlaylist}
                 maxVisible={listPreviewLimit}
-                categoryOptions={CATEGORY_OPTIONS}
                 playlistTypeFilters={playlistTypeFilters}
                 onToggleFilter={togglePlaylistTypeFilter}
-                formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
+                playlistLoading={!playlistHydrated}
                 playlistItemCount={playlistIds.length}
                 onAddItems={handleOpenAddItems}
                 onClearPlaylist={() => {
@@ -2889,6 +2818,7 @@ export default function PlayFilesPage() {
                 onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
                 hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
                 onViewAllEndReached={queryFilteredPlaylist.loadMoreViewAllResults}
+                letterIndexSource={playlistLetterIndexSource}
               />
             </div>
           </ProfileSplitSection>
@@ -3119,7 +3049,7 @@ export default function PlayFilesPage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     if (!pendingConfigChange) return;

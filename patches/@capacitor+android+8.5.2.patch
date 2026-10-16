@@ -1,0 +1,20 @@
+diff --git a/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/WebViewLocalServer.java b/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/WebViewLocalServer.java
+index 66bfef7..80fce6a 100755
+--- a/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/WebViewLocalServer.java
++++ b/node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/WebViewLocalServer.java
+@@ -774,6 +774,15 @@ public class WebViewLocalServer {
+             InputStream is = getInputStream();
+             return is != null ? is.skip(n) : 0;
+         }
++
++        // The WebView closes the response stream when it is done with it; without this override the
++        // file opened by handle() stayed open until the garbage collector found it (CloseGuard).
++        @Override
++        public void close() throws IOException {
++            if (is != null) {
++                is.close();
++            }
++        }
+     }
+ 
+     // For L and above.

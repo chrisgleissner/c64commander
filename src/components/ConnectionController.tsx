@@ -18,7 +18,11 @@ import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from "@/lib/
 import { APP_SETTINGS_KEYS, loadBackgroundRediscoveryIntervalMs } from "@/lib/config/appSettings";
 import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/secureStorage";
 import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInvalidation";
-import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from "@/lib/query/c64PollingGovernance";
+import {
+  getBackgroundRediscoveryDelayMs,
+  getNextBackgroundFailureCount,
+  getOfflineDiscoverySweepGapMs,
+} from "@/lib/query/c64PollingGovernance";
 import { getDeviceDiscoveryState, subscribeDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 import { installNetworkTransitions } from "@/lib/connection/networkTransitions";
 import { installSimulatedDeviceContentCleanup } from "@/lib/connection/simulatedDeviceContent";
@@ -56,13 +60,13 @@ const hasAutomaticDiscoveryResultsAwaitingSelection = () => {
  */
 const RESUME_REDISCOVERY_MIN_HIDDEN_MS = 30_000;
 
-// HARD18-007: the plain background probe only ever re-checks the same stored
-// host - if the device changed IP (e.g. DHCP re-assignment after the
-// firmware-wedge power-cycle), it fails forever. After enough consecutive
-// failures, escalate ONCE to the "resume" trigger's saved-device sweep + LAN
-// scan (the same fallback HARD16-002 already gives a long-hidden-tab
-// return), instead of looping the same doomed probe indefinitely.
+// HARD18-007: the background probe only re-checks the stored host, which fails forever once the device changes IP.
+// After this many failures it escalates to the "resume" saved-device sweep and LAN scan, then repeats that sweep
+// with a growing gap (getOfflineDiscoverySweepGapMs) for as long as the device stays offline.
 const BACKGROUND_ESCALATE_AFTER_FAILURES = 3;
+
+type OfflineSweepStreak = { sweepsRun: number; nextSweepAtMs: number };
+const NO_OFFLINE_SWEEPS: OfflineSweepStreak = { sweepsRun: 0, nextSweepAtMs: 0 };
 
 export function ConnectionController() {
   const queryClient = useQueryClient();
@@ -70,7 +74,10 @@ export function ConnectionController() {
   const backgroundTimerRef = useRef<number | null>(null);
   const backgroundScheduleTokenRef = useRef(0);
   const backgroundFailureCountRef = useRef(0);
-  const hasEscalatedBackgroundFailuresRef = useRef(false);
+  // Kept outside the scheduling effect: a sweep moves the state through DISCOVERING and back, which re-runs that
+  // effect, and resetting this there restarted the streak, so a 516-host scan ran about once a minute.
+  const offlineSweepsRef = useRef<OfflineSweepStreak>(NO_OFFLINE_SWEEPS);
+  const lastScheduleVersionRef = useRef<number | null>(null);
   const lastSettingsRef = useRef<{
     baseUrl: string;
     password: string;
@@ -106,7 +113,9 @@ export function ConnectionController() {
   useEffect(
     () =>
       subscribeNetworkEdges((edge) => {
-        if (edge === "online") setBackgroundScheduleVersion((current) => current + 1);
+        if (edge !== "online") return;
+        offlineSweepsRef.current = NO_OFFLINE_SWEEPS;
+        setBackgroundScheduleVersion((current) => current + 1);
       }),
     [],
   );
@@ -149,6 +158,10 @@ export function ConnectionController() {
       }
     };
 
+    if (state === "REAL_CONNECTED") {
+      offlineSweepsRef.current = NO_OFFLINE_SWEEPS;
+      backgroundFailureCountRef.current = 0;
+    }
     if (state !== "DEMO_ACTIVE" && state !== "OFFLINE_NO_DEMO") {
       clearTimer();
       return;
@@ -201,25 +214,24 @@ export function ConnectionController() {
             lastProbeFailedAtMs: snapshot.lastProbeFailedAtMs,
           });
           backgroundFailureCountRef.current = nextFailureCount;
-          if (nextFailureCount === 0) hasEscalatedBackgroundFailuresRef.current = false;
+          if (nextFailureCount === 0) offlineSweepsRef.current = NO_OFFLINE_SWEEPS;
           if (backgroundScheduleTokenRef.current !== scheduleToken) {
             clearTimer();
             return;
           }
           if (snapshot.state === "DEMO_ACTIVE" || snapshot.state === "OFFLINE_NO_DEMO") {
-            // HARD18-007: escalate ONCE per failure streak, fire-and-forget -
-            // the plain background schedule below keeps running regardless
-            // (as a fallback, and to naturally pick up a "resume" success via
-            // the state change this effect already depends on).
+            const now = Date.now();
+            const sweeps = offlineSweepsRef.current;
             if (
               snapshot.state === "OFFLINE_NO_DEMO" &&
               !isNetworkKnownOffline() &&
               nextFailureCount >= BACKGROUND_ESCALATE_AFTER_FAILURES &&
-              !hasEscalatedBackgroundFailuresRef.current &&
+              now >= sweeps.nextSweepAtMs &&
               allowBackgroundRediscovery() &&
               !hasAutomaticDiscoveryResultsAwaitingSelection()
             ) {
-              hasEscalatedBackgroundFailuresRef.current = true;
+              const sweepsRun = sweeps.sweepsRun + 1;
+              offlineSweepsRef.current = { sweepsRun, nextSweepAtMs: now + getOfflineDiscoverySweepGapMs(sweepsRun) };
               void discoverConnection("resume");
             }
             scheduleNextProbe(nextFailureCount);
@@ -228,8 +240,10 @@ export function ConnectionController() {
       }, delayMs);
     };
 
-    backgroundFailureCountRef.current = 0;
-    hasEscalatedBackgroundFailuresRef.current = false;
+    // Only a new schedule (network back, app shown, picker dismissed) restarts the probe backoff; a state change
+    // caused by our own sweep does not.
+    if (lastScheduleVersionRef.current !== backgroundScheduleVersion) backgroundFailureCountRef.current = 0;
+    lastScheduleVersionRef.current = backgroundScheduleVersion;
     clearTimer();
     scheduleNextProbe(backgroundFailureCountRef.current);
 

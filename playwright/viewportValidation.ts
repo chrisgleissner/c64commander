@@ -106,6 +106,14 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
     const isInsideSwipeRunway = (element: Element) =>
       Boolean(element.closest('[data-testid="swipe-navigation-runway"]'));
     const isInsideActiveSwipeSlot = (element: Element) => Boolean(activeSwipeSlot && activeSwipeSlot.contains(element));
+    // Content of a row that scrolls sideways may extend past the screen; the scroller itself is still checked.
+    const isInsideHorizontalScroller = (element: Element) => {
+      for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+        const overflowX = window.getComputedStyle(parent).overflowX;
+        if ((overflowX === "auto" || overflowX === "scroll") && parent.scrollWidth > parent.clientWidth) return true;
+      }
+      return false;
+    };
 
     // Check all visible elements
     const elements = document.querySelectorAll("body *");
@@ -113,6 +121,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       if (isToastElement(element)) return;
       if (isClosedTransitionElement(element)) return;
       if (isInsideSwipeRunway(element) && !isInsideActiveSwipeSlot(element)) return;
+      if (isInsideHorizontalScroller(element)) return;
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
 

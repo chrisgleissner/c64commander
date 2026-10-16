@@ -19,6 +19,25 @@ const buildMetadataMessage = (
 
 const canHydrateSong = (metadataStatus?: string | null) => metadataStatus !== "hydrated" && metadataStatus !== "error";
 
+/** Fills a song from a SID header, or from a whole SID file, which starts with one. Throws on anything else. */
+export const hydrateBrowseSongFromSidHeader = (
+  snapshot: HvscBrowseIndexSnapshot,
+  virtualPath: string,
+  header: Uint8Array,
+) => {
+  const sidMetadata = parseSidHeaderMetadata(header);
+  updateHvscBrowseSong(snapshot, virtualPath, {
+    canonicalTitle: sidMetadata.name || null,
+    canonicalAuthor: sidMetadata.author || null,
+    released: sidMetadata.released || null,
+    defaultSong: sidMetadata.startSong,
+    metadataStatus: "hydrated",
+    sidMetadata,
+    trackSubsongs: buildSidTrackSubsongs(sidMetadata.songs, sidMetadata.startSong),
+    subsongCount: sidMetadata.songs,
+  });
+};
+
 export type HydrateHvscMetadataOptions = {
   snapshot: HvscBrowseIndexSnapshot;
   readSong: (virtualPath: string) => Promise<HvscSong | null>;
@@ -93,17 +112,7 @@ export const hydrateHvscMetadata = async ({
           continue;
         }
 
-        const sidMetadata = parseSidHeaderMetadata(base64ToUint8(detail.dataBase64));
-        updateHvscBrowseSong(snapshot, virtualPath, {
-          canonicalTitle: sidMetadata.name || null,
-          canonicalAuthor: sidMetadata.author || null,
-          released: sidMetadata.released || null,
-          defaultSong: sidMetadata.startSong,
-          metadataStatus: "hydrated",
-          sidMetadata,
-          trackSubsongs: buildSidTrackSubsongs(sidMetadata.songs, sidMetadata.startSong),
-          subsongCount: sidMetadata.songs,
-        });
+        hydrateBrowseSongFromSidHeader(snapshot, virtualPath, base64ToUint8(detail.dataBase64));
       } catch (error) {
         failedSongs += 1;
         updateHvscBrowseSong(snapshot, virtualPath, {
@@ -112,6 +121,7 @@ export const hydrateHvscMetadata = async ({
         addLog("warn", "HVSC metadata hydration failed for song", {
           virtualPath,
           error: (error as Error).message,
+          stack: (error as Error).stack,
         });
       } finally {
         processedCount += 1;

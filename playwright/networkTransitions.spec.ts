@@ -19,6 +19,8 @@ import { saveCoverageFromPage } from "./withCoverage";
 
 const snap = attachStepScreenshotTolerant;
 
+type FetchActivity = { inFlight: number; lastAt: number };
+
 /*
  * Leaving home and coming back, as the page sees it: the browser goes offline and online again. The
  * app has to show the device offline calmly (no problem count, no error toast, no warnings) and
@@ -70,15 +72,22 @@ test.describe("Network transitions", () => {
     // in flight, fails whatever the app does. This listener is registered before the app's, so the flag is set
     // before the app hears of the loss.
     await page.addInitScript(() => {
-      const win = window as Window & { __fetchesAfterOffline?: string[] };
+      const win = window as Window & { __fetchesAfterOffline?: string[]; __fetchActivity?: FetchActivity };
       win.__fetchesAfterOffline = [];
+      const activity: FetchActivity = { inFlight: 0, lastAt: performance.now() };
+      win.__fetchActivity = activity;
+      const noteActivity = (change: number) => {
+        activity.inFlight += change;
+        activity.lastAt = performance.now();
+      };
       let told = false;
       window.addEventListener("offline", () => (told = true));
       window.addEventListener("online", () => (told = false));
       const originalFetch = window.fetch.bind(window);
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         if (told) win.__fetchesAfterOffline!.push(String(input instanceof Request ? input.url : input));
-        return originalFetch(input, init);
+        noteActivity(1);
+        return originalFetch(input, init).finally(() => noteActivity(-1));
       };
     });
 
@@ -86,18 +95,15 @@ test.describe("Network transitions", () => {
     const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(badge).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     // The page's network-idle state is reached before the app connects, so it says nothing about the
-    // reads that follow; a request still in flight when the network drops is logged as a failed load.
-    let seen = server.requests.length;
-    let quietSince = Date.now();
+    // reads that follow; a request still in flight when the network drops is logged as a failed load. The
+    // server cannot judge idleness either: under load a request waits in the browser before it arrives there.
     await expect
       .poll(
-        () => {
-          if (server.requests.length !== seen) {
-            seen = server.requests.length;
-            quietSince = Date.now();
-          }
-          return Date.now() - quietSince >= 750;
-        },
+        () =>
+          page.evaluate(() => {
+            const activity = (window as Window & { __fetchActivity?: FetchActivity }).__fetchActivity!;
+            return activity.inFlight === 0 && performance.now() - activity.lastAt >= 750;
+          }),
         { timeout: 15000, intervals: [100] },
       )
       .toBe(true);

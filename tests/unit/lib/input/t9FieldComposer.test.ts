@@ -9,7 +9,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { resolveInputProfile } from "@/lib/input/profiles";
-import { composeT9Key, endT9Composition, isT9Field } from "@/lib/input/t9FieldComposer";
+import { DEFAULT_T9_CONFIG } from "@/lib/input/t9";
+import { composeT9Key, endT9Composition, isT9Field, msUntilT9LetterSettles } from "@/lib/input/t9FieldComposer";
 
 const keypad = resolveInputProfile("keypad");
 
@@ -201,5 +202,25 @@ describe("isT9Field", () => {
     expect(isT9Field(field({ disabled: "" }))).toBe(false);
     expect(isT9Field(field({ "data-t9": "off" }))).toBe(false);
     expect(isT9Field(document.createElement("button"))).toBe(false);
+  });
+});
+
+describe("msUntilT9LetterSettles", () => {
+  it("reports the rest of the multi-tap window while a letter is being cycled, then nothing", () => {
+    const input = field();
+    press(input, digit(7), 1000);
+    press(input, digit(7), 1200);
+
+    expect(msUntilT9LetterSettles(input, 1300)).toBe(DEFAULT_T9_CONFIG.multiTapTimeoutMs - 100);
+    expect(msUntilT9LetterSettles(input, 1200 + DEFAULT_T9_CONFIG.multiTapTimeoutMs)).toBe(0);
+  });
+
+  it("reports nothing for a field with no letter pending, or for something that is not a field", () => {
+    const input = field();
+    expect(msUntilT9LetterSettles(input, 0)).toBe(0);
+    press(input, digit(2), 1000);
+    endT9Composition(input);
+    expect(msUntilT9LetterSettles(input, 1001)).toBe(0);
+    expect(msUntilT9LetterSettles(document.body, 0)).toBe(0);
   });
 });

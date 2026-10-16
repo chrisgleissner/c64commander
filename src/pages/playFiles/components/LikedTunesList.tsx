@@ -46,7 +46,7 @@ export const LikedTunesList = ({ onPlay, isInstalled }: LikedTunesListProps) => 
   if (entries.length === 0) {
     return (
       <p className="text-sm text-muted-foreground" data-testid="liked-tunes">
-        No liked tunes yet. Tap ♥ while a tune plays to add it here.
+        No liked tunes yet. Like a tune with ♥ while it plays to add it here.
       </p>
     );
   }

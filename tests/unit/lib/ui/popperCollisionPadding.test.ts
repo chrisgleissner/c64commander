@@ -47,6 +47,43 @@ describe("resolveSafeAreaCollisionPadding", () => {
     }
   });
 
+  it("keeps them clear of the tab bar and the guidance bar above it", () => {
+    const place = (testId: string, top: number, visible?: boolean) => {
+      const element = document.createElement("div");
+      element.setAttribute("data-testid", testId);
+      if (visible) element.setAttribute("data-visible", "true");
+      element.getBoundingClientRect = () => ({ top, height: 427 - top }) as DOMRect;
+      document.body.appendChild(element);
+      return element;
+    };
+    const originalHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 427 });
+    const tabBar = place("tab-bar", 379);
+    try {
+      expect(resolveSafeAreaCollisionPadding().bottom).toBe(48);
+      resetSafeAreaCollisionPaddingForTests();
+      const guidance = place("keypad-guidance-bar", 353, true);
+      try {
+        expect(resolveSafeAreaCollisionPadding().bottom).toBe(74);
+      } finally {
+        guidance.remove();
+      }
+    } finally {
+      tabBar.remove();
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+    }
+  });
+
+  it("keeps a menu opened in a dialog clear of the toast strip above the guidance bar", () => {
+    document.documentElement.style.setProperty("--safe-area-inset-bottom", "12px");
+    document.documentElement.style.setProperty("--app-toast-reserved-height", "64px");
+    try {
+      expect(resolveSafeAreaCollisionPadding().bottom).toBe(76);
+    } finally {
+      document.documentElement.style.removeProperty("--app-toast-reserved-height");
+    }
+  });
+
   it("reads an unset or unparsable inset as no padding", () => {
     document.documentElement.style.setProperty("--safe-area-inset-top", "env(safe-area-inset-top, 0px)");
 

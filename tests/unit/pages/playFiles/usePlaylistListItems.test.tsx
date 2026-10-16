@@ -57,6 +57,42 @@ const buildItem = (
 });
 
 describe("usePlaylistListItems", () => {
+  it("gives each folder header its own id when a folder recurs further down the list", () => {
+    // A SID Radio queue alternates folders; a header id taken from the path alone repeated, and React
+    // kept the stale header rows of the repeated key on screen after the queue changed.
+    const playlist = [
+      buildItem("hvsc", "/MUSICIANS/A/one.sid"),
+      buildItem("hvsc", "/MUSICIANS/B/two.sid"),
+      buildItem("hvsc", "/MUSICIANS/A/three.sid"),
+    ];
+
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: null,
+      }),
+    );
+
+    const headers = result.current.filter((entry) => entry.variant === "header");
+    expect(headers.map((entry) => entry.title)).toEqual(["/MUSICIANS/A", "/MUSICIANS/B", "/MUSICIANS/A"]);
+    const ids = result.current.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("does not include source-kind labels in playlist item details", () => {
     const playlist = [
       buildItem("ultimate", "/USB0/Music/track1.sid"),

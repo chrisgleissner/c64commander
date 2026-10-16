@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
-import { resetInputModality } from "@/lib/input";
+import { resetInputModality, setInputModality } from "@/lib/input";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 
 /**
@@ -92,6 +92,63 @@ describe("KeypadGuidanceBar", () => {
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
   });
 
+  it("names what OK does on a card whose only control is its header: collapse, not open", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <section data-section-label="Spectrum">
+          <button aria-expanded="true">Spectrum</button>
+          <p>Available for sound played on this phone.</p>
+        </section>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(breadcrumb()).toHaveTextContent("Spectrum");
+    expect(actionText("keypad-guidance-center")).toBe("Collapse");
+  });
+
+  it("still names Open on a card with several controls, where OK goes into the card", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <section data-section-label="Drives">
+          <button aria-expanded="true">Drives</button>
+          <button>Mount</button>
+        </section>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(actionText("keypad-guidance-center")).toBe("Open");
+  });
+
+  it("names a control by its short guidance label, and drops 'Activate' on the compact screen only", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button aria-label="Connected to c64u, system healthy" data-guidance-label="c64u: healthy">
+          c64u
+        </button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(breadcrumb()).toHaveTextContent("c64u: healthy");
+    expect(actionText("keypad-guidance-center")).toBe("Activate");
+
+    document.documentElement.dataset.displayProfile = "compact";
+    try {
+      fireEvent.keyDown(document.body, { code: "ArrowUp" });
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(actionText("keypad-guidance-center")).toBe("");
+      expect(screen.getByTestId("keypad-guidance-center")).not.toHaveAttribute("hidden");
+    } finally {
+      delete document.documentElement.dataset.displayProfile;
+    }
+  });
+
   /*
    * The tour owns the keys while it runs, so this bar advertises actions that do not happen — and
    * on a 320 x 427 screen it is drawn over the tour's own caption, covering the title of the step
@@ -133,6 +190,164 @@ describe("KeypadGuidanceBar", () => {
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
 
     expect(bar()).toHaveAttribute("data-visible", "false");
+  });
+
+  it("names Close and Menu, and no OK action, while a dialog that drives its own keys offers a menu", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <div role="dialog" aria-labelledby="driving-title" data-key-nav-skip="" data-key-nav-soft-key-menu="">
+          <h2 id="driving-title">Remote Input</h2>
+          <button data-testid="driving-focus">Joystick</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("driving-focus").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Remote Input");
+    expect(actionText("keypad-guidance-left")).toBe("Close");
+    expect(screen.getByTestId("keypad-guidance-center")).toHaveAttribute("hidden");
+    expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
+  });
+
+  it("names Menu, Return and Delete while a dialog that types with the keypad opens its menu on Back", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-labelledby="typing-title" data-key-nav-skip="" data-key-nav-soft-key-menu="back">
+          <h2 id="typing-title">Remote Input</h2>
+          <button data-testid="typing-focus">Keys</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("typing-focus").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(actionText("keypad-guidance-left")).toBe("Menu");
+    expect(actionText("keypad-guidance-center")).toBe("Return");
+    expect(actionText("keypad-guidance-right")).toBe("Delete");
+  });
+
+  it("names Close and Select while that dialog's own menu has focus, though the dialog behind drives its keys", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-skip="" data-key-nav-soft-key-menu="softRight" />
+        <div role="dialog" aria-labelledby="menu-title" data-key-nav-soft-key-menu-panel="">
+          <h2 id="menu-title">Remote Input</h2>
+          <button data-testid="menu-item">Keys</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("menu-item").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Remote Input");
+    expect(actionText("keypad-guidance-left")).toBe("Close");
+    expect(actionText("keypad-guidance-center")).toBe("Select");
+    expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
+  it("names the selected entry of that menu, and on the compact screen shows the entry alone", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-skip="" data-key-nav-soft-key-menu="softRight" />
+        <div role="dialog" aria-labelledby="entry-menu-title" data-key-nav-soft-key-menu-panel="">
+          <h2 id="entry-menu-title">Remote Input</h2>
+          <button data-testid="entry-keys">Keys</button>
+          <button data-testid="entry-close">Close Remote Input</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("entry-keys").focus());
+    expect(breadcrumb()).toHaveTextContent("Remote Input › Keys");
+
+    document.documentElement.dataset.displayProfile = "compact";
+    try {
+      act(() => screen.getByTestId("entry-close").focus());
+      expect(breadcrumb().textContent?.trim()).toBe("Close Remote Input");
+    } finally {
+      delete document.documentElement.dataset.displayProfile;
+    }
+  });
+
+  it("drops 'Select' beside OK in that menu on the compact screen", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-skip="" data-key-nav-soft-key-menu="softRight" />
+        <div role="dialog" aria-labelledby="compact-menu-title" data-key-nav-soft-key-menu-panel="">
+          <h2 id="compact-menu-title">Remote Input</h2>
+          <button data-testid="compact-close">Close Remote Input</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    document.documentElement.dataset.displayProfile = "compact";
+    try {
+      act(() => screen.getByTestId("compact-close").focus());
+      expect(actionText("keypad-guidance-center")).toBe("");
+      expect(screen.getByTestId("keypad-guidance-center")).not.toHaveAttribute("hidden");
+      expect(breadcrumb().textContent?.trim()).toBe("Close Remote Input");
+    } finally {
+      delete document.documentElement.dataset.displayProfile;
+    }
+  });
+
+  it("keeps 'Select' beside OK on a page's select on the compact screen", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button role="combobox" aria-haspopup="listbox">
+          Mode
+        </button>
+      </FocusNavigationProvider>,
+    );
+    document.documentElement.dataset.displayProfile = "compact";
+    try {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(actionText("keypad-guidance-center")).toBe("Select");
+    } finally {
+      delete document.documentElement.dataset.displayProfile;
+    }
+  });
+
+  it("names the Menu soft key while the keypad walks the controls of a dialog that offers a menu", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" aria-label="Remote Input" data-key-nav-soft-key-menu="softRight">
+          <button data-testid="sheet-control">Joystick</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("sheet-control").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
+  });
+
+  it("falls back to 'Navigation' for a dialog that drives its own keys and has no title", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <div role="dialog" data-key-nav-skip="" data-key-nav-soft-key-menu="">
+          <button data-testid="untitled-focus">Fire</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("untitled-focus").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Navigation");
   });
 
   it("exposes the Menu soft key when the focused item has a context menu", () => {

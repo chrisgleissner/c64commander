@@ -107,7 +107,8 @@ internal data class FeedSessionStats(
  * queue in sequence order, writes the newest session that has audio into the shared
  * `AudioPipeline` with backpressure, and handles the crossfade between two sessions: recovering
  * what the outgoing tune had queued but not played, playing it on while the next tune opens, and
- * mixing it under the incoming tune with a falling ramp while the incoming tune fades in. It also
+ * mixing it under the incoming tune with a falling ramp while the incoming tune fades in. A tune that
+ * ends by itself with the crossfade off is played out to its songlength instead, ahead of the next. It also
  * watches for a flat signal and for a track that has stopped consuming.
  *
  * All state belongs to one feeder thread. Commands arrive through a lock-free inbox from the
@@ -130,7 +131,8 @@ internal class LocalAudioFeed(
 
   private class Fade(val to: Double, val perFrame: Double)
 
-  private class Tail(val segments: ArrayDeque<Segment>, var frames: Long) {
+  /** [playsOut]: the rest of a tune that ends on its own, played whole before the successor's audio, not mixed. */
+  private class Tail(val segments: ArrayDeque<Segment>, var frames: Long, val playsOut: Boolean = false) {
     var frame = 0L
   }
 
@@ -158,6 +160,8 @@ internal class LocalAudioFeed(
     var fade: Fade? = null
     var tail: Tail? = null
     var transitioning = false
+    /** The transition was a play-out: what is queued is the rest of the tune, ending on a declick. */
+    var playingOut = false
     var closed = false
     var writtenFrames = 0L
     val history = ArrayDeque<ByteArray>()
@@ -275,6 +279,7 @@ internal class LocalAudioFeed(
     session.pending[seq] =
         Entry.Command("flush") {
           it.queue.clear()
+          if (it.tail?.playsOut == true) it.tail = null
           it.history.clear()
           it.historyFrames = 0
           it.writtenFrames = 0
@@ -332,23 +337,30 @@ internal class LocalAudioFeed(
    * Begin a track change: recover what this session had queued in the track but not yet played, and
    * keep playing it a fraction of a second at a time while the next tune opens. The track is flushed
    * with whichever write comes next, so the incoming tune is never queued behind seconds of this one.
+   *
+   * With [playOutDeclickSeconds] above zero the tune is ending by itself: [seconds] is what is left of
+   * it from the playhead. The queue is cut there and ramps to silence over that declick, and the
+   * successor plays it whole before its own audio instead of mixing it under that audio.
    */
-  fun beginTransition(serial: Int, seq: Long, seconds: Double) =
+  fun beginTransition(serial: Int, seq: Long, seconds: Double, playOutDeclickSeconds: Double = 0.0) =
       ordered(serial, seq, "transition") { session ->
-        startTransition(session, seconds)
+        startTransition(session, seconds, playOutDeclickSeconds)
         true
       }
 
-  private fun startTransition(session: Session, seconds: Double) {
+  private fun startTransition(session: Session, seconds: Double, playOutDeclickSeconds: Double) {
     if (session.closed || session.transitioning) return
     session.transitioning = true
+    session.playingOut = playOutDeclickSeconds > 0
     val rate = session.settings.sampleRate
-    val wanted = (seconds * rate).toLong().coerceAtLeast(0)
     // The ring, not the track: what the track holds still plays, and recovering it too would play it twice.
     // Flushed now and counted in the same step: read first and flushed later, a block the player wrote
     // in between was heard twice, a click at the start of every crossfade.
     val active = session.serial == activeSerial
     val depthFrames = if (active) output?.flushRing(rate) ?: 0L else 0L
+    // A play-out is measured from the playhead, and the audio still in the track plays before the queue.
+    val heldByTrack = if (active && session.playingOut) ((output?.bufferedMs() ?: 0.0) * rate / 1000).toLong() else 0L
+    val wanted = ((seconds * rate).toLong() - heldByTrack).coerceAtLeast(0)
     var unplayed = minOf(session.historyFrames, depthFrames)
     val recovered = ArrayDeque<Segment>()
     while (unplayed > 0 && session.history.isNotEmpty()) {
@@ -371,10 +383,42 @@ internal class LocalAudioFeed(
     // the queue would jump ahead in the tune.
     if (kept < recovered.sumOf { it.frames }) session.queue.clear()
     for (segment in capped.reversed()) session.queue.addFirst(segment)
+    if (session.playingOut) endPlayOut(session.queue, wanted, (playOutDeclickSeconds * rate).toLong())
     session.history.clear()
     session.historyFrames = 0
     pendingTransitionFlush = !active || output == null
     publish(session)
+  }
+
+  /** Cut [queue] to [frames] and ramp its last [declickFrames] to silence, so the tune ends without a step. */
+  private fun endPlayOut(queue: ArrayDeque<Segment>, frames: Long, declickFrames: Long) {
+    var left = frames
+    val kept = ArrayDeque<Segment>()
+    while (queue.isNotEmpty() && left > 0) {
+      val segment = queue.removeFirst()
+      val take = minOf(segment.frames, left)
+      kept.addLast(Segment(segment.source, segment.startFrame, take, segment.processed))
+      left -= take
+    }
+    queue.clear()
+    val total = frames - left
+    val ramp = minOf(declickFrames, total).toInt()
+    if (ramp <= 0) {
+      queue.addAll(kept)
+      return
+    }
+    val bytes = ByteArray(ramp * BYTES_PER_FRAME)
+    var skip = total - ramp
+    var filled = 0
+    for (segment in kept) {
+      val before = minOf(segment.frames, skip)
+      if (before > 0) queue.addLast(Segment(segment.source, segment.startFrame, before, segment.processed))
+      skip -= before
+      val rest = segment.frames - before
+      if (rest > 0) filled += segment.source.read(segment.startFrame + before, bytes, filled * BYTES_PER_FRAME, rest.toInt())
+    }
+    for (i in 0 until filled) scaleFrame(bytes, i * BYTES_PER_FRAME, (filled - i - 1).toDouble() / ramp)
+    queue.addLast(Segment(bytesSource(bytes), 0, filled.toLong(), processed = true))
   }
 
   /** Hand what [serial] has queued, at most [maxSeconds] of it, to a tail a successor can adopt. */
@@ -395,19 +439,24 @@ internal class LocalAudioFeed(
       frames += take
     }
     session.queue.clear()
-    tails[tailId] = Tail(segments, frames)
+    tails[tailId] = Tail(segments, frames, playsOut = session.playingOut)
     publish(session)
   }
 
   /**
    * Sum the tail under [serial]'s own audio from [seq] on, fading it away across [seconds] of that
    * audio. The outgoing session hands the tail over in its own stream, so it may not exist yet: the
-   * command then waits, holding back this session's audio, for at most the gap timeout.
+   * command then waits, holding back this session's audio, for at most the gap timeout. A tail that
+   * plays out is not mixed: it is played whole, ahead of this session's audio.
    */
   fun adoptTail(serial: Int, seq: Long, tailId: Int, seconds: Double) =
       ordered(serial, seq, "adopt tail") { session ->
         val tail = tails.remove(tailId) ?: return@ordered false
         val available = tail.segments.sumOf { it.frames }
+        if (tail.playsOut) {
+          if (available > 0L) session.tail = tail
+          return@ordered true
+        }
         val fadeFrames = minOf(available, (seconds * session.settings.sampleRate).toLong())
         if (available > 0L && fadeFrames > 0) session.tail = Tail(tail.segments, fadeFrames)
         true
@@ -617,8 +666,14 @@ internal class LocalAudioFeed(
     session.fade = Fade(to, (to - session.fadeGain) * 1000.0 / ms / session.settings.sampleRate)
   }
 
+  /** Whether the last slice [buildSlice] built was [session]'s own audio, which is what its clock counts. */
+  private var sliceIsOwnAudio = true
+
   /** Fill [scratch] with the next slice for [session]; returns its frames. */
   private fun buildSlice(session: Session): Int {
+    val playingOut = session.tail?.takeIf { it.playsOut }
+    sliceIsOwnAudio = playingOut == null
+    if (playingOut != null) return readPlayOut(session, playingOut)
     val head = session.queue.firstOrNull()
     if (head != null) {
       val want = minOf(SLICE_FRAMES.toLong(), head.frames).toInt()
@@ -640,6 +695,22 @@ internal class LocalAudioFeed(
     val tailFrames = (session.settings.sampleRate / TAIL_SLICES_PER_SECOND).coerceIn(1, SLICE_FRAMES)
     java.util.Arrays.fill(scratch, 0, tailFrames * BYTES_PER_FRAME, 0)
     return mixTail(session, tailFrames, ownAudio = false)
+  }
+
+  /** The predecessor's play-out, as it is: it was cut and declicked when that tune's transition began. */
+  private fun readPlayOut(session: Session, tail: Tail): Int {
+    var filled = 0
+    while (filled < SLICE_FRAMES && tail.segments.isNotEmpty()) {
+      val segment = tail.segments.first()
+      val want = minOf((SLICE_FRAMES - filled).toLong(), segment.frames).toInt()
+      val got = segment.source.read(segment.startFrame, scratch, filled * BYTES_PER_FRAME, want)
+      segment.startFrame += got
+      segment.frames -= got
+      if (got <= 0 || segment.frames <= 0) tail.segments.removeFirst()
+      filled += got.coerceAtLeast(0)
+    }
+    if (tail.segments.isEmpty()) session.tail = null
+    return filled
   }
 
   private fun applyFade(session: Session, frames: Int) {
@@ -710,7 +781,7 @@ internal class LocalAudioFeed(
   private fun afterWrite(session: Session, frames: Int) {
     val now = clock.nanoTime()
     session.lastWriteNanos = now
-    session.writtenFrames += frames
+    if (sliceIsOwnAudio) session.writtenFrames += frames
     val copy = scratch.copyOf(frames * BYTES_PER_FRAME)
     session.history.addLast(copy)
     session.historyFrames += frames

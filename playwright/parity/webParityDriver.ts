@@ -106,11 +106,11 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
         const status = document.querySelector('[data-testid="playback-pending-status"]');
         return status ? Number(status.getAttribute("data-pending-progress") ?? 0) : null;
       }),
+    // A seek on the C64 shows its target with ⏵; one on the phone holds the clock under ⏸. Read in one
+    // page call: a wait that began between a check for it and a read of the clock passed as a landing.
     async shownSeconds() {
-      // A seek on the C64 shows its target with ⏵; one on the phone shows that it waits to continue.
-      if (await page.locator('[aria-label^="Waiting to continue at"]').count()) return null;
       const text = await page.getByTestId("playback-elapsed").innerText();
-      return text.includes("⏵") ? null : parseClock(text);
+      return /[⏵⏸]/.test(text) ? null : parseClock(text);
     },
     async durationSeconds() {
       const elapsed = parseClock(await page.getByTestId("playback-elapsed").innerText()) ?? 0;

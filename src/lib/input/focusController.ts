@@ -35,6 +35,11 @@ export interface FocusItem {
    */
   readonly parentId?: string;
   readonly disabled?: boolean;
+  /**
+   * App chrome repeated on every page, such as the app bar's Quick menu button and device badge. A default
+   * selection passes over it to the page's first own stop; Up still reaches it.
+   */
+  readonly chrome?: boolean;
   readonly activate: () => void;
 }
 
@@ -161,6 +166,12 @@ export class FocusController {
     return this.scopeParentId;
   }
 
+  /** Where a step in `delta`'s direction would land, and whether it wraps around the scope, without moving. */
+  peekStep(delta: number): { item: FocusItem; wraps: boolean } | null {
+    const found = this.findStep(delta);
+    return found && found.from >= 0 ? { item: this.toFocusItem(found.item), wraps: found.wraps } : null;
+  }
+
   /** Selects a specific item by id; returns false if unknown. */
   setCurrent(id: string): boolean {
     const item = this.items.find((entry) => entry.id === id);
@@ -236,32 +247,50 @@ export class FocusController {
   }
 
   private step(delta: number): FocusItem | null {
+    this.leaveScopeHoldingOnlyCurrent();
+    const scopedItems = this.itemsInScope(this.scopeParentId);
+    if (scopedItems.length === 0 || !scopedItems.some(isEnabled)) return null;
+    const found = this.findStep(delta);
+    if (!found) return this.current();
+    this.currentId = found.item.id;
+    this.currentIsDefault = false;
+    return this.toFocusItem(found.item);
+  }
+
+  /**
+   * A group whose only enabled stop is the selected one, as a Config category is once its header collapses
+   * it from inside, would hold Up and Down on that stop until Back. The step is taken among the group's
+   * siblings instead.
+   */
+  private leaveScopeHoldingOnlyCurrent(): void {
+    if (this.scopeParentId === null) return;
+    const enabled = this.itemsInScope(this.scopeParentId).filter(isEnabled);
+    if (enabled.length === 1 && enabled[0].id === this.currentId) this.focusParent();
+  }
+
+  /**
+   * The next enabled item in `delta`'s direction, wrapping around the scope. With nothing selected,
+   * a forward step lands on the first enabled item and a backward step on the last.
+   */
+  private findStep(delta: number): { item: InternalItem; wraps: boolean; from: number } | null {
     const scopedItems = this.itemsInScope(this.scopeParentId);
     const count = scopedItems.length;
-    if (count === 0) return null;
-
-    const enabledExists = scopedItems.some(isEnabled);
-    if (!enabledExists) return null;
-
-    const startIndex = scopedItems.findIndex((entry) => entry.id === this.currentId);
-    // When nothing is selected, a forward step lands on the first enabled item
-    // and a backward step on the last enabled item.
-    let index = startIndex < 0 ? (delta > 0 ? -1 : 0) : startIndex;
-
+    const from = scopedItems.findIndex((entry) => entry.id === this.currentId);
+    let index = from < 0 ? (delta > 0 ? -1 : 0) : from;
+    let wraps = false;
     for (let i = 0; i < count; i++) {
-      index = (index + delta + count) % count;
+      const unwrapped = index + delta;
+      wraps ||= unwrapped < 0 || unwrapped >= count;
+      index = (unwrapped + count) % count;
       const candidate = scopedItems[index];
-      if (isEnabled(candidate)) {
-        this.currentId = candidate.id;
-        this.currentIsDefault = false;
-        return this.toFocusItem(candidate);
-      }
+      if (isEnabled(candidate)) return { item: candidate, wraps, from };
     }
-    return this.current();
+    return null;
   }
 
   private firstEnabledIdInScope(parentId: string | null): string | null {
-    return this.itemsInScope(parentId).find(isEnabled)?.id ?? null;
+    const enabled = this.itemsInScope(parentId).filter(isEnabled);
+    return (enabled.find((item) => !item.chrome) ?? enabled[0])?.id ?? null;
   }
 
   private itemsInScope(parentId: string | null): InternalItem[] {

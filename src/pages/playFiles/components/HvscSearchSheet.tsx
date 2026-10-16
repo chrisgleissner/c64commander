@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { msUntilT9LetterSettles } from "@/lib/input/t9FieldComposer";
 import { useCallback, useEffect, useState } from "react";
 import { Play, Radio, Search } from "lucide-react";
 
@@ -249,7 +250,7 @@ export const HvscSearchSheet = ({
               autoFocus
               placeholder="Title or composer…"
               value={search.query}
-              onChange={(event) => search.setQuery(event.target.value)}
+              onChange={(event) => search.setQuery(event.target.value, msUntilT9LetterSettles(event.target))}
               data-testid="hvsc-search-input"
               aria-label="Search HVSC by title or composer"
             />

@@ -31,14 +31,21 @@
  *
  * Usage:
  *   node tools/hil/keypad_reachability.mjs --package uk.gleissner.c64commander \
- *     [--routes 1,2,3,4,5,6] [--max-steps 120] [--out artifacts/keypad-reachability.json]
+ *     [--routes 1,2,3,4,5,6] [--max-steps 140] [--max-child-steps 600] [--out artifacts/keypad-reachability.json]
  *
- * Requires an existing `adb forward tcp:<CDP_PORT> localabstract:webview_devtools_remote_<pid>`.
+ * Forwards the swept phone's WebView to CDP_PORT itself, so the keys and the page reads reach the same phone.
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createDroidDevice } from "./droidctl_device.mjs";
+import {
+  OPEN_SECTIONS_EXPR,
+  chooseReachabilityTarget,
+  closeSectionsExpr,
+  sectionsOpenedDuring,
+} from "./reachability_sections.mjs";
+import { HANDSET_PACKAGE } from "./gate_target.mjs";
 
 const PORT = process.env.CDP_PORT || "9333";
 
@@ -53,13 +60,24 @@ const ROUTE_KEYS = arg("routes", "1,2,3,4,5,6")
   .map((s) => Number(s.trim()))
   .filter((n) => n >= 1 && n <= 6);
 const MAX_STEPS = Number(arg("max-steps", "140"));
+// Inside one card the walk ends when it wraps; the cap only bounds a ring that never does. A long playlist card holds
+// several hundred stops, and the page-level cap had cut it short and reported its later rows as unreachable.
+const MAX_CHILD_STEPS = Number(arg("max-child-steps", "600"));
 const OUT = arg("out", "");
 
-/** Android key codes. The Callback's keypad produces exactly these. */
-const KEY = { UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, CENTER: 23, BACK: 4, DIGIT: (d) => 7 + d };
+/** Android key codes as the target keypad produces them: its OK key arrives as ENTER, not D-pad Center. */
+const KEY = { UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, CENTER: 66, BACK: 4, DIGIT: (d) => 7 + d };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const device = await createDroidDevice();
+// With the handset and a Pixel both attached, droidctl's default choice is the Pixel while the DevTools forward
+// may point at the handset: keys then went to one phone and the walk read the other, and a working page graded as
+// unreachable. The phone is chosen from the edition, and its own WebView is forwarded before anything is read.
+const device = await createDroidDevice(
+  PACKAGE === HANDSET_PACKAGE
+    ? { choose: (targets) => chooseReachabilityTarget(targets, PACKAGE, HANDSET_PACKAGE) }
+    : {},
+);
+await device.forwardWebview(PACKAGE, Number(PORT));
 const key = (code) => device.pressKey(code);
 
 async function connect() {
@@ -157,7 +175,9 @@ const STATE_EXPR = String.raw`(() => {
 
   const inventory = [...scopeEl.querySelectorAll(INTERACTIVE)]
     .filter(visible)
-    .filter((e) => usable(e) && e.getAttribute('aria-hidden') !== 'true')
+    // The swipe layer keeps every tab mounted and hides the inactive ones from assistive tech on
+    // the slot, so the control's own attribute is not enough.
+    .filter((e) => usable(e) && !e.closest('[aria-hidden="true"]'))
     // A control inside a label is represented by its label; the ring stops on one of them.
     .map((e) => ({ id: idOf(e), tag: e.tagName, box: hitBox(e) }));
 
@@ -196,7 +216,7 @@ const STATE_EXPR = String.raw`(() => {
       isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter(usable).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)
-        .filter((e) => usable(e) && e.getAttribute('aria-hidden') !== 'true')
+        .filter((e) => usable(e) && !e.closest('[aria-hidden="true"]'))
         .map(idOf),
       // OK on a field row (a stop that is not a card) edits the row's first field, even when the
       // row also wraps rows of its own, as Settings' host row wraps the three port rows.
@@ -236,16 +256,31 @@ const STATE_EXPR = String.raw`(() => {
   };
 })()`;
 
+/**
+ * Sum of every scroll offset on the page, inner scrollers included, so a Down that scrolled toward
+ * unreachable text reads as progress.
+ */
+const SCROLL_EXPR = `[...document.querySelectorAll("*")].reduce((sum, el) => sum + el.scrollTop, document.scrollingElement.scrollTop)`;
+
 /** Walk the ring in the current scope until it wraps, recording every stop. */
+
 async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}) {
   const stops = [];
   const seen = new Map();
   let wrapped = false;
   let first = null;
+  let scroll = await evaluate(SCROLL_EXPR);
   for (let step = 0; step < maxSteps; step += 1) {
     await key(KEY.DOWN);
     await sleep(settleMs);
     const state = await evaluate(STATE_EXPR);
+    const scrolled = await evaluate(SCROLL_EXPR);
+    // On a page's last stop, Down scrolls the page to show what follows before it moves on.
+    if (state.current?.id && state.current.id === stops.at(-1)?.id && scrolled !== scroll) {
+      scroll = scrolled;
+      continue;
+    }
+    scroll = scrolled;
     if (!state.current) {
       stops.push({ step, id: null, note: "no ring selection" });
       continue;
@@ -291,7 +326,8 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
 
   // One lap plus a margin: the ring may have moved on since walkScope recorded it, and a descend
   // and Back can land a stop away from where it started.
-  const budget = stops.length * 2 + 8;
+  // Plus the presses that scroll a page past its last stop instead of moving the ring.
+  const budget = stops.length * 2 + 24;
   for (let step = 0; step < budget && pending.size > 0; step += 1) {
     const state = await evaluate(STATE_EXPR);
     const id = state.current?.id;
@@ -332,7 +368,7 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
     // Per card, so a child this sweep already saw under a different card does not end the descent
     // before it has started.
     const seenHere = new Set();
-    for (let child = 0; child < MAX_STEPS; child += 1) {
+    for (let child = 0; child < MAX_CHILD_STEPS; child += 1) {
       const current = await evaluate(STATE_EXPR);
       if (current.current?.id) {
         reached.add(current.current.id);
@@ -470,8 +506,12 @@ async function main() {
       }
       await key(KEY.DOWN);
       await sleep(300);
+      const openBefore = JSON.parse(await evaluate(OPEN_SECTIONS_EXPR));
       const walk = await walkScope(evaluate);
       const descended = await walkDescendants(evaluate, walk.stops);
+      // OK opens a closed card on the way in, and Back leaves it open: close what the sweep opened.
+      const opened = sectionsOpenedDuring(openBefore, JSON.parse(await evaluate(OPEN_SECTIONS_EXPR)));
+      if (opened.length) await evaluate(closeSectionsExpr(opened));
       const graded = grade(`digit-${digit}`, walk, descended);
       results.push({ ...graded, descended: [...descended], stopDetail: walk.stops });
       const flag = graded.pass ? "PASS" : "FAIL";
@@ -486,6 +526,7 @@ async function main() {
     }
   } finally {
     ws.close();
+    await device.close();
   }
 
   const failed = results.filter((r) => !r.pass);

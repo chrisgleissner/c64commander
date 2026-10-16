@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useId } from "react";
 import { Printer } from "lucide-react";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
@@ -81,6 +82,7 @@ export function PrinterManager({
   getTelnetActionSupport,
 }: PrinterManagerProps) {
   const { profile } = useDisplayProfile();
+  const labelId = useId();
   const trace = useActionTrace("PrinterManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
   const { refetchDrives, printerConfig, printerDevice } = usePrinterData(isConnected);
@@ -234,7 +236,9 @@ export function PrinterManager({
             )}
           >
             <div className="inline-summary-label-value-pair flex items-center justify-between gap-2">
-              <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
+              <span id={`${labelId}-bus`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+                Bus ID
+              </span>
               <Select
                 value={String(printerBusValue)}
                 onValueChange={(value) =>
@@ -254,7 +258,11 @@ export function PrinterManager({
                   )
                 }
               >
-                <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-printer-bus">
+                <SelectTrigger
+                  className={inlineSelectTriggerClass}
+                  data-testid="home-printer-bus"
+                  aria-labelledby={`${labelId}-bus`}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -277,7 +285,12 @@ export function PrinterManager({
                   key={entry.itemName}
                   className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
                 >
-                  <span className="shrink-0 text-muted-foreground whitespace-nowrap">{entry.label}</span>
+                  <span
+                    id={`${labelId}-${entry.itemName.replace(/\s+/g, "-")}`}
+                    className="shrink-0 text-muted-foreground whitespace-nowrap"
+                  >
+                    {entry.label}
+                  </span>
                   <Select
                     value={entry.value}
                     onValueChange={(value) =>
@@ -294,6 +307,7 @@ export function PrinterManager({
                     <SelectTrigger
                       className={inlineSelectTriggerClass}
                       data-testid={`home-printer-${entry.itemName.toLowerCase().replace(/\s+/g, "-")}`}
+                      aria-labelledby={`${labelId}-${entry.itemName.replace(/\s+/g, "-")}`}
                     >
                       <SelectValue>{formatPrinterOptionLabel(entry.value)}</SelectValue>
                     </SelectTrigger>

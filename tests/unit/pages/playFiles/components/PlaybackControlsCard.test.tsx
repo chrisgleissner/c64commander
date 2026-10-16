@@ -14,6 +14,8 @@ import type { NowPlayingMetadataSegment } from "@/lib/playback/nowPlayingMetadat
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
 
+import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
+import type { PlaybackTimeDisplay, PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import {
   PlaybackControlsCard,
   type PlaybackControlsCardProps,
@@ -42,7 +44,27 @@ const metadataParts = (author: string, released?: string, ...facts: string[]): N
   ...facts.map((text): NowPlayingMetadataSegment => ({ text, kind: "detail", row: "facts" })),
 ];
 
-const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
+const shownTime = (display: Partial<PlaybackTimeDisplay>): PlaybackTimeline => {
+  const shown: PlaybackTimeDisplay = {
+    progressPercent: 0,
+    elapsedLabel: "0:00",
+    remainingLabel: "0:00",
+    totalLabel: "0:00",
+    remainingTotalLabel: "0:00",
+    ...Object.fromEntries(Object.entries(display).filter(([, value]) => value !== undefined)),
+  };
+  return { playbackTime: createPlaybackTimeStore(), display: () => shown };
+};
+
+const buildProps = ({
+  progressPercent,
+  elapsedLabel,
+  remainingLabel,
+  totalLabel,
+  remainingTotalLabel,
+  ...overrides
+}: Partial<PlaybackControlsCardProps> & Partial<PlaybackTimeDisplay> = {}): PlaybackControlsCardProps => ({
+  timeline: shownTime({ progressPercent, elapsedLabel, remainingLabel, totalLabel, remainingTotalLabel }),
   hasCurrentItem: false,
   currentItemLabel: null,
   canTransport: true,
@@ -58,11 +80,6 @@ const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): Playbac
   onStop: vi.fn(),
   onPauseResume: vi.fn(),
   onNext: vi.fn(),
-  progressPercent: 0,
-  elapsedLabel: "0:00",
-  remainingLabel: "0:00",
-  totalLabel: "0:00",
-  remainingTotalLabel: "0:00",
   volumeControls: <div data-testid="volume-controls-placeholder" />,
   shuffleEnabled: false,
   onShuffleChange: vi.fn(),

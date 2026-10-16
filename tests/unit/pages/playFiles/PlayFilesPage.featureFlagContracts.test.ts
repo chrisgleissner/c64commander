@@ -46,15 +46,9 @@ describe("PlayFilesPage feature-flag contracts", () => {
     );
     expect(playFilesPageSource).toContain("await BackgroundExecution.setDueAtMs({ dueAtMs: nextDueAtMs });");
     expect(playFilesPageSource).toContain(
-      'addLog("debug", "Cleared background auto-advance watchdog after auto next with no remaining guard"',
+      "const outcome = resolveBackgroundAdvanceOutcome(expectedTrackInstanceId, nextGuard);",
     );
-    expect(playFilesPageSource).toContain(
-      '"Background auto-advance did not move to a new track instance; cleared stale watchdog"',
-    );
-    expect(playFilesPageSource).toContain(
-      '"Background auto-advance fired while the app\'s own advance to the next track was under way"',
-    );
-    expect(playFilesPageSource).toContain('nextGuard.autoFired ? "debug" : "warn"');
+    expect(playFilesPageSource).toContain("BACKGROUND_ADVANCE_LOG_MESSAGES[outcome");
     expect(playFilesPageSource).toContain("setAutoAdvanceDueAtMs(null);");
     expect(playFilesPageSource).toContain("setAutoAdvanceDueAtMs(nextGuard.dueAtMs);");
     expect(playFilesPageSource).toContain("await queueBackgroundDueAtUpdateRef.current(null);");

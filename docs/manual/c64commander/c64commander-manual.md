@@ -67,7 +67,7 @@ If it finds one, the app opens **Choose your C64**:
 2. Choose **Save** to keep the device for later.
 3. If the device has a password, enter its network password when asked.
 
-If it finds nothing, C64 Commander opens **No C64 found** so you can set it up by hand.
+If it finds nothing and no saved device has ever connected, C64 Commander opens **No C64 found** so you can set it up by hand.
 
 Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.168.1.64`, then choose **Connect**. If the device asks for a password, the same dialog asks you for it before saving and connecting.
 
@@ -93,7 +93,7 @@ Let's take a walk through the app, one page at a time. First come two things you
 
 The badge in the top right corner tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. If the app is offline, the same tap also tries to reconnect.
 
-If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
+If you have saved more than one device, the badge does a little more. It shows the name of the device you are using; on a narrow screen the name has the top line of the badge to itself. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.
 
 ### Moving Between Pages
 
@@ -188,7 +188,7 @@ Choose **Add items** (it reads **Add more items** once the list has something in
 
 The picker stays inside the source you chose, so **Up** never wanders off somewhere else. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means just that folder or everything beneath it. That can be the difference between adding twelve files and twelve thousand.
 
-> **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue.
+> **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue. On a small screen the button sits at the top of the sheet and reads **Add** with the count.
 
 ![C64U file picker](../../img/app/play/import/profiles/medium/02-c64u-file-picker.png)
 
@@ -204,6 +204,12 @@ A short list fits on the Play page. When it grows, open **View all**. There you 
 
 A filter only hides rows; it never changes the playlist. Clear the box and the whole queue comes back.
 
+The **Songs**, **Progs** and **Disks** boxes narrow the list by kind: SID and MOD music, PRG programs and CRT cartridges, or disk images. On the smallest screens the filter folds into a single **Filter** row once you move on to the list. The row still says what is being filtered, and a tap or OK opens it again.
+
+When the list is long, a column of letters runs down the right edge of View all. Touch or drag along it and the list jumps to the first item that starts with that letter. That item is selected, so its play button, or OK, starts it at once.
+
+With a keypad, a number key does the same for its letters: `2` once for A, twice for B. On a hardware keyboard, a letter key goes straight to that letter.
+
 Every item remembers where it came from. Local files stay local, C64U files point back at the device, archive results remember their source, and SID entries carry their tunes and lengths with them.
 
 Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.
@@ -212,9 +218,9 @@ The transport controls run the show: play, stop, pause and resume, previous and 
 
 **Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
 
-Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.
+Each row's **⋮** button opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.
 
-Playback carries on when you leave the app or lock your phone or tablet, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one.
+Playback carries on when you leave the app or lock your phone or tablet, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one. On Android 13 and later, the app asks once for permission to show this notification, shortly after it first connects and before you play anything. If you decline, playback works the same without it.
 
 Play is the quick way to start a disk and see what it does. When the drives or your disk collection are what you are after, go to Disks.
 
@@ -234,7 +240,7 @@ Add a single image, a folder of them, or a result from the online archive. When 
 
 Filter by name, path or group to find something. A filter never deletes or moves anything.
 
-Mounting is what the page is for. Choose the disk, choose the drive, mount it; **Eject** empties the drive again. Each disk's menu also offers **Rename disk**, which changes the name in your collection and leaves the file itself alone.
+Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.
 
 Come to Disks whenever more than one disk is involved: the collection, the groups and the drives are all on one page. The drives themselves are explained in [Drives and Disk Images](#drives-and-disk-images).
 
@@ -244,11 +250,11 @@ Config holds every setting your machine has, laid out as one searchable tree.
 
 ![Config overview](../../img/app/config/profiles/medium/01-overview.png)
 
-Every category the device reports has a card of its own. Open one and edit its rows directly. Each item gets the control that suits it: a slider, a select, a checkbox, a text field, or a password field that hides what you type. The app remembers which cards you left open.
+On a Commodore 64 Ultimate the cards follow the machine's own setup menu, such as **Video setup** and **Audio setup**; on other machines each category the device reports has a card of its own. Open one and edit its rows directly. Each item gets the control that suits it: a slider, a select, a checkbox, a text field, or a password field that hides what you type. The app remembers which cards you left open.
 
-Config edits the live machine, not a draft. A change goes to the device the moment you make it. Most take effect at once; a few, such as the cartridge choice, wait for the next reset. To make a change survive a power cycle, see [Configuration and Saving](#configuration-and-saving).
+Config edits the live machine, not a draft, and has no Save button of its own: saving to flash is on Home's **Config** card. A change goes to the device the moment you make it. Most take effect at once; a few, such as the cartridge choice, wait for the next reset. To make a change survive a power cycle, see [Configuration and Saving](#configuration-and-saving).
 
-Come here when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the pages and groups whose names match. After changing a value, let the write finish before you change a related one. For everyday settings, the cards on Home are quicker.
+Come here when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the cards whose page, group or setting names match, so a setting can be found by its own name. After changing a value, let the write finish before you change a related one. For everyday settings, the cards on Home are quicker.
 
 ### Settings
 
@@ -314,7 +320,9 @@ Docs is the built-in help page: a pocket version of this manual, inside the app.
 
 ![Docs overview](../../img/app/docs/profiles/medium/01-overview.png)
 
-It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.
+It has a chapter of numbered steps for each main task: getting started, playing from HVSC, finding a tune, the playlist, SID Radio, where the sound plays, disks, Remote Input, Game Mode, Live View, Config, saving and restoring, devices, connection problems, the keypad keys, the status badge, and Diagnostics. **Contents**, at the top, jumps straight to a chapter.
+
+With a keypad or keyboard, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it. The page ends with links to the official device manuals and reference material.
 
 ### Diagnostics
 
@@ -387,7 +395,7 @@ Preferred path: choose C64U for files already on your C64, and Local for files o
 5. Confirm the selection.
 6. Open **View all** if the list is long.
 
-To search instead of browsing, type in the box at the top and choose **Everywhere**. **This folder**, where the box starts, only narrows what is on screen. **Everywhere** searches the whole source by title or composer, which for HVSC means all sixty thousand or so files.
+To search instead of browsing, type in the box at the top and choose **Everywhere**; on a small screen a single button shows the current choice and switches it. **This folder**, where the box starts, only narrows what is on screen. **Everywhere** searches the whole source by title or composer, which for HVSC means all sixty thousand or so files.
 
 Some sources have to be read one folder at a time, such as a folder on your device or the card in your C64. These offer a **Scan** button instead of searching as you type.
 
@@ -456,7 +464,7 @@ Preferred path: set the drive up first, then mount.
 1. Try Home's own cards first: CPU & RAM, Ports, Video, Audio, User Interface, Lighting.
 2. If the setting is not there, open **Config** and search.
 3. Change the value.
-4. To make the change survive a power cycle, use **Save** (**To flash**) in the **Config** card, unless **Keep device settings after a restart** is already on.
+4. To make the change survive a power cycle, use **Save** (**To flash**) in the **Config** card on Home, unless **Keep device settings after a restart** is already on.
 
 Preferred path: Home for common settings; Config for everything else.
 
@@ -532,11 +540,11 @@ Playing on your C64:
 
 #### The sound itself
 
-**Volume** and **Mute** follow whichever machine is making the sound. Playing here, they change this tune alone and leave your ringer and notifications as they were. Playing on the C64, they move the machine’s own mixer.
+**Volume** and **Mute** follow whichever machine is making the sound. Playing here, they change this tune alone and leave your ringer and notifications as they were. Playing on the C64, they move the machine’s own mixer, so with **Both** chosen, **Mute** silences your C64 and the sound it sends here alike. If you choose **Here** while your C64 is muted, the mute moves with the sound: your C64 returns to the volume it had before, and the tune here starts muted, with **Unmute** where you expect it.
 
 Your phone or tablet plays either its own tune or the sound sent from your C64, never both at once. Whichever you start last wins.
 
-The rest is under **Settings → SID Radio**. **Crossfade** blends one tune into the next: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off.
+The rest is under **Settings → SID Radio**. **Crossfade** blends one tune into the next: **Off (clean cut)**, or **Short (0.6s)**, **Medium (1.5s)**, **Long (3s)** or **Longest (4s)**. It starts at Off.
 
 Only your phone or tablet can play two tunes at once, so Crossfade is grayed out while the output is set to **C64** or **Both**.
 
@@ -558,7 +566,7 @@ There is no playlist to build, and nothing downloads while you listen. Once the 
 
 #### The spectrum and audio processing
 
-On an Android phone or tablet, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, from teal for quiet through green and amber to red near the loudest, and the small cap above a bar is that pitch's recent peak. **Level** and **Peak** give the overall loudness in dB, and the **Clip** lamp lights for a moment when the sound reaches the top of its range. It covers every sound your phone or tablet plays: a tune playing on it, and your C64's sound when Live View plays it here. It does not show sound that comes out of the C64 itself.
+On an Android phone or tablet, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, green for most levels, turning yellow, orange and red as the level nears full scale, and the small cap above a bar is that pitch's recent peak. Above the spectrum, each audio output channel has one horizontal meter that grows from left to right toward 0: the solid fill shows its average level, a translucent extension shows its instantaneous peak, and a thin marker holds its recent highest peak. A red block at the right end of a meter lights briefly when this channel reaches full scale. **L** and **R** are the left and right playback channels, including the mix from multiple SID chips. The rows stay in place even when both channels match. The scale under the meters is in dBFS, where 0 is full scale and the loudest a digital signal can be. When a tune plays on your phone or tablet, the bars follow what its speaker is playing at that moment, after the audio processing described below. When Live View plays your C64's sound here, the bars follow your C64's own sound as it arrives, before that processing, so they keep time with your C64 rather than with the copy your phone or tablet plays a moment later.
 
 ![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/medium/01-spectrum.png)
 
@@ -608,7 +616,7 @@ Your choices stay on your phone or tablet. They belong to the music itself, not 
 
 **It never repeats itself.** No tune plays twice. A mood takes one tune from each file, while a collection plays every tune on its list, even two from the same file.
 
-**A mood skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything. A collection plays every tune on its list, however short.
+**A mood skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play (seconds)**, or set it to zero to hear everything. A collection plays every tune on its list, however short.
 
 **It can run out.** A station follows a chain of similar tunes, and now and then it reaches the end, usually after many skips. The app tells you, and you can pick another mood.
 
@@ -654,7 +662,7 @@ The second is what the individual tunes inside a file are called. A list of nine
 
 #### Stopping later
 
-A station never stops on its own, so set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or 15, 30, 45 or 60 minutes. It counts down while it waits; **Off** cancels it.
+A station never stops on its own, so set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.
 
 ### Live View
 
@@ -664,12 +672,12 @@ There is only ever one Live View. Start it in one place, and it keeps playing wh
 
 You find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it. The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it. Inside are two switches:
 
-- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a matching dot in the top bar reminds you it is playing; tap it to stop everything at once.
+- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a speaker mark in the header badge reminds you it is playing.
 - **Watch** turns the picture on. A small preview of the C64 screen appears beneath the switches; tap the chevron beside it to make it bigger.
 
 ![Live View on Home](../../img/app/home/content-explorer/profiles/medium/01-live-view.png)
 
-While either is playing, a **Reset** in the card's header stops both, without opening the card.
+While either is playing, the header badge carries a small mark, a screen for the picture or a speaker for the sound alone, and **Stop** in the card's header stops both without opening the card. From any other page, **Stop Live View** in the Quick menu does the same.
 
 If the stream stops reaching the device running the app, because the network drops out or the machine is switched off, Live View tells you so. You never sit in front of a frozen picture wondering.
 
@@ -799,6 +807,8 @@ Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap a
 
 **Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.
 
+With a keyboard or D-pad, **F2** (the Menu soft key) opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. While the joystick is in use, the arrow keys steer and OK fires, so this menu is the way to the other controls. **Back** then gives the keys back to your C64. In **Keys**, the arrow keys move between the keys on the screen and OK presses the selected one.
+
 ![Remote Input keyboard mode](../../img/app/home/remote-input/04-keyboard-medium.png)
 
 The **Joystick** tab needs the device's `machine:input` REST endpoint. The app simply asks for it. If your machine answers, the tab appears; if not, you get **Keys** only. The endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**, and with Ultimate 64, Ultimate 64 Elite and Ultimate 64 Elite II firmware **3.15**.
@@ -811,7 +821,7 @@ If the device has a password, enter it in Settings first. Joystick and Keys both
 
 No key is ever left stuck down on the real C64. Everything is released when you close the sheet, change mode or port, switch device, or send the app to the background. If a message does not get through, the header shows **Reconnecting…** until the next one does.
 
-Tap **Release All** at any time to let go of every key and button at once.
+Tap **Release all** at any time to let go of every key and button at once.
 
 _Availability: on by default. Turn it off under **Remote Input** in Settings → Stable Features._
 
@@ -965,13 +975,13 @@ One more control, **Flush/Eject**, finishes the current page and sends it on. It
 
 Your machine keeps two copies of its settings: the **live** ones it is using now, and a **flash** copy it loads at power-on. Every change you make, on Home, on Disks, or in Config, goes live at once. It survives a reboot or power cycle only once it reaches flash.
 
-Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** in the Config card to write the current settings to flash once.
+Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** (**To flash**) on Home's **Config** card to write the current settings to flash once.
 
 The machine's own **Auto save config** does not cover this. It decides whether the machine saves changes you make in its on-screen setup menu, and has no effect on changes made from the app.
 
 On a Commodore 64 Ultimate, set it at **C= + RESTORE → User interface → Auto save config**. C64 Commander mirrors that menu in Config as **User interface → Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.
 
-Beside **Save** on the **Config** card are **Load** from flash, **Reset** to the factory settings, and **Revert**, which puts back the settings the device had when the app first connected to it. The app also keeps its own named **configuration snapshots** on the phone or tablet, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.
+Beside **Save** on the **Config** card are **Load** from flash, **Reset** (**To default**) to the device's default settings, and **Revert**, which puts back the settings the device had when the app first connected to it. The app also keeps its own named **configuration snapshots** on the phone or tablet, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.
 
 ### Switching Between Devices
 
@@ -989,9 +999,9 @@ Tap the chevron to open a row and read the checks one by one. That tells a sleep
 
 Tap a device to switch to it. First the app lets go of any keys you were holding on the old device and stops following its playback. Then it points itself at the new device's address and ports, and checks that it answers. Meanwhile the new device shows a **Verifying** pill; once it responds, it becomes the active device.
 
-You add and edit saved devices in **Settings → Connection**, under **Saved devices**. Set each one's **Device name**, **C64U hostname / IP**, **HTTP**, **FTP** and **Telnet** ports, and **Network Password**, or delete one you no longer need.
+You add and edit saved devices in **Settings → Connection**, under **Saved devices**. **Add device** asks for a **Device name**, the **C64U hostname / IP** and the **HTTP**, **FTP** and **Telnet** ports. The **Network Password** is set on the **Connection** card for the device in use: switch to a device, then fill it in. **Delete device** removes the device in use.
 
-**Save & Connect** waits for the device to answer before keeping it. With only one device saved, there is nothing to switch to, and the switcher stays out of your way.
+**Save & Connect** waits for the device to answer before it keeps a new address; a new name or port is saved straight away. With only one device saved, there is nothing to switch to: `#` says so, and a long-press on the badge acts as a tap.
 
 ### Reading Diagnostics
 
@@ -1001,7 +1011,7 @@ Notifications appear just above the tabs at the bottom of the screen, never on t
 
 The panel has three parts, from top to bottom:
 
-- The **health header** shows the state (Healthy, Degraded, Unhealthy, Idle, Unavailable, or Offline when there is no connection), which device it is about, and when it was last checked. Tap **Run health check** to test the connection now. The check tries the web, FTP and Telnet services, then three signals from the C64 itself: CONFIG, RASTER and JIFFY. Each reports its own result and timing, beside the overall latency. Open the header to read them one by one.
+- The **health header** shows the state (Healthy, Degraded, Unhealthy, Idle, or Unavailable, which is what it shows while the app is offline), which device it is about, and when it was last checked. Tap **Run health check** to test the connection now. The check tries the web, FTP and Telnet services, then three signals from the C64 itself: CONFIG, RASTER and JIFFY. Each reports its own result and timing, beside the overall latency. Open the header to read them one by one.
 - The **Filters** bar says how much of the activity you are seeing, and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by where it came from (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also has five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.
 - The **Activity** list gathers problems, actions, logs, and traces together. Problems give a plain-language summary; Traces show the timing and order of requests. Tap any row for the full details.
 

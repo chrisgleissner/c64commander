@@ -1816,7 +1816,7 @@ export const HomeDiskManager = () => {
         const folderPath = getDiskFolderPath(disk.path);
         if (folderPath !== lastFolder) {
           acc.push({
-            id: `folder:${folderPath}`,
+            id: `folder:${folderPath}:${disk.id}`,
             title: folderPath,
             variant: "header",
             icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
@@ -2764,7 +2764,7 @@ export const HomeDiskManager = () => {
             >
               Remove
             </Button>
-            <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)}>
+            <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)} data-open-focus>
               Cancel
             </Button>
           </DialogFooter>
@@ -2785,7 +2785,7 @@ export const HomeDiskManager = () => {
             <Button variant="outline" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
               Remove
             </Button>
-            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)}>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} data-open-focus>
               Cancel
             </Button>
           </DialogFooter>

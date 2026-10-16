@@ -17,6 +17,11 @@ interface QuickActionCardProps {
   icon: LucideIcon;
   label: string;
   description?: string;
+  /**
+   * The name read for the tile when its one-word label is ambiguous on the page, as the Config card's
+   * three Save tiles are. The keypad guidance bar shows it.
+   */
+  accessibleLabel?: string;
   onClick: () => void;
   variant?: "default" | "danger" | "success";
   disabled?: boolean;
@@ -37,6 +42,7 @@ export function QuickActionCard({
   icon: Icon,
   label,
   description,
+  accessibleLabel,
   onClick,
   variant = "default",
   disabled = false,
@@ -78,6 +84,7 @@ export function QuickActionCard({
       // their visible label, which is one word shared with other controls on the same page.
       id={dataTestId}
       data-testid={dataTestId}
+      aria-label={accessibleLabel}
       className={cn(
         "quick-action",
         // `px-0.5`, not the `p-2.5` this used to be on both axes. Horizontal padding is width the

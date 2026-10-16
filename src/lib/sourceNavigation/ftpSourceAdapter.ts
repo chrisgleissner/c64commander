@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
+import { isRefusedFtpListing, listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
@@ -108,6 +108,35 @@ const clearCachedEntriesUnderPrefix = (host: string, port: number | undefined, p
   saveCache(cache);
 };
 
+const folderName = (path: string) => path.replace(/\/+$/, "").replace(/^.*\//, "");
+const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/*
+ * The Ultimate's FTP server answers LIST for a folder it cannot open (an unreadable SD card) by
+ * listing the parent filtered to the folder's own name (`vfs_opendir` in 1541ultimate), so the
+ * folder appears to contain itself. One level down the parent is unreadable too, and the server
+ * refuses with 451. A real same-named child lists normally, even when it is empty.
+ */
+const isUnreadableFolderEcho = async (
+  request: { host: string; port: number; password: string },
+  path: string,
+  entries: { type: string; name: string; path: string }[],
+) => {
+  const [only] = entries;
+  if (path === "/" || entries.length !== 1 || only.type !== "dir") return false;
+  if (only.name.toLowerCase() !== folderName(path).toLowerCase()) return false;
+  try {
+    await listFtpDirectory({ ...request, path: only.path, refusalExpected: true });
+    return false;
+  } catch (error) {
+    if (isRefusedFtpListing(error)) {
+      addLog("info", "The C64 could not read a folder", { path, checkedWith: only.path, error: describeError(error) });
+      return true;
+    }
+    throw new Error(`Could not check whether ${path} can be read: ${describeError(error)}`, { cause: error });
+  }
+};
+
 const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
@@ -118,12 +147,11 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
     if (cached) return cached;
   }
 
-  const result = await listFtpDirectory({
-    host,
-    port: getStoredFtpPort(),
-    password,
-    path: normalizedPath,
-  });
+  const request = { host, port: getStoredFtpPort(), password };
+  const result = await listFtpDirectory({ ...request, path: normalizedPath });
+  if (await isUnreadableFolderEcho(request, normalizedPath, result.entries || [])) {
+    throw new Error(`The C64 could not read ${normalizedPath}. Check that its storage is inserted and readable.`);
+  }
   const entries = (result.entries || []).map((entry) => ({
     type: entry.type,
     name: entry.name,

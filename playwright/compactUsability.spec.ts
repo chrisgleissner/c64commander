@@ -318,6 +318,11 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
   });
 
   test("the Add items browser leaves room for the file list", async ({ page }) => {
+    await page.addInitScript(() =>
+      document.addEventListener("DOMContentLoaded", () => {
+        document.body.style.fontFamily = '"DejaVu Sans", sans-serif';
+      }),
+    );
     await openCompact(page, "/play");
 
     await page.getByRole("button", { name: /Add items|Add more items/i }).click();
@@ -637,7 +642,9 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await dismiss(page, radio);
 
     await page.getByTestId("playlist-item").first().getByRole("button", { name: "Item actions" }).click();
-    await page.getByRole("menuitem", { name: "Review playback config" }).click();
+    const itemSheet = page.getByTestId("action-list-item-sheet");
+    await audit.check(page, "Play / Item actions", itemSheet, "list");
+    await itemSheet.getByRole("button", { name: "Review playback config" }).click();
     const config = page.getByRole("dialog").filter({ hasText: "Playback config" }).last();
     await audit.check(page, "Play / Playback config", config, "form");
     await dismiss(page, config);
@@ -769,7 +776,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       ["Remove from collection", "Remove disk?", "confirmation"],
     ] as const) {
       await page.getByTestId("disk-row").first().getByRole("button", { name: "Item actions" }).click();
-      await page.getByRole("menuitem", { name: menuItem }).click();
+      await page.getByTestId("action-list-item-sheet").getByRole("button", { name: menuItem }).click();
       const dialog = page.getByRole("dialog", { name }).last();
       await audit.check(page, `Disks / ${name}`, dialog, kind);
       await dismiss(page, dialog);
@@ -819,7 +826,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       .first()
       .getByRole("button", { name: "Item actions" })
       .click();
-    const explorer = page.getByRole("menuitem", { name: /Open \(Disk Explorer\)/ });
+    const explorer = page.getByTestId("action-list-item-sheet").getByRole("button", { name: /Open \(Disk Explorer\)/ });
     await explorer.scrollIntoViewIfNeeded();
     await explorer.click();
 
@@ -842,6 +849,11 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     const deleteDevice = page.getByRole("alertdialog", { name: "Delete device?" });
     await audit.check(page, "Settings / Delete device?", deleteDevice, "confirmation");
     await dismiss(page, deleteDevice);
+
+    await page.getByTestId("settings-add-device").click();
+    const addDevice = page.getByTestId("settings-add-device-dialog");
+    await audit.check(page, "Settings / Add device", addDevice, "form");
+    await dismiss(page, addDevice);
 
     // The Device Safety card holds exactly one Select, so the combobox role is unambiguous.
     const safety = page.getByTestId("settings-section-device-safety");

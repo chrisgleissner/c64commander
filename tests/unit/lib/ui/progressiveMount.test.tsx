@@ -7,8 +7,10 @@
  */
 
 import { act, render, screen } from "@testing-library/react";
-import { useRef } from "react";
+import { startTransition, Suspense, useLayoutEffect, useRef } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import { mountAllWaiting, setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 
@@ -27,12 +29,29 @@ const Card = ({
   attachAnchor?: boolean;
 }) => {
   const anchor = useRef<HTMLElement | null>(null);
-  const mounted = useProgressiveMount(wanted, anchor, rememberedHeight);
+  const mounted = useProgressiveMount({ scope: "test", id }, wanted, anchor, rememberedHeight);
   return (
     <section ref={attachAnchor ? anchor : undefined} data-top={top} data-section-scope="test" data-section-id={id}>
       {wanted && mounted ? <div data-testid={`body-${id}`} /> : <div data-testid={`pending-${id}`} />}
     </section>
   );
+};
+
+/** Busy for longer than React's 5 ms time slice, so a transition render yields to the event loop after each card. */
+const SlowCard = (props: { id: string; wanted: boolean }) => {
+  const end = performance.now() + 8;
+  while (performance.now() < end) {
+    /* hold the render past React's time slice */
+  }
+  return <Card {...props} />;
+};
+
+const BodiesAtFirstCommit = ({ onCommit, children }: { onCommit: (bodies: number) => void; children: ReactNode }) => {
+  const host = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    onCommit(host.current?.querySelectorAll('[data-testid^="body-"]').length ?? -1);
+  }, [onCommit]);
+  return <div ref={host}>{children}</div>;
 };
 
 const nextPaintAndTask = () =>
@@ -263,6 +282,76 @@ describe("useProgressiveMount", () => {
 
     await nextTask();
     expect(screen.getByTestId("body-d")).toBeInTheDocument();
+  });
+
+  it("builds only two offscreen bodies in a first render that React time-slices across several tasks", async () => {
+    const reactGlobal = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const actEnvironment = reactGlobal.IS_REACT_ACT_ENVIRONMENT;
+    reactGlobal.IS_REACT_ACT_ENVIRONMENT = false;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      const committed = new Promise<number>((resolve) => {
+        startTransition(() =>
+          root.render(
+            <BodiesAtFirstCommit onCommit={resolve}>
+              {["a", "b", "c", "d", "e", "f"].map((id) => (
+                <SlowCard key={id} id={id} wanted />
+              ))}
+            </BodiesAtFirstCommit>,
+          ),
+        );
+      });
+      expect(await committed).toBe(2);
+    } finally {
+      root.unmount();
+      container.remove();
+      reactGlobal.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+    }
+  });
+
+  it("gives the first two cards their immediate bodies again when React restarts the render that first draws them", async () => {
+    const reactGlobal = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const actEnvironment = reactGlobal.IS_REACT_ACT_ENVIRONMENT;
+    reactGlobal.IS_REACT_ACT_ENVIRONMENT = false;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    let release: () => void = () => undefined;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let released = false;
+    const SuspendsUntilReleased = () => {
+      if (!released) throw pending;
+      return null;
+    };
+    try {
+      const committed = new Promise<number>((resolve) => {
+        startTransition(() =>
+          root.render(
+            <Suspense fallback={null}>
+              <BodiesAtFirstCommit onCommit={resolve}>
+                {["a", "b", "c", "d"].map((id) => (
+                  <Card key={id} id={id} wanted />
+                ))}
+                <SuspendsUntilReleased />
+              </BodiesAtFirstCommit>
+            </Suspense>,
+          ),
+        );
+        setTimeout(() => {
+          released = true;
+          release();
+        }, 20);
+      });
+      expect(await committed).toBe(2);
+    } finally {
+      root.unmount();
+      container.remove();
+      reactGlobal.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+    }
   });
 
   it("mounts a card that starts on screen before the first paint, however many came before it", () => {

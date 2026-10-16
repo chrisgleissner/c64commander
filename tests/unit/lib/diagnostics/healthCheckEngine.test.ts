@@ -144,6 +144,7 @@ import { clearHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { getHealthCheckStateSnapshot, resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import { getTraceEvents, resetTraceSession } from "@/lib/tracing/traceSession";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
+import { explainSkippedProbe } from "@/lib/diagnostics/skippedProbeExplanation";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -545,6 +546,94 @@ describe("runHealthCheckForTarget", () => {
 
     expect(result.probes.CONFIG.outcome).toBe("Skipped");
     expect(mockSetConfigValue).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["switch-device dialog", HEALTH_CHECK_CONTEXTS.switchDeviceDialog, false],
+    ["background maintenance", HEALTH_CHECK_CONTEXTS.backgroundMaintenance, false],
+    ["unreachable device", HEALTH_CHECK_CONTEXTS.switchDeviceDialog, true],
+  ])("records skip reasons that have a plain-language explanation (%s)", async (_, context, unreachable) => {
+    setupAllProbesSuccess();
+    if (unreachable) mockGetInfo.mockRejectedValue(new Error("Connection refused"));
+
+    const result = await runHealthCheckForTarget(
+      { deviceHost: "c64u", ftpPort: 21, telnetPort: 23, password: null },
+      { context },
+    );
+
+    const skipped = Object.values(result.probes).filter((probe) => probe.outcome === "Skipped");
+    expect(skipped.length).toBeGreaterThan(0);
+    skipped.forEach((probe) => {
+      const explanation = explainSkippedProbe(probe.reason);
+      expect(explanation, probe.reason ?? "").not.toBe(probe.reason);
+      expect(explanation, probe.reason ?? "").toMatch(/^Not (checked|finished)/);
+    });
+  });
+
+  describe("probe timeouts measure the device, not the app's queue", () => {
+    type ReadMemoryOptions = { __c64uOnDispatch?: () => void };
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+    const target = { deviceHost: "c64u", ftpPort: 21, telnetPort: 23, password: null };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("passes RASTER and JIFFY that wait 2.5 s in the queue and then answer in 20 ms", async () => {
+      setupAllProbesSuccess();
+      mockReadMemory.mockImplementation(async (addr: string, _length: number, options: ReadMemoryOptions) => {
+        await sleep(2500);
+        options.__c64uOnDispatch?.();
+        await sleep(20);
+        return addr === "00A2" ? jiffyBytes : new Uint8Array([0x42]);
+      });
+
+      const run = runHealthCheckForTarget(target, { context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog });
+      await vi.advanceTimersByTimeAsync(6000);
+      const result = await run;
+
+      expect(result.probes.RASTER).toMatchObject({ outcome: "Success", reason: null });
+      expect(result.probes.JIFFY).toMatchObject({ outcome: "Success", reason: null });
+    });
+
+    it("passes RASTER in a manual health check that waits 2.5 s in the queue", async () => {
+      setupAllProbesSuccess();
+      mockReadMemory.mockImplementation(async (addr: string, _length: number, options: ReadMemoryOptions) => {
+        await sleep(2500);
+        options.__c64uOnDispatch?.();
+        return addr === "00A2" ? jiffyBytes : new Uint8Array([0x42]);
+      });
+
+      const run = runHealthCheck();
+      await vi.advanceTimersByTimeAsync(8000);
+      const result = await run;
+
+      expect(result!.probes.RASTER.outcome).toBe("Success");
+      expect(result!.probes.JIFFY.outcome).toBe("Success");
+    });
+
+    it("still fails RASTER when the device does not answer within 1500 ms of the request being sent", async () => {
+      setupAllProbesSuccess();
+      mockReadMemory.mockImplementation(async (addr: string, _length: number, options: ReadMemoryOptions) => {
+        if (addr === "00A2") return jiffyBytes;
+        await sleep(1000);
+        options.__c64uOnDispatch?.();
+        return new Promise<Uint8Array>(() => {});
+      });
+
+      const run = runHealthCheckForTarget(target, { context: HEALTH_CHECK_CONTEXTS.switchDeviceDialog });
+      await vi.advanceTimersByTimeAsync(2499);
+      expect(mockReadMemory).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(4000);
+      const result = await run;
+
+      expect(result.probes.RASTER).toMatchObject({ outcome: "Fail", reason: "RASTER timed out after 1500ms" });
+      expect(result.probes.JIFFY.outcome).toBe("Success");
+    });
   });
 
   it("reports the explicit target as offline when the device is unreachable even if the current runtime is in demo mode", async () => {

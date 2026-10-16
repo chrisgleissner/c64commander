@@ -29,6 +29,7 @@ import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
@@ -42,9 +43,10 @@ import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { T9FieldListener } from "@/components/input/T9FieldListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { TourHost } from "@/components/tour/TourHost";
+import { NotificationPermissionMoment } from "@/components/NotificationPermissionMoment";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestDeviceSwitcherOpen, requestMachineCommand, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
-import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
+import { deviceSupportsGameMode, GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
@@ -285,6 +287,8 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   // The sheet is mounted by Home and Play, so a request raised anywhere else needs a page that can
   // answer it. The request itself is claimed by whichever sheet mounts next, so the navigation
   // cannot outrun it.
+  const { deviceInfo } = useConnectionState();
+  const gameModeAvailable = flags.remote_input_enabled && deviceSupportsGameMode(deviceInfo);
   const launchGameMode = useCallback(() => {
     if (!GAME_MODE_HOST_PATHS.has(window.location.pathname)) navigate(TAB_ROUTES[0].path);
     void startGameMode();
@@ -296,12 +300,13 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
         loadAssignment: (key) => (key === 1 ? loadRemoteFunction1Action() : loadRemoteFunction3Action()),
         remoteHandlers: createRemoteFunctionHandlers({
           remoteInputEnabled: flags.remote_input_enabled,
+          gameModeSupported: gameModeAvailable,
           launchGameMode,
           currentPath: () => window.location.pathname,
         }),
         transportOptions: transportShortcutOptions,
       }),
-    [flags.remote_input_enabled, launchGameMode, transportShortcutOptions],
+    [flags.remote_input_enabled, gameModeAvailable, launchGameMode, transportShortcutOptions],
   );
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
@@ -314,9 +319,9 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       runFunctionShortcut: runNormalNavigationFunctionShortcut,
       machinePauseResume: () => requestMachineCommand("pauseResume"),
       machineReset: () => requestMachineCommand("reset"),
-      openGameMode: flags.remote_input_enabled ? launchGameMode : undefined,
+      openGameMode: gameModeAvailable ? launchGameMode : undefined,
     }),
-    [guardedNavigate, flags.remote_input_enabled, launchGameMode, runNormalNavigationFunctionShortcut],
+    [guardedNavigate, gameModeAvailable, launchGameMode, runNormalNavigationFunctionShortcut],
   );
   return (
     <FocusNavigationProvider
@@ -359,6 +364,7 @@ const AppRoutes = () => {
             <T9FieldListener />
             <SearchOverlayHost />
             <TourHost />
+            <NotificationPermissionMoment />
             <ConnectionController />
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />

@@ -46,6 +46,8 @@ import uk.gleissner.c64commander.hvsc.HvscDownloadCancelledException
 import uk.gleissner.c64commander.hvsc.HvscResumableDownload
 import uk.gleissner.c64commander.hvsc.InsufficientMemoryException
 import uk.gleissner.c64commander.hvsc.MemoryBudget
+import uk.gleissner.c64commander.hvsc.extractionMemoryBudget
+import uk.gleissner.c64commander.hvsc.writeSidHeaderIndex
 
 @CapacitorPlugin(name = "HvscIngestion")
 open class HvscIngestionPlugin : Plugin() {
@@ -152,22 +154,13 @@ open class HvscIngestionPlugin : Plugin() {
   }
 
   private fun buildMemoryBudget(): MemoryBudget {
-    val runtime = Runtime.getRuntime()
     val activityManager = context.getSystemService(ActivityManager::class.java)
     val memoryInfo = ActivityManager.MemoryInfo()
     activityManager?.getMemoryInfo(memoryInfo)
-    val memoryClassBytes = ((activityManager?.memoryClass ?: 256).toLong() * 1024L * 1024L)
-    val runtimeBytes = runtime.maxMemory().coerceAtLeast(0L)
-    val availableBytes = memoryInfo.availMem.coerceAtLeast(0L)
-    val computedBudget =
-            minOf(
-                    if (availableBytes > 0L) availableBytes / 2L else Long.MAX_VALUE,
-                    maxOf(memoryClassBytes * 2L, runtimeBytes * 2L),
-            )
-    return MemoryBudget(
-            maxExtractionBytes = computedBudget,
-            detail =
-                    "availMem=${availableBytes} memoryClass=${memoryClassBytes} runtimeMax=${runtimeBytes}",
+    return extractionMemoryBudget(
+            availableBytes = memoryInfo.availMem.coerceAtLeast(0L),
+            memoryClassBytes = (activityManager?.memoryClass ?: 256).toLong() * 1024L * 1024L,
+            runtimeBytes = Runtime.getRuntime().maxMemory().coerceAtLeast(0L),
     )
   }
 
@@ -245,21 +238,6 @@ open class HvscIngestionPlugin : Plugin() {
           val songs: Int?,
           val startSong: Int?,
   )
-
-  private data class SidHeader(
-          val songs: Int,
-          val startSong: Int,
-  )
-
-  private fun parseSidHeader(headerBytes: ByteArray, headerLength: Int): SidHeader? {
-    if (headerLength < 0x12) return null
-    val magic = String(headerBytes, 0, 4, Charsets.US_ASCII)
-    if (magic != "PSID" && magic != "RSID") return null
-    val songs = ((headerBytes[0x0E].toInt() and 0xFF) shl 8) or (headerBytes[0x0F].toInt() and 0xFF)
-    val startSong =
-            ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
-    return SidHeader(songs = songs, startSong = startSong)
-  }
 
   /**
    * Deletes [oldRoot] only when [libraryRoot] currently exists - i.e. only once a valid
@@ -466,6 +444,21 @@ open class HvscIngestionPlugin : Plugin() {
             .toMutableList()
   }
 
+  private fun writeSidHeaderIndexOrNull(songs: List<ExtractedSong>, call: PluginCall): String? =
+          try {
+            writeSidHeaderIndex(context.filesDir, songs)
+          } catch (error: IOException) {
+            AppLogger.warn(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to write the HVSC SID header index; metadata hydration will read each song instead",
+                    "HvscIngestionPlugin",
+                    error,
+                    traceFields(call)
+            )
+            null
+          }
+
   private fun applyDeletionFiles(libraryRoot: File, deletionPaths: List<String>): List<String> {
     val deletedVirtualPaths = mutableListOf<String>()
     deletionPaths.forEach { deletionPath ->
@@ -662,6 +655,7 @@ open class HvscIngestionPlugin : Plugin() {
                   )
                 }
 
+                val sidHeaderIndexPath = writeSidHeaderIndexOrNull(extractionResult.extractedSongs, call)
                 val payload = JSObject()
                 payload.put("totalEntries", result.totalEntries)
                 payload.put("songsIngested", result.songsIngested)
@@ -681,6 +675,7 @@ open class HvscIngestionPlugin : Plugin() {
                 val deletedVirtualPathsPayload = JSArray()
                 result.deletedVirtualPaths.forEach { deletedVirtualPathsPayload.put(it) }
                 payload.put("deletedVirtualPaths", deletedVirtualPathsPayload)
+                sidHeaderIndexPath?.let { payload.put("sidHeaderIndexPath", it) }
 
                 emitProgress(
                         stage = "complete",
