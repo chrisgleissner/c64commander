@@ -233,8 +233,19 @@ test.describe("Switch device health detail on a 320x427 screen", () => {
     const explanation = page.getByTestId("health-check-probe-info-telnet-explanation");
     await expect(explanation).toBeVisible();
 
-    // The list checks every saved device again every 10 s, which used to rebuild this row and close the explanation.
-    await expect(probeRow(sheet, "rest")).toHaveAttribute("data-live-status", /running|done/, { timeout: 15_000 });
+    // Observe a completed probe from the next check. A saved-device result has no live-status
+    // attribute between rounds, and a fast probe's transient running state can be missed entirely.
+    const completedJiffyReads = () =>
+      server.requests.filter((request) => {
+        const url = new URL(request.url, server.baseUrl);
+        return (
+          url.pathname === "/v1/machine:readmem" &&
+          url.searchParams.get("address")?.toLowerCase() === "00a2" &&
+          request.completedAtMs !== null
+        );
+      }).length;
+    const previousJiffyReads = completedJiffyReads();
+    await expect.poll(completedJiffyReads, { timeout: 15_000 }).toBeGreaterThan(previousJiffyReads);
     await expect(probeRow(sheet, "jiffy")).toContainText("Success", { timeout: 30_000 });
     await expect(explanation).toBeVisible();
 
