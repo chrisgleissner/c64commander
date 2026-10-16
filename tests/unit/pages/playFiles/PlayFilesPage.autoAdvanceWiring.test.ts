@@ -26,7 +26,11 @@ import { describe, expect, it } from "vitest";
  */
 const testFilePath = fileURLToPath(import.meta.url);
 const pagePath = resolve(dirname(testFilePath), "../../../../src/pages/PlayFilesPage.tsx");
-const pageSource = readFileSync(pagePath, "utf8");
+// The page's background execution lives in its own hook; these wiring checks cover the two together.
+const pageSource = `${readFileSync(pagePath, "utf8")}\n${readFileSync(
+  pagePath.replace("PlayFilesPage.tsx", "playFiles/hooks/usePlayBackgroundExecution.ts"),
+  "utf8",
+)}`;
 
 const sliceHookCall = (hookName: string): string => {
   const start = pageSource.indexOf(`${hookName}({`);

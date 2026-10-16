@@ -5,15 +5,21 @@ import { describe, expect, it } from "vitest";
 
 const testFilePath = fileURLToPath(import.meta.url);
 const playFilesPagePath = resolve(dirname(testFilePath), "../../../../src/pages/PlayFilesPage.tsx");
-const playFilesPageSource = readFileSync(playFilesPagePath, "utf8");
+const backgroundExecutionHookSource = readFileSync(
+  resolve(dirname(testFilePath), "../../../../src/pages/playFiles/hooks/usePlayBackgroundExecution.ts"),
+  "utf8",
+);
+// The page's background execution lives in its own hook; the contracts below cover the two together.
+const playFilesPageSource = `${readFileSync(playFilesPagePath, "utf8")}\n${backgroundExecutionHookSource}`;
 
 describe("PlayFilesPage feature-flag contracts", () => {
   it("derives background execution from the feature-flag policy before touching the native bridge", () => {
     expect(playFilesPageSource).toContain(
       "const backgroundExecutionEnabled = isBackgroundExecutionEnabled(featureFlags);",
     );
-    expect(playFilesPageSource).toContain("resolveBackgroundExecutionAction({");
-    expect(playFilesPageSource).toContain("useBackgroundDueAtSync({");
+    expect(playFilesPageSource).toContain("usePlayBackgroundExecution({");
+    expect(backgroundExecutionHookSource).toContain("resolveBackgroundExecutionAction({");
+    expect(backgroundExecutionHookSource).toContain("useBackgroundDueAtSync({");
   });
 
   it("routes HVSC source and preparation behavior through the tightened HVSC feature policy", () => {

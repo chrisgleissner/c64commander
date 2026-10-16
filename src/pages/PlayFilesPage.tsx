@@ -39,7 +39,6 @@ import { PLAY_PAGE_TRACE_COMPONENT } from "@/lib/tracing/traceContext";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
-import { createLatestIntentWriteLane, type LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { TraceSourceKind } from "@/lib/tracing/types";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
@@ -81,14 +80,8 @@ import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDi
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
-import {
-  isBackgroundExecutionActive,
-  setBackgroundExecutionNowPlaying,
-  setBackgroundExecutionPaused,
-  startBackgroundExecution,
-  stopBackgroundExecution,
-} from "@/lib/native/backgroundExecutionManager";
-import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
+import { setBackgroundExecutionNowPlaying } from "@/lib/native/backgroundExecutionManager";
+import { onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
 import { runTransportCommand } from "@/pages/playFiles/transportCommands";
 
 import { AppBar } from "@/components/AppBar";
@@ -117,7 +110,7 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
-import { useBackgroundDueAtSync } from "@/pages/playFiles/hooks/useBackgroundDueAtSync";
+import { usePlayBackgroundExecution } from "@/pages/playFiles/hooks/usePlayBackgroundExecution";
 import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
@@ -178,10 +171,7 @@ import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClie
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
 import { usePlaylistLetterIndexSource } from "@/pages/playFiles/hooks/usePlaylistLetterIndexSource";
-import {
-  isBackgroundExecutionEnabled,
-  resolveBackgroundExecutionAction,
-} from "@/pages/playFiles/backgroundExecutionPolicy";
+import { isBackgroundExecutionEnabled } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { usePublishedPlaybackTrace } from "@/pages/playFiles/hooks/usePublishedPlaybackTrace";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
@@ -302,7 +292,6 @@ export default function PlayFilesPage() {
   // rejected. Declared here because the transport latch below is declared long
   // before that hook runs.
   const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
-  const [playlistRestored, setPlaylistRestored] = useState(false); // Set below, after the persistence hook.
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
@@ -451,19 +440,6 @@ export default function PlayFilesPage() {
   const [trackInstanceId, setTrackInstanceId] = useState(0);
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
   const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
-  const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);
-  // Adopt an already-running background-execution session on remount (e.g. after
-  // navigating away from Play while playing) instead of issuing a second start,
-  // which would unbalance the manager's reference count and leak the wake lock
-  // after Stop (BUG-025).
-  const backgroundExecutionActiveRef = useRef(isBackgroundExecutionActive());
-  // True once THIS Play instance has actually observed active playback. A fresh
-  // instance adopts the running session above (BUG-025) but starts isPlaying=false
-  // until its async session restore runs. A transient instance created during a
-  // tab transition can therefore mount-and-unmount while still isPlaying=false and
-  // would otherwise tear down the wake lock owned by the live playback session
-  // (BUG-040). Only an instance that genuinely owned playback may release it.
-  const hasObservedActivePlaybackRef = useRef(false);
   const hvscDisableCancellationRequestedRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
@@ -493,30 +469,6 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef.current.userCancelled = true;
     setAutoAdvanceDueAtMs(null);
   }, [setAutoAdvanceDueAtMs]);
-
-  if (!backgroundDueWriteLaneRef.current) {
-    backgroundDueWriteLaneRef.current = createLatestIntentWriteLane<number | null>({
-      run: async (nextDueAtMs) => {
-        await BackgroundExecution.setDueAtMs({ dueAtMs: nextDueAtMs });
-      },
-    });
-  }
-
-  const queueBackgroundDueAtUpdate = useCallback(async (nextDueAtMs: number | null) => {
-    await backgroundDueWriteLaneRef.current?.schedule(nextDueAtMs);
-  }, []);
-  const queueBackgroundDueAtUpdateRef = useRef(queueBackgroundDueAtUpdate);
-  useEffect(() => {
-    queueBackgroundDueAtUpdateRef.current = queueBackgroundDueAtUpdate;
-  }, [queueBackgroundDueAtUpdate]);
-  const stopBackgroundExecutionRef = useRef(stopBackgroundExecution);
-  useEffect(() => {
-    stopBackgroundExecutionRef.current = stopBackgroundExecution;
-  }, [stopBackgroundExecution]);
-  const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);
-  useEffect(() => {
-    backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;
-  }, [trackInstanceId]);
 
   const ensurePlaybackConnection = useCallback(async () => {
     if (status.isConnected) return;
@@ -731,9 +683,6 @@ export default function PlayFilesPage() {
   const playbackStateRef = useRef({ isPlaying, isPaused });
   useEffect(() => {
     playbackStateRef.current = { isPlaying, isPaused };
-    if (isPlaying) {
-      hasObservedActivePlaybackRef.current = true;
-    }
   }, [isPlaying, isPaused]);
 
   const selectedSavedDeviceId = useSavedDevices().selectedDeviceId;
@@ -795,143 +744,16 @@ export default function PlayFilesPage() {
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
 
-  useEffect(() => {
-    const backgroundExecutionAction = resolveBackgroundExecutionAction({
-      backgroundExecutionEnabled,
-      backgroundExecutionActive: backgroundExecutionActiveRef.current,
-      isPlaying,
-      isPaused,
-      playlistEnded,
-    });
-    if (backgroundExecutionAction === "start") {
-      backgroundExecutionActiveRef.current = true;
-      void startBackgroundExecution({
-        source: "playback-controller",
-        reason: "play",
-        context: { trackInstanceId },
-      }).catch((error) => {
-        reportUserError({
-          operation: "startBackgroundExecution",
-          title: "Background playback unavailable",
-          description: "Foreground playback continues, but background auto-advance may be interrupted.",
-          error,
-          context: { trackInstanceId },
-          // Playback itself succeeded; degraded background capability is a
-          // notice, not a destructive error (ERROR_POLICY §1 S2).
-          severity: "S2",
-        });
-      });
-      void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
-      return;
-    }
-    if (backgroundExecutionAction === "publish-paused" || backgroundExecutionAction === "publish-playing") {
-      // HARD27-007: a pause or resume of a live session updates the service in place. Stopping it
-      // on pause released the MediaSession, so the headset Play that followed reached nothing.
-      const paused = backgroundExecutionAction === "publish-paused";
-      void setBackgroundExecutionPaused(paused, {
-        source: "playback-controller",
-        reason: paused ? "pause" : "resume",
-        context: { trackInstanceId },
-      }).catch((error) => {
-        reportUserError({
-          operation: "setBackgroundExecutionPaused",
-          title: "Background playback state update failed",
-          description: "Lock-screen and headset controls may not match the current playback state.",
-          error,
-          context: { trackInstanceId, paused },
-          // System bookkeeping around a transport action the user already saw
-          // succeed; diagnostics material, never a toast (ERROR_POLICY §3).
-          background: true,
-        });
-      });
-      return;
-    }
-    if (backgroundExecutionAction !== "stop") {
-      return;
-    }
-    // Never let an instance that only adopted the running session (and has not
-    // itself observed playback) stop it — that transient case is BUG-040. Keep
-    // the adopted flag so a later restore on this instance does not double-start.
-    if (!hasObservedActivePlaybackRef.current) {
-      return;
-    }
-    backgroundExecutionActiveRef.current = false;
-    void stopBackgroundExecution({
-      source: "playback-controller",
-      reason: "stop",
-      context: { trackInstanceId },
-    }).catch((error) => {
-      reportUserError({
-        operation: "stopBackgroundExecution",
-        title: "Background playback cleanup failed",
-        description: "Background playback guard could not be fully stopped.",
-        error,
-        context: { trackInstanceId, reason: "stop" },
-        // Background guard cleanup is system work; failures are diagnostics
-        // material, never a toast (ERROR_POLICY §3).
-        background: true,
-      });
-    });
-    void queueBackgroundDueAtUpdate(null);
-  }, [
-    autoAdvanceDueAtMs,
+  const { queueBackgroundDueAtUpdateRef } = usePlayBackgroundExecution({
     backgroundExecutionEnabled,
-    isPaused,
     isPlaying,
-    queueBackgroundDueAtUpdate,
+    isPaused,
+    playlistEnded,
     trackInstanceId,
-  ]);
-
-  useEffect(
-    () => () => {
-      if (!backgroundExecutionActiveRef.current) return;
-      const latestPlaybackState = playbackStateRef.current;
-      // Keep the wake lock when this instance is still playing OR when it never
-      // observed playback (a transient instance that only adopted the running
-      // session must not release the live session's lock — BUG-040). A paused
-      // session is kept too (HARD27-007): the service has already dropped its
-      // wake lock and its own grace period bounds how long it survives, so
-      // tabbing away from Play must not be what kills the headset controls.
-      if (latestPlaybackState.isPlaying || !hasObservedActivePlaybackRef.current) {
-        addLog("debug", "Leaving background playback guard active across Play page unmount", {
-          trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
-          dueAtMs: autoAdvanceGuardRef.current?.dueAtMs ?? null,
-        });
-        return;
-      }
-      backgroundExecutionActiveRef.current = false;
-      void stopBackgroundExecutionRef
-        .current({
-          source: "playback-controller",
-          reason: "cleanup",
-          context: { trackInstanceId: backgroundCleanupTrackInstanceIdRef.current },
-        })
-        .catch((error) => {
-          reportUserError({
-            operation: "stopBackgroundExecution",
-            title: "Background playback cleanup failed",
-            description: "Background playback guard could not be fully stopped.",
-            error,
-            context: {
-              trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
-              reason: "cleanup",
-            },
-            // Unmount-time cleanup is never user-initiated (ERROR_POLICY §3).
-            background: true,
-          });
-        });
-      void queueBackgroundDueAtUpdateRef.current(null);
-    },
-    [],
-  );
-
-  useBackgroundDueAtSync({
-    backgroundExecutionEnabled,
-    backgroundExecutionActiveRef,
-    isNativeAndroid: isNativePlatform() && getPlatform() === "android",
-    sessionRestoreSettled,
     autoAdvanceDueAtMs,
-    queueBackgroundDueAtUpdate,
+    autoAdvanceGuardRef,
+    playbackStateRef,
+    sessionRestoreSettled,
   });
 
   useEffect(() => {
@@ -1661,6 +1483,45 @@ export default function PlayFilesPage() {
       }),
     [resolveSonglengthDurationMsForPath],
   );
+  const { readRepositoryPlaylist, playlistHydrated } = usePlaybackPersistence({
+    playlist,
+    setPlaylist,
+    currentIndex,
+    setCurrentIndex,
+    isPlaying,
+    setIsPlaying,
+    isPaused,
+    setIsPaused,
+    playbackTime,
+    durationMs,
+    setDurationMs,
+    setDurationMsItemId,
+    autoAdvanceDueAtMs,
+    setCurrentSubsongCount,
+    setShuffleEnabled,
+    setShuffleSeed,
+    setRepeatEnabled,
+    shuffleEnabled,
+    shuffleSeed,
+    repeatEnabled,
+    activePlaylistQuery: playlistFilterText,
+    setActivePlaylistQuery: restorePlaylistFilterText,
+    resolvedDeviceId,
+    playlistStorageKey,
+    localEntriesBySourceId,
+    localSourceTreeUris,
+    buildHvscLocalPlayFile,
+    buildPlaylistItem,
+    playedClockRef,
+    trackStartedAtRef,
+    trackInstanceIdRef,
+    autoAdvanceGuardRef,
+    setTrackInstanceId,
+    setAutoAdvanceDueAtMs,
+    playlistEnded,
+    setPlaylistEnded,
+    setSessionRestoreSettled,
+  });
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
     startPlaylist: (items) => stationHandover.startStationQueue(items),
@@ -1668,7 +1529,7 @@ export default function PlayFilesPage() {
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
-    queueReady: playlistRestored && sessionRestoreSettled,
+    queueReady: playlistHydrated && sessionRestoreSettled,
     // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
@@ -2249,46 +2110,6 @@ export default function PlayFilesPage() {
     removePlaylistItemsById(new Set(selectedPlaylistIds));
   }, [removePlaylistItemsById, selectedPlaylistIds]);
 
-  const { readRepositoryPlaylist, playlistHydrated } = usePlaybackPersistence({
-    playlist,
-    setPlaylist,
-    currentIndex,
-    setCurrentIndex,
-    isPlaying,
-    setIsPlaying,
-    isPaused,
-    setIsPaused,
-    playbackTime,
-    durationMs,
-    setDurationMs,
-    setDurationMsItemId,
-    autoAdvanceDueAtMs,
-    setCurrentSubsongCount,
-    setShuffleEnabled,
-    setShuffleSeed,
-    setRepeatEnabled,
-    shuffleEnabled,
-    shuffleSeed,
-    repeatEnabled,
-    activePlaylistQuery: playlistFilterText,
-    setActivePlaylistQuery: restorePlaylistFilterText,
-    resolvedDeviceId,
-    playlistStorageKey,
-    localEntriesBySourceId,
-    localSourceTreeUris,
-    buildHvscLocalPlayFile,
-    buildPlaylistItem,
-    playedClockRef,
-    trackStartedAtRef,
-    trackInstanceIdRef,
-    autoAdvanceGuardRef,
-    setTrackInstanceId,
-    setAutoAdvanceDueAtMs,
-    playlistEnded,
-    setPlaylistEnded,
-    setSessionRestoreSettled,
-  });
-  useEffect(() => setPlaylistRestored(playlistHydrated), [playlistHydrated]);
   const stationHandover = useStationPlaylistHandover({
     queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
     playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
