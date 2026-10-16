@@ -14,6 +14,7 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
+import { useIsExternallyOpen, type ExternalOpenState } from "@/hooks/useExternalOpenState";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { LikedTunesList } from "@/pages/playFiles/components/LikedTunesList";
 
@@ -44,3 +45,12 @@ export const LikedTunesSheet = ({ open, onOpenChange, onPlay }: LikedTunesSheetP
     </AppSheetContent>
   </AppSheet>
 );
+
+/** The sheet with its open flag in an external state, so opening it does not render the page that holds the button. */
+export const LikedTunesSheetHost = ({
+  state,
+  onPlay,
+}: {
+  state: ExternalOpenState;
+  onPlay: LikedTunesSheetProps["onPlay"];
+}) => <LikedTunesSheet open={useIsExternallyOpen(state)} onOpenChange={state.set} onPlay={onPlay} />;

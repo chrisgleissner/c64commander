@@ -108,7 +108,8 @@ import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
-import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
+import { LikedTunesSheetHost } from "@/pages/playFiles/components/LikedTunesSheet";
+import { useExternalOpenState } from "@/hooks/useExternalOpenState";
 import {
   PlayDeepLinks,
   useTransportCommands,
@@ -380,7 +381,7 @@ export default function PlayFilesPage() {
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   // Claimed here as well as on Home: search publishes without navigating when Play is on screen.
   useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
-  const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
+  const likedTunesSheet = useExternalOpenState();
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
   /**
@@ -669,7 +670,7 @@ export default function PlayFilesPage() {
       setHvscSearchSeed(seed ?? null);
       setHvscSearchOpen(true);
     },
-    openLikedTunes: () => setLikedTunesSheetOpen(true),
+    openLikedTunes: () => likedTunesSheet.set(true),
     resumeSession: () => transportCommandBus.publish("play"),
   };
 
@@ -2695,7 +2696,7 @@ export default function PlayFilesPage() {
                           className={SHEET_OPENER_CLASS}
                           aria-label="Liked Tunes"
                           data-testid="sid-radio-liked-tunes-open"
-                          onClick={() => setLikedTunesSheetOpen(true)}
+                          onClick={() => likedTunesSheet.set(true)}
                         >
                           <Heart className="mr-1.5 h-4 w-4" /> Liked
                         </Button>
@@ -2976,9 +2977,8 @@ export default function PlayFilesPage() {
             <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
           ) : null}
 
-          <LikedTunesSheet
-            open={likedTunesSheetOpen}
-            onOpenChange={setLikedTunesSheetOpen}
+          <LikedTunesSheetHost
+            state={likedTunesSheet}
             onPlay={(items, startIndex) => void startPlaylist(items, startIndex)}
           />
           <SidRadioLauncherSheet
