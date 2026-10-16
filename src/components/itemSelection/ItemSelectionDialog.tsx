@@ -676,6 +676,9 @@ export const ItemSelectionDialog = ({
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           {compactHeader ? (
             <AppSheetHeader
+              // Keep the list usable with system bars and wider fallback fonts. The header's
+              // controls retain their 44px targets; only the surrounding vertical space shrinks.
+              style={{ paddingTop: "2px", paddingBottom: "2px" }}
               actions={headerConfirmButton}
               titleContent={
                 <AppSheetTitle className="flex min-w-0 items-center gap-2 text-base" data-testid="add-items-title">
@@ -708,6 +711,7 @@ export const ItemSelectionDialog = ({
               "shrink-0 border-b border-border",
               compactHeader ? "space-y-2" : "space-y-3",
               bodyPaddingClassName,
+              compactHeader && "py-0",
             )}
           >
             {compactHeader ? null : (

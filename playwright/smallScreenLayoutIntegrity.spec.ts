@@ -261,6 +261,12 @@ test.describe("Small screen layout integrity", () => {
   for (const deviceName of ["Workshop 2", "WWWWWWWWWW"]) {
     test(`the header keeps "${deviceName}" readable while Live View streams @layout`, async ({ page }) => {
       await setup(page, server.baseUrl, { developerMode: true });
+      // Exercise a wider fallback font too: Android/Linux do not always have Inter installed.
+      await page.addInitScript(() =>
+        document.addEventListener("DOMContentLoaded", () => {
+          document.body.style.fontFamily = '"DejaVu Sans", sans-serif';
+        }),
+      );
       await seedTwoNamedDevices(page, deviceName);
       await installLiveViewStreamStub(page);
       await page.goto("/", { waitUntil: "domcontentloaded" });

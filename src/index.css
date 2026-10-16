@@ -773,6 +773,15 @@ button:focus-visible,
  * the legend 7px past the right edge, which is why this is not gated on `compact` alone.
  */
 @media (max-width: 430px) {
+  /* A named two-line badge needs the space around the Quick menu; both controls keep 44px targets. */
+  .app-bar-actions:has([data-testid="unified-health-badge-stacked"]) {
+    gap: 0;
+  }
+
+  .app-bar-actions:has([data-testid="unified-health-badge-stacked"]) [data-testid="app-bar-quick-menu"] {
+    margin-inline-end: 0;
+  }
+
   .keypad-guidance-key[data-soft="shortcut"] {
     display: none;
   }

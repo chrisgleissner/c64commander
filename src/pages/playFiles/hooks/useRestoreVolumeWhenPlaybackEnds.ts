@@ -7,6 +7,7 @@
  */
 
 import { useEffect } from "react";
+import { addErrorLog } from "@/lib/logging";
 
 /**
  * Ends the volume session, restoring the C64's pre-playback mixer levels, once playback has stopped.
@@ -31,6 +32,11 @@ export const useRestoreVolumeWhenPlaybackEnds = ({
   useEffect(() => {
     if (!sessionRestoreSettled || isPlaying || isPaused) return;
     if (!volumeSessionActiveRef.current) return;
-    void restoreVolumeOverrides("playback-ended");
+    void restoreVolumeOverrides("playback-ended").catch((error: unknown) => {
+      addErrorLog("Volume restore failed after playback ended", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
   }, [isPaused, isPlaying, restoreVolumeOverrides, sessionRestoreSettled, volumeSessionActiveRef]);
 };

@@ -256,6 +256,7 @@ export const searchSongsFromBrowseIndexInSlices = async (
   query: string,
   options: SongSearchOptions & { signal?: AbortSignal } = {},
 ): Promise<HvscSongSearchPage> => {
+  options.signal?.throwIfAborted();
   const search = startSongSearch(snapshot, query, options);
   while (!search.advance(performance.now() + SEARCH_SLICE_MS)) {
     await yieldToMain();

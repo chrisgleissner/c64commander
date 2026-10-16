@@ -85,4 +85,32 @@ describe("withProbeTimeout", () => {
     await vi.advanceTimersByTimeAsync(5000);
     await assertion;
   });
+  it("does not arm another timer when a queued request dispatches after its budget expired", async () => {
+    let dispatch!: () => void;
+    const result = withProbeTimeout(
+      (onDispatch) => {
+        dispatch = onDispatch;
+        return new Promise<string>(() => {});
+      },
+      { timeoutMs: 1500, timeoutMessage: message, queueBudgetMs: 5000 },
+    );
+    const assertion = expect(result).rejects.toThrow("before it could be sent");
+    await vi.advanceTimersByTimeAsync(5000);
+    await assertion;
+    dispatch();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("ignores a late dispatch callback after the probe has already resolved", async () => {
+    let dispatch!: () => void;
+    await withProbeTimeout(
+      async (onDispatch) => {
+        dispatch = onDispatch;
+        return "cached";
+      },
+      { timeoutMs: 1500, timeoutMessage: message, queueBudgetMs: 5000 },
+    );
+    dispatch();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

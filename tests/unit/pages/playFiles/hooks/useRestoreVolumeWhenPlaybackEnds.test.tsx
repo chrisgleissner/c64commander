@@ -6,9 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
+
+const { addErrorLog } = vi.hoisted(() => ({ addErrorLog: vi.fn() }));
+vi.mock("@/lib/logging", () => ({ addErrorLog }));
 
 type Props = { sessionRestoreSettled: boolean; isPlaying: boolean; isPaused: boolean };
 
@@ -59,5 +62,24 @@ describe("useRestoreVolumeWhenPlaybackEnds", () => {
     rerender({ sessionRestoreSettled: true, isPlaying: false, isPaused: false });
 
     expect(restoreVolumeOverrides).toHaveBeenCalledTimes(1);
+  });
+  it("logs a rejected mixer restore with its stack instead of leaving an unhandled rejection", async () => {
+    const error = new Error("C64U disconnected during mixer restore");
+    const restoreVolumeOverrides = vi.fn().mockRejectedValue(error);
+    renderHook(() =>
+      useRestoreVolumeWhenPlaybackEnds({
+        sessionRestoreSettled: true,
+        isPlaying: false,
+        isPaused: false,
+        volumeSessionActiveRef: { current: true },
+        restoreVolumeOverrides,
+      }),
+    );
+    await waitFor(() =>
+      expect(addErrorLog).toHaveBeenCalledWith("Volume restore failed after playback ended", {
+        error: error.message,
+        stack: error.stack,
+      }),
+    );
   });
 });

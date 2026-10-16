@@ -159,7 +159,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
               </div>
             )}
           </div>
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="app-bar-actions flex min-w-0 items-center gap-1">
             {/*
               The Quick menu, in the same place on every page.
               It already existed for the keypad's Menu key — jump to a page, Game Mode,

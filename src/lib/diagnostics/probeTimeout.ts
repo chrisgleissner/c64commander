@@ -45,6 +45,7 @@ export const withProbeTimeout = async <T>(
   try {
     return await Promise.race([run(() => onDispatch()), timeout]);
   } finally {
+    onDispatch = () => {};
     if (timer) clearTimeout(timer);
   }
 };

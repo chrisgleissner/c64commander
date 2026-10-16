@@ -134,6 +134,16 @@ describe("HVSC search in slices", () => {
     expect(sliced).toEqual(searchSongsFromBrowseIndex(bigSnapshot(3000), "tune 1", { limit: 20 }));
   });
 
+  it("rejects an already-aborted search before it scans or caches any songs", async () => {
+    const snapshot = buildSnapshot();
+    const controller = new AbortController();
+    controller.abort(new Error("closed before the browse index loaded"));
+    await expect(searchSongsFromBrowseIndexInSlices(snapshot, "ro", { signal: controller.signal })).rejects.toThrow(
+      "closed before the browse index loaded",
+    );
+    expect(Object.values(snapshot.songs).every((song) => !("__foldedSearchText" in song))).toBe(true);
+  });
+
   it("stops between slices once the search is no longer wanted", async () => {
     let clock = 0;
     vi.spyOn(performance, "now").mockImplementation(() => (clock += 5));

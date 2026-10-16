@@ -405,6 +405,11 @@ test.describe("List navigation affordances on the smallest screen", () => {
 
   for (const reducedMotion of ["no-preference", "reduce"] as const) {
     test(`the thumb follows the scroll position with reduced motion ${reducedMotion} @layout`, async ({ page }) => {
+      // Isolate the system preference from the low-end-device policy on small CI runners.
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "hardwareConcurrency", { get: () => 8 });
+        Object.defineProperty(navigator, "deviceMemory", { get: () => 8 });
+      });
       await page.emulateMedia({ reducedMotion });
       await page.goto("/settings", { waitUntil: "domcontentloaded" });
       await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
@@ -474,6 +479,9 @@ test.describe("List navigation affordances on the smallest screen", () => {
     await page.keyboard.press("Escape");
     await expect(filters).toBeHidden();
 
+    // Connection details can overflow the compact panel with wider system fonts. Give this
+    // half of the test enough height to exercise an actual fitting sheet on every platform.
+    await page.setViewportSize({ width: 320, height: 800 });
     await diagnostics.getByTestId("diagnostics-overflow-menu").click();
     await diagnostics.getByTestId("diagnostics-connection-details-action").click();
     const connection = page.getByTestId("connection-view-surface");

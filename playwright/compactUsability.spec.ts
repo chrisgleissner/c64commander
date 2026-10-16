@@ -304,6 +304,11 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
   });
 
   test("the Add items browser leaves room for the file list", async ({ page }) => {
+    await page.addInitScript(() =>
+      document.addEventListener("DOMContentLoaded", () => {
+        document.body.style.fontFamily = '"DejaVu Sans", sans-serif';
+      }),
+    );
     await openCompact(page, "/play");
 
     await page.getByRole("button", { name: /Add items|Add more items/i }).click();

@@ -200,14 +200,13 @@ import {
 } from "@/lib/config/configFileReferenceSelection";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
-import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
+import { useDurationOverride } from "@/pages/playFiles/hooks/useDurationOverride";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
-  DEFAULT_SONG_DURATION_MS,
   DURATION_SLIDER_STEPS,
   SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistItemId,
@@ -215,20 +214,14 @@ import {
   canAdvanceNext,
   canAdvancePrevious,
   shouldDetachPlaybackOnSavedDeviceSwitch,
-  applyDurationOverrideToPlaylist,
   mergeResolvedSonglengthDurations,
-  clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
   formatDate,
-  formatDurationSeconds,
   formatTime,
   isSongCategory,
-  normalizeDurationInputDraft,
   addThenMaybeLaunch,
   resolvePickerConfirm,
-  parseDurationInput,
-  sliderToDurationSeconds,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
@@ -309,12 +302,15 @@ export default function PlayFilesPage() {
   const [playbackTime] = useState(createPlaybackTimeStore);
   const { setElapsedMs, setPlayedMs } = playbackTime;
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
-  const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
-  const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
-  const [durationSeconds, setDurationSeconds] = useState(() =>
-    Math.round(loadDefaultSongDurationMs(DEFAULT_SONG_DURATION_MS) / 1000),
-  );
-  const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(durationSeconds));
+  const {
+    pendingDurationOverrideMs,
+    durationSeconds,
+    durationInput,
+    handleDurationSliderChange,
+    handleDurationSliderCommit,
+    handleDurationInputChange,
+    handleDurationInputBlur,
+  } = useDurationOverride(setPlaylist, setDurationMs);
   const [songNrInput, setSongNrInput] = useState("");
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
   const {
@@ -2355,19 +2351,6 @@ export default function PlayFilesPage() {
     [],
   );
 
-  const persistDurationOverride = useCallback(
-    (durationOverrideMs: number) => {
-      saveDefaultSongDurationMs(durationOverrideMs);
-      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, durationOverrideMs));
-    },
-    [setPlaylist],
-  );
-
-  useEffect(() => {
-    if (debouncedDurationOverrideMs === undefined) return;
-    persistDurationOverride(debouncedDurationOverrideMs);
-  }, [debouncedDurationOverrideMs, persistDurationOverride]);
-
   // Re-arm the auto-advance guard when the playing track's duration changes
   // mid-track (slider/input), so auto-advance fires at the new duration
   // instead of the stale one captured at track launch. No-op while paused
@@ -2392,63 +2375,6 @@ export default function PlayFilesPage() {
     guard.autoFired = false;
     setAutoAdvanceDueAtMs(nextDueAtMs);
   }, [durationMs, isPaused, isPlaying, setAutoAdvanceDueAtMs]);
-
-  const handleDurationSliderChange = useCallback(
-    (value: number[]) => {
-      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
-      setDurationInput(formatDurationSeconds(nextSeconds));
-    },
-    [setDurationMs],
-  );
-
-  const handleDurationSliderCommit = useCallback(
-    (value: number[]) => {
-      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setDurationInput(formatDurationSeconds(nextSeconds));
-      persistDurationOverride(nextDurationMs);
-      setPendingDurationOverrideMs(undefined);
-    },
-    [persistDurationOverride, setDurationMs],
-  );
-
-  const handleDurationInputChange = useCallback(
-    (value: string) => {
-      const normalizedValue = normalizeDurationInputDraft(value);
-      setDurationInput(normalizedValue);
-      const parsed = parseDurationInput(normalizedValue);
-      if (parsed === undefined) return;
-      const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
-    },
-    [setDurationMs],
-  );
-
-  const handleDurationInputBlur = useCallback(() => {
-    const parsed = parseDurationInput(durationInput);
-    if (parsed === undefined) {
-      setDurationInput(formatDurationSeconds(durationSeconds));
-      return;
-    }
-    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-    const nextDurationMs = nextSeconds * 1000;
-    if (nextSeconds !== durationSeconds) {
-      setDurationSeconds(nextSeconds);
-    }
-    setDurationMs(nextDurationMs);
-    persistDurationOverride(nextDurationMs);
-    setPendingDurationOverrideMs(undefined);
-    setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [durationInput, durationSeconds, persistDurationOverride, setDurationMs]);
 
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
     playlist,

@@ -755,7 +755,7 @@ export function UnifiedHealthBadge({ className }: Props) {
         <span
           className={cn(
             "app-chrome-badge-surface inline-flex min-w-0 max-w-full select-none items-center overflow-hidden rounded-md",
-            showShortDeviceLabel ? "px-1.5 py-0.5" : "px-2 py-[0.3rem]",
+            showShortDeviceLabel ? "px-0 py-0.5" : "px-2 py-[0.3rem]",
           )}
           aria-hidden="true"
         >
