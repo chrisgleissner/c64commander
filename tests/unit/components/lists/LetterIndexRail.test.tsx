@@ -28,10 +28,13 @@ function Harness({
   rows,
   source,
   scrollToListIndex,
+  unrenderedIds,
 }: {
   rows: Row[];
   source?: LetterIndexSource;
   scrollToListIndex: (index: number) => void;
+  /** Rows a virtualised list has not rendered yet. */
+  unrenderedIds?: ReadonlySet<string>;
 }) {
   const model = useLetterRailModel(rows, ITEM_HEIGHT, source);
   const [scope, setScope] = useState<HTMLElement | null>(null);
@@ -39,17 +42,19 @@ function Harness({
     <div ref={setScope} data-testid="scope">
       <input data-testid="filter" />
       <div ref={model.setScroller} data-testid="scroller" data-height={SCROLLER_HEIGHT}>
-        {rows.map((row) =>
-          row.variant === "header" ? (
-            <div key={row.id} data-row-id={row.id} />
-          ) : (
-            <div key={row.id} data-row-id={row.id}>
-              <button type="button" data-row-title="true">
-                {row.title}
-              </button>
-            </div>
-          ),
-        )}
+        {rows
+          .filter((row) => !unrenderedIds?.has(row.id))
+          .map((row) =>
+            row.variant === "header" ? (
+              <div key={row.id} data-row-id={row.id} />
+            ) : (
+              <div key={row.id} data-row-id={row.id}>
+                <button type="button" data-row-title="true">
+                  {row.title}
+                </button>
+              </div>
+            ),
+          )}
       </div>
       {model.eligible ? <LetterIndexRail model={model} scrollToListIndex={scrollToListIndex} keyScope={scope} /> : null}
     </div>
@@ -129,6 +134,23 @@ describe("LetterIndexRail", () => {
     pressKey("7");
     await nextFrame();
     expect(focusedTitle()).toBe("Paradroid");
+  });
+
+  it("keeps the selection on the latest jump when the row of an earlier jump renders later", async () => {
+    const rows = rowsFor(TITLES);
+    const view = render(<Harness rows={rows} scrollToListIndex={vi.fn()} unrenderedIds={new Set(["row-0"])} />);
+
+    pressKey("a");
+    await nextFrame();
+    expect(focusedTitle()).toBeNull();
+    pressKey("b");
+    await nextFrame();
+    expect(focusedTitle()).toBe("Bubble");
+
+    view.rerender(<Harness rows={rows} scrollToListIndex={vi.fn()} />);
+    for (let frame = 0; frame < 3; frame += 1) await nextFrame();
+
+    expect(focusedTitle()).toBe("Bubble");
   });
 
   it("jumps on a typed letter", async () => {
