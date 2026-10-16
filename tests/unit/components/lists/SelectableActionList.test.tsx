@@ -64,6 +64,29 @@ describe("SelectableActionList", () => {
     expect(card).toHaveClass("p-2");
   });
 
+  it("offers select all only while the list has items", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+    const renderWith = (list: typeof items) => (
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={list}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={10}
+          listTestId="files-list"
+        />
+      </DisplayProfileProvider>
+    );
+    const { rerender } = render(renderWith([]));
+    expect(screen.queryByTestId("files-list-toggle-select-all")).not.toBeInTheDocument();
+    rerender(renderWith(items));
+    expect(screen.getByTestId("files-list-toggle-select-all")).toBeInTheDocument();
+  });
+
   it("marks the type-filter toggle only while the type filters narrow the list", () => {
     localStorage.clear();
     setViewportWidth(393);

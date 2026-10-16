@@ -224,6 +224,9 @@ import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
 import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
+/** Buttons that open a sheet from the Play page share rows: short labels that grow to fill the row. */
+const SHEET_OPENER_CLASS = "flex-auto whitespace-nowrap px-2";
+
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
   "scanning",
   "ingesting",
@@ -2036,7 +2039,13 @@ export default function PlayFilesPage() {
   // wider profiles keep "Game Mode".
   const playGameModeLabel = displayProfile === "compact" ? "Game" : "Game Mode";
   const playGameModeButton = (
-    <Button variant="outline" size="sm" data-testid="play-open-game-mode" onClick={() => void startGameMode()}>
+    <Button
+      variant="outline"
+      size="sm"
+      className={SHEET_OPENER_CLASS}
+      data-testid="play-open-game-mode"
+      onClick={() => void startGameMode()}
+    >
       <Joystick className="mr-1.5 h-4 w-4" /> {playGameModeLabel}
     </Button>
   );
@@ -2044,10 +2053,12 @@ export default function PlayFilesPage() {
     <Button
       variant="outline"
       size="sm"
+      className={SHEET_OPENER_CLASS}
+      aria-label="Remote Input"
       data-testid="play-open-controller"
       onClick={() => setRemoteInputSheetOpen(true)}
     >
-      <Keyboard className="mr-1.5 h-4 w-4" /> Remote Input
+      <Keyboard className="mr-1.5 h-4 w-4" /> Input
     </Button>
   );
   /**
@@ -2694,13 +2705,15 @@ export default function PlayFilesPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className={SHEET_OPENER_CLASS}
+                        aria-label="More like this"
                         data-testid="sid-radio-start"
                         title={`Start a station from ${currentDisplay?.title ?? "this tune"}`}
                         onClick={() =>
                           void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
                         }
                       >
-                        <RadioIcon className="mr-1.5 h-4 w-4" /> More like this
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> Similar
                       </Button>
                     ) : null}
                     {/*
@@ -2714,13 +2727,15 @@ export default function PlayFilesPage() {
                           variant="outline"
                           size="sm"
                           id="sid-radio-launcher"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="SID Radio"
                           data-testid="sid-radio-launcher"
                           onClick={() => {
                             void sidRadio.ensureStylePopulations();
                             setSidRadioLauncherOpen(true);
                           }}
                         >
-                          <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                          <RadioIcon className="mr-1.5 h-4 w-4" /> Radio
                         </Button>
                         {/* A station chooses for you, which is the point of it right up until you
                             want one specific tune. Without this the only way to hear it was to stop
@@ -2730,19 +2745,23 @@ export default function PlayFilesPage() {
                           variant="outline"
                           size="sm"
                           id="hvsc-search-open"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="Find a tune"
                           data-testid="hvsc-search-open"
                           onClick={() => setHvscSearchOpen(true)}
                         >
-                          <Search className="mr-1.5 h-4 w-4" /> Find a tune
+                          <Search className="mr-1.5 h-4 w-4" /> Find
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           id="sid-radio-liked-tunes-open"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="Liked Tunes"
                           data-testid="sid-radio-liked-tunes-open"
                           onClick={() => setLikedTunesSheetOpen(true)}
                         >
-                          <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                          <Heart className="mr-1.5 h-4 w-4" /> Liked
                         </Button>
                       </>
                     ) : null}

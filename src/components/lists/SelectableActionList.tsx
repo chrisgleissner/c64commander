@@ -645,16 +645,17 @@ export const SelectableActionList = ({
                 {removeSelectedLabel}
               </Button>
             ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onToggleSelectAll}
-              disabled={!items.length}
-              id={selectionToggleId}
-              data-testid={selectionToggleId}
-            >
-              {allSelected ? deselectAllLabel : selectAllLabel}
-            </Button>
+            {items.length ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleSelectAll}
+                id={selectionToggleId}
+                data-testid={selectionToggleId}
+              >
+                {allSelected ? deselectAllLabel : selectAllLabel}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>

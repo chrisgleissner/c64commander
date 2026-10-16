@@ -90,14 +90,14 @@ export const SleepTimerControl = ({ mode, onChange, nowMs, isPlaying }: SleepTim
           {describeSleepTimer(mode, nowMs)}
         </p>
       </div>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sleep timer">
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6" role="group" aria-label="Sleep timer">
         {options.map((option) => (
           <Button
             key={option.key}
             type="button"
             size="sm"
             variant={option.active ? "default" : "outline"}
-            className="h-8 px-2.5 text-xs"
+            className="h-8 px-2 text-xs"
             aria-pressed={option.active}
             disabled={option.disabled ?? false}
             {...(option.title ? { title: option.title } : {})}

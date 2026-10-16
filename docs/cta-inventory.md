@@ -382,7 +382,7 @@ not-connected / empty / single-device).
 - HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
 - **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
-- Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
+- Remote Input — button (label **Input**, accessible name "Remote Input") — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
 - Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — minimum 44px target height; tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered for audio this device renders (see _Listen on_ below), and on the C64 route once the app has found the Ultimate's SID player on screen for a tune with its own play routine on a machine that takes key input (a jump there restarts the tune when it goes back, then fast forwards). Otherwise the bar is a plain indicator (`playback-progress`) and not focusable.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track; a tap still skips. Playing on this device it steps five seconds at a time. Playing on the C64 (under the same conditions as the progress bar), holding Next fast forwards with the C64's CPU speed raised one step a second, and holding Previous moves the target back 10, 20, 40, then 80 seconds a second and jumps there on release. Pointer only: a keypad OK press on either button is a tap.
@@ -397,8 +397,8 @@ Listed below in the order they are rendered and walked by the focus ring.
 
 **SID Radio** _(flag `c64u_sid_radio_enabled`)_
 
-- Start a station from the current tune — button — `sid-radio-start` — R✅ I✅ _(shown for a playing SID)_
-- Open the station launcher — button — `sid-radio-launcher` — R✅ I✅ ; sheet `sid-radio-launcher-sheet`
+- Start a station from the current tune — button (label **Similar**, accessible name "More like this") — `sid-radio-start` — R✅ I✅ _(shown for a playing SID)_
+- Open the station launcher — button (label **Radio**, accessible name "SID Radio") — `sid-radio-launcher` — R✅ I✅ ; sheet `sid-radio-launcher-sheet`
   - Needs HVSC — focusable note (`tabindex=0`) — `sid-radio-needs-hvsc` — first ring stop in the
     sheet `[shown only while no HVSC music is installed]` — code-verified, not yet enumerated on hardware
   - Install HVSC — button — `sid-radio-install-hvsc` — closes the launcher and opens the HVSC
@@ -424,14 +424,14 @@ Listed below in the order they are rendered and walked by the focus ring.
   - Return to my playlist — button — `station-queue-return` — ends the station and puts the saved playlist back
   - Close — button — the dialog's header close control — leaves the station running
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
-- Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
+- Liked tunes — button (label **Liked**, accessible name "Liked Tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
   and Un-like — button — `liked-tune-unlike`
 - Rank the current tune: ✕ / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
   _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
   in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
   same size and chrome as the transport
-- Find a tune — button — `hvsc-search-open` — R✅ I✅ ; sheet `hvsc-search-sheet`
+- Find a tune — button (label **Find**, accessible name "Find a tune") — `hvsc-search-open` — R✅ I✅ ; sheet `hvsc-search-sheet`
   - Search box — text — `hvsc-search-input` — R✅ I✅
   - Play a result — button — `hvsc-search-play` (per row `hvsc-search-row`) — R✅ I✅ — while a
     station is running this is an interruption: the station keeps its place and carries on
