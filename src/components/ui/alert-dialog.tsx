@@ -203,6 +203,7 @@ const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDiv
   const presentation = React.useContext(AlertDialogPresentationContext);
   return (
     <div
+      data-modal-footer="true"
       className={cn("flex", resolveAlertDialogFooterClassName(), presentation.footerClassName, className)}
       {...props}
     />
@@ -214,7 +215,11 @@ const AlertDialogTitle = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Title ref={ref} className={cn("text-lg font-semibold", className)} {...props} />
+  <AlertDialogPrimitive.Title
+    ref={ref}
+    className={cn("text-base font-semibold leading-tight line-clamp-2 break-words", className)}
+    {...props}
+  />
 ));
 AlertDialogTitle.displayName = AlertDialogPrimitive.Title.displayName;
 

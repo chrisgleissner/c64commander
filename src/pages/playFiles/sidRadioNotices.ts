@@ -35,11 +35,17 @@ export const SID_RADIO_NOTICE_TEXT: Record<SidRadioNotice, string> = {
   "refill-failed": "SID Radio could not find more tunes for this station. The diagnostics log has the details.",
 };
 
+const FAILURE_NOTICES: ReadonlySet<SidRadioNotice> = new Set([
+  "start-failed",
+  "refill-failed",
+  "collection-notes-unavailable",
+]);
+
 /**
  * A station is started from a sheet that closes on the tap, so the Play page notice alone can be
  * out of view. A start that cannot run is therefore also toasted and logged.
  */
 export const reportStationNotStarted = (notice: SidRadioNotice, context: Record<string, unknown>) => {
-  addLog("warn", "SID Radio: the station did not start", { notice, ...context });
+  addLog(FAILURE_NOTICES.has(notice) ? "warn" : "info", "SID Radio: the station did not start", { notice, ...context });
   toast({ title: "SID Radio", description: SID_RADIO_NOTICE_TEXT[notice] });
 };

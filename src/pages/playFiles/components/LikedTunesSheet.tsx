@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { LikedTunesList } from "@/pages/playFiles/components/LikedTunesList";
 
@@ -18,22 +25,22 @@ export type LikedTunesSheetProps = {
 
 /** The Liked Tunes collection in a bottom sheet (spec §5.5). */
 export const LikedTunesSheet = ({ open, onOpenChange, onPlay }: LikedTunesSheetProps) => (
-  <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="overflow-y-auto" data-testid="liked-tunes-sheet">
-      <SheetHeader>
-        <SheetTitle>Liked Tunes</SheetTitle>
-        <SheetDescription>
+  <AppSheet open={open} onOpenChange={onOpenChange}>
+    <AppSheetContent className="overflow-hidden p-0" data-testid="liked-tunes-sheet">
+      <AppSheetHeader>
+        <AppSheetTitle>Liked Tunes</AppSheetTitle>
+        <AppSheetDescription>
           Everything you have ♥-liked. Plays as a normal list — Shuffle and Repeat apply.
-        </SheetDescription>
-      </SheetHeader>
-      <div className="pt-3">
+        </AppSheetDescription>
+      </AppSheetHeader>
+      <AppSheetBody className="px-3 py-3">
         <LikedTunesList
           onPlay={(items, startIndex) => {
             onOpenChange(false);
             onPlay(items, startIndex);
           }}
         />
-      </div>
-    </SheetContent>
-  </Sheet>
+      </AppSheetBody>
+    </AppSheetContent>
+  </AppSheet>
 );

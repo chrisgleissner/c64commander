@@ -19,7 +19,6 @@ import {
   AppSheetBody,
   AppSheetContent,
   AppSheetDescription,
-  AppSheetFooter,
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
@@ -82,11 +81,6 @@ export function ManageConfigDialog({ open, onOpenChange, configs, onRename, onDe
               )}
             </div>
           </AppSheetBody>
-          <AppSheetFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </AppSheetFooter>
         </AppSheetContent>
       </AppSheet>
 

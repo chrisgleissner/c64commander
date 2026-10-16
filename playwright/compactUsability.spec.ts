@@ -73,7 +73,20 @@ const openCompact = async (page: Page, route: string) => {
  * Measures the surface and fails with every defect listed at once. Reporting one defect per run
  * would mean one build per defect on a surface that has several.
  */
+const SURFACE_SHOTS_DIR = process.env.COMPACT_SURFACE_SHOTS;
+
+/** With COMPACT_SURFACE_SHOTS set to a directory, each audited surface is also saved as a PNG for review. */
+const saveSurfaceShot = async (page: Page, name: string) => {
+  if (!SURFACE_SHOTS_DIR) return;
+  const file = `${name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")}.png`;
+  await page.screenshot({ path: `${SURFACE_SHOTS_DIR}/${file}` });
+};
+
 const expectUsable = async (page: Page, name: string, selector: string, kind: SurfaceKind) => {
+  await saveSurfaceShot(page, name);
   const measurement = await auditCompactSurface(page, selector, kind);
   expect(measurement.defects, formatDefects(name, measurement)).toEqual([]);
   return measurement;
@@ -126,6 +139,7 @@ const createAuditor = () => {
       await expect(surface, `${name}: surface never became visible`).toBeVisible({ timeout: 15_000 });
       // Let the open animation finish; a surface measured mid-transform reports its own animation.
       await page.waitForTimeout(400);
+      await saveSurfaceShot(page, name);
       const measurement = await auditSurface(page, surface, kind);
       if (measurement.defects.length > 0) {
         total += measurement.defects.length;

@@ -834,6 +834,10 @@ button:focus-visible,
     line-height: 1.2rem;
   }
 
+  :root[data-display-profile="compact"] [data-modal-footer="true"] > * {
+    flex: 1 1 auto;
+  }
+
   :root[data-display-profile="compact"] :where([class~="text-xs"]) {
     font-size: 1rem;
     line-height: 1.35rem;

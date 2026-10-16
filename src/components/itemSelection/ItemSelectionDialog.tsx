@@ -458,8 +458,14 @@ export const ItemSelectionDialog = ({
   const showArchiveLegalNotice = source?.type === "commoserve";
   const showCompactHeaderConfirm = profile === "compact" && !showArchiveLegalNotice;
   const interstitialOptionContentClassName = "flex min-w-0 w-full items-center justify-start gap-3";
-  const interstitialIconSlotClassName = "flex h-12 w-12 shrink-0 items-center justify-center self-center";
-  const interstitialIconClassName = "h-8 w-8 shrink-0 self-center text-[1.75rem]";
+  const interstitialIconSlotClassName = cn(
+    "flex shrink-0 items-center justify-center self-center",
+    profile === "compact" ? "h-9 w-9" : "h-12 w-12",
+  );
+  const interstitialIconClassName = cn(
+    "shrink-0 self-center",
+    profile === "compact" ? "h-6 w-6 text-[1.25rem]" : "h-8 w-8 text-[1.75rem]",
+  );
   const selectionHeadingIconClassName = "h-5 w-5 shrink-0 text-[1.25rem]";
   const resolveInterstitialIconClassName = (origin: SourceLocation["type"]) =>
     cn(interstitialIconClassName, origin === "commoserve" && "h-12 w-12 text-[4rem]");
@@ -470,12 +476,12 @@ export const ItemSelectionDialog = ({
       <AppDialog open={open} onOpenChange={onOpenChange}>
         <AppDialogContent className="max-w-md">
           <AppDialogHeader>
-            <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
+            <AppDialogTitle>{title}</AppDialogTitle>
             <AppDialogDescription>Choose a source.</AppDialogDescription>
           </AppDialogHeader>
           <AppDialogBody className={bodyPaddingClassName}>
-            <div className="space-y-5">
-              <p className="text-lg font-semibold text-foreground">Choose source</p>
+            <div className="space-y-2">
+              <p className="sr-only">Choose source</p>
               <div className={cn("grid gap-2", interstitialGridClassName)} data-testid="import-selection-interstitial">
                 <Button
                   variant="outline"

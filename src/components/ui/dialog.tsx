@@ -212,7 +212,11 @@ DialogHeader.displayName = "DialogHeader";
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
   const presentation = React.useContext(DialogPresentationContext);
   return (
-    <div className={cn("flex", resolveDialogFooterClassName(), presentation.footerClassName, className)} {...props} />
+    <div
+      data-modal-footer="true"
+      className={cn("flex", resolveDialogFooterClassName(), presentation.footerClassName, className)}
+      {...props}
+    />
   );
 };
 DialogFooter.displayName = "DialogFooter";
@@ -223,7 +227,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("text-base font-semibold leading-tight tracking-tight line-clamp-2 break-words", className)}
     {...props}
   />
 ));

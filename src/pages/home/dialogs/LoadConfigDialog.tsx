@@ -11,7 +11,6 @@ import {
   AppSheetBody,
   AppSheetContent,
   AppSheetDescription,
-  AppSheetFooter,
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
@@ -68,11 +67,6 @@ export function LoadConfigDialog({ open, onOpenChange, configs, onLoad, applying
             )}
           </div>
         </AppSheetBody>
-        <AppSheetFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </AppSheetFooter>
       </AppSheetContent>
     </AppSheet>
   );

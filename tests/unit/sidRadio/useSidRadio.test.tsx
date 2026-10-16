@@ -483,7 +483,7 @@ describe("useSidRadio", () => {
       expect.objectContaining({ description: expect.stringContaining("No HVSC music is installed yet") }),
     );
     expect(addLog).toHaveBeenCalledWith(
-      "warn",
+      "info",
       "SID Radio: the station did not start",
       expect.objectContaining({ notice: "no-hvsc", seedKind: "style" }),
     );

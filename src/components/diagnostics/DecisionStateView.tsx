@@ -62,21 +62,19 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold text-foreground">Decision state</h3>
-          <p className="text-xs text-muted-foreground">Internal reconciliation and uncertainty signals.</p>
-        </div>
+        <p className="min-w-0 text-xs text-muted-foreground">Internal reconciliation and uncertainty signals.</p>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="ml-auto h-7 text-xs"
+          className="ml-auto shrink-0"
+          title="Resync and repair"
           onClick={() => void onRepair()}
           disabled={repairRunning}
           data-testid="decision-state-repair"
         >
           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${repairRunning ? "animate-spin" : ""}`} aria-hidden="true" />
-          {repairRunning ? "Repairing" : "Resync / repair"}
+          {repairRunning ? "Repairing" : "Repair"}
         </Button>
       </div>
 

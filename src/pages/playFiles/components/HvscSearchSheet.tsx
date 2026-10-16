@@ -11,7 +11,14 @@ import { Play, Radio, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { useHvscArchiveSearch, type HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { loadRecentlyPlayed, type RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 
@@ -221,36 +228,35 @@ export const HvscSearchSheet = ({
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex flex-col" data-testid="hvsc-search-sheet">
-        <SheetHeader className={showIntro ? undefined : "pb-0"}>
-          <SheetTitle className={showIntro ? undefined : "text-base"}>Find a tune</SheetTitle>
-          {showIntro ? (
-            <SheetDescription>
-              {stationActive
-                ? "Search the whole of HVSC by title or composer. The station keeps its place and carries on afterward."
-                : "Search the whole of HVSC by title or composer."}
-            </SheetDescription>
-          ) : (
-            // The dialog primitive requires a description for its accessible name, so it stays in
-            // the tree and out of the layout rather than being removed.
-            <SheetDescription className="sr-only">Search the whole of HVSC by title or composer.</SheetDescription>
-          )}
-        </SheetHeader>
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="overflow-hidden p-0" data-testid="hvsc-search-sheet">
+        <AppSheetHeader>
+          <AppSheetTitle>Find a tune</AppSheetTitle>
+          <AppSheetDescription>Search the whole of HVSC by title or composer.</AppSheetDescription>
+        </AppSheetHeader>
 
-        <div className="flex items-center gap-2 pt-2">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <Input
-            autoFocus
-            placeholder="Title or composer…"
-            value={search.query}
-            onChange={(event) => search.setQuery(event.target.value)}
-            data-testid="hvsc-search-input"
-            aria-label="Search HVSC by title or composer"
-          />
+        <div className="shrink-0 space-y-1 px-3 pt-2">
+          {showIntro ? (
+            <p className="text-sm text-muted-foreground">
+              {stationActive
+                ? "The station keeps its place and carries on afterward."
+                : "Search the whole of HVSC by title or composer."}
+            </p>
+          ) : null}
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Input
+              autoFocus
+              placeholder="Title or composer…"
+              value={search.query}
+              onChange={(event) => search.setQuery(event.target.value)}
+              data-testid="hvsc-search-input"
+              aria-label="Search HVSC by title or composer"
+            />
+          </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pt-2" data-testid="hvsc-search-results">
+        <AppSheetBody className="px-3 py-2" data-testid="hvsc-search-results">
           {search.indexUnavailable ? (
             <p className="text-sm text-muted-foreground" data-testid="hvsc-search-unavailable">
               The HVSC index is not ready yet. Install or open the library once, then search again.
@@ -335,8 +341,8 @@ export const HvscSearchSheet = ({
               />
             </>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };
