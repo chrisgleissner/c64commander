@@ -302,6 +302,10 @@ const ActionListRow = React.memo(function ActionListRow({
   );
 });
 
+/** The view-all filter is the first row of the scrolling list, so it scrolls out of view with it. */
+const ViewAllFilterHeader = ({ context }: { context?: { filter: React.ReactNode } }) =>
+  context ? <div className="mb-2 space-y-2">{context.filter}</div> : null;
+
 export const SelectableActionList = ({
   title,
   items,
@@ -517,6 +521,37 @@ export const SelectableActionList = ({
     [viewAllScroller],
   );
 
+  const viewAllFilterNode = (
+    <>
+      {collapsibleFilter ? (
+        <CollapsibleListFilter
+          value={expandedFilterText}
+          onChange={setExpandedFilterText}
+          placeholder={filterPlaceholder}
+          testId="view-all-filter-input"
+          toggleTestId="view-all-filter-toggle"
+          header={viewAllFilterHeader ?? filterHeader}
+          headerSummary={filterHeaderSummary}
+          region={viewAllFilterRegion}
+        />
+      ) : (
+        <>
+          <ListFilterField
+            value={expandedFilterText}
+            onChange={setExpandedFilterText}
+            placeholder={filterPlaceholder}
+            testId="view-all-filter-input"
+          />
+          {(viewAllFilterHeader ?? filterHeader) ? (
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+              {viewAllFilterHeader ?? filterHeader}
+            </div>
+          ) : null}
+        </>
+      )}
+    </>
+  );
+
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
       {list.length === 0 ? (
@@ -636,32 +671,6 @@ export const SelectableActionList = ({
               <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
                 <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
                 <AppSheetDescription>Review all items in this list.</AppSheetDescription>
-                {collapsibleFilter ? (
-                  <CollapsibleListFilter
-                    value={expandedFilterText}
-                    onChange={setExpandedFilterText}
-                    placeholder={filterPlaceholder}
-                    testId="view-all-filter-input"
-                    toggleTestId="view-all-filter-toggle"
-                    header={viewAllFilterHeader ?? filterHeader}
-                    headerSummary={filterHeaderSummary}
-                    region={viewAllFilterRegion}
-                  />
-                ) : (
-                  <>
-                    <ListFilterField
-                      value={expandedFilterText}
-                      onChange={setExpandedFilterText}
-                      placeholder={filterPlaceholder}
-                      testId="view-all-filter-input"
-                    />
-                    {(viewAllFilterHeader ?? filterHeader) ? (
-                      <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                        {viewAllFilterHeader ?? filterHeader}
-                      </div>
-                    ) : null}
-                  </>
-                )}
               </AppSheetHeader>
               <AppSheetBody className={cn("relative flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
                 <div
@@ -672,11 +681,16 @@ export const SelectableActionList = ({
                   )}
                 >
                   {viewAllFilteredItems.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                      <div className="mb-2 space-y-2">{viewAllFilterNode}</div>
+                      <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
+                    </div>
                   ) : (
                     <Virtuoso
                       ref={virtuosoRef}
                       style={{ height: "100%" }}
+                      context={{ filter: viewAllFilterNode }}
+                      components={{ Header: ViewAllFilterHeader }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}
                       overscan={500}

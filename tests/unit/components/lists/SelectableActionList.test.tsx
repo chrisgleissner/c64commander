@@ -65,6 +65,33 @@ describe("SelectableActionList", () => {
     expect(card).toHaveClass("p-3");
   });
 
+  it("keeps the view-all filter out of the pinned header so it scrolls away with the list", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={1}
+          viewAllTitle="All files"
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+
+    const header = screen.getByTestId("action-list-view-all").firstElementChild;
+    expect(header).not.toContainElement(screen.getByTestId("view-all-filter-input"));
+    expect(header?.querySelector('[data-interstitial-header-row="true"]')).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
   it("bounds the expanded view-all sheet by the sheet's own top clearance", () => {
     localStorage.clear();
     setViewportWidth(1280);
