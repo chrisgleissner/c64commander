@@ -369,6 +369,9 @@ Header prohibitions:
 - Reserve space for selection and bulk-action controls.
 - Group related controls and keep labels concise and intention-driven.
 - Long paths must wrap and never force horizontal scrolling.
+- Scroll position markers appear when a scrollable page becomes active and while it scrolls. Use
+  the same 840 ms idle hold and existing 200 ms opacity fade on pages, sheets and dialogs; respect
+  reduced motion and keep the markers non-interactive. Page entry waits for navigation to settle.
 - Lists show a configurable preview limit and open a scrollable, query-backed “View all” bottom sheet for large result sets.
 
 ---

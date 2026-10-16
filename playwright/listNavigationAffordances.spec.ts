@@ -321,6 +321,26 @@ test.describe("List navigation affordances on the smallest screen", () => {
     expect(await longTasksSince(seen), "long tasks while dragging the rail").toEqual([]);
   });
 
+  test("entering and returning to a page shows its marker without scrolling @layout", async ({ page }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-shell")).toHaveAttribute("data-launch-phase", "app-ready");
+    const shown = page.locator('body > [data-testid="scroll-position-indicator"][data-visible="true"]');
+    await expect(shown).toHaveCount(1);
+    await expect(shown).toHaveCount(0, { timeout: 3000 });
+    await page.getByTestId("tab-home").click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByTestId("swipe-navigation-runway")).toHaveAttribute("data-runway-phase", "idle");
+    await expect(shown).toHaveCount(1);
+    await expect(shown).toHaveCount(0, { timeout: 3000 });
+    await page.keyboard.press("5");
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByTestId("swipe-navigation-runway")).toHaveAttribute("data-runway-phase", "idle");
+    await expect(shown).toHaveCount(1);
+    const thumb = await shown.locator(".scroll-position-thumb").boundingBox();
+    expect(thumb?.x).toBeGreaterThan(300);
+    expect(thumb!.x + thumb!.width).toBeLessThanOrEqual(320);
+  });
+
   test("the page scroll indicator shows while scrolling, covers nothing and fades @layout", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");

@@ -9,9 +9,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computeScrollIndicatorThumb } from "@/lib/scroll/scrollIndicatorGeometry";
+import { usePageActivity } from "@/hooks/usePageActivity";
 
-/** How long the indicator stays after the last scroll frame, close to Android's scroll bar fade delay. */
-export const SCROLL_INDICATOR_IDLE_MS = 600;
+/** Hold after the last scroll frame, before the shared CSS opacity fade begins. */
+export const SCROLL_INDICATOR_IDLE_MS = 840;
 
 const EDGE_INSET_PX = 2;
 const TRACK_INSET_PX = 4;
@@ -58,7 +59,15 @@ const setHostTimeline = (host: HTMLElement, name: string, present: boolean) => {
  * Inside a sheet or dialog it is drawn in that surface, so it shares its stacking order; for a page
  * it is drawn in the document body, below every surface.
  */
-export function ScrollPositionIndicator({ target }: { target: HTMLElement | null }) {
+export function ScrollPositionIndicator({
+  target,
+  showOnPageEntry = false,
+}: {
+  target: HTMLElement | null;
+  showOnPageEntry?: boolean;
+}) {
+  const pageActive = usePageActivity();
+  const active = showOnPageEntry ? pageActive : undefined;
   const indicatorRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
@@ -70,7 +79,7 @@ export function ScrollPositionIndicator({ target }: { target: HTMLElement | null
   useEffect(() => {
     const indicator = indicatorRef.current;
     const thumb = thumbRef.current;
-    if (!target || !host || !indicator || !thumb) return undefined;
+    if (!target || !host || !indicator || !thumb || active === false) return undefined;
     const inSurface = host !== document.body;
     const timeline = supportsScrollTimeline() ? `--scroll-position-${(timelineSequence += 1)}` : null;
     let frame = 0;
@@ -79,6 +88,8 @@ export function ScrollPositionIndicator({ target }: { target: HTMLElement | null
     let lastScrollAt = 0;
     let lastMeasureAt = 0;
     let shown = false;
+    let entryPending = active === true;
+    let entryObserver: MutationObserver | undefined;
     const written = new Map<string, string>();
 
     const write = (property: string, value: string) => {
@@ -133,6 +144,7 @@ export function ScrollPositionIndicator({ target }: { target: HTMLElement | null
     };
 
     const onScroll = () => {
+      if (entryPending) return;
       lastScrollAt = performance.now();
       const needsDraw = !timeline || !shown || lastScrollAt - lastMeasureAt > REMEASURE_MS;
       if (needsDraw && frame === 0) frame = requestAnimationFrame(draw);
@@ -145,7 +157,26 @@ export function ScrollPositionIndicator({ target }: { target: HTMLElement | null
       write("--scroll-indicator-timeline", timeline);
     }
     target.addEventListener("scroll", onScroll, { passive: true });
+    if (entryPending) {
+      // Measure once the page is actually presented, not while its slide places it off screen or
+      // the launch cover hides it. Observe only these two phase attributes, then disconnect;
+      // page entry needs no polling, per-frame JavaScript or ongoing observer.
+      const runway = target.closest<HTMLElement>("[data-runway-phase]");
+      const shell = target.closest<HTMLElement>("[data-launch-phase]");
+      const showEntry = () => {
+        if (runway && runway.dataset.runwayPhase !== "idle") return;
+        if (shell && shell.dataset.launchPhase !== "app-ready") return;
+        entryObserver?.disconnect();
+        entryPending = false;
+        onScroll();
+      };
+      entryObserver = new MutationObserver(showEntry);
+      if (runway) entryObserver.observe(runway, { attributes: true, attributeFilter: ["data-runway-phase"] });
+      if (shell) entryObserver.observe(shell, { attributes: true, attributeFilter: ["data-launch-phase"] });
+      showEntry();
+    }
     return () => {
+      entryObserver?.disconnect();
       target.removeEventListener("scroll", onScroll);
       if (frame !== 0) cancelAnimationFrame(frame);
       clearTimeout(hideTimer);
@@ -157,13 +188,14 @@ export function ScrollPositionIndicator({ target }: { target: HTMLElement | null
         setHostTimeline(host, timeline, false);
       }
     };
-  }, [target, host]);
+  }, [target, host, active]);
 
   if (!host) return null;
   return createPortal(
     <div
       ref={indicatorRef}
       className="scroll-position-indicator"
+      hidden={active === false}
       data-host={host === document.body ? "page" : "surface"}
       data-visible="false"
       data-testid="scroll-position-indicator"

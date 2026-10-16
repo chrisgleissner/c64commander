@@ -120,7 +120,7 @@ export function PageContainer({ children, className, size = "default", as = "mai
       style={style}
     >
       {children}
-      <ScrollPositionIndicator target={scrollElement} />
+      <ScrollPositionIndicator target={scrollElement} showOnPageEntry />
     </Component>
   );
 }

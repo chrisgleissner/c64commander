@@ -9,6 +9,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SCROLL_INDICATOR_IDLE_MS, ScrollPositionIndicator } from "@/components/ScrollPositionIndicator";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const defineMetrics = (element: HTMLElement, metrics: { scrollHeight: number; clientHeight: number }) => {
   Object.defineProperty(element, "scrollHeight", { configurable: true, value: metrics.scrollHeight });
@@ -62,7 +63,7 @@ describe("ScrollPositionIndicator", () => {
     expect(thumb()?.style.transform).toBe("translate3d(315px, 352px, 0)");
   });
 
-  it("fades out once scrolling stops", () => {
+  it("holds for 840 ms after scrolling, then retains tracking until the opacity fade finishes", () => {
     vi.useFakeTimers();
     const page = document.createElement("main");
     document.body.appendChild(page);
@@ -76,11 +77,11 @@ describe("ScrollPositionIndicator", () => {
     expect(indicator()).toHaveAttribute("data-visible", "true");
 
     act(() => {
-      vi.advanceTimersByTime(SCROLL_INDICATOR_IDLE_MS - 40);
+      vi.advanceTimersByTime(600);
     });
     expect(indicator()).toHaveAttribute("data-visible", "true");
     act(() => {
-      vi.advanceTimersByTime(40);
+      vi.advanceTimersByTime(240);
     });
     expect(indicator()).toHaveAttribute("data-visible", "false");
     expect(thumb()).toHaveAttribute("data-tracking", "true");
@@ -90,11 +91,69 @@ describe("ScrollPositionIndicator", () => {
     expect(thumb()).toHaveAttribute("data-tracking", "false");
   });
 
-  it("stays hidden when the content fits", async () => {
+  it("shows on first entry and every return to a kept page without needing a scroll event", () => {
+    vi.useFakeTimers();
+    const page = document.createElement("main");
+    document.body.appendChild(page);
+    defineMetrics(page, { scrollHeight: 1600, clientHeight: 408 });
+    const view = (active: boolean) => (
+      <ScreenActivityProvider active={active}>
+        <ScrollPositionIndicator target={page} showOnPageEntry />
+      </ScreenActivityProvider>
+    );
+    const { rerender } = render(view(true));
+    act(() => vi.advanceTimersByTime(20));
+    expect(indicator()).toHaveAttribute("data-visible", "true");
+    act(() => vi.advanceTimersByTime(SCROLL_INDICATOR_IDLE_MS + 300));
+    expect(indicator()).toHaveAttribute("data-visible", "false");
+    rerender(view(false));
+    expect(indicator()).toHaveAttribute("hidden");
+    act(() => {
+      page.dispatchEvent(new Event("scroll"));
+      vi.advanceTimersByTime(20);
+    });
+    expect(indicator()).toHaveAttribute("data-visible", "false");
+    page.scrollTop = 800;
+    rerender(view(true));
+    expect(indicator()).not.toHaveAttribute("hidden");
+    act(() => vi.advanceTimersByTime(20));
+    expect(indicator()).toHaveAttribute("data-visible", "true");
+    expect(thumb()?.style.transform).toBe("translate3d(315px, 254px, 0)");
+  });
+
+  it("waits for launch and the page slide to finish before showing the entry marker", async () => {
+    vi.useFakeTimers();
+    const shell = document.createElement("div");
+    shell.dataset.launchPhase = "fade-out";
+    const runway = document.createElement("div");
+    runway.dataset.runwayPhase = "transitioning";
+    const page = document.createElement("main");
+    shell.appendChild(runway);
+    runway.appendChild(page);
+    document.body.appendChild(shell);
+    defineMetrics(page, { scrollHeight: 1600, clientHeight: 408 });
+    const { unmount } = render(<ScrollPositionIndicator target={page} showOnPageEntry />);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(indicator()).toHaveAttribute("data-visible", "false");
+    await act(async () => {
+      shell.dataset.launchPhase = "app-ready";
+    });
+    act(() => vi.advanceTimersByTime(20));
+    expect(indicator()).toHaveAttribute("data-visible", "false");
+    await act(async () => {
+      runway.dataset.runwayPhase = "idle";
+    });
+    act(() => vi.advanceTimersByTime(20));
+    expect(indicator()).toHaveAttribute("data-visible", "true");
+    unmount();
+    shell.remove();
+  });
+
+  it.each([false, true])("stays hidden when the content fits (show on entry: %s)", async (showOnPageEntry) => {
     const page = document.createElement("main");
     document.body.appendChild(page);
     defineMetrics(page, { scrollHeight: 408, clientHeight: 408 });
-    render(<ScrollPositionIndicator target={page} />);
+    render(<ScrollPositionIndicator target={page} showOnPageEntry={showOnPageEntry} />);
     await scrollTo(page, 0);
     expect(indicator()).toHaveAttribute("data-visible", "false");
   });
