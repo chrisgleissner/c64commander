@@ -507,7 +507,9 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await waitForAnimations(page);
     const bar = page.getByTestId("keypad-guidance-bar");
     await expect(bar).toHaveAttribute("data-visible", "true");
-    await expect(bar.getByTestId("keypad-guidance-center")).toContainText("Select");
+    // On the compact screen the OK cap stands alone in this menu; the word "Select" cut entry names off.
+    await expect(bar.getByTestId("keypad-guidance-center")).toBeVisible();
+    await expect(bar.getByTestId("keypad-guidance-center").locator(".keypad-guidance-action")).toHaveText("");
 
     const problems: string[] = [];
     for (let index = 0; index < count; index += 1) {
@@ -528,6 +530,13 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
         page.getByTestId("keypad-guidance-breadcrumb"),
         "The guidance bar names the selected entry",
       ).toHaveText(measured.label);
+      if (
+        !(await page
+          .locator(".keypad-guidance-breadcrumb-text")
+          .evaluate((text) => text.scrollWidth <= text.clientWidth + 1))
+      ) {
+        problems.push(`${measured.label}: cut off in the guidance bar`);
+      }
       if (measured.width < 44 || measured.height < 44) {
         problems.push(`${measured.label}: ${Math.round(measured.width)}x${Math.round(measured.height)}`);
       }
