@@ -3228,7 +3228,15 @@ test.describe("App screenshots", () => {
       // Stop the clock now that the tune is up, so the elapsed time, the remaining
       // time and the progress bar cannot move between here and the shutter. See
       // FEATURED_SID for why this happens after connecting rather than before.
-      await page.clock.setFixedTime(Date.now());
+      // The app bar badge is part of this picture, so it has to have reached its verdict first.
+      const badge = page.getByTestId("unified-health-badge");
+      await expect(badge).toHaveAttribute("data-health-state", "Healthy");
+      // Pinned to the page's own clock, which installFixedClock already holds at FIXED_NOW_MS. The
+      // test runner's Date.now() is today: pinning to it moved the page two years on, every trace
+      // event fell out of the health window, and the badge dropped to Idle before the shutter.
+      const pageNowMs = await page.evaluate(() => Date.now());
+      await page.clock.setFixedTime(pageNowMs);
+      expect(await page.evaluate(() => Date.now())).toBe(pageNowMs);
 
       // Scrolled to the tune rather than photographed from the top of the page.
       //
@@ -3245,6 +3253,7 @@ test.describe("App screenshots", () => {
         await applyDisplayProfileViewport(page, profileId);
         await captureScreenshot(page, testInfo, profileScreenshotPath("play/sid-radio", profileId, "01-controls.png"));
       }
+      await expect(badge).toHaveAttribute("data-health-state", "Healthy");
 
       // The tunes inside the file, reached from "Tune 1 of 19" on the credits line. The seeded tune
       // holds nineteen, which is what makes the list worth having.
