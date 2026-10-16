@@ -149,6 +149,8 @@ test.describe("Re-selecting the current tab", () => {
     await page.waitForTimeout(2_000);
 
     expect(mixerLevels()).toEqual(muted);
+    // The remounted page reads the mixer that the Mute left, so it offers Unmute rather than a second Mute.
+    await expect(page.getByTestId("volume-mute")).toHaveAttribute("aria-label", "Unmute");
     expect(server.sidplayRequests).toHaveLength(1);
     await attachStepScreenshot(page, testInfo, "muted-after-reselect");
   });

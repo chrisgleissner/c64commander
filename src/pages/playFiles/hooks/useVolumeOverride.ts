@@ -513,6 +513,15 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     });
   }
 
+  const reconcilePlaybackMixerRef = useRef<() => void>(() => undefined);
+  reconcilePlaybackMixerRef.current = () => {
+    void Promise.all([
+      refetchAudioMixerCategory(),
+      refetchMasterAudioMixerCategory(),
+      refetchSidSocketsCategory(),
+      refetchSidAddressingCategory(),
+    ]);
+  };
   const schedulePlaybackReconciliation = useCallback(() => {
     if (playbackReconcileTimerRef.current) {
       window.clearTimeout(playbackReconcileTimerRef.current);
@@ -523,19 +532,9 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     );
     playbackReconcileTimerRef.current = window.setTimeout(() => {
       playbackReconcileTimerRef.current = null;
-      void Promise.all([
-        refetchAudioMixerCategory(),
-        refetchMasterAudioMixerCategory(),
-        refetchSidSocketsCategory(),
-        refetchSidAddressingCategory(),
-      ]);
+      reconcilePlaybackMixerRef.current();
     }, delayMs);
-  }, [
-    refetchAudioMixerCategory,
-    refetchMasterAudioMixerCategory,
-    refetchSidAddressingCategory,
-    refetchSidSocketsCategory,
-  ]);
+  }, []);
 
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
@@ -1282,11 +1281,13 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     volumeMuted,
   ]);
 
+  // A pending read-back runs now: a write skips invalidation, and a remount read the mixer from before it.
   useEffect(() => {
     return () => {
       if (playbackReconcileTimerRef.current) {
         window.clearTimeout(playbackReconcileTimerRef.current);
         playbackReconcileTimerRef.current = null;
+        reconcilePlaybackMixerRef.current();
       }
     };
   }, []);

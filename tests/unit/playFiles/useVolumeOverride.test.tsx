@@ -656,6 +656,37 @@ describe("useVolumeOverride", () => {
     expect(addLog).toHaveBeenCalledWith("info", "Play volume unmute sent", expect.objectContaining({ index: 1 }));
   });
 
+  // A re-selected Play tab remounts the page. A Mute's write skips the cache invalidation and asks for the mixer
+  // again a moment later; unmounting cancelled that, so the next instance read the levels from before the Mute.
+  it("reads the mixer back when it unmounts before the read that follows a Mute", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    const { result, unmount } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+    await waitFor(() => expect(result.current.volumeState.index).toBe(1));
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+    refetchAudioMixerCategoryMock.mockClear();
+
+    unmount();
+
+    expect(refetchAudioMixerCategoryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not read the mixer back on unmount when no read is pending", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    const { result, unmount } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+    await waitFor(() => expect(result.current.volumeState.index).toBe(1));
+    refetchAudioMixerCategoryMock.mockClear();
+
+    unmount();
+
+    expect(refetchAudioMixerCategoryMock).not.toHaveBeenCalled();
+  });
+
   it("holds the polling pause while a mute toggle write is in flight", async () => {
     let resolveWrite: (() => void) | null = null;
     mutateAsyncMock.mockImplementation(
