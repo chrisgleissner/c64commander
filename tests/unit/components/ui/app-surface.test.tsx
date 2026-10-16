@@ -288,7 +288,7 @@ describe("App surface primitives", () => {
 
     const footer = screen.getByRole("button", { name: "Cancel" }).parentElement as HTMLElement;
     expect(footer.className).not.toContain("safe-area-inset-bottom");
-    expect(footer).toHaveClass("pb-4");
+    expect(footer).toHaveClass("pb-3");
   });
 
   it("keeps sheet header actions and close control on the shared title row", () => {
