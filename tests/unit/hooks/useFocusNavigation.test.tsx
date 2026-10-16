@@ -2225,7 +2225,12 @@ describe("a tab jump", () => {
     resetInputModality();
   });
 
-  const TabbedPages = () => {
+  /** The remembered scroll offset the Play page reopens at. */
+  const keepScrolledTo = (top: number) => (element: HTMLDivElement | null) => {
+    if (element) Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+  };
+
+  const TabbedPages = ({ scrolledTop = 0 }: { scrolledTop?: number }) => {
     const [page, setPage] = useState(0);
     const shortcuts = useMemo(() => ({ jumpToTab: (index: number) => setPage(index) }), []);
     return (
@@ -2236,10 +2241,12 @@ describe("a tab jump", () => {
             <button>Home second</button>
           </main>
         ) : (
-          <main key="play">
-            <button>Play first</button>
-            <button>Play second</button>
-          </main>
+          <div key="play" data-slot-active="true">
+            <div data-page-scroll-container="true" ref={keepScrolledTo(scrolledTop)}>
+              <button>Play first</button>
+              <button>Play second</button>
+            </div>
+          </div>
         )}
       </FocusNavigationProvider>
     );
@@ -2259,6 +2266,35 @@ describe("a tab jump", () => {
 
     expect(button("Play first")).toHaveAttribute(SELECTED, "true");
     expect(scrolled).toContain(button("Play first"));
+    scrollIntoView.mockRestore();
+  });
+
+  it("keeps a page that reopens scrolled where it is and selects the first stop seen there", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    const boxes = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const top = this.hasAttribute("data-page-scroll-container")
+        ? 0
+        : this.textContent === "Play first"
+          ? -300
+          : this.textContent === "Play second"
+            ? 150
+            : 0;
+      const height = this.hasAttribute("data-page-scroll-container") ? 400 : 44;
+      return { top, bottom: top + height, height, left: 0, right: 100, width: 100, x: 0, y: top, toJSON: () => ({}) };
+    });
+    render(<TabbedPages scrolledTop={900} />);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    scrolled.length = 0;
+
+    fireEvent.keyDown(document.body, { key: "2", code: "Digit2" });
+    await act(afterRingRescan);
+
+    expect(button("Play second")).toHaveAttribute(SELECTED, "true");
+    expect(scrolled).not.toContain(button("Play first"));
+    boxes.mockRestore();
     scrollIntoView.mockRestore();
   });
 });

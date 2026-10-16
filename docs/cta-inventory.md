@@ -160,9 +160,11 @@ F1 is the neutral `function1` action (see the F1 row).
   Mode (not on a device that cannot stream, such as a U2, the same gate as the Home
   Game tile), `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
   same exclusions — never in a text field, never inside an open overlay. A tab jump
-  selects the new page's first own stop and keeps it in view while the page settles (a page left
-  scrolled reappears where it was, and late content moves it), until the next key: the app bar's Quick menu button and badge
-  (`data-focus-chrome`) are passed over by the default selection and stay one Up away.
+  keeps the page where it was left and selects the first of its own stops seen whole there, clear
+  of the app bar and the guidance bar. At the top of the page, or when no stop is in view, it selects
+  the page's first own stop and scrolls it into view. Until the next key, or for 3 s, it does so again
+  after each change while the page settles, so late content cannot leave the selection off screen.
+  The app bar's Quick menu button and badge (`data-focus-chrome`) are passed over and stay one Up away.
 
 Discovery is automatic: the provider scans the active
 scope (topmost dialog/menu/sheet, else the routed page + bottom TabBar) and

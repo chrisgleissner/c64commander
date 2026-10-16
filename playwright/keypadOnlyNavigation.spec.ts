@@ -702,26 +702,32 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     }
   });
 
-  test("a tab jump to a page left scrolled down shows the stop it selects @layout", async ({ page }) => {
+  test("a tab jump back to a page left scrolled down keeps its position and selects a stop seen there @layout", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await settle(page);
     await page.keyboard.press("ArrowDown");
     await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
-    const scrolledBy = await page.evaluate(() => {
+    const scrollTop = () =>
+      page.evaluate(
+        () =>
+          document.querySelector<HTMLElement>('[data-slot-active="true"] [data-page-scroll-container="true"]')
+            ?.scrollTop ?? 0,
+      );
+    await page.evaluate(() => {
       const scroller = document.querySelector<HTMLElement>(
         '[data-slot-active="true"] [data-page-scroll-container="true"]',
       );
-      if (!scroller) return 0;
-      scroller.scrollTop = scroller.scrollHeight;
-      return scroller.scrollTop;
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
     });
-    expect(scrolledBy, "Play must be long enough to leave scrolled").toBeGreaterThan(200);
+    await page.waitForTimeout(300);
+    const leftAt = await scrollTop();
+    expect(leftAt, "Play must be long enough to leave scrolled").toBeGreaterThan(200);
 
-    for (const digit of ["1", "2"]) {
-      await page.keyboard.press(digit);
-      await page.waitForTimeout(800);
-      const placement = await page.evaluate(() => {
+    const selectedPlacement = () =>
+      page.evaluate(() => {
         const selected = document.querySelector<HTMLElement>('[data-key-selected="true"]');
         const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"]');
         const header = document.querySelector<HTMLElement>('[data-slot-active="true"] header');
@@ -735,13 +741,19 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
           barTop: Math.round(bar.getBoundingClientRect().top),
         };
       });
+    for (const digit of ["1", "2"]) {
+      await page.keyboard.press(digit);
+      await page.waitForTimeout(800);
+      const placement = await selectedPlacement();
       expect(placement, `After ${digit} nothing is selected`).not.toBeNull();
       const { id, top, bottom, headerBottom, barTop } = placement!;
+      const tall = bottom - top > barTop - headerBottom;
       expect(
-        top >= headerBottom - 1 && Math.min(bottom, top + 44) <= barTop + 1,
-        `After ${digit} ${id} is at ${top}..${bottom}, outside ${headerBottom}..${barTop}`,
+        top >= headerBottom - 1 && (bottom <= barTop + 1 || (tall && top < barTop)),
+        `After ${digit} ${id} is at ${top}..${bottom}, not whole inside ${headerBottom}..${barTop}`,
       ).toBe(true);
     }
+    expect(Math.abs((await scrollTop()) - leftAt), "Play reopened where it was left").toBeLessThan(80);
   });
 
   test("closing Remote Input from its menu after closing Backup returns to the Input tile, not to Backup @layout", async ({
