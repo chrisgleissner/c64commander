@@ -54,7 +54,11 @@ describe("PlaybackSettingsPanel", () => {
 
   it("names the duration field and the songlengths button by what they change", () => {
     render(<PlaybackSettingsPanel {...baseProps} />);
-    expect(guidanceLabelFor(screen.getByTestId("duration-input"))).toBe("Default duration (mm:ss)");
+    expect(screen.getByRole("textbox", { name: "Default duration (mm:ss)" })).toBe(
+      screen.getByTestId("duration-input"),
+    );
+    // The guidance bar's short name fits the compact bar beside OK Edit; the full name was cut there.
+    expect(guidanceLabelFor(screen.getByTestId("duration-input"))).toBe("Default duration");
     expect(guidanceLabelFor(screen.getByRole("button", { name: "Change songlengths file" }))).toBe(
       "Change songlengths file",
     );

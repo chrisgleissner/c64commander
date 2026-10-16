@@ -77,6 +77,7 @@ export const PlaybackSettingsPanel = ({
             maxLength={5}
             placeholder="mm:ss"
             aria-label="Default duration (mm:ss)"
+            data-guidance-label="Default duration"
             className="w-[84px] text-right"
             data-testid="duration-input"
           />

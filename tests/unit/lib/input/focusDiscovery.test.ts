@@ -743,6 +743,36 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("returns to the most recent opener, not to an opener a dialog returned to earlier", () => {
+    const page = mount(`<div id="page"><button id="backup">Backup</button><button id="input">Input</button></div>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+    const selected = () => engine.elementForId(controller.current()!.id)?.id;
+
+    controller.setCurrent(idOf("backup"));
+    const dialog = mount(`<div role="dialog"><button>Cancel</button></div>`);
+    engine.refresh();
+    dialog.remove();
+    engine.refresh();
+    expect(selected()).toBe("backup");
+
+    controller.setCurrent(idOf("input"));
+    const sheet = mount(`<div role="dialog" data-key-nav-skip=""><button>Show controls</button></div>`);
+    page.setAttribute("aria-hidden", "true");
+    engine.refresh();
+    const menu = mount(`<div role="menu"><button>Close Remote Input</button></div>`);
+    engine.refresh();
+    menu.remove();
+    engine.refresh();
+    sheet.remove();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(selected()).toBe("input");
+    engine.stop();
+  });
+
   describe("a key-owning sheet closed from its own menu", () => {
     const openSheetFromOpener = () => {
       const page = mount(`<div id="page"><button id="first">first</button><button id="opener">Input</button></div>`);

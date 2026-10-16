@@ -207,11 +207,16 @@ const isCompactProfile = (): boolean =>
 
 /**
  * On the smallest screen "Activate" is dropped as well: OK on a button presses it, which the cap says,
- * and the word took the 60 px the breadcrumb needed to name the control at all.
+ * and the word took the 60 px the breadcrumb needed to name the control at all. So is "Select" on an
+ * entry of a soft-key menu, which cut "Close Remote Input" to "Close Remote…".
  */
+const wordTheCapSays = (label: string): boolean =>
+  label === "Activate" ||
+  (label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null);
+
 const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
   const repeatsCap = label.trim().toLowerCase() === cap.toLowerCase();
-  setTextIfChanged(action, repeatsCap || (label === "Activate" && isCompactProfile()) ? "" : label);
+  setTextIfChanged(action, repeatsCap || (isCompactProfile() && wordTheCapSays(label)) ? "" : label);
 };
 
 /**

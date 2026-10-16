@@ -7,7 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -2216,6 +2216,49 @@ describe("the first key after pointer use", () => {
     expect(button("Second card")).toHaveAttribute(SELECTED, "true");
     const last = reserveAtScroll.filter(([label]) => label === "Second card").at(-1);
     expect(last?.[1]).toBe("var(--keypad-guidance-bar-height)");
+    scrollIntoView.mockRestore();
+  });
+});
+
+describe("a tab jump", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  const TabbedPages = () => {
+    const [page, setPage] = useState(0);
+    const shortcuts = useMemo(() => ({ jumpToTab: (index: number) => setPage(index) }), []);
+    return (
+      <FocusNavigationProvider shortcuts={shortcuts}>
+        {page === 0 ? (
+          <main key="home">
+            <button>Home first</button>
+            <button>Home second</button>
+          </main>
+        ) : (
+          <main key="play">
+            <button>Play first</button>
+            <button>Play second</button>
+          </main>
+        )}
+      </FocusNavigationProvider>
+    );
+  };
+
+  it("scrolls the new page's first stop into view once the page has been scanned", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    render(<TabbedPages />);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    scrolled.length = 0;
+
+    fireEvent.keyDown(document.body, { key: "2", code: "Digit2" });
+    await act(afterRingRescan);
+
+    expect(button("Play first")).toHaveAttribute(SELECTED, "true");
+    expect(scrolled).toContain(button("Play first"));
     scrollIntoView.mockRestore();
   });
 });
