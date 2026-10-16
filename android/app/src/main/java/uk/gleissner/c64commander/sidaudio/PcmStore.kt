@@ -188,18 +188,18 @@ internal class PcmStore(
     /** One second at 48 kHz: big enough that a whole tune is a short list, small enough to waste little. */
     const val DEFAULT_BLOCK_FRAMES = 48_000
     /** Above the web cache's own 128 MB, so this only fires when an id has leaked. */
-    private const val MIN_RETAINED_BUDGET_BYTES = 32L * 1024 * 1024
-    private const val MAX_RETAINED_BUDGET_BYTES = 96L * 1024 * 1024
+    private const val MIN_RETAINED_BUDGET_BYTES = 48L * 1024 * 1024
+    private const val MAX_RETAINED_BUDGET_BYTES = 64L * 1024 * 1024
 
     /**
      * A direct ByteBuffer on Android is a non-movable array on the Java heap, so retained PCM is
      * counted against the heap limit. Android asks the system to destroy the app's background
-     * activities once the heap in use passes three quarters of that limit, so the budget stays well
-     * below it: three eighths of the limit, which is 48 MB at the default 128 MB and 96 MB with a
-     * large heap.
+     * activities once the heap in use passes three quarters of that limit, and a dropped buffer stays
+     * on the heap while the feed still plays from it. A quarter of the limit leaves room for both: it
+     * is 64 MB with the 256 MB large heap, and never less than the 48 MB one pre-render needs.
      */
     fun retainedBudgetFor(maxHeapBytes: Long): Long =
-        (maxHeapBytes * 3 / 8).coerceIn(MIN_RETAINED_BUDGET_BYTES, MAX_RETAINED_BUDGET_BYTES)
+        (maxHeapBytes / 4).coerceIn(MIN_RETAINED_BUDGET_BYTES, MAX_RETAINED_BUDGET_BYTES)
     const val DEFAULT_EPHEMERAL_TTL_NANOS = 120_000_000_000L
   }
 }

@@ -153,7 +153,7 @@ export const PlaylistPanel = ({
               aria-label="Add items to playlist"
               id="add-items-to-playlist"
               data-testid="add-items-to-playlist"
-              className="min-h-11"
+              className="min-h-11 whitespace-nowrap px-2"
             >
               <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
               Add
@@ -165,7 +165,7 @@ export const PlaylistPanel = ({
                 size="sm"
                 onClick={() => setClearConfirmOpen(true)}
                 aria-label="Clear playlist"
-                className="min-h-11 text-destructive hover:text-destructive"
+                className="min-h-11 whitespace-nowrap px-2 text-destructive hover:text-destructive"
               >
                 <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
                 Clear

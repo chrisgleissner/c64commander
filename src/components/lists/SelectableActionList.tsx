@@ -660,10 +660,10 @@ export const SelectableActionList = ({
       </div>
 
       {headerActions || shouldShowViewAll ? (
-        <div className="grid min-w-0 grid-flow-col auto-cols-fr items-center gap-2 [&>*]:min-w-0 [&>*]:whitespace-nowrap [&>*]:px-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 [&>*]:flex-auto">
           {headerActions}
           {shouldShowViewAll && (
-            <Button variant="outline" size="sm" onClick={() => setViewAllOpen(true)}>
+            <Button variant="outline" size="sm" className="whitespace-nowrap px-2" onClick={() => setViewAllOpen(true)}>
               {viewAllLabel}
             </Button>
           )}
