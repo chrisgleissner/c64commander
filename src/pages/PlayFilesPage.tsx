@@ -117,6 +117,7 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
@@ -301,6 +302,7 @@ export default function PlayFilesPage() {
   // rejected. Declared here because the transport latch below is declared long
   // before that hook runs.
   const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
+  const [playlistRestored, setPlaylistRestored] = useState(false); // Set below, after the persistence hook.
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
@@ -1670,6 +1672,7 @@ export default function PlayFilesPage() {
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
+    queueReady: playlistRestored && sessionRestoreSettled,
     // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
@@ -2289,6 +2292,7 @@ export default function PlayFilesPage() {
     setPlaylistEnded,
     setSessionRestoreSettled,
   });
+  useEffect(() => setPlaylistRestored(playlistHydrated), [playlistHydrated]);
   const stationHandover = useStationPlaylistHandover({
     queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
     playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
@@ -2316,11 +2320,13 @@ export default function PlayFilesPage() {
     shuffleSeed,
   );
 
-  useEffect(() => {
-    if (isPlaying || isPaused) return;
-    if (!volumeSessionActiveRef.current) return;
-    void restoreVolumeOverrides("playback-ended");
-  }, [isPaused, isPlaying, restoreVolumeOverrides]);
+  useRestoreVolumeWhenPlaybackEnds({
+    sessionRestoreSettled,
+    isPlaying,
+    isPaused,
+    volumeSessionActiveRef,
+    restoreVolumeOverrides,
+  });
 
   const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
   const navigateCleanupIsPlayingRef = useRef(isPlaying);

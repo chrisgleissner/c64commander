@@ -72,6 +72,11 @@ export interface UseSidRadioParams {
   /** Current cursor + queue length (drives lookahead refills). */
   currentIndex: number;
   playlistLength: number;
+  /**
+   * The playlist and its position have been read back. Until then the empty queue at index -1 is not the station's
+   * tail: a resumed station topped it up with 10 tunes on every remount of the Play page (R5-5).
+   */
+  queueReady: boolean;
   /** Test seams. */
   clientFactory?: () => SidRadioWorkerClient;
   resolvePath?: (md5_48: string) => string | null;
@@ -258,7 +263,7 @@ const defaultRandomSeed = (): number => {
   return Math.floor(Math.random() * 0xffffffff);
 };
 export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
-  const { enabled, startPlaylist, appendItems, currentIndex, playlistLength } = params;
+  const { enabled, startPlaylist, appendItems, currentIndex, playlistLength, queueReady } = params;
   const resolvePath = params.resolvePath ?? ((md5) => resolveVirtualPath(md5));
   const randomSeed = params.randomSeed ?? defaultRandomSeed;
 
@@ -723,7 +728,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
 
   // Lookahead refill: when the cursor nears the tail, resolve + append more.
   useEffect(() => {
-    if (!station || !providerRef.current) return;
+    if (!station || !providerRef.current || !queueReady) return;
     const remaining = playlistLength - currentIndex - 1;
     if (remaining > REFILL_THRESHOLD || refillingRef.current) return;
     refillingRef.current = true;
@@ -800,7 +805,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         // will, so the station stops after it, and the user is told why.
         if (stationGenerationRef.current === generation && remaining === 0) setNotice("refill-failed");
       });
-  }, [station, currentIndex, playlistLength, appendItems, notesMissingRef]);
+  }, [station, currentIndex, playlistLength, queueReady, appendItems, notesMissingRef]);
 
   // Record auto-advances for the continuity stat (§9.2). The determinism
   // sequence is recorded at emit time instead -- see `recordEmitted`.
