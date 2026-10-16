@@ -138,7 +138,7 @@ class SidplayEzRendererTest {
     val outcome = CompletableFuture<String>()
     r.prerender(
         request(),
-        600.0,
+        60.0,
         object : SidplayEzRenderer.PrerenderListener {
           override fun chunk(bufferId: Long, frames: Long, seconds: Double) {
             if (frames >= 240000) r.dispose()
@@ -166,7 +166,7 @@ class SidplayEzRendererTest {
     val outcome = CompletableFuture<Long>()
     r.prerender(
         request(),
-        600.0,
+        60.0,
         object : SidplayEzRenderer.PrerenderListener {
           override fun chunk(bufferId: Long, frames: Long, seconds: Double) {
             r.cancelPrerender()
@@ -185,6 +185,35 @@ class SidplayEzRendererTest {
           }
         })
     assertEquals(240000L, outcome.get(30, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun `a pre-render longer than the retained budget is refused before it renders anything`() {
+    val smallStore = PcmStore(retainedBudgetBytes = 10L * 48000 * 4)
+    val r = SidplayEzRenderer(renderers.size + 1, smallStore, background = true).also { renderers.add(it) }
+    val outcome = CompletableFuture<String>()
+    r.prerender(
+        request(),
+        11.0,
+        object : SidplayEzRenderer.PrerenderListener {
+          override fun chunk(bufferId: Long, frames: Long, seconds: Double) {
+            outcome.complete("chunk")
+          }
+
+          override fun done(bufferId: Long, frames: Long, seconds: Double) {
+            outcome.complete("done")
+          }
+
+          override fun cancelled(bufferId: Long, frames: Long, seconds: Double) {
+            outcome.complete("cancelled")
+          }
+
+          override fun failed(error: Exception) {
+            outcome.complete("failed: ${error.message}")
+          }
+        })
+    assertTrue(outcome.get(30, TimeUnit.SECONDS).startsWith("failed: Pre-render of 11 s needs more than"))
+    assertEquals(0, smallStore.size)
   }
 
   @Test

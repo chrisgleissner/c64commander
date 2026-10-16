@@ -227,6 +227,11 @@ internal class SidplayEzRenderer(
         val rate = native.nativeSampleRate(offline)
         buffer = store.create(rate, retained = true)
         val total = (seconds * rate).toLong()
+        if (total > store.retainedFramesThatFit()) {
+          throw IllegalArgumentException(
+              "Pre-render of ${seconds.toLong()} s needs more than the ${store.retainedBudgetBytes} byte retained PCM budget",
+          )
+        }
         val superseded = { disposed || generation.get() != myGeneration }
         while (buffer.frames < total && !superseded()) {
           val before = buffer.frames

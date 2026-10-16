@@ -8,7 +8,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LocalSidEngine, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
+import { LocalSidEngine, MAX_PRERENDER_SECONDS, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
+import type { RenderedTuneCache } from "@/lib/playback/renderedTuneCache";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 
 /**
@@ -153,5 +154,52 @@ describe("pre-render runs off the playback thread", () => {
     // Otherwise it keeps a second WASM instance alive, rendering a tune that is
     // no longer wanted.
     expect(prerenderWorker.terminated).toBe(true);
+  });
+
+  describe("how much of a tune is pre-rendered", () => {
+    const prerenderedMessage = (engine: LocalSidEngine) => {
+      const worker = workers[1]!;
+      const id = (engine as unknown as { prerenderId: number }).prerenderId;
+      const sampleRate = 100;
+      const channels = 2;
+      const seconds = (worker.sent.find((message) => message.type === "prerender") as { seconds: number }).seconds;
+      worker.emit({
+        type: "prerender-chunk",
+        id,
+        pcm: new Int16Array(sampleRate * channels * 4),
+        sampleRate,
+        channels,
+        seconds,
+      } as never);
+      worker.emit({ type: "prerendered", id, sampleRate, channels, seconds } as never);
+    };
+    const cached = (engine: LocalSidEngine, key: string) =>
+      (engine as unknown as { renderCache: RenderedTuneCache }).renderCache.get(key);
+
+    it("asks for the whole of a tune that fits the limit", () => {
+      const engine = makeEngine();
+      void engine.play(new ArrayBuffer(8), 0, {});
+
+      engine.prerender("tune-a", new ArrayBuffer(8), 0, MAX_PRERENDER_SECONDS);
+
+      expect(workers[1]!.sent.find((message) => message.type === "prerender")).toMatchObject({
+        seconds: MAX_PRERENDER_SECONDS,
+      });
+      prerenderedMessage(engine);
+      expect(cached(engine, "tune-a")?.partial).toBe(false);
+    });
+
+    it("asks for only the first stretch of a twenty-minute tune and caches it as a lead-in", () => {
+      const engine = makeEngine();
+      void engine.play(new ArrayBuffer(8), 0, {});
+
+      engine.prerender("tune-a", new ArrayBuffer(8), 0, 1200);
+
+      expect(workers[1]!.sent.find((message) => message.type === "prerender")).toMatchObject({
+        seconds: MAX_PRERENDER_SECONDS,
+      });
+      prerenderedMessage(engine);
+      expect(cached(engine, "tune-a")?.partial).toBe(true);
+    });
   });
 });

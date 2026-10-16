@@ -123,7 +123,7 @@ internal class PcmBuffer(
  * that keeps growing is held to it too; the growing buffer itself is never the one dropped.
  */
 internal class PcmStore(
-    private val retainedBudgetBytes: Long = DEFAULT_RETAINED_BUDGET_BYTES,
+    val retainedBudgetBytes: Long = retainedBudgetFor(Runtime.getRuntime().maxMemory()),
     private val ephemeralTtlNanos: Long = DEFAULT_EPHEMERAL_TTL_NANOS,
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
@@ -159,6 +159,8 @@ internal class PcmStore(
   val size: Int
     get() = buffers.size
 
+  fun retainedFramesThatFit(): Long = retainedBudgetBytes / PcmBuffer.BYTES_PER_FRAME
+
   val retainedBytes: Long
     get() = buffers.values.filter { it.retained }.sumOf { it.byteSize }
 
@@ -186,7 +188,18 @@ internal class PcmStore(
     /** One second at 48 kHz: big enough that a whole tune is a short list, small enough to waste little. */
     const val DEFAULT_BLOCK_FRAMES = 48_000
     /** Above the web cache's own 128 MB, so this only fires when an id has leaked. */
-    const val DEFAULT_RETAINED_BUDGET_BYTES = 192L * 1024 * 1024
+    private const val MIN_RETAINED_BUDGET_BYTES = 32L * 1024 * 1024
+    private const val MAX_RETAINED_BUDGET_BYTES = 96L * 1024 * 1024
+
+    /**
+     * A direct ByteBuffer on Android is a non-movable array on the Java heap, so retained PCM is
+     * counted against the heap limit. Android asks the system to destroy the app's background
+     * activities once the heap in use passes three quarters of that limit, so the budget stays well
+     * below it: three eighths of the limit, which is 48 MB at the default 128 MB and 96 MB with a
+     * large heap.
+     */
+    fun retainedBudgetFor(maxHeapBytes: Long): Long =
+        (maxHeapBytes * 3 / 8).coerceIn(MIN_RETAINED_BUDGET_BYTES, MAX_RETAINED_BUDGET_BYTES)
     const val DEFAULT_EPHEMERAL_TTL_NANOS = 120_000_000_000L
   }
 }
