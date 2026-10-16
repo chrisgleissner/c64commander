@@ -74,6 +74,7 @@ export const CUT_DECLICK_MS = 10;
 /** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
 const CUT_CLOSE_MARGIN_MS = 30;
 import { playbackSidEmulation, prerenderSecondsFor, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { RenderRateWindow } from "./renderRateWindow";
 import { beginLocalPlayOut, endLocalPlayOut, playOutSeconds } from "./localPlayOut";
 
 /**
@@ -565,7 +566,7 @@ export class LocalSidEngine {
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
   /** Per-chunk render rates (ms per rendered second), newest wins once full. */
-  private renderRates: number[] = [];
+  private readonly renderRates = new RenderRateWindow(RENDER_RATE_SAMPLES);
 
   constructor(options: LocalSidEngineOptions = {}) {
     const injected = options.workerFactory;
@@ -1829,16 +1830,12 @@ export class LocalSidEngine {
     this.totalRenderMs += renderMs;
     this.totalRenderedSeconds += seconds;
     this.peakRenderMsPerSec = Math.max(this.peakRenderMsPerSec, rate);
-    if (this.renderRates.length >= RENDER_RATE_SAMPLES) this.renderRates.shift();
-    this.renderRates.push(rate);
+    this.renderRates.record(rate);
   }
 
   /** p99 of the recorded per-chunk render rates (0 before the first chunk). */
   private renderRateP99(): number {
-    if (this.renderRates.length === 0) return 0;
-    const sorted = [...this.renderRates].sort((a, b) => a - b);
-    const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.99) - 1);
-    return sorted[Math.max(0, index)];
+    return this.renderRates.p99();
   }
 
   private onWorkerError(code: string, message: string, id?: number): void {
@@ -2468,6 +2465,6 @@ export class LocalSidEngine {
     this.totalRenderMs = 0;
     this.totalRenderedSeconds = 0;
     this.peakRenderMsPerSec = 0;
-    this.renderRates = [];
+    this.renderRates.clear();
   }
 }

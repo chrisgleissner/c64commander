@@ -178,7 +178,7 @@ internal class PcmStore(
       val oldest =
           buffers.values.filter { it.retained && it.id != keepId }.minByOrNull { it.lastTouchedNanos } ?: return
       if (buffers.remove(oldest.id) != null) {
-        Log.e(TAG, "Retained PCM over budget; dropped buffer ${oldest.id} (${oldest.byteSize} bytes)")
+        Log.i(TAG, "Retained PCM over budget; dropped buffer ${oldest.id} (${oldest.byteSize} bytes)")
       }
     }
   }
