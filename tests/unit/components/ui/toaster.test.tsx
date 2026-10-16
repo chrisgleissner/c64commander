@@ -92,6 +92,7 @@ vi.mock("@/lib/config/appSettings", () => ({
 // ── Import after mocks ────────────────────────────────────────────────────────
 
 import { Toaster } from "@/components/ui/toaster";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -343,6 +344,19 @@ describe("Toaster page-area reservation", () => {
       unmount();
       expect(document.documentElement.style.getPropertyValue("--app-toast-reserved-height")).toBe("0px");
     } finally {
+      heightSpy.mockRestore();
+    }
+  });
+
+  it("asks open dialogs to place themselves again when the strip's height changes", () => {
+    const heightSpy = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(72);
+    const placements = vi.fn();
+    window.addEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, placements);
+    try {
+      render(<Toaster />);
+      expect(placements).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, placements);
       heightSpy.mockRestore();
     }
   });

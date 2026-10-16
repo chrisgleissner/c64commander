@@ -10,6 +10,7 @@ import { addLog, type LogLevel } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { getPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
+import { playbackTraceContextFor } from "@/lib/tracing/traceContext";
 
 type LoggerDetails = Record<string, unknown>;
 
@@ -56,7 +57,7 @@ const normalizeError = (error: unknown) => {
 
 const buildContextDetails = (component?: string): LoggerDetails => {
   const activeAction = getActiveAction();
-  const playback = getPlaybackTraceSnapshot();
+  const playback = playbackTraceContextFor(getPlaybackTraceSnapshot(), activeAction);
   const lifecycleState =
     typeof document === "undefined"
       ? "unknown"

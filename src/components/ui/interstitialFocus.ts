@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { FIELD_FRAME_ATTR } from "@/lib/input/ringDom";
+
 type OpenAutoFocusEvent = Event & {
   currentTarget: EventTarget | null;
 };
@@ -34,4 +36,24 @@ export const composeInterstitialOpenAutoFocus =
 
     event.preventDefault();
     focusInterstitialSurface(event);
+  };
+
+/**
+ * Escape, which is also the keypad's Back, while a field frame's input is being edited returns to the
+ * frame and keeps the dialog open, as it does on a page; the next Escape closes the dialog. Radix
+ * closes a dialog on Escape from the document, before the input's own handler sees the key, so the
+ * New disk dialog closed and lost a half-typed Tracks value.
+ */
+export const composeFieldFrameEscape =
+  (handler?: (event: KeyboardEvent) => void) =>
+  (event: KeyboardEvent): void => {
+    const field = event.target;
+    const frame = field instanceof HTMLElement ? field.closest<HTMLElement>(`[${FIELD_FRAME_ATTR}]`) : null;
+    if (frame && frame !== field) {
+      event.preventDefault();
+      (field as HTMLElement).blur();
+      frame.focus();
+      return;
+    }
+    handler?.(event);
   };

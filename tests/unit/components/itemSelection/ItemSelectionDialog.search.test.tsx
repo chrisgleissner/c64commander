@@ -45,6 +45,7 @@ const navigatorState = {
   navigateUp: vi.fn(),
   navigateRoot: vi.fn(),
   refresh: vi.fn(),
+  clearError: vi.fn(),
 } satisfies SourceNavigatorState;
 
 vi.mock("@/lib/sourceNavigation/useSourceNavigator", () => ({

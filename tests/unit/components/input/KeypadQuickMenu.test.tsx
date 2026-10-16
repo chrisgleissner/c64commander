@@ -16,6 +16,9 @@ vi.mock("@/lib/input/keypadCommands", async (importOriginal) => ({
 vi.mock("@/hooks/useSavedDevices", () => ({ useSavedDevices: () => devices() }));
 vi.mock("@/hooks/use-toast", () => ({ toast }));
 
+const mirror = vi.hoisted(() => ({ anyLive: false, stopAll: vi.fn(async () => undefined) }));
+vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
+
 const variantId = vi.hoisted(() => ({ current: "c64commander" }));
 vi.mock("@/generated/variant", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/generated/variant")>();
@@ -55,6 +58,33 @@ describe("KeypadQuickMenu", () => {
 
     fireEvent.click(screen.getByTestId("keypad-quick-menu-diagnostics"));
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
+  });
+
+  describe("Stop Live View", () => {
+    afterEach(() => {
+      mirror.anyLive = false;
+    });
+
+    it("is offered while Live View streams, and stops it and closes the menu", async () => {
+      mirror.anyLive = true;
+      renderMenu();
+      requestQuickMenuOpen();
+      const stop = await screen.findByTestId("keypad-quick-menu-stop-live-view");
+      expect(stop).toHaveTextContent("Stop Live View");
+
+      fireEvent.click(stop);
+
+      expect(mirror.stopAll).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.queryByTestId("keypad-quick-menu")).toBeNull());
+    });
+
+    it("is not offered while nothing streams", async () => {
+      renderMenu();
+      requestQuickMenuOpen();
+      await screen.findByTestId("keypad-quick-menu");
+
+      expect(screen.queryByTestId("keypad-quick-menu-stop-live-view")).toBeNull();
+    });
   });
 
   it("offers the newest notification's action, so a keypad can press Retry", async () => {

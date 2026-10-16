@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { APP_SETTINGS_KEYS, loadNotificationDurationMs } from "@/lib/config/appSettings";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 const TOAST_RESERVED_HEIGHT_VAR = "--app-toast-reserved-height";
 
@@ -21,6 +22,8 @@ const reserveToastStripHeight = (heightPx: number) => {
   const next = `${Math.max(0, Math.round(heightPx))}px`;
   if (root.style.getPropertyValue(TOAST_RESERVED_HEIGHT_VAR) === next) return;
   root.style.setProperty(TOAST_RESERVED_HEIGHT_VAR, next);
+  // An open dialog is placed in JavaScript and stands on the strip, so it is placed again.
+  window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
 };
 
 /** Keeps the page area ending above the toast strip, so no page control can sit under a toast. */

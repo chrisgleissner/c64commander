@@ -42,6 +42,24 @@ describe("NewDiskDialog", () => {
     expect(screen.getByTestId("new-disk-name")).toHaveValue("");
   });
 
+  it("returns Back from the Tracks field to its row and keeps the dialog open; a second Back closes it", async () => {
+    const { onOpenChange } = setup();
+    await deviceFolderShown();
+    const tracks = screen.getByTestId("new-disk-tracks");
+    act(() => tracks.focus());
+    fireEvent.change(tracks, { target: { value: "40" } });
+
+    fireEvent.keyDown(tracks, { key: "Escape", code: "Escape" });
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(document.activeElement).toBe(screen.getByTestId("new-disk-tracks-field"));
+    expect(screen.getByTestId("new-disk-tracks")).toHaveValue("40");
+
+    fireEvent.keyDown(screen.getByTestId("new-disk-tracks-field"), { key: "Escape", code: "Escape" });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("disables Create until a name is entered", async () => {
     setup();
     await deviceFolderShown();

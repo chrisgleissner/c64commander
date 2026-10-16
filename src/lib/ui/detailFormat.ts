@@ -32,14 +32,15 @@ export const formatByteSize = (value: number) => {
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${BYTE_UNITS[unitIndex]}`;
 };
 
+// Built once: constructing a DateTimeFormat costs about half a millisecond, and every playlist row
+// formats a date, so building one per call cost over a second for a long list on a slow device.
+let detailDateFormat: Intl.DateTimeFormat | null = null;
+
 /** Format an ISO-ish date string in the viewer's locale, or `—` if unusable. */
 export const formatDetailDate = (value?: string | null) => {
   if (!value) return UNKNOWN_VALUE;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return UNKNOWN_VALUE;
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(date);
+  detailDateFormat ??= new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "2-digit" });
+  return detailDateFormat.format(date);
 };

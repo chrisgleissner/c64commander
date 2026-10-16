@@ -307,6 +307,19 @@ describe("DiagnosticsDialog", () => {
     setStoredTelnetPort(23);
   });
 
+  it("reports the first visible paint after that paint, not in the frame before it", async () => {
+    // Work started from the report (activity summaries, reconcilers) ran ahead of the first paint.
+    const onFirstVisible = vi.fn();
+    let callsDuringFirstFrame = -1;
+    renderDialog({ onFirstVisible });
+    requestAnimationFrame(() => {
+      callsDuringFirstFrame = onFirstVisible.mock.calls.length;
+    });
+
+    await waitFor(() => expect(onFirstVisible).toHaveBeenCalledTimes(1));
+    expect(callsDuringFirstFrame).toBe(0);
+  });
+
   it("reports the first visible paint once per open cycle", async () => {
     const onFirstVisible = vi.fn();
     const view = renderDialog({ onFirstVisible });

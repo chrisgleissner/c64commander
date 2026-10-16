@@ -35,6 +35,7 @@ import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { PLAY_PAGE_TRACE_COMPONENT } from "@/lib/tracing/traceContext";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
@@ -116,6 +117,7 @@ import {
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
@@ -174,6 +176,7 @@ import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { useArchiveClientSettings } from "@/pages/playFiles/hooks/useArchiveClientSettings";
 import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
+import { usePlaylistLetterIndexSource } from "@/pages/playFiles/hooks/usePlaylistLetterIndexSource";
 import {
   isBackgroundExecutionEnabled,
   resolveBackgroundExecutionAction,
@@ -197,15 +200,13 @@ import {
 } from "@/lib/config/configFileReferenceSelection";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
-import { loadDefaultSongDurationMs, saveDefaultSongDurationMs } from "@/lib/config/appSettings";
+import { useDurationOverride } from "@/pages/playFiles/hooks/useDurationOverride";
 import { areConfigReferencesEqual, type ConfigCandidate, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useGameModeAvailable } from "@/hooks/useGameModeAvailable";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
-  CATEGORY_OPTIONS,
-  DEFAULT_SONG_DURATION_MS,
   DURATION_SLIDER_STEPS,
   SHARED_PLAYLIST_STORAGE_KEY,
   buildPlaylistItemId,
@@ -213,20 +214,14 @@ import {
   canAdvanceNext,
   canAdvancePrevious,
   shouldDetachPlaybackOnSavedDeviceSwitch,
-  applyDurationOverrideToPlaylist,
   mergeResolvedSonglengthDurations,
-  clampDurationSeconds,
   durationSecondsToSlider,
   formatBytes,
   formatDate,
-  formatDurationSeconds,
   formatTime,
   isSongCategory,
-  normalizeDurationInputDraft,
   addThenMaybeLaunch,
   resolvePickerConfirm,
-  parseDurationInput,
-  sliderToDurationSeconds,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
@@ -300,18 +295,22 @@ export default function PlayFilesPage() {
   // rejected. Declared here because the transport latch below is declared long
   // before that hook runs.
   const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
+  const [playlistRestored, setPlaylistRestored] = useState(false); // Set below, after the persistence hook.
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
   const [playbackTime] = useState(createPlaybackTimeStore);
   const { setElapsedMs, setPlayedMs } = playbackTime;
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
-  const [pendingDurationOverrideMs, setPendingDurationOverrideMs] = useState<number | undefined>(undefined);
-  const debouncedDurationOverrideMs = useDebouncedValue(pendingDurationOverrideMs, 500);
-  const [durationSeconds, setDurationSeconds] = useState(() =>
-    Math.round(loadDefaultSongDurationMs(DEFAULT_SONG_DURATION_MS) / 1000),
-  );
-  const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(durationSeconds));
+  const {
+    pendingDurationOverrideMs,
+    durationSeconds,
+    durationInput,
+    handleDurationSliderChange,
+    handleDurationSliderCommit,
+    handleDurationInputChange,
+    handleDurationInputBlur,
+  } = useDurationOverride(setPlaylist, setDurationMs);
   const [songNrInput, setSongNrInput] = useState("");
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
   const {
@@ -366,7 +365,7 @@ export default function PlayFilesPage() {
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const { profile: displayProfile } = useDisplayProfile();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
-  const trace = useActionTrace("PlayFilesPage");
+  const trace = useActionTrace(PLAY_PAGE_TRACE_COMPONENT);
 
   const featureFlags = useFeatureFlags();
   const hvscControlsEnabled = shouldShowHvscControls(featureFlags);
@@ -1669,6 +1668,7 @@ export default function PlayFilesPage() {
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
+    queueReady: playlistRestored && sessionRestoreSettled,
     // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
@@ -2288,6 +2288,7 @@ export default function PlayFilesPage() {
     setPlaylistEnded,
     setSessionRestoreSettled,
   });
+  useEffect(() => setPlaylistRestored(playlistHydrated), [playlistHydrated]);
   const stationHandover = useStationPlaylistHandover({
     queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
     playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
@@ -2315,11 +2316,13 @@ export default function PlayFilesPage() {
     shuffleSeed,
   );
 
-  useEffect(() => {
-    if (isPlaying || isPaused) return;
-    if (!volumeSessionActiveRef.current) return;
-    void restoreVolumeOverrides("playback-ended");
-  }, [isPaused, isPlaying, restoreVolumeOverrides]);
+  useRestoreVolumeWhenPlaybackEnds({
+    sessionRestoreSettled,
+    isPlaying,
+    isPaused,
+    volumeSessionActiveRef,
+    restoreVolumeOverrides,
+  });
 
   const restoreVolumeOverridesOnNavigateRef = useRef(restoreVolumeOverrides);
   const navigateCleanupIsPlayingRef = useRef(isPlaying);
@@ -2348,19 +2351,6 @@ export default function PlayFilesPage() {
     [],
   );
 
-  const persistDurationOverride = useCallback(
-    (durationOverrideMs: number) => {
-      saveDefaultSongDurationMs(durationOverrideMs);
-      setPlaylist((prev) => applyDurationOverrideToPlaylist(prev, durationOverrideMs));
-    },
-    [setPlaylist],
-  );
-
-  useEffect(() => {
-    if (debouncedDurationOverrideMs === undefined) return;
-    persistDurationOverride(debouncedDurationOverrideMs);
-  }, [debouncedDurationOverrideMs, persistDurationOverride]);
-
   // Re-arm the auto-advance guard when the playing track's duration changes
   // mid-track (slider/input), so auto-advance fires at the new duration
   // instead of the stale one captured at track launch. No-op while paused
@@ -2386,69 +2376,18 @@ export default function PlayFilesPage() {
     setAutoAdvanceDueAtMs(nextDueAtMs);
   }, [durationMs, isPaused, isPlaying, setAutoAdvanceDueAtMs]);
 
-  const handleDurationSliderChange = useCallback(
-    (value: number[]) => {
-      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
-      setDurationInput(formatDurationSeconds(nextSeconds));
-    },
-    [setDurationMs],
-  );
-
-  const handleDurationSliderCommit = useCallback(
-    (value: number[]) => {
-      const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setDurationInput(formatDurationSeconds(nextSeconds));
-      persistDurationOverride(nextDurationMs);
-      setPendingDurationOverrideMs(undefined);
-    },
-    [persistDurationOverride, setDurationMs],
-  );
-
-  const handleDurationInputChange = useCallback(
-    (value: string) => {
-      const normalizedValue = normalizeDurationInputDraft(value);
-      setDurationInput(normalizedValue);
-      const parsed = parseDurationInput(normalizedValue);
-      if (parsed === undefined) return;
-      const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-      const nextDurationMs = nextSeconds * 1000;
-      setDurationSeconds(nextSeconds);
-      setDurationMs(nextDurationMs);
-      setPendingDurationOverrideMs(nextDurationMs);
-    },
-    [setDurationMs],
-  );
-
-  const handleDurationInputBlur = useCallback(() => {
-    const parsed = parseDurationInput(durationInput);
-    if (parsed === undefined) {
-      setDurationInput(formatDurationSeconds(durationSeconds));
-      return;
-    }
-    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
-    const nextDurationMs = nextSeconds * 1000;
-    if (nextSeconds !== durationSeconds) {
-      setDurationSeconds(nextSeconds);
-    }
-    setDurationMs(nextDurationMs);
-    persistDurationOverride(nextDurationMs);
-    setPendingDurationOverrideMs(undefined);
-    setDurationInput(formatDurationSeconds(nextSeconds));
-  }, [durationInput, durationSeconds, persistDurationOverride, setDurationMs]);
-
   const queryFilteredPlaylist = useQueryFilteredPlaylist({
     playlist,
     playlistStorageKey,
     playlistTypeFilters,
     query: playlistFilterText,
     previewLimit: listPreviewLimit,
+  });
+  const playlistLetterIndexSource = usePlaylistLetterIndexSource({
+    playlist,
+    playlistTypeFilters,
+    query: playlistFilterText,
+    ensureLoaded: queryFilteredPlaylist.ensureViewAllLoaded,
   });
 
   const effectivePlaylistItemDuration = useCallback(
@@ -2844,10 +2783,8 @@ export default function PlayFilesPage() {
                 onToggleSelectAll={toggleSelectAllPlaylist}
                 onRemoveSelected={handleRemoveSelectedPlaylist}
                 maxVisible={listPreviewLimit}
-                categoryOptions={CATEGORY_OPTIONS}
                 playlistTypeFilters={playlistTypeFilters}
                 onToggleFilter={togglePlaylistTypeFilter}
-                formatCategory={formatPlayCategory}
                 hasPlaylist={hasPlaylist}
                 playlistLoading={!playlistHydrated}
                 playlistItemCount={playlistIds.length}
@@ -2862,6 +2799,7 @@ export default function PlayFilesPage() {
                 onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
                 hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
                 onViewAllEndReached={queryFilteredPlaylist.loadMoreViewAllResults}
+                letterIndexSource={playlistLetterIndexSource}
               />
             </div>
           </ProfileSplitSection>

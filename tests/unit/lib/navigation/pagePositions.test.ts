@@ -81,6 +81,7 @@ describe("pagePositions", () => {
     if (original === undefined) delete document.documentElement.dataset.textScale;
     else document.documentElement.dataset.textScale = original;
     vi.stubGlobal("innerWidth", window.innerWidth + 200);
+    window.dispatchEvent(new Event("resize"));
     expect(rememberedCardHeight("home", "video")).toBeUndefined();
   });
 
@@ -361,5 +362,20 @@ describe("pagePositions", () => {
     rememberPagePosition(4, null);
     restorePagePosition(4, null);
     expect(rememberedCardHeight("home", "video")).toBeUndefined();
+  });
+
+  it("reads the window width once and then only on resize, not on every remembered-height lookup", () => {
+    // Every collapsible card asks while it renders; reading innerWidth there forced a page layout.
+    const { slot } = buildSlot(0);
+    rememberPagePosition(0, slot);
+    const width = vi.spyOn(window, "innerWidth", "get");
+    rememberedCardHeight("home", "video");
+    width.mockClear();
+
+    for (let i = 0; i < 5; i += 1) rememberedCardHeight("home", "video");
+    expect(width).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event("resize"));
+    expect(width).toHaveBeenCalledTimes(1);
   });
 });

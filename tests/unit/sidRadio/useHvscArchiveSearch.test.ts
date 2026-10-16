@@ -158,4 +158,52 @@ describe("useHvscArchiveSearch", () => {
     await waitFor(() => expect(result.current.hits).toHaveLength(1));
     expect(result.current.hits[0]?.folder).toBe("/");
   });
+
+  it("waits for a multi-tap letter to settle instead of searching for a letter the next press replaces", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(searchHvscSongs).mockResolvedValue(page([song()]));
+      const { result } = renderHook(() => useHvscArchiveSearch());
+
+      act(() => result.current.setQuery("rp", 800));
+      act(() => result.current.setQuery("rq", 790));
+      act(() => result.current.setQuery("rr", 780));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+      expect(searchHvscSongs).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+      expect(searchHvscSongs).toHaveBeenCalledTimes(1);
+      expect(searchHvscSongs).toHaveBeenCalledWith(expect.objectContaining({ query: "rr" }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("abandons the scan of a search that a newer one has replaced", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(searchHvscSongs).mockImplementation(() => new Promise(() => undefined));
+      const { result } = renderHook(() => useHvscArchiveSearch());
+
+      act(() => result.current.setQuery("rob"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      const first = vi.mocked(searchHvscSongs).mock.calls[0]?.[0] as { signal?: AbortSignal };
+      expect(first.signal?.aborted).toBe(false);
+
+      act(() => result.current.setQuery("robo"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
+      expect(first.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

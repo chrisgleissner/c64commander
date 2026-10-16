@@ -27,6 +27,8 @@ export type FtpListOptions = {
   timeoutMs?: number;
   connectTimeoutMs?: number;
   traceContext?: NativeTraceContext;
+  /** A listing made to find out whether a folder can be read, where a refusal is the answer rather than a fault. */
+  refusalExpected?: boolean;
 };
 
 export type FtpRecursiveListOptions = FtpListOptions & {

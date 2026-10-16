@@ -35,6 +35,7 @@ import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/h
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
   accessibleLabelFor,
+  guidanceLabelFor,
   classifyFocusKind,
   getInputModality,
   hasContextMenu,
@@ -68,8 +69,8 @@ const buildGuidanceState = (
   // Breadcrumb: the ancestor group labels we are inside, then the current item.
   const breadcrumb = engine.currentScopeChain().map((item) => item.group ?? item.id);
   const currentLabel = isGroup
-    ? (current?.group ?? accessibleLabelFor(currentElement))
-    : accessibleLabelFor(currentElement);
+    ? (current?.group ?? guidanceLabelFor(currentElement))
+    : guidanceLabelFor(currentElement);
   if (currentLabel) breadcrumb.push(currentLabel);
 
   // OK on a card with a single control presses that control, so the bar names what it does.
@@ -133,7 +134,10 @@ const dialogTitle = (dialog: Element): string | null =>
 const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
   const focused = document.activeElement;
   const panel = focused?.closest(`[role="dialog"][${SOFT_KEY_MENU_PANEL_ATTR}]`);
-  if (panel) return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel));
+  if (panel) {
+    const entry = focused !== panel ? accessibleLabelFor(focused) : null;
+    return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel), entry);
+  }
   const overlay = focused?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`);
   if (!overlay) return null;
   const menuKey = overlay.getAttribute(SOFT_KEY_MENU_ATTR) === "back" ? "back" : "softRight";
@@ -165,14 +169,30 @@ const setAttrIfChanged = (element: HTMLElement | null, name: string, value: stri
  * on `.page-shell` itself: that scroll box must not gain a bottom reservation of any kind (BUG-066
  * and BUG-072 both did and were reverted; `tests/unit/pageShellClearance.test.ts` locks it).
  */
-const reserveGuidanceHeight = (reserved: boolean): void => {
-  if (typeof document === "undefined") return;
+let reserveWanted: boolean | null = null;
+
+/*
+ * Applied once the current script has finished. Opening a dialog hid the bar and showed it again
+ * within one task, and each write of this variable on <html> restyles the whole document: two
+ * full style recalculations, about 130 ms each at 6x CPU throttling, for no visible change. The
+ * ring flushes it early before it scrolls the first key's stop, which must clear the bar just shown.
+ */
+export const flushReservedGuidanceHeight = (): void => {
+  const reserved = reserveWanted;
+  reserveWanted = null;
+  if (reserved === null) return;
   const root = document.documentElement;
   const next = reserved ? "var(--keypad-guidance-bar-height)" : "0px";
   if (root.style.getPropertyValue("--keypad-guidance-reserved-height") === next) return;
   root.style.setProperty("--keypad-guidance-reserved-height", next);
   // Dialogs are placed in JavaScript and have to be placed again when the bar appears under them.
   window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+};
+
+export const reserveGuidanceHeight = (reserved: boolean): void => {
+  if (typeof document === "undefined") return;
+  if (reserveWanted === null) queueMicrotask(flushReservedGuidanceHeight);
+  reserveWanted = reserved;
 };
 
 /**
@@ -182,8 +202,21 @@ const reserveGuidanceHeight = (reserved: boolean): void => {
  * "Back Back". On a 320 px screen that redundancy is not free: it pushed the row past the viewport
  * and truncated the next key's word to "Acti…", which is the one that actually needed saying.
  */
+const isCompactProfile = (): boolean =>
+  typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
+
+/**
+ * On the smallest screen "Activate" is dropped as well: OK on a button presses it, which the cap says,
+ * and the word took the 60 px the breadcrumb needed to name the control at all. So is "Select" on an
+ * entry of a soft-key menu, which cut "Close Remote Input" to "Close Remote…".
+ */
+const wordTheCapSays = (label: string): boolean =>
+  label === "Activate" ||
+  (label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null);
+
 const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
-  setTextIfChanged(action, label.trim().toLowerCase() === cap.toLowerCase() ? "" : label);
+  const repeatsCap = label.trim().toLowerCase() === cap.toLowerCase();
+  setTextIfChanged(action, repeatsCap || (isCompactProfile() && wordTheCapSays(label)) ? "" : label);
 };
 
 /**
@@ -196,8 +229,7 @@ const setActionText = (action: HTMLElement | null, cap: string, label: string): 
  */
 const formatBreadcrumb = (segments: readonly string[]): string => {
   if (segments.length === 0) return "Navigation";
-  const compact = typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
-  return compact ? segments[segments.length - 1] : segments.join("  ›  ");
+  return isCompactProfile() ? segments[segments.length - 1] : segments.join("  ›  ");
 };
 
 /** Show/hide a soft-key slot and set its action text, each guarded by a value bail. */

@@ -47,6 +47,18 @@ export const setTraceFeatureFlags = (flags: Record<string, boolean>) => {
   emit();
 };
 
+/** The component name the Play page traces its actions under. */
+export const PLAY_PAGE_TRACE_COMPONENT = "PlayFilesPage";
+
+/**
+ * The playback an operation belongs to: the tune that is playing, or the Play page's current tune for the Play page's
+ * own actions, such as the read that starts a tune before it plays. A Disks browse while nothing plays has none.
+ */
+export const playbackTraceContextFor = (
+  playback: TracePlaybackContext | null | undefined,
+  action: { componentName?: string | null } | null | undefined,
+) => (playback && (playback.isPlaying || action?.componentName === PLAY_PAGE_TRACE_COMPONENT) ? playback : null);
+
 export const setTracePlaybackContext = (playback: TracePlaybackContext | null) => {
   snapshot = { ...snapshot, playback };
   emit();

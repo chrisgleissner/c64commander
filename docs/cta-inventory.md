@@ -71,7 +71,7 @@ one forwarded as `SoftRight`. The keypad profile binds `F21` and `F23` by code.
 | **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": the focused control's own context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device). A card or other group has no menu of its own, even when a row inside it does.                                     |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done). Inside an open dialog, sheet or the tour it closes it, as Back does. Forwarded by the native shell.                                                                                                                                                                                      |
 | **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Same as Menu. In a text field that holds text, **deletes the last character** (T9 editions; the guidance bar labels it Delete). Forwarded by the native shell. |
-| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱, # and Call ignore key repeat.                                                                                                                                 |
+| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. In a "View all" list with a letter rail: **jump to a letter** (see that overlay below). Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; **8 pauses or resumes** the machine and **9 resets** it (after a confirmation). 8, 9, 0, ✱, # and Call ignore key repeat.                                                                                                                                 |
 | **0**                 | `KEYCODE_0` 7        | `digit0`          | In a text field: T9 entry. Outside a field: **enter Game Mode** (starts the remembered Watch/Listen and opens the sheet ready to play). Inside the Remote Input sheet it is a joystick direction, which the open-overlay exclusion keeps this shortcut away from. |
 | **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. In another text field: switch the case of the last letter. Otherwise **open Diagnostics**. |
 | **# (pound)**         | `POUND` 18           | `hash`            | In a text field: switch between letters and digits. Otherwise **open the Device Switcher** (= badge long-press); with one saved device a message says there is no other device to switch to. |
@@ -96,7 +96,10 @@ F1 is the neutral `function1` action (see the F1 row).
   soft-key labels — left = Back/Exit, center = Open/Select/Adjust/Activate, or
   Expand/Collapse on a control with `aria-expanded` (by control kind; on a card
   whose only control is its header, by that control), right = Menu only where the focused control has a menu of its
-  own. While a single-line field on a page has focus, left and center read Done;
+  own. The breadcrumb names the selected control by its accessible name, or by a
+  shorter `data-guidance-label` where that name is a sentence (the health badge
+  reads "C64U: healthy"). On the compact profile the center key's "Activate", and "Select" in a soft-key menu such as Remote Input's, are
+  left out, so the breadcrumb has room. While a single-line field on a page has focus, left and center read Done;
   while a T9 text field holds text, right reads Delete. Dialogs and sheets are placed above it; it hides while Search is open. On Home and Play with a device
   connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
   exactly when the user is driving by keys.
@@ -119,6 +122,8 @@ F1 is the neutral `function1` action (see the F1 row).
   first, and is scrolled into view.
 - **OK acts on the highlight:** while keys drive the ring, OK activates the
   highlighted stop even when DOM focus was left on a different stop.
+- **Field rows in a dialog or sheet:** Back while a field row's input is being edited
+  returns to the row and keeps the dialog open; the next Back closes the dialog.
 - **Closing a dialog or sheet:** the selection and DOM focus return to the
   control that was selected when it opened, also when Remote Input is closed
   from its keypad menu or after its "Other controls".
@@ -154,12 +159,25 @@ F1 is the neutral `function1` action (see the F1 row).
 - **Always-reachable shortcuts:** digits `1`–`6` jump to a tab, `0` enters Game
   Mode (not on a device that cannot stream, such as a U2, the same gate as the Home
   Game tile), `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
-  same exclusions — never in a text field, never inside an open overlay.
+  same exclusions — never in a text field, never inside an open overlay. A tab jump
+  keeps the page where it was left and selects the first of its own stops seen whole there, clear
+  of the app bar and the guidance bar. At the top of the page, or when no stop is in view, it selects
+  the page's first own stop and scrolls it into view. Until the next key, or for 3 s, it does so again
+  after each change while the page settles, so late content cannot leave the selection off screen.
+  The app bar's Quick menu button and badge (`data-focus-chrome`) are passed over and stay one Up away.
 
-Reachability is **complete by construction**: the provider scans the active
+Discovery is automatic: the provider scans the active
 scope (topmost dialog/menu/sheet, else the routed page + bottom TabBar) and
 discovers every interactive element; `useFocusItem`/`useFocusGroup` only refine
 id/order/label/grouping/activation.
+
+Discovery alone does not prove reachability. Verify each scenario by independently
+inventorying its enabled rendered controls, walking every group using only
+Up/Down, OK and Back, and comparing the visited controls with that inventory.
+Check visibility on each selection, both traversal directions, and order after
+expanding or collapsing cards. Keep each card's stops together even during its
+height animation. Dialogs, menus, conditional controls and device capability
+variants need their own scenarios; reaching all six tabs does not cover them.
 
 ---
 
@@ -173,10 +191,10 @@ persistent status badge that appear on every page).
 | -------- | ----------- | --------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Home     | `/`         |                    117 (+4) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. **Screen colors** (`home-video-screen-colors`) was added as the first row of the Quick Config → Video card, taking the page from 113 to 114; it is unconditional and works while disconnected, and the controls of the sheet it opens are an overlay scope counted separately (§4.1). `+1` **Game Mode** tile behind `remote_input_enabled` and the device's streaming capability, first in the Quick Actions grid (§3.2.1 order: safe first, destructive last). `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). `+4` the promoted tiles (Radio, Last, Recent, Live) moved into the Quick Actions grid in 0.10.0-rc2 when the "Listen and play" section was removed. `-1` net from folding **Reboot** and **Power Off** into a single **Power** tile: two tiles out, one in. Power Cycle and Reboot (Clr Mem) were already flag-gated and out of this count. The four rows of the Power sheet are an overlay scope counted separately (§4.1). This total is derived from those deltas rather than re-counted on device.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Settings | `/settings` |                    92 (+12) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. The Crossfade group gained a fifth length (4 s), taking the page from 80 to 81. `+5` the Text size choice (four buttons) and the Allow-circuit-override checkbox, which gained a `data-testid` when its row became the target, taking it to 86. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below). `+4` the Game Mode block in **Remote Input**: `settings-joystick-key-layout`, `settings-game-mode-joystick`, `settings-game-mode-on-launch`, and (for a Custom layout) the nine press-to-bind slots `settings-joystick-bind-<slot>` with their `settings-joystick-clear-<slot>` companions. The **Keep device settings after a restart** checkbox (`settings-persist-config-to-flash`) in Device safety is unconditional and takes the page from 86 to 87. The Screen colors select (`settings-vic-palette`) was removed from the Live View streaming block and its controls now live on Home (§4.1); it sat among the mirror-gated stream controls that the `(+N)` tallies above never counted, so its removal changes no number here. `+2` the `demo_mode_enabled` flag (already in the `stable` group) flipped from off to on by default, so the **Automatic Demo Mode** checkbox and a new **Preview Demo Mode** button in the Devices group are now counted for the first time, taking the page from 87 to 89. `+1` the **Mute C64 seeking** select (`settings-c64-seek-mute`) below Disk first-PRG load in Play and Disk, taking it to 90. `+2` the **SID emulation** choice (`settings-sid-engine-residfp`, `settings-sid-engine-sidlite`), which was developer-only and is now shown whenever on-device playback is on, taking it to 92. On Android the same group has a third button, **Fast & accurate** (`settings-sid-engine-sidplayez`), shown only where libSidplayEZ runs; it is not counted in the 92, which is measured on the web build. |
-| Play     | `/play`     | 31 (+2, +20 SID Radio, +16) | Transport, volume, playback flags, playlist, type filters, HVSC. Include subfolders moved off this page into the Add items sheet (32 → 31). `+2` the **Game Mode** and Remote Input buttons, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`. `+16` **Find a tune** (open, search box, per-row play and seed-a-station), the composer and the tune position on the metadata lines, the tune-notes reveal, **Play all N tunes**, and the six sleep-timer choices. The playback settings' own tune list was removed when the credits-line one arrived, so the net count is unchanged by it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Play     | `/play`     | 30 (+2, +20 SID Radio, +16) | Transport, volume, playback flags, playlist, type filters, HVSC. The five type checkboxes became three (Songs, Progs, Disks) and the filter gained the toggle that folds it on the compact profile, 31 → 30 (code-verified). Include subfolders moved off this page into the Add items sheet (32 → 31). `+2` the **Game Mode** and Remote Input buttons, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`. `+16` **Find a tune** (open, search box, per-row play and seed-a-station), the composer and the tune position on the metadata lines, the tune-notes reveal, **Play all N tunes**, and the six sleep-timer choices. The playback settings' own tune list was removed when the credits-line one arrived, so the net count is unchanged by it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Config   | `/config`   |                          30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Disks    | `/disks`    |                     28 (+1) | Drive A/B/Soft-IEC controls, disk library. `+1` Content Explorer **New disk** button (`new_disk_enabled`); the per-disk **Open (Disk Explorer)…** overflow action (`disk_explorer_enabled`) and the New-disk / Disk-contents dialogs it opens are documented in §4.3/§5 (code-verified — see note below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Docs     | `/docs`     |                          18 | 8 doc-section toggles + 3 external links.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Docs     | `/docs`     |                          45 | 17 guide-chapter toggles, the Contents toggle and its 17 jump links, the tour button, and 3 external links. Paragraphs and steps inside an open chapter are reading stops for the keypad ring, not controls.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 > **Content Explorer CTAs — code-verified, not yet hardware-verified.** The six
 > flag-gated Content Explorer capabilities (Disk Explorer, In-image search, Launch
@@ -202,10 +220,15 @@ persistent status badge that appear on every page).
 | Tab: Settings         | tab (button) | `tab-settings`         | ✅        | ✅                 |                                                                            |
 | Tab: Docs             | tab (button) | `tab-docs`             | ✅        | ✅                 | OK on a focused tab switches route (verified).                             |
 
-> **Conditional app-bar CTA — A/V mirror live pip** (`av-mirror-live-pip`): a tiny
-> indicator that appears in the header next to the status badge on every page **only
-> while an A/V mirror stream is live** (Content Explorer). Tapping it stops all
-> mirroring. Invisible — and not counted above — when nothing is streaming.
+> **Live View in the app bar** (`unified-health-badge-live`): while an A/V mirror
+> stream is live, the status badge carries a mark (a screen for the picture, a speaker
+> for sound alone) and its accessible name ends ", Live View on". It is not a control.
+> The one-tap stop that a separate app-bar indicator used to offer is **Stop Live View**
+> in the Quick menu (`keypad-quick-menu-stop-live-view`), listed only while a stream is
+> live and reachable from every page by touch (`app-bar-quick-menu`) and by keypad
+> (Menu). On a narrow header, a badge that names the device puts the name on its own
+> line above the marks (`unified-health-badge-stacked`), so a streaming mark no longer
+> takes width from the name.
 
 ---
 
@@ -311,6 +334,7 @@ not-connected / empty / single-device).
   - WASD/Cursors — select — `home-user-interface-wasd-cursors` — R✅ I✅
   - Color Scheme — select — `home-user-interface-color-scheme` — R✅ I✅
 - **LED — Case Light / Keyboard Light** _(flag `lighting_studio_enabled`)_
+  - Opening Lighting keeps Case Light and Keyboard Light together before Drives in the keypad order, including while the card expands. OK enters either light's controls; Back returns to its group, and Down/Up moves to the other light. `keypadOnlyNavigation.spec.ts` covers both directions and independently walks every enabled control at 320 × 426 CSS px. The shared reading-order regression also covers animation-time overlap with later cards.
   - Mode / Music Detect / Pattern / Color / Tint / SID select — select/checkbox — `home-led-*`, `home-keyboard-lighting-*` — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
   - Color slider, Intensity slider — slider ×2 each — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
 - **Drives** (`data-section-label="Drives"`) — per drive A / B / Soft-IEC:
@@ -395,15 +419,28 @@ not-connected / empty / single-device).
   (`add-items-folder-options`), not on the Play page: it decides what selecting a folder means, so it
   is shown while folders are being chosen and at no other time. Rendered only once a source is open
   and only where folder selection is allowed.
-- Filter files — text — `list-filter-input` — R✅ I✅
-- Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
+- Filter (compact profile) — button — `list-filter-toggle` — code-verified — the playlist filter folds into this
+  one row. Folded it reads "Filter files", or "Filter: " and what the filter keeps (the quoted text, then the
+  type groups still shown, e.g. `Filter: “demo” · Progs, Disks`), so an active filter is never out of sight.
+  OK or a tap unfolds it; unfolded it is a chevron to the right of the field, first in DOM order, so Down goes
+  from it to the field and then the type filters. The filter folds by itself when focus moves past it into the
+  list (Select all or a row) and when the list is scrolled by touch or wheel; never while the field has focus.
+  Folding holds the rows still on screen. On other profiles the field and type filters are always shown.
+- Filter files — text — `list-filter-input` — R✅ I✅ `[compact: only while the filter is unfolded]`
+- Type filters: Songs (SID, MOD) / Progs (PRG, CRT) / Disks (every disk image) — checkbox —
+  `playlist-type-songs|progs|disks` (`playlist-type-*`) — R✅ I✅ — one line at 320 px at the default text size;
+  a press shows or hides every file type of its group `[compact: only while the filter is unfolded]`
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
-- Item actions (⋮) — button — `playlist-item-actions-<title>` — R✅ I✅ — opens the row's menu: the
-  **Details** and **Config** rows (Type, Duration, Path, Status, Size, Date, Attached, Status, Origin,
-  Candidates, Overrides, and Location when a config is attached), then Review playback config, Attach or
-  Change local / C64U .cfg, and Remove config association `[only with a config attached]`. The detail
-  rows are menu items the arrow keys stop on, so a keypad scrolls them into view; OK on one does nothing
-  and leaves the menu open. Opened by keypad, the menu starts on its first detail row.
+- Item actions (⋮) — button — `playlist-item-actions-<title>` — R✅ I✅ — on the compact profile it opens
+  the **Item actions sheet** (`action-list-item-sheet`), a bottom sheet titled with the item's name; on other
+  profiles it opens the same entries as a menu beside the row. The sheet holds, in order: Play — button —
+  `action-list-item-sheet-primary` (plays the item and closes the sheet); the **Details** and **Config** blocks
+  (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then Attached, Status, Origin,
+  Candidates, Overrides, and Location when a config is attached); then Review playback config, Attach or Change
+  local / C64U .cfg, and Remove config association `[only with a config attached]`. Each details block is one
+  keypad stop, and the sheet opens on the first; Down on a block taller than the sheet scrolls the rest of it
+  into view before moving on. Back closes the sheet and returns focus and the selection to ⋮. In the menu the
+  detail rows are menu items the arrow keys stop on; OK on one does nothing and leaves the menu open.
 - Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
   **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
   how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,
@@ -527,7 +564,7 @@ Per drive (A / B / Soft-IEC):
 
 Disk library: New disk — button — `new-disk-open` — R✅ I✅ _(flag `new_disk_enabled`; opens the **New disk dialog**, §5)_ ; Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
 
-Per-disk overflow menu (Set group / Rename / Remove; its detail rows are reachable by the arrow keys and inert on OK, as in the playlist row menu, §4.2) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
+Per-disk overflow menu (Set group / Rename / Remove; on the compact profile the **Item actions sheet** with Mount first, as for a playlist row, §4.2; elsewhere a menu whose detail rows are reachable by the arrow keys and inert on OK) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
 
 Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / connected Ultimate (named after its product: C64U, U64, U64E, U64E2 or U2) / CommoServe — buttons — `import-option-*` — R✅ I✅.
 
@@ -595,7 +632,9 @@ past it to anything below.
   **Add device** dialog (`settings-add-device-dialog`), which saves nothing and leaves
   the connection alone until the new device answers: the shared saved-device editor
   fields `add-device-*` (name, host in T9 hostname mode, HTTP/FTP/Telnet ports, and
-  `add-device-use-suggested-address` when an unreachable hostname is found on the LAN),
+  `add-device-use-suggested-address` when an unreachable hostname is found on the LAN;
+  the keypad stops on each field's row (`add-device-*-field`) without focusing its input,
+  OK starts editing and OK or Back returns to the row, as on the Settings card),
   Cancel — button — `settings-add-device-cancel`, and Add — button —
   `settings-add-device-confirm`, which probes the host, saves the device and connects
   to it _(dialog code-verified, not yet hardware-verified)_ ; Delete device — button —
@@ -729,13 +768,28 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
   — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
-  `/settings/open-source-licenses`)
+  `/settings/open-source-licenses`, a sheet `open-source-licenses-overlay` that leaves the
+  guidance bar visible: Close — button — `open-source-licenses-close`; each package's
+  License and Source links — link — 44 px targets; Back closes it)
 
 ### 4.6 Docs (`/docs`)
 
 - Take the tour — card `docs-tour-card`, button `docs-tour-start` — R✅ I✅ — first on the page
-- Section toggles: Getting Started, Home, Play, Disks & Drives, Swapping
-  Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
+- Contents — card `docs-card-contents`, toggle `docs-toggle-contents` — R✅ I✅ — open on a
+  first visit. One jump link per chapter, two to a row — button —
+  `docs-contents-link-<chapter id>` — R✅ I✅. OK opens the chapter, scrolls its header to the
+  top of the page and moves the ring onto it.
+- Chapter toggles, in page order: Get started, Play a tune from HVSC, Find a tune fast, Build
+  and order a playlist, Use SID Radio, Listen here or on your C64, Mount and run a disk, Type on
+  the C64 with Remote Input, Play a game with Game Mode (… and the keypad on `c64u-remote`),
+  Watch your C64 with Live View, Change a setting in Config, Save and restore configs and
+  snapshots, Connect, switch and add devices, Fix connection problems, Keypad cheat sheet, What
+  the status badge colors mean, Diagnostics and sharing logs — button —
+  `docs-toggle-<chapter id>` — R✅ I✅. A chapter whose feature is switched off
+  (`hvsc_enabled`, `remote_input_enabled`, `live_view_enabled`, `keypad_input_enabled`) is left
+  out. OK on a closed chapter opens it; OK again goes in, and Down then stops on each paragraph,
+  step and key (`data-key-nav-reading`, no OK action) so a chapter longer than the screen is read
+  to its end; Back leaves it. `playwright/docsGuide.spec.ts` walks every chapter this way.
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
   Official Site — link — `docs-external-resource-*` — R✅ I✅
   (`c64u-remote`: card hidden — its only external link, the C64U User Guide,
@@ -842,13 +896,26 @@ buttons are disabled during that retry, so the prompt cannot be double-submitted
 **"View all" list overlay** (`SelectableActionList`, the shared list used by the Home,
 Play and Disks lists once they exceed the preview limit set by Settings → List preview
 limit): Filter — text — `view-all-filter-input` — filters the expanded list only, and
-carries its own clear button.
+carries its own clear button. In the Playlist's sheet on the compact profile the filter and its type filters fold
+behind one row, Filter — button — `view-all-filter-toggle`, which behaves as the page's `list-filter-toggle`
+(§4.2); it folds only once the list has scrolled far enough to be held still while it does. Letter rail — touch strip — `alphabet-rail` — shown at the
+right edge when the list holds at least four screens of rows and two or more initial
+letters; the list leaves a lane for it, so it covers no row. Pressing or dragging along it
+scrolls to the first item of the letter under the finger and selects that item's title, with
+the letter in a bubble (`alphabet-badge`) beside the finger. It is not a ring stop: on the
+keypad, **2–9** inside the sheet multi-tap through their letters (2 = A, then B, then C;
+letters the list lacks are skipped) and **1** goes to titles that do not start with a letter;
+a hardware keyboard's letter keys go straight to that letter. Each jump selects the item's
+title, so **OK** plays it. Keys typed into the filter field stay T9 entry. For the playlist the
+rail indexes the whole playlist and loads the pages up to a letter before jumping; with a
+filter text it indexes the loaded results.
 
 **New disk dialog** (`new-disk-*`, Content Explorer, behind `new_disk_enabled`;
 opened from the Disks library's "New disk" button): Type — select — `new-disk-type`
 — R✅ I✅ ; File name — text — `new-disk-name` — R✅ I✅ ; Disk label — text —
-`new-disk-label` — R✅ I✅ ; Tracks — number — `new-disk-tracks` — R✅ I✅
-`[visible for D64/DNP types only]` ; Storage folder — text — `new-disk-folder` —
+`new-disk-label` — R✅ I✅ ; Tracks — number — row `new-disk-tracks-field`, input
+`new-disk-tracks` — R✅ I✅ `[visible for D64/DNP types only]` _(the keypad stops on the
+row; OK starts editing the input, OK or Back returns to the row and keeps the dialog open; a second Back closes it)_ ; Storage folder — text — `new-disk-folder` —
 R✅ I✅ ; Cancel — button — R✅ I✅ ; Create & mount — button — `new-disk-create`
 — R✅ I✅ `[disabled until a non-empty file name is entered / while creating]`.
 Selecting the D64 or DNP type reveals the Tracks field; a successful create adds
@@ -1166,7 +1233,8 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
-`keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`.
+`keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`,
+`keypad-quick-menu-stop-live-view` (only while Live View streams; stops picture and sound).
 `keypad-quick-menu-game-mode` is absent on a device that cannot stream, such as a U2,
 like the Home Game tile; a function key assigned to Game Mode explains why there instead.
 
@@ -1291,6 +1359,10 @@ DOM order.
   device is reachable]` — pins Demo Mode
 - Expand/collapse — button — `diagnostics-header-toggle` `[rendered only once a health
   check has run or is running]` — reveals `diagnostics-header-expanded`
+  - Health check detail (`health-check-detail-view`) — Why was _check_ skipped? —
+    button — `health-check-probe-info-<probe>` `[only on a skipped check that recorded a
+    reason]` — opens a popover (`health-check-probe-info-<probe>-explanation`) that says
+    in plain language why the check did not run; Back/Escape or a tap outside closes it
 
 **Filter bar** (`filters-collapsed-bar`)
 
@@ -1338,7 +1410,10 @@ so Back has a target inside the dialog before it reaches the dialog itself.
   Resync / repair — button — `decision-state-repair`
 - Health history (`health-history-popup`) — Zoom in — button — `health-history-zoom-in` ;
   Zoom out — button — `health-history-zoom-out` (each disabled at its end of the
-  zoom-window list)
+  zoom-window list). Each event row's toggle expands its checks below it; a skipped
+  check there carries Why was _check_ skipped? — button —
+  `health-history-probe-info-<event>-<probe>` — with the same popover as the health
+  check detail
 - Latency — funnel — button — `open-latency-filters` — the same filter editor pattern
   as the main list
 - ← Diagnostics — button — `analytic-popup-return` — the return control shared by every
@@ -1352,6 +1427,23 @@ renders them and they are not part of the keypad surface. The launcher
 `VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON` is set; the page carries `switch-lab-from-device`,
 `switch-lab-to-device`, `switch-lab-iterations`, `switch-lab-delay-ms` and
 `switch-lab-run-soak`.
+
+### 5.2.1 Device switcher (`switch-device-sheet`)
+
+Opened by long-pressing the status badge, the keypad **#** key, or Quick Menu →
+Switch device (§1). Shown only when more than one device is saved. Code-verified
+against source; the R/I marks are omitted, as in §5.1.
+
+- Close — button — the sheet's shared close control
+- Per saved device, in list order:
+  - Device row — button — `switch-device-row-<id>` — switches to that device
+  - Expand/collapse device health detail — button — `switch-device-expand-<id>` —
+    reveals that device's health check detail (`health-check-detail-view`)
+  - Why was _check_ skipped? — button — `health-check-probe-info-<probe>` `[inside the
+    expanded detail, only on a skipped check that recorded a reason]` — opens the
+    plain-language explanation popover described in §5.2; on this sheet Telnet and
+    Config are always skipped, because the switcher does not open Telnet sessions or
+    change settings
 
 ---
 

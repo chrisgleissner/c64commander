@@ -149,3 +149,63 @@ describe("stepFocusWithinOverlay with a scrolling dialog body", () => {
     expect(document.activeElement).toBe(first);
   });
 });
+
+/** A sheet whose body holds a block of details taller than the body, then a button. */
+const sheetWithTallStop = (blockTop: number, blockHeight: number) => {
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  const body = scrolling({ scrollHeight: 900, clientHeight: 300, scrollTop: 0 });
+  const block = document.createElement("section");
+  block.tabIndex = 0;
+  block.getBoundingClientRect = () =>
+    ({
+      top: blockTop,
+      bottom: blockTop + blockHeight,
+      height: blockHeight,
+      width: 100,
+      left: 0,
+      right: 100,
+    }) as DOMRect;
+  const after = button("After", blockTop + blockHeight + 8);
+  body.element.append(block, after);
+  dialog.append(body.element);
+  document.body.append(dialog);
+  return { dialog, block, after, scrollBy: body.scrollBy };
+};
+
+describe("stepFocusWithinOverlay with a stop taller than the dialog body", () => {
+  it("scrolls the rest of the stop into view before Down moves on", () => {
+    const { dialog, block, scrollBy } = sheetWithTallStop(20, 400);
+    block.focus();
+
+    expect(stepFocusWithinOverlay(dialog, block, true)).toBe(true);
+    expect(scrollBy).toHaveBeenCalledWith({ top: 120 });
+    expect(document.activeElement).toBe(block);
+  });
+
+  it("scrolls at most a page less one control at a time", () => {
+    const { dialog, block, scrollBy } = sheetWithTallStop(0, 900);
+    block.focus();
+
+    stepFocusWithinOverlay(dialog, block, true);
+    expect(scrollBy).toHaveBeenCalledWith({ top: 256 });
+  });
+
+  it("scrolls back up through the stop before Up moves on", () => {
+    const { dialog, block, scrollBy } = sheetWithTallStop(-150, 400);
+    block.focus();
+
+    stepFocusWithinOverlay(dialog, block, false);
+    expect(scrollBy).toHaveBeenCalledWith({ top: -150 });
+    expect(document.activeElement).toBe(block);
+  });
+
+  it("moves on once the whole stop has been on screen", () => {
+    const { dialog, block, after, scrollBy } = sheetWithTallStop(-100, 380);
+    block.focus();
+
+    stepFocusWithinOverlay(dialog, block, true);
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(after);
+  });
+});

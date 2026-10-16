@@ -9,6 +9,7 @@
 import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useAppChromeMode } from "@/components/layout/AppChromeContext";
+import { ScrollPositionIndicator } from "@/components/ScrollPositionIndicator";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { cn } from "@/lib/utils";
 
@@ -102,6 +103,7 @@ export function PageContainer({ children, className, size = "default", as = "mai
   const { tokens } = useDisplayProfile();
   const appChromeMode = useAppChromeMode();
   const Component = as;
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   const style: CSSProperties = {
     height: appChromeMode === "sticky" ? "calc(100% - var(--app-bar-height))" : undefined,
     minHeight: 0,
@@ -111,12 +113,14 @@ export function PageContainer({ children, className, size = "default", as = "mai
 
   return (
     <Component
+      ref={setScrollElement}
       className={cn("page-shell", className)}
       data-page-scroll-container="true"
       data-app-chrome={appChromeMode}
       style={style}
     >
       {children}
+      <ScrollPositionIndicator target={scrollElement} showOnPageEntry />
     </Component>
   );
 }

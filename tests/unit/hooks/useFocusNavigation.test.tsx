@@ -7,7 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
@@ -1373,6 +1373,33 @@ describe("the keypad highlight follows focus that a menu moves itself", () => {
   });
 });
 
+describe("a dialog focusing its own surface as it opens", () => {
+  afterEach(() => resetInputModality());
+
+  it("is not scrolled into view, which forced a second style and layout pass on every open", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Diagnostics" tabIndex={-1}>
+          <button type="button">Close</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    const dialog = screen.getByRole("dialog");
+    const close = screen.getByRole("button", { name: "Close" });
+    const dialogScroll = vi.fn();
+    const closeScroll = vi.fn();
+    dialog.scrollIntoView = dialogScroll;
+    close.scrollIntoView = closeScroll;
+
+    dialog.focus();
+    expect(dialogScroll).not.toHaveBeenCalled();
+
+    close.focus();
+    expect(closeScroll).toHaveBeenCalled();
+  });
+});
+
 describe("the keypad highlight follows focus moved to a control the ring has not scanned yet", () => {
   afterEach(() => resetInputModality());
 
@@ -2153,6 +2180,121 @@ describe("the selected stop goes away", () => {
     expect(button("Add items")).not.toHaveAttribute(SELECTED);
     expect(document.activeElement).toBe(button("First item"));
     expect(scrolled).toContain(button("First item"));
+    scrollIntoView.mockRestore();
+  });
+});
+
+describe("the first key after pointer use", () => {
+  beforeEach(async () => {
+    // A reservation queued by an earlier test applies in a microtask; let it land before resetting.
+    await Promise.resolve();
+    resetInputModality();
+    document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+  });
+  afterEach(() => {
+    resetInputModality();
+    document.documentElement.style.removeProperty("--keypad-guidance-reserved-height");
+  });
+
+  it("scrolls the stop it moved to again once the guidance bar has reserved its room", () => {
+    const reserveAtScroll: Array<[string, string]> = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      reserveAtScroll.push([
+        this.textContent ?? "",
+        document.documentElement.style.getPropertyValue("--keypad-guidance-reserved-height"),
+      ]);
+    });
+    render(
+      <FocusNavigationProvider>
+        <button>First card</button>
+        <button>Second card</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(button("Second card")).toHaveAttribute(SELECTED, "true");
+    const last = reserveAtScroll.filter(([label]) => label === "Second card").at(-1);
+    expect(last?.[1]).toBe("var(--keypad-guidance-bar-height)");
+    scrollIntoView.mockRestore();
+  });
+});
+
+describe("a tab jump", () => {
+  afterEach(() => {
+    resetInputModality();
+  });
+
+  /** The remembered scroll offset the Play page reopens at. */
+  const keepScrolledTo = (top: number) => (element: HTMLDivElement | null) => {
+    if (element) Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+  };
+
+  const TabbedPages = ({ scrolledTop = 0 }: { scrolledTop?: number }) => {
+    const [page, setPage] = useState(0);
+    const shortcuts = useMemo(() => ({ jumpToTab: (index: number) => setPage(index) }), []);
+    return (
+      <FocusNavigationProvider shortcuts={shortcuts}>
+        {page === 0 ? (
+          <main key="home">
+            <button>Home first</button>
+            <button>Home second</button>
+          </main>
+        ) : (
+          <div key="play" data-slot-active="true">
+            <div data-page-scroll-container="true" ref={keepScrolledTo(scrolledTop)}>
+              <button>Play first</button>
+              <button>Play second</button>
+            </div>
+          </div>
+        )}
+      </FocusNavigationProvider>
+    );
+  };
+
+  it("scrolls the new page's first stop into view once the page has been scanned", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    render(<TabbedPages />);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    scrolled.length = 0;
+
+    fireEvent.keyDown(document.body, { key: "2", code: "Digit2" });
+    await act(afterRingRescan);
+
+    expect(button("Play first")).toHaveAttribute(SELECTED, "true");
+    expect(scrolled).toContain(button("Play first"));
+    scrollIntoView.mockRestore();
+  });
+
+  it("keeps a page that reopens scrolled where it is and selects the first stop seen there", async () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    const boxes = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const top = this.hasAttribute("data-page-scroll-container")
+        ? 0
+        : this.textContent === "Play first"
+          ? -300
+          : this.textContent === "Play second"
+            ? 150
+            : 0;
+      const height = this.hasAttribute("data-page-scroll-container") ? 400 : 44;
+      return { top, bottom: top + height, height, left: 0, right: 100, width: 100, x: 0, y: top, toJSON: () => ({}) };
+    });
+    render(<TabbedPages scrolledTop={900} />);
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    scrolled.length = 0;
+
+    fireEvent.keyDown(document.body, { key: "2", code: "Digit2" });
+    await act(afterRingRescan);
+
+    expect(button("Play second")).toHaveAttribute(SELECTED, "true");
+    expect(scrolled).not.toContain(button("Play first"));
+    boxes.mockRestore();
     scrollIntoView.mockRestore();
   });
 });

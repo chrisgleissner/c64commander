@@ -369,6 +369,62 @@ describe("FocusDiscoveryEngine", () => {
     });
   });
 
+  it("marks the stops of an app-chrome region, so the default selection passes over them", () => {
+    mount(`<header><div data-focus-chrome=""><button id="quick-menu">Quick menu</button></div></header>
+      <main><button id="first-card">First card</button></main>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    expect(engine.elementForId(controller.current()!.id)?.id).toBe("first-card");
+    expect(controller.list().map((entry) => entry.chrome ?? false)).toEqual([true, false]);
+    engine.stop();
+  });
+
+  describe("closing a dialog whose page reappears after the tab bar", () => {
+    const tabBar = `<nav data-focus-scope="tabbar"><button id="tab-home">Home</button><button id="tab-play">Play</button></nav>`;
+    const openAndClose = () => {
+      const page = mount(`<main id="page"><button id="badge">Badge</button><button id="backup">Backup</button></main>`);
+      mount(tabBar);
+      const onSelectionMovedByScan = vi.fn();
+      const controller = new FocusController();
+      const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onSelectionMovedByScan });
+      engine.start();
+      const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+      controller.setCurrent(idOf("backup"));
+      const dialog = mount(
+        `<div role="dialog"><button id="cancel">Cancel</button><button id="save">Save</button></div>`,
+      );
+      page.setAttribute("aria-hidden", "true");
+      engine.refresh();
+      dialog.remove();
+      engine.refresh();
+      const selected = () => engine.elementForId(controller.current()!.id)?.id;
+      return { page, engine, selected, onSelectionMovedByScan };
+    };
+
+    it("returns to the opener, not to the next tab, once the page is back", () => {
+      const { page, engine, selected } = openAndClose();
+      expect(selected()).toBe("tab-home");
+
+      page.removeAttribute("aria-hidden");
+      engine.refresh();
+
+      expect(selected()).toBe("backup");
+      engine.stop();
+    });
+
+    it("lands on the page's first stop, not on a tab, when the opener is gone", () => {
+      const { page, engine, selected } = openAndClose();
+      el("backup").remove();
+
+      page.removeAttribute("aria-hidden");
+      engine.refresh();
+
+      expect(selected()).toBe("badge");
+      engine.stop();
+    });
+  });
+
   describe("a route change", () => {
     const startOnSecondStop = () => {
       const onSelectionMovedByScan = vi.fn();
@@ -684,6 +740,36 @@ describe("FocusDiscoveryEngine", () => {
     engine.refresh();
 
     expect(engine.elementForId(controller.current()!.id)?.id).toBe("opener");
+    engine.stop();
+  });
+
+  it("returns to the most recent opener, not to an opener a dialog returned to earlier", () => {
+    const page = mount(`<div id="page"><button id="backup">Backup</button><button id="input">Input</button></div>`);
+    const { controller, engine } = makeEngine();
+    engine.start();
+    const idOf = (domId: string) => controller.list().find((item) => engine.elementForId(item.id)?.id === domId)!.id;
+    const selected = () => engine.elementForId(controller.current()!.id)?.id;
+
+    controller.setCurrent(idOf("backup"));
+    const dialog = mount(`<div role="dialog"><button>Cancel</button></div>`);
+    engine.refresh();
+    dialog.remove();
+    engine.refresh();
+    expect(selected()).toBe("backup");
+
+    controller.setCurrent(idOf("input"));
+    const sheet = mount(`<div role="dialog" data-key-nav-skip=""><button>Show controls</button></div>`);
+    page.setAttribute("aria-hidden", "true");
+    engine.refresh();
+    const menu = mount(`<div role="menu"><button>Close Remote Input</button></div>`);
+    engine.refresh();
+    menu.remove();
+    engine.refresh();
+    sheet.remove();
+    page.removeAttribute("aria-hidden");
+    engine.refresh();
+
+    expect(selected()).toBe("input");
     engine.stop();
   });
 
@@ -1295,6 +1381,76 @@ describe("FocusDiscoveryEngine while a list is still being built", () => {
     });
     await afterRingRescan();
     expect(refresh).toHaveBeenCalledTimes(3);
+    engine.stop();
+  });
+});
+
+describe("child list changes that hold no ring structure", () => {
+  const start = (html: string) => {
+    document.body.innerHTML = html;
+    const onAfterAssemble = vi.fn();
+    const controller = new FocusController();
+    const engine = new FocusDiscoveryEngine({ controller, listExplicit: () => [], onAfterAssemble });
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+    onAfterAssemble.mockClear();
+    return { controller, engine, onAfterAssemble, refresh };
+  };
+
+  it("do not rescan when a selected button swaps its icon, and notify the guidance bar", async () => {
+    // Mute swaps the speaker icon inside its button; each swap rescanned the whole Play page.
+    const { engine, onAfterAssemble, refresh } = start(
+      `<div id="page"><button id="mute" aria-label="Mute"><svg id="icon"></svg></button><button>Next</button></div>`,
+    );
+
+    el("icon").replaceWith(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(onAfterAssemble).toHaveBeenCalledTimes(1);
+    engine.stop();
+  });
+
+  it("do not rescan when a checkbox draws its tick or a status line appears", async () => {
+    const { engine, refresh } = start(
+      `<div id="page"><button id="box" role="checkbox"></button><div id="status"></div><button>Next</button></div>`,
+    );
+
+    el("box").appendChild(document.createElement("span"));
+    const note = document.createElement("p");
+    note.innerHTML = "<strong>1</strong> selected";
+    el("status").appendChild(note);
+    await afterRingRescan();
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it.each([
+    ["a button", "<button id='added'>Remove selected</button>"],
+    ["a wrapper holding a link", "<div><a id='added' href='#x'>More</a></div>"],
+    ["a labelled section", "<section data-section-label='Extra'><span>text</span></section>"],
+    ["a dialog", "<div role='dialog'><span>text</span></div>"],
+  ])("rescan when %s is added", async (_name, html) => {
+    const { engine, refresh } = start(`<div id="page"><button>Play</button><div id="slot"></div></div>`);
+
+    el("slot").innerHTML = html;
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    engine.stop();
+  });
+
+  it("rescan when a node holding a control is removed", async () => {
+    const { controller, engine, refresh } = start(
+      `<div id="page"><button>Play</button><div id="extra"><button id="gone">Gone</button></div></div>`,
+    );
+
+    el("extra").remove();
+    await afterRingRescan();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(controller.list()).toHaveLength(1);
     engine.stop();
   });
 });

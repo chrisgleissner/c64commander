@@ -215,7 +215,7 @@ const isC64uRemoteVariant = (variant) => variant.id === "c64u-remote";
 // a compact, keypad-first phone, so its manual always speaks of a "phone" and
 // never names a model. The broad C64 Commander edition also runs on tablets, so
 // it keeps the wider "phone or tablet" phrasing unchanged.
-const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
+export const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
 
 /**
  * The SID emulation choices, led by the edition's default. Fast & accurate exists only on Android,
@@ -245,7 +245,7 @@ export const sidEmulationProse = (variant) => {
 // name one of them.
 const appDeviceSubject = (variant) => (isC64uRemoteVariant(variant) ? "your phone" : "the device running the app");
 
-const targetDeviceDescription = (variant) =>
+export const targetDeviceDescription = (variant) =>
   isC64uRemoteVariant(variant)
     ? "a Commodore 64 Ultimate"
     : "a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II";
@@ -264,7 +264,7 @@ const targetDeviceDescription = (variant) =>
 const manualSubtitle = (variant) =>
   `Play SID music, run games and demos, mount disks, and control ${targetDeviceDescription(variant)} from one app.`;
 
-const targetDeviceShortName = (variant) =>
+export const targetDeviceShortName = (variant) =>
   isC64uRemoteVariant(variant) ? "the Commodore 64 Ultimate" : "the connected Ultimate-family device";
 
 const targetDevicePasswordName = (variant) =>
@@ -356,7 +356,7 @@ const autoSaveConfigGuidance = (variant) =>
   )}`;
 
 const saveToFlashGuidance = (variant) =>
-  `Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** in the Config card to write the current settings to flash once.\n\n${autoSaveConfigGuidance(
+  `Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** (**To flash**) on Home's **Config** card to write the current settings to flash once.\n\n${autoSaveConfigGuidance(
     variant,
   )}`;
 
@@ -727,8 +727,18 @@ const renderKeyboardReference = ({ features, variant }) => {
     table(
       ["Key", "What it does"],
       [
-        ["F1", isC64uRemoteVariant(variant) ? "Run its normal-navigation assignment (default: Play/Pause)" : "Play or pause, from any page"],
-        ["F3", isC64uRemoteVariant(variant) ? "Run its normal-navigation assignment (default: Next tune)" : "Next tune, from any page"],
+        [
+          "F1",
+          isC64uRemoteVariant(variant)
+            ? "Run its normal-navigation assignment (default: Play/Pause)"
+            : "Play or pause, from any page",
+        ],
+        [
+          "F3",
+          isC64uRemoteVariant(variant)
+            ? "Run its normal-navigation assignment (default: Next tune)"
+            : "Next tune, from any page",
+        ],
       ],
     ),
     "",
@@ -871,7 +881,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "2. Choose **Save** to keep the device for later.",
     "3. If the device has a password, enter its network password when asked.",
     "",
-    `If it finds nothing, ${appName} opens **No C64 found** so you can set it up by hand.`,
+    `If it finds nothing and no saved device has ever connected, ${appName} opens **No C64 found** so you can set it up by hand.`,
     "",
     isC64uRemoteVariant(variant)
       ? "Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the Commodore 64 Ultimate asks for a password, the same dialog asks you for it before saving and connecting."
@@ -899,7 +909,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The badge in the top right corner tells you how your C64 is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. If the app is offline, the same tap also tries to reconnect.",
     "",
-    "If you have saved more than one device, the badge does a little more. It shows the name of the device you are using. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.",
+    "If you have saved more than one device, the badge does a little more. It shows the name of the device you are using; on a narrow screen the name has the top line of the badge to itself. When the app connects to a device, or you switch to another one, it tells you for a few seconds which device it has reached. To change devices, long-press the badge or press `#`. This opens **Switch device**.",
     "",
     "### Moving Between Pages",
     "",
@@ -1010,7 +1020,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The picker stays inside the source you chose, so **Up** never wanders off somewhere else. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means just that folder or everything beneath it. That can be the difference between adding twelve files and twelve thousand.",
     "",
-    "> **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue.",
+    "> **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue. On a small screen the button sits at the top of the sheet and reads **Add** with the count.",
     "",
     image("C64U file picker", profile, "play/import/profiles/{profile}/02-c64u-file-picker.png"),
     "",
@@ -1026,6 +1036,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "A filter only hides rows; it never changes the playlist. Clear the box and the whole queue comes back.",
     "",
+    "The **Songs**, **Progs** and **Disks** boxes narrow the list by kind: SID and MOD music, PRG programs and CRT cartridges, or disk images. On the smallest screens the filter folds into a single **Filter** row once you move on to the list. The row still says what is being filtered, and a tap or OK opens it again.",
+    "",
+    "When the list is long, a column of letters runs down the right edge of View all. Touch or drag along it and the list jumps to the first item that starts with that letter. That item is selected, so its play button, or OK, starts it at once.",
+    "",
+    isC64uRemoteVariant(variant)
+      ? "On the keypad, press a number key for its letters: `2` once for A, twice for B, three times for C. `1` goes to titles that start with a digit or a symbol."
+      : "With a keypad, a number key does the same for its letters: `2` once for A, twice for B. On a hardware keyboard, a letter key goes straight to that letter.",
+    "",
     "Every item remembers where it came from. Local files stay local, C64U files point back at the device, archive results remember their source, and SID entries carry their tunes and lengths with them.",
     "",
     "Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.",
@@ -1034,7 +1052,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
     "",
-    "Each row has its own menu with the item's details and its **playback config**: settings the app applies to the machine just before that item runs. To take items out, tick them and choose **Remove selected items**.",
+    "Each row's **⋮** button opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.",
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(
       variant,
@@ -1058,7 +1076,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Filter by name, path or group to find something. A filter never deletes or moves anything.",
     "",
-    "Mounting is what the page is for. Choose the disk, choose the drive, mount it; **Eject** empties the drive again. Each disk's menu also offers **Rename disk**, which changes the name in your collection and leaves the file itself alone.",
+    "Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.",
     "",
     "Come to Disks whenever more than one disk is involved: the collection, the groups and the drives are all on one page. The drives themselves are explained in [Drives and Disk Images](#drives-and-disk-images).",
     "",
@@ -1068,11 +1086,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Config overview", profile, "config/profiles/{profile}/01-overview.png"),
     "",
-    "Every category the device reports has a card of its own. Open one and edit its rows directly. Each item gets the control that suits it: a slider, a select, a checkbox, a text field, or a password field that hides what you type. The app remembers which cards you left open.",
+    (isC64uRemoteVariant(variant)
+      ? "The cards follow the machine's own setup menu, such as **Video setup** and **Audio setup**."
+      : "On a Commodore 64 Ultimate the cards follow the machine's own setup menu, such as **Video setup** and **Audio setup**; on other machines each category the device reports has a card of its own.") +
+      " Open one and edit its rows directly. Each item gets the control that suits it: a slider, a select, a checkbox, a text field, or a password field that hides what you type. The app remembers which cards you left open.",
     "",
-    "Config edits the live machine, not a draft. A change goes to the device the moment you make it. Most take effect at once; a few, such as the cartridge choice, wait for the next reset. To make a change survive a power cycle, see [Configuration and Saving](#configuration-and-saving).",
+    "Config edits the live machine, not a draft, and has no Save button of its own: saving to flash is on Home's **Config** card. A change goes to the device the moment you make it. Most take effect at once; a few, such as the cartridge choice, wait for the next reset. To make a change survive a power cycle, see [Configuration and Saving](#configuration-and-saving).",
     "",
-    "Come here when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the pages and groups whose names match. After changing a value, let the write finish before you change a related one. For everyday settings, the cards on Home are quicker.",
+    "Come here when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the cards whose page, group or setting names match, so a setting can be found by its own name. After changing a value, let the write finish before you change a related one. For everyday settings, the cards on Home are quicker.",
     "",
     "### Settings",
     "",
@@ -1149,9 +1170,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Docs overview", profile, "docs/profiles/{profile}/01-overview.png"),
     "",
+    "It has a chapter of numbered steps for each main task: getting started, playing from HVSC, finding a tune, the playlist, SID Radio, where the sound plays, disks, Remote Input, Game Mode, Live View, Config, saving and restoring, devices, connection problems, the keypad keys, the status badge, and Diagnostics. **Contents**, at the top, jumps straight to a chapter.",
+    "",
     isC64uRemoteVariant(variant)
-      ? "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping."
-      : "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.",
+      ? "On the keypad, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it."
+      : "With a keypad or keyboard, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it. The page ends with links to the official device manuals and reference material.",
     "",
     "### Diagnostics",
     "",
@@ -1226,7 +1249,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "5. Confirm the selection.",
     "6. Open **View all** if the list is long.",
     "",
-    "To search instead of browsing, type in the box at the top and choose **Everywhere**. **This folder**, where the box starts, only narrows what is on screen. **Everywhere** searches the whole source by title or composer, which for HVSC means all sixty thousand or so files.",
+    "To search instead of browsing, type in the box at the top and choose **Everywhere**; on a small screen a single button shows the current choice and switches it. **This folder**, where the box starts, only narrows what is on screen. **Everywhere** searches the whole source by title or composer, which for HVSC means all sixty thousand or so files.",
     "",
     "Some sources have to be read one folder at a time, such as a folder on your device or the card in your C64. These offer a **Scan** button instead of searching as you type.",
     "",
@@ -1303,7 +1326,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     }.`,
     "2. If the setting is not there, open **Config** and search.",
     "3. Change the value.",
-    "4. To make the change survive a power cycle, use **Save** (**To flash**) in the **Config** card, unless **Keep device settings after a restart** is already on.",
+    "4. To make the change survive a power cycle, use **Save** (**To flash**) in the **Config** card on Home, unless **Keep device settings after a restart** is already on.",
     "",
     "Preferred path: Home for common settings; Config for everything else.",
     "",
@@ -1391,7 +1414,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} plays either its own tune or the sound sent from your C64, never both at once. Whichever you start last wins.`,
     "",
-    "The rest is under **Settings → SID Radio**. **Crossfade** blends one tune into the next: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off.",
+    "The rest is under **Settings → SID Radio**. **Crossfade** blends one tune into the next: **Off (clean cut)**, or **Short (0.6s)**, **Medium (1.5s)**, **Long (3s)** or **Longest (4s)**. It starts at Off.",
     "",
     `Only your ${appDeviceName(
       variant,
@@ -1487,7 +1510,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**It never repeats itself.** No tune plays twice. A mood takes one tune from each file, while a collection plays every tune on its list, even two from the same file.",
     "",
-    "**A mood skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything. A collection plays every tune on its list, however short.",
+    "**A mood skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play (seconds)**, or set it to zero to hear everything. A collection plays every tune on its list, however short.",
     "",
     "**It can run out.** A station follows a chain of similar tunes, and now and then it reaches the end, usually after many skips. The app tells you, and you can pick another mood.",
     "",
@@ -1541,7 +1564,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "#### Stopping later",
     "",
-    "A station never stops on its own, so set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or 15, 30, 45 or 60 minutes. It counts down while it waits; **Off** cancels it.",
+    "A station never stops on its own, so set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.",
     "",
     "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
@@ -1556,7 +1579,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           ...(includeFeature(features, "audio_mirror_enabled")
             ? [
-                "- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a matching dot in the top bar reminds you it is playing; tap it to stop everything at once.",
+                "- **Listen** turns the sound on. It takes almost no room, just a lit button and a small live dot, so you can keep half an ear on a game or a SID tune while you do something else. On other pages, a speaker mark in the header badge reminds you it is playing.",
               ]
             : []),
           ...(includeFeature(features, "video_mirror_enabled")
@@ -1567,7 +1590,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           image("Live View on Home", profile, "home/content-explorer/profiles/{profile}/01-live-view.png"),
           "",
-          "While either is playing, a **Reset** in the card's header stops both, without opening the card.",
+          "While either is playing, the header badge carries a small mark, a screen for the picture or a speaker for the sound alone, and **Stop** in the card's header stops both without opening the card. From any other page, **Stop Live View** in the Quick menu does the same.",
           "",
           `If the stream stops reaching ${appDeviceSubject(
             variant,
@@ -1731,7 +1754,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "No key is ever left stuck down on the real C64. Everything is released when you close the sheet, change mode or port, switch device, or send the app to the background. If a message does not get through, the header shows **Reconnecting…** until the next one does.",
           "",
-          "Tap **Release All** at any time to let go of every key and button at once.",
+          "Tap **Release all** at any time to let go of every key and button at once.",
           "",
           availabilityNote(features.remote_input_enabled),
           "",
@@ -1969,7 +1992,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     saveToFlashGuidance(variant),
     "",
-    `Beside **Save** on the **Config** card are **Load** from flash, **Reset** to the factory settings, and **Revert**, which puts back the settings the device had when the app first connected to it. The app also keeps its own named **configuration snapshots** on the ${appDeviceName(
+    `Beside **Save** on the **Config** card are **Load** from flash, **Reset** (**To default**) to the device's default settings, and **Revert**, which puts back the settings the device had when the app first connected to it. The app also keeps its own named **configuration snapshots** on the ${appDeviceName(
       variant,
     )}, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.`,
     "",
@@ -1991,9 +2014,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Tap a device to switch to it. First the app lets go of any keys you were holding on the old device and stops following its playback. Then it points itself at the new device's address and ports, and checks that it answers. Meanwhile the new device shows a **Verifying** pill; once it responds, it becomes the active device.",
     "",
-    "You add and edit saved devices in **Settings → Connection**, under **Saved devices**. Set each one's **Device name**, **C64U hostname / IP**, **HTTP**, **FTP** and **Telnet** ports, and **Network Password**, or delete one you no longer need.",
+    "You add and edit saved devices in **Settings → Connection**, under **Saved devices**. **Add device** asks for a **Device name**, the **C64U hostname / IP** and the **HTTP**, **FTP** and **Telnet** ports. The **Network Password** is set on the **Connection** card for the device in use: switch to a device, then fill it in. **Delete device** removes the device in use.",
     "",
-    "**Save & Connect** waits for the device to answer before keeping it. With only one device saved, there is nothing to switch to, and the switcher stays out of your way.",
+    "**Save & Connect** waits for the device to answer before it keeps a new address; a new name or port is saved straight away. With only one device saved, there is nothing to switch to: `#` says so, and a long-press on the badge acts as a tap.",
     "",
     "### Reading Diagnostics",
     "",
@@ -2003,7 +2026,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The panel has three parts, from top to bottom:",
     "",
-    "- The **health header** shows the state (Healthy, Degraded, Unhealthy, Idle, Unavailable, or Offline when there is no connection), which device it is about, and when it was last checked. Tap **Run health check** to test the connection now. The check tries the web, FTP and Telnet services, then three signals from the C64 itself: CONFIG, RASTER and JIFFY. Each reports its own result and timing, beside the overall latency. Open the header to read them one by one.",
+    "- The **health header** shows the state (Healthy, Degraded, Unhealthy, Idle, or Unavailable, which is what it shows while the app is offline), which device it is about, and when it was last checked. Tap **Run health check** to test the connection now. The check tries the web, FTP and Telnet services, then three signals from the C64 itself: CONFIG, RASTER and JIFFY. Each reports its own result and timing, beside the overall latency. Open the header to read them one by one.",
     "- The **Filters** bar says how much of the activity you are seeing, and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by where it came from (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also has five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.",
     "- The **Activity** list gathers problems, actions, logs, and traces together. Problems give a plain-language summary; Traces show the timing and order of requests. Tap any row for the full details.",
     "",
@@ -2314,7 +2337,7 @@ export const INDEX_TERMS = [
   { term: "disk images", match: ["disk images"] },
   { term: "disk, blank", match: ["**New disk**"] },
   { term: "disk, mounting", match: ["Mounting is what the page is for", "Choose a disk from your collection"] },
-  { term: "disk, renaming", match: ["**Rename disk**"] },
+  { term: "disk, renaming", match: ["**Rename disk…**"] },
   { term: "disk, rotating", match: ["rotate", "Rotate Disks"] },
   { term: "Disks page", match: ["Disks is where the drives"] },
   { term: "display profile", match: ["display profile"] },
@@ -2322,7 +2345,7 @@ export const INDEX_TERMS = [
   { term: "Docs page", match: ["Docs is the built-in help page"] },
   { term: "drives", match: ["Drives and Disk Images"] },
   { term: "drive type", match: ["drive type"] },
-  { term: "Eject", match: ["**Eject**"] },
+  { term: "Eject", match: ["**Eject disk**"] },
   { term: "Ethernet", match: ["**Ethernet**"] },
   { term: "feature switches", match: ["Feature switches", "Stable Features"] },
   { term: "Find a tune", match: ["**Find a tune**"] },
@@ -2391,7 +2414,7 @@ export const INDEX_TERMS = [
   { term: "RAM snapshots", match: ["RAM Snapshots", "**Backup**", "**Restore**"] },
   { term: "RASTER probe", match: ["RASTER"] },
   { term: "Reboot (Clr Mem)", match: ["**Reboot (Clr Mem)**"] },
-  { term: "Release All", match: ["**Release All**"] },
+  { term: "Release all", match: ["**Release all**"] },
   { term: "Remote Input", match: ["**Remote Input**"] },
   { term: "report, diagnostics", match: ["Sharing a Diagnostics Report", "Share all"] },
   { term: "Reset", match: ["**Reset**"] },

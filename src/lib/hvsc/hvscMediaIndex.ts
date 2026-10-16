@@ -6,6 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import {
+  searchSongsFromBrowseIndex,
+  searchSongsFromBrowseIndexInSlices,
+  type HvscSongSearchPage,
+} from "./hvscSongSearch";
 import type { MediaEntry, MediaIndex } from "@/lib/media-index";
 import { FilesystemMediaIndexStorage, JsonMediaIndex, LocalStorageMediaIndexStorage } from "@/lib/media-index";
 import type { HvscFolderListing, HvscFolderListingPage } from "./hvscTypes";
@@ -14,13 +19,11 @@ import {
   buildHvscBrowseIndexFromEntries,
   listFolderFromBrowseIndex,
   listSongsRecursiveFromBrowseIndex,
-  searchSongsFromBrowseIndex,
   streamSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   type HvscBrowseIndexSnapshot,
   type HvscBrowseIndexedSong,
-  type HvscSongSearchPage,
 } from "./hvscBrowseIndexStore";
 
 const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
@@ -232,6 +235,23 @@ export class HvscMediaIndexAdapter implements MediaIndex {
       path: options.path,
       offset: options.offset,
       limit: options.limit,
+    });
+  }
+
+  /** {@link searchSongs}, giving the main thread back between slices of the scan. */
+  async searchSongsInSlices(options: {
+    query: string;
+    path?: string;
+    offset?: number;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<HvscSongSearchPage | null> {
+    if (!this.browseSnapshot) return null;
+    return searchSongsFromBrowseIndexInSlices(this.browseSnapshot, options.query, {
+      path: options.path,
+      offset: options.offset,
+      limit: options.limit,
+      signal: options.signal,
     });
   }
 

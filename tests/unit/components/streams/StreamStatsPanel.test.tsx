@@ -10,6 +10,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StreamStatsPanel } from "@/components/streams/StreamStatsPanel";
 import type { AvMirrorSession, AvStatsSnapshot } from "@/lib/streams/avMirrorSession";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 const snapshot = (
   over: Partial<AvStatsSnapshot["governor"]> = {},
@@ -112,6 +113,12 @@ describe("StreamStatsPanel", () => {
     render(<StreamStatsPanel session={makeFakeSession(snapshot())} />);
     expect(screen.getByText("Audio buf")).toBeInTheDocument();
     expect(screen.getByText("Under runs")).toBeInTheDocument();
+  });
+
+  it("names the frame-rate choices, so the guidance bar does not read only Auto or 25%", () => {
+    render(<StreamStatsPanel session={makeFakeSession(snapshot())} />);
+    expect(guidanceLabelFor(screen.getByTestId("stream-stats-mode-auto"))).toBe("Frame rate: auto");
+    expect(guidanceLabelFor(screen.getByTestId("stream-stats-mode-25"))).toBe("Frame rate: 25%");
   });
 
   it("selecting a frame-rate mode routes to the session and persists it", () => {

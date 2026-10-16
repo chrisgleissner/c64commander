@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/interstitialStyles";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 import { getInputModality } from "@/lib/input/inputModality";
+import { isEditableTarget } from "@/lib/input/eventTargets";
 
 const assignRef = <T>(ref: React.ForwardedRef<T>, value: T | null) => {
   if (typeof ref === "function") {
@@ -65,9 +66,11 @@ export function useWorkflowSheetPosition<T extends HTMLElement>(
  * A surface that shrinks, for one when the keypad guidance bar appears under it, can leave the
  * control a keypad user is on outside its scroll area, and nothing else would bring it back.
  */
+// A field being typed into is kept in view whatever the modality: the system keyboard that opens for
+// it shrinks the viewport, and a tap is how a touch phone gets there.
 const keepKeypadFocusInView = (surface: HTMLElement) => {
-  if (getInputModality() !== "key-navigation") return;
   const focused = document.activeElement;
+  if (getInputModality() !== "key-navigation" && !isEditableTarget(focused)) return;
   if (focused instanceof HTMLElement && focused !== surface && surface.contains(focused)) {
     focused.scrollIntoView({ block: "nearest", inline: "nearest" });
   }

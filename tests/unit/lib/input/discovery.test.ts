@@ -198,6 +198,42 @@ describe("compareFocusables", () => {
 });
 
 describe("sortIntoReadingOrder", () => {
+  it("keeps both lighting groups before the following card while the lighting body expands", () => {
+    const host = mount(`
+      <section id="lighting" data-section-scope="home">
+        <button id="lighting-toggle">Lighting</button>
+        <div id="case" data-section-label="Case Light"></div>
+        <div id="keyboard" data-section-label="Keyboard Light"></div>
+      </section>
+      <section id="drives" data-section-scope="home"><button id="drive-toggle">Drives</button></section>
+    `);
+    // The body's children already have full layout positions while its animated height is still
+    // small. Drives therefore temporarily overlaps them. That scan used to persist after settling.
+    const tops: Record<string, number> = {
+      lighting: 100,
+      "lighting-toggle": 100,
+      case: 160,
+      keyboard: 650,
+      drives: 190,
+      "drive-toggle": 190,
+    };
+    for (const [id, top] of Object.entries(tops)) {
+      vi.spyOn(host.querySelector(`#${id}`)!, "getBoundingClientRect").mockReturnValue({
+        top,
+        left: 0,
+        width: 280,
+        height: 44,
+      } as DOMRect);
+    }
+    const stops = ["drive-toggle", "keyboard", "case", "lighting-toggle"].map((id) => host.querySelector(`#${id}`)!);
+    expect(sortIntoReadingOrder(stops).map((element) => element.id)).toEqual([
+      "lighting-toggle",
+      "case",
+      "keyboard",
+      "drive-toggle",
+    ]);
+  });
+
   /**
    * jsdom has no layout, so the geometry path is exercised by stubbing each element's rect as a
    * function of how far its container is scrolled — which is exactly the relationship a real

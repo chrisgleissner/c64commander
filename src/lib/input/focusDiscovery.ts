@@ -20,12 +20,17 @@
  * the ring) when it is off — preserving the Prime Directive byte-for-byte.
  */
 
+import { afterNextPaint } from "@/lib/ui/afterNextPaint";
 import { afterStagedRowsSettle, isInsidePendingList } from "@/lib/ui/stagedRows";
 import type { FocusController, FocusItem } from "./focusController";
 import {
   GROUP_ATTR,
   GROUP_CONTAINER_SELECTOR,
+  INTERACTIVE_SELECTOR,
+  OVERLAY_SELECTOR,
+  SCOPE_ATTR,
   SECTION_LABEL_ATTR,
+  SECTION_SCOPE_SELECTOR,
   SKIP_ATTR,
   TABBAR_SCOPE_SELECTOR,
   createDiscoveryScan,
@@ -127,6 +132,9 @@ const OBSERVED_ATTRIBUTES = [
   "aria-label",
 ];
 
+/** Marks app chrome repeated on every page; see {@link FocusItem.chrome}. */
+export const FOCUS_CHROME_ATTR = "data-focus-chrome";
+
 /*
  * The overlays that take the ring when they open. Deliberately NOT OVERLAY_SELECTOR: that includes
  * listbox, and the search overlay is a skipped subtree whose listbox rows are rewritten on every
@@ -136,14 +144,6 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
-
-const scheduleAfterNextPaint = (run: () => void): void => {
-  if (typeof requestAnimationFrame !== "function") {
-    queueMicrotask(run);
-    return;
-  }
-  requestAnimationFrame(() => setTimeout(run, 0));
-};
 
 const labellingElements = (element: Element): HTMLElement[] =>
   (element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [])
@@ -175,6 +175,31 @@ const changesOnlyText = (record: MutationRecord): boolean => {
   const isElement = (node: Node) => node.nodeType === Node.ELEMENT_NODE;
   return !Array.from(record.addedNodes).some(isElement) && !Array.from(record.removedNodes).some(isElement);
 };
+
+/**
+ * Everything a scan can find or be steered by. A node that is none of these and holds none of them
+ * cannot add, remove or regroup a ring stop: an icon swapped inside a button, a checkbox's tick, a
+ * count or a status line. Explicit `useFocusItem` registrations schedule their own re-scan.
+ */
+const RING_STRUCTURE_SELECTOR = [
+  INTERACTIVE_SELECTOR,
+  GROUP_CONTAINER_SELECTOR,
+  OVERLAY_SELECTOR,
+  SECTION_SCOPE_SELECTOR,
+  `[${SCOPE_ATTR}]`,
+  `[${SKIP_ATTR}]`,
+  "[data-slot-active]",
+].join(",");
+
+const holdsRingStructure = (node: Node): boolean =>
+  node instanceof Element &&
+  (node.matches(RING_STRUCTURE_SELECTOR) || node.querySelector(RING_STRUCTURE_SELECTOR) !== null);
+
+/** A child list change whose added and removed nodes hold no ring structure. */
+export const changesNoRingStructure = (record: MutationRecord): boolean =>
+  record.type === "childList" &&
+  !Array.from(record.addedNodes).some(holdsRingStructure) &&
+  !Array.from(record.removedNodes).some(holdsRingStructure);
 
 /** React writes an input's `type` on every render, which is no change and must not rescan the page. */
 const rewritesAttributeWithSameValue = (record: MutationRecord): boolean =>
@@ -278,7 +303,8 @@ export class FocusDiscoveryEngine {
     const currentId = this.controller.current()?.id;
     const current = currentId ? this.elementForId(currentId) : null;
     const relabels =
-      changesOnlyText(record) || (record.attributeName === "aria-label" && !rewritesAttributeWithSameValue(record));
+      changesNoRingStructure(record) ||
+      (record.attributeName === "aria-label" && !rewritesAttributeWithSameValue(record));
     return current !== null && relabels && current.contains(record.target);
   }
 
@@ -297,6 +323,7 @@ export class FocusDiscoveryEngine {
    */
   private cannotChangeRing(record: MutationRecord): boolean {
     if (changesOnlyText(record)) return !this.renamesAGroup(record);
+    if (changesNoRingStructure(record)) return !this.renamesAGroup(record);
     if (rewritesAttributeWithSameValue(record)) return true;
     if (record.attributeName === "aria-label") return !this.groupElements.has(record.target as Element);
     if (record.attributeName === SKIP_ATTR) return false;
@@ -319,7 +346,7 @@ export class FocusDiscoveryEngine {
   scheduleRefresh(urgent = false): void {
     if (!this.started || (this.scheduled && !urgent)) return;
     this.scheduled = true;
-    scheduleAfterNextPaint(() =>
+    afterNextPaint(() =>
       urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
     );
   }
@@ -373,6 +400,7 @@ export class FocusDiscoveryEngine {
     const leavingId = this.controller.current()?.id;
     const leavingElement = leavingId ? this.elementForId(leavingId) : null;
     const previousItems = this.controller.list();
+    const leavingWasDefault = this.controller.currentIsDefaultSelection();
     if (scopeChanged && previousScope && leavingId) this.currentWhenLeft.set(previousScope, leavingId);
     this.lastScope = scope.element;
     // A selected control that is disabled while the work it started runs (Pause, Menu) stays the
@@ -394,6 +422,8 @@ export class FocusDiscoveryEngine {
     // stood on inside the overlay no longer exists. Returning to the item that opened it keeps a keypad
     // user where they were.
     const returningTo = scopeChanged ? this.currentWhenLeft.get(scope.element) : undefined;
+    // Used once: kept, it outlived later openers, and closing Remote Input's menu went back to Backup.
+    if (returningTo) this.currentWhenLeft.delete(scope.element);
     let returnedTo: string | undefined;
     if (returningTo && this.controller.setCurrent(returningTo)) {
       returnedTo = returningTo;
@@ -407,7 +437,7 @@ export class FocusDiscoveryEngine {
     } else if (!scopeChanged) {
       returnedTo =
         this.followReplacedStop(leavingId, leavingElement, items.focusItems, items.resolvers) ??
-        this.followVanishedStop(leavingId, previousItems, previousRegions);
+        (leavingWasDefault ? undefined : this.followVanishedStop(leavingId, previousItems, previousRegions));
       returnedTo = this.retryPendingReturn(scope.element) ?? returnedTo;
     }
     returnedTo ??= this.restoreStandingAfterEmptyRing(
@@ -454,14 +484,15 @@ export class FocusDiscoveryEngine {
   /**
    * The selected stop went away (Remove selected items, an inline editor's Cancel). The ring took the
    * group's first stop, which can be far off screen; it moves to the nearest remaining sibling instead,
-   * the following one first.
+   * the following one first. Only a stop that is gone counts: a default selection that moved on to the
+   * page's first stop when the page came back behind a closed dialog used to take the next tab.
    */
   private followVanishedStop(
     leavingId: string | undefined,
     previousItems: readonly FocusItem[],
     previousRegions: ReadonlyMap<string, Element | null>,
   ): string | undefined {
-    if (!leavingId || this.controller.current()?.id === leavingId) return undefined;
+    if (!leavingId || this.controller.list().some((item) => item.id === leavingId)) return undefined;
     const leaving = previousItems.find((item) => item.id === leavingId);
     const parentId = leaving?.parentId ?? null;
     if (!leaving || this.controller.currentScopeParentId() !== parentId) return undefined;
@@ -494,7 +525,10 @@ export class FocusDiscoveryEngine {
    */
   private restoreStandingAfterEmptyRing(scope: Element, leavingId: string | undefined, itemCount: number) {
     if (itemCount === 0) {
-      if (leavingId) this.standingWhenRingEmptied = { scope, id: leavingId };
+      if (leavingId) {
+        this.standingWhenRingEmptied = { scope, id: leavingId };
+        this.currentWhenLeft.delete(scope);
+      }
       return undefined;
     }
     const standing = this.standingWhenRingEmptied;
@@ -712,6 +746,7 @@ export class FocusDiscoveryEngine {
         group: descriptor?.label ?? descriptor?.group ?? implicitGroupLabel,
         parentId: parentId ?? undefined,
         disabled: descriptor?.disabled || (!node.isGroup && isFocusDisabled(element)) || undefined,
+        chrome: element.closest(`[${FOCUS_CHROME_ATTR}]`) !== null || undefined,
         activate,
       });
       resolvers.set(node.id, () => element);

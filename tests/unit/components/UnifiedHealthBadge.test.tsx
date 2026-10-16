@@ -16,6 +16,7 @@ import {
   forgetConnectedDeviceAnnouncementForTests,
 } from "@/components/UnifiedHealthBadge";
 import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
+import { guidanceLabelFor } from "@/lib/input/guidance";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
 const mockToast = vi.hoisted(() => vi.fn());
@@ -193,6 +194,9 @@ const mockState = vi.hoisted(() => ({
   },
 }));
 
+const mirrorState = vi.hoisted(() => ({ current: { anyLive: false, videoLive: false } }));
+vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirrorState.current }));
+
 vi.mock("@/hooks/useHealthState", () => ({
   useHealthState: () => mockState.healthState,
 }));
@@ -286,6 +290,57 @@ describe("UnifiedHealthBadge", () => {
 
     expect(screen.queryByTestId("unified-health-badge-demo")).toBeNull();
     expect(screen.getByTestId("unified-health-badge").textContent).not.toContain("C64U");
+  });
+
+  it("gives the keypad guidance bar a short name: the device and its state, not the full sentence", () => {
+    render(<UnifiedHealthBadge />);
+    const badge = screen.getByTestId("unified-health-badge");
+
+    const short = badge.getAttribute("data-guidance-label") ?? "";
+    expect(short.length).toBeGreaterThan(0);
+    expect(short.length).toBeLessThan(badge.getAttribute("aria-label")!.length);
+    expect(guidanceLabelFor(badge)).toBe(short);
+  });
+
+  describe("Live View in the badge", () => {
+    afterEach(() => {
+      mirrorState.current = { anyLive: false, videoLive: false };
+    });
+
+    it("carries a picture mark and says Live View is on while the picture streams", () => {
+      mirrorState.current = { anyLive: true, videoLive: true };
+      render(<UnifiedHealthBadge />);
+
+      const badge = screen.getByTestId("unified-health-badge");
+      expect(screen.getByTestId("unified-health-badge-live")).toHaveAttribute("data-live-stream", "video");
+      expect(badge.getAttribute("aria-label")).toMatch(/, Live View on$/);
+    });
+
+    it("carries a sound mark while only the sound streams", () => {
+      mirrorState.current = { anyLive: true, videoLive: false };
+      render(<UnifiedHealthBadge />);
+
+      expect(screen.getByTestId("unified-health-badge-live")).toHaveAttribute("data-live-stream", "audio");
+    });
+
+    it("has no mark and no Live View wording while nothing streams", () => {
+      render(<UnifiedHealthBadge />);
+
+      expect(screen.queryByTestId("unified-health-badge-live")).toBeNull();
+      expect(screen.getByTestId("unified-health-badge").getAttribute("aria-label")).not.toMatch(/Live View/);
+    });
+
+    it("puts a named device on its own line, above the Live View mark", () => {
+      mockState.currentProfile = "compact";
+      mirrorState.current = { anyLive: true, videoLive: true };
+      render(<UnifiedHealthBadge />);
+
+      const stacked = screen.getByTestId("unified-health-badge-stacked");
+      const name = screen.getByTestId("unified-health-badge-device");
+      expect(stacked.firstElementChild).toBe(name);
+      expect(name).toHaveTextContent("Office U64");
+      expect(name.nextElementSibling).toContainElement(screen.getByTestId("unified-health-badge-live"));
+    });
   });
 
   describe("naming the device on a phone", () => {
@@ -553,6 +608,26 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     expect(screen.getByTestId("unified-health-badge")).not.toHaveAttribute("data-connected-device");
+  });
+
+  // The health model has no trace evidence for an unreachable device and reports Idle; the badge
+  // drew Idle's solid ring, which the Docs reserve for "not connected yet".
+  it.each(["Offline", "Auth"])("draws the dotted ring the Docs describe for %s, not the Idle ring", (connectivity) => {
+    (mockState.healthState as { connectivity: string }).connectivity = connectivity;
+    (mockState.healthState as { state: string }).state = "Idle";
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.querySelector("svg[data-health-shape]")).toHaveAttribute("data-health-shape", "Unavailable");
+  });
+
+  it("keeps naming the selected device while it is offline", () => {
+    (mockState.healthState as { connectivity: string }).connectivity = "Offline";
+    (mockState.healthState as { state: string }).state = "Idle";
+    mockState.currentProfile = "compact";
+    render(<UnifiedHealthBadge />);
+
+    expect(screen.getByTestId("unified-health-badge-device")).toHaveTextContent("Office U64");
   });
 
   it("renders offline and not-yet-connected special copy unchanged", () => {
@@ -1340,7 +1415,10 @@ describe("UnifiedHealthBadge", () => {
       "aria-label",
       "Collapse device health detail",
     );
-    expect(screen.getByTestId("health-check-probe-config").textContent).toContain("Passive");
+    const configRow = screen.getByTestId("health-check-probe-config");
+    expect(configRow).toHaveTextContent("Skipped");
+    expect(configRow).not.toHaveTextContent("Passive");
+    expect(within(configRow).getByRole("button", { name: "Why was Config skipped?" })).toBeVisible();
   });
 
   it("resets expanded device details when the picker closes", async () => {

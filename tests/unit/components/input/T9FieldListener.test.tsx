@@ -99,6 +99,44 @@ describe("T9FieldListener", () => {
     expect(field).toHaveAttribute("inputmode", "none");
   });
 
+  it("keeps the system keyboard out of a number field once a hardware keypad has navigated, and its digits stay digits", () => {
+    const PortField = () => {
+      const [value, setValue] = useState("");
+      return (
+        <input aria-label="HTTP port" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
+      );
+    };
+    render(
+      <>
+        <T9FieldListener />
+        <button>Before</button>
+        <PortField />
+      </>,
+    );
+    const field = screen.getByLabelText("HTTP port");
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Before" }), { key: "ArrowDown", keyCode: 40 });
+    fireEvent.focusIn(field);
+    fireEvent.keyDown(field, { key: "2", code: "Digit2" });
+
+    expect(field).toHaveAttribute("inputmode", "none");
+    expect(field).not.toHaveValue("a");
+  });
+
+  it("leaves a number field's keyboard alone on a touch phone that never used a keypad", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <input aria-label="HTTP port" inputMode="numeric" />
+      </>,
+    );
+    const field = screen.getByLabelText("HTTP port");
+
+    fireEvent.focusIn(field);
+
+    expect(field).toHaveAttribute("inputmode", "numeric");
+  });
+
   it("leaves the input method alone for arrow keys typed inside a field", () => {
     render(
       <>

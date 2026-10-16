@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   MAX_BREADCRUMB_SEGMENTS,
   accessibleLabelFor,
+  guidanceLabelFor,
   classifyFocusKind,
   hasContextMenu,
   resolveGuidanceLabels,
@@ -177,6 +178,32 @@ describe("classifyFocusKind", () => {
     ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "button"],
   ] as const)("%s → %s", (html, kind) => {
     expect(classifyFocusKind(el(html), false)).toBe(kind);
+  });
+
+  it("reads a guide paragraph the ring stops on as text, so the bar offers OK no action there", () => {
+    const paragraph = el('<p tabindex="0" data-key-nav-reading="true">Press OK to open a card.</p>');
+    expect(classifyFocusKind(paragraph, false)).toBe("status");
+  });
+});
+
+describe("guidanceLabelFor", () => {
+  const make = (html: string): Element => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    return wrapper.firstElementChild as Element;
+  };
+
+  it("prefers a control's short guidance label over its full accessible name", () => {
+    const badge = make(
+      '<button aria-label="Connected to c64u, system healthy" data-guidance-label="c64u: healthy"></button>',
+    );
+    expect(guidanceLabelFor(badge)).toBe("c64u: healthy");
+  });
+
+  it("falls back to the accessible name without one", () => {
+    expect(guidanceLabelFor(make('<button aria-label="Mute audio">x</button>'))).toBe("Mute audio");
+    expect(guidanceLabelFor(make('<button data-guidance-label=" ">Save</button>'))).toBe("Save");
+    expect(guidanceLabelFor(null)).toBeNull();
   });
 });
 
@@ -372,5 +399,12 @@ describe("resolveSoftKeyMenuPanelLabels", () => {
       shortcut: null,
     });
     expect(resolveSoftKeyMenuPanelLabels(false, null).breadcrumb).toEqual([]);
+  });
+
+  it("adds the selected entry after the menu's title", () => {
+    expect(resolveSoftKeyMenuPanelLabels(true, "Remote Input", "Release all").breadcrumb).toEqual([
+      "Remote Input",
+      "Release all",
+    ]);
   });
 });

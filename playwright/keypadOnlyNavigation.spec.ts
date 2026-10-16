@@ -83,6 +83,72 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await server.close();
   });
 
+  test("Lighting exposes both Case Light and Keyboard Light after opening by keypad @layout", async ({ page }) => {
+    await page.goto("/");
+    await settle(page);
+    const lighting = page.getByTestId("home-lighting-group");
+    expect(await ringFocus(page, lighting)).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(lighting).toHaveAttribute("data-open", "true");
+    await page.waitForTimeout(400);
+    // Opening a card is enough to freeze an animation-time scan. Do not force a new scan or
+    // use DOM focus: that would repair the stale order before the test can observe it.
+    expect(await ringFocus(page, page.getByTestId("home-led-summary"))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-led-mode")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("home-led-summary")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByTestId("home-keyboard-lighting-summary")).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(page.getByTestId("home-keyboard-lighting-mode"))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-keyboard-lighting-mode")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByTestId("home-led-summary")).toHaveAttribute(SELECTED, "true");
+  });
+
+  test("every enabled control in both lighting groups is selected and visible using only keys @layout", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await settle(page);
+    expect(await ringFocus(page, page.getByTestId("home-lighting-group"))).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("home-lighting-group")).toHaveAttribute("data-open", "true");
+    for (const prefix of ["home-led", "home-keyboard-lighting"]) {
+      const group = page.getByTestId(`${prefix}-summary`);
+      expect(await ringFocus(page, group)).toBe(true);
+      // Inventory the rendered controls independently of the app's discovery engine. A missing
+      // registration must fail here instead of being absent from both the expected and actual sets.
+      const inventory = await group.evaluateHandle((element) =>
+        Array.from(
+          element.querySelectorAll<HTMLElement>("button,input:not([type=hidden]),select,textarea,[role=slider]"),
+        )
+          .filter((control) => !control.matches(":disabled,[aria-disabled=true]"))
+          .filter((control) => !control.closest("[data-key-nav-skip]"))
+          .filter((control) => control.getBoundingClientRect().height > 0),
+      );
+      const count = await inventory.evaluate((controls) => controls.length);
+      expect(count).toBeGreaterThan(0);
+      await page.keyboard.press("Enter");
+      const reached = new Set<number>();
+      for (let step = 0; step <= count; step++) {
+        const index = await inventory.evaluate((controls) =>
+          controls.indexOf(document.querySelector('[data-key-selected="true"]') as HTMLElement),
+        );
+        expect(index, `${prefix}: the ring must select an inventoried control`).toBeGreaterThanOrEqual(0);
+        if (reached.has(index)) break;
+        reached.add(index);
+        expect(await isOnScreen(page.locator(`[${SELECTED}="true"]`))).toBe(true);
+        await page.keyboard.press("ArrowDown");
+      }
+      expect(reached.size, `${prefix}: every enabled rendered control must be reachable`).toBe(count);
+      await inventory.dispose();
+      await page.keyboard.press("Escape");
+    }
+  });
+
   test("every primary page is reachable using only the keypad @layout", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -279,7 +345,9 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
    * which a menu's arrow keys skip, so a keypad opened the menu on its first action with the details
    * scrolled above it and no key that could bring them back.
    */
-  test("a playlist row's menu lets the keypad read every detail row @layout", async ({ page }) => {
+  test("a playlist row's item sheet lets the keypad read every detail and reach every action, and Back returns to ⋮ @layout", async ({
+    page,
+  }) => {
     await page.addInitScript(() => {
       const items = Array.from({ length: 3 }, (_, index) => ({
         source: "ultimate",
@@ -298,48 +366,54 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const trigger = page.locator('[data-slot-active="true"]').getByRole("button", { name: "Item actions" }).first();
     await expect(trigger).toBeAttached({ timeout: 15_000 });
     expect(await ringFocus(page, trigger), "the ring could not reach the row's menu button").toBe(true);
-    // Near the top, so the tall menu opens downward and has to stop at the bars at the bottom.
+    // Near the top of the screen, where the dropdown this sheet replaced had the least room.
     await trigger.evaluate((element) => element.scrollIntoView({ block: "start" }));
     await page.keyboard.press("Enter");
-    const menu = page.getByRole("menu");
-    await expect(menu).toBeVisible();
+    const sheet = page.getByTestId("action-list-item-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(page.getByRole("menu")).toHaveCount(0);
     await waitForAnimations(page);
-    const menuBottom = await menu.evaluate((element) => element.getBoundingClientRect().bottom);
-    expect(menuBottom, "the menu runs under the guidance bar").toBeLessThanOrEqual((await guidanceBarTop(page)) + 0.5);
+    const sheetBottom = await sheet.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(sheetBottom, "the sheet runs under the guidance bar").toBeLessThanOrEqual(
+      (await guidanceBarTop(page)) + 0.5,
+    );
 
-    const clipped = await menu
-      .locator('[data-menu-detail="true"]')
-      .evaluateAll((rows) =>
-        rows
-          .filter((row) => row.scrollWidth > row.clientWidth + 1)
-          .map((row) => `${(row.textContent ?? "").trim().slice(0, 40)} (${row.scrollWidth} > ${row.clientWidth})`),
+    const clipped = await sheet
+      .locator("dd[data-detail-label], button")
+      .evaluateAll((elements) =>
+        elements
+          .filter((element) => element.scrollWidth > element.clientWidth + 1)
+          .map(
+            (element) =>
+              `${(element.textContent ?? "").trim().slice(0, 40)} (${element.scrollWidth} > ${element.clientWidth})`,
+          ),
       );
-    expect(clipped, "detail rows whose text runs past the menu's edge").toEqual([]);
+    expect(clipped, "details or actions whose text runs past the sheet's edge").toEqual([]);
 
-    // Walk the whole menu both ways, as a reader looking for the details would, and note every row
-    // the menu's own highlight landed on while that row was inside the menu's visible box.
+    // Walk the whole sheet both ways, as a reader looking for the details would, and note every detail
+    // and action that was wholly inside the sheet's visible body at some step.
     const seen = new Set<string>();
     const record = async () => {
-      const label = await page.evaluate(() => {
-        const focused = document.activeElement;
-        const box = focused?.closest('[role="menu"]')?.getBoundingClientRect();
-        if (!focused || !box || focused.getAttribute("role") !== "menuitem") return null;
-        const rect = focused.getBoundingClientRect();
-        const inMenu = rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5;
-        const onScreen = rect.top >= 0 && rect.bottom <= window.innerHeight;
-        return inMenu && onScreen ? (focused.textContent ?? "").trim() : null;
+      const visible = await sheet.evaluate((root) => {
+        const body = root.querySelector(".overflow-y-auto")!.getBoundingClientRect();
+        const bottom = Math.min(body.bottom, window.innerHeight);
+        return Array.from(root.querySelectorAll<HTMLElement>("dd[data-detail-label], button"))
+          .filter((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.height > 0 && rect.top >= body.top - 0.5 && rect.bottom <= bottom + 0.5;
+          })
+          .map((element) => element.getAttribute("data-detail-label") ?? (element.textContent ?? "").trim());
       });
-      if (label) seen.add(label.split(":")[0]);
+      visible.forEach((label) => seen.add(label));
     };
     for (const key of ["ArrowDown", "ArrowUp"]) {
-      for (let step = 0; step < 24; step += 1) {
+      for (let step = 0; step < 12; step += 1) {
         await record();
         await page.keyboard.press(key);
         await page.waitForTimeout(60);
       }
     }
-
-    const details = [
+    const expected = [
       "Type",
       "Duration",
       "Path",
@@ -350,12 +424,20 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       "Origin",
       "Candidates",
       "Overrides",
+      "Play",
+      "Review playback config",
+      "Attach local .cfg",
+      "Attach C64U .cfg",
     ];
     expect(
-      details.filter((label) => !seen.has(label)),
-      "detail rows the keypad could not bring into view",
+      expected.filter((label) => !seen.has(label)),
+      "details or actions the keypad never brought wholly on screen",
     ).toEqual([]);
-    expect(seen.has("Review playback config"), "the menu's actions are still reachable").toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute(SELECTED, "true");
   });
 
   test("a selected card's top edge is never left under the app bar @layout", async ({ page }) => {
@@ -425,7 +507,9 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await waitForAnimations(page);
     const bar = page.getByTestId("keypad-guidance-bar");
     await expect(bar).toHaveAttribute("data-visible", "true");
-    await expect(bar.getByTestId("keypad-guidance-center")).toContainText("Select");
+    // On the compact screen the OK cap stands alone in this menu; the word "Select" cut entry names off.
+    await expect(bar.getByTestId("keypad-guidance-center")).toBeVisible();
+    await expect(bar.getByTestId("keypad-guidance-center").locator(".keypad-guidance-action")).toHaveText("");
 
     const problems: string[] = [];
     for (let index = 0; index < count; index += 1) {
@@ -442,6 +526,17 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
           fontPx: Number.parseFloat(window.getComputedStyle(element).fontSize),
         };
       });
+      await expect(
+        page.getByTestId("keypad-guidance-breadcrumb"),
+        "The guidance bar names the selected entry",
+      ).toHaveText(measured.label);
+      if (
+        !(await page
+          .locator(".keypad-guidance-breadcrumb-text")
+          .evaluate((text) => text.scrollWidth <= text.clientWidth + 1))
+      ) {
+        problems.push(`${measured.label}: cut off in the guidance bar`);
+      }
       if (measured.width < 44 || measured.height < 44) {
         problems.push(`${measured.label}: ${Math.round(measured.width)}x${Math.round(measured.height)}`);
       }
@@ -508,6 +603,197 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
 
     await expect(sheet).toBeHidden();
     await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+  });
+
+  test("closing a dialog by Back returns the selection to its opener, not to the tab bar @layout", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    const openers = [
+      { opener: page.getByTestId("unified-health-badge"), dialog: page.getByTestId("diagnostics-sheet") },
+      {
+        opener: page.locator('[data-slot-active="true"]').getByTestId("home-save-ram"),
+        dialog: page.getByTestId("save-ram-dialog"),
+      },
+    ];
+    for (const { opener, dialog } of openers) {
+      expect(await ringFocus(page, opener), "The ring could not reach the opener").toBe(true);
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      await waitForAnimations(page);
+      // On the keypad handset the first scan after the dialog has gone still sees the page hidden and
+      // only the tab bar; desktop Chromium unhides the page first. This hides the page for that scan.
+      await page.evaluate(() => {
+        const slot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
+        const observer = new MutationObserver(() => {
+          if (document.querySelector('[role="dialog"]')) return;
+          observer.disconnect();
+          slot?.setAttribute("aria-hidden", "true");
+          setTimeout(() => slot?.removeAttribute("aria-hidden"), 300);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await page.waitForTimeout(800);
+      await expect(opener).toHaveAttribute(SELECTED, "true");
+    }
+  });
+
+  test("a page jump by number key lands on the new page's first own stop, not on the app bar @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+
+    for (const digit of ["2", "6", "1"]) {
+      await page.keyboard.press(digit);
+      await page.waitForTimeout(600);
+      const selected = await page.evaluate(() => {
+        const element = document.querySelector('[data-key-selected="true"]');
+        return {
+          id: element?.getAttribute("data-testid") ?? "",
+          inAppBar: element?.closest('[data-testid="app-bar-row"]') !== null,
+          inTabBar: element?.closest('[data-focus-scope="tabbar"]') !== null,
+        };
+      });
+      expect(selected.inAppBar || selected.inTabBar, `After ${digit} the selection is ${selected.id}`).toBe(false);
+    }
+  });
+
+  test("the guidance bar names Home's controls by what they act on, and the badge without cutting it @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const crumb = page.getByTestId("keypad-guidance-breadcrumb");
+    const home = page.locator('[data-slot-active="true"]');
+
+    const badge = page.getByTestId("unified-health-badge");
+    for (let step = 0; step < 10 && (await badge.getAttribute(SELECTED)) !== "true"; step += 1) {
+      await page.keyboard.press("ArrowUp");
+    }
+    await expect(badge).toHaveAttribute(SELECTED, "true");
+    await expect(crumb).toHaveText(/^C64U: /);
+    expect(
+      await page
+        .locator(".keypad-guidance-breadcrumb-text")
+        .evaluate((text) => text.scrollWidth <= text.clientWidth + 1),
+      "The badge's name is drawn whole in the guidance bar",
+    ).toBe(true);
+
+    const expected: Array<[string, RegExp]> = [
+      ["home-drives-reset", /^Drives: reset$/],
+      ["home-drive-toggle-a", /^Drive A power: (on|off)$/],
+      ["home-drive-status-a", /^Drive A status: /],
+    ];
+    for (const [testId, name] of expected) {
+      expect(await ringFocus(page, home.getByTestId(testId), 160), `The ring could not reach ${testId}`).toBe(true);
+      await expect(crumb, testId).toHaveText(name);
+    }
+  });
+
+  test("a tab jump back to a page left scrolled down keeps its position and selects a stop seen there @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const scrollTop = () =>
+      page.evaluate(
+        () =>
+          document.querySelector<HTMLElement>('[data-slot-active="true"] [data-page-scroll-container="true"]')
+            ?.scrollTop ?? 0,
+      );
+    await page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>(
+        '[data-slot-active="true"] [data-page-scroll-container="true"]',
+      );
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    });
+    await page.waitForTimeout(300);
+    const leftAt = await scrollTop();
+    expect(leftAt, "Play must be long enough to leave scrolled").toBeGreaterThan(200);
+
+    const selectedPlacement = () =>
+      page.evaluate(() => {
+        const selected = document.querySelector<HTMLElement>('[data-key-selected="true"]');
+        const bar = document.querySelector<HTMLElement>('[data-testid="keypad-guidance-bar"]');
+        const header = document.querySelector<HTMLElement>('[data-slot-active="true"] header');
+        if (!selected || !bar) return null;
+        const rect = selected.getBoundingClientRect();
+        return {
+          id: selected.getAttribute("data-testid") ?? selected.textContent?.trim().slice(0, 30) ?? "",
+          top: Math.round(rect.top),
+          bottom: Math.round(rect.bottom),
+          headerBottom: Math.round(header?.getBoundingClientRect().bottom ?? 0),
+          barTop: Math.round(bar.getBoundingClientRect().top),
+        };
+      });
+    for (const digit of ["1", "2"]) {
+      await page.keyboard.press(digit);
+      await page.waitForTimeout(800);
+      const placement = await selectedPlacement();
+      expect(placement, `After ${digit} nothing is selected`).not.toBeNull();
+      const { id, top, bottom, headerBottom, barTop } = placement!;
+      const tall = bottom - top > barTop - headerBottom;
+      expect(
+        top >= headerBottom - 1 && (bottom <= barTop + 1 || (tall && top < barTop)),
+        `After ${digit} ${id} is at ${top}..${bottom}, not whole inside ${headerBottom}..${barTop}`,
+      ).toBe(true);
+    }
+    expect(Math.abs((await scrollTop()) - leftAt), "Play reopened where it was left").toBeLessThan(80);
+  });
+
+  test("closing Remote Input from its menu after closing Backup returns to the Input tile, not to Backup @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => page.locator(`[${SELECTED}="true"]`).count()).toBeGreaterThan(0);
+    const home = page.locator('[data-slot-active="true"]');
+
+    const backup = home.getByTestId("home-save-ram");
+    expect(await ringFocus(page, backup), "The ring could not reach Backup").toBe(true);
+    await page.keyboard.press("Enter");
+    const backupDialog = page.getByTestId("save-ram-dialog");
+    await expect(backupDialog).toBeVisible();
+    await waitForAnimations(page);
+    await page.keyboard.press("Escape");
+    await expect(backupDialog).toBeHidden();
+    await page.waitForTimeout(500);
+    await expect(backup).toHaveAttribute(SELECTED, "true");
+
+    const openRemoteInput = home.getByTestId("home-machine-inline-openRemoteInput");
+    expect(await ringFocus(page, openRemoteInput), "The ring could not reach Remote Input").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press("F2");
+    const close = page.getByTestId("remote-input-controls-menu").getByTestId("remote-input-menu-close");
+    await expect(close).toBeVisible();
+    for (let step = 0; step < 10 && !(await close.evaluate((e) => e === document.activeElement)); step += 1) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeHidden();
+    await page.waitForTimeout(500);
+
+    await expect(openRemoteInput).toHaveAttribute(SELECTED, "true");
+    await expect(backup).not.toHaveAttribute(SELECTED, "true");
   });
 
   test("the guidance bar names a Quick menu entry by its label, not the key cap beside it @layout", async ({

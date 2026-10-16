@@ -29,18 +29,24 @@ import {
 } from "@/lib/deviceInteraction/deviceActivityGate";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import {
-  buildRestRequestIdentity,
   canonicalizeRestPath,
   isConfigMutationPath,
   isMachineControlPath,
   isReadOnlyRestMethod,
 } from "@/lib/deviceInteraction/restRequestIdentity";
+import { deviceScopeOfHost, resolveRestDeviceScope } from "@/lib/deviceInteraction/deviceScope";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { publishDeviceWrite, TELNET_DEVICE_ACTION } from "@/lib/deviceInteraction/deviceWriteEvents";
 import { DEVICE_NO_ANSWER_PHRASE } from "@/lib/c64api/requestFailureMessage";
+import { PerDeviceFailureState } from "@/lib/deviceInteraction/deviceFailureState";
+import {
+  InteractionCancelledError,
+  PerDeviceInteractionScheduler,
+  type InteractionIntent,
+} from "@/lib/deviceInteraction/interactionScheduler";
 
-export type InteractionIntent = "user" | "system" | "background";
+export { InteractionCancelledError, type InteractionIntent };
 
 type RestRequestMeta = {
   action: TraceActionContext;
@@ -49,6 +55,12 @@ type RestRequestMeta = {
   normalizedUrl: string;
   intent: InteractionIntent;
   baseUrl: string;
+  /**
+   * The device the request is for. Its host name picks the REST slot, so a device that does not answer
+   * cannot hold the slot another device needs. On web every request goes through one proxy `baseUrl`,
+   * so the host has to come from here; without it the host is taken from `baseUrl`.
+   */
+  deviceHost?: string;
   allowDuringDiscovery?: boolean;
   allowDuringError?: boolean;
   bypassCache?: boolean;
@@ -122,14 +134,6 @@ type InflightEntry<T> = {
   generation: number;
 };
 
-type QueueTask<T> = {
-  run: () => Promise<T>;
-  resolve?: (value: T) => void;
-  reject?: (error: Error) => void;
-  intent: InteractionIntent;
-  getReadyAtMs?: () => number;
-};
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isAutomatedEnv = () => {
@@ -181,127 +185,6 @@ export const isDeviceSafetyGovernorEnabled = (): boolean => {
 
 const isGovernorBypassed = () => !isDeviceSafetyGovernorEnabled();
 
-// PH10: thrown when queued interaction tasks are cancelled by a device-state
-// reset (e.g. saved-device switch). Classified as cancellation, not failure,
-// so callers and diagnostics can distinguish "stale, ignored" from "broken".
-export class InteractionCancelledError extends Error {
-  readonly isCancellation = true as const;
-  constructor(
-    message: string,
-    readonly reason: string,
-  ) {
-    super(message);
-    this.name = "InteractionCancelledError";
-  }
-}
-
-class InteractionScheduler {
-  private running = 0;
-  private deferredDrainTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly queues: Record<InteractionIntent, Array<QueueTask<unknown>>> = {
-    user: [],
-    system: [],
-    background: [],
-  };
-
-  constructor(
-    private readonly maxConcurrency: () => number,
-    private readonly label: string = "scheduler",
-  ) {}
-
-  schedule<T>(task: QueueTask<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const entry: QueueTask<unknown> = {
-        ...task,
-        resolve,
-        reject,
-      } as QueueTask<unknown>;
-      this.queues[task.intent].push(entry);
-      this.drain();
-    });
-  }
-
-  // PH10: reject every queued (not-yet-running) task with a cancellation
-  // error so a saved-device switch doesn't leak old-host work into the new
-  // device's context. Running tasks cannot be revoked here — they complete
-  // or fail naturally; their late results are handled by the caller (or
-  // simply ignored when state has moved on).
-  cancelAll(reason: string, intents: readonly InteractionIntent[] = ["user", "system", "background"]): number {
-    this.clearDeferredDrainTimer();
-    let cancelled = 0;
-    for (const intent of intents) {
-      const queue = this.queues[intent];
-      while (queue.length > 0) {
-        const task = queue.shift();
-        if (!task) continue;
-        cancelled += 1;
-        const error = new InteractionCancelledError(`${this.label} queued task cancelled: ${reason}`, reason);
-        // Promise reject cannot throw synchronously, so no try/catch is needed.
-        task.reject?.(error);
-      }
-    }
-    return cancelled;
-  }
-
-  private clearDeferredDrainTimer() {
-    if (this.deferredDrainTimer) {
-      clearTimeout(this.deferredDrainTimer);
-      this.deferredDrainTimer = null;
-    }
-  }
-
-  private scheduleDeferredDrain(nextReadyAtMs: number | null) {
-    this.clearDeferredDrainTimer();
-    if (nextReadyAtMs === null) return;
-    this.deferredDrainTimer = setTimeout(
-      () => {
-        this.deferredDrainTimer = null;
-        this.drain();
-      },
-      Math.max(0, nextReadyAtMs - Date.now()),
-    );
-  }
-
-  private takeNext(): { task: QueueTask<unknown> | null; nextReadyAtMs: number | null } {
-    const now = Date.now();
-    let nextReadyAtMs: number | null = null;
-    for (const intent of ["user", "system", "background"] as const) {
-      const queue = this.queues[intent];
-      for (let index = 0; index < queue.length; index += 1) {
-        const candidate = queue[index];
-        const readyAtMs = candidate.getReadyAtMs?.() ?? now;
-        if (readyAtMs <= now) {
-          queue.splice(index, 1);
-          return { task: candidate, nextReadyAtMs: null };
-        }
-        nextReadyAtMs = nextReadyAtMs === null ? readyAtMs : Math.min(nextReadyAtMs, readyAtMs);
-      }
-    }
-    return { task: null, nextReadyAtMs };
-  }
-
-  private drain() {
-    this.clearDeferredDrainTimer();
-    const limit = Math.max(1, this.maxConcurrency());
-    while (this.running < limit) {
-      const { task, nextReadyAtMs } = this.takeNext();
-      if (!task) {
-        this.scheduleDeferredDrain(nextReadyAtMs);
-        return;
-      }
-      this.running += 1;
-      void task
-        .run()
-        .then((value) => task.resolve?.(value))
-        .catch((error) => task.reject?.(error))
-        .finally(() => {
-          this.running = Math.max(0, this.running - 1);
-          this.drain();
-        });
-    }
-  }
-}
-
 let config: DeviceSafetyConfig = loadDeviceSafetyConfig();
 let lastLoggedEffectivePresetSignature: string | null = null;
 
@@ -337,17 +220,7 @@ const updateConfig = () => {
   telnetConnectCooldownUntil.clear();
   restInflight.clear();
   ftpInflight.clear();
-  restErrorStreak = 0;
-  restBackoffUntilMs = 0;
-  restCircuitUntilMs = 0;
-  restUserCircuitProbePromise = null;
-  ftpErrorStreak = 0;
-  ftpBackoffUntilMs = 0;
-  ftpCircuitUntilMs = 0;
-  telnetErrorStreak = 0;
-  telnetBackoffUntilMs = 0;
-  telnetCircuitUntilMs = 0;
-  setCircuitOpenUntil(null);
+  clearFailureStates();
   logEffectivePresetChange(config);
   addLog("info", "Device safety config updated", { mode: config.mode, config });
 };
@@ -364,17 +237,7 @@ export const resetInteractionState = (reason: string) => {
   ftpConnectCooldownUntil.clear();
   telnetConnectCooldownUntil.clear();
   ftpInflight.clear();
-  restErrorStreak = 0;
-  restBackoffUntilMs = 0;
-  restCircuitUntilMs = 0;
-  restUserCircuitProbePromise = null;
-  ftpErrorStreak = 0;
-  ftpBackoffUntilMs = 0;
-  ftpCircuitUntilMs = 0;
-  telnetErrorStreak = 0;
-  telnetBackoffUntilMs = 0;
-  telnetCircuitUntilMs = 0;
-  setCircuitOpenUntil(null);
+  clearFailureStates();
   // PH10: reject everything still queued so old-device REST/FTP/Telnet
   // work cannot land against the new device's context. Already-running
   // tasks complete naturally; their late results are stale and ignored
@@ -400,9 +263,11 @@ const TELNET_MAX_CONCURRENCY = 1;
 const MACHINE_CONTROL_COOLDOWN_MS = 250;
 export const FTP_TRANSIENT_RETRY_DELAY_MS = 250;
 
-const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
-const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
-const telnetScheduler = new InteractionScheduler(() => TELNET_MAX_CONCURRENCY, "telnet");
+// Each lane protects one Ultimate's network task, so each device has its own lanes. With one REST slot for every
+// device, a saved device that did not answer held it until its timeout while the reachable device's probes timed out.
+const restScheduler = new PerDeviceInteractionScheduler(() => REST_MAX_CONCURRENCY, "rest");
+const ftpScheduler = new PerDeviceInteractionScheduler(() => config.ftpMaxConcurrency, "ftp");
+const telnetScheduler = new PerDeviceInteractionScheduler(() => TELNET_MAX_CONCURRENCY, "telnet");
 
 const restCache = new Map<string, CacheEntry<unknown>>();
 const restInflight = new Map<string, InflightEntry<unknown>>();
@@ -412,19 +277,21 @@ const ftpInflight = new Map<string, Promise<unknown>>();
 const ftpConnectCooldownUntil = new Map<string, number>();
 const telnetConnectCooldownUntil = new Map<string, number>();
 
-let restErrorStreak = 0;
-let restBackoffUntilMs = 0;
-let restCircuitUntilMs = 0;
-let restUserCircuitProbePromise: Promise<unknown> | null = null;
 let restInflightGeneration = 0;
 
-let ftpErrorStreak = 0;
-let ftpBackoffUntilMs = 0;
-let ftpCircuitUntilMs = 0;
+const restFailures = new PerDeviceFailureState();
+const ftpFailures = new PerDeviceFailureState();
+const telnetFailures = new PerDeviceFailureState();
+// The device state store shows one circuit, the one most recently opened; only that device's recovery closes it.
+let circuitShownForScope: string | null = null;
 
-let telnetErrorStreak = 0;
-let telnetBackoffUntilMs = 0;
-let telnetCircuitUntilMs = 0;
+function clearFailureStates() {
+  restFailures.clear();
+  ftpFailures.clear();
+  telnetFailures.clear();
+  circuitShownForScope = null;
+  setCircuitOpenUntil(null);
+}
 
 const getRestFailureKind = (error: Error): RestFailureKind | null => {
   const kind = (error as { c64uRestFailureKind?: RestFailureKind }).c64uRestFailureKind;
@@ -462,33 +329,18 @@ const getCriticalRestFailureWeight = (error: Error) => {
   return isCriticalRestError(error) ? 1 : 0;
 };
 
-const computeBackoff = (streak: number) => {
-  if (config.backoffBaseMs <= 0 || config.backoffMaxMs <= 0 || streak <= 0) return 0;
-  const factor = Math.max(1, config.backoffFactor);
-  const backoff = Math.min(config.backoffMaxMs, Math.round(config.backoffBaseMs * Math.pow(factor, streak - 1)));
-  return backoff;
-};
-
-const updateRestFailure = (error: Error) => {
+const updateRestFailure = (deviceScope: string, error: Error) => {
   const failureWeight = getCriticalRestFailureWeight(error);
   if (failureWeight <= 0) return;
-  restErrorStreak += failureWeight;
-  const backoffMs = computeBackoff(restErrorStreak);
-  const now = Date.now();
-  if (backoffMs > 0) {
-    restBackoffUntilMs = Math.max(restBackoffUntilMs, now + backoffMs);
-  }
-  if (config.circuitBreakerThreshold > 0 && restErrorStreak >= config.circuitBreakerThreshold) {
-    restCircuitUntilMs = Math.max(restCircuitUntilMs, now + config.circuitBreakerCooldownMs);
-    setCircuitOpenUntil(restCircuitUntilMs, error.message);
-  }
+  if (!restFailures.recordFailure(deviceScope, failureWeight, config)) return;
+  circuitShownForScope = deviceScope;
+  setCircuitOpenUntil(restFailures.forDevice(deviceScope).circuitUntilMs, error.message);
 };
 
-const resetRestFailure = () => {
-  restErrorStreak = 0;
-  restBackoffUntilMs = 0;
-  restCircuitUntilMs = 0;
-  restUserCircuitProbePromise = null;
+const resetRestFailure = (deviceScope: string) => {
+  restFailures.reset(deviceScope);
+  if (circuitShownForScope !== deviceScope) return;
+  circuitShownForScope = null;
   setCircuitOpenUntil(null);
 };
 
@@ -504,63 +356,35 @@ const isTransientFtpFailure = (error: Error) => {
 
 const shouldRetryFtpFailure = (error: Error) => isTransientFtpFailure(error);
 
-const updateFtpFailure = (error: Error) => {
+const updateFtpFailure = (deviceScope: string, error: Error) => {
   if (!isTransientFtpFailure(error)) return;
-  ftpErrorStreak += 1;
-  const backoffMs = computeBackoff(ftpErrorStreak);
-  const now = Date.now();
-  if (backoffMs > 0) {
-    ftpBackoffUntilMs = Math.max(ftpBackoffUntilMs, now + backoffMs);
-  }
-  if (config.circuitBreakerThreshold > 0 && ftpErrorStreak >= config.circuitBreakerThreshold) {
-    ftpCircuitUntilMs = Math.max(ftpCircuitUntilMs, now + config.circuitBreakerCooldownMs);
-  }
+  ftpFailures.recordFailure(deviceScope, 1, config);
 };
 
-const resetFtpFailure = () => {
-  ftpErrorStreak = 0;
-  ftpBackoffUntilMs = 0;
-  ftpCircuitUntilMs = 0;
-};
+// Keyed by device, not by base URL: on web every device is reached through the same proxy base URL.
+const readStateKey = (method: string, canonicalPath: string, deviceScope: string) =>
+  `${method} ${deviceScope}|${canonicalPath}`;
 
-const updateTelnetFailure = (error: Error) => {
-  telnetErrorStreak += 1;
-  const backoffMs = computeBackoff(telnetErrorStreak);
-  const now = Date.now();
-  if (backoffMs > 0) {
-    telnetBackoffUntilMs = Math.max(telnetBackoffUntilMs, now + backoffMs);
-  }
-  if (config.circuitBreakerThreshold > 0 && telnetErrorStreak >= config.circuitBreakerThreshold) {
-    telnetCircuitUntilMs = Math.max(telnetCircuitUntilMs, now + config.circuitBreakerCooldownMs);
-  }
-};
-
-const resetTelnetFailure = () => {
-  telnetErrorStreak = 0;
-  telnetBackoffUntilMs = 0;
-  telnetCircuitUntilMs = 0;
-};
-
-const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
+const resolveRestPolicy = (method: string, path: string, baseUrl: string, deviceScope: string) => {
   const canonicalPath = canonicalizeRestPath(path, baseUrl);
   const normalizedPath = canonicalPath.split("?")[0];
   if (method === "GET" && normalizedPath === "/v1/info") {
     return {
-      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
+      key: readStateKey(method, canonicalPath, deviceScope),
       cacheMs: config.infoCacheMs,
       cooldownMs: config.infoCacheMs,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/configs") {
     return {
-      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
+      key: readStateKey(method, canonicalPath, deviceScope),
       cacheMs: config.configsCacheMs,
       cooldownMs: config.configsCooldownMs,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/drives") {
     return {
-      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
+      key: readStateKey(method, canonicalPath, deviceScope),
       cacheMs: 0,
       cooldownMs: config.drivesCooldownMs,
     };
@@ -569,7 +393,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
     // One cooldown per device, but never one answer: concurrent reads of different addresses shared it,
     // and the shared value is a Response whose body only one caller can read.
     return {
-      key: `${baseUrl}:rest-machine-readmem`,
+      key: `${deviceScope}:rest-machine-readmem`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
       unshared: true,
@@ -577,21 +401,21 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
   }
   if (normalizedPath === "/v1/machine:writemem") {
     return {
-      key: `${baseUrl}:rest-machine-writemem`,
+      key: `${deviceScope}:rest-machine-writemem`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
     };
   }
   if (!isReadOnlyRestMethod(method) && isMachineControlPath(canonicalPath)) {
     return {
-      key: `${baseUrl}:rest-machine-control`,
+      key: `${deviceScope}:rest-machine-control`,
       cacheMs: 0,
       cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
     };
   }
   if (!isReadOnlyRestMethod(method) && isConfigMutationPath(canonicalPath)) {
     return {
-      key: `${baseUrl}:rest-config-mutation`,
+      key: `${deviceScope}:rest-config-mutation`,
       cacheMs: 0,
       cooldownMs: config.configsCooldownMs,
     };
@@ -622,7 +446,7 @@ const normalizeRestResourcePath = (path: string, baseUrl: string) => canonicaliz
 const pathsShareResourceTree = (leftPath: string, rightPath: string) =>
   leftPath === rightPath || leftPath.startsWith(`${rightPath}/`) || rightPath.startsWith(`${leftPath}/`);
 
-const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: string) => {
+const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: string, deviceScope: string) => {
   if (isReadOnlyRestMethod(method)) return;
 
   const writePath = normalizeRestResourcePath(path, baseUrl);
@@ -639,8 +463,9 @@ const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: 
   }
 
   const shouldInvalidateKey = (key: string) => {
-    if (!key.startsWith(`GET ${baseUrl}`)) return false;
-    const readPath = normalizeRestResourcePath(key.slice(`GET ${baseUrl}`.length), baseUrl);
+    const readKeyPrefix = readStateKey("GET", "", deviceScope);
+    if (!key.startsWith(readKeyPrefix)) return false;
+    const readPath = normalizeRestResourcePath(key.slice(readKeyPrefix.length), baseUrl);
     if (invalidatedReadPaths.has(readPath)) return true;
     return Array.from(invalidatedReadPaths).some((candidate) => pathsShareResourceTree(readPath, candidate));
   };
@@ -719,25 +544,28 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     }
   }
 
+  const deviceScope = resolveRestDeviceScope(meta);
+  const restFailure = () => restFailures.forDevice(deviceScope);
   let now = Date.now();
-  let circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
+  let circuitOpen = restFailure().circuitUntilMs > now && !meta.bypassCircuit;
   let userHalfOpenProbe = circuitOpen && meta.intent === "user";
   let reservedUserHalfOpenProbe = false;
   if (circuitOpen && !userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",
-      untilMs: restCircuitUntilMs,
+      untilMs: restFailure().circuitUntilMs,
     });
     throw new Error("Device circuit open");
   }
-  if (userHalfOpenProbe && restUserCircuitProbePromise) {
+  const pendingUserCircuitProbe = restFailure().userCircuitProbe;
+  if (userHalfOpenProbe && pendingUserCircuitProbe) {
     recordDeviceGuard(meta.action, {
       decision: "defer",
       reason: "circuit-open",
-      untilMs: restCircuitUntilMs,
+      untilMs: restFailure().circuitUntilMs,
     });
-    const firstProbeSucceeded = await restUserCircuitProbePromise.then(
+    const firstProbeSucceeded = await pendingUserCircuitProbe.then(
       () => true,
       () => false,
     );
@@ -745,13 +573,13 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       throw new Error("Device circuit open");
     }
     now = Date.now();
-    circuitOpen = restCircuitUntilMs > now && !meta.bypassCircuit;
+    circuitOpen = restFailure().circuitUntilMs > now && !meta.bypassCircuit;
     userHalfOpenProbe = circuitOpen && meta.intent === "user";
     if (circuitOpen && !userHalfOpenProbe) {
       recordDeviceGuard(meta.action, {
         decision: "block",
         reason: "circuit-open",
-        untilMs: restCircuitUntilMs,
+        untilMs: restFailure().circuitUntilMs,
       });
       throw new Error("Device circuit open");
     }
@@ -759,23 +587,23 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   if (userHalfOpenProbe) {
     reservedUserHalfOpenProbe = true;
   }
-  if (restCircuitUntilMs > now && meta.bypassCircuit) {
+  if (restFailure().circuitUntilMs > now && meta.bypassCircuit) {
     recordDeviceGuard(meta.action, {
       decision: "override",
       reason: "circuit-open",
-      untilMs: restCircuitUntilMs,
+      untilMs: restFailure().circuitUntilMs,
     });
   }
   if (userHalfOpenProbe) {
     recordDeviceGuard(meta.action, {
       decision: "override",
       reason: "circuit-open",
-      untilMs: restCircuitUntilMs,
+      untilMs: restFailure().circuitUntilMs,
     });
   }
 
   const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
-  const resolvedPolicy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const resolvedPolicy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl, deviceScope);
   const policy =
     meta.seekCpuSpeedWrite && resolvedPolicy.key?.endsWith(":rest-config-mutation")
       ? { ...resolvedPolicy, cooldownMs: seekCpuSpeedWriteIntervalMs(config) }
@@ -838,8 +666,8 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
           expiresAt: Date.now() + policy.cacheMs,
         });
       }
-      invalidateRestReadStateForWrite(meta.method, canonicalPath, meta.baseUrl);
-      resetRestFailure();
+      invalidateRestReadStateForWrite(meta.method, canonicalPath, meta.baseUrl, deviceScope);
+      resetRestFailure(deviceScope);
       markDeviceRequestEnd({ success: true });
       addLog("debug", "Device request finished", {
         transport: "rest",
@@ -870,7 +698,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       // cycled". Bounded by the cooldown the caller armed, so a genuinely
       // dead device still surfaces once the window elapses.
       if (!meta.suppressCircuitContribution && !isMachineTransitionActive()) {
-        updateRestFailure(err);
+        updateRestFailure(deviceScope, err);
       }
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
       addLog("debug", "Device request finished", {
@@ -892,13 +720,13 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   // is still enforced by the caller's serializeMachineInputRequest lane.
   const scheduledPromise = meta.useInputLane
     ? scheduleTask()
-    : restScheduler.schedule<T>({
+    : restScheduler.forDevice(deviceScope).schedule<T>({
         intent: meta.intent,
         run: scheduleTask,
         getReadyAtMs: () => {
           let readyAtMs = Date.now();
           if (!meta.bypassBackoff && !userHalfOpenProbe) {
-            readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
+            readyAtMs = Math.max(readyAtMs, restFailure().backoffUntilMs);
           }
           if (!meta.bypassCooldown && !userHalfOpenProbe && policy.key && policy.cooldownMs > 0) {
             readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
@@ -908,7 +736,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       });
 
   if (reservedUserHalfOpenProbe) {
-    restUserCircuitProbePromise = scheduledPromise;
+    restFailure().userCircuitProbe = scheduledPromise;
   }
 
   if (usesSharedReadState && policy.key) {
@@ -920,8 +748,8 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
 
   return scheduledPromise.finally(() => {
     if (reservedUserHalfOpenProbe) {
-      if (restUserCircuitProbePromise === scheduledPromise) {
-        restUserCircuitProbePromise = null;
+      if (restFailure().userCircuitProbe === scheduledPromise) {
+        restFailure().userCircuitProbe = null;
       }
     }
     if (usesSharedReadState && policy.key) {
@@ -1008,20 +836,22 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     throw error;
   }
 
+  const ftpDeviceScope = deviceScopeOfHost(meta.host ?? "any");
+  const ftpFailure = () => ftpFailures.forDevice(ftpDeviceScope);
   const now = Date.now();
-  if (ftpCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+  if (ftpFailure().circuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",
-      untilMs: ftpCircuitUntilMs,
+      untilMs: ftpFailure().circuitUntilMs,
     });
     throw new Error("FTP circuit open");
   }
-  if (ftpCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
+  if (ftpFailure().circuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
     recordDeviceGuard(meta.action, {
       decision: "override",
       reason: "circuit-open",
-      untilMs: ftpCircuitUntilMs,
+      untilMs: ftpFailure().circuitUntilMs,
     });
   }
 
@@ -1043,8 +873,8 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
   }
 
   const scheduleTask = async () => {
-    if (ftpBackoffUntilMs > Date.now()) {
-      const waitMs = ftpBackoffUntilMs - Date.now();
+    if (ftpFailure().backoffUntilMs > Date.now()) {
+      const waitMs = ftpFailure().backoffUntilMs - Date.now();
       recordDeviceGuard(meta.action, {
         decision: "defer",
         reason: "backoff",
@@ -1059,14 +889,14 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
       markDeviceRequestStart();
       try {
         const result = await handler();
-        resetFtpFailure();
+        ftpFailures.reset(ftpDeviceScope);
         markDeviceRequestEnd({ success: true });
         return result;
       } catch (error) {
         const err = error as Error;
-        updateFtpFailure(err);
+        updateFtpFailure(ftpDeviceScope, err);
         markDeviceRequestEnd({ success: false, errorMessage: err.message });
-        const circuitOpen = ftpCircuitUntilMs > Date.now();
+        const circuitOpen = ftpFailure().circuitUntilMs > Date.now();
         if (attempt >= 1 || !shouldRetryFtpFailure(err) || circuitOpen) {
           throw error;
         }
@@ -1089,7 +919,7 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     }
   };
 
-  const scheduledPromise = ftpScheduler.schedule<T>({
+  const scheduledPromise = ftpScheduler.forDevice(ftpDeviceScope).schedule<T>({
     intent: meta.intent,
     run: scheduleTask,
   });
@@ -1135,27 +965,29 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       throw error;
     }
 
+    const telnetDeviceScope = deviceScopeOfHost(meta.host ?? "any");
+    const telnetFailure = () => telnetFailures.forDevice(telnetDeviceScope);
     const now = Date.now();
-    if (telnetCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
+    if (telnetFailure().circuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
       recordDeviceGuard(meta.action, {
         decision: "block",
         reason: "circuit-open",
-        untilMs: telnetCircuitUntilMs,
+        untilMs: telnetFailure().circuitUntilMs,
       });
       throw new Error("Telnet circuit open");
     }
-    if (telnetCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
+    if (telnetFailure().circuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
       recordDeviceGuard(meta.action, {
         decision: "override",
         reason: "circuit-open",
-        untilMs: telnetCircuitUntilMs,
+        untilMs: telnetFailure().circuitUntilMs,
       });
     }
     const hostScope = `${(meta.host ?? "any").toLowerCase()}:${meta.port ?? 23}`;
 
     const scheduleTask = async () => {
-      if (telnetBackoffUntilMs > Date.now()) {
-        const waitMs = telnetBackoffUntilMs - Date.now();
+      if (telnetFailure().backoffUntilMs > Date.now()) {
+        const waitMs = telnetFailure().backoffUntilMs - Date.now();
         recordDeviceGuard(meta.action, {
           decision: "defer",
           reason: "backoff",
@@ -1168,7 +1000,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       markDeviceRequestStart();
       try {
         const result = await handler();
-        resetTelnetFailure();
+        telnetFailures.reset(telnetDeviceScope);
         markDeviceRequestEnd({ success: true });
         return result;
       } catch (error) {
@@ -1178,7 +1010,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
           addLog("info", "Telnet request canceled by Stop", { error: err.message, actionId: meta.actionId });
           throw error;
         }
-        updateTelnetFailure(err);
+        telnetFailures.recordFailure(telnetDeviceScope, 1, config);
         markDeviceRequestEnd({ success: false, errorMessage: err.message });
         addErrorLog("Telnet request failed", {
           error: err.message,
@@ -1188,7 +1020,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
       }
     };
 
-    return await telnetScheduler.schedule<T>({
+    return await telnetScheduler.forDevice(telnetDeviceScope).schedule<T>({
       intent: meta.intent,
       run: scheduleTask,
     });

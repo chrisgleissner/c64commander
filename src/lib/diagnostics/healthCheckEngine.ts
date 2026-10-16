@@ -37,6 +37,7 @@ import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
 import { recordTelnetOperation } from "@/lib/tracing/traceSession";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { withProbeTimeout } from "@/lib/diagnostics/probeTimeout";
 
 const CONFIG_ROUNDTRIP_TARGETS = [
   { category: "LED Strip Settings", item: "Strip Intensity", delta: 16, min: 0, max: 31 },
@@ -54,6 +55,7 @@ const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
   JIFFY: 1500,
 };
 const GLOBAL_RUN_TIMEOUT_MS = 12_000;
+const DISPATCH_TIMED_PROBES: ReadonlySet<HealthCheckProbeType> = new Set(["REST", "RASTER", "JIFFY"]);
 const STALE_RUN_GRACE_MS = 1500;
 const PRESENTATION_ORDER: ReadonlyArray<HealthCheckProbeType> = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"];
 const CONFIG_PULSE_DELAY_MS = 80;
@@ -296,7 +298,7 @@ const readMemoryProbeWithTransientRetry = async (
   runtime: ProbeRuntime,
   address: string,
   length: number,
-  options: { signal: AbortSignal; timeoutMs: number; probe: HealthCheckProbeType },
+  options: { signal: AbortSignal; timeoutMs: number; probe: HealthCheckProbeType; onDispatch: () => void },
 ) => {
   let lastError: unknown = null;
 
@@ -309,6 +311,7 @@ const readMemoryProbeWithTransientRetry = async (
         __c64uForceProbe: runtime.forceProbe,
         __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
+        __c64uOnDispatch: options.onDispatch,
       });
     } catch (error) {
       lastError = error;
@@ -442,20 +445,6 @@ const cancelActiveRun = (
   return true;
 };
 
-const withTimeout = async <T>(run: () => Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  try {
-    return await Promise.race([
-      run(),
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-};
-
 const waitMs = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -577,6 +566,7 @@ const selectConfigPulseValue = (currentValue: number, delta: number, bounds: { m
 const probeRest = async (
   signal: AbortSignal,
   runtime: ProbeRuntime,
+  onDispatch: () => void,
 ): Promise<{
   record: HealthCheckProbeRecord;
   deviceInfo: HealthCheckRunResult["deviceInfo"];
@@ -595,6 +585,7 @@ const probeRest = async (
         // fresh success can close a stale failure state.
         __c64uRecoveryProbe: true,
         __c64uSuppressCircuitContribution: true,
+        __c64uOnDispatch: onDispatch,
       }),
     );
     const hasErrors = Array.isArray(info.errors) && info.errors.length > 0;
@@ -631,6 +622,7 @@ const probeRest = async (
 const probeJiffy = async (
   signal: AbortSignal,
   runtime: ProbeRuntime,
+  onDispatch: () => void,
 ): Promise<{
   record: HealthCheckProbeRecord;
   uptimeSeconds: number | null;
@@ -642,6 +634,7 @@ const probeJiffy = async (
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.JIFFY,
         probe: "JIFFY",
+        onDispatch,
       }),
     );
     if (!bytes || bytes.length !== 3) {
@@ -674,7 +667,11 @@ const probeJiffy = async (
   }
 };
 
-const probeRaster = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> => {
+const probeRaster = async (
+  signal: AbortSignal,
+  runtime: ProbeRuntime,
+  onDispatch: () => void,
+): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
     const { result: bytes } = await timedProbe(() =>
@@ -682,6 +679,7 @@ const probeRaster = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         signal,
         timeoutMs: PROBE_TIMEOUT_MS.RASTER,
         probe: "RASTER",
+        onDispatch,
       }),
     );
     if (!bytes || bytes.length < 1) {
@@ -1359,7 +1357,7 @@ const lifecycleFromRecord = (
 const runProbe = async <T>(
   run: ActiveRun,
   probe: HealthCheckProbeType,
-  execute: (signal: AbortSignal) => Promise<T>,
+  execute: (signal: AbortSignal, onDispatch: () => void) => Promise<T>,
   normalize: (value: T) => ProbeExecution,
   timeoutCeilingMs: number = PROBE_TIMEOUT_MS[probe],
 ): Promise<ProbeExecution> => {
@@ -1380,11 +1378,11 @@ const runProbe = async <T>(
   const timeoutMs = Math.min(timeoutCeilingMs, remainingBudgetMs);
 
   try {
-    const value = await withTimeout(
-      () => execute(run.controller.signal),
+    const value = await withProbeTimeout((onDispatch) => execute(run.controller.signal, onDispatch), {
       timeoutMs,
-      `${probe} timed out after ${timeoutMs}ms`,
-    );
+      timeoutMessage: (ms) => `${probe} timed out after ${ms}ms`,
+      queueBudgetMs: DISPATCH_TIMED_PROBES.has(probe) ? remainingBudgetMs : undefined,
+    });
     if (!isCurrentRun(run.token)) {
       return {
         record: makeRecord(probe, "Skipped", null, "Superseded by a newer health check run", Date.now()),
@@ -1615,10 +1613,13 @@ export const runConnectivityProbeForTarget = async (
   });
 
   try {
-    const { record, deviceInfo } = await withTimeout(
-      () => probeRest(controller.signal, runtime),
-      PROBE_TIMEOUT_MS.REST,
-      `REST timed out after ${PROBE_TIMEOUT_MS.REST}ms`,
+    const { record, deviceInfo } = await withProbeTimeout(
+      (onDispatch) => probeRest(controller.signal, runtime, onDispatch),
+      {
+        timeoutMs: PROBE_TIMEOUT_MS.REST,
+        timeoutMessage: (ms) => `REST timed out after ${ms}ms`,
+        queueBudgetMs: GLOBAL_RUN_TIMEOUT_MS,
+      },
     );
     const rest: ProbeExecution = {
       record,
@@ -1734,7 +1735,7 @@ export const runHealthCheckForTarget = async (
 
   const runLocalProbe = async <T>(
     probe: HealthCheckProbeType,
-    execute: (signal: AbortSignal) => Promise<T>,
+    execute: (signal: AbortSignal, onDispatch: () => void) => Promise<T>,
     normalize: (value: T) => ProbeExecution,
     timeoutCeilingMs: number = PROBE_TIMEOUT_MS[probe],
   ): Promise<ProbeExecution> => {
@@ -1756,11 +1757,11 @@ export const runHealthCheckForTarget = async (
     const timeoutMs = Math.min(timeoutCeilingMs, remainingBudgetMs);
 
     try {
-      const value = await withTimeout(
-        () => execute(controller.signal),
+      const value = await withProbeTimeout((onDispatch) => execute(controller.signal, onDispatch), {
         timeoutMs,
-        `${probe} timed out after ${timeoutMs}ms`,
-      );
+        timeoutMessage: (ms) => `${probe} timed out after ${ms}ms`,
+        queueBudgetMs: DISPATCH_TIMED_PROBES.has(probe) ? remainingBudgetMs : undefined,
+      });
       const normalized = normalize(value);
       liveProbes[probe] = normalized.record;
       setLocalProbeLifecycle(
@@ -1803,7 +1804,7 @@ export const runHealthCheckForTarget = async (
   try {
     const rest = await runLocalProbe(
       "REST",
-      (signal) => probeRest(signal, runtime),
+      (signal, onDispatch) => probeRest(signal, runtime, onDispatch),
       ({ record, deviceInfo }) => ({
         record,
         lifecycle: lifecycleFromRecord(record.outcome),
@@ -1858,7 +1859,7 @@ export const runHealthCheckForTarget = async (
       ? setLocalSkippedProbe("RASTER", "Skipped: REST probe failed")
       : await runLocalProbe(
           "RASTER",
-          (signal) => probeRaster(signal, runtime),
+          (signal, onDispatch) => probeRaster(signal, runtime, onDispatch),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -1869,7 +1870,7 @@ export const runHealthCheckForTarget = async (
       ? setLocalSkippedProbe("JIFFY", "Skipped: REST probe failed")
       : await runLocalProbe(
           "JIFFY",
-          (signal) => probeJiffy(signal, runtime),
+          (signal, onDispatch) => probeJiffy(signal, runtime, onDispatch),
           ({ record, uptimeSeconds }) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -2013,7 +2014,7 @@ export const runHealthCheck = async (
     const rest = await runProbe(
       run,
       "REST",
-      (signal) => probeRest(signal, runtime),
+      (signal, onDispatch) => probeRest(signal, runtime, onDispatch),
       ({ record, deviceInfo }) => ({
         record,
         lifecycle: lifecycleFromRecord(record.outcome),
@@ -2070,7 +2071,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "RASTER",
-          (signal) => probeRaster(signal, runtime),
+          (signal, onDispatch) => probeRaster(signal, runtime, onDispatch),
           (record) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),
@@ -2083,7 +2084,7 @@ export const runHealthCheck = async (
       : await runProbe(
           run,
           "JIFFY",
-          (signal) => probeJiffy(signal, runtime),
+          (signal, onDispatch) => probeJiffy(signal, runtime, onDispatch),
           ({ record, uptimeSeconds }) => ({
             record,
             lifecycle: lifecycleFromRecord(record.outcome),

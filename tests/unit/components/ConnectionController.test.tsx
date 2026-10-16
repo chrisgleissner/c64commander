@@ -777,16 +777,92 @@ describe("ConnectionController", () => {
         </QueryClientProvider>,
       );
 
-      // Drain past the escalation point (3 failures), then clear and drain
-      // one more failure - it must not escalate again immediately.
-      await vi.advanceTimersByTimeAsync(60_000 + 120_000 + 240_000);
+      // Drain past the escalation point (3 failures), then clear: the failures in the next four minutes stay
+      // inside the first five-minute gap between sweeps, so none of them escalates again. The probe delay is
+      // capped at 60 s, so the third failure and the escalation land at three minutes.
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      expect(discoverConnectionMock.mock.calls.map((call) => call[0])).toContain("resume");
       discoverConnectionMock.mockClear();
 
-      await vi.advanceTimersByTimeAsync(480_000);
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
 
       const triggers = discoverConnectionMock.mock.calls.map((call) => call[0]);
       expect(triggers).toContain("background");
       expect(triggers).not.toContain("resume");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // R4-4: the sweep itself moves the state OFFLINE_NO_DEMO -> DISCOVERING -> OFFLINE_NO_DEMO. That re-ran the
+  // scheduling effect, which reset the escalation guard, so a 516-host scan ran about once a minute while offline.
+  const renderWithSweepStateChanges = () => {
+    const queryClient = new QueryClient();
+    const tree = () => (
+      <QueryClientProvider client={queryClient}>
+        <ConnectionController />
+      </QueryClientProvider>
+    );
+    const view = render(tree());
+    let failedAtMs = 1_000;
+    discoverConnectionMock.mockImplementation(async (trigger: string) => {
+      if (trigger === "background") {
+        failedAtMs += 1;
+        connectionState.lastProbeFailedAtMs = failedAtMs;
+      }
+      if (trigger === "resume") {
+        connectionState.value = "DISCOVERING";
+        view.rerender(tree());
+        await Promise.resolve();
+        connectionState.value = "OFFLINE_NO_DEMO";
+        view.rerender(tree());
+      }
+    });
+    return { rerender: () => view.rerender(tree()) };
+  };
+
+  it("R4-4: spaces repeated offline sweeps further apart instead of restarting them after each sweep", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      const sweepsAtMs: number[] = [];
+      const startMs = Date.now();
+      renderWithSweepStateChanges();
+      const scheduled = discoverConnectionMock.getMockImplementation()!;
+      discoverConnectionMock.mockImplementation(async (trigger: string) => {
+        if (trigger === "resume") sweepsAtMs.push(Date.now() - startMs);
+        return scheduled(trigger);
+      });
+
+      await vi.advanceTimersByTimeAsync(2 * 60 * 60_000);
+
+      expect(sweepsAtMs.length).toBeGreaterThanOrEqual(2);
+      expect(sweepsAtMs.length).toBeLessThanOrEqual(7);
+      const gapsMs = sweepsAtMs.slice(1).map((at, index) => at - sweepsAtMs[index]!);
+      expect(gapsMs[0]).toBeGreaterThanOrEqual(5 * 60_000);
+      gapsMs.slice(1).forEach((gap, index) => expect(gap).toBeGreaterThanOrEqual(gapsMs[index]!));
+      expect(gapsMs.every((gap) => gap <= 31 * 60_000)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("R4-4: starts the sweep backoff over once the device has been reached", async () => {
+    vi.useFakeTimers();
+    try {
+      connectionState.value = "OFFLINE_NO_DEMO";
+      const view = renderWithSweepStateChanges();
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
+      expect(discoverConnectionMock.mock.calls.filter(([trigger]) => trigger === "resume")).toHaveLength(1);
+
+      connectionState.value = "REAL_CONNECTED";
+      view.rerender();
+      connectionState.value = "OFFLINE_NO_DEMO";
+      view.rerender();
+      discoverConnectionMock.mockClear();
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
+
+      expect(discoverConnectionMock.mock.calls.filter(([trigger]) => trigger === "resume")).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }

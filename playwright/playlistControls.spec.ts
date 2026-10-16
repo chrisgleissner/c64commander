@@ -155,11 +155,11 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    const sidCategoryCheckbox = page.getByTestId("playlist-type-sid");
-    await expect(sidCategoryCheckbox).toBeChecked();
-    await sidCategoryCheckbox.click();
-    await expect(sidCategoryCheckbox).not.toBeChecked();
-    await snap(page, testInfo, "sid-category-unchecked");
+    const songsCategoryCheckbox = page.getByTestId("playlist-type-songs");
+    await expect(songsCategoryCheckbox).toBeChecked();
+    await songsCategoryCheckbox.click();
+    await expect(songsCategoryCheckbox).not.toBeChecked();
+    await snap(page, testInfo, "songs-category-unchecked");
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(1);
     await expect(page.getByTestId("playlist-list")).toContainText("demo.d64");

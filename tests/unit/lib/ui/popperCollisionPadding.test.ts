@@ -74,6 +74,16 @@ describe("resolveSafeAreaCollisionPadding", () => {
     }
   });
 
+  it("keeps a menu opened in a dialog clear of the toast strip above the guidance bar", () => {
+    document.documentElement.style.setProperty("--safe-area-inset-bottom", "12px");
+    document.documentElement.style.setProperty("--app-toast-reserved-height", "64px");
+    try {
+      expect(resolveSafeAreaCollisionPadding().bottom).toBe(76);
+    } finally {
+      document.documentElement.style.removeProperty("--app-toast-reserved-height");
+    }
+  });
+
   it("reads an unset or unparsable inset as no padding", () => {
     document.documentElement.style.setProperty("--safe-area-inset-top", "env(safe-area-inset-top, 0px)");
 

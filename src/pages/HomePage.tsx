@@ -1161,6 +1161,11 @@ function HomePageContent() {
           onClick={() => void handleSelectRamDumpFolder()}
           disabled={folderTaskPending || machineTaskBusy}
           data-testid="ram-dump-folder-trigger"
+          aria-label={
+            folderTaskPending
+              ? "RAM folder: changing"
+              : `RAM folder: ${ramDumpFolder || ramDumpFolderDisplayPath ? ramDumpFolderLabel : "not chosen"}`
+          }
         >
           {folderTaskPending ? "Changing…" : ramDumpFolderLabel}
         </Button>
@@ -1921,6 +1926,7 @@ function HomePageContent() {
                 description="To flash"
                 variant="success"
                 focusId="home-config-save-flash"
+                accessibleLabel="Save config to flash"
                 focusOrder={600}
                 onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), "Config saved to flash")}
                 disabled={!isActive || machineTaskBusy}
@@ -1931,6 +1937,7 @@ function HomePageContent() {
                 label="Load"
                 description="From flash"
                 focusId="home-config-load-flash"
+                accessibleLabel="Load config from flash"
                 focusOrder={610}
                 onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), "Config loaded from flash")}
                 disabled={!isActive || machineTaskBusy}
@@ -1942,6 +1949,7 @@ function HomePageContent() {
                 description="To default"
                 variant="danger"
                 focusId="home-config-reset"
+                accessibleLabel="Reset config to default"
                 focusOrder={620}
                 onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), "Config reset to defaults")}
                 disabled={!isActive || machineTaskBusy}
@@ -1954,6 +1962,7 @@ function HomePageContent() {
                 variant="success"
                 dataTestId="home-config-save-app"
                 focusId="home-config-save-app"
+                accessibleLabel="Save config to app"
                 focusOrder={630}
                 onClick={() => setSaveDialogOpen(true)}
                 disabled={!isActive || isSaving || machineTaskBusy}
@@ -1965,6 +1974,7 @@ function HomePageContent() {
                 description="From app"
                 dataTestId="home-config-load-app"
                 focusId="home-config-load-app"
+                accessibleLabel="Load config from app"
                 focusOrder={640}
                 onClick={() => setLoadDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
@@ -1974,6 +1984,7 @@ function HomePageContent() {
                 label="Revert"
                 dataTestId="home-config-revert-changes"
                 focusId="home-config-revert-changes"
+                accessibleLabel="Revert config changes"
                 focusOrder={650}
                 onClick={() => void handleRevertInitialConfig()}
                 disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
@@ -1985,6 +1996,7 @@ function HomePageContent() {
                 description="App configs"
                 dataTestId="home-config-manage-app"
                 focusId="home-config-manage-app"
+                accessibleLabel="Manage app configs"
                 focusOrder={660}
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
@@ -1996,6 +2008,7 @@ function HomePageContent() {
                   description={saveConfigDisabledReason ?? "To file"}
                   dataTestId="home-config-save-file"
                   focusId="home-config-save-file"
+                  accessibleLabel="Save config to file"
                   focusOrder={670}
                   onClick={() => void handleSaveToFile()}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy || saveConfigDisabledReason !== null}
@@ -2009,6 +2022,7 @@ function HomePageContent() {
                   description="From file"
                   dataTestId="home-config-load-file"
                   focusId="home-config-load-file"
+                  accessibleLabel="Load config from file"
                   focusOrder={680}
                   onClick={() => void handleLoadFromFile()}
                   disabled={!isActive || machineTaskBusy || telnet.isBusy}

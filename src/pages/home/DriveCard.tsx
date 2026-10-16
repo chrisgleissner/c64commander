@@ -148,6 +148,7 @@ export function DriveCard({
           disabled={!isConnected || togglePending || loading}
           className={cn("px-3 text-xs", getOnOffButtonClass(enabled && !loading), "min-h-11 min-w-11")}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
+          aria-label={`${name} power: ${loading ? LOADING_LABEL : enabled ? "on" : "off"}`}
         >
           {loading ? LOADING_LABEL : enabled ? "ON" : "OFF"}
         </Button>
@@ -279,6 +280,7 @@ export function DriveCard({
             getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
           )}
           data-testid={`home-drive-status-${testIdSuffix}`}
+          aria-label={`${name} status: ${loading ? LOADING_LABEL : statusSummary}`}
         >
           {loading ? LOADING_LABEL : statusSummary}
         </button>

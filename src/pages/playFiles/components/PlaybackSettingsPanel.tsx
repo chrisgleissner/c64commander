@@ -76,6 +76,8 @@ export const PlaybackSettingsPanel = ({
             inputMode="numeric"
             maxLength={5}
             placeholder="mm:ss"
+            aria-label="Default duration (mm:ss)"
+            data-guidance-label="Default duration"
             className="w-[84px] text-right"
             data-testid="duration-input"
           />
@@ -103,7 +105,7 @@ export const PlaybackSettingsPanel = ({
               <p className="text-xs text-muted-foreground">{songlengthsMetadata}</p>
             ) : null}
           </div>
-          <Button variant="outline" size="sm" onClick={onChooseSonglengthsFile}>
+          <Button variant="outline" size="sm" onClick={onChooseSonglengthsFile} aria-label="Change songlengths file">
             Change
           </Button>
         </div>

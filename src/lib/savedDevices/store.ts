@@ -19,6 +19,7 @@ import { sanitizeSavedDeviceNameInput } from "@/lib/savedDevices/deviceEditor";
 import { TELNET_DEFAULT_PORT as DEFAULT_TELNET_PORT } from "@/lib/telnet/telnetTypes";
 import type { DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { registerSavedDevicesForDeviceScope } from "@/lib/deviceInteraction/deviceScope";
 
 export type ProductFamilyCode = "C64U" | "U64" | "U64E" | "U64E2" | "U2";
 
@@ -705,6 +706,7 @@ export const getSavedDevicesSnapshot = (): SavedDevicesSnapshot => {
   loadEnvelope();
   return snapshot as SavedDevicesSnapshot;
 };
+registerSavedDevicesForDeviceScope(getSavedDevicesSnapshot);
 
 export const getSavedDevicesStorageKey = () => STORAGE_KEY;
 

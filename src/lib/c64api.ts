@@ -56,6 +56,7 @@ import {
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
+import { resolveRestDeviceScope } from "@/lib/deviceInteraction/deviceScope";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_DEVICE_HOST,
@@ -546,27 +547,23 @@ const buildRequestId = () => {
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
 };
 
-// Serialize native direct-device REST requests: at most one connection to the
-// device is in flight at a time. The C64 Ultimate / C64U firmware (esp. c64u
-// 1.1.0, which lacks the lwIP socket-timeout/polling and Tx-starvation fixes the
-// 3.14x line shipped — GideonZ/1541ultimate 57c7c8a6a / 802d6143b / ddd28dd17 /
-// fdb521a5b) runs a single-threaded network task on a single shared Rx/Tx WiFi
-// buffer and does not time out stuck sockets. Concurrent connections starve its
-// Tx path and pile up sockets it never reclaims, which can drive the embedded TCP
-// stack into a permanent wedge (all TCP services dead, ICMP alive, recover only on
-// a power-cycle). Serializing our requests keeps us to one connection at a time so
-// we never trigger that on the unfixed firmware. (The cure is a c64u firmware
-// update; see docs/c64/c64u-firmware-tcp-wedge-report.md.)
-let activeNativeDeviceRequests = 0;
-const nativeDeviceRequestQueue: Array<{ limit: number; resolve: () => void }> = [];
-const pumpNativeDeviceRequestQueue = () => {
-  while (
-    nativeDeviceRequestQueue.length > 0 &&
-    activeNativeDeviceRequests < (nativeDeviceRequestQueue[0]?.limit ?? 1)
-  ) {
-    const next = nativeDeviceRequestQueue.shift();
+// Serialize native direct-device REST requests, one lane per device. The c64u 1.1.0 firmware (without the
+// lwIP socket-timeout and Tx-starvation fixes of the 3.14x line: GideonZ/1541ultimate 57c7c8a6a / 802d6143b /
+// ddd28dd17 / fdb521a5b) runs one network task on one shared Rx/Tx WiFi buffer and never times out stuck sockets,
+// so concurrent connections can wedge its TCP stack until a power-cycle (docs/c64/c64u-firmware-tcp-wedge-report.md).
+// Per device, an Ultimate that does not answer cannot hold the connection another one needs.
+type NativeDeviceRequestLane = { active: number; queue: Array<{ limit: number; resolve: () => void }> };
+const nativeDeviceRequestLanes = new Map<string, NativeDeviceRequestLane>();
+const nativeDeviceRequestLaneFor = (deviceScope: string) => {
+  const lane = nativeDeviceRequestLanes.get(deviceScope) ?? { active: 0, queue: [] };
+  nativeDeviceRequestLanes.set(deviceScope, lane);
+  return lane;
+};
+const pumpNativeDeviceRequestQueue = (lane: NativeDeviceRequestLane) => {
+  while (lane.queue.length > 0 && lane.active < (lane.queue[0]?.limit ?? 1)) {
+    const next = lane.queue.shift();
     if (!next) break;
-    activeNativeDeviceRequests += 1;
+    lane.active += 1;
     next.resolve();
   }
 };
@@ -619,19 +616,21 @@ const awaitNativeCallWithinHoldDeadline = (nativeCall: Promise<unknown>, holdTim
 export const serializeNativeDeviceRequest = async <T>(
   run: (hold: HoldNativeDeviceCall) => Promise<T>,
   maxConcurrent = 1,
+  deviceScope = "",
 ): Promise<T> => {
   const limit = Number.isFinite(maxConcurrent) ? Math.max(1, Math.floor(maxConcurrent)) : 1;
+  const lane = nativeDeviceRequestLaneFor(deviceScope);
   await new Promise<void>((resolve) => {
-    nativeDeviceRequestQueue.push({ limit, resolve });
-    pumpNativeDeviceRequestQueue();
+    lane.queue.push({ limit, resolve });
+    pumpNativeDeviceRequestQueue(lane);
   });
   const heldNativeCalls: Array<Promise<void>> = [];
   const hold: HoldNativeDeviceCall = (nativeCall, holdTimeoutMs) => {
     heldNativeCalls.push(awaitNativeCallWithinHoldDeadline(nativeCall, holdTimeoutMs));
   };
   const releaseLane = () => {
-    activeNativeDeviceRequests = Math.max(0, activeNativeDeviceRequests - 1);
-    pumpNativeDeviceRequestQueue();
+    lane.active = Math.max(0, lane.active - 1);
+    pumpNativeDeviceRequestQueue(lane);
   };
   try {
     return await run(hold);
@@ -1023,7 +1022,16 @@ type C64ReadRequestOptions = RequestInit & {
    * `intent: "system"` is also suppressed automatically.
    */
   __c64uSuppressAuthChallenge?: boolean;
+  /** Called as each attempt leaves the app's queues, so a caller's timeout measures the device, not the queue. */
+  __c64uOnDispatch?: () => void;
 };
+
+const FETCH_PROBE_OPTION_KEYS = [
+  "__c64uForceProbe",
+  "__c64uRecoveryProbe",
+  "__c64uSuppressCircuitContribution",
+  "__c64uOnDispatch",
+] as const;
 
 export interface DriveInfo {
   enabled?: boolean;
@@ -1595,6 +1603,7 @@ export class C64API {
     // password UX, so they never raise the global Forbidden popup; every other
     // call does, covering info/config/drives/runners/play/health-check uniformly.
     const suppressAuthChallenge = Boolean(options.__c64uSuppressAuthChallenge) || intent === "system";
+    const onDispatch = options.__c64uOnDispatch;
     const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
@@ -1613,6 +1622,7 @@ export class C64API {
     delete (requestOptions as { __c64uSkipSuccessBodyInspection?: boolean }).__c64uSkipSuccessBodyInspection;
     delete (requestOptions as { __c64uInspectSkippedSuccessBody?: boolean }).__c64uInspectSkippedSuccessBody;
     delete (requestOptions as { __c64uSuppressAuthChallenge?: boolean }).__c64uSuppressAuthChallenge;
+    delete (requestOptions as { __c64uOnDispatch?: () => void }).__c64uOnDispatch;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     const requestSignal = requestOptions.signal ?? undefined;
@@ -1640,10 +1650,12 @@ export class C64API {
           path,
           readRequestKey,
         });
+        onDispatch?.(); // the request it joins is already with the device
         return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestSignal);
       }
     }
 
+    const deviceScope = resolveRestDeviceScope({ baseUrl, deviceHost: requestDeviceHost });
     const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
     // Only the shared bulk-REST lane holds its slot for the native call (HARD27-014).
     // The machine-input lane keeps the previous release-on-settle behaviour so its
@@ -1652,7 +1664,7 @@ export class C64API {
       serializeOnDevice
         ? useInputLane
           ? serializeMachineInputRequest(() => handler(noopHoldNativeDeviceCall))
-          : serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency)
+          : serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency, deviceScope)
         : handler(noopHoldNativeDeviceCall);
     const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
@@ -1664,6 +1676,7 @@ export class C64API {
             normalizedUrl: normalizeUrlPath(url),
             intent,
             baseUrl,
+            deviceHost: requestDeviceHost,
             allowDuringDiscovery,
             allowDuringError,
             bypassCache,
@@ -1711,6 +1724,7 @@ export class C64API {
                   payloadPreview: requestTrace.payloadPreview,
                 });
 
+                onDispatch?.();
                 const timedSignal = createTimedRequestSignal(requestSignal, requestTimeoutMs);
                 try {
                   if (shouldBlockSmokeMutation(method)) {
@@ -2052,14 +2066,19 @@ export class C64API {
       // keep the battle-tested patched-fetch marshalling untouched.
       __c64uNativeArrayBufferResponse?: boolean;
       __c64uBypassCooldown?: boolean;
-    },
+    } & Pick<C64ReadRequestOptions, (typeof FETCH_PROBE_OPTION_KEYS)[number]>,
     timeoutMs?: number,
   ): Promise<Response> {
     const intent = options.__c64uIntent ?? "user";
-    const bypassCooldown = Boolean(options.__c64uBypassCooldown);
+    const forceProbe = Boolean(options.__c64uForceProbe);
+    const bypassCooldown = Boolean(options.__c64uBypassCooldown) || forceProbe;
+    const bypassCircuit = Boolean(options.__c64uRecoveryProbe) || forceProbe;
+    const suppressCircuitContribution = Boolean(options.__c64uSuppressCircuitContribution);
+    const onDispatch = options.__c64uOnDispatch;
     options.__c64uTraceSuppressed = true;
     delete (options as { __c64uIntent?: InteractionIntent }).__c64uIntent;
     delete (options as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
+    for (const key of FETCH_PROBE_OPTION_KEYS) delete options[key];
     const nativeArrayBufferResponse = Boolean(
       (options as { __c64uNativeArrayBufferResponse?: boolean }).__c64uNativeArrayBufferResponse,
     );
@@ -2076,7 +2095,13 @@ export class C64API {
           path: normalizeUrlPath(url),
           normalizedUrl: normalizeUrlPath(url),
           intent,
+          deviceHost: this.deviceHost,
           bypassCooldown,
+          bypassBackoff: forceProbe,
+          bypassCache: forceProbe,
+          bypassCircuit,
+          forceProbe,
+          suppressCircuitContribution,
           baseUrl: (() => {
             try {
               return new URL(url).origin;
@@ -2117,6 +2142,7 @@ export class C64API {
             console.info("C64U_HTTP", JSON.stringify({ method, url }));
           }
 
+          onDispatch?.();
           // Keep upload/control calls stateless to avoid cookie bridge lookups.
           const timedSignal = createTimedRequestSignal(options.signal ?? undefined, timeoutMs);
           // Only a bodyless native direct-device GET (readMemory) is routed through
@@ -2703,6 +2729,10 @@ export class C64API {
         signal: options.signal,
         __c64uIntent: options.__c64uIntent,
         __c64uBypassCooldown: options.__c64uBypassCooldown,
+        __c64uForceProbe: options.__c64uForceProbe,
+        __c64uRecoveryProbe: options.__c64uRecoveryProbe,
+        __c64uSuppressCircuitContribution: options.__c64uSuppressCircuitContribution,
+        __c64uOnDispatch: options.__c64uOnDispatch,
         // Bodyless GET: route through CapacitorHttp.request on native so the binary read
         // gets a real native read timeout and a dead pooled connection is evicted after a
         // device reboot instead of hanging (BUG-066).

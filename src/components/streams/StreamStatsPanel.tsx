@@ -181,6 +181,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
             onClick={() => setFrameRateMode(m.value)}
             data-testid={`stream-stats-mode-${m.value}`}
             aria-pressed={requestedMode === m.value}
+            aria-label={`Frame rate: ${m.label === "Auto" ? "auto" : m.label}`}
           >
             {m.label}
           </Button>

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
@@ -46,6 +46,55 @@ const setViewportWidth = (width: number) => {
   });
 };
 
+describe("Escape in a field frame inside an app dialog or sheet", () => {
+  const FieldFrameIn = ({
+    kind,
+    onOpenChange,
+  }: {
+    kind: "dialog" | "sheet";
+    onOpenChange: (open: boolean) => void;
+  }) => {
+    const field = (
+      <div data-field-frame="" tabIndex={-1} data-testid="frame">
+        <input data-testid="field" aria-label="HTTP port" />
+      </div>
+    );
+    return kind === "dialog" ? (
+      <AppDialog open onOpenChange={onOpenChange}>
+        <AppDialogContent>
+          <AppDialogTitle>Add device</AppDialogTitle>
+          <AppDialogDescription>Ports</AppDialogDescription>
+          {field}
+        </AppDialogContent>
+      </AppDialog>
+    ) : (
+      <AppSheet open onOpenChange={onOpenChange}>
+        <AppSheetContent>
+          <AppSheetTitle>Device</AppSheetTitle>
+          <AppSheetDescription>Ports</AppSheetDescription>
+          {field}
+        </AppSheetContent>
+      </AppSheet>
+    );
+  };
+
+  it.each(["dialog", "sheet"] as const)(
+    "returns to the frame from its input in an app %s, and closes on the next Escape",
+    (kind) => {
+      const onOpenChange = vi.fn();
+      renderWithProviders(<FieldFrameIn kind={kind} onOpenChange={onOpenChange} />);
+      act(() => screen.getByTestId("field").focus());
+
+      fireEvent.keyDown(screen.getByTestId("field"), { key: "Escape", code: "Escape" });
+      expect(onOpenChange).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(screen.getByTestId("frame"));
+
+      fireEvent.keyDown(screen.getByTestId("frame"), { key: "Escape", code: "Escape" });
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    },
+  );
+});
+
 describe("App surface primitives", () => {
   it("renders AppSheet as a bottom sheet on medium widths", () => {
     localStorage.clear();
@@ -73,7 +122,7 @@ describe("App surface primitives", () => {
     expect(dialog.className).toContain("pb-[max(1rem,var(--safe-area-inset-bottom))]");
     expect(dialog.className).not.toContain("pb-[var(--app-sheet-bottom-clearance)]");
     // ...and stands on the keypad guidance bar while that shows.
-    expect(dialog.className).toContain("bottom-[var(--keypad-guidance-reserved-height,0px)]");
+    expect(dialog.className).toContain("bottom-[var(--app-bottom-overlay-reserved-height,0px)]");
     // Game Mode still opts in to the old 5rem clearance for its edge-anchored controls.
     expect(dialog.getAttribute("style")).toContain(
       "--app-sheet-bottom-clearance: calc(5rem + var(--safe-area-inset-bottom))",
@@ -114,7 +163,7 @@ describe("App surface primitives", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(dialog.className).toContain("bottom-[var(--keypad-guidance-reserved-height,0px)]");
+    expect(dialog.className).toContain("bottom-[var(--app-bottom-overlay-reserved-height,0px)]");
     expect(dialog.className).toContain("sm:w-[min(100vw-2rem,56rem)]");
   });
 

@@ -286,6 +286,47 @@ class FtpClientPluginTest {
     assertTrue(names.contains("docs"))
   }
 
+  private fun refusedListingLogs(refusalExpected: Boolean): List<ShadowLog.LogItem> {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+    `when`(ftpClient.listFiles("/SD/SD")).thenReturn(emptyArray())
+    `when`(ftpClient.replyCode).thenReturn(451)
+    `when`(ftpClient.replyString).thenReturn("451 Requested action aborted\r\n")
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/SD/SD")
+    `when`(call.getBoolean("refusalExpected", false)).thenReturn(refusalExpected)
+
+    ShadowLog.clear()
+    plugin.listDirectory(call)
+
+    verify(call).reject(eq("FTP LIST /SD/SD refused (451): 451 Requested action aborted"), any(Exception::class.java))
+    return ShadowLog.getLogsForTag("FtpClientPlugin")
+  }
+
+  @Test
+  fun listDirectoryLogsTheRefusalAReadabilityCheckExpectsAsInformationNotAnError() {
+    val logs = refusedListingLogs(refusalExpected = true)
+
+    assertTrue(logs.none { it.msg?.contains("FTP listDirectory failed") == true })
+    assertTrue(logs.any { it.type == android.util.Log.INFO && it.msg?.contains("readability check expected") == true })
+  }
+
+  @Test
+  fun listDirectoryStillLogsAnUnexpectedRefusalAsAnError() {
+    val logs = refusedListingLogs(refusalExpected = false)
+
+    assertTrue(logs.any { it.type == android.util.Log.ERROR && it.msg?.contains("FTP listDirectory failed") == true })
+  }
+
   @Test
   fun listDirectoryDoesNotCascadeToMlsdOrNlstOnTimeout() {
     val plugin = FtpClientPlugin()

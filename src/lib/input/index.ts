@@ -84,6 +84,8 @@ export {
   resolveGuidanceLabels,
   classifyFocusKind,
   accessibleLabelFor,
+  guidanceLabelFor,
+  GUIDANCE_LABEL_ATTR,
   findContextMenuTrigger,
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
