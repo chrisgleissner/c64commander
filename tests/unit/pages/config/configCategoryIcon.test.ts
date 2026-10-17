@@ -10,6 +10,21 @@ import { describe, expect, it } from "vitest";
 import { FolderOpen } from "lucide-react";
 import { configCategoryIcon } from "@/pages/config/configCategoryIcon";
 
+const MENU_PAGES = [
+  "Memory & ROMs",
+  "Turbo boost",
+  "Video setup",
+  "Joystick & controllers",
+  "LED lighting",
+  "Network services & timezone",
+  "Wi-Fi network setup",
+  "Modems",
+  "Printers",
+  "User interface",
+  "Built-in drive A",
+  "Audio mixer",
+];
+
 const CATEGORIES = [
   "Audio Mixer",
   "SID Sockets Configuration",
@@ -29,6 +44,12 @@ describe("configCategoryIcon", () => {
     const icons = CATEGORIES.map(configCategoryIcon);
     expect(icons).not.toContain(FolderOpen);
     expect(new Set(icons).size).toBeGreaterThanOrEqual(8);
+  });
+
+  it("gives each telnet menu page its own kind of icon", () => {
+    const icons = MENU_PAGES.map(configCategoryIcon);
+    expect(icons).not.toContain(FolderOpen);
+    expect(new Set(icons).size).toBeGreaterThanOrEqual(10);
   });
 
   it("falls back to the folder for a category it does not recognize", () => {
