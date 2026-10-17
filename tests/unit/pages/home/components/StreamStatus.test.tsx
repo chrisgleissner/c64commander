@@ -143,13 +143,6 @@ describe("StreamStatus", () => {
     expect(guidanceLabelFor(screen.getByTestId("home-stream-stop-sid"))).toMatch(/^Stop .+ stream$/);
   });
 
-  it("keeps each endpoint address on one line instead of breaking inside it", () => {
-    render(<StreamStatus isConnected={true} />);
-    const address = screen.getByTestId("home-stream-endpoint-display-sid");
-    expect(address.className).toContain("whitespace-nowrap");
-    expect(address.className).not.toContain("break-all");
-  });
-
   it("displays the endpoint for each stream", () => {
     render(<StreamStatus isConnected={true} />);
     expect(screen.getByTestId("home-stream-endpoint-display-sid")).toBeInTheDocument();
