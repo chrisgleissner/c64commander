@@ -407,7 +407,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       visible.forEach((label) => seen.add(label));
     };
     for (const key of ["ArrowDown", "ArrowUp"]) {
-      for (let step = 0; step < 12; step += 1) {
+      for (let step = 0; step < 20; step += 1) {
         await record();
         await page.keyboard.press(key);
         await page.waitForTimeout(60);
