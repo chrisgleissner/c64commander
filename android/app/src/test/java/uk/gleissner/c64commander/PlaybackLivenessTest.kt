@@ -291,6 +291,24 @@ class BackgroundExecutionLivenessTest {
         assertNotNull(shadow.savedIntent.getStringExtra(ResumeRequest.EXTRA_TRANSPORT_COMMAND))
     }
 
+    private fun sessionActions(): Long {
+        val session = service.javaClass.getDeclaredField("mediaSession").apply { isAccessible = true }.get(service)
+        val field = MediaSession::class.java.getDeclaredField("mPlaybackState")
+        field.isAccessible = true
+        return (field.get(session) as PlaybackState).actions
+    }
+
+    @Test
+    fun aStaleSessionAdvertisesNoPlayThatTheSystemWouldNotLetItAnswer() {
+        idle(PlaybackLiveness.HEARTBEAT_TIMEOUT_MS + 500L)
+
+        assertEquals(PlaybackState.ACTION_STOP, sessionActions())
+
+        heartbeat()
+
+        assertTrue(sessionActions() and PlaybackState.ACTION_PLAY != 0L)
+    }
+
     @Test
     fun aLiveNotificationStillBroadcastsItsTransportCommands() {
         val shadow = Shadows.shadowOf(notification().actions[0].actionIntent)

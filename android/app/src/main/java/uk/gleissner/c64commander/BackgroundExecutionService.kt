@@ -475,6 +475,7 @@ class BackgroundExecutionService : Service() {
         livenessStale = true
         releaseWakeLock()
         publishPlaybackState(PlaybackState.STATE_PAUSED)
+        mediaSession?.setSessionActivity(ResumeRequest.activityIntent(this, REQUEST_RESUME_CONTENT))
         schedulePausedExpiry()
         refreshNotification()
         AppLogger.warn(
@@ -623,11 +624,16 @@ class BackgroundExecutionService : Service() {
             PlaybackState.Builder()
                     .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
                     .setActions(
-                            PlaybackState.ACTION_PLAY or
-                                    PlaybackState.ACTION_PAUSE or
-                                    PlaybackState.ACTION_PLAY_PAUSE or
-                                    PlaybackState.ACTION_STOP or
-                                    PlaybackState.ACTION_SKIP_TO_NEXT,
+                            if (livenessStale) {
+                                // A Play the system will not let us act on is worse than none.
+                                PlaybackState.ACTION_STOP
+                            } else {
+                                PlaybackState.ACTION_PLAY or
+                                        PlaybackState.ACTION_PAUSE or
+                                        PlaybackState.ACTION_PLAY_PAUSE or
+                                        PlaybackState.ACTION_STOP or
+                                        PlaybackState.ACTION_SKIP_TO_NEXT
+                            },
                     )
                     .build()
 
@@ -868,15 +874,24 @@ class BackgroundExecutionService : Service() {
         }
     }
 
+    /**
+     * Android refuses a background activity start from a media button, so this usually does
+     * nothing; a notification or session-activity tap, which the system sends, is the way back.
+     */
     internal fun launchResumeActivity() {
         try {
             startActivity(ResumeRequest.launchIntent(this, System.nanoTime()))
-            AppLogger.info(this, TAG, "Started the activity to resume playback", "BackgroundExecutionService")
+            AppLogger.info(
+                    this,
+                    TAG,
+                    "Asked Android to start the activity to resume playback; it may refuse from the background",
+                    "BackgroundExecutionService"
+            )
         } catch (e: RuntimeException) {
             AppLogger.warn(
                     this,
                     TAG,
-                    "Could not start the activity to resume playback; the notification Play action still can",
+                    "Could not start the activity to resume playback",
                     "BackgroundExecutionService",
                     e
             )
