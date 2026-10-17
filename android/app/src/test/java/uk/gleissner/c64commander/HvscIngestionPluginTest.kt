@@ -574,6 +574,7 @@ class HvscIngestionPluginTest {
           stagingRoot: File,
           oldRoot: File,
           db: SQLiteDatabase,
+          rows: List<Any> = emptyList(),
   ) {
     val method =
             HvscIngestionPlugin::class.java.getDeclaredMethod(
@@ -587,7 +588,7 @@ class HvscIngestionPluginTest {
             )
     method.isAccessible = true
     try {
-      method.invoke(plugin, libraryRoot, stagingRoot, oldRoot, db, emptyList<Any>(), 1000L)
+      method.invoke(plugin, libraryRoot, stagingRoot, oldRoot, db, rows, 1000L)
     } catch (wrapped: InvocationTargetException) {
       throw wrapped.targetException
     }
@@ -618,6 +619,47 @@ class HvscIngestionPluginTest {
       assertTrue(!stagingRoot.exists())
       assertTrue(!oldRoot.exists())
       assertEquals(0, songIndexRowCount(db))
+    } finally {
+      db.close()
+      root.deleteRecursively()
+    }
+  }
+
+  private fun songUpsertRows(count: Int): List<Any> {
+    val rowClass = Class.forName("uk.gleissner.c64commander.HvscIngestionPlugin\$SongUpsertRow")
+    val constructor =
+            rowClass.getDeclaredConstructor(
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaObjectType,
+                    Int::class.javaObjectType,
+            )
+    constructor.isAccessible = true
+    return (1..count).map { constructor.newInstance("/MUSICIANS/T/Tester/Song$it.sid", "Song$it.sid", 1, 1) }
+  }
+
+  @Test
+  fun promoteBaselineLibraryReportsTheSongIndexWriteAsProgress() {
+    // The database write of a baseline install ran for about 20 s on a Pixel 4 without a single
+    // progress event, so the unpack step looked stuck at all files done while its rate fell.
+    val root = File(context.filesDir, "hvsc-promote-progress")
+    root.deleteRecursively()
+    val libraryRoot = File(root, "library").apply { mkdirs() }
+    val stagingRoot = File(root, "library-staging").apply { mkdirs() }
+    File(stagingRoot, "new.sid").writeText("NEW")
+    val oldRoot = File(root, "library-old")
+    val db = openHvscSongIndexTestDb()
+
+    try {
+      invokePromoteBaselineLibrary(libraryRoot, stagingRoot, oldRoot, db, songUpsertRows(2_500))
+
+      val written =
+              plugin.progressEvents
+                      .filter { it.getString("stage") == "database_insertion" }
+                      .map { it.getInt("processedCount") }
+      assertEquals(listOf(0, 1_000, 2_000, 2_500), written)
+      assertEquals(2_500, plugin.progressEvents.last().getInt("totalCount"))
+      assertEquals(2_500, songIndexRowCount(db))
     } finally {
       db.close()
       root.deleteRecursively()
@@ -967,6 +1009,25 @@ class HvscIngestionPluginTest {
       assertFalse("entry progress must not be reported as parsing", stages.contains("sid_metadata_parsing"))
       val entryEvents = events.filter { it.has("totalCount") && it.getInt("totalCount") == 1000 }
       assertEquals(listOf("archive_extraction"), entryEvents.map { it.getString("stage") })
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
+  }
+
+  @Test
+  fun ingestHvscUpdateReportsEachDatabaseBatchAsProgress() {
+    try {
+      val events = mutableListOf<JSObject>()
+      ingestUpdateResolving(
+              fakeExtractionResult(emptyList()).copy(extractedSongs = ingestedSongs),
+              eventsOut = events,
+      )
+
+      val inserts = events.filter { it.getString("stage") == "database_insertion" }
+      assertEquals(0, inserts.first().getInt("processedCount"))
+      assertEquals(ingestedSongs.size, inserts.last().getInt("processedCount"))
+      assertEquals(ingestedSongs.size, inserts.last().getInt("totalCount"))
     } finally {
       File(context.filesDir, "hvsc").deleteRecursively()
       File(context.filesDir, "hvsc-cache").deleteRecursively()

@@ -286,7 +286,8 @@ open class HvscIngestionPlugin : Plugin() {
       db.beginTransaction()
       try {
         db.delete("hvsc_song_index", null, null)
-        for (row in deferredUpserts) {
+        emitSongIndexProgress(0, deferredUpserts.size)
+        for ((index, row) in deferredUpserts.withIndex()) {
           val cv =
                   ContentValues().apply {
                     put("virtual_path", row.virtualPath)
@@ -297,6 +298,9 @@ open class HvscIngestionPlugin : Plugin() {
                     put("updated_at_ms", updatedAt)
                   }
           db.insertWithOnConflict("hvsc_song_index", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+          if ((index + 1) % songIndexProgressStep == 0 || index + 1 == deferredUpserts.size) {
+            emitSongIndexProgress(index + 1, deferredUpserts.size)
+          }
         }
         db.setTransactionSuccessful()
       } finally {
@@ -364,6 +368,21 @@ open class HvscIngestionPlugin : Plugin() {
 
   private fun getSongIndexCount(db: SQLiteDatabase): Long {
     return DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM hvsc_song_index", null)
+  }
+
+  private val songIndexProgressStep = 1000
+
+  /** Progress of writing the song index to the database, in rows. */
+  private fun emitSongIndexProgress(written: Int, total: Int) {
+    emitProgress(
+            stage = "database_insertion",
+            message = "Writing the song index…",
+            processedCount = written,
+            totalCount = total,
+            currentFile = null,
+            songsIngested = written,
+            songsDeleted = 0,
+    )
   }
 
   private fun emitProgress(
@@ -593,11 +612,16 @@ open class HvscIngestionPlugin : Plugin() {
                 val pendingUpserts = toSongUpsertRows(extractionResult.extractedSongs)
                 var metadataUpserts = 0
                 if (!resetLibrary) {
+                  val upsertTotal = pendingUpserts.size
+                  var upsertsWritten = 0
+                  emitSongIndexProgress(0, upsertTotal)
                   while (pendingUpserts.isNotEmpty()) {
                     val batchCount = minOf(pendingUpserts.size, dbBatchSize.coerceAtLeast(1))
                     val nextBatch = pendingUpserts.subList(0, batchCount).toMutableList()
                     metadataUpserts += flushSongBatch(writableDb, nextBatch)
                     pendingUpserts.subList(0, batchCount).clear()
+                    upsertsWritten += batchCount
+                    emitSongIndexProgress(upsertsWritten, upsertTotal)
                   }
                 }
 
