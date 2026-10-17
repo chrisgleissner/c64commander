@@ -19,7 +19,7 @@ type Props = {
   onBack: () => void;
 };
 
-type LoadState = "idle" | "loading" | "done" | "error";
+type LoadState = "idle" | "loading" | "done" | "error" | "unavailable";
 
 export function ConfigDriftView({ onBack }: Props) {
   const [state, setState] = useState<LoadState>("idle");
@@ -30,7 +30,7 @@ export function ConfigDriftView({ onBack }: Props) {
     try {
       const r = await computeConfigDrift();
       setResult(r);
-      setState(r.error ? "error" : "done");
+      setState(r.unavailable ? "unavailable" : r.error ? "error" : "done");
     } catch (error) {
       setResult({
         timestamp: new Date().toISOString(),
@@ -85,6 +85,12 @@ export function ConfigDriftView({ onBack }: Props) {
       {state === "loading" && (
         <p className="text-xs text-muted-foreground" data-testid="config-drift-loading">
           Comparing runtime and persisted config…
+        </p>
+      )}
+
+      {state === "unavailable" && (
+        <p className="text-xs text-muted-foreground" data-testid="config-drift-unavailable">
+          {result?.error}
         </p>
       )}
 

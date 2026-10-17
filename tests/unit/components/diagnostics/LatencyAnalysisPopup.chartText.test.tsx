@@ -50,4 +50,32 @@ describe("LatencyAnalysisPopup chart text", () => {
     expect(legend).not.toBeNull();
     expect(Number.parseFloat(legend!.style.fontSize)).toBeGreaterThanOrEqual(14);
   });
+
+  it("labels each minute once when several 30 s buckets fall inside it", () => {
+    vi.useFakeTimers();
+    try {
+      const minuteStart = new Date(2026, 9, 17, 12, 4, 0).getTime();
+      vi.setSystemTime(minuteStart + 1_000);
+      recordLatencySample("REST", "/v1/info", 40);
+      vi.setSystemTime(minuteStart + 35_000);
+      recordLatencySample("REST", "/v1/info", 50);
+      vi.setSystemTime(minuteStart + 70_000);
+      recordLatencySample("REST", "/v1/info", 60);
+
+      render(
+        <DisplayProfileProvider>
+          <LatencyAnalysisPopup open onClose={() => {}} />
+        </DisplayProfileProvider>,
+      );
+
+      const labels = Array.from(
+        screen
+          .getByTestId("latency-chart-panel")
+          .querySelectorAll(".recharts-xAxis .recharts-cartesian-axis-tick-value"),
+      ).map((tick) => tick.textContent);
+      expect(labels).toEqual(["12:04", "12:05"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

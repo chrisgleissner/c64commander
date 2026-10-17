@@ -53,6 +53,14 @@ describe("DecisionStateView", () => {
     expect(screen.getByTestId("decision-state-health-check")).toHaveTextContent("Run ID-");
   });
 
+  it("keeps metric labels on one line so a long value cannot wrap them mid-word", () => {
+    render(<DecisionStateView onBack={vi.fn()} onRepair={vi.fn()} repairRunning={false} actionSummaries={[]} />);
+
+    const label = screen.getByText("Run state");
+    expect(label.className).toContain("whitespace-nowrap");
+    expect(label.className).toContain("shrink-0");
+  });
+
   it("renders populated decision, health-check, and transport metrics", () => {
     setPlaybackDecisionState({
       state: "PLAYING",

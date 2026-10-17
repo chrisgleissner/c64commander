@@ -59,6 +59,17 @@ describe("HeatMapPopup", () => {
     expect(screen.getByText("No FTP activity recorded in this session.")).toBeInTheDocument();
   });
 
+  it("draws cell and legend numerals in black or white, not a theme color that can match the cell", () => {
+    render(
+      <HeatMapPopup open={true} onClose={() => undefined} variant="REST" traceEvents={[makeRestResponseEvent()]} />,
+    );
+
+    const cell = screen.getByTestId("heat-cell-Device info-Info");
+    expect(cell.style.color).toBe("rgb(255, 255, 255)");
+    const legendCell = screen.getByTestId("heat-map-legend").firstElementChild as HTMLElement;
+    expect(legendCell.style.color).toBe("rgb(0, 0, 0)");
+  });
+
   it("renders heat map cells as keyboard-accessible buttons", () => {
     render(
       <HeatMapPopup open={true} onClose={() => undefined} variant="REST" traceEvents={[makeRestResponseEvent()]} />,

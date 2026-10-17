@@ -22,6 +22,7 @@ import {
   type HeatMapMetricMode,
   type HeatMapVariant,
 } from "@/lib/diagnostics/heatMapData";
+import { heatCellHsl, heatCellTextColor } from "@/lib/diagnostics/heatCellColors";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
@@ -56,8 +57,6 @@ const metricIntensity = (value: number, max: number): number => {
 
 const legendSteps = Array.from({ length: 10 }, (_, index) => (index + 1) / 10);
 
-const interpolate = (from: number, to: number, intensity: number) => from + (to - from) * intensity;
-
 const heatCellStyle = (intensity: number): CSSProperties => {
   if (intensity <= 0) {
     return {
@@ -67,14 +66,12 @@ const heatCellStyle = (intensity: number): CSSProperties => {
     };
   }
 
-  const hue = interpolate(196, 12, intensity);
-  const saturation = interpolate(82, 88, intensity);
-  const lightness = interpolate(96, 38, intensity);
+  const { hue, saturation, lightness } = heatCellHsl(intensity);
 
   return {
     backgroundColor: `hsl(${hue} ${saturation}% ${lightness}%)`,
     borderColor: `hsl(${hue} ${Math.min(96, saturation + 4)}% ${Math.max(24, lightness - 12)}%)`,
-    color: lightness < 58 ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+    color: heatCellTextColor(intensity),
   };
 };
 
@@ -215,7 +212,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
       onClose={onClose}
       title={VARIANT_TITLES[variant]}
       description={VARIANT_DESCRIPTIONS[variant]}
-      contentClassName="w-[min(96vw,72rem)] h-[min(88dvh,52rem)]"
+      contentClassName="w-[min(96vw,72rem)]"
       data-testid={`heat-map-popup-${variant.toLowerCase()}`}
     >
       <div className="flex flex-1 min-h-0 flex-col p-3 relative">
