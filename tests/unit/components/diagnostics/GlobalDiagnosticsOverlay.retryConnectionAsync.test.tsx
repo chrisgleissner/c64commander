@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
@@ -138,11 +138,11 @@ vi.mock("@/components/diagnostics/DiagnosticsDialog", () => ({
   },
 }));
 
-const renderOverlay = () => {
+const renderOverlay = async () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/"]}>
         <InterstitialStateProvider>
@@ -153,6 +153,9 @@ const renderOverlay = () => {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  // The dialog's code loads when it first opens, so the callbacks it receives arrive a moment later.
+  await waitFor(() => expect(capturedConnectionCallbacks.current).not.toBeNull());
+  return rendered;
 };
 
 describe("GlobalDiagnosticsOverlay handleRetryConnectionAsync (HARD18-027)", () => {
@@ -166,7 +169,7 @@ describe("GlobalDiagnosticsOverlay handleRetryConnectionAsync (HARD18-027)", () 
   it("resolves success, records success recovery evidence, and triggers rediscovery + health check", async () => {
     const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockResolvedValue({ model: "u64" } as never);
 
-    renderOverlay();
+    await renderOverlay();
     const callbacks = capturedConnectionCallbacks.current;
     expect(callbacks).not.toBeNull();
 
@@ -183,7 +186,7 @@ describe("GlobalDiagnosticsOverlay handleRetryConnectionAsync (HARD18-027)", () 
   it("resolves failure and logs the REST contributor error when the probe fails", async () => {
     const getInfoSpy = vi.spyOn(C64API.prototype, "getInfo").mockRejectedValue(new Error("HTTP 503"));
 
-    renderOverlay();
+    await renderOverlay();
     const callbacks = capturedConnectionCallbacks.current;
     expect(callbacks).not.toBeNull();
 

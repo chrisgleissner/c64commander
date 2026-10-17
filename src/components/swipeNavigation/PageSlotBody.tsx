@@ -14,14 +14,49 @@ import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { PageLoadingFallback } from "@/components/PageLoadingFallback";
 import { rememberPagePosition, restorePagePosition } from "@/lib/navigation/pagePositions";
+import { addLog } from "@/lib/logging";
 
-const HomePage = lazy(() => import("@/pages/HomePage"));
-const PlayFilesPage = lazy(() => import("@/pages/PlayFilesPage"));
-const DisksPage = lazy(() => import("@/pages/DisksPage"));
-const ConfigBrowserPage = lazy(() => import("@/pages/ConfigBrowserPage"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const loadHomePage = () => import("@/pages/HomePage");
+const loadPlayFilesPage = () => import("@/pages/PlayFilesPage");
+const loadDisksPage = () => import("@/pages/DisksPage");
+const loadConfigBrowserPage = () => import("@/pages/ConfigBrowserPage");
+const loadSettingsPage = () => import("@/pages/SettingsPage");
+
+const HomePage = lazy(loadHomePage);
+const PlayFilesPage = lazy(loadPlayFilesPage);
+const DisksPage = lazy(loadDisksPage);
+const ConfigBrowserPage = lazy(loadConfigBrowserPage);
+const SettingsPage = lazy(loadSettingsPage);
 const OpenSourceLicensesPage = lazy(() => import("@/pages/OpenSourceLicensesPage"));
 const DocsPage = lazy(() => import("@/pages/DocsPage"));
+
+const WARM_START_DELAY_MS = 2500;
+const WARM_STEP_DELAY_MS = 1500;
+
+/**
+ * Loads the other tabs' code one at a time while the app is idle, so a first visit shows the page
+ * instead of "Loading screen..." (about 0.7 s on a phone). One chunk per step keeps each parse short
+ * enough not to delay playback that the page's own thread is feeding.
+ */
+export const warmPageChunks = (): (() => void) => {
+  const loaders = [loadPlayFilesPage, loadDisksPage, loadConfigBrowserPage, loadSettingsPage];
+  let timer: number | undefined;
+  let index = 0;
+  const loadNext = () => {
+    const load = loaders[index];
+    index += 1;
+    if (!load) return;
+    load()
+      .catch((error: unknown) => {
+        addLog("warn", "Page code warm-up failed", { step: index, error: (error as Error).message });
+      })
+      .finally(() => {
+        timer = window.setTimeout(loadNext, WARM_STEP_DELAY_MS);
+      });
+  };
+  timer = window.setTimeout(loadNext, WARM_START_DELAY_MS);
+  return () => window.clearTimeout(timer);
+};
 
 const HomeSlot = () => <HomePage />;
 const PlaySlot = () => <PlayFilesPage />;
