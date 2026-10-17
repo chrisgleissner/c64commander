@@ -2832,7 +2832,7 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select safety mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="AUTO">Auto (Conservative for C64U, Balanced for others) - recommended</SelectItem>
+                  <SelectItem value="AUTO">Auto (follows the device and its firmware) - recommended</SelectItem>
                   <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
                   <SelectItem value="BALANCED">Balanced</SelectItem>
                   <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
