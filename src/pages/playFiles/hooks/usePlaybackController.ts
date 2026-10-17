@@ -682,6 +682,7 @@ export function usePlaybackController({
     resolveHvscRuntimeRequest,
     getLocalSidPlayback,
   });
+  const scheduleNextTunePrefetchRef = useRef<(fromIndex: number, remainingMs: number | null) => void>(() => undefined);
 
   const playItem = useCallback(
     async (
@@ -1154,7 +1155,10 @@ export function usePlaybackController({
           // of memory while the renderer catches up, instead of having to out-run the speaker from a
           // standing start — which it only just manages, and audibly failed to a second or two in.
           void warmNeighbouringTracks();
-          nextTunePrefetch.schedule(playlistRef.current[currentIndexRef.current + 1], resolvedDuration ?? null);
+          scheduleNextTunePrefetchRef.current(
+            resolveLaunchedItemIndex(playlistRef.current, item.id, options?.playlistIndex ?? -1),
+            resolvedDuration ?? null,
+          );
         } else {
           await executePlayPlan(api, plan, executionOptions).catch((error) => {
             if (!(error instanceof PlaybackLaunchOvertakenError)) throw error;
@@ -1702,6 +1706,10 @@ export function usePlaybackController({
           setIsPaused(false);
           writeMachineExecutionFromPlay("running");
           const { elapsedMs } = playbackTime.read();
+          scheduleNextTunePrefetchRef.current(
+            currentIndexRef.current,
+            typeof durationMs === "number" ? durationMs - elapsedMs : null,
+          );
           trackStartedAtRef.current = now - elapsedMs;
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
@@ -2023,6 +2031,12 @@ export function usePlaybackController({
     },
     [traversalOrdering, shuffleSeed],
   );
+
+  scheduleNextTunePrefetchRef.current = (fromIndex, remainingMs) => {
+    const reachableIndex =
+      fromIndex < 0 ? null : resolveReachableNextIndex(playlistRef.current, fromIndex).reachableIndex;
+    nextTunePrefetch.schedule(reachableIndex === null ? null : playlistRef.current[reachableIndex], remainingMs);
+  };
 
   // With nothing playing a skip only chooses the track, which showed the last tune's length and a full bar.
   const showChosenTrackWhileStopped = useCallback(
