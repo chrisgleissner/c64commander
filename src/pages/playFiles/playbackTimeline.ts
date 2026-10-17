@@ -17,6 +17,8 @@ export type PlaybackTimeDisplay = {
   remainingLabel: string;
   totalLabel: string;
   remainingTotalLabel: string;
+  /** False when the playlist is just this tune, so the playlist counters would repeat the tune's own times. */
+  playlistCountersShown: boolean;
 };
 
 /** The Play page's progress bar and time labels: the clock they follow, and what they show at any elapsed time. */
@@ -54,6 +56,7 @@ export const describePlaybackTime = (
     remainingLabel: durationMs !== undefined ? `-${formatTime(Math.max(0, durationMs - shownMs))}` : "—",
     totalLabel: formatTime(totals.total),
     remainingTotalLabel: formatTime(totals.remaining),
+    playlistCountersShown: totals.total !== undefined && totals.total !== durationMs,
   };
 };
 

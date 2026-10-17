@@ -57,7 +57,7 @@ export function SaveConfigDialog({ open, onOpenChange, existingNames, onSave, is
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader hideClose>
           <DialogTitle>Save to app</DialogTitle>
           <DialogDescription>Store the current configuration of your C64 in this app.</DialogDescription>
         </DialogHeader>

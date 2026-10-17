@@ -11,7 +11,7 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion } from "framer-motion";
-import { Search, Loader2, FolderOpen } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import {
   useC64Categories,
@@ -75,6 +75,7 @@ import { rollbackAudioMixerItem } from "@/pages/config/audioMixerRollback";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
 import { useRowChangeCallbacks, useStagedConfigRows } from "@/pages/config/stagedConfigRows";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
+import { configCategoryIcon } from "@/pages/config/configCategoryIcon";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
 type ConfigListItem = {
@@ -825,7 +826,7 @@ const CategorySection = memo(function CategorySection({
       id={configCategorySectionId(categoryName)}
       title={displayTitle ?? categoryName}
       summary={groupLabel ?? undefined}
-      icon={FolderOpen}
+      icon={configCategoryIcon(categoryName)}
       headerRef={categoryHeaderFocusRef}
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}

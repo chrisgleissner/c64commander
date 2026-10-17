@@ -1035,7 +1035,6 @@ export function LightingStudioDialog() {
                   <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center")}>
                     <div className="min-w-0 flex-1">
                       <h3 className={cn("min-w-0 font-semibold", compact ? "text-sm" : "text-base")}>Profiles</h3>
-                      {!compact ? <p className="text-sm text-muted-foreground">Save and reuse looks.</p> : null}
                     </div>
                     <div className={cn("flex shrink-0 gap-1.5", narrow ? "w-full" : "items-center")}>
                       <Input

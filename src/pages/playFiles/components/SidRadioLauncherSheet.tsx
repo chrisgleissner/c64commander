@@ -179,10 +179,7 @@ export const SidRadioLauncherSheet = ({
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-sm font-semibold">Moods</h3>
-              <p className="text-xs text-muted-foreground">Tunes that sound like the mood you pick.</p>
-            </div>
+            <h3 className="text-sm font-semibold">Moods</h3>
             <label className="flex min-h-11 items-center gap-2 text-sm">
               <Checkbox
                 data-testid="sid-radio-likes-toggle"
@@ -236,12 +233,7 @@ export const SidRadioLauncherSheet = ({
 
             {onStartCollection ? (
               <div className="flex flex-col gap-2" data-testid="sid-radio-collections">
-                <div className="flex flex-col gap-0.5">
-                  <h3 className="text-sm font-semibold">Collections</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Only tunes from the collection, as listed in the HVSC tune notes.
-                  </p>
-                </div>
+                <h3 className="text-sm font-semibold">Collections</h3>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {sidRadioCollectionsFor(today ?? new Date()).map((collection) => {
                     const count = collectionCounts?.[collection.id];

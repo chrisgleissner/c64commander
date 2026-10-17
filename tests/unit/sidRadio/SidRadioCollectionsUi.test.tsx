@@ -127,10 +127,12 @@ describe("SID Radio collections in the launcher", () => {
     expect(screen.queryByTestId("sid-radio-collections")).toBeNull();
   });
 
-  it("says what separates a collection from a mood", () => {
+  it("separates moods from collections by heading alone, without a sentence repeating each heading", () => {
     renderLauncher();
-    expect(screen.getByText("Tunes that sound like the mood you pick.")).toBeInTheDocument();
-    expect(screen.getByText("Only tunes from the collection, as listed in the HVSC tune notes.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Moods" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Collections" })).toBeInTheDocument();
+    expect(screen.queryByText("Tunes that sound like the mood you pick.")).toBeNull();
+    expect(screen.queryByText("Only tunes from the collection, as listed in the HVSC tune notes.")).toBeNull();
   });
 
   it("names each collection by its label and falls back to the id", () => {

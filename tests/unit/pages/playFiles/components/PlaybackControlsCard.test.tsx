@@ -51,6 +51,7 @@ const shownTime = (display: Partial<PlaybackTimeDisplay>): PlaybackTimeline => {
     remainingLabel: "0:00",
     totalLabel: "0:00",
     remainingTotalLabel: "0:00",
+    playlistCountersShown: true,
     ...Object.fromEntries(Object.entries(display).filter(([, value]) => value !== undefined)),
   };
   return { playbackTime: createPlaybackTimeStore(), display: () => shown };

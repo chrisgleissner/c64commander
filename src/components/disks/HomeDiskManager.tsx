@@ -2618,7 +2618,7 @@ export const HomeDiskManager = () => {
 
       <Dialog open={Boolean(groupDialogDisk)} onOpenChange={(open) => !open && setGroupDialogDisk(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Set group</DialogTitle>
             <DialogDescription>Assign a group label for disk rotation.</DialogDescription>
           </DialogHeader>
@@ -2667,6 +2667,9 @@ export const HomeDiskManager = () => {
             </div>
           </div>
           <DialogFooter>
+            <Button variant="outline" onClick={() => setGroupDialogDisk(null)}>
+              Cancel
+            </Button>
             <Button
               variant="default"
               onClick={() => {
@@ -2678,21 +2681,21 @@ export const HomeDiskManager = () => {
             >
               {groupName.trim() ? "Create & assign" : "Clear group"}
             </Button>
-            <Button variant="ghost" onClick={() => setGroupDialogDisk(null)}>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(renameDialogDisk)} onOpenChange={(open) => !open && setRenameDialogDisk(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Rename disk</DialogTitle>
             <DialogDescription>Update the display name for this disk.</DialogDescription>
           </DialogHeader>
           <Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
           <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameDialogDisk(null)}>
+              Cancel
+            </Button>
             <Button
               variant="default"
               onClick={() => {
@@ -2703,24 +2706,24 @@ export const HomeDiskManager = () => {
             >
               Save
             </Button>
-            <Button variant="ghost" onClick={() => setRenameDialogDisk(null)}>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(deleteDialogDisk)} onOpenChange={(open) => !open && setDeleteDialogDisk(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Remove disk?</DialogTitle>
             <DialogDescription>
               This removes the disk from your collection. The original file is not deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogDisk(null)} data-open-focus>
+              Cancel
+            </Button>
             <Button
-              variant="outline"
+              variant="destructive"
               onClick={() => {
                 if (!deleteDialogDisk) return;
                 void handleDeleteDisk(deleteDialogDisk);
@@ -2729,16 +2732,13 @@ export const HomeDiskManager = () => {
             >
               Remove
             </Button>
-            <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)} data-open-focus>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Remove selected disks?</DialogTitle>
             <DialogDescription>
               {selectedCount
@@ -2747,11 +2747,11 @@ export const HomeDiskManager = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
-              Remove
-            </Button>
-            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} data-open-focus>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)} data-open-focus>
               Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
+              Remove
             </Button>
           </DialogFooter>
         </DialogContent>

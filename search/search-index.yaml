@@ -849,10 +849,10 @@ entries:
 
   - id: settings.control.allow-circuit-override
     title_key: search.settings.allowCircuitOverride
-    title: Allow circuit override
+    title: Allow manual retry while paused
     subtitle_key: search.settings.allowCircuitOverride.subtitle
-    subtitle: Let the app change settings that can stress the hardware
-    keywords: [safety, override, protection, advanced]
+    subtitle: Let you retry a connection the app has paused after repeated failures
+    keywords: [safety, override, circuit, retry, protection, advanced]
     group: setting
     icon: shield
     target:

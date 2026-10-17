@@ -2833,7 +2833,7 @@ describe("SettingsPage", () => {
 
     expect(saveArchiveHostOverride).toHaveBeenCalledWith("http://bad-host");
     expect(screen.getByRole("alert")).toHaveTextContent(/hostname only/i);
-    expect(screen.getByText(/Resolved host:/i)).toHaveTextContent("commoserve.files.commodore.net");
+    expect(screen.getByText(/Host in use:/i)).toHaveTextContent("commoserve.files.commodore.net");
   });
 
   it("persists archive overrides and mounts the archive dialog only when opened", () => {
@@ -2841,10 +2841,10 @@ describe("SettingsPage", () => {
 
     expect(screen.queryByTestId("online-archive-dialog-mock")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Client-Id override"), {
+    fireEvent.change(screen.getByLabelText("Archive client ID"), {
       target: { value: "Custom Client" },
     });
-    fireEvent.change(screen.getByLabelText("User-Agent override"), {
+    fireEvent.change(screen.getByLabelText("Archive user agent"), {
       target: { value: "Custom Agent" },
     });
 

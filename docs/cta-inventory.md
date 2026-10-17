@@ -499,7 +499,7 @@ Listed below in the order they are rendered and walked by the focus ring.
 - Liked tunes — button (label **Liked**, accessible name "Liked tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
   and Un-like — button — `liked-tune-unlike`
-- Rank the current tune: ✕ / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
+- Rank the current tune: thumbs-down / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
   _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
   in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
   same size and chrome as the transport
@@ -618,7 +618,7 @@ past it to anything below.
   (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
 - **Device safety**: Machine input cooldown (ms) — number —
   `device-safety-machine-input-cooldown` — the coalescing window the app holds between
-  `machine:input` writes (0–2000) ; Allow circuit override — checkbox —
+  `machine:input` writes (0–2000) ; Allow manual retry while paused — checkbox —
   `settings-allow-circuit-override` — R✅ I✅ ; the whole row is the target, so the
   label activates it as well as the box ; Keep device settings after a restart —
   checkbox — `settings-persist-config-to-flash` — R✅ I✅ _(default off: a device
@@ -847,6 +847,8 @@ its controls are discovered the same way (Up/Down within, OK activates, Back/Esc
 closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open source licenses page.
+Confirmation and small form dialogs that have their own Cancel button (secondary action on the left,
+primary action on the right) show no header close control; Back and Esc still close them.
 
 **Diagnostics dialog — connection card** (opened from the connectivity badge on any page):
 Run health check — button — `run-health-check` — R✅ I✅ ; Use the simulated device — button —

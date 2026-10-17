@@ -1557,7 +1557,6 @@ export default function SettingsPage() {
                       );
                     })}
                   </div>
-                  <HelperText>Portrait stays upright, Landscape stays wide, Auto follows the phone.</HelperText>
                 </div>
                 {isAndroid ? (
                   <div className="space-y-2 pt-2" data-testid="settings-full-screen">
@@ -1610,7 +1609,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap min-w-0">
                     <div className="min-w-[9rem] flex-1">
                       <Label className="text-sm font-medium">Saved devices</Label>
-                      <HelperText>Manage devices here. Long press the header badge to switch quickly.</HelperText>
+                      <HelperText>Long press the header badge to switch quickly.</HelperText>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Button
@@ -2034,7 +2033,7 @@ export default function SettingsPage() {
                   }}
                 >
                   <AlertDialogContent>
-                    <AlertDialogHeader>
+                    <AlertDialogHeader hideClose>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
                       {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
                       <AlertDialogDescription className={deleteReferenceCount > 0 ? undefined : "not-sr-only"}>
@@ -2121,7 +2120,9 @@ export default function SettingsPage() {
                     <Label htmlFor="debug-logging" className="flex min-h-11 items-center font-medium">
                       Enable debug logging
                     </Label>
-                    <HelperText>Emits all debug-level logs for diagnostics, including SAF and REST events.</HelperText>
+                    <HelperText>
+                      Records extra detail in the diagnostics log, including file access and device requests.
+                    </HelperText>
                   </div>
                   <Checkbox
                     id="debug-logging"
@@ -2137,8 +2138,8 @@ export default function SettingsPage() {
                 {debugLoggingEnabled && isAndroid ? (
                   <div className="space-y-2 rounded-lg border border-border/70 p-3">
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold">SAF diagnostics</p>
-                      <HelperText>Manual checks for persisted SAF permissions and enumeration.</HelperText>
+                      <p className="text-sm font-semibold">Folder access diagnostics</p>
+                      <HelperText>Check which folders the app is still allowed to read.</HelperText>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -2751,7 +2752,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="archive-client-id-override" className="text-sm font-medium">
-                    Client-Id override
+                    Archive client ID
                   </Label>
                   <Input
                     id="archive-client-id-override"
@@ -2768,7 +2769,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="archive-user-agent-override" className="text-sm font-medium">
-                    User-Agent override
+                    Archive user agent
                   </Label>
                   <Input
                     id="archive-user-agent-override"
@@ -2785,18 +2786,15 @@ export default function SettingsPage() {
 
                 <div className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
                   <div>
-                    Resolved host: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
+                    Host in use: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
                   </div>
                   <div>
-                    Resolved Client-Id: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
+                    Client ID in use: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
                   </div>
                   <div>
-                    Resolved User-Agent: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
+                    User agent in use: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
                   </div>
-                  <div className="mt-2">
-                    Native apps allow the default cleartext hosts. Override hosts can be blocked by platform security,
-                    especially on iOS, until the native allow-list is updated.
-                  </div>
+                  <div className="mt-2">The phone may block a custom host for security reasons, especially on iOS.</div>
                 </div>
 
                 <Button
@@ -3308,8 +3306,8 @@ export default function SettingsPage() {
                     }}
                   />
                   <HelperText>
-                    How often drag previews are sent for device-backed sliders (CPU, volume, lighting). Default 200 ms,
-                    range 100–500 ms.
+                    How often the app sends updates to the C64 while you drag a slider (CPU, volume, lighting). Default
+                    200 ms, range 100–500 ms.
                   </HelperText>
                 </div>
 
@@ -3317,9 +3315,9 @@ export default function SettingsPage() {
                   {/* A label, so the whole row toggles the checkbox rather than only the
                       16px box, and so the control has an accessible name at all. */}
                   <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
-                    <span className="text-sm font-medium">Allow circuit override</span>
+                    <span className="text-sm font-medium">Allow manual retry while paused</span>
                     <Checkbox
-                      aria-label="Allow circuit override"
+                      aria-label="Allow manual retry while paused"
                       data-testid="settings-allow-circuit-override"
                       checked={allowCircuitOverride}
                       onCheckedChange={(checked) => {
@@ -3472,7 +3470,7 @@ export default function SettingsPage() {
       <ScreenActivityWatch onChange={rereadFullScreenSettingsOnReturn} />
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Enable relaxed safety mode?</DialogTitle>
             <DialogDescription>
               Relaxed mode increases FTP concurrency and reduces protection. This can overload or destabilize real
