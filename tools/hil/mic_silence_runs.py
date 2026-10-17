@@ -41,8 +41,10 @@ def stream_levels_db(blocks, rate: int) -> np.ndarray:
     levels: list[float] = []
     for block in blocks:
         if state is None:
-            state = sosfilt_zi(sos) * block[0]
-        band, state = sosfilt(sos, block, zi=state)
+            state = (sosfilt_zi(sos) * block[0], sosfilt_zi(sos) * block[0])
+        band, first_state = sosfilt(sos, block, zi=state[0])
+        band, second_state = sosfilt(sos, band, zi=state[1])
+        state = (first_state, second_state)
         for index in range(len(band) // rate):
             chunk = band[index * rate : (index + 1) * rate]
             levels.append(20 * np.log10(np.sqrt(np.mean(chunk**2)) + 1e-9))

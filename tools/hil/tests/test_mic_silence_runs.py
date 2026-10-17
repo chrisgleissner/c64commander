@@ -90,3 +90,11 @@ def test_a_recording_that_is_not_sixteen_bit_is_refused(tmp_path):
         assert "expected 16-bit" in str(error)
     else:
         raise AssertionError("an 8-bit recording was accepted")
+
+
+def test_a_loud_tone_below_the_band_reads_at_least_sixty_db_under_the_same_tone_in_band():
+    def level_of(frequency: float) -> float:
+        t = np.arange(20 * RATE) / RATE
+        return float(np.median(module.per_second_levels_db(0.5 * np.sin(2 * np.pi * frequency * t), RATE)[5:]))
+
+    assert level_of(1000) - level_of(80) >= 60.0
