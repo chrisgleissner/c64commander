@@ -9,13 +9,12 @@
 import React from "react";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
-import { Button } from "@/components/ui/button";
 import { HardDrive } from "lucide-react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
+import { Switch } from "@/components/ui/switch";
 import {
   getDiagnosticsColorClassForDisplaySeverity,
   type DiagnosticsDisplaySeverity,
@@ -140,18 +139,14 @@ export function DriveCard({
       // ON/OFF stays outside the body: whether a drive is powered is the one thing worth seeing,
       // and worth being able to change, without opening the card.
       actions={
-        <Button
+        <Switch
           ref={toggleFocusRef}
-          variant="outline"
-          size="sm"
-          onClick={onToggle}
+          checked={enabled && !loading}
+          onCheckedChange={() => onToggle()}
           disabled={!isConnected || togglePending || loading}
-          className={cn("px-3 text-xs", getOnOffButtonClass(enabled && !loading), "min-h-11 min-w-11")}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
           aria-label={`${name} power: ${loading ? LOADING_LABEL : enabled ? "on" : "off"}`}
-        >
-          {loading ? LOADING_LABEL : enabled ? "ON" : "OFF"}
-        </Button>
+        />
       }
     >
       {/* Row 1.5: Mounted Path.

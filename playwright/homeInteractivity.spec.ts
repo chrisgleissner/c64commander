@@ -238,16 +238,16 @@ test.describe("Home interactions", () => {
     const sidToggle = page.getByTestId("home-sid-toggle-socket1");
     await expect(sidEntry).toBeVisible();
     await expect(sidToggle).toBeVisible();
-    await expect(sidToggle).toHaveText("ON");
+    await expect(sidToggle).toBeChecked();
     await sidToggle.click();
 
     await expect
       .poll(async () => {
         const count = await sidEntry.count();
         if (count === 0) return "removed";
-        return (await sidToggle.textContent())?.trim() ?? "unknown";
+        return (await sidToggle.isChecked()) ? "on" : "off";
       })
-      .toMatch(/removed|OFF/);
+      .toMatch(/removed|off/);
   });
 
   test("machine quick actions use REST controls where expected", async ({ page, server }) => {

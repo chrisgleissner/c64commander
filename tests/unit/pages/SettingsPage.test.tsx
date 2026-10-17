@@ -2054,7 +2054,7 @@ describe("SettingsPage", () => {
   it("hides the automatic demo-mode setting when the feature flag is disabled", () => {
     renderSettingsPage();
 
-    expect(screen.queryByRole("checkbox", { name: /automatic demo mode/i })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /automatic demo mode/i })).toBeNull();
   });
 
   it("persists automatic demo mode and debug logging toggles", () => {
@@ -2063,8 +2063,8 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /automatic demo mode/i }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /enable debug logging/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /automatic demo mode/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /enable debug logging/i }));
 
     expect(saveDemoModeEnabled).toHaveBeenCalledWith(false);
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
