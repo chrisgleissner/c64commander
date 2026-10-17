@@ -154,7 +154,7 @@ describe("installing HVSC as five named steps", () => {
       // The hydration pass reports under its own name. Observed unmapped on the device: the stepper
       // showed "Unpack" running for minutes while the panel below read "HVSC META 128/61,157".
       sid_metadata_hydration: "analyze",
-      database_insertion: "details",
+      database_insertion: "scan",
       unknown_stage: null,
     };
     for (const [stage, expected] of Object.entries(grouped)) {

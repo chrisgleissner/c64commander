@@ -287,6 +287,30 @@ describe("applyIngestedSidHeaders", () => {
     expect(mocks.saveHvscBrowseIndexSnapshot).not.toHaveBeenCalled();
   });
 
+  it("reports how many songs it has applied, from none to all, so the analysis step can show progress", async () => {
+    // On a real install this pass took about 6 s after the native ingest had resolved, with no progress
+    // events, so the install looked finished while it was still working.
+    const paths = Array.from({ length: 1200 }, (_, index) => `/MUSICIANS/M/Many/Song_${index}.sid`);
+    const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({
+      pathToSeconds: new Map(paths.map((path) => [path, [60]])),
+      md5ToSeconds: new Map(),
+    });
+    const header = uint8ToBase64(files[STEREO_PSID].subarray(0, 124));
+    mocks.readDataFileText.mockResolvedValue(JSON.stringify(Object.fromEntries(paths.map((path) => [path, header]))));
+    mocks.loadHvscBrowseIndexSnapshot.mockResolvedValue(snapshot);
+    const progress = vi.fn();
+
+    await applyIngestedSidHeaders(INDEX_PATH, undefined, progress);
+
+    expect(progress.mock.calls).toEqual([
+      [0, 1200],
+      [500, 1200],
+      [1000, 1200],
+      [1200, 1200],
+    ]);
+    expect(mocks.saveHvscBrowseIndexSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it("gives the UI a turn while it hydrates a full-size library", async () => {
     const paths = Array.from({ length: 1200 }, (_, index) => `/MUSICIANS/M/Many/Song_${index}.sid`);
     const snapshot = buildHvscBrowseIndexFromSonglengthSnapshot({

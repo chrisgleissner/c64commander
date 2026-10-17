@@ -829,6 +829,7 @@ const ingestArchivePathNative = async (options: {
         await browseIndex.finalize();
       }
 
+      emitProgress({ stage: "songlengths", message: "Loading song lengths…", archiveName });
       resetSonglengthsCache();
       const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
         archiveName,
@@ -853,7 +854,20 @@ const ingestArchivePathNative = async (options: {
         );
       }
       if (result.sidHeaderIndexPath) {
-        await applyIngestedSidHeaders(result.sidHeaderIndexPath, () => ensureNotCancelled(cancelToken));
+        await applyIngestedSidHeaders(
+          result.sidHeaderIndexPath,
+          () => ensureNotCancelled(cancelToken),
+          (processed, total) =>
+            emitProgress({
+              stage: "sid_metadata_hydration",
+              statusToken: processed >= total ? "done" : processed === 0 ? "queued" : "running",
+              message: `Reading song details ${processed.toLocaleString()}/${total.toLocaleString()}`,
+              archiveName,
+              processedCount: processed,
+              totalCount: total,
+              percent: total > 0 ? Math.round((processed / total) * 100) : 100,
+            }),
+        );
       }
     } finally {
       if (result.sidHeaderIndexPath) await discardIngestedSidHeaderIndex(result.sidHeaderIndexPath);

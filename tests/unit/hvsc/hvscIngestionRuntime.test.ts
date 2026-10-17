@@ -1041,7 +1041,7 @@ describe("hvscIngestionRuntime", () => {
     await ingestCachedHvsc("token-native-sid-headers");
 
     expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalledTimes(1);
-    expect(applyIngestedSidHeaders).toHaveBeenCalledWith(SID_HEADER_INDEX, expect.any(Function));
+    expect(applyIngestedSidHeaders).toHaveBeenCalledWith(SID_HEADER_INDEX, expect.any(Function), expect.any(Function));
     expect(vi.mocked(applyIngestedSidHeaders).mock.invocationCallOrder[0]).toBeGreaterThan(
       vi.mocked(reloadHvscSonglengthsOnConfigChange).mock.invocationCallOrder[0],
     );
@@ -1049,6 +1049,36 @@ describe("hvscIngestionRuntime", () => {
     expect(vi.mocked(discardIngestedSidHeaderIndex).mock.invocationCallOrder[0]).toBeGreaterThan(
       vi.mocked(applyIngestedSidHeaders).mock.invocationCallOrder[0],
     );
+  });
+
+  it("reports the song lengths and the SID header pass as their own steps before it announces completion", async () => {
+    // After the native ingest resolved, loading the song lengths and applying the header index took
+    // about 7 s on a Pixel 4 with no progress events, and the install showed the extraction as still
+    // running with a falling rate.
+    prepareNativeIngestWithSidHeaderIndex();
+    vi.mocked(applyIngestedSidHeaders).mockImplementationOnce(async (_path, _cancelled, onProgress) => {
+      onProgress?.(0, 1_000);
+      onProgress?.(500, 1_000);
+      onProgress?.(1_000, 1_000);
+    });
+    const events: Array<{ stage: string; statusToken?: string; processedCount?: number; totalCount?: number }> = [];
+    const listener = await addHvscProgressListener((event) => {
+      events.push(event);
+    });
+
+    await ingestCachedHvsc("token-native-tail-progress");
+    await listener.remove();
+
+    const tail = events
+      .filter((event) => ["songlengths", "sid_metadata_hydration", "complete"].includes(event.stage))
+      .map((event) => [event.stage, event.statusToken, event.processedCount, event.totalCount]);
+    expect(tail).toEqual([
+      ["songlengths", undefined, undefined, undefined],
+      ["sid_metadata_hydration", "queued", 0, 1_000],
+      ["sid_metadata_hydration", "running", 500, 1_000],
+      ["sid_metadata_hydration", "done", 1_000, 1_000],
+      ["complete", undefined, undefined, undefined],
+    ]);
   });
 
   it("deletes the SID header index when the ingest is cancelled after the native step", async () => {

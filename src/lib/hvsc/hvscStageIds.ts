@@ -16,7 +16,7 @@ export const HVSC_STAGE_ORDER: HvscStageId[] = ["download", "unpack", "scan", "d
  *
  * The stage vocabulary is the native ingestion runtime's, and is finer-grained than anything worth
  * showing: `archive_validation` and `archive_extraction` are both "unpacking" as far as the user is
- * concerned, and `songlengths`, `sid_metadata_parsing` and `database_insertion` are all "reading the
+ * concerned, and `songlengths` and `sid_metadata_parsing` are "reading the
  * details of each song". The hydration pass that follows the install is its own step, with its own
  * counter and clock.
  */
@@ -31,7 +31,7 @@ const STAGE_TO_STEP: Record<string, HvscStageId> = {
   // step for the whole of it — observed on the device, stuck there for minutes while the panel below
   // plainly read "HVSC META 128/61,157".
   sid_metadata_hydration: "analyze",
-  database_insertion: "details",
+  database_insertion: "scan",
 };
 
 export const stepForStage = (stage: string | null | undefined): HvscStageId | null =>
