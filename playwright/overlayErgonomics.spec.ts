@@ -246,6 +246,12 @@ test.describe("Overlay ergonomics on a phone", () => {
       await expect(immersive).toBeVisible();
       await immersive.hover();
       const controls = immersive.getByTestId("av-mirror-immersive-controls");
+      if (profile === "compact") {
+        // The compact Remote Input sheet shows the picture as a thin strip with no control cluster.
+        await expect(controls).toHaveCount(0);
+        expect((await immersive.boundingBox())!.height, "the compact preview is a thin strip").toBeLessThanOrEqual(80);
+        return;
+      }
       await expect(controls).toBeVisible({ timeout: 8000 });
 
       await expectAllMeetTarget(controls.locator("button"), "Immersive Live View controls", 5);

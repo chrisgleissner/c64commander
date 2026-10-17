@@ -1079,7 +1079,9 @@ throughout.
     "Mark what the view is following", `settings-follow-marker`, on by default)
   - Fit / Done view-lock — toggle button — `av-immersive-mode-toggle` — R✅ I✅
     — flips physical-key ownership between relaying to the C64 and adjusting the
-    view; also reachable via the `*`/Menu physical key and auto-reverts after idle
+    view; also reachable via the `*`/Menu physical key and auto-reverts after idle. Not shown
+    in the thin preview strip that the compact profile uses in the Remote Input sheet while
+    Watch is on (the sheet's room goes to the joystick or keyboard); the physical key still works
   - Minimap — draggable viewport rectangle — `av-mirror-minimap` /
     `av-mirror-minimap-viewport` — pointer-drag to reposition (shown once zoomed in)
   - The picture itself — pinch to zoom, drag to pan, double-tap to zoom-to-point
