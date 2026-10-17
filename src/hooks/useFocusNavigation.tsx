@@ -79,6 +79,7 @@ import {
   DIALOG_ANCESTOR_SELECTOR,
   ENTER_IGNORING_CONTROL_SELECTOR,
   focusRingElement,
+  revealRingElementAfterLayout,
   isActivation,
   toggleFieldFrameEditing,
   isNativelyActivatable,
@@ -214,6 +215,7 @@ export const FocusNavigationProvider = ({
             return;
           }
           focusRingElement(element);
+          revealRingElementAfterLayout(element);
         },
         onNavigateBack: () => onNavigateBackRef.current?.(),
         onOpenMenu: (item) => {

@@ -167,6 +167,31 @@ export const focusRingElement = (element: HTMLElement | null): void => {
   element.scrollIntoView({ block, inline: "nearest" });
 };
 
+const REVEAL_AFTER_LAYOUT_DELAYS_MS = [120, 400];
+
+/** True when the element's box lies wholly above or below the part of its scroll container that is on screen. */
+export const isOutsideScrollport = (element: HTMLElement): boolean => {
+  const rect = element.getBoundingClientRect();
+  const scrollport = visibleBoundsOf(scrollContainerOf(element));
+  return rect.bottom <= scrollport.top || rect.top >= scrollport.bottom;
+};
+
+/**
+ * Bring the ring's element back into view when activating it changed the layout around it, such as a
+ * larger text size, which moved the control the keypad user had just pressed off the screen.
+ */
+export const revealRingElementAfterLayout = (element: HTMLElement | null): (() => void) => {
+  if (!element) return () => {};
+  const timers = REVEAL_AFTER_LAYOUT_DELAYS_MS.map((delay) =>
+    window.setTimeout(() => {
+      if (element.isConnected && keypadScrollAnchorEl === element && isOutsideScrollport(element)) {
+        focusRingElement(element);
+      }
+    }, delay),
+  );
+  return () => timers.forEach((timer) => window.clearTimeout(timer));
+};
+
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
 
 /**
