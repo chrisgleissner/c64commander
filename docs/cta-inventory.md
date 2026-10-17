@@ -969,7 +969,7 @@ reports it as Back.
 Touch and the on-screen keyboard/quick-keys buttons remain ordinary tap targets
 throughout.
 
-- Keypad menu — dialog — `remote-input-controls-menu` — R✅ I✅ _(opened by the right
+- Keypad menu — dialog — `remote-input-controls-menu` — R✅ I✅ _(opened by the menu key, the right
   soft key, or by Back while typing; opens with its first item selected; Up/Down
   move, OK activates, Back or the right soft key closes it; the guidance bar shows
   **Back Close** and **OK Select** while it is open)_ — buttons
@@ -978,7 +978,7 @@ throughout.
   in Game Mode), `remote-input-menu-options` (Joystick mode on the compact profile,
   where the options fold behind the Options button; opens them and moves the keypad
   to that button), `remote-input-menu-game` (Game Mode / Exit Game Mode, when
-  available), `remote-input-menu-controls` (Other controls: moves the keypad to the
+  available), `remote-input-menu-adjust-view` (Adjust view: pan and zoom the picture; only while it is on), `remote-input-menu-controls` (Other controls: moves the keypad to the
   sheet's first control after Close), `remote-input-menu-release-all` (not in Game
   Mode, where the sheet shows no Release all), `remote-input-menu-close`
 
