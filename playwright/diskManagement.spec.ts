@@ -369,46 +369,19 @@ test.describe("Disk management", () => {
 
     await openDriveCards(page);
     const driveCard = getDriveCard(page, "Drive A");
-    const mountButton = driveCard.getByTestId("drive-mount-toggle-a");
-    const powerButton = page.getByTestId("drive-power-toggle-a");
+    const powerButton = driveCard.getByTestId("drive-status-toggle-a");
 
     await expect(powerButton).toBeVisible();
-    await expect(powerButton).toHaveText("Turn off");
+    await expect(powerButton).toHaveText("ON");
+    await expect(driveCard.getByTestId("drive-power-toggle-a"), "the pill is the only power control").toHaveCount(0);
 
-    /*
-     * Check each control against its own container, not against the other control.
-     *
-     * The claim worth holding is that both controls sit at the right-hand end of their row: the
-     * mount toggle at the end of the card header's action row, the power toggle at the end of the
-     * drive's control row. Comparing the two to each other measured something else. Their left
-     * edges are 31 px apart simply because the mount toggle is a 63 px icon button and "Turn off"
-     * is 90 px wide, and their right edges sit in containers with different padding, which differed
-     * by 4.5 px locally and by 53.6 px on CI. Neither number says anything about whether the
-     * controls are where they should be.
-     */
-    const insetFromRowEnd = (button: ReturnType<Page["getByTestId"]>) =>
-      button.evaluate((el) => {
-        const row = el.parentElement;
-        if (!row) return Number.NaN;
-        return row.getBoundingClientRect().right - el.getBoundingClientRect().right;
-      });
-
-    const [mountBox, powerBox, mountInset, powerInset] = await Promise.all([
-      mountButton.boundingBox(),
-      powerButton.boundingBox(),
-      insetFromRowEnd(mountButton),
-      insetFromRowEnd(powerButton),
-    ]);
-    if (mountBox && powerBox) {
-      expect(powerBox.y).toBeGreaterThan(mountBox.y);
-    }
-    expect(mountInset, `mount toggle inset from the end of its row: ${mountInset}px`).toBeLessThanOrEqual(2);
-    expect(powerInset, `power toggle inset from the end of its row: ${powerInset}px`).toBeLessThanOrEqual(2);
+    const pillBox = await powerButton.boundingBox();
+    const cardBox = await driveCard.boundingBox();
+    expect(pillBox && cardBox && pillBox.y - cardBox.y, "the pill sits in the card header").toBeLessThan(60);
 
     await clearTraces(page);
     await powerButton.click();
-    await expect(powerButton).toHaveText("Turn on");
-    await expect(page.getByTestId("drive-status-toggle-a")).toHaveText("OFF");
+    await expect(powerButton).toHaveText("OFF");
     await snap(page, testInfo, "drive-power-off");
 
     const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith("/v1/drives/a:off"));

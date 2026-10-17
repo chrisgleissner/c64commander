@@ -138,7 +138,10 @@ export const CollapsibleSection = ({
    * under the toggle, where it cost a row on every closed card and was easily hit instead of the
    * header; where the title fits, it now shares the row.
    */
-  const [fitRefs, fitsOneRow] = useHeaderActionsFit(actions != null, title);
+  const shortestTitle = titleVariants?.reduce((shortest, variant) =>
+    variant.length < shortest.length ? variant : shortest,
+  );
+  const [fitRefs, fitsOneRow] = useHeaderActionsFit(actions != null, shortestTitle ?? title);
   const stackActions = fitsOneRow === false;
   // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
   // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which

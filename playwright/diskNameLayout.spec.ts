@@ -158,6 +158,40 @@ test.describe("Compact disk rows", () => {
     await server.close();
   });
 
+  test("drive card headers keep the pill and the mount button beside the title, and the fields stay whole @layout", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+    await expect(page.getByTestId("startup-launch-sequence")).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByTestId("drive-card-a")).toBeVisible({ timeout: 20_000 });
+    for (const id of ["disks-section-toggle-drive-b", "disks-section-toggle-drive-soft-iec"]) {
+      const toggle = page.getByTestId(id);
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    }
+    for (const id of ["drive-card-a", "drive-card-b", "drive-soft-iec-row"]) {
+      const card = page.getByTestId(id);
+      await card.scrollIntoViewIfNeeded();
+      await expect
+        .poll(
+          async () => {
+            const boxes = await Promise.all([
+              card.getByRole("heading").first().boundingBox(),
+              card.locator('[data-testid^="drive-status-toggle-"]').boundingBox(),
+              card.locator('[data-testid^="drive-mount-toggle-"]').boundingBox(),
+            ]);
+            const centers = boxes.map((box) => (box ? box.y + box.height / 2 : Number.NaN));
+            return Math.max(...centers) - Math.min(...centers);
+          },
+          { message: `${id}: title, pill and mount button share a row` },
+        )
+        .toBeLessThan(24);
+    }
+    await expect(page.getByTestId("drive-power-toggle-a")).toHaveCount(0);
+    await expect(page.getByTestId("drive-power-toggle-b")).toHaveCount(0);
+  });
+
   test("a disk row is one compact block that does not repeat the folder as a group @layout", async ({ page }) => {
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
