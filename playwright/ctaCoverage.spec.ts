@@ -265,6 +265,8 @@ test.describe("Home Page Quick actions", () => {
     await expect(page.getByTestId("home-drive-toggle-a")).toBeVisible();
     await expect(page.getByTestId("home-drive-toggle-b")).toBeVisible();
     await expect(page.getByTestId("home-drive-toggle-soft-iec")).toBeVisible();
+    await expect(page.getByTestId("home-drive-link-a")).toBeVisible();
+    await page.getByTestId("home-drive-details-toggle-a").click();
     await expect(page.getByTestId("home-drive-bus-a")).toBeVisible();
     await expect(page.getByTestId("home-drive-type-a")).toBeVisible();
 

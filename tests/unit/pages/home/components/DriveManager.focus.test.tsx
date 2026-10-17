@@ -29,6 +29,8 @@ const { updateConfigValueSpy, resolveConfigValueSpy, onResetDrivesSpy } = vi.hoi
   onResetDrivesSpy: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/hooks/useStableNavigate", () => ({ useStableNavigate: () => vi.fn() }));
+
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({ mountDrive: vi.fn().mockResolvedValue({}), mountDriveUpload: vi.fn().mockResolvedValue({}) }),
 }));

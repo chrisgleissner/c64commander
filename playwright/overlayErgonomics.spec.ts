@@ -575,9 +575,10 @@ test.describe("Large display chosen on a phone", () => {
       await settle(page, "expanded");
       await openSection(page, "home-section-toggle-drives");
       for (const key of ["a", "b"]) {
-        const title = await visibleTitle(page, `home-section-toggle-drive-${key}`);
-        expect(title.text, `Home drive ${key} title`).toBe(`Drive ${key.toUpperCase()}`);
-        expect(title.width, `Home drive ${key} title width`).toBeGreaterThanOrEqual(title.needed - 0.5);
+        const link = activeSlot(page).getByTestId(`home-drive-link-${key}`);
+        await expect(link, `Home drive ${key} summary`).toHaveText(new RegExp(`^${key.toUpperCase()}\\s·`));
+        const clipped = await link.evaluate((element) => element.scrollHeight > element.clientHeight + 1);
+        expect(clipped, `Home drive ${key} summary is drawn whole`).toBe(false);
       }
     });
   }

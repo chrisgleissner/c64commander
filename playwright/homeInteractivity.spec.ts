@@ -221,6 +221,7 @@ test.describe("Home interactions", () => {
     await page.goto("/");
     await waitForConnected(page);
 
+    await page.getByTestId("home-drive-details-toggle-a").click();
     await page.getByTestId("home-drive-type-a").click();
     await page.getByRole("option", { name: "1571" }).click();
 

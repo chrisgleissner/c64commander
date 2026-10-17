@@ -154,6 +154,7 @@ const tourHome = async (page: Page) => {
   await openAndCloseSelect(page, page.getByTestId("home-led-tint"));
 
   await smoothScrollToLocator(page, page.getByTestId("home-drives-group"), 2000);
+  await page.getByTestId("home-drive-details-toggle-a").click();
   await openAndCloseSelect(page, page.getByTestId("home-drive-type-a"));
 
   await smoothScrollToLocator(page, page.getByTestId("home-printers"), 2000);

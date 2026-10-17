@@ -82,7 +82,6 @@ describe("DriveCard", () => {
 
   it("renders name and status", () => {
     render(<DriveCard {...defaultProps} />);
-    expect(screen.getByText("Drive 8")).toBeInTheDocument();
     expect(screen.getByTestId("home-drive-status-d8")).toHaveTextContent("OK");
   });
 
@@ -103,6 +102,37 @@ describe("DriveCard", () => {
     expect(screen.getByTestId("home-drive-status-d8")).toHaveTextContent("…");
     expect(screen.queryByText("OFF")).toBeNull();
     expect(screen.queryByText("No disk mounted")).toBeNull();
+  });
+
+  it("draws one summary line that opens the Disks page", () => {
+    const onOpenDisks = vi.fn();
+    render(
+      <DriveCard
+        {...defaultProps}
+        name="Drive A"
+        typeValue="1541"
+        typeOptions={["1541"]}
+        mountedPath="/Usb0/games/Elite.d64"
+        onOpenDisks={onOpenDisks}
+      />,
+    );
+    const link = screen.getByTestId("home-drive-link-d8");
+    expect(link).toHaveTextContent(/^A\s·\s#8\s·\s1541\s·\sElite\.d64$/);
+    expect(link).toHaveAccessibleName("Drive A, #8, 1541, Elite.d64");
+    fireEvent.click(link);
+    expect(onOpenDisks).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps bus, type, disk and status behind a details toggle that does not navigate", () => {
+    const onOpenDisks = vi.fn();
+    render(<DriveCard {...defaultProps} defaultOpen={false} onOpenDisks={onOpenDisks} />);
+    expect(screen.queryByTestId("home-drive-bus-d8")).not.toBeInTheDocument();
+    const toggle = screen.getByTestId("home-drive-details-toggle-d8");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("home-drive-bus-d8")).toBeInTheDocument();
+    expect(onOpenDisks).not.toHaveBeenCalled();
   });
 
   it("shows ON/OFF based on enabled prop", () => {

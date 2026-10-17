@@ -1113,11 +1113,12 @@ describe("HomePage SID status", () => {
     expect(within(drivesGroup).getByTestId("home-drive-row-a")).toBeTruthy();
     expect(within(drivesGroup).getByTestId("home-drive-row-b")).toBeTruthy();
     expect(within(drivesGroup).getByTestId("home-drive-row-soft-iec")).toBeTruthy();
-    expect(within(drivesGroup).getByText("Drive A")).toBeTruthy();
-    expect(within(drivesGroup).getByText("Drive B")).toBeTruthy();
-    // By accessible name: the visible wording is whichever of "Soft IEC Drive" / "IEC Drive" /
-    // "Soft IEC" / "IEC" fits the header, while the name announced stays the drive's own label.
-    expect(within(drivesGroup).getByLabelText("Soft IEC")).toBeTruthy();
+    for (const suffix of ["a", "b", "soft-iec"]) {
+      fireEvent.click(within(drivesGroup).getByTestId(`home-drive-details-toggle-${suffix}`));
+    }
+    expect(within(drivesGroup).getByTestId("home-drive-link-a")).toHaveTextContent(/^A\s·\s#8\s·\s1541/);
+    expect(within(drivesGroup).getByTestId("home-drive-link-b")).toHaveTextContent(/^B\s·\s#9\s·\s1571/);
+    expect(within(drivesGroup).getByTestId("home-drive-link-soft-iec")).toHaveTextContent(/^IEC\s·\s#11/);
     expect(within(drivesGroup).getAllByText("Bus ID").length).toBeGreaterThanOrEqual(3);
     expect(within(drivesGroup).getAllByText("Type").length).toBeGreaterThanOrEqual(2);
     expect(within(drivesGroup).getByText("Path")).toBeTruthy();
@@ -1162,6 +1163,8 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
+    fireEvent.click(screen.getByTestId("home-drive-details-toggle-a"));
+    fireEvent.click(screen.getByTestId("home-drive-details-toggle-soft-iec"));
     expect(screen.getByTestId("home-drive-status-a")).toHaveTextContent("DRIVE NOT READY");
     expect(screen.getByTestId("home-drive-status-soft-iec").textContent).toMatch(/^(OK|DOS MISMATCH)$/);
   });
@@ -1238,7 +1241,9 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    expect(screen.getAllByText("No disk mounted").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("home-drive-link-a")).toHaveTextContent(/No disk$/);
+    fireEvent.click(screen.getByTestId("home-drive-details-toggle-a"));
+    expect(screen.getByTestId("home-drive-mounted-a")).toHaveTextContent("No disk mounted");
   });
 
   it("handles machine actions and reports errors", async () => {

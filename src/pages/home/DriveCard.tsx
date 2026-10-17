@@ -10,9 +10,8 @@ import React from "react";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
-import { HardDrive } from "lucide-react";
-import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
+import { ChevronDown } from "lucide-react";
+import { buildDriveSummaryLine, SUMMARY_SEPARATOR } from "@/lib/drives/driveSummaryLine";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
@@ -72,6 +71,8 @@ export interface DriveCardProps {
   focusId?: string;
   /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
   focusOrder?: number;
+  /** Opens the Disks page. The summary line is this link; without it the line is plain text. */
+  onOpenDisks?: () => void;
   /** The card has a tablet-width track: Bus ID and Type side by side, and the path beside its label. */
   wide?: boolean;
 }
@@ -111,6 +112,7 @@ export function DriveCard({
   focusId,
   focusOrder = 0,
   wide = false,
+  onOpenDisks,
 }: DriveCardProps) {
   const { profile } = useDisplayProfile();
   const labelId = React.useId();
@@ -124,120 +126,116 @@ export function DriveCard({
     disabled: !isConnected || Boolean(togglePending) || loading,
   });
   const shownPath = loading ? LOADING_LABEL : (mountedPath ?? pathValue);
+  const [detailsOpen, setDetailsOpen] = React.useState(defaultOpen);
+  const detailsId = `home-drive-details-${testIdSuffix}`;
+  const summaryLine = buildDriveSummaryLine({
+    name,
+    busId: busIdValue,
+    type: typeValue,
+    mountedPath: mountedPath ?? pathValue,
+    loading,
+    loadingLabel: LOADING_LABEL,
+  });
 
   return (
-    <CollapsibleSection
-      scope="home"
-      id={`drive-${testIdSuffix}`}
-      title={name}
-      titleVariants={driveCardTitleVariants(name)}
-      icon={HardDrive}
-      // The header already carries ON/OFF and mount; the tile would cost the title the room it needs.
-      plainIcon
-      className={className}
-      testId={`home-drive-row-${testIdSuffix}`}
-      defaultOpen={defaultOpen}
-      // ON/OFF stays outside the body: whether a drive is powered is the one thing worth seeing,
-      // and worth being able to change, without opening the card.
-      actions={
+    <section
+      className={cn("overflow-hidden rounded-panel border border-border bg-card", className)}
+      data-testid={`home-drive-row-${testIdSuffix}`}
+      data-section-label={name}
+      data-open={detailsOpen ? "true" : "false"}
+    >
+      <div className="flex items-center gap-1 pl-2 pr-1">
+        {onOpenDisks ? (
+          <button
+            type="button"
+            onClick={onOpenDisks}
+            className="min-h-11 min-w-0 flex-1 break-words text-left text-sm font-medium leading-tight hover:underline line-clamp-2"
+            data-testid={`home-drive-link-${testIdSuffix}`}
+            aria-label={[name, ...summaryLine.split(SUMMARY_SEPARATOR).slice(1)].join(", ")}
+          >
+            {summaryLine}
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 break-words py-3 text-sm font-medium leading-tight line-clamp-2">
+            {summaryLine}
+          </span>
+        )}
         <Button
           ref={toggleFocusRef}
           variant="outline"
           size="sm"
           onClick={onToggle}
           disabled={!isConnected || togglePending || loading}
-          className={cn("px-3 text-xs", getOnOffButtonClass(enabled && !loading), "min-h-11 min-w-11")}
+          className={cn("px-2 text-xs", getOnOffButtonClass(enabled && !loading), "min-h-11 min-w-11")}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
           aria-label={`${name} power: ${loading ? LOADING_LABEL : enabled ? "on" : "off"}`}
         >
           {loading ? LOADING_LABEL : enabled ? "ON" : "OFF"}
         </Button>
-      }
-    >
-      {/* Row 1.5: Mounted Path.
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((open) => !open)}
+          className="flex size-11 shrink-0 items-center justify-center"
+          data-testid={`home-drive-details-toggle-${testIdSuffix}`}
+          aria-expanded={detailsOpen}
+          aria-controls={detailsId}
+          aria-label={`${name} settings`}
+        >
+          <ChevronDown
+            className={cn("h-5 w-5 text-muted-foreground transition-transform", detailsOpen && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+      </div>
+      {detailsOpen ? (
+        <div id={detailsId} className="space-y-3 border-t border-border px-3 py-3">
+          {/* Row 1.5: Mounted Path.
           The row wraps, and the value is allowed the whole of it when it does. The drive cards sit
           two to a row, so this card is 147px wide on a 393px screen; with the label beside it the
           button had 57.7px for "No disk mounted", which needs 149px, and drew "No d…". The label
           taking its own line is the only way the value can be read at all here. */}
-      {(mountedPath !== undefined || pathValue !== undefined) && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          <span className="shrink-0 text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
-          <button
-            type="button"
-            onClick={onMountedPathClick || onPathClick}
-            disabled={!isConnected || pathPending || !pathEditable || loading}
-            className={cn(
-              "min-h-11 min-w-0 flex-1 text-left font-medium text-foreground hover:underline",
-              wide ? "basis-auto" : "basis-full",
-              /*
-               * A path is elided; a sentence wraps.
-               *
-               * Cutting the middle of a path still leaves it recognisable, and that is what
-               * `truncate` is for here. "No disk mounted" and "Select..." are not paths — cutting
-               * them gives "No d…", which says nothing — and this card is 147px wide because the
-               * drives sit two to a row, so on the medium profile there is no width at which the
-               * sentence fits on one line. `MountedLabel` in HomeDiskManager already draws this
-               * same distinction for the row below.
-               */
-              shownPath?.includes("/") ? "truncate" : "whitespace-normal break-words",
-            )}
-            data-testid={`home-drive-mounted-${testIdSuffix}`}
-          >
-            {shownPath || "Select..."}
-          </button>
-        </div>
-      )}
+          {(mountedPath !== undefined || pathValue !== undefined) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+              <span className="shrink-0 text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
+              <button
+                type="button"
+                onClick={onMountedPathClick || onPathClick}
+                disabled={!isConnected || pathPending || !pathEditable || loading}
+                className={cn(
+                  "min-h-11 min-w-0 flex-1 text-left font-medium text-foreground hover:underline",
+                  wide ? "basis-auto" : "basis-full",
+                  /*
+                   * A path is elided; a sentence wraps.
+                   *
+                   * Cutting the middle of a path still leaves it recognisable, and that is what
+                   * `truncate` is for here. "No disk mounted" and "Select..." are not paths — cutting
+                   * them gives "No d…", which says nothing — and this card is 147px wide because the
+                   * drives sit two to a row, so on the medium profile there is no width at which the
+                   * sentence fits on one line. `MountedLabel` in HomeDiskManager already draws this
+                   * same distinction for the row below.
+                   */
+                  shownPath?.includes("/") ? "truncate" : "whitespace-normal break-words",
+                )}
+                data-testid={`home-drive-mounted-${testIdSuffix}`}
+              >
+                {shownPath || "Select..."}
+              </button>
+            </div>
+          )}
 
-      {/* Row 2: Bus ID and Type.
+          {/* Row 2: Bus ID and Type.
           Two columns only where the card is actually wide enough for them. The drive cards sit two
           to a row, so on the medium profile a card is 147px and each of these cells got about 70px
           — a "Type" label and then 32px for its value against the 44px touch floor, which squeezed
           the trigger to exactly that floor and cut "1541" to 44px of the 47px it needs. It fitted
           before only because the floor was a rem that happened to be 49.5px there; sizing the floor
           honestly in pixels is what exposed the column count as the real problem. */}
-      <div className={cn("grid gap-2 text-xs", wide ? "grid-cols-2" : "grid-cols-1")}>
-        <div className="inline-summary-label-value-pair flex items-center gap-2">
-          <span id={`${labelId}-bus`} className="shrink-0 text-muted-foreground whitespace-nowrap">
-            Bus ID
-          </span>
-          <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
-            <SelectTrigger
-              className={cn(
-                inlineSelectTriggerClass,
-                // Sized to its own content, not to the cell. `flex-1` gave these a basis of 0, so in
-                // a narrow cell they shrank to the 44px touch floor and `overflow-hidden` cut the
-                // rest — "1541" in a 44px box needing 47px on CI's wider fallback font. It fitted
-                // before only because the floor was a rem that happened to be 49.5px there. These
-                // values are short (a bus number, a drive type), so letting each keep its own width
-                // costs the row nothing and cannot cut it.
-                "min-h-11 min-w-11 shrink-0 justify-start",
-              )}
-              data-testid={`home-drive-bus-${testIdSuffix}`}
-              aria-labelledby={`${labelId}-bus`}
-            >
-              <SelectValue placeholder={busIdValue} />
-            </SelectTrigger>
-            <SelectContent>
-              {busIdOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {formatSelectOptionLabel(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div
-          className={cn(
-            "inline-summary-label-value-pair flex items-center gap-2 min-w-0",
-            profile === "compact" ? "justify-start" : "justify-end",
-          )}
-        >
-          {typeValue !== undefined && (
-            <>
-              <span id={`${labelId}-type`} className="shrink-0 text-muted-foreground whitespace-nowrap">
-                Type
+          <div className={cn("grid gap-2 text-xs", wide ? "grid-cols-2" : "grid-cols-1")}>
+            <div className="inline-summary-label-value-pair flex items-center gap-2">
+              <span id={`${labelId}-bus`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+                Bus ID
               </span>
-              <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
+              <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
                 <SelectTrigger
                   className={cn(
                     inlineSelectTriggerClass,
@@ -249,44 +247,83 @@ export function DriveCard({
                     // costs the row nothing and cannot cut it.
                     "min-h-11 min-w-11 shrink-0 justify-start",
                   )}
-                  data-testid={`home-drive-type-${testIdSuffix}`}
-                  aria-labelledby={`${labelId}-type`}
+                  data-testid={`home-drive-bus-${testIdSuffix}`}
+                  aria-labelledby={`${labelId}-bus`}
                 >
-                  <SelectValue placeholder={typeValue} />
+                  <SelectValue placeholder={busIdValue} />
                 </SelectTrigger>
                 <SelectContent>
-                  {typeOptions?.map((option) => (
+                  {busIdOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {formatSelectOptionLabel(option)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </>
-          )}
+            </div>
+            <div
+              className={cn(
+                "inline-summary-label-value-pair flex items-center gap-2 min-w-0",
+                profile === "compact" ? "justify-start" : "justify-end",
+              )}
+            >
+              {typeValue !== undefined && (
+                <>
+                  <span id={`${labelId}-type`} className="shrink-0 text-muted-foreground whitespace-nowrap">
+                    Type
+                  </span>
+                  <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
+                    <SelectTrigger
+                      className={cn(
+                        inlineSelectTriggerClass,
+                        // Sized to its own content, not to the cell. `flex-1` gave these a basis of 0, so in
+                        // a narrow cell they shrank to the 44px touch floor and `overflow-hidden` cut the
+                        // rest — "1541" in a 44px box needing 47px on CI's wider fallback font. It fitted
+                        // before only because the floor was a rem that happened to be 49.5px there. These
+                        // values are short (a bus number, a drive type), so letting each keep its own width
+                        // costs the row nothing and cannot cut it.
+                        "min-h-11 min-w-11 shrink-0 justify-start",
+                      )}
+                      data-testid={`home-drive-type-${testIdSuffix}`}
+                      aria-labelledby={`${labelId}-type`}
+                    >
+                      <SelectValue placeholder={typeValue} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {typeOptions?.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {formatSelectOptionLabel(option)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Row 3: Status (always shown) */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground whitespace-nowrap">Status</span>
+            <button
+              type="button"
+              onClick={onStatusClick}
+              disabled={!onStatusClick}
+              className={cn(
+                "min-h-11 min-w-11 flex-1 truncate text-left font-medium",
+                onStatusClick ? "underline-offset-2 hover:underline" : "cursor-default",
+                getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
+              )}
+              data-testid={`home-drive-status-${testIdSuffix}`}
+              aria-label={`${name} status: ${loading ? LOADING_LABEL : statusSummary}`}
+            >
+              {loading ? LOADING_LABEL : statusSummary}
+            </button>
+          </div>
+
+          {footer}
         </div>
-      </div>
-
-      {/* Row 3: Status (always shown) */}
-      <div className="flex items-center gap-2 text-xs">
-        <span className="text-muted-foreground whitespace-nowrap">Status</span>
-        <button
-          type="button"
-          onClick={onStatusClick}
-          disabled={!onStatusClick}
-          className={cn(
-            "min-h-11 min-w-11 flex-1 truncate text-left font-medium",
-            onStatusClick ? "underline-offset-2 hover:underline" : "cursor-default",
-            getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
-          )}
-          data-testid={`home-drive-status-${testIdSuffix}`}
-          aria-label={`${name} status: ${loading ? LOADING_LABEL : statusSummary}`}
-        >
-          {loading ? LOADING_LABEL : statusSummary}
-        </button>
-      </div>
-
-      {footer}
-    </CollapsibleSection>
+      ) : null}
+    </section>
   );
 }
