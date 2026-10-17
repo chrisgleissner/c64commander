@@ -114,7 +114,16 @@ export const ItemSelectionDialog = ({
   // A phone with the soft keyboard open has about 400 CSS px of height, the room the compact layout
   // is made for, although its width says otherwise.
   const shortViewport = useMediaQuery("(max-height: 520px)");
-  const profile = displayProfile === "compact" || shortViewport ? "compact" : displayProfile;
+  // Held until the dialog closes: tapping a result hides the keyboard, and without this the layout
+  // would flip back to the tall one under the user's finger and move the list.
+  const [keyboardSeen, setKeyboardSeen] = useState(false);
+  useEffect(() => {
+    if (shortViewport) setKeyboardSeen(true);
+  }, [shortViewport]);
+  useEffect(() => {
+    if (!open) setKeyboardSeen(false);
+  }, [open]);
+  const profile = displayProfile === "compact" || shortViewport || keyboardSeen ? "compact" : displayProfile;
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [archiveSelection, setArchiveSelection] = useState<Map<string, ArchiveSearchResult>>(new Map());

@@ -1169,6 +1169,32 @@ describe("ItemSelectionDialog confirm in flight", () => {
     }
   });
 
+  it("keeps the compact layout after the keyboard hides, so the list does not move under a tap", async () => {
+    setViewportWidth(1280);
+    const originalMatchMedia = window.matchMedia;
+    let short = true;
+    const listeners = new Set<() => void>();
+    window.matchMedia = ((query: string) => ({
+      get matches() {
+        return query === "(max-height: 520px)" && short;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderOpenSource(vi.fn());
+      expect(await screen.findByTestId("add-items-title")).toHaveTextContent("From C64U");
+
+      short = false;
+      act(() => listeners.forEach((listener) => listener()));
+
+      expect(screen.getByTestId("add-items-title")).toHaveTextContent("From C64U");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
   it("makes confirm available again after onConfirm fails", async () => {
     setViewportWidth(1280);
     const first = deferred();
