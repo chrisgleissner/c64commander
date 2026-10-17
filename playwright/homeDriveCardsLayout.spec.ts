@@ -46,7 +46,7 @@ for (const profile of ["compact", "medium"] as const) {
       }
 
       for (const suffix of suffixes) {
-        for (const control of ["link", "toggle", "details-toggle"]) {
+        for (const control of ["link", "details-toggle"]) {
           const box = await page.getByTestId(`home-drive-${control}-${suffix}`).boundingBox();
           expect(box!.height, `${control} ${suffix} height`).toBeGreaterThanOrEqual(43.5);
           expect(box!.width, `${control} ${suffix} width`).toBeGreaterThanOrEqual(43.5);

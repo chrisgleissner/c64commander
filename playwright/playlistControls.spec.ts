@@ -92,13 +92,36 @@ test.describe("Playlist controls and advanced features", () => {
       const remove = page.getByTestId("playlist-list-remove-selected");
       await expect(remove, "the action keeps its place while nothing is selected").toBeHidden();
 
-      const listBelowSelectAll = async () =>
-        (await page.getByTestId("playlist-list").boundingBox())!.y -
-        (await page.getByTestId("playlist-list-toggle-select-all").boundingBox())!.y;
-      const before = await listBelowSelectAll();
+      const selectAll = page.getByTestId("playlist-list-toggle-select-all");
+      const measure = async () => {
+        const [list, toggle, row, firstRow] = await Promise.all([
+          page.getByTestId("playlist-list").boundingBox(),
+          selectAll.boundingBox(),
+          selectAll.locator("xpath=../..").boundingBox(),
+          rows.first().boundingBox(),
+        ]);
+        return {
+          listBelowSelectAll: list!.y - toggle!.y,
+          firstItemBelowSelectAll: firstRow!.y - toggle!.y,
+          rowHeight: row!.height,
+        };
+      };
+      const before = await measure();
       await rows.first().getByRole("checkbox").click();
       await expect(remove).toBeVisible();
-      expect(await listBelowSelectAll(), "the list stays where it was when the action appears").toBeCloseTo(before, 0);
+      const after = await measure();
+      expect(after.listBelowSelectAll, "the list stays where it was when the action appears").toBeCloseTo(
+        before.listBelowSelectAll,
+        0,
+      );
+      expect(after.firstItemBelowSelectAll, "the first item does not move").toBeCloseTo(
+        before.firstItemBelowSelectAll,
+        0,
+      );
+      expect(after.rowHeight, "the header row keeps its height").toBeCloseTo(before.rowHeight, 0);
+      expect(before.rowHeight, "the header row is one line").toBeLessThan(52);
+      expect((await remove.boundingBox())!.width, "the action is a 44 px target").toBeGreaterThanOrEqual(43.5);
+      await expect(remove).toHaveAccessibleName("Remove selected items");
       await snap(page, testInfo, "first-item-selected");
     },
   );
