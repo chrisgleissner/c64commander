@@ -1723,7 +1723,7 @@ export function DiagnosticsDialog({
     >
       {profile === "compact" ? (
         <div
-          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-elev-2"
+          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] scroll-pb-[9.5rem] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-elev-2"
           style={
             overflowPanelTop === null
               ? undefined
@@ -1756,7 +1756,7 @@ export function DiagnosticsDialog({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 opacity-70"
+                  className="h-11 w-11 p-0 opacity-70"
                   // Keep the trigger clickable while the menu's DismissableLayer disables outside
                   // pointer events, so a repeat tap routes to onClick and toggles the menu shut.
                   style={overflowOpen ? { pointerEvents: "auto" } : undefined}

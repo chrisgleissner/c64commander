@@ -1025,6 +1025,7 @@ describe("DiagnosticsDialog", () => {
     const panel = screen.getByTestId("diagnostics-overflow-panel");
     expect(panel.className).toContain("fixed");
     expect(panel.className).toContain("inset-x-4");
+    expect(panel.className).toContain("scroll-pb-[9.5rem]");
     expect(panel).toHaveTextContent("Health history");
   });
 
