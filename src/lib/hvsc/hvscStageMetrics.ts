@@ -22,6 +22,8 @@ export type HvscStageMeasurement = {
   finishedAtMs: number | null;
   processed: number | null;
   total: number | null;
+  /** When the count last changed. The rate is measured up to here, so a step that goes quiet does not keep slowing. */
+  lastProgressAtMs?: number;
 };
 
 export type HvscStageMeasurements = Partial<Record<HvscStageId, HvscStageMeasurement>>;
@@ -78,11 +80,15 @@ export const applyHvscStageEvent = (
   if (existing?.finishedAtMs != null) return measurements;
 
   const counts = countsOf(stage, event);
+  const processed = counts.processed ?? existing?.processed ?? null;
+  const countMoved = processed !== null && processed !== existing?.processed;
+  const lastProgressAtMs = countMoved ? nowMs : existing?.lastProgressAtMs;
   const next: HvscStageMeasurement = {
     startedAtMs: existing?.startedAtMs ?? nowMs,
     finishedAtMs: existing?.finishedAtMs ?? null,
-    processed: counts.processed ?? existing?.processed ?? null,
+    processed,
     total: counts.total ?? existing?.total ?? null,
+    ...(lastProgressAtMs === undefined ? {} : { lastProgressAtMs }),
   };
   if (isStepFinishedByEvent(stage, event, counts)) next.finishedAtMs = nowMs;
   measurements[stage] = next;

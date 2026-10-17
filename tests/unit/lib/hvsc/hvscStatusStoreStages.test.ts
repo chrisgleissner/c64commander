@@ -67,6 +67,7 @@ describe("hvsc status summary stage measurements", () => {
       finishedAtMs: null,
       processed: 6_000,
       total: 60_000,
+      lastProgressAtMs: Date.parse("2026-10-17T08:01:20Z"),
     });
   });
 

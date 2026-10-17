@@ -595,6 +595,17 @@ open class HvscIngestionPlugin : Plugin() {
                                             songsIngested = progress.songsExtracted,
                                             songsDeleted = 0,
                                     )
+                                    if (progress.processedEntries == progress.totalEntries) {
+                                      emitProgress(
+                                              stage = "sid_enumeration",
+                                              message = "Organizing the extracted files…",
+                                              processedCount = 0,
+                                              totalCount = null,
+                                              currentFile = null,
+                                              songsIngested = progress.songsExtracted,
+                                              songsDeleted = 0,
+                                      )
+                                    }
                                     if (debugHeapLogging) {
                                       val runtime = Runtime.getRuntime()
                                       val used = runtime.totalMemory() - runtime.freeMemory()

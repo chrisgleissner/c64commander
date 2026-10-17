@@ -56,7 +56,13 @@ describe("hvscStageMetrics", () => {
     ]);
 
     expect(m.details?.finishedAtMs).toBe(10_000);
-    expect(m.analyze).toEqual({ startedAtMs: 10_000, finishedAtMs: null, processed: 6_000, total: 60_000 });
+    expect(m.analyze).toEqual({
+      startedAtMs: 10_000,
+      finishedAtMs: null,
+      processed: 6_000,
+      total: 60_000,
+      lastProgressAtMs: 20_000,
+    });
     expect(stageRatePerSecond(m.analyze, 20_000)).toBe(600);
   });
 
@@ -101,7 +107,13 @@ describe("hvscStageMetrics", () => {
       event("sid_metadata_hydration", { processedCount: 0, totalCount: 20, statusToken: "queued" }),
       900_000,
     );
-    expect(second.analyze).toEqual({ startedAtMs: 900_000, finishedAtMs: null, processed: 0, total: 20 });
+    expect(second.analyze).toEqual({
+      startedAtMs: 900_000,
+      finishedAtMs: null,
+      processed: 0,
+      total: 20,
+      lastProgressAtMs: 900_000,
+    });
   });
 
   it("forgets everything when a new run starts", () => {
@@ -145,7 +157,13 @@ describe("hvscStageMetrics", () => {
       weeksLater,
     );
 
-    expect(next.analyze).toEqual({ startedAtMs: weeksLater, finishedAtMs: null, processed: 0, total: 60_000 });
+    expect(next.analyze).toEqual({
+      startedAtMs: weeksLater,
+      finishedAtMs: null,
+      processed: 0,
+      total: 60_000,
+      lastProgressAtMs: weeksLater,
+    });
   });
 
   it("does not let a late hydration event finish the download of the next install", () => {
@@ -164,6 +182,24 @@ describe("hvscStageMetrics", () => {
       2_000,
     );
 
-    expect(afterwards.download).toEqual({ startedAtMs: 1_000, finishedAtMs: null, processed: 60, total: 100 });
+    expect(afterwards.download).toEqual({
+      startedAtMs: 1_000,
+      finishedAtMs: null,
+      processed: 60,
+      total: 100,
+      lastProgressAtMs: 2_000,
+    });
+  });
+
+  it("stops slowing the rate of a step whose count has stopped moving", () => {
+    // After the last archive entry the native side went quiet for 18 s on a Pixel 4. The unpack step
+    // kept 61,326 of 61,326 and its rate fell from 3,063 to 1,915 files/s while it waited.
+    const m = run([
+      [0, event("archive_extraction", { processedCount: 0, totalCount: 1_000 })],
+      [10_000, event("archive_extraction", { processedCount: 1_000, totalCount: 1_000 })],
+    ]);
+
+    expect(stageRatePerSecond(m.unpack, 10_000)).toBe(100);
+    expect(stageRatePerSecond(m.unpack, 28_000)).toBe(100);
   });
 });

@@ -1009,6 +1009,12 @@ class HvscIngestionPluginTest {
       assertFalse("entry progress must not be reported as parsing", stages.contains("sid_metadata_parsing"))
       val entryEvents = events.filter { it.has("totalCount") && it.getInt("totalCount") == 1000 }
       assertEquals(listOf("archive_extraction"), entryEvents.map { it.getString("stage") })
+
+      // Once the last entry is out, the extractor copies the files into the library layout and deletes
+      // its temporary tree, which took about 18 s on a Pixel 4 without an event. The next step starts
+      // as soon as the last entry is reached instead of leaving the unpack step running.
+      val lastEntryIndex = events.indexOfLast { it.has("totalCount") && it.getInt("totalCount") == 1000 }
+      assertEquals("sid_enumeration", events[lastEntryIndex + 1].getString("stage"))
     } finally {
       File(context.filesDir, "hvsc").deleteRecursively()
       File(context.filesDir, "hvsc-cache").deleteRecursively()

@@ -13,7 +13,7 @@ const MIN_ELAPSED_FOR_RATE_MS = 1000;
 const MIN_ELAPSED_FOR_ESTIMATE_MS = 3000;
 
 export const stageElapsedMs = (measurement: HvscStageMeasurement, nowMs: number) =>
-  Math.max(0, (measurement.finishedAtMs ?? nowMs) - measurement.startedAtMs);
+  Math.max(0, (measurement.finishedAtMs ?? measurement.lastProgressAtMs ?? nowMs) - measurement.startedAtMs);
 
 /** Items per second within this step alone, or null before there is enough to say. */
 export const stageRatePerSecond = (measurement: HvscStageMeasurement | undefined, nowMs: number): number | null => {
@@ -42,7 +42,7 @@ export const formatRemaining = (remainingMs: number): string => {
 const RATE_UNIT: Record<HvscStageId, string> = {
   download: "MB/s",
   unpack: "files/s",
-  scan: "files/s",
+  scan: "songs/s",
   details: "songs/s",
   analyze: "songs/s",
 };
