@@ -155,7 +155,10 @@ const ActionListRow = React.memo(function ActionListRow({
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
       <div
-        className="flex items-start gap-2 rounded-md bg-muted/30 px-2 py-[0.44rem] min-w-0 max-w-full"
+        className={cn(
+          "flex items-start gap-2 rounded-md bg-muted/30 px-2 min-w-0 max-w-full",
+          dense ? "py-1" : "py-[0.44rem]",
+        )}
         data-testid={headerTestId}
         data-row-id={item.id}
       >
@@ -176,7 +179,7 @@ const ActionListRow = React.memo(function ActionListRow({
       className={cn(
         "items-center rounded-md min-w-0 max-w-full",
         dense
-          ? "grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] py-1"
+          ? "grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem_2.75rem] py-0.5"
           : cn(
               "flex flex-wrap gap-x-2 px-1",
               // The stacked title is a 44 px target on its own line, so the row gives back its own
@@ -218,7 +221,7 @@ const ActionListRow = React.memo(function ActionListRow({
           <label
             className={cn(
               "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center",
-              dense ? "col-start-1 row-span-2 row-start-1" : "-ml-[14px] -mr-1",
+              dense ? "col-start-1 row-start-1" : "-ml-[14px] -mr-1",
             )}
             onClick={(event) => event.stopPropagation()}
           >
@@ -233,7 +236,7 @@ const ActionListRow = React.memo(function ActionListRow({
           </label>
         ) : null}
         {item.showMenu === false ? null : (
-          <div className={dense ? "col-start-3 row-start-2 flex justify-center" : "contents"}>
+          <div className={dense ? "col-start-4 row-start-1 flex justify-center" : "contents"}>
             <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
           </div>
         )}
@@ -241,14 +244,17 @@ const ActionListRow = React.memo(function ActionListRow({
       <div
         className={cn(
           "flex items-center gap-2 min-w-0 max-w-full",
-          dense ? "col-start-2 row-span-2 row-start-1" : stackTitle ? "order-first basis-full" : "flex-1",
+          dense ? "col-start-2 row-start-1" : stackTitle ? "order-first basis-full" : "flex-1",
         )}
       >
-        {item.icon ? <div className="shrink-0">{item.icon}</div> : null}
+        {item.icon && !dense ? <div className="shrink-0">{item.icon}</div> : null}
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className="text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex items-center gap-1"
+            className={cn(
+              "text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex",
+              dense ? "flex-col items-start justify-center" : "items-center gap-1",
+            )}
             data-row-title="true"
             onClick={wrapUserEvent(
               (event) => {
@@ -283,17 +289,13 @@ const ActionListRow = React.memo(function ActionListRow({
           ) : null}
         </div>
       </div>
-      <div
-        className={cn(
-          "flex flex-col gap-1 shrink-0",
-          dense ? "col-start-3 row-start-1 items-center" : stackTitle && "ml-auto",
-        )}
-      >
+      <div className={dense ? "contents" : cn("flex flex-col gap-1 shrink-0", stackTitle && "ml-auto")}>
         <Button
           variant={isPlaying ? "secondary" : "ghost"}
           size="icon"
           className={cn(
             "h-9 w-9 min-h-[44px] min-w-[44px]",
+            dense && "col-start-3 row-start-1",
             isPlaying ? "text-primary border border-primary/30" : null,
           )}
           onClick={(event) => {
@@ -309,7 +311,10 @@ const ActionListRow = React.memo(function ActionListRow({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+            className={cn(
+              "h-7 px-2 text-xs text-destructive hover:text-destructive",
+              dense && "col-span-2 col-start-2 row-start-2 justify-self-start",
+            )}
             onClick={(event) => {
               event.stopPropagation();
               item.onSecondaryAction?.();
@@ -390,8 +395,8 @@ export const SelectableActionList = ({
     const rootPx = Number.parseFloat(getDisplayProfileLayoutTokens(profile).rootFontSize);
     // 7.8 root-font-sizes: a row measured 140px against the phone profile's 18px root. Expressed
     // as a multiple of the root so it follows the profile rather than being re-measured per screen.
-    return Math.round(rootPx * 7.8);
-  }, [profile]);
+    return Math.round(rootPx * (denseRows ? 4.1 : 7.8));
+  }, [profile, denseRows]);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const effectiveViewAllItems = viewAllItems ?? items;
@@ -543,7 +548,7 @@ export const SelectableActionList = ({
   );
 
   const renderList = (list: ActionListItem[]) => (
-    <div className="space-y-2" data-testid={listTestId}>
+    <div className={denseRows ? "space-y-0.5" : "space-y-2"} data-testid={listTestId}>
       {list.length === 0 ? (
         <p className="text-xs text-muted-foreground">{inlineEmptyLabel}</p>
       ) : (
@@ -643,7 +648,10 @@ export const SelectableActionList = ({
         </div>
       ) : null}
 
-      <div ref={inlineListRef} className="bg-card border border-border rounded-panel p-4 overflow-hidden">
+      <div
+        ref={inlineListRef}
+        className={cn("bg-card border border-border rounded-panel overflow-hidden", denseRows ? "p-2" : "p-4")}
+      >
         {renderList(visibleItems)}
       </div>
 
@@ -713,7 +721,7 @@ export const SelectableActionList = ({
                       }}
                       scrollerRef={letterRail.setScroller}
                       itemContent={(index, item) => (
-                        <div className={cn("mb-2 last:mb-0", letterRailLaneClass)}>
+                        <div className={cn(denseRows ? "mb-0.5" : "mb-2", "last:mb-0", letterRailLaneClass)}>
                           <ActionListRow
                             item={item}
                             rowTestId={rowTestId}

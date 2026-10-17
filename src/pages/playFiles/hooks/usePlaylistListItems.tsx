@@ -9,7 +9,6 @@
 import { useLatestCallback } from "@/hooks/useLatestCallback";
 import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SidChipBadge } from "@/components/playback/SidChipBadge";
 import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
@@ -173,12 +172,13 @@ export const usePlaylistListItems = ({
               : configUiState === "declined"
                 ? "No CFG"
                 : null;
-      const detailParts = [
+      const titleSuffix = [
         formatPlayCategory(item.category).split(" ")[0],
         durationLabel,
-        ...(configStatusLabel ? [configStatusLabel] : []),
-        ...(item.status === "unavailable" ? ["Unavailable"] : []),
-      ];
+        item.status === "unavailable" ? "Unavailable" : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
       const menuItems: ActionListMenuItem[] = [
         { type: "label", label: "Details" },
         {
@@ -276,28 +276,10 @@ export const usePlaylistListItems = ({
         id: item.id,
         title: display.title,
         titleClassName: "whitespace-normal break-words block",
-        subtitle: buildPlaylistRowSubtitle(item, display.title),
+        subtitle: buildPlaylistRowSubtitle(item),
         subtitleClassName: "truncate block",
-        meta: (
-          <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <FileOriginIcon
-                origin={
-                  item.request.source === "ultimate"
-                    ? "ultimate"
-                    : item.request.source === "hvsc"
-                      ? "hvsc"
-                      : item.request.source === "commoserve"
-                        ? "commoserve"
-                        : "local"
-                }
-                className="h-3.5 w-3.5 shrink-0 opacity-60"
-              />
-              <span>{detailParts.join(" • ")}</span>
-            </span>
-            {display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : null}
-          </div>
-        ),
+        titleSuffix,
+        meta: display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : undefined,
         selected,
         isPlaying,
         onSelectToggle: (nextSelected) => handlePlaylistSelect(item, nextSelected),
