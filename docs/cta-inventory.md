@@ -499,7 +499,7 @@ Listed below in the order they are rendered and walked by the focus ring.
 - Liked tunes — button (label **Liked**, accessible name "Liked tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
   and Un-like — button — `liked-tune-unlike`
-- Rank the current tune: ✕ / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
+- Rank the current tune: thumbs-down / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
   _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
   in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
   same size and chrome as the transport
