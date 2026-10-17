@@ -88,11 +88,11 @@ import {
   markInstalledLibraryConsistent,
   markInstalledLibraryTouched,
   registerNativeProgressListener,
-  reloadSonglengthsAfterNativeIngest,
   removeNativeProgressListener,
   reportCacheStatFailure,
   resetCacheStatFailure,
 } from "./hvscIngestionRuntimeSupport";
+import { reloadSonglengthsAfterNativeIngest } from "./hvscSonglengthReload";
 import { finishIngestionRun, prepareIngestionStorage } from "./hvscIngestionStoragePrep";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
