@@ -646,6 +646,7 @@ describe("PlaybackControlsCard pending seek", () => {
     etaSeconds: 4,
     almostReady: false,
     targetLabel: "0:27",
+    markerLabel: "Waiting to continue at 0:27, 68% ready",
     statusText: "Preparing audio for 0:27 · 68% · about 4 s",
     liveText: "Rendering audio for position 27 seconds. 68 percent ready. About 4 seconds remaining.",
     ...overrides,
@@ -672,6 +673,17 @@ describe("PlaybackControlsCard pending seek", () => {
     expect(status).toHaveAttribute("data-pending-progress", "68");
     // Not a `title` anywhere: there is no hover on the device this runs on.
     expect(status).not.toHaveAttribute("title");
+  });
+
+  it("names the marker after the seek when the worker is replaying the tune", () => {
+    renderPending({
+      markerLabel: "Seeking to 19:23",
+      statusText: "Seeking to 19:23 · about 1 min 40 s",
+      liveText: "Seeking to position 1163 seconds. About 1 min 40 s remaining.",
+    });
+
+    expect(screen.getByTestId("playback-awaited-marker")).toHaveAccessibleName("Seeking to 19:23");
+    expect(screen.getByTestId("playback-pending-status")).toHaveTextContent("Seeking to 19:23 · about 1 min 40 s");
   });
 
   it("gives the target marker a cap, the requested time and a name of its own", () => {

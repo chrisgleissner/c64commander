@@ -13,6 +13,9 @@ import type { PendingSeekState } from "@/lib/playback/pendingSeekStatus";
 
 /** Polled rather than pushed: the render head moves a few times a second at most. */
 export const IDLE_POLL_MS = 500;
+/** How often a worker replay refreshes its estimate: the status counts whole seconds. */
+export const REPLAY_REFRESH_MS = 1000;
+
 /** While a seek waits, so the bar shows the landing within a frame or two of the audio resuming. */
 export const AWAITING_POLL_MS = 100;
 
@@ -33,6 +36,7 @@ const samePendingSeek = (a: PendingSeekState | null, b: PendingSeekState | null)
 export const useLocalPendingSeek = (localEngineActive: boolean, trackKey: unknown, onLanded: () => void) => {
   const [renderedSeconds, setRenderedSeconds] = useState<number | null>(null);
   const [pendingSeekState, setPendingSeekState] = useState<PendingSeekState | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const awaiting = pendingSeekState !== null;
   const onLandedRef = useRef(onLanded);
   onLandedRef.current = onLanded;
@@ -52,6 +56,12 @@ export const useLocalPendingSeek = (localEngineActive: boolean, trackKey: unknow
       setRenderedSeconds(controller.renderedSeconds());
       const pending = controller.pendingSeek();
       setPendingSeekState((previous) => (samePendingSeek(previous, pending) ? previous : pending));
+      if (pending?.replayStartedAtMs !== undefined) {
+        const now = Date.now();
+        setNowMs((previous) =>
+          now - previous >= REPLAY_REFRESH_MS || previous < pending.replayStartedAtMs! ? now : previous,
+        );
+      }
     };
     read();
     const timer = window.setInterval(read, awaiting ? AWAITING_POLL_MS : IDLE_POLL_MS);
@@ -68,5 +78,5 @@ export const useLocalPendingSeek = (localEngineActive: boolean, trackKey: unknow
     wasAwaitingRef.current = awaiting;
   }, [awaiting]);
 
-  return { renderedSeconds, pendingSeekState };
+  return { renderedSeconds, pendingSeekState, nowMs };
 };

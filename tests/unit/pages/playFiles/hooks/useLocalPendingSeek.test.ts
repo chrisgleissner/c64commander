@@ -34,7 +34,12 @@ vi.mock("@/lib/playback/localSidPlaybackController", () => ({
 }));
 
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
-import { AWAITING_POLL_MS, IDLE_POLL_MS, useLocalPendingSeek } from "@/pages/playFiles/hooks/useLocalPendingSeek";
+import {
+  AWAITING_POLL_MS,
+  IDLE_POLL_MS,
+  REPLAY_REFRESH_MS,
+  useLocalPendingSeek,
+} from "@/pages/playFiles/hooks/useLocalPendingSeek";
 
 const waiting: PendingSeekState = {
   targetSeconds: 108,
@@ -59,7 +64,7 @@ describe("useLocalPendingSeek", () => {
   it("reports the render head and the seek being waited for", () => {
     engine.pending = waiting;
     const { result } = renderHook(() => useLocalPendingSeek(true, "tune", vi.fn()));
-    expect(result.current).toEqual({ renderedSeconds: 10, pendingSeekState: waiting });
+    expect(result.current).toMatchObject({ renderedSeconds: 10, pendingSeekState: waiting });
   });
 
   it("keeps the same record while the engine reports the same seek, so the page does not re-render", () => {
@@ -78,6 +83,23 @@ describe("useLocalPendingSeek", () => {
     engine.pending = waiting;
     act(() => engine.seekListeners.forEach((listener) => listener()));
     expect(result.current.pendingSeekState).toEqual(waiting);
+  });
+
+  it("refreshes the clock once a second while the worker replays towards a seek, and not otherwise", () => {
+    vi.setSystemTime(1_000_000);
+    engine.pending = { ...waiting, renderedAtRequestSeconds: 0, replayStartedAtMs: 1_000_000 };
+    const { result } = renderHook(() => useLocalPendingSeek(true, "tune", vi.fn()));
+    const first = result.current.nowMs;
+
+    act(() => vi.advanceTimersByTime(REPLAY_REFRESH_MS * 3));
+    expect(result.current.nowMs - first).toBeGreaterThanOrEqual(REPLAY_REFRESH_MS * 2);
+    expect(result.current.nowMs - first).toBeLessThanOrEqual(REPLAY_REFRESH_MS * 3);
+
+    engine.pending = waiting;
+    act(() => vi.advanceTimersByTime(AWAITING_POLL_MS));
+    const held = result.current.nowMs;
+    act(() => vi.advanceTimersByTime(REPLAY_REFRESH_MS * 3));
+    expect(result.current.nowMs).toBe(held);
   });
 
   it("stops listening for seeks once the engine is no longer playing here", () => {
@@ -121,7 +143,7 @@ describe("useLocalPendingSeek", () => {
     const { result } = renderHook(() => useLocalPendingSeek(false, "tune", vi.fn()));
     engine.reads = 0;
     act(() => vi.advanceTimersByTime(IDLE_POLL_MS * 4));
-    expect(result.current).toEqual({ renderedSeconds: null, pendingSeekState: null });
+    expect(result.current).toMatchObject({ renderedSeconds: null, pendingSeekState: null });
     expect(engine.reads).toBe(0);
   });
 

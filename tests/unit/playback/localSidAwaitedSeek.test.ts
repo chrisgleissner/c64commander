@@ -175,7 +175,7 @@ describe("a seek waiting for the pre-render to reach it", () => {
     const seek = engine.seekTo(1163);
     await Promise.resolve();
 
-    expect(engine.getPendingSeek()).toBeNull();
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 1163, replayStartedAtMs: expect.any(Number) });
     expect(worker.ofType("seek")).toMatchObject([{ positionSeconds: 1163 }]);
     worker.emit({ type: "seeked", id: (worker.ofType("seek")[0] as { id: number }).id } as never);
     await seek;
@@ -499,7 +499,7 @@ describe("a seek waiting for the pre-render to reach it", () => {
     });
 
     it("is true while the worker is re-rendering towards a seek", async () => {
-      // No pre-render running, so the seek falls through to the worker: nothing on screen says so.
+      // No pre-render running, so the seek falls through to the worker and is reported as a replay.
       const engine = makeEngine();
       const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
       worker.emit({ type: "ready", moduleLoadMs: 1 });
@@ -510,7 +510,7 @@ describe("a seek waiting for the pre-render to reach it", () => {
       void engine.seekTo(120);
       await Promise.resolve();
 
-      expect(engine.getPendingSeek()).toBeNull();
+      expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 120, replayStartedAtMs: expect.any(Number) });
       expect(engine.isSeeking()).toBe(true);
     });
 
