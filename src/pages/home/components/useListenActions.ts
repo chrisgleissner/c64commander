@@ -22,6 +22,8 @@ import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
 import { getSearchEntries } from "@/lib/search/registry";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
+import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
+import { loadFriendlySidNames } from "@/lib/config/appSettings";
 import type { ResolvedSearchEntry } from "@/lib/search/types";
 import { NEEDS_CONNECTED_DEVICE_REASON } from "@/lib/search/requirements";
 
@@ -71,11 +73,17 @@ interface StoredTileState {
   readonly hvscReady: boolean;
 }
 
+/** The item title the Play page shows, so the tile names the tune rather than printing its file name. */
+export const resolveSessionTileLabel = (fileLabel: string, friendlyNames: boolean): string => {
+  const category = /\.sid$/i.test(fileLabel) ? "sid" : "prg";
+  const display = resolveTrackDisplayName({ label: fileLabel, category, friendlyNames });
+  return display.title.replace(/\.[a-z0-9]{1,4}$/i, "");
+};
+
 const readSessionLabel = (session: ReturnType<typeof readStoredPlaybackSession>): string | null => {
   if (!session?.currentItemId) return null;
-  // "Chess", not "Chess.sid": in a 64 px tile the extension broke the name mid-word onto a second line.
   return typeof session.currentItemLabel === "string"
-    ? session.currentItemLabel.replace(/\.[a-z0-9]{1,4}$/i, "")
+    ? resolveSessionTileLabel(session.currentItemLabel, loadFriendlySidNames())
     : null;
 };
 
