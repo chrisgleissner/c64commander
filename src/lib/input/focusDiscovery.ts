@@ -34,6 +34,7 @@ import {
   SKIP_ATTR,
   TABBAR_SCOPE_SELECTOR,
   createDiscoveryScan,
+  createScanWarmer,
   sortIntoReadingOrder,
   discoverInteractiveElements,
   isFocusDisabled,
@@ -144,6 +145,8 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
+const WARM_SLICE_BUDGET_MS = 8;
+const MAX_WARM_RESTARTS = 3;
 
 const labellingElements = (element: Element): HTMLElement[] =>
   (element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [])
@@ -233,6 +236,8 @@ export class FocusDiscoveryEngine {
   private readonly onSelectionMovedByScan?: (id: string) => void;
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
+  /** Counts observed changes that can alter the ring, so measurements taken across one are discarded. */
+  private pageChangeCount = 0;
   private scheduled = false;
   /** True while every change since the last scan only added content inside cards; see flushPendingRefresh. */
   private staleTolerable = false;
@@ -282,6 +287,7 @@ export class FocusDiscoveryEngine {
           if (records.some((record) => this.relabelsCurrent(record))) this.onAfterAssemble?.();
           return;
         }
+        this.pageChangeCount += 1;
         this.scheduleRefresh(
           records.some((record) => !isInsidePendingList(record.target)),
           records
@@ -297,8 +303,13 @@ export class FocusDiscoveryEngine {
         attributeFilter: OBSERVED_ATTRIBUTES,
       });
     }
+    this.doc.defaultView?.addEventListener("resize", this.countPageChange);
     this.refresh();
   }
+
+  private readonly countPageChange = () => {
+    this.pageChangeCount += 1;
+  };
 
   /** Detaches the observer, removes every `tabindex` shim, and clears the ring. */
   stop(): void {
@@ -307,6 +318,7 @@ export class FocusDiscoveryEngine {
     this.scheduled = false;
     this.observer?.disconnect();
     this.observer = null;
+    this.doc.defaultView?.removeEventListener("resize", this.countPageChange);
     this.lastScope = null;
     this.pendingReturn = null;
     this.standingWhenRingEmptied = null;
@@ -378,8 +390,41 @@ export class FocusDiscoveryEngine {
     if (this.scheduled && !urgent) return;
     this.scheduled = true;
     afterNextPaint(() =>
-      urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
+      urgent
+        ? this.refreshInSlices(MAX_WARM_RESTARTS)
+        : afterStagedRowsSettle(() => this.refreshInSlices(MAX_WARM_RESTARTS)),
     );
+  }
+
+  /**
+   * Measures the page in slices of {@link WARM_SLICE_BUDGET_MS}, then scans once on the measurements. A key press
+   * between slices acts on the last ring, or runs the scan itself and ends the slicing. A change to the page
+   * while measuring discards the measurements; after {@link MAX_WARM_RESTARTS} discards the scan runs unwarmed.
+   */
+  private refreshInSlices(restartsLeft: number): void {
+    if (!this.scheduled || !this.started) return;
+    const scan = createDiscoveryScan();
+    const scope = resolveActiveScope(this.doc, scan);
+    if (scope.kind === "overlay" || restartsLeft <= 0) {
+      this.flushPendingRefresh();
+      return;
+    }
+    const warmer = createScanWarmer(scope.element, scan);
+    const generation = this.pageChangeCount;
+    const step = () => {
+      if (!this.scheduled || !this.started) return;
+      if (!warmer.step(WARM_SLICE_BUDGET_MS)) {
+        setTimeout(step, 0);
+        return;
+      }
+      if (generation !== this.pageChangeCount) {
+        this.refreshInSlices(restartsLeft - 1);
+        return;
+      }
+      this.scheduled = false;
+      this.refresh(scan);
+    };
+    step();
   }
 
   /** Re-scans now, for a caller that has just changed the DOM itself; any scheduled re-scan is dropped. */
@@ -428,7 +473,7 @@ export class FocusDiscoveryEngine {
   }
 
   /** Re-scans the active scope and rebuilds the ring in one batch. */
-  refresh(): void {
+  refresh(warmedScan?: DiscoveryScan): void {
     if (!this.started) return;
     this.staleTolerable = false;
     if (this.freezeDuringTransientLayer()) {
@@ -436,7 +481,7 @@ export class FocusDiscoveryEngine {
       this.onAfterAssemble?.();
       return;
     }
-    const scan = createDiscoveryScan();
+    const scan = warmedScan ?? createDiscoveryScan();
     const scope = resolveActiveScope(this.doc, scan);
     const previousScope = this.lastScope;
     const scopeChanged = previousScope !== scope.element;

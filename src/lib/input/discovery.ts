@@ -460,6 +460,38 @@ export const discoverInteractiveElements = (scope: Element, options: DiscoverOpt
   return result;
 };
 
+export interface DiscoveryScanWarmer {
+  /** Measures candidates until `budgetMs` has elapsed; true once every candidate has been measured. */
+  step(budgetMs: number): boolean;
+}
+
+/**
+ * Fills `scan` with the visibility and document position of every candidate in `scope`, a time-boxed step
+ * at a time, so the scan that follows finds them cached. Positions are document-relative and stay valid when
+ * the page scrolls; the per-ancestor scroll offsets are re-read at the start of each step because they do not.
+ */
+export const createScanWarmer = (scope: Element, scan: DiscoveryScan): DiscoveryScanWarmer => {
+  const candidates = Array.from(scope.querySelectorAll(INTERACTIVE_SELECTOR));
+  let next = 0;
+  return {
+    step(budgetMs: number): boolean {
+      scan.scrollOffsets.clear();
+      const deadline = performance.now() + budgetMs;
+      while (next < candidates.length) {
+        const candidate = candidates[next];
+        next += 1;
+        if (candidate instanceof HTMLElement && isFocusVisible(candidate, scan)) {
+          readingPosition(candidate, scan);
+          cardOf(candidate, scan);
+        }
+        if (performance.now() >= deadline) break;
+      }
+      scan.scrollOffsets.clear();
+      return next >= candidates.length;
+    },
+  };
+};
+
 /** Selector for the persistent bottom tab bar scope (excluded from the page scan). */
 export const TABBAR_SCOPE_SELECTOR = TABBAR_SELECTOR;
 
