@@ -863,7 +863,7 @@ class BackgroundExecutionService : Service() {
         }
         when (command) {
             TRANSPORT_COMMAND_PLAY, TRANSPORT_COMMAND_PLAY_PAUSE -> launchResumeActivity()
-            TRANSPORT_COMMAND_STOP -> stopSelf()
+            TRANSPORT_COMMAND_STOP -> run { broadcastTransportCommand(command); stopSelf() }
             else ->
                     AppLogger.debug(
                             this,

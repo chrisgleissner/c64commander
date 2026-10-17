@@ -759,6 +759,25 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun stopWhileTheWebLayerIsSilentStillTellsItToStop() {
+        controller.create()
+        startService()
+        setPlaybackState(paused = false, startId = 2)
+        ShadowLooper.shadowMainLooper().idleFor(PlaybackLiveness.HEARTBEAT_TIMEOUT_MS * 2, TimeUnit.MILLISECONDS)
+        val shadowApp = Shadows.shadowOf(service.application as android.app.Application)
+        shadowApp.clearBroadcastIntents()
+
+        service.mediaSessionCallback.onStop()
+
+        val commands =
+                shadowApp.broadcastIntents
+                        .filter { it.action == BackgroundExecutionService.ACTION_TRANSPORT_COMMAND }
+                        .map { it.getStringExtra(BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND) }
+        assertEquals(listOf(BackgroundExecutionService.TRANSPORT_COMMAND_STOP), commands)
+        assertTrue(Shadows.shadowOf(service).isStoppedBySelf)
+    }
+
+    @Test
     fun pauseKeepsTheMediaSessionAliveSoHeadsetPlayStillReachesTheWebLayer() {
         // HARD27-007: pausing used to stop the service, which released the MediaSession. The
         // headset or lock-screen Play that followed reached nothing and the user had to unlock the
