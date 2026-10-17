@@ -21,6 +21,7 @@ import { clearLogs, getLogs } from "@/lib/logging";
 import { Checkbox } from "@/components/ui/checkbox";
 import { setProgressiveMountEnabled, useProgressiveMount } from "@/lib/ui/progressiveMount";
 import { resetStagedRowsForTests, useStagedRows } from "@/lib/ui/stagedRows";
+import { FocusDiscoveryEngine } from "@/lib/input/focusDiscovery";
 import { afterRingRescan } from "../helpers/ringRescan";
 
 const SELECTED = "data-key-selected";
@@ -1974,40 +1975,59 @@ describe("FocusNavigationProvider with rows still being built inside a card", ()
     );
   };
 
-  const walkDown = (staged: boolean) => {
-    setProgressiveMountEnabled(staged);
-    const view = render(
-      <FocusNavigationProvider>
-        {["First", "Second"].map((name) => (
-          <StagedCard key={name} name={name} />
-        ))}
-      </FocusNavigationProvider>,
-    );
-    const builtBeforeWalking = screen.queryAllByRole("button", { name: /^Second row/ }).length;
+  const secondRows = () => screen.queryAllByRole("button", { name: /^Second row/ }).length;
+  const selectedLabel = () => document.querySelector(`[${SELECTED}="true"]`)?.textContent ?? "";
+  const pressDown = (times: number) => {
     const labels: string[] = [];
-    for (const code of ["ArrowDown", "Enter", ...Array.from({ length: ROWS + 2 }, () => "ArrowDown")]) {
-      fireEvent.keyDown(document.body, { code });
-      labels.push(document.querySelector('[data-key-selected="true"]')?.textContent ?? "");
+    for (let step = 0; step < times; step++) {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      labels.push(selectedLabel());
     }
-    view.unmount();
-    resetStagedRowsForTests();
-    resetInputModality();
-    return { builtBeforeWalking, labels };
+    return labels;
+  };
+  const builtCompletely = async () => {
+    await waitFor(() => expect(secondRows()).toBe(ROWS));
+    await act(afterRingRescan);
   };
 
-  it("Down from the last built row builds the rest of the card and reaches its last row", () => {
+  it("Down in a partly built card does not build the rest of it inside the key press", () => {
+    setProgressiveMountEnabled(true);
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
-    const eager = walkDown(false);
-    const staged = walkDown(true);
+    render(
+      <FocusNavigationProvider>
+        <StagedCard name="First" />
+        <StagedCard name="Second" />
+      </FocusNavigationProvider>,
+    );
+    const builtBeforeWalking = secondRows();
+    expect(builtBeforeWalking).toBeLessThan(ROWS);
 
-    expect(staged.builtBeforeWalking).toBeLessThan(ROWS);
-    expect(staged.labels).toContain(`Second row ${ROWS}`);
-    expect(staged.labels).toEqual(eager.labels);
+    for (const code of ["ArrowDown", "Enter", ...Array.from({ length: ROWS }, () => "ArrowDown")]) {
+      fireEvent.keyDown(document.body, { code });
+    }
+
+    expect(secondRows()).toBe(builtBeforeWalking);
   });
 
-  const selectedLabel = () => document.querySelector(`[${SELECTED}="true"]`)?.textContent ?? "";
+  it("Down reaches the last row of a card once the rows that were still being built are in", async () => {
+    setProgressiveMountEnabled(true);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
+    render(
+      <FocusNavigationProvider>
+        <StagedCard name="First" />
+        <StagedCard name="Second" />
+      </FocusNavigationProvider>,
+    );
+    await builtCompletely();
+    for (const code of ["ArrowDown", "Enter"]) fireEvent.keyDown(document.body, { code });
 
-  it("a row removed after the walk entered a partly built card hands the selection to the next row, and the walk still reaches the last row", async () => {
+    const labels = pressDown(ROWS + 2);
+
+    expect(labels).toContain(`Second row ${ROWS}`);
+    expect(labels.indexOf("Second row 2")).toBeGreaterThan(-1);
+  });
+
+  it("a row removed after the walk entered a card hands the selection to the next row, and the walk still reaches the last row", async () => {
     setProgressiveMountEnabled(true);
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ top: 5000, bottom: 5100 } as DOMRect);
     const cards = (removedRow?: number) => (
@@ -2017,23 +2037,44 @@ describe("FocusNavigationProvider with rows still being built inside a card", ()
       </FocusNavigationProvider>
     );
     const view = render(cards());
-    expect(screen.queryAllByRole("button", { name: /^Second row/ }).length).toBeLessThan(ROWS);
-    for (const code of ["ArrowDown", "Enter", "ArrowDown", "ArrowDown", "ArrowDown"]) {
-      fireEvent.keyDown(document.body, { code });
-    }
+    await builtCompletely();
+    for (const code of ["ArrowDown", "Enter"]) fireEvent.keyDown(document.body, { code });
+    for (let step = 0; step < ROWS && selectedLabel() !== "Second row 3"; step++) pressDown(1);
     expect(selectedLabel()).toBe("Second row 3");
 
     view.rerender(cards(3));
     await act(afterRingRescan);
     expect(selectedLabel()).toBe("Second row 4");
 
-    const labels: string[] = [];
-    for (let step = 0; step < ROWS; step++) {
-      fireEvent.keyDown(document.body, { code: "ArrowDown" });
-      labels.push(selectedLabel());
-    }
+    const labels = pressDown(ROWS);
     expect(labels).toContain(`Second row ${ROWS}`);
     expect(labels).not.toContain("Second row 3");
+  });
+
+  it("Down moves on the last ring and leaves the re-scan for after the paint when a card has just gained content", async () => {
+    setProgressiveMountEnabled(false);
+    render(
+      <FocusNavigationProvider>
+        <StagedCard name="First" />
+        <StagedCard name="Second" />
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    await act(afterRingRescan);
+    const refresh = vi.spyOn(FocusDiscoveryEngine.prototype, "refresh");
+    const added = document.createElement("button");
+    added.textContent = "First row added";
+    document.querySelector('[data-section-id="First"]')!.appendChild(added);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(refresh).not.toHaveBeenCalled();
+    await act(afterRingRescan);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("a route change lands on the new page's first stop while the page left still has a list being built", async () => {

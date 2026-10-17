@@ -9,7 +9,7 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { SECTION_OPEN_REQUEST_EVENT, type SectionOpenRequestDetail } from "./collapsibleSectionStore";
-import { completeStagedRows, setStagedRowsEnabled } from "./stagedRows";
+import { buildStagedRowsFirstIn, completeStagedRows, setStagedRowsEnabled } from "./stagedRows";
 
 /**
  * Lets a page draw at once and fill in behind the first paint. Rendering a page with every card open
@@ -167,8 +167,11 @@ const queueMount = (entry: WaitingMount): (() => void) => {
  * this before the focus ring reads the page: a card's own labelled sections and rows are ring stops
  * once they are built, so a key pressed while they were still waiting took a different path through
  * the page. Returns whether anything was built.
+ * With `completeRows` false the rows still staged inside `scope` are not built in this task: building
+ * them here cost 300 ms on the keypad handset. They are built next by the background tasks that
+ * already build them, and the ring picks them up on the re-scan that follows.
  */
-export const mountAllWaiting = (scope?: Element): boolean => {
+export const mountAllWaiting = (scope?: Element, { completeRows = true } = {}): boolean => {
   const entries = waiting.filter((entry) => !scope || (entry.anchor.current && scope.contains(entry.anchor.current)));
   for (const entry of entries) {
     waiting.splice(waiting.indexOf(entry), 1);
@@ -177,6 +180,10 @@ export const mountAllWaiting = (scope?: Element): boolean => {
   if (entries.length > 0) {
     if (waiting.length === 0) stopWatchingScroll();
     flushSync(() => entries.forEach((entry) => entry.mount()));
+  }
+  if (!completeRows) {
+    if (scope) buildStagedRowsFirstIn(scope);
+    return entries.length > 0;
   }
   const builtRows = completeStagedRows(scope);
   return entries.length > 0 || builtRows;

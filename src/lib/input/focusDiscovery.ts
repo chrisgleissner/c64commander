@@ -191,6 +191,9 @@ const RING_STRUCTURE_SELECTOR = [
   "[data-slot-active]",
 ].join(",");
 
+const holdsOverlay = (node: Node): boolean =>
+  node instanceof Element && (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null);
+
 const holdsRingStructure = (node: Node): boolean =>
   node instanceof Element &&
   (node.matches(RING_STRUCTURE_SELECTOR) || node.querySelector(RING_STRUCTURE_SELECTOR) !== null);
@@ -231,6 +234,8 @@ export class FocusDiscoveryEngine {
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
   private scheduled = false;
+  /** True while every change since the last scan only added content inside cards; see flushPendingRefresh. */
+  private staleTolerable = false;
   private started = false;
   private shimmed = new Set<HTMLElement>();
   private resolvers = new Map<string, () => HTMLElement | null>();
@@ -263,11 +268,7 @@ export class FocusDiscoveryEngine {
   }
 
   private addsAnOverlay(record: MutationRecord): boolean {
-    for (const node of record.addedNodes) {
-      if (!(node instanceof Element)) continue;
-      if (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null) return true;
-    }
-    return false;
+    return Array.from(record.addedNodes).some(holdsOverlay);
   }
 
   /** Attaches the observer and performs the first scan. Idempotent. */
@@ -281,7 +282,12 @@ export class FocusDiscoveryEngine {
           if (records.some((record) => this.relabelsCurrent(record))) this.onAfterAssemble?.();
           return;
         }
-        this.scheduleRefresh(records.some((record) => !isInsidePendingList(record.target)));
+        this.scheduleRefresh(
+          records.some((record) => !isInsidePendingList(record.target)),
+          records
+            .filter((record) => !this.cannotChangeRing(record))
+            .every((record) => this.onlyAddsContentToOpenSection(record)),
+        );
       });
       this.observer.observe(this.doc.body, {
         childList: true,
@@ -311,6 +317,15 @@ export class FocusDiscoveryEngine {
     this.groupLabelElements = [];
     this.groupElements.clear();
     this.controller.clear();
+  }
+
+  /** A change to the children of a card inside the scanned scope that adds or removes no overlay. */
+  private onlyAddsContentToOpenSection(record: MutationRecord): boolean {
+    if (record.type !== "childList" || this.lastScope === null) return false;
+    const target = record.target;
+    if (!(target instanceof Element) || !this.lastScope.contains(target)) return false;
+    if (target.closest(SECTION_SCOPE_SELECTOR) === null) return false;
+    return !this.addsAnOverlay(record) && !Array.from(record.removedNodes).some(holdsOverlay);
   }
 
   private relabelsCurrent(record: MutationRecord): boolean {
@@ -357,8 +372,10 @@ export class FocusDiscoveryEngine {
    * only by a list still building its rows a few per task waits until the list is finished; any other
    * change, such as an overlay or a route change, is scanned after the next paint as before.
    */
-  scheduleRefresh(urgent = false): void {
-    if (!this.started || (this.scheduled && !urgent)) return;
+  scheduleRefresh(urgent = false, staleTolerable = false): void {
+    if (!this.started) return;
+    this.staleTolerable = this.scheduled ? this.staleTolerable && staleTolerable : staleTolerable;
+    if (this.scheduled && !urgent) return;
     this.scheduled = true;
     afterNextPaint(() =>
       urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
@@ -371,11 +388,22 @@ export class FocusDiscoveryEngine {
     if (this.started) this.refresh();
   }
 
-  /** Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM. */
-  flushPendingRefresh(): void {
+  /**
+   * Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM.
+   * `allowStaleRing` lets a key act on the last ring while the pending change only added content
+   * inside cards and every stop of that ring is still attached; the scheduled re-scan then runs after
+   * the next paint instead of inside the key press, where it cost 400 ms on the keypad handset.
+   */
+  flushPendingRefresh(options: { allowStaleRing?: boolean } = {}): void {
     if (!this.scheduled) return;
+    if (options.allowStaleRing && this.staleTolerable && this.everyStopIsAttached()) return;
     this.scheduled = false;
     if (this.started) this.refresh();
+  }
+
+  private everyStopIsAttached(): boolean {
+    for (const resolve of this.resolvers.values()) if (!resolve()?.isConnected) return false;
+    return this.resolvers.size > 0;
   }
 
   /** The live DOM element for a ring id (explicit resolver or captured element). */
@@ -402,6 +430,7 @@ export class FocusDiscoveryEngine {
   /** Re-scans the active scope and rebuilds the ring in one batch. */
   refresh(): void {
     if (!this.started) return;
+    this.staleTolerable = false;
     if (this.freezeDuringTransientLayer()) {
       this.observer?.takeRecords();
       this.onAfterAssemble?.();

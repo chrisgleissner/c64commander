@@ -461,7 +461,7 @@ export const FocusNavigationProvider = ({
           "previousField",
         ].includes(action);
         const engine = engineRef.current;
-        engine?.flushPendingRefresh();
+        engine?.flushPendingRefresh({ allowStaleRing: traversesRing });
         if (traversesRing) {
           const scope = resolveActiveScope(document).element;
           if (!hasSectionScopeIn(scope)) {
@@ -478,7 +478,7 @@ export const FocusNavigationProvider = ({
             if (delta && getInputModality() === "pointer") adoptActiveElement();
             const mountCardFor = (id: string | undefined) => {
               const card = id ? engine?.elementForId(id)?.closest(SECTION_SCOPE_SELECTOR) : null;
-              if (card && scope.contains(card) && mountAllWaiting(card)) engine?.refreshNow();
+              if (card && scope.contains(card) && mountAllWaiting(card, { completeRows: false })) engine?.refreshNow();
             };
             // Discover the current card's real stops before predicting the next sibling.
             mountCardFor(controller.focus.current()?.id);
