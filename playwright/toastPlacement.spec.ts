@@ -239,7 +239,7 @@ test.describe("Toast strip touch scrolling", () => {
     await page.addInitScript((override) => {
       localStorage.setItem("c64u_display_profile_override", override);
     }, profile.override);
-    await page.setViewportSize(profile.viewport);
+    await page.setViewportSize({ width: profile.viewport.width, height: 340 });
     const longError = JSON.stringify({
       errors: ["The device refused the request because another client holds the machine; try again in a moment."],
     });
