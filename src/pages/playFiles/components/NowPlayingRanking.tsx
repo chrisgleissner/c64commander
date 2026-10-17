@@ -20,7 +20,7 @@ export type NowPlayingRankingProps = {
   /**
    * Called when the user *newly* marks the tune Not-for-me while a station is
    * active — the station skips immediately (spec §5.1, D8). Omitted (or no
-   * active station) → ✕ only records the dislike.
+   * active station) → the thumbs-down only records the dislike.
    *
    * Its presence is therefore also how this component knows a station is
    * driving the queue, which is what decides whether ✕ says it will skip.
@@ -34,7 +34,7 @@ export type NowPlayingRankingProps = {
  * **Order: thumbs-down then ♥, with ♥ outermost.** The pair is right-aligned, so the outermost button is the
  * easiest one to hit on the row — and it shares its right edge with the Next button one row below,
  * which is where an overshooting thumb ends up. ♥ takes that seat because it is the safe half of
- * the pair: a stray ♥ fills a heart you can see and untap, whereas a stray ✕ skips the tune out
+ * the pair: a stray ♥ fills a heart you can see and untap, whereas a stray thumbs-down skips the tune out
  * from under you *and* biases every future refill, and the tune it was about has left the card
  * before you can undo it. Left-to-right this reads reject-then-like, matching the
  * swipe-left-to-reject / swipe-right-to-like mapping that mobile has taught everyone for
