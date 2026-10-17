@@ -49,5 +49,5 @@ const FAILURE_NOTICES: ReadonlySet<SidRadioNotice> = new Set([
  */
 export const reportStationNotStarted = (notice: SidRadioNotice, context: Record<string, unknown>) => {
   addLog(FAILURE_NOTICES.has(notice) ? "warn" : "info", "SID Radio: the station did not start", { notice, ...context });
-  toast({ title: "SID Radio", description: SID_RADIO_NOTICE_TEXT[notice] });
+  toast({ title: "SID Radio", description: SID_RADIO_NOTICE_TEXT[notice], alwaysVisible: true });
 };

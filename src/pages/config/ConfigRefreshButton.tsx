@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 
 export const ConfigRefreshButton = forwardRef<
   HTMLButtonElement,
-  { categoryLabel: string; slug: string; onRefresh: () => void }
->(({ categoryLabel, slug, onRefresh }, ref) => (
+  { categoryLabel: string; slug: string; headerId: string; onRefresh: () => void }
+>(({ categoryLabel, slug, headerId, onRefresh }, ref) => (
   <Button
     ref={ref}
     variant="ghost"
@@ -21,6 +21,7 @@ export const ConfigRefreshButton = forwardRef<
     onClick={onRefresh}
     className="size-11 shrink-0"
     aria-label="Refresh"
+    aria-describedby={headerId}
     title={`Refresh ${categoryLabel}`}
     data-testid={`config-refresh-${slug}`}
   >
@@ -35,7 +36,14 @@ export const configRefreshAction = (
   categoryLabel: string,
   slug: string,
   onRefresh: () => void,
+  headerId = `config-category-${slug}`,
 ) =>
   isOpen ? (
-    <ConfigRefreshButton ref={buttonRef} categoryLabel={categoryLabel} slug={slug} onRefresh={onRefresh} />
+    <ConfigRefreshButton
+      ref={buttonRef}
+      categoryLabel={categoryLabel}
+      slug={slug}
+      headerId={headerId}
+      onRefresh={onRefresh}
+    />
   ) : undefined;

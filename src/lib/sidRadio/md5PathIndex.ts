@@ -224,6 +224,10 @@ export const resolveVirtualPath = (md5_48: string, options?: ResolveVirtualPathO
 /** All known paths for a `md5_48` (sorted; empty if unknown). */
 export const virtualPathsForMd548 = (md5_48: string): string[] => currentIndex.get(md5_48.toLowerCase()) ?? [];
 
+/** True when the archive lists a tune with this identity, whichever copy of it is playing. */
+export const isMd548InHvsc = (md5_48: string | null): boolean =>
+  md5_48 !== null && virtualPathsForMd548(md5_48).length > 0;
+
 /**
  * The corpus identity of an HVSC path, or null when the archive does not list it.
  *

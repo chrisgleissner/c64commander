@@ -614,7 +614,7 @@ describe("useHomeConfigRefresh", () => {
     expect(requestTimesSeconds).toEqual([10, 30, 70, 130, 190]);
     const failureLogs = addLogMock.mock.calls.filter(([, message]) => message === "Home config refresh failed");
     expect(failureLogs.map(([, , detail]) => detail.nextIntervalMs)).toEqual([20_000, 40_000, 60_000, 60_000, 60_000]);
-    expect(failureLogs.map(([level]) => level)).toEqual(["info", "warn", "warn", "warn", "warn"]);
+    expect(failureLogs.map(([level]) => level)).toEqual(["warn", "warn", "warn", "warn", "warn"]);
 
     fakeApi.wildcard = null;
     await advance(HOME_CONFIG_REFRESH_INTERVAL_MS * 6);

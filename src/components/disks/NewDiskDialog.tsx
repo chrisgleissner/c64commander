@@ -89,7 +89,7 @@ export function NewDiskDialog({
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
   const [deviceFolder, setDeviceFolder] = useState<string | null>(null);
-  const [foldersUnavailable, setFoldersUnavailable] = useState(false);
+  const [lookupSettled, setLookupSettled] = useState(false);
   const initialFolder = defaultFolder ?? deviceFolder ?? "";
   const [chosenFolder, setChosenFolder] = useState<string | null>(null);
   const folder = chosenFolder ?? initialFolder;
@@ -105,13 +105,15 @@ export function NewDiskDialog({
     if (!open || defaultFolder !== undefined) return undefined;
     let cancelled = false;
     setDeviceFolder(null);
-    setFoldersUnavailable(false);
+    setLookupSettled(false);
     listStorageRoots()
       .then((roots) => {
-        if (!cancelled) setDeviceFolder(pickNewDiskFolder(roots));
+        if (cancelled) return;
+        setDeviceFolder(pickNewDiskFolder(roots));
+        setLookupSettled(true);
       })
       .catch((err) => {
-        if (!cancelled) setFoldersUnavailable(true);
+        if (!cancelled) setLookupSettled(true);
         addLog("warn", "New Disk: could not list the device's storage folders", {
           error: (err as Error).message,
           stack: (err as Error).stack,
@@ -143,7 +145,7 @@ export function NewDiskDialog({
     }
   }, [args, name]);
 
-  const lookingUpFolder = defaultFolder === undefined && deviceFolder === null && !foldersUnavailable;
+  const lookingUpFolder = defaultFolder === undefined && !lookupSettled;
 
   const reset = () => {
     setKind("d64");

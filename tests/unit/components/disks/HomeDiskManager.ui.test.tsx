@@ -188,6 +188,8 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     const toggleBtn = screen.getByTestId("drive-status-toggle-a");
     expect(toggleBtn).toHaveTextContent("ON");
+    expect(toggleBtn).toHaveAccessibleName("Turn off Drive A");
+    expect(screen.getByTestId("drive-status-toggle-b")).toHaveAccessibleName(/^Turn (on|off) Drive B$/);
 
     // Mock error
     mockApi.driveOff.mockRejectedValueOnce(new Error("Power error"));
@@ -219,6 +221,21 @@ describe("HomeDiskManager UI & Interactions", () => {
         }),
       );
     });
+  });
+
+  it("lists where each disk lives in its details, because compact rows hide the location icon", () => {
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [
+        createMockDisk({ id: "d-local", name: "l.d64", location: "local" }),
+        createMockDisk({ id: "d-ultimate", name: "u.d64", location: "ultimate" }),
+      ],
+      runtimeFiles: {},
+      removeDisk: mockRemoveDisk,
+    });
+    render(<HomeDiskManager />);
+    const locationRow = (id: string) => within(screen.getByTestId(`menu-${id}`)).getByText("Location").parentElement;
+    expect(locationRow("d-local")).toHaveTextContent("LocationLocal");
+    expect(locationRow("d-ultimate")).toHaveTextContent("LocationC64U");
   });
 
   it("clears a stale mounted override when reset refresh shows no disk", async () => {

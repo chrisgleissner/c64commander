@@ -1605,6 +1605,8 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     await act(() => afterRingRescan());
     const resetButton = screen.getByRole("button", { name: /^reset$/i });
     const refreshButton = screen.getByRole("button", { name: /refresh/i });
+    expect(refreshButton).toHaveAccessibleName("Refresh");
+    expect(refreshButton).toHaveAccessibleDescription(/audio mixer/i);
     expect(focusContext.current?.engine.sourceForId("config-category-action-audio-mixer")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("config-refresh-audio-mixer")).toBe("dom+explicit");
 

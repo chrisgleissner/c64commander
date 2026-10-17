@@ -92,7 +92,7 @@ export const claimPhoneAudio = (
     });
     owner = null;
     if (previous.source === "av-mirror" && source === "local-sid") {
-      toast({ title: "Listen stopped", description: "This phone started playing a tune." });
+      toast({ title: "Listen stopped", description: "This phone started playing a tune.", alwaysVisible: true });
     }
     // Stop AFTER clearing, so a stop() that releases ownership cannot wipe the
     // claim we are about to install.

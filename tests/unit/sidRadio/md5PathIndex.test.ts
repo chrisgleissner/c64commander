@@ -17,6 +17,7 @@ import {
   rebuildMd548PathIndex,
   resetMd548PathIndex,
   md548ForVirtualPath,
+  isMd548InHvsc,
   resolveVirtualPath,
 } from "@/lib/sidRadio/md5PathIndex";
 
@@ -304,5 +305,22 @@ describe("the sliced parse", () => {
     await rebuilding;
 
     expect(getMd548PathIndexStats().size).toBe(0);
+  });
+});
+
+describe("isMd548InHvsc", () => {
+  beforeEach(() => {
+    resetMd548PathIndex();
+    rebuildMd548PathIndex(SONGLENGTHS);
+  });
+
+  it("is true for an identity the archive lists, even when it came from a content hash rather than a path", () => {
+    expect(isMd548InHvsc(COMMANDO_MD5.slice(0, 12))).toBe(true);
+    expect(isMd548InHvsc(COMMANDO_MD5.slice(0, 12).toUpperCase())).toBe(true);
+  });
+
+  it("is false for an identity the archive does not list, and for no identity", () => {
+    expect(isMd548InHvsc("ffffffffffff")).toBe(false);
+    expect(isMd548InHvsc(null)).toBe(false);
   });
 });

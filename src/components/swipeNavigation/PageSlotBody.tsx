@@ -15,6 +15,7 @@ import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { PageLoadingFallback } from "@/components/PageLoadingFallback";
 import { rememberPagePosition, restorePagePosition } from "@/lib/navigation/pagePositions";
 import { addLog } from "@/lib/logging";
+import { Capacitor } from "@capacitor/core";
 
 const loadHomePage = () => import("@/pages/HomePage");
 const loadPlayFilesPage = () => import("@/pages/PlayFilesPage");
@@ -59,7 +60,9 @@ export const warmPageChunks = (): (() => void) => {
   INPUT_EVENTS.forEach((type) => window.addEventListener(type, noteInput, { capture: true, passive: true }));
   const loadNext = () => {
     if (cancelled) return;
-    if (navigator.onLine === false || Date.now() - lastInputAt < WARM_QUIET_AFTER_INPUT_MS) {
+    // A native build bundles its chunks, and onLine is false in airplane mode, which Demo Mode runs in.
+    const chunksNeedNetwork = !Capacitor.isNativePlatform() && navigator.onLine === false;
+    if (chunksNeedNetwork || Date.now() - lastInputAt < WARM_QUIET_AFTER_INPUT_MS) {
       whenIdle(loadNext, WARM_STEP_DELAY_MS);
       return;
     }

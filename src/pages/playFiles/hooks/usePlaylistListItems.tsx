@@ -15,9 +15,9 @@ import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { describeConfigOrigin, describeConfigOutcome, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
+import { LOCAL_DEVICE_LABEL, connectedDeviceLabel, describeContentSource } from "@/lib/sourceNavigation/sourceTerms";
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
-import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import { formatPlayCategoryTag, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistRowSubtitle } from "@/pages/playFiles/playlistRowSubtitle";
 
@@ -173,7 +173,7 @@ export const usePlaylistListItems = ({
                 ? "No CFG"
                 : null;
       const titleSuffix = [
-        formatPlayCategory(item.category).split(" ")[0],
+        formatPlayCategoryTag(item.category),
         durationLabel,
         item.status === "unavailable" ? "Unavailable" : null,
       ]
@@ -187,9 +187,8 @@ export const usePlaylistListItems = ({
           value: formatPlayCategory(item.category),
         },
         { type: "info", label: "Duration", value: durationLabel },
-        // Always here, because the row itself shows the path only when it has nothing more useful
-        // to say: on the tunes of an expanded file every row has the same path, and which tune it
-        // is takes its place. See `buildPlaylistRowSubtitle`.
+        { type: "info", label: "Source", value: describeContentSource(item.request.source) },
+        // The row may show something more useful than the path (see `buildPlaylistRowSubtitle`).
         { type: "info", label: "Path", value: item.path },
         {
           type: "info",

@@ -43,7 +43,7 @@ import {
   type AddItemsProgressState,
 } from "@/components/itemSelection/AddItemsProgressOverlay";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
-import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { SOURCE_LABELS, describeContentSource } from "@/lib/sourceNavigation/sourceTerms";
 import { toast } from "@/hooks/use-toast";
 import {
   getC64DrivesQueryKey,
@@ -1742,6 +1742,11 @@ export const HomeDiskManager = () => {
       });
       return [
         { type: "label", label: "Details" },
+        {
+          type: "info",
+          label: "Location",
+          value: describeContentSource(disk.location === "local" ? "local" : "ultimate"),
+        },
         { type: "info", label: "Size", value: formatBytes(disk.sizeBytes) },
         { type: "info", label: "Date", value: formatDate(detailsDate) },
         { type: "separator" },
@@ -2017,6 +2022,7 @@ export const HomeDiskManager = () => {
                         onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                         disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                         data-testid={`drive-status-toggle-${key}`}
+                        aria-label={`${powerEnabled ? "Turn off" : "Turn on"} ${driveLabel}`}
                       >
                         {powerEnabled ? "ON" : "OFF"}
                       </FocusableDiskButton>
@@ -2232,6 +2238,7 @@ export const HomeDiskManager = () => {
                     }
                     disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
                     data-testid="drive-status-toggle-soft-iec"
+                    aria-label={`${softIecPowerEnabled ? "Turn off" : "Turn on"} Soft IEC drive`}
                   >
                     {softIecPowerEnabled ? "ON" : "OFF"}
                   </FocusableDiskButton>

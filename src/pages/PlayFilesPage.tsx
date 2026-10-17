@@ -132,7 +132,7 @@ import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
-import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
+import { isMd548InHvsc, md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import type { RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 import { useRecordRecentlyPlayed } from "@/pages/playFiles/hooks/useRecordRecentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
@@ -1716,7 +1716,7 @@ export default function PlayFilesPage() {
       : !sidRadio.active && currentSeedMd548 && currentItem?.category === "sid"
         ? (currentItem.label ?? "this tune")
         : null;
-  const sidRadioSeedIsHvscTune = Boolean(currentItem?.path && md548ForVirtualPath(currentItem.path));
+  const sidRadioSeedIsHvscTune = isMd548InHvsc(currentSeedMd548);
   const startSidRadioSongMood = (styleBit: number | null) => {
     // Re-aim rather than restart while a Song station is running, so the seed survives the change of
     // mood; the hook holds the seed, which is also what makes this work for a resumed station.
@@ -2656,7 +2656,12 @@ export default function PlayFilesPage() {
                         className={SHEET_OPENER_CLASS}
                         aria-label="More like this"
                         data-testid="sid-radio-start"
-                        title={`Start a station from ${currentDisplay?.title ?? "this tune"}`}
+                        disabled={!sidRadioSeedIsHvscTune}
+                        title={
+                          sidRadioSeedIsHvscTune
+                            ? `Start a station from ${currentDisplay?.title ?? "this tune"}`
+                            : "Not available: this tune is not in the HVSC library."
+                        }
                         onClick={() =>
                           void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
                         }

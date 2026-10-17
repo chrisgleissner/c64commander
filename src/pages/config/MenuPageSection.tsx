@@ -91,6 +91,7 @@ export const MenuPageSection = memo(function MenuPageSection({
     group: "config-group-actions",
   });
   const sectionId = `config-menu-section-${slug}`;
+  const headerId = `config-menu-page-${slug}`;
 
   // Every REST category whose values are rendered on this page: the block categories
   // plus the advanced categories whose unclaimed items smart-route onto this page.
@@ -122,11 +123,11 @@ export const MenuPageSection = memo(function MenuPageSection({
       summary={groupLabel ?? undefined}
       icon={configCategoryIcon(page.label)}
       headerRef={headerFocusRef}
-      toggleTestId={`config-menu-page-${slug}`}
+      toggleTestId={headerId}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
       plainIcon
-      actions={configRefreshAction(isOpen, refreshFocusRef, page.label, slug, handleRefresh)}
+      actions={configRefreshAction(isOpen, refreshFocusRef, page.label, slug, handleRefresh, headerId)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: page.label }, "ConfigHeader")}
     >
       {blocks.map((block) => (

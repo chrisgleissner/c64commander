@@ -520,9 +520,18 @@ describe("SelectableActionList", () => {
     expect(title).toHaveTextContent("3:05");
   });
 
-  it("keeps the wrapping flex row on profiles the dense grid does not apply to", () => {
+  it("lays a medium row out in the same grid as compact, so the item menu sits at the right end", () => {
     localStorage.clear();
     setViewportWidth(393);
+    renderRow({ menuItems: [{ type: "info", label: "Type", value: "SID" }] });
+
+    expect(screen.getByTestId("row")).toHaveClass("grid", "grid-cols-[2.75rem_minmax(0,1fr)_2.75rem_2.75rem]");
+    expect(screen.getByRole("button", { name: "Item actions" }).parentElement).toHaveClass("col-start-4");
+  });
+
+  it("keeps the wrapping flex row on profiles the dense grid does not apply to", () => {
+    localStorage.clear();
+    setViewportWidth(800);
     renderRow({});
 
     expect(screen.getByTestId("row")).toHaveClass("flex", "flex-wrap");

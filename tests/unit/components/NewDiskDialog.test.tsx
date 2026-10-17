@@ -51,6 +51,15 @@ describe("NewDiskDialog", () => {
     await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveAttribute("placeholder", "/USB0"));
   });
 
+  it("falls back to the /USB0 example when the device lists only non-persistent roots", async () => {
+    setup(
+      undefined,
+      vi.fn(async () => ["Temp"]),
+    );
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveAttribute("placeholder", "/USB0"));
+    expect(screen.getByTestId("new-disk-folder")).toHaveValue("");
+  });
+
   it("scrolls the fields above a footer that always holds Cancel and Create", async () => {
     setup();
     await deviceFolderShown();

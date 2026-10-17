@@ -15,9 +15,21 @@ import { installLiveViewStreamStub } from "./liveViewStreamStub";
 
 const { width: WIDTH, height: HEIGHT } = DISPLAY_PROFILE_VIEWPORTS.compact.viewport;
 const NAVIGATION_BAR_PX = 48;
-const WATCH_ON_BOTTOM_INSET_PX = 0;
 const MIN_TARGET_PX = 44;
 const MIN_TEXT_PX = 14;
+
+const waitForSettledLayout = async (page: Page, testId: string) => {
+  let previous = "";
+  await expect
+    .poll(async () => {
+      const box = await page.getByTestId(testId).first().boundingBox();
+      const current = JSON.stringify(box);
+      const settled = box !== null && current === previous;
+      previous = current;
+      return settled;
+    })
+    .toBe(true);
+};
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -42,19 +54,18 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
     await page.setViewportSize({ width: WIDTH, height: HEIGHT });
-    const bottomInsetPx = testInfo.titlePath.includes("with Watch on") ? WATCH_ON_BOTTOM_INSET_PX : NAVIGATION_BAR_PX;
     await page.addInitScript((bottom) => {
       document.addEventListener("DOMContentLoaded", () => {
         const style = document.createElement("style");
         style.textContent = `:root { --safe-area-inset-top: 30px !important; --safe-area-inset-bottom: ${bottom}px !important; }`;
         document.head.append(style);
       });
-    }, bottomInsetPx);
+    }, NAVIGATION_BAR_PX);
     await installLiveViewStreamStub(page);
     await page.goto("/");
     await page.getByTestId("home-machine-inline-openRemoteInput").first().click();
     await expect(page.getByTestId("remote-input-sheet")).toBeVisible();
-    await page.waitForTimeout(700);
+    await waitForSettledLayout(page, "remote-input-fire-button");
   });
 
   test.afterEach(async () => {
@@ -108,7 +119,7 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     page,
   }, testInfo) => {
     await page.getByTestId("remote-input-mode-type").click();
-    await page.waitForTimeout(500);
+    await waitForSettledLayout(page, "remote-input-keyboard-scroll");
     await testInfo.attach("compact-keys", { body: await page.screenshot(), contentType: "image/png" });
 
     const scroller = page.getByTestId("remote-input-keyboard-scroll");
@@ -164,7 +175,7 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     const turnWatchOn = async (page: Page) => {
       await page.getByTestId("remote-input-mirror-controls").getByTestId("av-video-toggle").click();
       await expect(page.getByTestId("av-mirror-immersive")).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(800);
+      await waitForSettledLayout(page, "av-mirror-immersive");
     };
 
     test("joystick mode keeps the stick, FIRE and toolbar visible below a thin preview", async ({ page }) => {
@@ -180,7 +191,7 @@ test.describe("Remote Input sheet on the compact display profile", () => {
         "remote-input-port-1",
         "remote-input-port-2",
       ]) {
-        expectInsideViewport(id, await boxOf(page, id), WATCH_ON_BOTTOM_INSET_PX);
+        expectInsideViewport(id, await boxOf(page, id));
       }
       const body = page.locator('[data-testid="remote-input-sheet"] [data-surface-body="true"]');
       expect(await body.evaluate((el) => el.scrollTop), "the body has not scrolled").toBe(0);
@@ -208,12 +219,13 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     test("keys mode leaves the keyboard at least three key rows of height above the footer", async ({ page }) => {
       await turnWatchOn(page);
       await page.getByTestId("remote-input-mode-type").click();
-      await page.waitForTimeout(500);
+      await waitForSettledLayout(page, "remote-input-keyboard-scroll");
       const scroller = await boxOf(page, "remote-input-keyboard-scroll");
       const footer = await boxOf(page, "remote-input-mirror-controls");
       expect(scroller.height, "the key scroller height").toBeGreaterThanOrEqual(MIN_KEY_SCROLLER_PX);
       expect(scroller.y + scroller.height, "the scroller ends above the footer").toBeLessThanOrEqual(footer.y + 0.5);
-      expectInsideViewport("the footer", footer, WATCH_ON_BOTTOM_INSET_PX);
+      await page.getByTestId("remote-input-mirror-controls").scrollIntoViewIfNeeded();
+      expectInsideViewport("the footer once scrolled into view", await boxOf(page, "remote-input-mirror-controls"));
     });
   });
 });

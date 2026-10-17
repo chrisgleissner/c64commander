@@ -264,7 +264,9 @@ test.describe("UI coverage", () => {
 
     await page.emulateMedia({ colorScheme: "light" });
     await page.goto("/play", { waitUntil: "domcontentloaded" });
-    const playIcon = page.getByTestId("file-origin-icon").first();
+    // Playlist rows no longer draw the origin glyph; the Add items source chooser still does.
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+    const playIcon = page.getByRole("dialog").getByTestId("file-origin-icon").first();
     await expect(playIcon).toBeVisible();
     const lightStroke = await settledStroke(playIcon);
     await snap(page, testInfo, "play-icons-light");
