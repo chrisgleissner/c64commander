@@ -470,7 +470,7 @@ Listed below in the order they are rendered and walked by the focus ring.
 
 **SID Radio** _(flag `c64u_sid_radio_enabled`)_
 
-- Start a station from the current tune — button (label **Similar**, accessible name "More like this") — `sid-radio-start` — R✅ I✅ _(shown for a playing SID)_
+- Start a station from the current tune — button (label **Similar**, accessible name "More like this") — `sid-radio-start` — R✅ I✅ _(shown for a playing SID; disabled when the tune is not in the HVSC library)_
 - Open the station launcher — button (label **Radio**, accessible name "SID Radio") — `sid-radio-launcher` — R✅ I✅ ; sheet `sid-radio-launcher-sheet`
   - Needs HVSC — focusable note (`tabindex=0`) — `sid-radio-needs-hvsc` — first ring stop in the
     sheet `[shown only while no HVSC music is installed]` — code-verified, not yet enumerated on hardware

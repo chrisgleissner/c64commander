@@ -2656,7 +2656,12 @@ export default function PlayFilesPage() {
                         className={SHEET_OPENER_CLASS}
                         aria-label="More like this"
                         data-testid="sid-radio-start"
-                        title={`Start a station from ${currentDisplay?.title ?? "this tune"}`}
+                        disabled={!sidRadioSeedIsHvscTune}
+                        title={
+                          sidRadioSeedIsHvscTune
+                            ? `Start a station from ${currentDisplay?.title ?? "this tune"}`
+                            : "Not available: this tune is not in the HVSC library."
+                        }
                         onClick={() =>
                           void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
                         }

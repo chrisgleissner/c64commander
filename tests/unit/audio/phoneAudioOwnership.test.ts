@@ -46,7 +46,7 @@ describe("phone audio ownership", () => {
     const local = {};
     claimPhoneAudio("av-mirror", mirror, vi.fn());
     claimPhoneAudio("local-sid", local, vi.fn());
-    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Listen stopped" }));
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Listen stopped", alwaysVisible: true }));
 
     vi.mocked(toast).mockClear();
     claimPhoneAudio("av-mirror", {}, vi.fn());
