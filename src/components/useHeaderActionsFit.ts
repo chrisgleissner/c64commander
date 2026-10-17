@@ -22,8 +22,13 @@ export interface HeaderRowWidths {
 }
 
 /** Whether title, actions and chevron share one row with the full title drawn. */
+// Canvas text width and laid-out text width differ by a few pixels between machines and fonts; a title measured
+// to fit with no room to spare was then cut to a short form by the heading's own fit.
+const ONE_ROW_SLACK_PX = 8;
+
 export const headerFitsOneRow = (widths: HeaderRowWidths): boolean =>
-  widths.toggleChrome + widths.title + widths.actions + widths.chevron + widths.rowChrome <= widths.available + 0.5;
+  widths.toggleChrome + widths.title + widths.actions + widths.chevron + widths.rowChrome <=
+  widths.available - ONE_ROW_SLACK_PX;
 
 let measureContext: CanvasRenderingContext2D | null = null;
 const measureText = (text: string, element: Element): number => {
