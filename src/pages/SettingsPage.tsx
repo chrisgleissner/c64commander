@@ -1557,7 +1557,6 @@ export default function SettingsPage() {
                       );
                     })}
                   </div>
-                  <HelperText>Portrait stays upright, Landscape stays wide, Auto follows the phone.</HelperText>
                 </div>
                 {isAndroid ? (
                   <div className="space-y-2 pt-2" data-testid="settings-full-screen">
@@ -1610,7 +1609,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap min-w-0">
                     <div className="min-w-[9rem] flex-1">
                       <Label className="text-sm font-medium">Saved devices</Label>
-                      <HelperText>Manage devices here. Long press the header badge to switch quickly.</HelperText>
+                      <HelperText>Long press the header badge to switch quickly.</HelperText>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Button
@@ -2794,8 +2793,8 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     User agent in use: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
-                  <div className="mt-2">The phone may block a custom host for security reasons, especially on iOS.</div>
                   </div>
+                  <div className="mt-2">The phone may block a custom host for security reasons, especially on iOS.</div>
                 </div>
 
                 <Button

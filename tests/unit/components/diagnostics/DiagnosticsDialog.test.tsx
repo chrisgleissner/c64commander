@@ -390,9 +390,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-header")).toBeVisible();
     expect(screen.getByTestId("evidence-panel")).toBeVisible();
     expect(screen.getByTestId("evidence-heading")).toHaveTextContent("Activity");
-    expect(screen.getByTestId("activity-kinds-line")).toHaveTextContent(
-      "Problems, actions, logs, and traces across App, REST, FTP, and Telnet",
-    );
+    expect(screen.queryByTestId("activity-kinds-line")).toBeNull();
     expect(screen.getByTestId("filters-collapsed-bar")).toBeVisible();
     expect(screen.queryByText(/in view/i)).toBeNull();
     expect(screen.queryByTestId("filters-editor-surface")).toBeNull();
