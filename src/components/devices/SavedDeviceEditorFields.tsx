@@ -236,11 +236,12 @@ export function SavedDeviceEditorFields({
             data-testid={`${idPrefix}-http-field`}
           >
             <Label htmlFor={`${idPrefix}-http`} className="text-xs text-muted-foreground">
-              HTTP port
+              HTTP
             </Label>
             <Input
               ref={httpFocus.inputRef}
               id={`${idPrefix}-http`}
+              aria-label="HTTP port"
               inputMode="numeric"
               value={draft.httpPort}
               onChange={(event) => onChange({ ...draft, httpPort: sanitizeSavedDevicePortInput(event.target.value) })}
@@ -255,11 +256,12 @@ export function SavedDeviceEditorFields({
             data-testid={`${idPrefix}-ftp-field`}
           >
             <Label htmlFor={`${idPrefix}-ftp`} className="text-xs text-muted-foreground">
-              FTP port
+              FTP
             </Label>
             <Input
               ref={ftpFocus.inputRef}
               id={`${idPrefix}-ftp`}
+              aria-label="FTP port"
               inputMode="numeric"
               value={draft.ftpPort}
               onChange={(event) => onChange({ ...draft, ftpPort: sanitizeSavedDevicePortInput(event.target.value) })}
@@ -274,11 +276,12 @@ export function SavedDeviceEditorFields({
             data-testid={`${idPrefix}-telnet-field`}
           >
             <Label htmlFor={`${idPrefix}-telnet`} className="text-xs text-muted-foreground">
-              Telnet port
+              Telnet
             </Label>
             <Input
               ref={telnetFocus.inputRef}
               id={`${idPrefix}-telnet`}
+              aria-label="Telnet port"
               inputMode="numeric"
               value={draft.telnetPort}
               onChange={(event) => onChange({ ...draft, telnetPort: sanitizeSavedDevicePortInput(event.target.value) })}

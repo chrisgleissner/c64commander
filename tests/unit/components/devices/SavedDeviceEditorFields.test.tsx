@@ -110,4 +110,32 @@ describe("SavedDeviceEditorFields", () => {
     expect(screen.getByText("Auto")).toBeInTheDocument();
     expect(screen.getByText(/clear to follow the host/i)).toBeInTheDocument();
   });
+
+  it("labels the three ports with one short word each, so none wraps on a 320 px screen, and keeps the full name for assistive technology", () => {
+    render(
+      <SavedDeviceEditorFields
+        draft={{
+          name: "",
+          nameSource: "INFERRED",
+          host: "c64u",
+          type: "",
+          typeSource: "INFERRED",
+          httpPort: "80",
+          ftpPort: "21",
+          telnetPort: "64",
+        }}
+        onChange={vi.fn()}
+        idPrefix="saved-device"
+      />,
+    );
+
+    for (const [visible, name] of [
+      ["HTTP", "HTTP port"],
+      ["FTP", "FTP port"],
+      ["Telnet", "Telnet port"],
+    ]) {
+      expect(screen.getByText(visible, { selector: "label" })).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name })).toBeInTheDocument();
+    }
+  });
 });
