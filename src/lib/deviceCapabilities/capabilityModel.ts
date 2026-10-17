@@ -142,7 +142,9 @@ export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): Dev
     // `core_version` signal, never a family list. Cartridges (no core_version) are
     // correctly excluded; all U64-family computers (incl. plain U64/Elite) included.
     supportsPowerCycle: restReachable && isIntegratedComputer,
-    supportsMachineInput: false,
+    // Offered wherever the probe would be attempted. Whether the firmware really answers is learned
+    // when the Remote Input sheet opens, which then explains a refusal.
+    supportsMachineInput: restReachable && isIntegratedComputer,
     streamingSource,
   };
 };

@@ -27,7 +27,7 @@ describe("deviceCapabilities — deriveDeviceCapabilities", () => {
     expect(supportsStreaming(caps)).toBe(true);
     expect(supportsMenuInput(caps)).toBe(true);
     expect(supportsPowerCycle(caps)).toBe(true);
-    expect(supportsMachineInput(caps)).toBe(false);
+    expect(supportsMachineInput(caps)).toBe(true);
     expect(caps.streamingSource).toBe("core-version");
     expect(caps.firmwareVersion).toBe("1.1.0");
     expect(caps.coreVersion).toBe("1.49");
@@ -57,6 +57,7 @@ describe("deviceCapabilities — deriveDeviceCapabilities", () => {
     expect(supportsPowerCycle(caps)).toBe(false);
     expect(supportsStreaming(caps)).toBe(false);
     expect(supportsMenuInput(caps)).toBe(true);
+    expect(supportsMachineInput(caps)).toBe(false);
   });
 
   it("derives U2 (Ultimate II+) capabilities WITHOUT streaming or power cycle (no core_version)", () => {
