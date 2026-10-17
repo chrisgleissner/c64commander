@@ -817,7 +817,6 @@ const CategorySection = memo(function CategorySection({
     [audioConfiguredItems, authoritativeValues, categoryName, isAudioMixer, items],
   );
   const sectionId = `config-section-${configCategorySectionId(categoryName)}`;
-  const headerId = `config-category-${configCategorySectionId(categoryName)}`;
   const stagedRows = useStagedConfigRows(categoryName, displayItems, (item) => item.name);
   const rowChangeFor = useRowChangeCallbacks({ handleValueChange, handleAudioValueChange });
 
@@ -829,18 +828,11 @@ const CategorySection = memo(function CategorySection({
       summary={groupLabel ?? undefined}
       icon={configCategoryIcon(categoryName)}
       headerRef={categoryHeaderFocusRef}
-      toggleTestId={headerId}
+      toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
       plainIcon
-      actions={configRefreshAction(
-        isOpen,
-        refreshFocusRef,
-        displayTitle ?? categoryName,
-        categorySlug,
-        headerId,
-        handleRefresh,
-      )}
+      actions={configRefreshAction(isOpen, refreshFocusRef, displayTitle ?? categoryName, categorySlug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
       {isAudioMixer ? <ScreenActivityWatch onChange={restoreSoloWhenPageLeft} /> : null}

@@ -35,8 +35,8 @@ export const configRefreshAction = (
   buttonRef: Ref<HTMLButtonElement>,
   categoryLabel: string,
   slug: string,
-  headerId: string,
   onRefresh: () => void,
+  headerId = `config-category-${slug}`,
 ) =>
   isOpen ? (
     <ConfigRefreshButton
