@@ -790,13 +790,16 @@ class BackgroundExecutionService : Service() {
     }
 
     private fun updateDueAtInternal(nextDueAtMs: Long?) {
+        val hadWatchdog = dueAtMs != null
         dueRunnable?.let { handler.removeCallbacks(it) }
         dueRunnable = null
         dueAtMs = null
         dueAtElapsedMs = null
 
         if (nextDueAtMs == null) {
-            AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
+            if (hadWatchdog) {
+                AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
+            }
             return
         }
 
