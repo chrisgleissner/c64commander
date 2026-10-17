@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { createMockArchiveServer } from "./mockArchiveServer";
@@ -299,6 +302,14 @@ const seedSnapshots = async (page: Page) => {
     );
   });
 };
+
+const longNamedDiskFolder = () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "long-disk-"));
+  fs.copyFileSync("tests/fixtures/local-source-assets/demo.d64", path.join(folder, LONG_DISK_NAME));
+  return folder;
+};
+
+const LONG_DISK_NAME = "Bomb_Jack_(Hotman)_side_a_with_a_long_name.d64";
 
 test.describe("Every surface is usable on a 320x427 panel", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -792,6 +803,8 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     await page.getByTestId("new-disk-open").click();
     const newDisk = page.getByRole("dialog", { name: "New disk" });
+    await expect(newDisk.getByTestId("new-disk-create")).toBeInViewport({ ratio: 1 });
+    await expect(newDisk.getByRole("button", { name: "Cancel" })).toBeInViewport({ ratio: 1 });
     await audit.check(page, "Disks / New disk", newDisk, "form");
     await dismiss(page, newDisk);
 
@@ -817,13 +830,13 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     await page
       .locator('[data-slot-active="true"] input[type="file"][webkitdirectory]')
-      .setInputFiles("tests/fixtures/local-source-assets");
+      .setInputFiles(longNamedDiskFolder());
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 20_000 });
     await expect(page.getByTestId("disk-row").first()).toBeVisible({ timeout: 20_000 });
 
     await page
       .getByTestId("disk-row")
-      .filter({ hasText: "demo.d64" })
+      .filter({ hasText: "Bomb_Jack" })
       .first()
       .getByRole("button", { name: "Item actions" })
       .click();
@@ -831,9 +844,22 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await explorer.scrollIntoViewIfNeeded();
     await explorer.click();
 
-    const dialog = page.getByRole("dialog").filter({ hasText: "demo.d64" }).last();
+    const dialog = page.getByRole("dialog").filter({ hasText: "Bomb_Jack" }).last();
     await expect(dialog).toBeVisible({ timeout: 20_000 });
     await expect(dialog.getByTestId("disk-contents-loading")).toHaveCount(0, { timeout: 20_000 });
+    const clipped = await dialog.evaluate((root) => {
+      const rects = (selector: string) => Array.from(root.querySelectorAll<HTMLElement>(selector));
+      const problems: string[] = [];
+      for (const element of [...rects("h2"), ...rects('li[data-testid^="disk-entry-"] .font-medium')]) {
+        if (element.scrollWidth > element.clientWidth + 1) problems.push(`clipped: ${element.textContent}`);
+        if (getComputedStyle(element).textOverflow === "ellipsis") problems.push(`ellipsis: ${element.textContent}`);
+      }
+      for (const badge of rects('li[data-testid^="disk-entry-"] .rounded-full')) {
+        if (badge.getBoundingClientRect().height > 32) problems.push(`badge wraps: ${badge.textContent}`);
+      }
+      return problems;
+    });
+    expect(clipped, "disk contents text that is clipped or wrapped per letter").toEqual([]);
     await audit.check(page, "Disks / Disk contents", dialog, "list");
 
     audit.assertAllUsable();

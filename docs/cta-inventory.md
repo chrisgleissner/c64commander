@@ -434,13 +434,14 @@ not-connected / empty / single-device).
 - Item actions (⋮) — button — `playlist-item-actions-<title>` — R✅ I✅ — on the compact profile it opens
   the **Item actions sheet** (`action-list-item-sheet`), a bottom sheet titled with the item's name; on other
   profiles it opens the same entries as a menu beside the row. The sheet holds, in order: Play — button —
-  `action-list-item-sheet-primary` (plays the item and closes the sheet); the **Details** and **Config** blocks
-  (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then Attached, Status, Origin,
-  Candidates, Overrides, and Location when a config is attached); then Review playback config, Attach or Change
-  local / C64U .cfg, and Remove config association `[only with a config attached]`. Each details block is one
-  keypad stop, and the sheet opens on the first; Down on a block taller than the sheet scrolls the rest of it
-  into view before moving on. Back closes the sheet and returns focus and the selection to ⋮. In the menu the
-  detail rows are menu items the arrow keys stop on; OK on one does nothing and leaves the menu open.
+  `action-list-item-sheet-primary` (plays the item and closes the sheet); then the actions (Review playback config,
+  Attach or Change local / C64U .cfg, and Remove config association `[only with a config attached]`); then the
+  **Details** and **Config** blocks (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then
+  Attached, Status, Origin, Candidates, Overrides, and Location when a config is attached). Each detail row
+  (`action-list-item-sheet-detail-row`) is one keypad stop, so a block taller than the sheet is read row by row.
+  The sheet opens on its first action. Back closes the sheet and returns focus and the selection to ⋮. In the menu
+  the actions come first and the detail rows follow as menu items the arrow keys stop on; OK on one does nothing and
+  leaves the menu open.
 - Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
   **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
   how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,
@@ -456,7 +457,7 @@ not-connected / empty / single-device).
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying` and not on a device that cannot stream, such as a U2)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button (label **Input**, accessible name "Remote Input") — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
 - Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
-- Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — minimum 44px target height; tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered for audio this device renders (see _Listen on_ below), and on the C64 route once the app has found the Ultimate's SID player on screen for a tune with its own play routine on a machine that takes key input (a jump there restarts the tune when it goes back, then fast forwards). Otherwise the bar is a plain indicator (`playback-progress`) and not focusable.
+- Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — minimum 44px target height; tap or drag to jump within the tune; **also operable without a pointer**: it owns `ArrowLeft`/`ArrowRight` while focused (Up and Down still move the ring), which step ∓5 s per press and 15 s per key repeat; the guidance bar names OK as Seek. The new position is applied once, after the keys stop. Rendered for audio this device renders (see _Listen on_ below), and on the C64 route once the app has found the Ultimate's SID player on screen for a tune with its own play routine on a machine that takes key input (a jump there restarts the tune when it goes back, then fast forwards). Otherwise the bar is a plain indicator (`playback-progress`) and not focusable.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track; a tap still skips. Playing on this device it steps five seconds at a time. Playing on the C64 (under the same conditions as the progress bar), holding Next fast forwards with the C64's CPU speed raised one step a second, and holding Previous moves the target back 10, 20, 40, then 80 seconds a second and jumps there on release. Pointer only: a keypad OK press on either button is a tap.
 
 **Listen on** — group `playback-engine-toggle` _(flag `c64u_local_engine_enabled`; SID items only)_ — an equal-width grid, three columns normally and two while **Both** is hidden, so the row holds one line on the compact profile; no origin icons, because a third of that row cannot fit icon plus label.
@@ -476,7 +477,7 @@ Listed below in the order they are rendered and walked by the focus ring.
   - Install HVSC — button — `sid-radio-install-hvsc` — closes the launcher and opens the HVSC
     preparation sheet `[shown only while no HVSC music is installed and HVSC is enabled]` — code-verified,
     not yet enumerated on hardware
-  - Song moods — button — `sid-radio-song-mood-<bit|all>` `[disabled: no HVSC installed, or the mood has no members]`
+  - Song moods — button — `sid-radio-song-mood-<bit|all>`, under a bordered "Similar to <tune>" heading with a hint (`sid-radio-song-hint`; a keypad stop when it says the tune is not in HVSC) `[disabled: no HVSC installed, the tune is not an HVSC tune, or the mood has no members]`
   - Style stations — button — `sid-radio-style-<bit>` (0–8) — R✅ I✅ `[disabled: no HVSC installed, or the export left this style with no tracks — see size `sid-radio-style-<bit>-size`]`
   - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅ `[disabled: no HVSC installed]`
   - Collections — button — `sid-radio-collection-<id>` (`winners`, `screen`, `games`, `pioneers`, `synthpop`,
