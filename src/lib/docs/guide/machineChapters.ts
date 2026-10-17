@@ -8,7 +8,7 @@
 
 import { Disc, Gamepad2, Keyboard as KeyboardIcon, MonitorPlay, Save, Sliders } from "lucide-react";
 import { appDeviceName, isKeypadEdition } from "@/lib/docs/deviceNames";
-import { backKeyName } from "@/lib/docs/guide/keyNames";
+import { backKeyName, menuKeyName } from "@/lib/docs/guide/keyNames";
 import type { GuideBlock, GuideChapter, GuideContext } from "@/lib/docs/guide/types";
 
 export const diskChapter = ({ variantId, flags }: GuideContext): GuideChapter => ({
@@ -97,8 +97,8 @@ export const remoteInputChapter = ({ variantId }: GuideContext): GuideChapter =>
               { key: "`#`", action: "Switch between letters and digits" },
               { key: "OK", action: "RETURN" },
               { key: "D-pad", action: "The cursor keys" },
-              { key: "Right Soft Key", action: "Delete" },
-              { key: "Left Soft Key", action: "The menu, with **Close Remote Input**" },
+              { key: menuKeyName(variantId), action: "Delete" },
+              { key: backKeyName(variantId), action: "The menu, with **Close Remote Input**" },
             ],
           } satisfies GuideBlock,
         ]

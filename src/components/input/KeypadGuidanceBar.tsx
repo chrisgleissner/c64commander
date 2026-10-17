@@ -53,6 +53,7 @@ import { isAnyOverlayOpen, isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } f
 import { isT9Field } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { getKeyLabels } from "@/lib/variant/keyLabels";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
 const buildGuidanceState = (
@@ -293,9 +294,10 @@ export const KeypadGuidanceBar = () => {
     // chrome that mirrors on-screen text, so a single string keeps it out of
     // role/text queries for the real controls behind it.
     setTextIfChanged(breadcrumbRef.current, formatBreadcrumb(labels.breadcrumb));
-    setActionText(leftActionRef.current, "Back", labels.left);
-    applySlot(centerSlotRef.current, centerActionRef.current, labels.center, "OK");
-    applySlot(rightSlotRef.current, rightActionRef.current, labels.right, "Menu");
+    const caps = getKeyLabels();
+    setActionText(leftActionRef.current, caps.leftCap, labels.left);
+    applySlot(centerSlotRef.current, centerActionRef.current, labels.center, caps.centerCap);
+    applySlot(rightSlotRef.current, rightActionRef.current, labels.right, caps.rightCap);
     applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
   }, [context, gameModeAvailable, t9Enabled]);
 
@@ -325,6 +327,7 @@ export const KeypadGuidanceBar = () => {
 
   if (!context) return null;
 
+  const caps = getKeyLabels();
   return (
     // aria-hidden: the focused element already conveys position/role to assistive
     // tech (it carries real DOM focus), so the bar is redundant chrome for AT and
@@ -342,7 +345,7 @@ export const KeypadGuidanceBar = () => {
       </div>
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">
-          <kbd className="keypad-guidance-cap">Back</kbd>
+          <kbd className="keypad-guidance-cap">{caps.leftCap}</kbd>
           <span ref={leftActionRef} className="keypad-guidance-action" />
         </span>
         <span
@@ -351,7 +354,7 @@ export const KeypadGuidanceBar = () => {
           data-soft="center"
           data-testid="keypad-guidance-center"
         >
-          <kbd className="keypad-guidance-cap">OK</kbd>
+          <kbd className="keypad-guidance-cap">{caps.centerCap}</kbd>
           <span ref={centerActionRef} className="keypad-guidance-action" />
         </span>
         <span
@@ -361,7 +364,7 @@ export const KeypadGuidanceBar = () => {
           data-testid="keypad-guidance-right"
           hidden
         >
-          <kbd className="keypad-guidance-cap">Menu</kbd>
+          <kbd className="keypad-guidance-cap">{caps.rightCap}</kbd>
           <span ref={rightActionRef} className="keypad-guidance-action" />
         </span>
         <span

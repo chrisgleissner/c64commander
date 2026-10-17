@@ -204,7 +204,7 @@ export const keypadChapter = ({ variantId }: GuideContext): GuideChapter => {
                 { key: "`1`", action: "Punctuation, such as `.` `@` and `-`" },
                 { key: "`#`", action: "Switch between letters and digits" },
                 { key: "`*`", action: "Change the case of the last letter; in host fields, cycle `.` `:` `-`" },
-                { key: "Right Soft Key", action: "Delete the last character" },
+                { key: menuKeyName(variantId), action: "Delete the last character" },
               ],
             } satisfies GuideBlock,
           ]

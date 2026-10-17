@@ -29,6 +29,7 @@
 import type { InputModality } from "./inputModality";
 import { selectorPresence } from "./selectorPresence";
 import { READING_STOP_ATTR } from "./discovery";
+import { getKeyLabels } from "@/lib/variant/keyLabels";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
@@ -134,14 +135,17 @@ export const resolveSoftKeyMenuOverlayLabels = (
   visible: boolean,
   overlayTitle: string | null,
   menuKey: SoftKeyMenuKey,
-): GuidanceLabels => ({
-  visible,
-  breadcrumb: overlayTitle ? [overlayTitle] : [],
-  left: menuKey === "back" ? "Menu" : "Close",
-  center: menuKey === "back" ? "Return" : null,
-  right: menuKey === "back" ? "Delete" : "Menu",
-  shortcut: null,
-});
+): GuidanceLabels => {
+  const words = getKeyLabels();
+  return {
+    visible,
+    breadcrumb: overlayTitle ? [overlayTitle] : [],
+    left: menuKey === "back" ? words.menuWord : words.closeWord,
+    center: menuKey === "back" ? "Return" : null,
+    right: menuKey === "back" ? words.deleteWord : words.menuWord,
+    shortcut: null,
+  };
+};
 
 /** PURE: the labels while that menu is open. */
 export const resolveSoftKeyMenuPanelLabels = (
@@ -151,7 +155,7 @@ export const resolveSoftKeyMenuPanelLabels = (
 ): GuidanceLabels => ({
   visible,
   breadcrumb: [menuTitle, entryLabel].filter((segment): segment is string => Boolean(segment)),
-  left: "Close",
+  left: getKeyLabels().closeWord,
   center: "Select",
   right: null,
   shortcut: null,
@@ -171,11 +175,12 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   const visible = state.enabled && state.modality === "key-navigation";
   const breadcrumb = state.breadcrumb.slice(-MAX_BREADCRUMB_SEGMENTS);
 
+  const words = getKeyLabels();
   let left: string;
-  if (state.layerOpen) left = "Close";
+  if (state.layerOpen) left = words.closeWord;
   else if (state.fieldEngaged) left = "Done";
   else if (!state.atRoot) left = "Exit";
-  else left = "Back";
+  else left = words.backWord;
 
   let center: string | null;
   if (state.layerOpen) center = "Select";
@@ -184,8 +189,8 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
 
   let right: string | null = null;
-  if (state.fieldDeletes) right = "Delete";
-  else if (state.hasMenu) right = "Menu";
+  if (state.fieldDeletes) right = words.deleteWord;
+  else if (state.hasMenu) right = words.menuWord;
   const shortcut = state.gameModeShortcut ? "Game Mode" : null;
 
   return { visible, breadcrumb, left, center, right, shortcut };
