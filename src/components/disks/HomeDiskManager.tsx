@@ -89,7 +89,7 @@ import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDepende
 import { forgetUploadMount } from "@/lib/disks/uploadMountRegistry";
 import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 import * as mountSupport from "@/components/disks/driveMountSupport";
-import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
+import { Switch } from "@/components/ui/switch";
 import {
   createDiskEntry,
   getDiskFolderPath,
@@ -249,6 +249,21 @@ const FocusableDiskButton = ({
   });
 
   return <Button ref={focusRef} disabled={disabled} {...props} />;
+};
+
+const FocusableDiskSwitch = ({
+  focusId,
+  focusOrder,
+  disabled,
+  ...props
+}: ComponentProps<typeof Switch> & { focusId: string; focusOrder: number }) => {
+  const focusRef = useFocusItem<HTMLButtonElement>({
+    id: focusId,
+    order: focusOrder,
+    group: "disks-drive-controls",
+    disabled: Boolean(disabled),
+  });
+  return <Switch ref={focusRef} disabled={disabled} {...props} />;
 };
 
 // Every drive config item whose Bus ID range / Drive Type choices must be sourced from the device.
@@ -2013,19 +2028,15 @@ export const HomeDiskManager = () => {
                   // holds a disk, are the two things worth seeing and changing without opening it.
                   actions={
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <FocusableDiskButton
+                      <FocusableDiskSwitch
                         focusId={`disks-drive-${key}-status-toggle`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 0)}
-                        variant="outline"
-                        size="sm"
-                        className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(powerEnabled))}
-                        onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
+                        checked={powerEnabled}
+                        onCheckedChange={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                         disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                         data-testid={`drive-status-toggle-${key}`}
-                        aria-label={`${powerEnabled ? "Turn off" : "Turn on"} ${driveLabel}`}
-                      >
-                        {powerEnabled ? "ON" : "OFF"}
-                      </FocusableDiskButton>
+                        aria-label={`${driveLabel} power`}
+                      />
                       <FocusableDiskButton
                         focusId={`disks-drive-${key}-mount-toggle`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 10)}
@@ -2222,13 +2233,11 @@ export const HomeDiskManager = () => {
               defaultOpen={false}
               actions={
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <FocusableDiskButton
+                  <FocusableDiskSwitch
                     focusId="disks-soft-iec-status-toggle"
                     focusOrder={300}
-                    variant="outline"
-                    size="sm"
-                    className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(softIecPowerEnabled))}
-                    onClick={() =>
+                    checked={softIecPowerEnabled}
+                    onCheckedChange={() =>
                       void handleSoftIecConfigUpdate(
                         "IEC Drive",
                         softIecPowerEnabled ? "Disabled" : "Enabled",
@@ -2238,10 +2247,8 @@ export const HomeDiskManager = () => {
                     }
                     disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
                     data-testid="drive-status-toggle-soft-iec"
-                    aria-label={`${softIecPowerEnabled ? "Turn off" : "Turn on"} Soft IEC drive`}
-                  >
-                    {softIecPowerEnabled ? "ON" : "OFF"}
-                  </FocusableDiskButton>
+                    aria-label="Soft IEC drive power"
+                  />
                   <FocusableDiskButton
                     focusId="disks-soft-iec-mount-toggle"
                     focusOrder={310}

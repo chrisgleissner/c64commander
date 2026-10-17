@@ -213,6 +213,7 @@ const ActionListRow = React.memo(function ActionListRow({
       data-testid={rowTestId}
       data-row-id={item.id}
       data-playing={isPlaying ? "true" : "false"}
+      data-key-nav-menu-host={item.showMenu === false ? undefined : ""}
     >
       <div className={dense ? "contents" : "flex items-center gap-1 shrink-0"}>
         {item.showSelection !== false ? (

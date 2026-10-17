@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { beginKeyCapture } from "@/lib/input/keyCaptureState";
@@ -245,7 +245,7 @@ export const GameModeSettingsSection = () => {
             Programs, cartridges and disk images enter Game Mode. Tunes and playlist auto-advance are unaffected.
           </p>
         </div>
-        <Checkbox
+        <Switch
           id="settings-game-mode-on-launch"
           data-testid="settings-game-mode-on-launch"
           checked={onLaunch}
@@ -267,7 +267,7 @@ export const GameModeSettingsSection = () => {
             you can see which one it picked. Turn it off if you would rather have the picture clear.
           </p>
         </div>
-        <Checkbox
+        <Switch
           id="settings-follow-marker"
           data-testid="settings-follow-marker"
           checked={followMarker}

@@ -897,8 +897,8 @@ describe("HomePage SID status", () => {
     expect(ultiSid1).toBeTruthy();
     expect(ultiSid2).toBeTruthy();
 
-    expect(screen.getByTestId("home-sid-toggle-socket1").textContent).toBe("ON");
-    expect(screen.getByTestId("home-sid-toggle-socket2").textContent).toBe("OFF");
+    expect(screen.getByTestId("home-sid-toggle-socket1")).toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-socket2")).not.toBeChecked();
 
     sidSocketsPayloadRef.current = {
       "SID Sockets Configuration": {
@@ -927,10 +927,10 @@ describe("HomePage SID status", () => {
       />,
     );
 
-    expect(screen.getByTestId("home-sid-toggle-socket1").textContent).toBe("OFF");
-    expect(screen.getByTestId("home-sid-toggle-socket2").textContent).toBe("ON");
-    expect(screen.getByTestId("home-sid-toggle-ultiSid1").textContent).toBe("ON");
-    expect(screen.getByTestId("home-sid-toggle-ultiSid2").textContent).toBe("OFF");
+    expect(screen.getByTestId("home-sid-toggle-socket1")).not.toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-socket2")).toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-ultiSid1")).toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-ultiSid2")).not.toBeChecked();
   });
 
   it("renders stream rows with full IP:PORT endpoint values from Data Streams config", () => {

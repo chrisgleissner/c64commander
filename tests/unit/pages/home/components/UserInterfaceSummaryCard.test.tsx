@@ -25,8 +25,8 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", () => ({
   }),
 }));
 
-vi.mock("@/components/ui/checkbox", () => ({
-  Checkbox: ({ checked, onCheckedChange, disabled, "aria-label": ariaLabel, "data-testid": testId }: any) => (
+vi.mock("@/components/ui/switch", () => ({
+  Switch: ({ checked, onCheckedChange, disabled, "aria-label": ariaLabel, "data-testid": testId }: any) => (
     <input
       type="checkbox"
       checked={checked}

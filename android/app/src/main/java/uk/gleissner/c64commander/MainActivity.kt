@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.app.ActivityManager
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
@@ -158,6 +159,7 @@ open class MainActivity : BridgeActivity() {
     registerPlugin(TelnetSocketPlugin::class.java)
     bridgeBuilder.addWebViewListener(renderProcessGoneRecovery)
     super.onCreate(savedInstanceState)
+    acceptResumeRequest(intent, redeliverToWebView = false)
     applySystemFontScale()
     installLanCookieBypassIfNeeded()
     WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -173,6 +175,33 @@ open class MainActivity : BridgeActivity() {
             "Android memory class detected: memoryClass=$memoryClass, largeMemoryClass=$largeMemoryClass",
             "MainActivity",
     )
+  }
+
+  /**
+   * A cold start has no web layer to tell yet, so the request waits for it to ask; a running one is
+   * told through the same broadcast a media button uses.
+   */
+  internal fun acceptResumeRequest(
+    launchIntent: Intent?,
+    redeliverToWebView: Boolean,
+    gate: ResumeRequestGate = ResumeRequestGate(SharedPreferencesResumeNonceStore(this)),
+  ) {
+    val command = gate.accept(launchIntent) ?: return
+    AppLogger.info(null, "MainActivity", "Resume request accepted (command=$command)", "MainActivity")
+    if (!redeliverToWebView) {
+      PendingResumeCommand.offer(command)
+      return
+    }
+    sendBroadcast(
+      Intent(BackgroundExecutionService.ACTION_TRANSPORT_COMMAND)
+        .setPackage(packageName)
+        .putExtra(BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND, command)
+    )
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    acceptResumeRequest(intent, redeliverToWebView = true)
   }
 
   internal fun isUnpersistableShareActivityCall(call: PluginCall?): Boolean {

@@ -103,6 +103,9 @@ interface UsePlaybackPersistenceProps {
   setSessionRestoreSettled: (settled: boolean) => void;
 }
 
+/** The longest a playing session's stored position may lag behind the tune. */
+export const PLAYBACK_SESSION_HEARTBEAT_MS = 5_000;
+
 // Tunes of one SID share a track record, so only the item's own duration is specific to it. Records
 // written before the override existed carry no field and fall back to the track.
 const resolveRestoredItemDurationMs = (item: PlaylistItemRecord, track: TrackRecord) =>
@@ -716,6 +719,21 @@ export function usePlaybackPersistence({
     ],
   );
   usePlaybackTimeEffect(playbackTime, persistSession);
+
+  // The clock only ticks while the Play tab is shown, and a destroyed activity resumes from the last stored position.
+  const persistSessionRef = useRef(persistSession);
+  persistSessionRef.current = persistSession;
+  useEffect(() => {
+    if (!isPlaying || isPaused) return;
+    const timer = window.setInterval(() => {
+      const startedAtMs = trackStartedAtRef.current;
+      if (startedAtMs === null) return;
+      const shown = playbackTime.read();
+      const elapsedMs = Math.max(shown.elapsedMs, Date.now() - startedAtMs);
+      persistSessionRef.current({ elapsedMs, playedMs: shown.playedMs + (elapsedMs - shown.elapsedMs) });
+    }, PLAYBACK_SESSION_HEARTBEAT_MS);
+    return () => window.clearInterval(timer);
+  }, [isPlaying, isPaused, playbackTime, trackStartedAtRef]);
 
   return { readRepositoryPlaylist, playlistHydrated: restoreVersion > 0 };
 }

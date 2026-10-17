@@ -87,6 +87,14 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     return undefined;
   }
 
+  async heartbeat(): Promise<void> {
+    return undefined;
+  }
+
+  async takeLaunchCommand(): Promise<{ command: null }> {
+    return { command: null };
+  }
+
   /** The browser has no foreground-service notification, so there is nothing to ask for. */
   async checkPermissions(): Promise<BackgroundExecutionPermissions> {
     return { notifications: "granted" };

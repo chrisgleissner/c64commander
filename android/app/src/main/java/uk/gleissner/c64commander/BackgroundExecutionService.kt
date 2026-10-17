@@ -45,6 +45,7 @@ class BackgroundExecutionService : Service() {
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
         const val ACTION_TRANSPORT_COMMAND = "uk.gleissner.c64commander.action.TRANSPORT_COMMAND"
         const val ACTION_SET_PLAYBACK_STATE = "uk.gleissner.c64commander.action.SET_PLAYBACK_STATE"
+        const val ACTION_STOP_SESSION = "uk.gleissner.c64commander.action.STOP_SESSION"
         const val EXTRA_DUE_AT_MS = "dueAtMs"
         const val EXTRA_FIRED_AT_MS = "firedAtMs"
         const val EXTRA_COMMAND_GENERATION = "commandGeneration"
@@ -82,6 +83,7 @@ class BackgroundExecutionService : Service() {
         private const val TRANSPORT_REQUEST_PAUSE = 2
         private const val TRANSPORT_REQUEST_NEXT = 3
         private const val TRANSPORT_REQUEST_STOP = 4
+        private const val REQUEST_RESUME_CONTENT = 6
 
         @Volatile
         var isRunning = false
@@ -200,6 +202,16 @@ class BackgroundExecutionService : Service() {
             }
         }
 
+        /** The web layer is alive and playing; a service that is not running has nothing to keep honest. */
+        fun noteHeartbeat() {
+            runningInstance?.applyHeartbeat()
+        }
+
+        /** The activity hosting the web layer was destroyed, so playback cannot continue behind it. */
+        fun noteActivityGone() {
+            runningInstance?.applyActivityGone()
+        }
+
         fun updateDueAt(context: Context, dueAtMs: Long?) {
             val activeService = runningInstance
             if (isRunning && activeService != null) {
@@ -255,13 +267,13 @@ class BackgroundExecutionService : Service() {
      */
     internal val mediaSessionCallback =
             object : MediaSession.Callback() {
-                override fun onPlay() = broadcastTransportCommand(TRANSPORT_COMMAND_PLAY)
+                override fun onPlay() = relayTransportCommand(TRANSPORT_COMMAND_PLAY)
 
-                override fun onPause() = broadcastTransportCommand(TRANSPORT_COMMAND_PLAY_PAUSE)
+                override fun onPause() = relayTransportCommand(TRANSPORT_COMMAND_PLAY_PAUSE)
 
-                override fun onStop() = broadcastTransportCommand(TRANSPORT_COMMAND_STOP)
+                override fun onStop() = relayTransportCommand(TRANSPORT_COMMAND_STOP)
 
-                override fun onSkipToNext() = broadcastTransportCommand(TRANSPORT_COMMAND_NEXT)
+                override fun onSkipToNext() = relayTransportCommand(TRANSPORT_COMMAND_NEXT)
             }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -275,6 +287,13 @@ class BackgroundExecutionService : Service() {
     private var dueAtMs: Long? = null
     private var dueAtElapsedMs: Long? = null
     private var dueRunnable: Runnable? = null
+    private val liveness = PlaybackLiveness()
+    /** True while the web layer has gone silent; the session then shows paused whatever it last said. */
+    private var livenessStale = false
+    private val livenessWatchdog =
+            LivenessWatchdog(handler, liveness, SystemClock::elapsedRealtime) {
+                if (!isPausedState && !livenessStale) markLivenessStale()
+            }
 
     override fun onCreate() {
         super.onCreate()
@@ -321,6 +340,13 @@ class BackgroundExecutionService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification())
             acquireWakeLock()
             isRunning = true
+            liveness.onHeartbeat(SystemClock.elapsedRealtime())
+            armLivenessWatchdog()
+        }
+
+        if (action == ACTION_STOP_SESSION) {
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         if (action == ACTION_SET_PLAYBACK_STATE) {
@@ -355,6 +381,7 @@ class BackgroundExecutionService : Service() {
         AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
         updateDueAtInternal(null)
         cancelPausedExpiry()
+        livenessWatchdog.cancel()
         handler.removeCallbacks(notificationRefreshRunnable)
         notificationRefreshPending = false
         releaseMediaSession()
@@ -393,9 +420,13 @@ class BackgroundExecutionService : Service() {
      * the MediaSession so the platform still routes media buttons here (HARD27-007).
      */
     private fun updatePlaybackStateInternal(paused: Boolean) {
-        if (paused == isPausedState) return
+        val wasStale = livenessStale
+        livenessStale = false
+        liveness.onHeartbeat(SystemClock.elapsedRealtime())
+        if (paused == isPausedState && !wasStale) return
         isPausedState = paused
         if (paused) {
+            livenessWatchdog.cancel()
             releaseWakeLock()
             publishPlaybackState(PlaybackState.STATE_PAUSED)
             schedulePausedExpiry()
@@ -403,12 +434,54 @@ class BackgroundExecutionService : Service() {
             cancelPausedExpiry()
             acquireWakeLock()
             publishPlaybackState(PlaybackState.STATE_PLAYING)
+            armLivenessWatchdog()
         }
         refreshNotification()
         AppLogger.info(
                 this,
                 TAG,
                 "Playback state ${if (paused) "paused" else "playing"}",
+                "BackgroundExecutionService"
+        )
+    }
+
+    private fun applyHeartbeat() {
+        handler.post {
+            if (livenessStale) {
+                updatePlaybackStateInternal(isPausedState)
+            } else {
+                liveness.onHeartbeat(SystemClock.elapsedRealtime())
+            }
+        }
+    }
+
+    private fun armLivenessWatchdog() {
+        if (!isPausedState && !livenessStale) livenessWatchdog.arm()
+    }
+
+    private fun applyActivityGone() {
+        handler.post {
+            liveness.onActivityGone(SystemClock.elapsedRealtime())
+            armLivenessWatchdog()
+        }
+    }
+
+    /**
+     * Nothing can play without the web layer, so the lock screen must stop saying it does. The wake
+     * lock goes too, since there is nothing to keep awake, and the grace period starts so the
+     * notification does not outlive its usefulness.
+     */
+    private fun markLivenessStale() {
+        livenessStale = true
+        releaseWakeLock()
+        publishPlaybackState(PlaybackState.STATE_PAUSED)
+        mediaSession?.setSessionActivity(ResumeRequest.activityIntent(this, REQUEST_RESUME_CONTENT))
+        schedulePausedExpiry()
+        refreshNotification()
+        AppLogger.warn(
+                this,
+                TAG,
+                "Web layer stopped reporting while playing; showing paused until it returns",
                 "BackgroundExecutionService"
         )
     }
@@ -551,11 +624,16 @@ class BackgroundExecutionService : Service() {
             PlaybackState.Builder()
                     .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
                     .setActions(
-                            PlaybackState.ACTION_PLAY or
-                                    PlaybackState.ACTION_PAUSE or
-                                    PlaybackState.ACTION_PLAY_PAUSE or
-                                    PlaybackState.ACTION_STOP or
-                                    PlaybackState.ACTION_SKIP_TO_NEXT,
+                            if (livenessStale) {
+                                // A Play the system will not let us act on is worse than none.
+                                PlaybackState.ACTION_STOP
+                            } else {
+                                PlaybackState.ACTION_PLAY or
+                                        PlaybackState.ACTION_PAUSE or
+                                        PlaybackState.ACTION_PLAY_PAUSE or
+                                        PlaybackState.ACTION_STOP or
+                                        PlaybackState.ACTION_SKIP_TO_NEXT
+                            },
                     )
                     .build()
 
@@ -603,14 +681,17 @@ class BackgroundExecutionService : Service() {
      * nowhere and the only way to stop playback is to unlock the phone and open the app.
      */
     private fun buildNotification(): Notification {
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent =
-                PendingIntent.getActivity(
-                        this,
-                        0,
-                        launchIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+                if (livenessStale) {
+                    ResumeRequest.activityIntent(this, REQUEST_RESUME_CONTENT)
+                } else {
+                    PendingIntent.getActivity(
+                            this,
+                            0,
+                            packageManager.getLaunchIntentForPackage(packageName),
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                }
 
         val builder =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -628,6 +709,11 @@ class BackgroundExecutionService : Service() {
                 // The lock screen hides a notification's content by default; a media control that
                 // will not say what is playing defeats the point of publishing the metadata.
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
+
+        if (livenessStale) {
+            ResumeRequest.addStaleSessionActions(this, builder)
+            return finishMediaNotification(builder, compactActions = intArrayOf(0, 1))
+        }
 
         // Play or Pause is first, because a collapsed control shows the leading actions.
         if (isPausedState) {
@@ -666,15 +752,24 @@ class BackgroundExecutionService : Service() {
                 )
         )
 
-        val style = Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2)
+        return finishMediaNotification(builder, compactActions = intArrayOf(0, 1, 2))
+    }
+
+    private fun finishMediaNotification(builder: Notification.Builder, compactActions: IntArray): Notification {
+        val style = Notification.MediaStyle().setShowActionsInCompactView(*compactActions)
         mediaSession?.sessionToken?.let { style.setMediaSession(it) }
         builder.setStyle(style)
-
         return builder.build()
     }
 
+    private fun showsPaused(): Boolean = isPausedState || livenessStale
+
     private fun playbackStateText(): String =
-            if (isPausedState) "Playback paused" else "Playback active"
+            when {
+                livenessStale -> "Playback paused, tap Play to resume"
+                isPausedState -> "Playback paused"
+                else -> "Playback active"
+            }
 
     /**
      * A notification button relays the same broadcast a media-button press does, so the web layer
@@ -738,7 +833,7 @@ class BackgroundExecutionService : Service() {
             session.setCallback(mediaSessionCallback)
             session.setPlaybackState(
                     buildPlaybackState(
-                            if (isPausedState) PlaybackState.STATE_PAUSED
+                            if (showsPaused()) PlaybackState.STATE_PAUSED
                             else PlaybackState.STATE_PLAYING
                     )
             )
@@ -751,6 +846,52 @@ class BackgroundExecutionService : Service() {
                     this,
                     TAG,
                     "Failed to initialize MediaSession",
+                    "BackgroundExecutionService",
+                    e
+            )
+        }
+    }
+
+    /**
+     * A media button while the web layer is gone: Play resumes by starting the activity, Stop ends
+     * the session, and the rest have no effect to relay to.
+     */
+    private fun relayTransportCommand(command: String) {
+        if (!livenessStale) {
+            broadcastTransportCommand(command)
+            return
+        }
+        when (command) {
+            TRANSPORT_COMMAND_PLAY, TRANSPORT_COMMAND_PLAY_PAUSE -> launchResumeActivity()
+            TRANSPORT_COMMAND_STOP -> stopSelf()
+            else ->
+                    AppLogger.debug(
+                            this,
+                            TAG,
+                            "Ignoring $command while the web layer is gone",
+                            "BackgroundExecutionService"
+                    )
+        }
+    }
+
+    /**
+     * Android refuses a background activity start from a media button, so this usually does
+     * nothing; a notification or session-activity tap, which the system sends, is the way back.
+     */
+    internal fun launchResumeActivity() {
+        try {
+            startActivity(ResumeRequest.launchIntent(this, System.nanoTime()))
+            AppLogger.info(
+                    this,
+                    TAG,
+                    "Asked Android to start the activity to resume playback; it may refuse from the background",
+                    "BackgroundExecutionService"
+            )
+        } catch (e: RuntimeException) {
+            AppLogger.warn(
+                    this,
+                    TAG,
+                    "Could not start the activity to resume playback",
                     "BackgroundExecutionService",
                     e
             )
@@ -797,9 +938,7 @@ class BackgroundExecutionService : Service() {
         dueAtElapsedMs = null
 
         if (nextDueAtMs == null) {
-            if (hadWatchdog) {
-                AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
-            }
+            if (hadWatchdog) AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
             return
         }
 

@@ -372,16 +372,16 @@ test.describe("Disk management", () => {
     const powerButton = driveCard.getByTestId("drive-status-toggle-a");
 
     await expect(powerButton).toBeVisible();
-    await expect(powerButton).toHaveText("ON");
-    await expect(driveCard.getByTestId("drive-power-toggle-a"), "the pill is the only power control").toHaveCount(0);
+    await expect(powerButton).toBeChecked();
+    await expect(driveCard.getByTestId("drive-power-toggle-a"), "the switch is the only power control").toHaveCount(0);
 
     const pillBox = await powerButton.boundingBox();
     const cardBox = await driveCard.boundingBox();
-    expect(pillBox && cardBox && pillBox.y - cardBox.y, "the pill sits in the card header").toBeLessThan(60);
+    expect(pillBox && cardBox && pillBox.y - cardBox.y, "the switch sits in the card header").toBeLessThan(60);
 
     await clearTraces(page);
     await powerButton.click();
-    await expect(powerButton).toHaveText("OFF");
+    await expect(powerButton).not.toBeChecked();
     await snap(page, testInfo, "drive-power-off");
 
     const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith("/v1/drives/a:off"));

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   requestPermissions: vi.fn(async () => ({ notifications: "granted" as string })),
   start: vi.fn(async () => undefined),
   stop: vi.fn(async () => undefined),
+  heartbeat: vi.fn(async () => undefined),
   addLog: vi.fn(),
   isNativePlatform: vi.fn(() => true),
   getPlatform: vi.fn(() => "android"),
@@ -27,6 +28,7 @@ vi.mock("@/lib/native/backgroundExecution", () => ({
   BackgroundExecution: {
     start: mocks.start,
     stop: mocks.stop,
+    heartbeat: mocks.heartbeat,
     checkPermissions: mocks.checkPermissions,
     requestPermissions: mocks.requestPermissions,
   },
