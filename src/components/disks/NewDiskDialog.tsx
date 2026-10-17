@@ -187,7 +187,7 @@ export function NewDiskDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent surface="confirmation">
+      <DialogContent surface="confirmation" className="flex flex-col gap-0 overflow-hidden">
         <DialogHeader hideClose>
           <DialogTitle className="flex items-center gap-2">
             <HardDriveDownload className="h-5 w-5" aria-hidden />
@@ -196,7 +196,7 @@ export function NewDiskDialog({
           <DialogDescription>Create a formatted blank image on the device, then mount it.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3" data-testid="new-disk-body">
           <div className="space-y-2">
             <Label htmlFor="new-disk-type">Type</Label>
             <Select value={kind} onValueChange={(value) => setKind(value as CreateDiskKind)}>
@@ -280,7 +280,7 @@ export function NewDiskDialog({
           )}
         </div>
 
-        <DialogFooter className="sticky bottom-0 z-10 border-t border-border bg-background pt-2">
+        <DialogFooter className="shrink-0 border-t border-border pt-2">
           <Button
             variant="outline"
             onClick={() => {

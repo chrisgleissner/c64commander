@@ -52,7 +52,11 @@ export function DiskContentsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-start gap-2 text-left leading-snug">
             <DiscAlbum className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-            <span className="min-w-0 [overflow-wrap:anywhere]" data-testid="disk-contents-title">
+            <span
+              className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]"
+              data-testid="disk-contents-title"
+              title={diskName}
+            >
               {diskName}
             </span>
           </DialogTitle>

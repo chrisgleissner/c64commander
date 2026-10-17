@@ -847,6 +847,9 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     const dialog = page.getByRole("dialog").filter({ hasText: "Bomb_Jack" }).last();
     await expect(dialog).toBeVisible({ timeout: 20_000 });
     await expect(dialog.getByTestId("disk-contents-loading")).toHaveCount(0, { timeout: 20_000 });
+    for (const close of await page.getByTestId("app-toast-close").all()) {
+      await close.evaluate((button) => (button as HTMLButtonElement).click());
+    }
     const clipped = await dialog.evaluate((root) => {
       const rects = (selector: string) => Array.from(root.querySelectorAll<HTMLElement>(selector));
       const problems: string[] = [];

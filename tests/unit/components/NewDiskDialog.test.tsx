@@ -51,11 +51,13 @@ describe("NewDiskDialog", () => {
     await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveAttribute("placeholder", "/USB0"));
   });
 
-  it("keeps Cancel and Create in a footer that sticks to the bottom of the scrolling dialog", async () => {
+  it("scrolls the fields above a footer that always holds Cancel and Create", async () => {
     setup();
     await deviceFolderShown();
     const footer = screen.getByTestId("new-disk-create").closest('[data-modal-footer="true"]');
-    expect(footer).toHaveClass("sticky", "bottom-0");
+    expect(footer).toHaveClass("shrink-0");
+    expect(screen.getByTestId("new-disk-body")).toHaveClass("overflow-y-auto", "min-h-0");
+    expect(screen.getByTestId("new-disk-body")).not.toContainElement(screen.getByTestId("new-disk-create"));
   });
 
   it("clears the entered name when Cancel closes the dialog, as closing by Back or outside tap does", async () => {
