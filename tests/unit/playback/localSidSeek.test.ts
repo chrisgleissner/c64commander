@@ -166,6 +166,7 @@ describe("scrub feedback contract", () => {
     const inputs = {
       durationMs: 100_000,
       launching: false,
+      idle: false,
       scrubTargetMs: null as number | null,
       heldAtMs: undefined as number | undefined,
       playlistTotalsAt: () => ({ total: undefined, remaining: undefined }),

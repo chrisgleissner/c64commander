@@ -694,7 +694,8 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     const expected: Array<[string, RegExp]> = [
       ["home-drives-reset", /^Drives: reset$/],
       ["home-drive-toggle-a", /^Drive A power: (on|off)$/],
-      ["home-drive-status-a", /^Drive A status: /],
+      ["home-drive-link-a", /^Drive A, #8, \d+, .+$/],
+      ["home-drive-details-toggle-a", /^Drive A settings$/],
     ];
     for (const [testId, name] of expected) {
       expect(await ringFocus(page, home.getByTestId(testId), 160), `The ring could not reach ${testId}`).toBe(true);

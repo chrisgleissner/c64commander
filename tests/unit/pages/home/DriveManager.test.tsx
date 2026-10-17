@@ -52,6 +52,9 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
 }));
 
+const navigateSpy = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/useStableNavigate", () => ({ useStableNavigate: () => navigateSpy }));
+
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => c64ApiMockRef.current,
 }));
@@ -166,6 +169,9 @@ vi.mock("@/pages/home/DriveCard", () => ({
           ChangeType
         </button>
       )}
+      <button data-testid="drive-open-disks" onClick={props.onOpenDisks}>
+        OpenDisks
+      </button>
       <button data-testid="drive-mount-click" onClick={props.onMountedPathClick}>
         Mount
       </button>
@@ -301,6 +307,13 @@ describe("DriveManager", () => {
     expect(screen.getByTestId("drive-card-a")).toBeDefined();
     expect(screen.getByTestId("drive-card-b")).toBeDefined();
     expect(screen.getByTestId("drive-card-soft-iec")).toBeDefined();
+  });
+
+  it("opens the Disks page from a drive's summary line", () => {
+    navigateSpy.mockClear();
+    render(<DriveManager {...defaultProps} />);
+    fireEvent.click(screen.getAllByTestId("drive-open-disks")[0]);
+    expect(navigateSpy).toHaveBeenCalledWith("/disks");
   });
 
   it("shows the drive type the drive reports after a mount switched it away from the configured type", () => {

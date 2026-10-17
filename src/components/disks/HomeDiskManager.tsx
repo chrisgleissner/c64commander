@@ -2419,7 +2419,7 @@ export const HomeDiskManager = () => {
               emptyLabel="No disks in the collection yet."
               selectAllLabel="Select all"
               deselectAllLabel="Deselect all"
-              removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}
+              removeSelectedLabel="Remove selected items"
               selectedCount={selectedCount}
               allSelected={allSelected}
               onToggleSelectAll={toggleSelectAll}

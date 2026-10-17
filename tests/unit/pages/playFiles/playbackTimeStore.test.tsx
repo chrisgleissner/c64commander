@@ -70,6 +70,7 @@ describe("describePlaybackTime", () => {
   const inputs = {
     durationMs: 120_000,
     launching: false,
+    idle: false,
     scrubTargetMs: null,
     heldAtMs: undefined,
     playlistTotalsAt: (elapsedMs: number) => ({ total: 300_000, remaining: 300_000 - elapsedMs }),
@@ -83,6 +84,28 @@ describe("describePlaybackTime", () => {
       totalLabel: "5:00",
       remainingTotalLabel: "4:30",
       playlistCountersShown: true,
+    });
+  });
+
+  it("shows 0:00 and the tune's own length for a track nothing is playing, whatever the last clock said", () => {
+    expect(describePlaybackTime({ ...inputs, idle: true }, 90_000)).toMatchObject({
+      progressPercent: 0,
+      elapsedLabel: "0:00",
+      remainingLabel: "-2:00",
+    });
+  });
+
+  it("shows 0:00 for an idle track even when the previous playback ended on its full length", () => {
+    expect(describePlaybackTime({ ...inputs, idle: true }, 120_000)).toMatchObject({
+      elapsedLabel: "0:00",
+      remainingLabel: "-2:00",
+    });
+  });
+
+  it("keeps the paused or playing position when the track is not idle", () => {
+    expect(describePlaybackTime({ ...inputs, idle: false }, 90_000)).toMatchObject({
+      elapsedLabel: "1:30",
+      remainingLabel: "-0:30",
     });
   });
 

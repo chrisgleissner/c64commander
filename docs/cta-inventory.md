@@ -340,11 +340,13 @@ not-connected / empty / single-device).
   - Color slider, Intensity slider — slider ×2 each — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
 - **Drives** (`data-section-label="Drives"`) — per drive A / B / Soft-IEC:
   - Reset — button — `home-drives-reset` — R✅ I✅
+  - Summary line — button — `home-drive-link-*` — R✅ I✅ — one line per drive (`A · #8 · 1541 · No disk`, 44 CSS px high) that opens the Disks page; the accessible name spells the line out ("Drive A, #8, 1541, No disk"), short enough for the guidance bar
   - Power toggle — switch — `home-drive-toggle-*` — R✅ I✅
-  - Mount / path — button — `home-drive-mounted-*` — R✅ I✅
-  - Bus ID — select — `home-drive-bus-*` — R✅ I✅
-  - Drive Type — select — `home-drive-type-*` — R✅ I✅
-  - Status (OK) — button — `home-drive-status-*` — R✅ I✅ (status dialog)
+  - Details — button — `home-drive-details-toggle-*` — R✅ I✅ — `aria-expanded`; closed on every visit, opens the four rows below in place without leaving Home
+  - Mount / path — button — `home-drive-mounted-*` — R✅ I✅ (inside details)
+  - Bus ID — select — `home-drive-bus-*` — R✅ I✅ (inside details)
+  - Drive Type — select — `home-drive-type-*` — R✅ I✅ (inside details)
+  - Status (OK) — button — `home-drive-status-*` — R✅ I✅ (status dialog; inside details)
 - **Printer** (`data-section-label="Printers"`)
   - Reset — button — `home-printer-reset` — R✅ I✅
   - Power toggle — switch — `home-printer-toggle` — R✅ I✅

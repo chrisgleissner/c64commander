@@ -665,6 +665,14 @@ export const PlaybackControlsCard = ({
                   }}
                 >
                   <div className="relative w-full">
+                    {/* The empty track, always drawn: the progress element is transparent so the rendered
+                      span can show through it, which left nothing visible to aim at while a tune was
+                      still being rendered. */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-full border border-border bg-secondary"
+                      data-testid="playback-track"
+                    />
                     {/* Behind the played portion, so the two read as one bar: solid where the tune has
                       played, translucent as far as it is rendered. */}
                     {/* Shown whenever the tune is not fully rendered — including, and especially, when

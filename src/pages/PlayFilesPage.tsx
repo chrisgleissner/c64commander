@@ -2426,6 +2426,7 @@ export default function PlayFilesPage() {
   const timeline = usePlaybackTimeline(shownNowPlaying.time, {
     durationMs: shownNowPlaying.durationMs,
     launching: chosenTrackLaunching && shownNowPlaying.index === currentIndex,
+    idle: !playbackRunning && !isPaused && shownNowPlaying.index === currentIndex,
     scrubTargetMs: shownScrubTargetMs,
     heldAtMs: pendingSeek?.audibleMs,
     playlistTotalsAt,

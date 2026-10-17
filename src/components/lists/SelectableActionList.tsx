@@ -8,7 +8,7 @@
 
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Play } from "lucide-react";
+import { Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -620,7 +620,7 @@ export const SelectableActionList = ({
       )}
 
       {showSelectionControls ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+        <div className="flex items-center justify-between gap-2 text-xs min-w-0">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="text-muted-foreground min-w-0 break-words">
               {/* Empty says so once, in the list body; the count reads "1 item", not "1 items". */}
@@ -640,16 +640,25 @@ export const SelectableActionList = ({
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
           </div>
-          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+          {removeSelectedLabel && onRemoveSelected && (items.length > 0 || selectedCount > 0) ? (
+            // Always in the row and hidden while nothing is selected, so appearing on the first
+            // selection moves nothing; an icon, so the row keeps its single line at 320 px.
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={onRemoveSelected}
-              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
+              disabled={selectedCount === 0}
+              aria-hidden={selectedCount === 0 ? true : undefined}
+              aria-label={removeSelectedLabel}
+              title={removeSelectedLabel}
+              className={cn(
+                "size-11 shrink-0 text-destructive hover:text-destructive",
+                selectedCount === 0 && "invisible",
+              )}
               id={removeSelectedId}
               data-testid={removeSelectedId}
             >
-              {removeSelectedLabel}
+              <Trash2 className="h-5 w-5" aria-hidden />
             </Button>
           ) : null}
         </div>

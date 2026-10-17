@@ -2237,6 +2237,7 @@ test.describe("App screenshots", () => {
         "home/interactions/01-toggle.png",
       );
 
+      await activeMain.getByTestId("home-drive-details-toggle-a").click();
       await activeMain.getByTestId("home-drive-type-a").click();
       await captureScreenshot(page, testInfo, "home/interactions/02-dropdown.png");
       await page.keyboard.press("Escape");
