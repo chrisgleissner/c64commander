@@ -133,6 +133,7 @@ export function DriveManager({
     WIDE_DRIVE_CARD_MIN_WIDTH,
   );
   const wideDriveCards = profile === "expanded" && driveColumns === requestedDriveColumns;
+  const lastDriveIndex = DRIVE_CONTROL_SPECS.length - 1;
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
@@ -333,7 +334,7 @@ export function DriveManager({
     >
       <div
         ref={drivesGridRef}
-        className="grid gap-2"
+        className="grid items-start gap-2"
         style={{ gridTemplateColumns: `repeat(${driveColumns}, minmax(0, 1fr))` }}
         data-testid="home-drives-group"
       >
@@ -446,6 +447,11 @@ export function DriveManager({
           return (
             <DriveCard
               key={spec.class}
+              className={
+                driveColumns > 1 && index === lastDriveIndex && lastDriveIndex % driveColumns === 0
+                  ? "col-span-full"
+                  : undefined
+              }
               wide={wideDriveCards}
               name={label}
               loading={drivesLoading}
