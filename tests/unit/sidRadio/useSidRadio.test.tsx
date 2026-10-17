@@ -438,7 +438,7 @@ describe("useSidRadio", () => {
       await result.current.startSurpriseRadio();
     });
     expect(result.current.station?.styleBit).not.toBe(8);
-    expect(result.current.station?.seedLabel).not.toBe("Game Themes");
+    expect(result.current.station?.seedLabel).not.toBe("Game themes");
   });
 
   it("Surprise says so rather than starting nothing when no style has members", async () => {
@@ -663,7 +663,7 @@ describe("useSidRadio", () => {
     const { result } = renderHook(() => useSidRadio(params));
     expect(result.current.stylePopulations).toBeNull();
     await act(async () => {
-      await result.current.startStyleRadio(8, "Game Themes");
+      await result.current.startStyleRadio(8, "Game themes");
     });
     expect(result.current.active).toBe(false);
     expect(result.current.notice).toBe("no-radio-for-style");
@@ -676,7 +676,7 @@ describe("useSidRadio", () => {
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     await act(async () => {
-      await result.current.startStyleRadio(8, "Game Themes", true);
+      await result.current.startStyleRadio(8, "Game themes", true);
     });
     expect(result.current.active).toBe(false);
     expect(result.current.notice).toBe("no-radio-for-style");

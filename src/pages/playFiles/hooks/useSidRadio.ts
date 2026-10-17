@@ -205,7 +205,7 @@ export const SID_RADIO_STYLE_TILES: ReadonlyArray<{ bit: number; key: string; la
   { bit: 5, key: "composer_focus", label: "Composer deep-dive", blurb: "Stays close to a composer's signature" },
   { bit: 6, key: "era_explorer", label: "Era explorer", blurb: "Roams a musical era" },
   { bit: 7, key: "deep_discovery", label: "Deep cuts", blurb: "Rarely-heard corners of HVSC" },
-  { bit: 8, key: "theme_hunter", label: "Game Themes", blurb: "Themes & loader tunes" },
+  { bit: 8, key: "theme_hunter", label: "Game themes", blurb: "Themes & loader tunes" },
 ];
 
 /** Taste-Radio unlock threshold (D1). */

@@ -182,7 +182,7 @@ entries:
 
   - id: action.key-explorer
     title_key: search.action.keyExplorer
-    title: Key Explorer
+    title: Key explorer
     subtitle_key: search.action.keyExplorer.subtitle
     subtitle: See what code a key on this device emits
     keywords: [keypad, keyboard, keycode, binding, remote key]
@@ -273,7 +273,7 @@ entries:
   # ---------------------------------------------------------------------------------------------
   - id: home.section.quick-actions
     title_key: search.home.quickActions
-    title: Quick Actions
+    title: Quick actions
     subtitle_key: search.home.quickActions.subtitle
     subtitle: Reset, pause, menu, backup and restore, power
     # "save ram" and "load ram" stay listed: they were the tile labels up to 0.10.0-rc2, and a
@@ -455,7 +455,7 @@ entries:
 
   - id: settings.section.play-and-disk
     title_key: search.settings.playAndDisk
-    title: Play and Disk
+    title: Play and disk
     subtitle_key: search.settings.playAndDisk.subtitle
     subtitle: Autostart, boot menu, stream ports and buffers
     keywords: [autostart, boot, launch, stream port, buffer, latency, subfolder]

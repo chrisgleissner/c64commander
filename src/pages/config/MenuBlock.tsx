@@ -81,7 +81,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
 
   return (
     <div data-testid={block.title ? `config-subsection-${block.title.toLowerCase().replace(/\s+/g, "-")}` : undefined}>
-      {/* The heading is not with `tracking-wide`: that styling is most of a heading's
+      {/* The heading has no `tracking-wide`: that styling is most of a heading's
           width, and at the largest Text size "Time Synchronization" needed 275px against a 258px
           box and was clipped. Title case fits. */}
       {block.title ? (

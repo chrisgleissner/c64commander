@@ -830,6 +830,7 @@ const CategorySection = memo(function CategorySection({
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
+      plainIcon
       actions={configRefreshAction(isOpen, refreshFocusRef, displayTitle ?? categoryName, categorySlug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >

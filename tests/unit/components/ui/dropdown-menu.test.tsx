@@ -69,4 +69,16 @@ describe("DropdownMenuContent", () => {
     expect(callbackRef).toHaveBeenCalledWith(screen.getByTestId("with-callback"));
     expect(objectRef.current).toBe(screen.getByTestId("with-object"));
   });
+
+  it("stacks above sheets and dialogs, so a row menu opened inside the View all sheet is not hidden behind it", () => {
+    render(
+      <DropdownMenu open modal={false}>
+        <DropdownMenuContent data-testid="menu">
+          <DropdownMenuItem>Rename</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    expect(screen.getByTestId("menu").className).toContain("z-[250]");
+  });
 });

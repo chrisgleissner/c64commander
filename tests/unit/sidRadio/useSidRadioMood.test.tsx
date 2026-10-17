@@ -165,7 +165,7 @@ describe("useSidRadio — a Song station constrained to one mood", () => {
 
       const admissible = mayServe(tile.bit);
       if (admissible.size === 0) {
-        // Two different empty conditions, and both must be reported rather than widened: Game Themes
+        // Two different empty conditions, and both must be reported rather than widened: Game themes
         // has no members at all, Deep cuts has members the seed cannot reach.
         expect(result.current.active).toBe(false);
         expect(params.startPlaylist).not.toHaveBeenCalled();

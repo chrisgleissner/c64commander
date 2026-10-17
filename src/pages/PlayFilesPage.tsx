@@ -226,7 +226,7 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
-import { resolvePlayheadAnchor, shouldRefreshDeadline } from "@/lib/playback/playheadAnchor";
+import { resolvePlayheadAnchor, seekAwareDelayMs, shouldRefreshDeadline } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
 /** Buttons that open a sheet from the Play page share rows: short labels that grow to fill the row. */
@@ -1531,7 +1531,12 @@ export default function PlayFilesPage() {
           currentDurationMsRef.current &&
           shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)
         ) {
-          const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
+          const dueAtMs =
+            now +
+            seekAwareDelayMs(
+              autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive),
+              awaitingSeek,
+            );
           guard.dueAtMs = dueAtMs;
           guard.autoFired = false;
           guard.deferredToEnd = false;

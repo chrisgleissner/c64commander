@@ -31,6 +31,12 @@ describe("StationQueueEditedDialog", () => {
     expect(dialog.textContent).not.toContain("…");
   });
 
+  it("draws the keep button with the normal text color and a title short enough for a compact dialog", () => {
+    renderDialog(12, 40);
+    expect(screen.getByTestId("station-queue-keep").className).toContain("text-foreground");
+    expect(screen.getByText("Keep the radio tunes or your playlist?")).toBeInTheDocument();
+  });
+
   it("uses the singular for one tune and describes an unread playlist without a count", () => {
     renderDialog(1, null);
     const dialog = screen.getByTestId("station-queue-edited-dialog");

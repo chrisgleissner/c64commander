@@ -12,6 +12,7 @@ import {
   PLAYHEAD_DRIFT_TOLERANCE_MS,
   SEEK_DEADLINE_MARGIN_MS,
   resolvePlayheadAnchor,
+  seekAwareDelayMs,
   shouldRefreshDeadline,
 } from "@/lib/playback/playheadAnchor";
 
@@ -213,5 +214,13 @@ describe("shouldRefreshDeadline", () => {
     expect(shouldRefreshDeadline({ drifted: true, stalled: false }, false, 60_000)).toBe(true);
     expect(shouldRefreshDeadline({ drifted: true, stalled: true }, false, 60_000)).toBe(false);
     expect(shouldRefreshDeadline({ drifted: false, stalled: true }, true, 1_000)).toBe(false);
+  });
+});
+
+describe("seekAwareDelayMs", () => {
+  it("keeps a short delay from being rewritten every tick while a seek is outstanding", () => {
+    expect(seekAwareDelayMs(3_000, true)).toBe(2 * SEEK_DEADLINE_MARGIN_MS);
+    expect(seekAwareDelayMs(3_000, false)).toBe(3_000);
+    expect(seekAwareDelayMs(90_000, true)).toBe(90_000);
   });
 });

@@ -1499,7 +1499,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for:",
     "",
-    "- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game Themes. Each draws on tens of thousands of tunes.",
+    "- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game themes. Each draws on tens of thousands of tunes.",
     "- **A collection.** A fixed list of tunes, such as competition winners or movie themes. See below.",
     "- **From tunes you like.** Once five tunes carry a heart, this builds a station from them.",
     "- **Surprise me.** Anything at all.",

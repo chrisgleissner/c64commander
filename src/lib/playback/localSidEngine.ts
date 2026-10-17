@@ -1389,6 +1389,10 @@ export class LocalSidEngine {
     this.audio?.flush?.();
     this.emitPosition();
 
+    // A deeper worker seek still waiting is superseded by this one; its long timeout must not keep the gate shut.
+    this.seekPending?.resolve();
+    this.seekPending = null;
+
     // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
     // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
     const rendered = this.currentKey ? this.cachedForThisRenderer(this.currentKey) : null;

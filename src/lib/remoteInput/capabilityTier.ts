@@ -56,7 +56,7 @@ export const REMOTE_INPUT_AUTH_REQUIRED_HINT =
   "This device needs its password entered in Settings before Remote Input can send anything - Joystick and Keys both need it.";
 
 export const REMOTE_INPUT_PROBE_UNANSWERED_HINT =
-  "The device did not answer the joystick relay check. Close and reopen this sheet to try again. The Keys tab still works.";
+  "The joystick relay check could not be completed. Close and reopen this sheet to try again. The Keys tab still works.";
 
 export const resolveJoystickUnavailableHint = (
   tier: RemoteInputTier,

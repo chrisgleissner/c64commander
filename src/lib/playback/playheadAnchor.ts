@@ -154,3 +154,7 @@ export const shouldRefreshDeadline = (
   awaitingSeek: boolean,
   msUntilDue: number,
 ): boolean => !anchor.stalled && (anchor.drifted || (awaitingSeek && msUntilDue < SEEK_DEADLINE_MARGIN_MS));
+
+/** While a seek is outstanding, a new deadline is at least twice the margin away, so it is rewritten about every ten seconds and not every tick. */
+export const seekAwareDelayMs = (delayMs: number, awaitingSeek: boolean): number =>
+  awaitingSeek ? Math.max(delayMs, 2 * SEEK_DEADLINE_MARGIN_MS) : delayMs;

@@ -259,9 +259,8 @@ describe("auto-advance follows a seek", () => {
     const { readFileSync } = await import("node:fs");
     const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
     expect(page).toContain("resolvePlayheadAnchor({");
-    expect(page).toContain(
-      "const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);",
-    );
+    expect(page).toContain("autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive)");
+    expect(page).toContain("seekAwareDelayMs(");
     // Only when it moved or a seek is outstanding: this deadline is mirrored to the native background watchdog.
     expect(page).toContain("shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)");
     expect(page).not.toContain("holdAutoAdvanceWhilePending");
