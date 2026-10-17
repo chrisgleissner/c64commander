@@ -65,7 +65,7 @@ describe("SelectableActionList", () => {
     expect(card).toHaveClass("p-3");
   });
 
-  it("keeps the view-all filter out of the pinned header so it scrolls away with the list", () => {
+  it("keeps the view-all filter in the pinned header with the title row and Close", () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -87,7 +87,7 @@ describe("SelectableActionList", () => {
     fireEvent.click(screen.getByRole("button", { name: "View all" }));
 
     const header = screen.getByTestId("action-list-view-all").firstElementChild;
-    expect(header).not.toContainElement(screen.getByTestId("view-all-filter-input"));
+    expect(header).toContainElement(screen.getByTestId("view-all-filter-input"));
     expect(header?.querySelector('[data-interstitial-header-row="true"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
