@@ -186,6 +186,25 @@ test.describe("Remote Input sheet on the compact display profile", () => {
       expect(await body.evaluate((el) => el.scrollTop), "the body has not scrolled").toBe(0);
     });
 
+    test("adjusting the view keeps the mode chip whole inside the thin preview and drops the hint text", async ({
+      page,
+    }) => {
+      await turnWatchOn(page);
+      await page.getByTestId("remote-input-sheet").focus();
+      await page.keyboard.press("*");
+      await expect(page.getByTestId("av-mirror-immersive")).toHaveAttribute("data-mode", "adjust");
+
+      const preview = await boxOf(page, "av-mirror-immersive");
+      const chip = await boxOf(page, "av-mirror-mode-chip");
+      expect(chip.x, "chip left edge").toBeGreaterThanOrEqual(preview.x);
+      expect(chip.y, "chip top edge").toBeGreaterThanOrEqual(preview.y);
+      expect(chip.y + chip.height, "chip bottom edge").toBeLessThanOrEqual(preview.y + preview.height);
+      expect(chip.x + chip.width, "chip right edge").toBeLessThanOrEqual(preview.x + preview.width);
+      await expect(page.getByTestId("av-mirror-mode-chip")).toHaveText("View");
+      await expect(page.getByTestId("av-immersive-lock-hint")).toHaveCount(0);
+      await expect(page.getByTestId("av-mirror-immersive-fps")).toHaveCount(0);
+    });
+
     test("keys mode leaves the keyboard at least three key rows of height above the footer", async ({ page }) => {
       await turnWatchOn(page);
       await page.getByTestId("remote-input-mode-type").click();
