@@ -59,6 +59,7 @@ import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
+import { SEEK_COST_FLOOR_MS_PER_SECOND, seekAckTimeoutMs } from "./workerSeekCost";
 import { traceLocalSid } from "./localSidTrace";
 import { localSidPlaybackSupported } from "./localSidSupport";
 
@@ -172,28 +173,6 @@ const AUDIO_STALL_TIMEOUT_MS = 5000;
  * *ahead of the audio clock*, which dips fractionally between chunks even when perfectly healthy.
  */
 const STARVED_BUFFER_SECONDS = 0.05;
-
-/**
- * How long to wait for the worker to acknowledge a seek before reopening the audio gate.
- *
- * `seekPending` suppresses every rendered chunk so the audio from the position just left is never
- * scheduled. That is correct while a seek is genuinely in flight and ruinous the moment it is not:
- * an unacknowledged seek would discard chunks for as long as the tune lasts. Generous next to a
- * seek that lands, so this only fires when the reply is genuinely never coming.
- *
- * Generous because a seek is not a quick acknowledgement: the worker serialises it behind the
- * renders already queued, and then renders and discards everything between the current position
- * and the target, so seeking deep into a long tune is real emulation work. Cutting it short would
- * only trade a slow seek for a wrong one, and this is a recovery rather than a failure — the gate
- * reopens and playback carries on from wherever the engine actually is.
- */
-const SEEK_ACK_TIMEOUT_MS = 20_000;
-
-/** Upper bound on the wait for a seek reply, however deep the target. */
-const SEEK_ACK_TIMEOUT_MAX_MS = 15 * 60_000;
-
-/** A worker seek's cost per second of tune replayed, until measured: 115 s took 42 s on a busy Pixel 4. */
-const SEEK_COST_FLOOR_MS_PER_SECOND = 400;
 const HANDOFF_MARGIN_SECONDS = 5;
 
 /**
@@ -360,7 +339,8 @@ export class LocalSidEngine {
   private currentTune: { bytes: ArrayBuffer; songIndex: number } | null = null;
   /** Bumped per seek so chunks rendered for a superseded position are dropped. */
   private seekEpoch = 0;
-  private seekPending: { id: number; resolve: () => void } | null = null;
+  /** `awaited` is set only for a seek the listener asked for, so the lead-in hand-off shows no status. */
+  private seekPending: { id: number; resolve: () => void; awaited?: PendingSeekState } | null = null;
   /** Seeks the worker is still inside. A stop reopens the gate but cannot call a seek off. */
   private seeksInFlight = 0;
   private deferredHandoffSeconds: number | null = null;
@@ -1439,18 +1419,7 @@ export class LocalSidEngine {
       return;
     }
 
-    await this.seekThroughWorker(target, epoch);
-  }
-
-  /**
-   * How long a worker seek to `targetSeconds` may take before its reply is given up on. The worker
-   * replays the tune from its start, so the work grows with the target: 20 s is generous for a seek
-   * into the opening and far too short for 19:23 of a 20-minute tune, where giving up reopened the
-   * gate on a renderer that had not arrived and the tune was then ended with nothing played.
-   */
-  private seekAckTimeoutMs(targetSeconds: number): number {
-    const costMsPerSecond = Math.max(this.renderRateP99(), SEEK_COST_FLOOR_MS_PER_SECOND);
-    return Math.min(SEEK_ACK_TIMEOUT_MAX_MS, Math.max(SEEK_ACK_TIMEOUT_MS, targetSeconds * costMsPerSecond * 1.5));
+    await this.seekThroughWorker(target, epoch, audibleAtRequest);
   }
 
   /**
@@ -1458,7 +1427,7 @@ export class LocalSidEngine {
    * with the audio gated. Used when no render of the tune covers the target and none is on its way
    * there.
    */
-  private async seekThroughWorker(target: number, epoch: number): Promise<void> {
+  private async seekThroughWorker(target: number, epoch: number, audibleAtSeconds: number): Promise<void> {
     const id = this.nextId;
     this.nextId += 1;
     await new Promise<void>((resolve) => {
@@ -1470,6 +1439,7 @@ export class LocalSidEngine {
       // chunk is discarded, so a reply that never comes would silence the tune indefinitely. Give
       // up on the reply and reopen the gate rather than wait for it forever — the worst case is a
       // seek that does not land, which is a great deal better than a track that plays nothing.
+      const ackTimeoutMs = seekAckTimeoutMs(target, this.renderRateP99());
       const timer = setTimeout(() => {
         if (this.seekPending?.id !== id) return;
         this.seekPending = null;
@@ -1479,12 +1449,20 @@ export class LocalSidEngine {
         });
         resolve();
         this.pump();
-      }, this.seekAckTimeoutMs(target));
+      }, ackTimeoutMs);
       this.seekPending = {
         id,
         resolve: () => {
           clearTimeout(timer);
           resolve();
+        },
+        awaited: {
+          targetSeconds: target,
+          renderedAtRequestSeconds: 0,
+          audibleAtRequestSeconds: audibleAtSeconds,
+          generation: epoch,
+          trackInstanceId: this.trackInstanceId,
+          replayStartedAtMs: Date.now(),
         },
       };
       if (this.worker) this.seeksInFlight += 1;
@@ -1533,6 +1511,12 @@ export class LocalSidEngine {
       return null;
     }
     return pending;
+  }
+
+  /** The listener's seek the worker is replaying towards, or null; see {@link seekPending}. */
+  private get activeWorkerSeek(): PendingSeekState | null {
+    const awaited = this.seekPending?.awaited;
+    return awaited && !this.isStalePendingSeek(awaited) ? awaited : null;
   }
 
   /**
@@ -1585,7 +1569,7 @@ export class LocalSidEngine {
         seconds: pending.targetSeconds,
         renderedSeconds: seconds,
       });
-      void this.seekThroughWorker(pending.targetSeconds, this.seekEpoch);
+      void this.seekThroughWorker(pending.targetSeconds, this.seekEpoch, pending.audibleAtRequestSeconds);
       return;
     }
     addLog("debug", "Local SID awaited seek landed at or past the end of the tune", {
@@ -1967,6 +1951,7 @@ export class LocalSidEngine {
     // chunk is discarded, so a reply that never arrives would silence the rest of the tune. Giving up
     // on the reply reopens the gate; the worst case is playing on from wherever the worker actually
     // is, which is a great deal better than playing nothing.
+    const ackTimeoutMs = seekAckTimeoutMs(seconds, this.renderRateP99());
     const timer = setTimeout(() => {
       if (this.seekPending?.id !== id) return;
       this.seekPending = null;
@@ -1975,7 +1960,7 @@ export class LocalSidEngine {
         seconds,
       });
       this.pump();
-    }, this.seekAckTimeoutMs(seconds));
+    }, ackTimeoutMs);
     this.seekPending = {
       id,
       resolve: () => {
@@ -2241,7 +2226,7 @@ export class LocalSidEngine {
    * caller holding on to it cannot see the engine's own record change underneath them.
    */
   getPendingSeek(): PendingSeekState | null {
-    const pending = this.activePendingSeek;
+    const pending = this.activePendingSeek ?? this.activeWorkerSeek;
     return pending ? { ...pending } : null;
   }
 

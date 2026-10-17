@@ -45,6 +45,12 @@ export type PendingSeekState = {
   generation: number;
   /** Identity of the track instance, so a completion from a previous tune can be rejected. */
   trackInstanceId: number;
+  /**
+   * Set when the render worker is replaying the tune from its start to reach the target, and the
+   * time it began. The worker reports no position while it replays, so the wait is shown from the
+   * elapsed wall time and the measured render rate rather than from a render head.
+   */
+  replayStartedAtMs?: number;
 };
 
 /** Below this many seconds remaining, a number is less useful than "nearly there". */
@@ -117,6 +123,8 @@ export type PendingSeekPresentation = {
   almostReady: boolean;
   /** m:ss of the requested position, for the marker's own label. */
   targetLabel: string;
+  /** The label of the target marker. */
+  markerLabel: string;
   /** The inline status under the bar. */
   statusText: string;
   /** The sentence a screen reader is given. */
@@ -131,6 +139,72 @@ export type PendingSeekPresentationInput = {
   durationMs: number;
   /** Injected in tests; production reads the one smoothed estimator. */
   ratio?: number | null;
+  /** The current time, for a worker replay whose estimate advances with the wall clock. */
+  nowMs?: number;
+};
+
+/** "45 s" or "1 min 40 s". */
+const formatWait = (seconds: number): string =>
+  seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${(seconds % 60).toString().padStart(2, "0")} s`;
+
+/** Within this many seconds either side of the estimate, a countdown is replaced by "nearly there". */
+const REPLAY_NEARLY_THERE_SECONDS = 1;
+
+/**
+ * Present a seek the worker is answering by replaying the tune.
+ *
+ * The estimate is the target divided by the measured render ratio, less the time already spent.
+ * Without a measured ratio there is no duration and no percentage, only "Seeking…". Once the
+ * estimate has run out the status says so instead of counting below zero or sitting at 100%.
+ */
+const describeWorkerReplay = (
+  state: PendingSeekState,
+  durationMs: number,
+  ratio: number | null,
+  nowMs: number,
+): PendingSeekPresentation => {
+  const percentOf = (seconds: number) => Math.min(100, Math.max(0, (seconds * 1000 * 100) / durationMs));
+  const elapsed = Math.max(0, (nowMs - (state.replayStartedAtMs ?? nowMs)) / 1000);
+  const expected = ratio !== null && Number.isFinite(ratio) && ratio > 0 ? state.targetSeconds / ratio : null;
+  const remaining = expected === null ? null : expected - elapsed;
+  const progress = expected === null || !(expected > 0) ? 0 : Math.min(0.99, elapsed / expected);
+  const progressPercent = Math.round(progress * 100);
+  const targetLabel = formatClock(state.targetSeconds);
+  const targetWholeSeconds = Math.round(state.targetSeconds);
+  const live = `Seeking to position ${targetWholeSeconds} seconds.`;
+
+  let etaSeconds: number | null = null;
+  let status = `Seeking to ${targetLabel}…`;
+  let liveText = live;
+  if (remaining !== null) {
+    if (remaining >= REPLAY_NEARLY_THERE_SECONDS) {
+      etaSeconds = Math.round(remaining);
+      status = `Seeking to ${targetLabel} · about ${formatWait(etaSeconds)}`;
+      liveText = `${live} About ${formatWait(etaSeconds)} remaining.`;
+    } else if (remaining > -REPLAY_NEARLY_THERE_SECONDS) {
+      status = `Seeking to ${targetLabel} · nearly there`;
+      liveText = `${live} Nearly there.`;
+    } else {
+      status = `Seeking to ${targetLabel} · taking longer than expected`;
+      liveText = `${live} Taking longer than expected.`;
+    }
+  }
+
+  return {
+    targetPercent: percentOf(state.targetSeconds),
+    startedAtPercent: 0,
+    renderedPercent: percentOf(state.targetSeconds * progress),
+    audibleMs: Math.max(0, state.audibleAtRequestSeconds * 1000),
+    progress,
+    progressPercent,
+    etaSeconds,
+    almostReady:
+      remaining !== null && remaining < REPLAY_NEARLY_THERE_SECONDS && remaining > -REPLAY_NEARLY_THERE_SECONDS,
+    targetLabel,
+    markerLabel: `Seeking to ${targetLabel}`,
+    statusText: status,
+    liveText,
+  };
 };
 
 /**
@@ -143,6 +217,9 @@ export const describePendingSeek = (input: PendingSeekPresentationInput): Pendin
   const { state, renderedSeconds, durationMs } = input;
   if (!(durationMs > 0)) return null;
   const ratio = input.ratio === undefined ? measuredRenderRatio() : input.ratio;
+  if (state.replayStartedAtMs !== undefined) {
+    return describeWorkerReplay(state, durationMs, ratio, input.nowMs ?? Date.now());
+  }
   const percentOf = (seconds: number) => Math.min(100, Math.max(0, (seconds * 1000 * 100) / durationMs));
 
   const progress = pendingSeekProgress(state, renderedSeconds);
@@ -176,6 +253,7 @@ export const describePendingSeek = (input: PendingSeekPresentationInput): Pendin
     etaSeconds,
     almostReady,
     targetLabel,
+    markerLabel: `Waiting to continue at ${targetLabel}, ${progressPercent}% ready`,
     statusText,
     liveText,
   };

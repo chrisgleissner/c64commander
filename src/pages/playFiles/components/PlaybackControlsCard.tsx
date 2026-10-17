@@ -706,7 +706,7 @@ export const PlaybackControlsCard = ({
                     {pendingSeek ? (
                       <div
                         role="img"
-                        aria-label={`Waiting to continue at ${pendingSeek.targetLabel}, ${pendingSeek.progressPercent}% ready`}
+                        aria-label={pendingSeek.markerLabel}
                         className="pointer-events-none absolute inset-y-0"
                         style={{ left: `${clampPercent(pendingSeek.targetPercent)}%` }}
                         data-testid="playback-awaited-marker"

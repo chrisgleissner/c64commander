@@ -238,3 +238,56 @@ describe("pending seek announcement", () => {
     expect(nextPoliteAnnouncement(first, "one", 99_000)).toBe(first);
   });
 });
+
+describe("describePendingSeek for a worker replay", () => {
+  const STARTED = 1_000_000;
+  const replay = (overrides: Partial<PendingSeekState> = {}): PendingSeekState =>
+    state({ targetSeconds: 1163, renderedAtRequestSeconds: 0, replayStartedAtMs: STARTED, ...overrides });
+  const at = (elapsedSeconds: number, ratio: number | null) =>
+    describePendingSeek({
+      state: replay(),
+      renderedSeconds: 0,
+      durationMs: 1_200_000,
+      ratio,
+      nowMs: STARTED + elapsedSeconds * 1000,
+    })!;
+
+  it("states a duration from the measured render ratio and counts it down", () => {
+    expect(at(0, 10).statusText).toBe("Seeking to 19:23 · about 1 min 56 s");
+    expect(at(10, 10).statusText).toBe("Seeking to 19:23 · about 1 min 46 s");
+    expect(at(100, 10).statusText).toBe("Seeking to 19:23 · about 16 s");
+    expect(at(100, 10).etaSeconds).toBe(16);
+  });
+
+  it("never states a duration or a percentage when the ratio has not been measured", () => {
+    const shown = at(30, null);
+    expect(shown.statusText).toBe("Seeking to 19:23…");
+    expect(shown.etaSeconds).toBeNull();
+    expect(shown.statusText).not.toMatch(/%|about|\bs\b/);
+    expect(shown.liveText).toBe("Seeking to position 1163 seconds.");
+  });
+
+  it("says so when the estimate has run out instead of counting below zero", () => {
+    expect(at(116, 10).statusText).toBe("Seeking to 19:23 · nearly there");
+    expect(at(130, 10).statusText).toBe("Seeking to 19:23 · taking longer than expected");
+    expect(at(130, 10).progressPercent).toBeLessThan(100);
+  });
+
+  it("starts from the beginning of the tune and moves the reached point towards the target", () => {
+    const early = at(0, 10);
+    const later = at(58, 10);
+    expect(early.startedAtPercent).toBe(0);
+    expect(early.renderedPercent).toBe(0);
+    expect(later.renderedPercent).toBeGreaterThan(40);
+    expect(later.renderedPercent).toBeLessThan(later.targetPercent);
+  });
+
+  it("holds the clock at the last audible position and names the marker after the seek", () => {
+    expect(at(5, 10).audibleMs).toBe(12_000);
+    expect(at(5, 10).markerLabel).toBe("Seeking to 19:23");
+  });
+
+  it("clamps a clock that has not yet reached the start time", () => {
+    expect(at(-5, 10).statusText).toBe("Seeking to 19:23 · about 1 min 56 s");
+  });
+});

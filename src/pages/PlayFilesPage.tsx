@@ -1963,7 +1963,7 @@ export default function PlayFilesPage() {
     // stopped. Forgetting the last reading here is what keeps that from reading as a stall.
     anchoredElapsedRef.current = null;
   }, [localEngineActive, currentItem?.id]);
-  const { renderedSeconds, pendingSeekState } = useLocalPendingSeek(localEngineActive, currentItem?.id, () =>
+  const { renderedSeconds, pendingSeekState, nowMs } = useLocalPendingSeek(localEngineActive, currentItem?.id, () =>
     syncPlaybackTimelineRef.current(),
   );
   const pendingSeek =
@@ -1972,6 +1972,7 @@ export default function PlayFilesPage() {
           state: pendingSeekState,
           renderedSeconds: renderedSeconds ?? pendingSeekState.renderedAtRequestSeconds,
           durationMs: currentDurationMs ?? 0,
+          nowMs,
         }) ?? undefined)
       : undefined;
   const renderedPercent =
