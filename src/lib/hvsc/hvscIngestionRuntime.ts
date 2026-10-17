@@ -44,7 +44,11 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
-import { applyIngestedSidHeaders, discardIngestedSidHeaderIndex } from "./hvscIngestedSidHeaders";
+import {
+  applyIngestedSidHeaders,
+  discardIngestedSidHeaderIndex,
+  hydrationProgressReporter,
+} from "./hvscIngestedSidHeaders";
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -84,6 +88,7 @@ import {
   markInstalledLibraryConsistent,
   markInstalledLibraryTouched,
   registerNativeProgressListener,
+  reloadSonglengthsAfterNativeIngest,
   removeNativeProgressListener,
   reportCacheStatFailure,
   resetCacheStatFailure,
@@ -830,43 +835,16 @@ const ingestArchivePathNative = async (options: {
       }
 
       emitProgress({ stage: "songlengths", message: "Loading song lengths…", archiveName });
-      resetSonglengthsCache();
-      const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
+      await reloadSonglengthsAfterNativeIngest({
         archiveName,
         archiveType: plan.type,
         archiveVersion: plan.version,
-        mode: "native",
       });
-      let nativeSonglengthsPerfError: Error | null = null;
-      try {
-        // force: see ingestArchiveBuffer — installedVersion is set in applyIngestionSuccess()
-        // below, after this reload, so discovery must bypass the install-state gate.
-        await reloadHvscSonglengthsOnConfigChange({ force: true });
-      } catch (error) {
-        nativeSonglengthsPerfError = error as Error;
-        throw error;
-      } finally {
-        endHvscPerfScope(
-          nativeSonglengthsPerfScope,
-          nativeSonglengthsPerfError
-            ? { outcome: "error", errorMessage: nativeSonglengthsPerfError.message }
-            : { outcome: "success" },
-        );
-      }
       if (result.sidHeaderIndexPath) {
         await applyIngestedSidHeaders(
           result.sidHeaderIndexPath,
           () => ensureNotCancelled(cancelToken),
-          (processed, total) =>
-            emitProgress({
-              stage: "sid_metadata_hydration",
-              statusToken: processed >= total ? "done" : processed === 0 ? "queued" : "running",
-              message: `Reading song details ${processed.toLocaleString()}/${total.toLocaleString()}`,
-              archiveName,
-              processedCount: processed,
-              totalCount: total,
-              percent: total > 0 ? Math.round((processed / total) * 100) : 100,
-            }),
+          hydrationProgressReporter(emitProgress, archiveName),
         );
       }
     } finally {

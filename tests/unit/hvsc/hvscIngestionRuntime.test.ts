@@ -195,7 +195,8 @@ vi.mock("@/lib/sid/sidUtils", () => ({
   buildSidTrackSubsongs: vi.fn(() => [{ songNr: 1, isDefault: true }]),
 }));
 
-vi.mock("@/lib/hvsc/hvscIngestedSidHeaders", () => ({
+vi.mock("@/lib/hvsc/hvscIngestedSidHeaders", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hvsc/hvscIngestedSidHeaders")>()),
   applyIngestedSidHeaders: vi.fn(async () => undefined),
   discardIngestedSidHeaderIndex: vi.fn(async () => undefined),
 }));

@@ -7,6 +7,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import type { HvscProgressEvent } from "./hvscTypes";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
   loadHvscBrowseIndexSnapshot,
@@ -21,6 +22,23 @@ import { hydrateBrowseSongFromSidHeader } from "./hvscMetadataHydrator";
 
 /** Songs applied so far and how many the header index names. */
 export type SidHeaderProgress = (processed: number, total: number) => void;
+
+/** Reports the header pass as the analysis step: queued at none, running in between, done at all. */
+export const hydrationProgressReporter =
+  (
+    emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
+    archiveName: string,
+  ): SidHeaderProgress =>
+  (processed, total) =>
+    emitProgress({
+      stage: "sid_metadata_hydration",
+      statusToken: processed >= total ? "done" : processed === 0 ? "queued" : "running",
+      message: `Reading song details ${processed.toLocaleString()}/${total.toLocaleString()}`,
+      archiveName,
+      processedCount: processed,
+      totalCount: total,
+      percent: total > 0 ? Math.round((processed / total) * 100) : 100,
+    });
 
 /** Virtual path to the song's raw SID header, base64-encoded, as the native ingest writes it. */
 export type SidHeaderIndex = Record<string, string>;
