@@ -36,7 +36,7 @@ export const ArchiveOverrideField = ({ id, label, value, onChange, effectiveValu
       aria-invalid={error ? true : undefined}
       data-testid={id}
     />
-    <p className="break-all text-xs text-muted-foreground" data-testid={`${id}-effective`}>
+    <p className="break-normal text-xs text-muted-foreground" data-testid={`${id}-effective`}>
       In use: {effectiveValue}
     </p>
     {error ? (
