@@ -34,7 +34,7 @@ export const LikedTunesSheet = ({ open, onOpenChange, onPlay }: LikedTunesSheetP
           Everything you have ♥-liked. Plays as a normal list — Shuffle and Repeat apply.
         </AppSheetDescription>
       </AppSheetHeader>
-      <AppSheetBody className="px-3 py-3">
+      <AppSheetBody className="px-3 pt-3 pb-[calc(0.75rem+var(--safe-area-inset-bottom))]">
         <LikedTunesList
           onPlay={(items, startIndex) => {
             onOpenChange(false);

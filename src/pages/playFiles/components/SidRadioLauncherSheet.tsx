@@ -125,7 +125,7 @@ export const SidRadioLauncherSheet = ({
           </AppSheetDescription>
         </AppSheetHeader>
 
-        <AppSheetBody className="px-3 py-3">
+        <AppSheetBody className="px-3 pt-3 pb-[calc(0.75rem+var(--safe-area-inset-bottom))]">
           <div className="flex flex-col gap-4">
             {hvscMissing ? (
               <div className="flex flex-col gap-2 rounded-md border border-border p-3">

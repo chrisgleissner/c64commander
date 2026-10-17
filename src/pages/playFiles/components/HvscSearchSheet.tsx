@@ -257,7 +257,10 @@ export const HvscSearchSheet = ({
           </div>
         </div>
 
-        <AppSheetBody className="px-3 py-2" data-testid="hvsc-search-results">
+        <AppSheetBody
+          className="px-3 pt-2 pb-[calc(0.5rem+var(--safe-area-inset-bottom))]"
+          data-testid="hvsc-search-results"
+        >
           {search.indexUnavailable ? (
             <p className="text-sm text-muted-foreground" data-testid="hvsc-search-unavailable">
               The HVSC index is not ready yet. Install or open the library once, then search again.

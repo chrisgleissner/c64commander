@@ -64,7 +64,7 @@ export const TuneListSheet = ({
           <AppSheetDescription className="not-sr-only truncate">{fileLabel}</AppSheetDescription>
         </AppSheetHeader>
 
-        <AppSheetBody className="px-3 py-2">
+        <AppSheetBody className="px-3 pt-2 pb-[calc(0.5rem+var(--safe-area-inset-bottom))]">
           {/* Same spacing as the search results, because these are the same kind of row and one
               tap does the same kind of thing. */}
           <ul className="flex flex-col gap-2">
