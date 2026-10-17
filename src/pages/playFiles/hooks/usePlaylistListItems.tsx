@@ -173,6 +173,12 @@ export const usePlaylistListItems = ({
               : configUiState === "declined"
                 ? "No CFG"
                 : null;
+      const detailParts = [
+        formatPlayCategory(item.category).split(" ")[0],
+        durationLabel,
+        ...(configStatusLabel ? [configStatusLabel] : []),
+        ...(item.status === "unavailable" ? ["Unavailable"] : []),
+      ];
       const menuItems: ActionListMenuItem[] = [
         { type: "label", label: "Details" },
         {
@@ -270,38 +276,26 @@ export const usePlaylistListItems = ({
         id: item.id,
         title: display.title,
         titleClassName: "whitespace-normal break-words block",
-        subtitle: buildPlaylistRowSubtitle(item),
+        subtitle: buildPlaylistRowSubtitle(item, display.title),
         subtitleClassName: "truncate block",
         meta: (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <FileOriginIcon
-              origin={
-                item.request.source === "ultimate"
-                  ? "ultimate"
-                  : item.request.source === "hvsc"
-                    ? "hvsc"
-                    : item.request.source === "commoserve"
-                      ? "commoserve"
-                      : "local"
-              }
-              className="h-3.5 w-3.5 shrink-0 opacity-60"
-            />
+          <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <FileOriginIcon
+                origin={
+                  item.request.source === "ultimate"
+                    ? "ultimate"
+                    : item.request.source === "hvsc"
+                      ? "hvsc"
+                      : item.request.source === "commoserve"
+                        ? "commoserve"
+                        : "local"
+                }
+                className="h-3.5 w-3.5 shrink-0 opacity-60"
+              />
+              <span>{detailParts.join(" • ")}</span>
+            </span>
             {display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : null}
-            <span>{formatPlayCategory(item.category)}</span>
-            <span>•</span>
-            <span>{durationLabel}</span>
-            {configStatusLabel ? (
-              <>
-                <span>•</span>
-                <span>{configStatusLabel}</span>
-              </>
-            ) : null}
-            {item.status === "unavailable" ? (
-              <>
-                <span>•</span>
-                <span>Unavailable</span>
-              </>
-            ) : null}
           </div>
         ),
         selected,

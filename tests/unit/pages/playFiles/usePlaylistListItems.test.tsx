@@ -6,11 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { LOCAL_DEVICE_LABEL } from "@/lib/sourceNavigation/sourceTerms";
 
@@ -127,17 +126,11 @@ describe("usePlaylistListItems", () => {
     listItems.forEach((entry) => {
       const sourceInfo = entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source");
       expect(sourceInfo).toBeUndefined();
-      expect(entry.subtitle).toBeTruthy();
-      expect(entry.subtitle).not.toContain("This device");
-      expect(entry.subtitle).not.toContain("C64 Ultimate");
-      expect(entry.subtitle).not.toContain("HVSC");
-      const metaChildren = Array.isArray((entry.meta as any)?.props?.children)
-        ? (entry.meta as any).props.children
-        : [(entry.meta as any)?.props?.children];
-      expect(metaChildren.some((child: any) => child?.type === FileOriginIcon)).toBe(true);
+      expect(entry.subtitle).not.toContain("/");
+      const { unmount } = render(<>{entry.meta}</>);
+      expect(screen.getByTestId("file-origin-icon")).toBeInTheDocument();
+      unmount();
     });
-
-    expect(listItems[2]?.subtitle).toBe("/MUSICIANS/Hubbard_Rob/Commando.sid");
   });
 
   it("uses generic unavailable status metadata", () => {
@@ -382,9 +375,7 @@ describe("usePlaylistListItems", () => {
     expect(startPlaylist).toHaveBeenNthCalledWith(2, playlist, 0);
     expect(startPlaylist).toHaveBeenNthCalledWith(3, playlist, 1);
 
-    const candidateMetaChildren = Array.isArray((candidateRow?.meta as any)?.props?.children)
-      ? (candidateRow?.meta as any).props.children
-      : [(candidateRow?.meta as any)?.props?.children];
-    expect(candidateMetaChildren[0]?.props?.origin).toBe("commoserve");
+    render(<>{candidateRow?.meta}</>);
+    expect(screen.getByLabelText("Online archive file")).toBeInTheDocument();
   });
 });

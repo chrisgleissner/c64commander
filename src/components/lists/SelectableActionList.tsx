@@ -109,6 +109,8 @@ export type SelectableActionListProps = {
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
   stackTitleProfiles?: readonly DisplayProfile[];
+  /** Profiles on which a row is a three-column grid: select, name with details, and play above the item menu. */
+  denseRowProfiles?: readonly DisplayProfile[];
   /** The whole list for the view-all letter rail when `viewAllItems` is paged. */
   letterIndexSource?: LetterIndexSource;
   /** Profiles on which the filter folds into one summary row once the reader moves on to the list. */
@@ -134,6 +136,7 @@ type ActionListRowProps = {
   item: ActionListItem;
   rowTestId?: string;
   stackTitle: boolean;
+  dense: boolean;
   menuPresentation: "dropdown" | "sheet";
 };
 
@@ -144,6 +147,7 @@ const ActionListRow = React.memo(function ActionListRow({
   item,
   rowTestId,
   stackTitle,
+  dense,
   menuPresentation,
 }: ActionListRowProps) {
   if (item.variant === "header") {
@@ -169,10 +173,15 @@ const ActionListRow = React.memo(function ActionListRow({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-2 rounded-md px-1 min-w-0 max-w-full",
-        // The stacked title is a 44 px target on its own line, so the row gives back its own
-        // vertical padding and line gap to stay the height it was.
-        stackTitle ? "gap-y-0 py-0" : "gap-y-2 py-[0.44rem]",
+        "items-center rounded-md px-1 min-w-0 max-w-full",
+        dense
+          ? "grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] gap-x-1 py-1"
+          : cn(
+              "flex flex-wrap gap-x-2",
+              // The stacked title is a 44 px target on its own line, so the row gives back its own
+              // vertical padding and line gap to stay the height it was.
+              stackTitle ? "gap-y-0 py-0" : "gap-y-2 py-[0.44rem]",
+            ),
         item.isDimmed
           ? "opacity-40"
           : isPlaying
@@ -201,12 +210,15 @@ const ActionListRow = React.memo(function ActionListRow({
       data-row-id={item.id}
       data-playing={isPlaying ? "true" : "false"}
     >
-      <div className="flex items-center gap-1 shrink-0">
+      <div className={dense ? "contents" : "flex items-center gap-1 shrink-0"}>
         {item.showSelection !== false ? (
           // A 44 px label around the 16 px box takes the tap. The margins keep the row's layout close
           // to the bare box and stop short of the actions button, so the two targets do not overlap.
           <label
-            className="-ml-[14px] -mr-1 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center"
+            className={cn(
+              "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center",
+              dense ? "col-start-1 row-span-2 row-start-1" : "-ml-[14px] -mr-1",
+            )}
             onClick={(event) => event.stopPropagation()}
           >
             <Checkbox
@@ -220,11 +232,16 @@ const ActionListRow = React.memo(function ActionListRow({
           </label>
         ) : null}
         {item.showMenu === false ? null : (
-          <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
+          <div className={dense ? "col-start-3 row-start-2 flex justify-center" : "contents"}>
+            <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
+          </div>
         )}
       </div>
       <div
-        className={cn("flex items-center gap-2 min-w-0 max-w-full", stackTitle ? "order-first basis-full" : "flex-1")}
+        className={cn(
+          "flex items-center gap-2 min-w-0 max-w-full",
+          dense ? "col-start-2 row-span-2 row-start-1" : stackTitle ? "order-first basis-full" : "flex-1",
+        )}
       >
         {item.icon ? <div className="shrink-0">{item.icon}</div> : null}
         <div className="min-w-0 w-full">
@@ -265,7 +282,12 @@ const ActionListRow = React.memo(function ActionListRow({
           ) : null}
         </div>
       </div>
-      <div className={cn("flex flex-col gap-1 shrink-0", stackTitle && "ml-auto")}>
+      <div
+        className={cn(
+          "flex flex-col gap-1 shrink-0",
+          dense ? "col-start-3 row-start-1 items-center" : stackTitle && "ml-auto",
+        )}
+      >
         <Button
           variant={isPlaying ? "secondary" : "ghost"}
           size="icon"
@@ -336,6 +358,7 @@ export const SelectableActionList = ({
   selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
+  denseRowProfiles = NO_PROFILES,
   letterIndexSource,
   collapsibleFilterProfiles = NO_PROFILES,
   filterHeaderSummary = null,
@@ -343,6 +366,7 @@ export const SelectableActionList = ({
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
   const stackTitles = stackTitleProfiles.includes(profile);
+  const denseRows = denseRowProfiles.includes(profile);
   const collapsibleFilter = collapsibleFilterProfiles.includes(profile);
   const menuPresentation = isCompact ? "sheet" : "dropdown";
   const listRootRef = useRef<HTMLDivElement>(null);
@@ -528,6 +552,7 @@ export const SelectableActionList = ({
             item={item}
             rowTestId={rowTestId}
             stackTitle={stackTitles}
+            dense={denseRows}
             menuPresentation={menuPresentation}
           />
         ))
@@ -692,6 +717,7 @@ export const SelectableActionList = ({
                             item={item}
                             rowTestId={rowTestId}
                             stackTitle={stackTitles}
+                            dense={denseRows}
                             menuPresentation={menuPresentation}
                           />
                         </div>
