@@ -2220,6 +2220,16 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("draws the selected theme icon in the on-primary color so it stays visible on the selected button", () => {
+    renderSettingsPage();
+
+    const [selected, other] = ["Light", "Dark"].map((name) =>
+      within(screen.getByRole("group", { name: "Theme" })).getByRole("button", { name }),
+    );
+    expect(selected.querySelector("svg")).toHaveClass("text-primary-foreground");
+    expect(other.querySelector("svg")).toHaveClass("text-muted-foreground");
+  });
+
   it("changes theme when selecting a new option", () => {
     renderSettingsPage();
 
@@ -2287,6 +2297,22 @@ describe("SettingsPage", () => {
 
       expect(screen.getByTestId("settings-app-style-cool-grey")).toHaveClass("bg-primary");
       expect(screen.getByTestId("settings-app-style-ocean-teal")).not.toHaveClass("bg-primary");
+    });
+
+    it("outlines the swatch dots of the selected style so they stay visible on the selected row", () => {
+      appStyleStateRef.current.storedStyleId = "cool-grey";
+      appStyleStateRef.current.styleId = "cool-grey";
+      renderSettingsPage();
+
+      const selectedDots = screen
+        .getByTestId("settings-app-style-cool-grey")
+        .querySelectorAll("span[aria-hidden] > span");
+      expect(selectedDots.length).toBe(3);
+      selectedDots.forEach((dot) => expect(dot).toHaveClass("border-primary-foreground"));
+      const otherDots = screen
+        .getByTestId("settings-app-style-ocean-teal")
+        .querySelectorAll("span[aria-hidden] > span");
+      otherDots.forEach((dot) => expect(dot).not.toHaveClass("border-primary-foreground"));
     });
 
     it("calls setStyleId when a style row is clicked", () => {

@@ -22,8 +22,8 @@ type Props = {
 
 const MetricRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-start justify-between gap-3 text-xs">
-    <span className="text-muted-foreground">{label}</span>
-    <span className="text-right font-mono text-foreground">{value}</span>
+    <span className="shrink-0 whitespace-nowrap text-muted-foreground">{label}</span>
+    <span className="min-w-0 break-words text-right font-mono text-foreground">{value}</span>
   </div>
 );
 

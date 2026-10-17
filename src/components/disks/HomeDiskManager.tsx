@@ -118,7 +118,7 @@ import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import {
-  describeConfigOrigin,
+  describeAttachedConfigRows,
   resolvePlaybackConfigUiState,
   resolveStoredConfigOrigin,
 } from "@/lib/config/playbackConfig";
@@ -1766,8 +1766,10 @@ export const HomeDiskManager = () => {
         { type: "info", label: "Date", value: formatDate(detailsDate) },
         { type: "separator" },
         { type: "label", label: "Config" },
-        { type: "info", label: "Attached", value: disk.configRef?.fileName ?? "None" },
-        { type: "info", label: "Origin", value: describeConfigOrigin(disk.configOrigin ?? "none") },
+        ...describeAttachedConfigRows(disk.configRef?.fileName, disk.configOrigin).map((row) => ({
+          type: "info" as const,
+          ...row,
+        })),
         {
           type: "info",
           label: "Status",
