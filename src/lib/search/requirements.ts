@@ -82,6 +82,8 @@ const SHORT_CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = 
   supportsMachineInput: "No input",
 };
 
+export const NEEDS_CONNECTED_DEVICE_REASON = "Needs a connected C64 Ultimate";
+
 /**
  * One requirement to a verdict. Every member of the union is answered here and nowhere else, which
  * is what `requirements.test.ts` asserts exhaustively — a new kind that is not handled fails the
@@ -94,14 +96,14 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
         ? { met: true, reason: "" }
         : {
             met: false,
-            reason: "Needs a connected C64 Ultimate",
+            reason: NEEDS_CONNECTED_DEVICE_REASON,
             remedyTarget: settingsSection("connection"),
           };
     case "capability":
       if (!ctx.deviceConnected) {
         return {
           met: false,
-          reason: "Needs a connected C64 Ultimate",
+          reason: NEEDS_CONNECTED_DEVICE_REASON,
           remedyTarget: settingsSection("connection"),
         };
       }
@@ -116,7 +118,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
       if (!ctx.deviceConnected) {
         return {
           met: false,
-          reason: "Needs a connected C64 Ultimate",
+          reason: NEEDS_CONNECTED_DEVICE_REASON,
           remedyTarget: settingsSection("connection"),
         };
       }
@@ -127,7 +129,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
       if (!ctx.deviceConnected) {
         return {
           met: false,
-          reason: "Needs a connected C64 Ultimate",
+          reason: NEEDS_CONNECTED_DEVICE_REASON,
           remedyTarget: settingsSection("connection"),
         };
       }

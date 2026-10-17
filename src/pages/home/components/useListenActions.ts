@@ -23,6 +23,7 @@ import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
 import { getSearchEntries } from "@/lib/search/registry";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import type { ResolvedSearchEntry } from "@/lib/search/types";
+import { NEEDS_CONNECTED_DEVICE_REASON } from "@/lib/search/requirements";
 
 /**
  * The four capabilities that were hardest to reach, one action from Home (spec.md section 6.3).
@@ -87,6 +88,13 @@ const readStoredTileState = (): StoredTileState => {
     hvscReady: isHvscInstalled(),
   };
 };
+
+/**
+ * "Needs a connected C64 Ultimate" is true of most of Home and is already shown once, by the connection
+ * badge, so it is not repeated on one tile. A reason particular to the tile — a switch, a model — is.
+ */
+const disabledTileReason = (reason: string | null): string | null =>
+  reason === NEEDS_CONNECTED_DEVICE_REASON ? null : reason;
 
 export const useListenActions = (): ListenAction[] => {
   const navigate = useStableNavigate();
@@ -216,7 +224,7 @@ export const useListenActions = (): ListenAction[] => {
                   // tile, so the short form is taken wherever there is one. "This model cannot
                   // stream picture or sound" under the greyed Live tile wrapped to six lines and
                   // took the whole top row of Quick Actions from 91 px to 204 px on a cartridge.
-                  (entry.shortDisabledReason ?? entry.disabledReason ?? null),
+                  disabledTileReason(entry.shortDisabledReason ?? entry.disabledReason ?? null),
             disabled: !enabled,
             onSelect: () => void activate(entry),
             testId: `home-tile-${tile.entryId}`,

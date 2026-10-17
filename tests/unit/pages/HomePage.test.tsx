@@ -2516,12 +2516,12 @@ describe("HomePage offline arrangement", () => {
     }
   });
 
-  it("keeps the Live View tile listed, disabled, rather than hiding it", () => {
+  it("keeps the Live View tile listed, disabled and without a connection sentence, like the other greyed tiles", () => {
     featureFlagsRef.current.live_view_enabled = true;
     renderWithRouter(<HomePage />);
     const tile = screen.getByTestId("home-tile-home.section.live-view");
     expect(tile).toBeDisabled();
-    expect(tile.textContent).toContain("Needs a connected C64 Ultimate");
+    expect(tile.textContent).toBe("Live");
   });
 
   it("names the switch on the Live View tile when Live View itself is turned off", () => {
