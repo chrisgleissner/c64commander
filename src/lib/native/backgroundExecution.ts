@@ -59,6 +59,16 @@ export type BackgroundExecutionPlugin = {
    */
   setNowPlaying: (options: NowPlayingInfo & { traceContext?: NativeTraceContext }) => Promise<void>;
   setDueAtMs: (options: { dueAtMs: number | null; traceContext?: NativeTraceContext }) => Promise<void>;
+  /**
+   * Tells the foreground service the web layer is alive while it plays. A session that goes quiet
+   * for too long is shown as paused, because the activity that played it has been destroyed.
+   */
+  heartbeat: () => Promise<void>;
+  /**
+   * The resume request the activity was launched with (notification Play, or a tap on it after the
+   * activity was destroyed). Returned once; null when there is none or it was already taken.
+   */
+  takeLaunchCommand: () => Promise<{ command: TransportCommand | null }>;
   checkPermissions: () => Promise<BackgroundExecutionPermissions>;
   requestPermissions: (options: { permissions: string[] }) => Promise<BackgroundExecutionPermissions>;
   addListener: <E extends keyof BackgroundExecutionEvents>(
@@ -97,6 +107,8 @@ export const BackgroundExecution: BackgroundExecutionPlugin = {
       ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
+  heartbeat: () => plugin.heartbeat(),
+  takeLaunchCommand: () => plugin.takeLaunchCommand(),
   checkPermissions: () => plugin.checkPermissions(),
   requestPermissions: (options) => plugin.requestPermissions(options),
   addListener: (eventName, listenerFunc) => plugin.addListener(eventName, listenerFunc),

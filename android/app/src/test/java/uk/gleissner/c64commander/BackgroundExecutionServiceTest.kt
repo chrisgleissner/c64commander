@@ -842,8 +842,12 @@ class BackgroundExecutionServiceTest {
         setPlaybackState(paused = true)
 
         setPlaybackState(paused = false, startId = 2)
-        ShadowLooper.shadowMainLooper()
-                .idleFor(BackgroundExecutionService.PAUSED_GRACE_PERIOD_MS * 2, TimeUnit.MILLISECONDS)
+        // A playing session is only kept alive by its web layer's heartbeats (issue 504).
+        val step = PlaybackLiveness.HEARTBEAT_TIMEOUT_MS / 3
+        repeat((BackgroundExecutionService.PAUSED_GRACE_PERIOD_MS * 2 / step).toInt()) {
+            ShadowLooper.shadowMainLooper().idleFor(step, TimeUnit.MILLISECONDS)
+            BackgroundExecutionService.noteHeartbeat()
+        }
 
         assertFalse(
                 "A resumed session must not be stopped by the pause it already left",

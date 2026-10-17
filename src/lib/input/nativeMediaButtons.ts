@@ -7,7 +7,7 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { onBackgroundTransportCommand } from "@/lib/native/backgroundExecution";
+import { BackgroundExecution, onBackgroundTransportCommand } from "@/lib/native/backgroundExecution";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { createTransportShortcut, type TransportShortcutOptions } from "@/lib/input/transportShortcuts";
 
@@ -35,6 +35,21 @@ export const installNativeMediaButtons = (options: TransportShortcutOptions): ((
     })
     .catch((error: unknown) => {
       addLog("warn", "Failed to register native media button listener", {
+        source: "native-media-buttons",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+  // The notification's Play after the activity was destroyed launches the app with a resume request,
+  // which no broadcast can deliver to a web layer that did not exist yet. Native hands it over once,
+  // so a request taken by an effect run that is torn down straight away must still be acted on.
+  BackgroundExecution.takeLaunchCommand()
+    .then(({ command }) => {
+      if (!command) return;
+      createTransportShortcut(command, options)();
+    })
+    .catch((error: unknown) => {
+      addLog("warn", "Failed to read the launch resume request", {
         source: "native-media-buttons",
         error: error instanceof Error ? error.message : String(error),
       });
