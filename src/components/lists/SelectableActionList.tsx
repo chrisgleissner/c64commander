@@ -120,7 +120,7 @@ export type SelectableActionListProps = {
 };
 
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
-const DEFAULT_DENSE_ROW_PROFILES: readonly DisplayProfile[] = ["compact"];
+const DEFAULT_DENSE_ROW_PROFILES: readonly DisplayProfile[] = ["compact", "medium"];
 const NO_PROFILES: readonly DisplayProfile[] = [];
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -268,7 +268,10 @@ const ActionListRow = React.memo(function ActionListRow({
             )}
             disabled={item.isDimmed || item.disableActions}
           >
-            <NameWrap name={item.title} className={cn(item.titleClassName, "min-w-0 whitespace-normal")} />
+            <NameWrap
+              name={item.title}
+              className={cn(item.titleClassName, "min-w-0 whitespace-normal [word-break:normal]")}
+            />
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
