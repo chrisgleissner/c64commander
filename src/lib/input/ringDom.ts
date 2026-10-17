@@ -169,7 +169,8 @@ export const focusRingElement = (element: HTMLElement | null): void => {
   element.scrollIntoView({ block, inline: "nearest" });
 };
 
-const REVEAL_AFTER_LAYOUT_DELAYS_MS = [120, 400];
+const REVEAL_WINDOW_MS = 1500;
+const REVEAL_CHECK_DELAYS_MS = [120, 400, 800, REVEAL_WINDOW_MS];
 
 /** True when the element's box lies wholly above or below the part of its scroll container that is on screen. */
 export const isOutsideScrollport = (element: HTMLElement): boolean => {
@@ -178,20 +179,54 @@ export const isOutsideScrollport = (element: HTMLElement): boolean => {
   return rect.bottom <= scrollport.top || rect.top >= scrollport.bottom;
 };
 
+/** True when the element is out of sight, or its end is under the bars while it would fit above them. */
+const needsReveal = (element: HTMLElement): boolean => {
+  if (isOutsideScrollport(element)) return true;
+  const rect = element.getBoundingClientRect();
+  const scrollport = visibleBoundsOf(scrollContainerOf(element));
+  const style = getComputedStyle(element);
+  const areaTop = scrollport.top + (parseFloat(style.scrollMarginTop) || 0);
+  const areaBottom = scrollport.bottom - (parseFloat(style.scrollMarginBottom) || 0);
+  return rect.height <= areaBottom - areaTop && (rect.top < areaTop - 1 || rect.bottom > areaBottom + 1);
+};
+
 /**
  * Bring the ring's element back into view when activating it changed the layout around it, such as a
  * larger text size, which moved the control the keypad user had just pressed off the screen.
+ *
+ * The layout can keep changing after the press, and the pressed element can be replaced, so for a
+ * short while every size or structure change in its scroll container re-checks whichever element
+ * the ring is on. Any key or pointer input ends the watch: the user has moved on.
  */
 export const revealRingElementAfterLayout = (element: HTMLElement | null): (() => void) => {
   if (!element) return () => {};
-  const timers = REVEAL_AFTER_LAYOUT_DELAYS_MS.map((delay) =>
-    window.setTimeout(() => {
-      if (element.isConnected && keypadScrollAnchorEl === element && isOutsideScrollport(element)) {
-        focusRingElement(element);
-      }
-    }, delay),
-  );
-  return () => timers.forEach((timer) => window.clearTimeout(timer));
+  const revealCurrent = () => {
+    const current = keypadScrollAnchorEl;
+    if (current?.isConnected && needsReveal(current)) focusRingElement(current);
+  };
+  const container = scrollContainerOf(element);
+  const watched = container === document.scrollingElement ? document.body : container;
+  const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(revealCurrent);
+  resizeObserver?.observe(watched);
+  Array.from(watched.children).forEach((child) => resizeObserver?.observe(child));
+  const mutationObserver = new MutationObserver(revealCurrent);
+  mutationObserver.observe(watched, { childList: true, subtree: true, characterData: true });
+  const timers = REVEAL_CHECK_DELAYS_MS.map((delay) => window.setTimeout(revealCurrent, delay));
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    timers.forEach((timer) => window.clearTimeout(timer));
+    window.clearTimeout(endTimer);
+    resizeObserver?.disconnect();
+    mutationObserver.disconnect();
+    window.removeEventListener("keydown", cancel, true);
+    window.removeEventListener("pointerdown", cancel, true);
+  };
+  const endTimer = window.setTimeout(cancel, REVEAL_WINDOW_MS + 1);
+  window.addEventListener("keydown", cancel, true);
+  window.addEventListener("pointerdown", cancel, true);
+  return cancel;
 };
 
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
