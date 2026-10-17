@@ -8,6 +8,7 @@
 
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import { cloneBudgetValue } from "@/lib/c64api/requestRuntime";
+import { addLog } from "@/lib/logging";
 
 const STRUCTURED_CONFIG_METADATA_KEYS = [
   "selected",
@@ -72,4 +73,31 @@ export const mergeListedConfigItems = (
     itemsNeedingEnrichment.add(item);
   });
   return itemsNeedingEnrichment;
+};
+
+/** Folds per-item fetch results into `mergedItems`, logging each fetch that failed. */
+export const mergeFetchedConfigItems = (
+  category: string,
+  requestedItems: readonly string[],
+  responses: readonly PromiseSettledResult<unknown>[],
+  mergedItems: Record<string, unknown>,
+) => {
+  responses.forEach((result, index) => {
+    if (result.status !== "fulfilled") {
+      addLog("warn", "Config item fetch failed", {
+        category,
+        item: requestedItems[index],
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+      return;
+    }
+    const payload = result.value as Record<string, any>;
+    const categoryBlock = payload?.[category] ?? payload;
+    const itemsBlock = categoryBlock?.items ?? categoryBlock;
+    if (!itemsBlock || typeof itemsBlock !== "object") return;
+    Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
+      if (name === "errors") return;
+      mergedItems[name] = config;
+    });
+  });
 };

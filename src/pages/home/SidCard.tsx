@@ -193,7 +193,7 @@ export function SidCard({
           <span id={`${labelId}-identity`} className="shrink-0 text-muted-foreground whitespace-nowrap">
             {identityLabel}
           </span>
-          {isIdentityReadOnly ? (
+          {isIdentityReadOnly || !identityOptions?.length ? (
             <span className="font-medium text-muted-foreground" data-testid={`home-sid-type-${testIdSuffix}`}>
               {identityValue}
             </span>
@@ -253,7 +253,7 @@ export function SidCard({
             <span id={`${labelId}-shaping-${index}`} className="shrink-0 text-muted-foreground whitespace-nowrap">
               {control.label}
             </span>
-            {control.options && control.onChange ? (
+            {control.options?.length && control.onChange ? (
               <Select value={control.value} onValueChange={control.onChange} disabled={!isConnected || control.pending}>
                 <SelectTrigger
                   className={inlineSelectTriggerClass}

@@ -353,8 +353,10 @@ not-connected / empty / single-device).
   - Reset — button — `home-sid-reset` — R✅ I✅
   - Master volume — slider — `home-sid-volume-master` — R✅ I✅ when the live `Vol Master` item exists.
     Left/Right (and PageUp/PageDown, ×10) move one mixer option per press; dragging keeps its fine step.
+  - Read failed — button — `home-sid-read-retry` (row `home-sid-read-error`) — R✅ I✅ — shown instead of the controls
+    while an Audio category read has failed; a skeleton (`home-sid-loading`) stands in while it is pending.
   - Enable toggle — switch — `home-sid-toggle-*` — R✅ I✅
-  - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅
+  - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅ — a value with no listed options is plain text, not a select.
   - Volume, Pan — slider ×2 — `home-sid-volume-*`, `home-sid-pan-*` — R✅ I✅ — one mixer option per Left/Right press, like Master volume.
 - **Streams** (`home-stream-status`) — per VIC / Audio / Debug:
   - Edit target — button — `home-stream-edit-toggle-*` — R✅ I✅

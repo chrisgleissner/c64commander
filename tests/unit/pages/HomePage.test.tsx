@@ -885,6 +885,7 @@ describe("HomePage SID status", () => {
       },
     };
 
+    audioMixerPayloadRef.current = { "Audio Mixer": { items: {} } };
     const { rerender } = renderHomePage();
 
     expect(within(screen.getByTestId("home-sid-status")).getAllByText("SID").length).toBeGreaterThan(0);

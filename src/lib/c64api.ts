@@ -23,6 +23,7 @@ import {
   hasStructuredConfigMetadata,
   mergeListedConfigItems,
   seedConfigItemsFromCache,
+  mergeFetchedConfigItems,
 } from "@/lib/c64api/configItemsMerge";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
@@ -2343,6 +2344,7 @@ export class C64API {
     let itemsNeedingEnrichment = new Set<string>();
     // An item the category listing omits is one the device does not have; asking for it only earns a 404.
     let categoryListed = false;
+    let categoryReadError: unknown;
     try {
       const categoryPayload = await this.getCategory(category, {
         ...options,
@@ -2383,6 +2385,7 @@ export class C64API {
         throw error;
       }
 
+      categoryReadError = error;
       addLog("debug", "Category config fetch failed; falling back to item fetches", {
         category,
         error: categoryErrorMessage,
@@ -2403,17 +2406,12 @@ export class C64API {
           }),
         ),
       );
-      responses.forEach((result) => {
-        if (result.status !== "fulfilled") return;
-        const payload = result.value as Record<string, any>;
-        const categoryBlock = payload?.[category] ?? payload;
-        const itemsBlock = categoryBlock?.items ?? categoryBlock;
-        if (!itemsBlock || typeof itemsBlock !== "object") return;
-        Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
-          if (name === "errors") return;
-          mergedItems[name] = config;
-        });
-      });
+      mergeFetchedConfigItems(category, missingItems, responses, mergedItems);
+    }
+
+    // An empty answer after a failed read would be cached as a success and render blank controls.
+    if (categoryReadError !== undefined && !uniqueItems.some((item) => Object.hasOwn(mergedItems, item))) {
+      throw categoryReadError;
     }
 
     return {
