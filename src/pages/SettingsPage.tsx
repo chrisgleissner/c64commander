@@ -51,6 +51,7 @@ import type { AppStyle, AppStyleColors, AppStyleMode } from "@/generated/appStyl
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { AddSavedDeviceDialog } from "@/components/devices/AddSavedDeviceDialog";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { AboutLicenseNotice } from "@/pages/settings/AboutLicenseNotice";
 import { ArchiveOverrideField } from "@/pages/settings/ArchiveOverrideField";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -3431,6 +3432,7 @@ export default function SettingsPage() {
               <FileText className="h-4 w-4" />
               Open source licenses
             </button>
+            <AboutLicenseNotice />
           </SettingsSection>
         </PageStack>
       </PageContainer>

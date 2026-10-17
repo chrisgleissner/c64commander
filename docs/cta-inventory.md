@@ -776,7 +776,10 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
   `/settings/open-source-licenses`, a sheet `open-source-licenses-overlay` that leaves the
   guidance bar visible: Close — button — `open-source-licenses-close`; each package's
-  License and Source links — link — 44 px targets; Back closes it)
+  License and Source links — link — 44 px targets; Back closes it) ; the small GPL notice
+  `settings-about-license-notice` names the app by variant and holds two inline links: GNU GPL v3
+  or later — `settings-about-license-text`, and Get the source code —
+  `settings-about-source-code` — R✅ I✅
 
 ### 4.6 Docs (`/docs`)
 
