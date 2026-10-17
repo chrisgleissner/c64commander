@@ -665,8 +665,9 @@ button:focus-visible,
   bottom: var(--safe-area-inset-bottom, 0px);
 }
 
-:root[data-interstitial-active="true"] {
-  --app-toast-strip-bottom: calc(var(--safe-area-inset-bottom, 0px) + var(--keypad-guidance-reserved-height, 0px));
+/* Set on the toast strip itself: a custom property changed on :root restyles every element in the document. */
+:root[data-interstitial-active="true"] .toast-viewport {
+  bottom: calc(var(--safe-area-inset-bottom, 0px) + var(--keypad-guidance-reserved-height, 0px));
 }
 
 .keypad-guidance-bar {
@@ -902,6 +903,10 @@ button:focus-visible,
   :root[data-display-profile="compact"] :where([class~="text-[11px]"]) {
     font-size: 0.9rem;
     line-height: 1.2rem;
+  }
+
+  :root[data-display-profile="compact"] [data-modal-footer="true"] > * {
+    flex: 1 1 auto;
   }
 
   :root[data-display-profile="compact"] :where([class~="text-xs"]) {
@@ -1576,12 +1581,17 @@ button:focus-visible,
 /* Dialogs lock page scrolling on <body> (react-remove-scroll), but pages scroll inside .page-shell and
    the body never scrolls. The lock still switched the body's overflow, position, margin and a custom
    property, which re-laid out and restyled the whole document on every dialog open and close. These
-   keep the body as it was; the lock's event blocking is unaffected. */
+   keep the body as it was; the lock's event blocking is unaffected. The lock's custom property is
+   registered as not inherited, so setting it on the body no longer restyles every descendant. */
+@property --removed-body-scroll-bar-size {
+  syntax: "*";
+  inherits: false;
+}
+
 html body[data-scroll-locked] {
   overflow-x: hidden !important;
   overflow-y: visible !important;
   overscroll-behavior: auto;
   position: static !important;
   margin: 0 !important;
-  --removed-body-scroll-bar-size: initial;
 }

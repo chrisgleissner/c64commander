@@ -36,6 +36,7 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
       hvscStageDone={hvsc.hvscStageDone}
       hvscStageTotal={hvsc.hvscStageTotal}
       hvscPreparationThroughputLabel={hvsc.hvscPreparationThroughputLabel}
+      hvscAnalyzing={hvsc.hvscAnalyzing}
       hvscPreparationErrorReason={hvsc.hvscPreparationErrorReason}
       hvscPreparationFailedPhase={hvsc.hvscPreparationFailedPhase}
       hvscReadySongCount={hvsc.hvscReadySongCount}

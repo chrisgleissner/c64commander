@@ -243,7 +243,7 @@ test.describe("HVSC perf", () => {
 
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: /10_Orbyte\.sid/i })
+      .filter({ hasText: /10.Orbyte/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect.poll(() => c64Server.sidplayRequests.length).toBeGreaterThan(0);

@@ -42,6 +42,7 @@ export type C64QueryOptions = {
   staleTime?: number;
   skipEnrichment?: boolean;
   timeoutMs?: number;
+  retry?: number;
 };
 
 export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
@@ -49,6 +50,7 @@ export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
   refetchOnMount: "always",
 };
 
+export const CONFIG_RETRY_DELAY_MS = (attempt: number) => Math.min(1000 * 2 ** attempt, 8000);
 const HEALTH_CHECK_INTERVAL_MS = 60_000;
 const BACKGROUND_QUERY_PREFIXES = [
   ["c64-info"],
@@ -498,6 +500,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     placeholderData: (previousData) => previousData ?? snapshotPlaceholder(),
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
+    ...(options.retry === undefined ? {} : { retry: options.retry, retryDelay: CONFIG_RETRY_DELAY_MS }),
   });
 }
 

@@ -7,6 +7,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import type { HvscProgressEvent } from "./hvscTypes";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
   loadHvscBrowseIndexSnapshot,
@@ -18,6 +19,26 @@ import {
 import { isHvscCancellationError } from "./hvscCancellation";
 import { deleteDataFileIfPresent, readDataFileText } from "./hvscFilesystem";
 import { hydrateBrowseSongFromSidHeader } from "./hvscMetadataHydrator";
+
+/** Songs applied so far and how many the header index names. */
+export type SidHeaderProgress = (processed: number, total: number) => void;
+
+/** Reports the header pass as the analysis step: queued at none, running in between, done at all. */
+export const hydrationProgressReporter =
+  (
+    emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
+    archiveName: string,
+  ): SidHeaderProgress =>
+  (processed, total) =>
+    emitProgress({
+      stage: "sid_metadata_hydration",
+      statusToken: processed >= total ? "done" : processed === 0 ? "queued" : "running",
+      message: `Reading song details ${processed.toLocaleString()}/${total.toLocaleString()}`,
+      archiveName,
+      processedCount: processed,
+      totalCount: total,
+      percent: total > 0 ? Math.round((processed / total) * 100) : 100,
+    });
 
 /** Virtual path to the song's raw SID header, base64-encoded, as the native ingest writes it. */
 export type SidHeaderIndex = Record<string, string>;
@@ -38,7 +59,10 @@ export const applySidHeaderIndex = async (
   snapshot: HvscBrowseIndexSnapshot,
   headers: SidHeaderIndex,
   throwIfCancelled: () => void = () => undefined,
+  onProgress: SidHeaderProgress = () => undefined,
 ) => {
+  const total = Object.keys(headers).length;
+  onProgress(0, total);
   let hydrated = 0;
   let failed = 0;
   let notIndexed = 0;
@@ -46,6 +70,7 @@ export const applySidHeaderIndex = async (
   for (const [virtualPath, headerBase64] of Object.entries(headers)) {
     visited += 1;
     if (visited % SONGS_PER_CHUNK === 0) {
+      onProgress(visited, total);
       await yieldToUi();
       throwIfCancelled();
     }
@@ -76,7 +101,11 @@ export const applySidHeaderIndex = async (
  * Any failure other than a cancellation leaves those songs to metadata hydration, which reads each
  * one from its file instead. The index is left on disk for {@link discardIngestedSidHeaderIndex}.
  */
-export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string, throwIfCancelled?: () => void) => {
+export const applyIngestedSidHeaders = async (
+  sidHeaderIndexPath: string,
+  throwIfCancelled?: () => void,
+  onProgress?: SidHeaderProgress,
+) => {
   try {
     const text = await readDataFileText(sidHeaderIndexPath);
     if (text === null) {
@@ -92,8 +121,11 @@ export const applyIngestedSidHeaders = async (sidHeaderIndexPath: string, throwI
       });
       return;
     }
-    const outcome = await applySidHeaderIndex(snapshot, JSON.parse(text) as SidHeaderIndex, throwIfCancelled);
+    const headers = JSON.parse(text) as SidHeaderIndex;
+    const outcome = await applySidHeaderIndex(snapshot, headers, throwIfCancelled, onProgress);
     await saveHvscBrowseIndexSnapshot(snapshot, { foldersUnchanged: true });
+    const total = Object.keys(headers).length;
+    onProgress?.(total, total);
     addLog("info", "HVSC song metadata taken from the ingested SID headers", { sidHeaderIndexPath, ...outcome });
   } catch (error) {
     if (isHvscCancellationError(error)) throw error;

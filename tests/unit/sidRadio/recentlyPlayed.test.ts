@@ -22,7 +22,7 @@ vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
 /**
  * The way back from an endless station.
  *
- * A tune goes by, you think "what *was* that", and it is gone: Liked Tunes only holds what you
+ * A tune goes by, you think "what *was* that", and it is gone: Liked tunes only holds what you
  * reacted to in time, and the playlist has already moved on. This keeps just enough to answer the
  * question, and no more — past a couple of dozen it would stop being a way back and start being a
  * second playlist.

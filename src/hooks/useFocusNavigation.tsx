@@ -7,31 +7,18 @@
  */
 
 /**
- * React adapter that drives keyboard / D-pad / keypad navigation from real key
- * events, for keypad-first devices (and any hardware keyboard).
+ * React adapter that drives keyboard / D-pad / keypad navigation from real key events.
  *
- * The pure logic lives in `@/lib/input`: {@link NavigationController} turns a
- * semantic action into a focus move / descend / activate / back-chain step over
- * an ordered registry, {@link FocusDiscoveryEngine} keeps that registry in sync
- * with the live DOM of the active scope (so reachability is complete by
- * construction — every interactive element is in the ring without per-component
- * wiring), and {@link normalizeKeyEvent} maps a raw key event to a semantic
- * action via the active profile. This file is the thin, DOM-aware glue:
+ * The pure logic lives in `@/lib/input`: NavigationController turns a semantic action into a focus
+ * move, descend, activate or back step over an ordered registry; FocusDiscoveryEngine keeps that
+ * registry in sync with the live DOM, so every interactive element is reachable without wiring;
+ * normalizeKeyEvent maps a raw key event to an action. This file is the DOM-aware glue:
+ * FocusNavigationProvider mounts the global capture-phase key and pointer listeners and applies the
+ * side effects the pure layer cannot (focus, scroll, highlight, router back, context menu), while
+ * useFocusItem and useFocusGroup are optional refinements (id, order, group, custom activation).
  *
- *   - {@link FocusNavigationProvider} mounts ONE global capture-phase `keydown`
- *     listener + capture pointer/touch listeners (which flip modality), runs the
- *     discovery engine while the flag is on, and applies the DOM side-effects the
- *     pure layer cannot (focus the resolved element, scroll it into view, toggle
- *     the highlight, call the router on an exhausted Back, open a context menu).
- *   - {@link useFocusItem} / {@link useFocusGroup} are OPTIONAL refinements:
- *     they give an element an explicit id / order / group membership / custom
- *     activation / opt-out. Basic reachability needs neither.
- *
- * Prime Directive: with the flag OFF the engine never starts, no `tabindex` or
- * other attribute is written, no key is `preventDefault`ed, and modality stays
- * `pointer` — the app is byte-for-byte baseline. With the flag ON but modality
- * `pointer`, there is still no highlight and no guidance bar; a pointer/touch
- * always wins and clears both in the same frame.
+ * With the flag off the engine never starts and nothing is written to the DOM; with modality
+ * `pointer` there is no highlight or guidance bar, and a pointer or touch always clears both.
  */
 
 import {
@@ -73,12 +60,18 @@ import {
 } from "@/lib/input/eventTargets";
 import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { holdsRingOnLoadingPage } from "@/lib/input/pageLoadingStop";
 import { DefaultStopFollower } from "@/lib/input/defaultStopFollower";
-import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import {
+  dispatchDeviceBackKey,
+  installDeviceBackButton,
+  runBackWhenOverlaysSettled,
+} from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
   ENTER_IGNORING_CONTROL_SELECTOR,
   focusRingElement,
+  revealRingElementAfterLayout,
   isActivation,
   toggleFieldFrameEditing,
   isNativelyActivatable,
@@ -197,23 +190,20 @@ export const FocusNavigationProvider = ({
         // `contains` check lets that focus stand while still re-anchoring a plain
         // button/control that did not move focus.
         onActivate: (item) => {
-          // Anchored on the ring's item, which for a single-control card is the card: DOM focus
-          // left on the control it clicked took the next OK from the ring, and a card header's
-          // toggle then closed the card it had just opened instead of going into it.
+          // Anchored on the ring's item (the card, for a single-control card): focus left on the clicked
+          // control took the next OK from the ring and closed the card a header toggle had just opened.
           const element = ringElementFor(created.focus.current()?.id ?? item.id);
           if (element && element.contains(document.activeElement)) return;
-          // Activating a bare text field is the explicit "go in" that starts
-          // editing, so it is the one place the field does take real DOM focus.
-          // `focusRingElement` deliberately withholds focus from editables on
-          // arrival (that is what stops the ring being trapped), so focus it
-          // here instead of going through it. A synthetic click would not:
-          // `.click()` does not move focus the way a real pointer press does.
+          // Activating a bare text field is the explicit "go in" that starts editing, so it is the one
+          // place the field takes real DOM focus; `focusRingElement` withholds it on arrival so the ring
+          // is not trapped. A synthetic click would not focus it: `.click()` does not move focus.
           if (element && isEditableTarget(element)) {
             element.focus({ preventScroll: true });
             element.scrollIntoView({ block: "nearest", inline: "nearest" });
             return;
           }
           focusRingElement(element);
+          revealRingElementAfterLayout(element);
         },
         onNavigateBack: () => onNavigateBackRef.current?.(),
         onOpenMenu: (item) => {
@@ -440,7 +430,7 @@ export const FocusNavigationProvider = ({
       // does. Once per press: a held key must not close a select, then its dialog, then walk on.
       if (action === "softLeft" && isAnyOverlayOpen()) {
         event.preventDefault();
-        if (!event.repeat) dispatchDeviceBackKey(document.activeElement ?? document);
+        if (!event.repeat) runBackWhenOverlaysSettled(() => dispatchDeviceBackKey(document.activeElement ?? document));
         return;
       }
       const shortcuts = shortcutsRef.current;
@@ -471,7 +461,7 @@ export const FocusNavigationProvider = ({
           "previousField",
         ].includes(action);
         const engine = engineRef.current;
-        engine?.flushPendingRefresh();
+        engine?.flushPendingRefresh({ allowStaleRing: traversesRing });
         if (traversesRing) {
           const scope = resolveActiveScope(document).element;
           if (!hasSectionScopeIn(scope)) {
@@ -488,7 +478,7 @@ export const FocusNavigationProvider = ({
             if (delta && getInputModality() === "pointer") adoptActiveElement();
             const mountCardFor = (id: string | undefined) => {
               const card = id ? engine?.elementForId(id)?.closest(SECTION_SCOPE_SELECTOR) : null;
-              if (card && scope.contains(card) && mountAllWaiting(card)) engine?.refreshNow();
+              if (card && scope.contains(card) && mountAllWaiting(card, { completeRows: false })) engine?.refreshNow();
             };
             // Discover the current card's real stops before predicting the next sibling.
             mountCardFor(controller.focus.current()?.id);
@@ -737,6 +727,12 @@ export const FocusNavigationProvider = ({
         activeElement !== ringElementFor(controller.focus.current()?.id ?? "") &&
         !(getInputModality() === "key-navigation" && engineRef.current?.isRingStop(activeElement))
       ) {
+        return;
+      }
+      if (holdsRingOnLoadingPage(controller.focus.current()?.id, action)) {
+        setInputModality("key-navigation");
+        notifyRing();
+        event.preventDefault();
         return;
       }
       // Seamless pointer → key hand-off: start the move from where the user is.

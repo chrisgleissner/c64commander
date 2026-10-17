@@ -129,16 +129,16 @@ describe("PrinterManager", () => {
     expect(screen.getByTestId("home-printer-toggle")).toBeInTheDocument();
   });
 
-  it("shows ON when printer enabled (default fallback is Enabled from device)", () => {
+  it("checks the power switch when printer enabled (default fallback is Enabled from device)", () => {
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
     );
     // The default: printerDevice.enabled=true → fallback is 'Enabled'
     render(<PrinterManager {...defaultProps} />);
-    expect(screen.getByTestId("home-printer-toggle")).toHaveTextContent("ON");
+    expect(screen.getByRole("switch", { name: "Printer power" })).toBeChecked();
   });
 
-  it("shows OFF when printer resolves as Disabled", () => {
+  it("unchecks the power switch when printer resolves as Disabled", () => {
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
         if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
@@ -146,7 +146,7 @@ describe("PrinterManager", () => {
       },
     );
     render(<PrinterManager {...defaultProps} />);
-    expect(screen.getByTestId("home-printer-toggle")).toHaveTextContent("OFF");
+    expect(screen.getByRole("switch", { name: "Printer power" })).not.toBeChecked();
   });
 
   it("disables toggle button when not connected", () => {
@@ -252,7 +252,7 @@ describe("PrinterManager – telnet controls", () => {
     expect(screen.getByText("Flush/Eject: Flush/Eject is not available on this firmware.")).toBeInTheDocument();
   });
 
-  it("shows Turn On when printer is disabled", () => {
+  it("shows Turn on when printer is disabled", () => {
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
         if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
@@ -279,7 +279,7 @@ describe("PrinterManager – telnet controls", () => {
     expect(onTelnetAction).toHaveBeenCalledWith("printerReset");
   });
 
-  it("calls onTelnetAction with printerTurnOn when Turn On is clicked", () => {
+  it("calls onTelnetAction with printerTurnOn when Turn on is clicked", () => {
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
         if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";
@@ -316,7 +316,7 @@ describe("PrinterManager – telnet controls", () => {
     expect(screen.getByTestId("home-printer-flush")).toHaveTextContent("Flushing…");
   });
 
-  it("shows Turn On loading text for active disabled-printer telnet action", () => {
+  it("shows Turn on loading text for active disabled-printer telnet action", () => {
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, category: string, itemName: string, _fallback: string | number) => {
         if (category === "Printer Settings" && itemName === "IEC printer") return "Disabled";

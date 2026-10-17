@@ -289,6 +289,35 @@ describe("AudioMixer", () => {
     expect(screen.getByTestId("reset-btn")).toBeDisabled();
   });
 
+  it("shows a loading skeleton and no SID cards while an Audio category read is pending", () => {
+    mockSidControlEntries.mockReturnValue({ ...mockSidControlEntries(), sidAudioStatus: "loading" });
+    render(<AudioMixer {...defaultProps} />);
+
+    expect(screen.getByTestId("home-sid-loading")).toBeDefined();
+    expect(screen.queryByTestId("sid-card-socket1")).toBeNull();
+    expect(screen.queryByTestId("home-sid-master-volume")).toBeNull();
+  });
+
+  it("shows a Retry row instead of empty selects when an Audio category read failed, and retries on tap", () => {
+    const refetchSidAudio = vi.fn();
+    mockSidControlEntries.mockReturnValue({ ...mockSidControlEntries(), sidAudioStatus: "error", refetchSidAudio });
+    render(<AudioMixer {...defaultProps} />);
+
+    expect(screen.getByTestId("home-sid-read-error")).toHaveTextContent("Could not read from the device");
+    expect(screen.queryByTestId("sid-card-socket1")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-sid-read-retry"));
+    expect(refetchSidAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the SID cards without a read-state row once every Audio category has answered", () => {
+    mockSidControlEntries.mockReturnValue({ ...mockSidControlEntries(), sidAudioStatus: "ready" });
+    render(<AudioMixer {...defaultProps} />);
+
+    expect(screen.getByTestId("sid-card-socket1")).toBeDefined();
+    expect(screen.queryByTestId("home-sid-loading")).toBeNull();
+    expect(screen.queryByTestId("home-sid-read-error")).toBeNull();
+  });
+
   it("renders a SID card for each control entry", () => {
     render(<AudioMixer {...defaultProps} />);
     expect(screen.getByTestId("sid-card-socket1")).toBeDefined();

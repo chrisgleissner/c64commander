@@ -69,7 +69,7 @@ describe("SheetContent", () => {
   /*
    * The keypad guidance bar is fixed over the bottom 32 px of the screen while it shows. A bottom
    * sheet that stood on the navigation bar ran under it: on a 427 px screen the last line of the
-   * empty Liked Tunes text and half of the selected Recent row were hidden.
+   * empty Liked tunes text and half of the selected Recent row were hidden.
    */
   it("stands a bottom sheet on the keypad guidance bar and leaves the other sides alone", () => {
     profileRef.current = "compact";

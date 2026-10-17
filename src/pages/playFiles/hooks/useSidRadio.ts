@@ -197,15 +197,15 @@ const REFILL_THRESHOLD = 4;
 
 /** The 9 style tiles (spec §5.4) — mask bit → export key + friendly label + blurb. */
 export const SID_RADIO_STYLE_TILES: ReadonlyArray<{ bit: number; key: string; label: string; blurb: string }> = [
-  { bit: 0, key: "fast_paced", label: "Fast-Paced", blurb: "High-energy, driving tunes" },
+  { bit: 0, key: "fast_paced", label: "Fast-paced", blurb: "High-energy, driving tunes" },
   { bit: 1, key: "slow_ambient", label: "Chill / Ambient", blurb: "Slow, atmospheric" },
   { bit: 2, key: "melodic", label: "Melodic", blurb: "Strong, hummable melodies" },
   { bit: 3, key: "experimental", label: "Experimental", blurb: "Off the beaten track" },
   { bit: 4, key: "nostalgic", label: "Nostalgic", blurb: "Classic, wistful vibes" },
-  { bit: 5, key: "composer_focus", label: "Composer Deep-Dive", blurb: "Stays close to a composer's signature" },
-  { bit: 6, key: "era_explorer", label: "Era Explorer", blurb: "Roams a musical era" },
-  { bit: 7, key: "deep_discovery", label: "Deep Cuts", blurb: "Rarely-heard corners of HVSC" },
-  { bit: 8, key: "theme_hunter", label: "Game Themes", blurb: "Themes & loader tunes" },
+  { bit: 5, key: "composer_focus", label: "Composer deep-dive", blurb: "Stays close to a composer's signature" },
+  { bit: 6, key: "era_explorer", label: "Era explorer", blurb: "Roams a musical era" },
+  { bit: 7, key: "deep_discovery", label: "Deep cuts", blurb: "Rarely-heard corners of HVSC" },
+  { bit: 8, key: "theme_hunter", label: "Game themes", blurb: "Themes & loader tunes" },
 ];
 
 /** Taste-Radio unlock threshold (D1). */
@@ -554,7 +554,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         const hvscMissing = getMd548PathIndexStats().size === 0;
         // Only the Likes station is seeded by likes, so only its refusal may ask for more of them.
         const emptyRefusal: Record<ActiveStation["seedKind"], SidRadioNotice> = {
-          song: "no-radio-for-tune",
+          song: styleFilter === null ? "no-radio-for-tune" : "no-radio-for-tune-in-style",
           style: "no-radio-for-style",
           taste: "no-radio",
           collection: "no-radio-for-collection",

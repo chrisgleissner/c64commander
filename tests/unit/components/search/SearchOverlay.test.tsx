@@ -155,6 +155,13 @@ describe("SearchOverlay", () => {
     expect(screen.getByTestId("search-results")).toHaveAttribute("role", "listbox");
   });
 
+  it("hides the browser's own clear button so the close button is the only X", async () => {
+    renderOverlay();
+    await open();
+    expect(screen.getByTestId("search-input").className).toContain("[&::-webkit-search-cancel-button]:hidden");
+    expect(screen.getAllByRole("button", { name: /close search/i })).toHaveLength(1);
+  });
+
   describe("keyboard model", () => {
     /*
      * The point of section 5.7. The focus ring moves real DOM focus through tabbables on Down

@@ -17,6 +17,8 @@ export type PlaybackTimeDisplay = {
   remainingLabel: string;
   totalLabel: string;
   remainingTotalLabel: string;
+  /** False when the playlist is just this tune, so the playlist counters would repeat the tune's own times. */
+  playlistCountersShown: boolean;
 };
 
 /** The Play page's progress bar and time labels: the clock they follow, and what they show at any elapsed time. */
@@ -29,6 +31,11 @@ export type PlaybackTimelineInputs = {
   durationMs: number | undefined;
   /** A skip's chosen track is launching, and the previous track's clock is not shown against it. */
   launching: boolean;
+  /**
+   * Nothing is playing or paused on the shown track, so it has no position: a track chosen after Stop, after a
+   * station is left, or after the playlist ended shows 0:00 and its own length, not the clock of the last track.
+   */
+  idle: boolean;
   /** Where a scrub or a drag on the bar is heading. */
   scrubTargetMs: number | null;
   /** The last audible position, while a seek waits for the renderer. */
@@ -43,10 +50,10 @@ export type PlaybackTimelineInputs = {
  * and a clock advancing through a silence is exactly what a listener reads as playback having died.
  */
 export const describePlaybackTime = (
-  { durationMs, launching, scrubTargetMs, heldAtMs, playlistTotalsAt }: PlaybackTimelineInputs,
+  { durationMs, launching, idle, scrubTargetMs, heldAtMs, playlistTotalsAt }: PlaybackTimelineInputs,
   elapsedMs: number,
 ): PlaybackTimeDisplay => {
-  const shownMs = launching ? 0 : scrubTargetMs !== null ? scrubTargetMs : (heldAtMs ?? elapsedMs);
+  const shownMs = launching || idle ? 0 : scrubTargetMs !== null ? scrubTargetMs : (heldAtMs ?? elapsedMs);
   const totals = playlistTotalsAt(shownMs);
   return {
     progressPercent: durationMs ? Math.min(100, (shownMs / durationMs) * 100) : 0,
@@ -54,17 +61,18 @@ export const describePlaybackTime = (
     remainingLabel: durationMs !== undefined ? `-${formatTime(Math.max(0, durationMs - shownMs))}` : "—",
     totalLabel: formatTime(totals.total),
     remainingTotalLabel: formatTime(totals.remaining),
+    playlistCountersShown: totals.total !== undefined && totals.total !== durationMs,
   };
 };
 
 /** Several labels show one elapsed time per render, so the display for it is worked out once. */
 export const usePlaybackTimeline = (
   playbackTime: PlaybackTimeStore,
-  { durationMs, launching, scrubTargetMs, heldAtMs, playlistTotalsAt }: PlaybackTimelineInputs,
+  { durationMs, launching, idle, scrubTargetMs, heldAtMs, playlistTotalsAt }: PlaybackTimelineInputs,
 ): PlaybackTimeline =>
   useMemo(() => {
     let last: { elapsedMs: number; display: PlaybackTimeDisplay } | null = null;
-    const inputs = { durationMs, launching, scrubTargetMs, heldAtMs, playlistTotalsAt };
+    const inputs = { durationMs, launching, idle, scrubTargetMs, heldAtMs, playlistTotalsAt };
     return {
       playbackTime,
       display: (elapsedMs) => {
@@ -72,4 +80,4 @@ export const usePlaybackTimeline = (
         return last.display;
       },
     };
-  }, [playbackTime, durationMs, launching, scrubTargetMs, heldAtMs, playlistTotalsAt]);
+  }, [playbackTime, durationMs, launching, idle, scrubTargetMs, heldAtMs, playlistTotalsAt]);

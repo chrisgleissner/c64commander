@@ -264,6 +264,32 @@ describe("AvMirrorImmersive", () => {
     expect(screen.getByTestId("av-mirror-immersive-controls")).toBeInTheDocument();
   });
 
+  it("leaves the control cluster out of a thin preview strip but keeps the mode chip", () => {
+    render(<AvMirrorImmersive strip />);
+    expect(screen.queryByTestId("av-mirror-immersive-controls")).toBeNull();
+    expect(screen.getByTestId("av-mirror-mode-chip")).toBeInTheDocument();
+  });
+
+  it("keeps only the mode chip in a thin preview strip while adjusting, with no hint or frame-rate readout", () => {
+    mirror.video = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
+    const ref = createRef<AvMirrorImmersiveHandle>();
+    render(<AvMirrorImmersive ref={ref} strip />);
+
+    act(() => ref.current!.toggleMode());
+
+    expect(screen.getByTestId("av-mirror-mode-chip")).toHaveTextContent("View");
+    expect(screen.queryByTestId("av-immersive-lock-hint")).toBeNull();
+    expect(screen.queryByTestId("av-mirror-immersive-fps")).toBeNull();
+  });
+
+  it("hides the status row in a thin strip that has no picture, so it cannot overlap the unavailable notice", () => {
+    mirror.video = { videoLive: false, video: { state: "error" } };
+    render(<AvMirrorImmersive strip />);
+
+    expect(screen.getByTestId("av-mirror-status-row")).toHaveClass("hidden");
+    expect(screen.getByText("Video unavailable")).toBeInTheDocument();
+  });
+
   it("keeps the mode chip and the frame-rate readout on one status row", () => {
     mirror.video = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
     render(<AvMirrorImmersive />);

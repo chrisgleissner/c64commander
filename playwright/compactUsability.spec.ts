@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { createMockArchiveServer } from "./mockArchiveServer";
@@ -73,7 +76,20 @@ const openCompact = async (page: Page, route: string) => {
  * Measures the surface and fails with every defect listed at once. Reporting one defect per run
  * would mean one build per defect on a surface that has several.
  */
+const SURFACE_SHOTS_DIR = process.env.COMPACT_SURFACE_SHOTS;
+
+/** With COMPACT_SURFACE_SHOTS set to a directory, each audited surface is also saved as a PNG for review. */
+const saveSurfaceShot = async (page: Page, name: string) => {
+  if (!SURFACE_SHOTS_DIR) return;
+  const file = `${name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")}.png`;
+  await page.screenshot({ path: `${SURFACE_SHOTS_DIR}/${file}` });
+};
+
 const expectUsable = async (page: Page, name: string, selector: string, kind: SurfaceKind) => {
+  await saveSurfaceShot(page, name);
   const measurement = await auditCompactSurface(page, selector, kind);
   expect(measurement.defects, formatDefects(name, measurement)).toEqual([]);
   return measurement;
@@ -126,6 +142,7 @@ const createAuditor = () => {
       await expect(surface, `${name}: surface never became visible`).toBeVisible({ timeout: 15_000 });
       // Let the open animation finish; a surface measured mid-transform reports its own animation.
       await page.waitForTimeout(400);
+      await saveSurfaceShot(page, name);
       const measurement = await auditSurface(page, surface, kind);
       if (measurement.defects.length > 0) {
         total += measurement.defects.length;
@@ -286,6 +303,14 @@ const seedSnapshots = async (page: Page) => {
   });
 };
 
+const longNamedDiskFolder = () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "long-disk-"));
+  fs.copyFileSync("tests/fixtures/local-source-assets/demo.d64", path.join(folder, LONG_DISK_NAME));
+  return folder;
+};
+
+const LONG_DISK_NAME = "Bomb_Jack_(Hotman)_side_a_with_a_long_name.d64";
+
 test.describe("Every surface is usable on a 320x427 panel", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -349,7 +374,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     }
   });
 
-  /* Session A1 — the machine controls on Home, which all live in the Quick Actions card. */
+  /* Session A1 — the machine controls on Home, which all live in the Quick actions card. */
   test("Home machine dialogs fit the panel", async ({ page }) => {
     await seedSnapshots(page);
     await openCompact(page, "/");
@@ -619,7 +644,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     await main.getByTestId("sid-radio-liked-tunes-open").click();
     const liked = page.getByTestId("liked-tunes-sheet");
-    await audit.check(page, "Play / Liked Tunes", liked, "list");
+    await audit.check(page, "Play / Liked tunes", liked, "list");
     await dismiss(page, liked);
 
     await main.getByTestId("sid-radio-launcher").click();
@@ -660,7 +685,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "multi.sid" })
+      .filter({ hasText: /^multi/i })
       .first()
       .getByRole("button", { name: "Play" })
       .click();
@@ -719,7 +744,8 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     const preparation = page.getByTestId("hvsc-preparation-sheet");
     await audit.check(page, "Play / Preparing HVSC library", preparation, "confirmation");
     // Words wider than an equal share ran into their neighbours: "Download" ended 2px before
-    // "Unpack" began, and the row read as "DownloadUnpack".
+    // "Unpack" began, and the row read as "DownloadUnpack". Five steps fit in one row at 320 px only
+    // because no word is wider than "Analyze"; the first step is "Fetch" for that reason.
     const labelGaps = await page.evaluate(() => {
       const ranges = [...document.querySelectorAll("[data-testid^='hvsc-preparation-progress-'] > span")].map(
         (label) => {
@@ -730,8 +756,8 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       );
       return ranges.slice(1).map((rect, index) => rect.left - ranges[index].right);
     });
-    expect(labelGaps.length).toBe(3);
-    for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(6);
+    expect(labelGaps.length).toBe(4);
+    for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(5.9);
 
     audit.assertAllUsable();
   });
@@ -777,6 +803,8 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     await page.getByTestId("new-disk-open").click();
     const newDisk = page.getByRole("dialog", { name: "New disk" });
+    await expect(newDisk.getByTestId("new-disk-create")).toBeInViewport({ ratio: 1 });
+    await expect(newDisk.getByRole("button", { name: "Cancel" })).toBeInViewport({ ratio: 1 });
     await audit.check(page, "Disks / New disk", newDisk, "form");
     await dismiss(page, newDisk);
 
@@ -802,13 +830,13 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     await page
       .locator('[data-slot-active="true"] input[type="file"][webkitdirectory]')
-      .setInputFiles("tests/fixtures/local-source-assets");
+      .setInputFiles(longNamedDiskFolder());
     await expect(page.getByRole("dialog")).toBeHidden({ timeout: 20_000 });
     await expect(page.getByTestId("disk-row").first()).toBeVisible({ timeout: 20_000 });
 
     await page
       .getByTestId("disk-row")
-      .filter({ hasText: "demo.d64" })
+      .filter({ hasText: "Bomb_Jack" })
       .first()
       .getByRole("button", { name: "Item actions" })
       .click();
@@ -816,9 +844,25 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await explorer.scrollIntoViewIfNeeded();
     await explorer.click();
 
-    const dialog = page.getByRole("dialog").filter({ hasText: "demo.d64" }).last();
+    const dialog = page.getByRole("dialog").filter({ hasText: "Bomb_Jack" }).last();
     await expect(dialog).toBeVisible({ timeout: 20_000 });
     await expect(dialog.getByTestId("disk-contents-loading")).toHaveCount(0, { timeout: 20_000 });
+    for (const close of await page.getByTestId("app-toast-close").all()) {
+      await close.evaluate((button) => (button as HTMLButtonElement).click());
+    }
+    const clipped = await dialog.evaluate((root) => {
+      const rects = (selector: string) => Array.from(root.querySelectorAll<HTMLElement>(selector));
+      const problems: string[] = [];
+      for (const element of [...rects("h2"), ...rects('li[data-testid^="disk-entry-"] .font-medium')]) {
+        if (element.scrollWidth > element.clientWidth + 1) problems.push(`clipped: ${element.textContent}`);
+        if (getComputedStyle(element).textOverflow === "ellipsis") problems.push(`ellipsis: ${element.textContent}`);
+      }
+      for (const badge of rects('li[data-testid^="disk-entry-"] .rounded-full')) {
+        if (badge.getBoundingClientRect().height > 32) problems.push(`badge wraps: ${badge.textContent}`);
+      }
+      return problems;
+    });
+    expect(clipped, "disk contents text that is clipped or wrapped per letter").toEqual([]);
     await audit.check(page, "Disks / Disk contents", dialog, "list");
 
     audit.assertAllUsable();

@@ -108,9 +108,37 @@ describe("HvscControls", () => {
 
     rerender(<HvscControls {...buildProps({ hvscPreparationState: "READY", hvscStage: null })} />);
 
-    for (const step of ["download", "unpack", "scan", "details"]) {
+    for (const step of ["download", "unpack", "scan", "details", "analyze"]) {
       expect(screen.getByTestId(`hvsc-stage-steps-${step}`)).toHaveAttribute("data-status", "done");
     }
+  });
+
+  it("keeps the analysis step on screen while a ready library is still being analyzed", () => {
+    // The library is browsable once it is ready, but reading every tune again starts then and runs
+    // for minutes. With the state at READY the panel used to show nothing about it.
+    renderOpen(
+      buildProps({
+        hvscPreparationState: "READY",
+        hvscAnalyzing: true,
+        hvscStage: "sid_metadata_hydration",
+        hvscStageStep: "analyze",
+        hvscStageDone: 6_000,
+        hvscStageTotal: 60_000,
+        hvscPreparationThroughputLabel: "600 songs/s · about 2 min left",
+      }),
+    );
+
+    expect(screen.getByTestId("hvsc-stage-steps-analyze")).toHaveAttribute("data-status", "active");
+    expect(screen.getByTestId("hvsc-stage-steps-details")).toHaveAttribute("data-status", "done");
+    expect(screen.getByText("Analyzing songs")).toBeInTheDocument();
+    expect(screen.getByTestId("hvsc-stage-steps-detail")).toHaveTextContent("6,000 / 60,000");
+    expect(screen.getByTestId("hvsc-stage-steps-detail")).toHaveTextContent("600 songs/s · about 2 min left");
+  });
+
+  it("shows no analysis step for a ready library that is not being analyzed", () => {
+    renderOpen(buildProps({ hvscPreparationState: "READY", hvscAnalyzing: false }));
+
+    expect(screen.queryByTestId("hvsc-stage-steps-analyze")).toBeNull();
   });
 
   it("exposes stable ids for the primary and advanced actions", () => {

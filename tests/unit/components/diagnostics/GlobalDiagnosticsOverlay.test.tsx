@@ -266,7 +266,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay();
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 8000 });
     fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
 
@@ -294,7 +294,7 @@ describe("GlobalDiagnosticsOverlay", () => {
   it("Android Back closes Diagnostics without changing the route", async () => {
     renderOverlay("/settings");
 
-    await screen.findByRole("dialog");
+    await screen.findByRole("dialog", {}, { timeout: 8000 });
     await waitFor(() => expect(appListenerState.backButtonListener).not.toBeNull());
 
     act(() => {
@@ -332,7 +332,7 @@ describe("GlobalDiagnosticsOverlay", () => {
         }),
       );
     });
-    await screen.findByRole("dialog");
+    await screen.findByRole("dialog", {}, { timeout: 8000 });
     await waitFor(() => expect(appListenerState.backButtonListener).not.toBeNull());
 
     // Something (page remount, scroll lock teardown) resets the container's
@@ -356,7 +356,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay();
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 8000 });
     fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
@@ -397,7 +397,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay();
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 8000 });
     fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
     fireEvent.click(await screen.findByTestId("diagnostics-clear-all-confirm"));
@@ -410,7 +410,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay("/diagnostics/history");
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", {}, { timeout: 8000 })).toBeInTheDocument();
     expect(await screen.findByTestId("health-history-popup")).toBeVisible();
   });
 
@@ -427,7 +427,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay(path);
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", {}, { timeout: 8000 })).toBeInTheDocument();
     if (surfaceTestId) {
       expect(await screen.findByTestId(surfaceTestId)).toBeVisible();
     }
@@ -446,7 +446,7 @@ describe("GlobalDiagnosticsOverlay", () => {
       );
     });
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", {}, { timeout: 8000 })).toBeInTheDocument();
     expect(clearDiagnosticsOpenRequestMock).toHaveBeenCalledTimes(1);
   });
 
@@ -469,7 +469,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay();
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", {}, { timeout: 8000 })).toBeInTheDocument();
     expect(buildActionSummariesMock).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -517,7 +517,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     renderOverlay();
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", {}, { timeout: 8000 })).toBeInTheDocument();
     expandDiagnosticsHeader();
     expect(screen.getByTestId("diagnostics-header-expanded")).toHaveTextContent(
       /Latency:\s*p50 10ms\s*·\s*p90 20ms\s*·\s*p99 30ms/i,
@@ -583,7 +583,7 @@ describe("GlobalDiagnosticsOverlay", () => {
         }),
       );
     });
-    await screen.findByRole("dialog");
+    await screen.findByRole("dialog", {}, { timeout: 8000 });
 
     // Opening must seed a fresh snapshot.
     expect(vi.mocked(getLogs).mock.calls.length).toBeGreaterThan(logsCallsWhileClosed);

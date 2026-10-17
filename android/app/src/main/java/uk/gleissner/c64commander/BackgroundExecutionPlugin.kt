@@ -119,6 +119,7 @@ open class BackgroundExecutionPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        BackgroundExecutionService.noteActivityGone()
         if (!areServiceReceiversRegistered) {
             super.handleOnDestroy()
             return
@@ -240,6 +241,21 @@ open class BackgroundExecutionPlugin : Plugin() {
             )
             call.reject("Failed to update background now-playing metadata", e)
         }
+    }
+
+    /** Sent while the web layer plays, so the service can tell a live session from an orphaned one. */
+    @PluginMethod
+    fun heartbeat(call: PluginCall) {
+        BackgroundExecutionService.noteHeartbeat()
+        call.resolve()
+    }
+
+    /** The resume request the activity was launched with, once: null if there was none or it was taken. */
+    @PluginMethod
+    fun takeLaunchCommand(call: PluginCall) {
+        val result = JSObject()
+        result.put("command", PendingResumeCommand.take())
+        call.resolve(result)
     }
 
     @PluginMethod

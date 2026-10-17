@@ -36,6 +36,31 @@ describe("HvscPreparationSheet", () => {
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
+  it("shows the analysis step while a ready library is still being analyzed, and still offers to browse", () => {
+    render(
+      <HvscPreparationSheet
+        {...buildProps({
+          state: "READY",
+          statusLabel: "Ready",
+          stage: "sid_metadata_hydration",
+          step: "analyze",
+          analyzing: true,
+          stagePercent: null,
+          stageDone: 6_000,
+          stageTotal: 60_000,
+          throughputLabel: "600 songs/s · about 2 min left",
+          readySongCount: 60_000,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("hvsc-preparation-progress-analyze")).toHaveAttribute("data-status", "active");
+    expect(screen.getByTestId("hvsc-preparation-progress-details")).toHaveAttribute("data-status", "done");
+    expect(screen.getByText("Analyzing songs")).toBeVisible();
+    expect(screen.getByTestId("hvsc-preparation-progress-detail")).toHaveTextContent("6,000 / 60,000");
+    expect(screen.getByTestId("hvsc-preparation-browse")).toBeVisible();
+  });
+
   it("renders success state and requires explicit browse confirmation", () => {
     const onBrowse = vi.fn();
 
@@ -55,7 +80,7 @@ describe("HvscPreparationSheet", () => {
 
     // Every step finished, which is the resting state — the old bar hid itself on completion, so the
     // one thing the user was waiting for was never rendered.
-    for (const step of ["download", "unpack", "scan", "details"]) {
+    for (const step of ["download", "unpack", "scan", "details", "analyze"]) {
       expect(screen.getByTestId(`hvsc-preparation-progress-${step}`)).toHaveAttribute("data-status", "done");
     }
     expect(screen.getByTestId("hvsc-preparation-success-count")).toHaveTextContent("65,890 songs ready");

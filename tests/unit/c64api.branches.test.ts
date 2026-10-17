@@ -1362,6 +1362,30 @@ describe("c64api branches", () => {
     );
   });
 
+  it("rejects instead of returning no items when the category read fails and enrichment is skipped", async () => {
+    const api = new C64API("http://c64u");
+    vi.spyOn(api, "getCategory").mockRejectedValue(new Error("HTTP 500 Server Error"));
+
+    await expect(
+      api.getConfigItems("SID Sockets Configuration", ["SID Socket 1"], { __c64uSkipItemEnrichment: true }),
+    ).rejects.toThrow("HTTP 500");
+  });
+
+  it("rejects when the category read and every per-item fallback fetch fail", async () => {
+    const api = new C64API("http://c64u");
+    vi.spyOn(api, "getCategory").mockRejectedValue(new Error("HTTP 500 Server Error"));
+    vi.spyOn(api, "getConfigItem").mockRejectedValue(new Error("HTTP 500 Server Error"));
+
+    await expect(api.getConfigItems("SID Sockets Configuration", ["SID Socket 1", "SID Socket 2"])).rejects.toThrow(
+      "HTTP 500",
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Config item fetch failed",
+      expect.objectContaining({ category: "SID Sockets Configuration", item: "SID Socket 1" }),
+    );
+  });
+
   // #31: updateConfigBatch immediate mode
   it("runs updateConfigBatch immediately when immediate option is true", async () => {
     const fetchMock = getFetchMock();
@@ -1644,7 +1668,7 @@ describe("c64api branches", () => {
   });
 
   // #49: getConfigItems with per-item fetch rejection (BRDA:1151)
-  it("getConfigItems tolerates per-item fetch rejection from Promise.allSettled", async () => {
+  it("getConfigItems rejects when the category read and every per-item fetch fail", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -1656,9 +1680,7 @@ describe("c64api branches", () => {
     });
 
     const api = new C64API("http://c64u");
-    const result = await api.getConfigItems("network", ["myItem"]);
-    // All items missing, all per-item fetches rejected → empty result
-    expect((result as any).network?.items).toEqual({});
+    await expect(api.getConfigItems("network", ["myItem"])).rejects.toThrow("category fetch error");
   });
 
   // #50: getConfigItems with per-item response missing category/items keys (BRDA:1153, 1154)
@@ -1679,7 +1701,7 @@ describe("c64api branches", () => {
   });
 
   // #51: getConfigItems with non-object itemsBlock in per-item response (BRDA:1155)
-  it("getConfigItems skips per-item result when itemsBlock is not an object", async () => {
+  it("getConfigItems rejects when the category read fails and per-item results hold no items", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -1691,8 +1713,7 @@ describe("c64api branches", () => {
     });
 
     const api = new C64API("http://c64u");
-    const result = await api.getConfigItems("network", ["myItem"]);
-    expect((result as any).network?.items).toEqual({});
+    await expect(api.getConfigItems("network", ["myItem"])).rejects.toThrow("category fetch error");
   });
 
   // #52: isSidUploadTransientFailure with non-Error thrown (BRDA:60 FALSE path)

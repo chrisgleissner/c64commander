@@ -71,7 +71,7 @@ const CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = {
  *
  * `CAPABILITY_REASONS` reads correctly in a full-width search row and is what that row keeps. In a
  * tile the shortest of them wrapped to six lines of one word each, and because a grid row is as
- * tall as its tallest tile, the whole top row of Quick Actions grew from 91 px to 204 px on an
+ * tall as its tallest tile, the whole top row of Quick actions grew from 91 px to 204 px on an
  * Ultimate II+L — the only device on which any of these is ever unmet.
  */
 const SHORT_CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = {
@@ -81,6 +81,8 @@ const SHORT_CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = 
   supportsPowerCycle: "No power off",
   supportsMachineInput: "No input",
 };
+
+export const NEEDS_CONNECTED_DEVICE_REASON = "Needs a connected C64 Ultimate";
 
 /**
  * One requirement to a verdict. Every member of the union is answered here and nowhere else, which
@@ -94,14 +96,14 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
         ? { met: true, reason: "" }
         : {
             met: false,
-            reason: "Needs a connected C64 Ultimate",
+            reason: NEEDS_CONNECTED_DEVICE_REASON,
             remedyTarget: settingsSection("connection"),
           };
     case "capability":
       if (!ctx.deviceConnected) {
         return {
           met: false,
-          reason: "Needs a connected C64 Ultimate",
+          reason: NEEDS_CONNECTED_DEVICE_REASON,
           remedyTarget: settingsSection("connection"),
         };
       }
@@ -116,7 +118,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
       if (!ctx.deviceConnected) {
         return {
           met: false,
-          reason: "Needs a connected C64 Ultimate",
+          reason: NEEDS_CONNECTED_DEVICE_REASON,
           remedyTarget: settingsSection("connection"),
         };
       }
@@ -127,7 +129,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
       if (!ctx.deviceConnected) {
         return {
           met: false,
-          reason: "Needs a connected C64 Ultimate",
+          reason: NEEDS_CONNECTED_DEVICE_REASON,
           remedyTarget: settingsSection("connection"),
         };
       }

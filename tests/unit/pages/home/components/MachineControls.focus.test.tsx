@@ -93,7 +93,7 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     const focusContext = { current: null as FocusNavigationContextValue | null };
     renderInRing({}, focusContext);
 
-    // Quick Actions is itself collapsible now, so its own toggle is the ring's first
+    // Quick actions is itself collapsible now, so its own toggle is the ring's first
     // stop. Selection starts there; OK establishes focus without activating (the
     // section is already open), and stepping down from it walks Menu → Pause → Reset →
     // Power.
@@ -145,7 +145,7 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Menu" }));
-    const order = ["Pause", "Reset", "Power", "Quick Actions", "Menu"];
+    const order = ["Pause", "Reset", "Power", "Quick actions", "Menu"];
     for (const name of order) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
       expect(document.activeElement).toBe(screen.getByRole("button", { name }));

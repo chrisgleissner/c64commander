@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
-import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { reportUserError } from "@/lib/uiErrors";
 
@@ -327,9 +326,11 @@ describe("ItemSelectionDialog display profiles", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(screen.getByTestId("add-items-filter").closest('[data-testid="add-items-scroll"]')).toBeNull();
+    // The filter is the first row of the scrolling area, so a short viewport (the soft keyboard is up)
+    // is left with the list instead of a pinned filter, scope buttons and footer and no room for results.
+    expect(screen.getByTestId("add-items-filter").closest('[data-testid="add-items-scroll"]')).not.toBeNull();
 
-    const filterInput = screen.getByPlaceholderText("Filter files…");
+    const filterInput = screen.getByPlaceholderText("Filter files");
     fireEvent.change(filterInput, { target: { value: "Alpha" } });
     fireEvent.click(screen.getByLabelText("Select Alpha.sid"));
 
@@ -337,7 +338,7 @@ describe("ItemSelectionDialog display profiles", () => {
       fireEvent.click(screen.getByText("Expanded override"));
     });
 
-    expect(screen.getByPlaceholderText("Filter files…")).toHaveValue("Alpha");
+    expect(screen.getByPlaceholderText("Filter files")).toHaveValue("Alpha");
     expect(screen.getByLabelText("Select Alpha.sid")).toHaveAttribute("data-state", "checked");
     expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "sheet");
   });
@@ -1025,8 +1026,8 @@ describe("ItemSelectionDialog archive source buttons", () => {
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
     expect(await screen.findByText("From CommoServe")).toBeVisible();
     expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
-    expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
-    expect(screen.getAllByText(LEGAL_NOTICE)).toHaveLength(1);
+    expect(screen.queryByText(/necessary license or rights/)).toBeNull();
+    expect(screen.queryByTestId("archive-legal-notice")).toBeNull();
   });
 
   it("keeps chooser labels aligned while enlarging the CommoServe interstitial icon", async () => {
@@ -1145,6 +1146,89 @@ describe("ItemSelectionDialog confirm in flight", () => {
     await act(async () => {
       pending.resolve(false);
     });
+  });
+
+  it("takes the compact layout when the viewport is short, whatever its width", async () => {
+    // A phone with the soft keyboard open has about 400 CSS px of height. The expanded layout (title
+    // "Add items", confirm in a tall footer) left a filtered file list with no height at all.
+    setViewportWidth(1280);
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === "(max-height: 520px)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderOpenSource(vi.fn());
+
+      expect(await screen.findByTestId("add-items-title")).toHaveTextContent("From C64U");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("keeps the compact layout after the keyboard hides, so the list does not move under a tap", async () => {
+    setViewportWidth(1280);
+    const originalMatchMedia = window.matchMedia;
+    let short = true;
+    const listeners = new Set<() => void>();
+    window.matchMedia = ((query: string) => ({
+      get matches() {
+        return query === "(max-height: 520px)" && short;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderOpenSource(vi.fn());
+      expect(await screen.findByTestId("add-items-title")).toHaveTextContent("From C64U");
+
+      short = false;
+      act(() => listeners.forEach((listener) => listener()));
+
+      expect(screen.getByTestId("add-items-title")).toHaveTextContent("From C64U");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("releases the compact layout when the display profile itself changes, which is a resize and not a keyboard", async () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    const originalMatchMedia = window.matchMedia;
+    let short = true;
+    const listeners = new Set<() => void>();
+    window.matchMedia = ((query: string) => ({
+      get matches() {
+        return query === "(max-height: 520px)" && short;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(
+        <DisplayProfileProvider>
+          <Harness />
+        </DisplayProfileProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+      expect(await screen.findByTestId("add-items-title")).toHaveTextContent("From C64U");
+
+      short = false;
+      act(() => listeners.forEach((listener) => listener()));
+      expect(screen.getByTestId("add-items-title")).toHaveTextContent("From C64U");
+
+      act(() => {
+        fireEvent.click(screen.getByText("Expanded override"));
+      });
+
+      expect(screen.getByTestId("add-items-title")).toHaveTextContent("Add items");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it("makes confirm available again after onConfirm fails", async () => {

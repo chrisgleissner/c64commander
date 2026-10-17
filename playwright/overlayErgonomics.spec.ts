@@ -115,7 +115,7 @@ const seedLists = async (page: Page) => {
 const openDiagnostics = async (page: Page) => {
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await settle(page, "medium");
-  await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+  await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -246,6 +246,12 @@ test.describe("Overlay ergonomics on a phone", () => {
       await expect(immersive).toBeVisible();
       await immersive.hover();
       const controls = immersive.getByTestId("av-mirror-immersive-controls");
+      if (profile === "compact") {
+        // The compact Remote Input sheet shows the picture as a thin strip with no control cluster.
+        await expect(controls).toHaveCount(0);
+        expect((await immersive.boundingBox())!.height, "the compact preview is a thin strip").toBeLessThanOrEqual(80);
+        return;
+      }
       await expect(controls).toBeVisible({ timeout: 8000 });
 
       await expectAllMeetTarget(controls.locator("button"), "Immersive Live View controls", 5);
@@ -268,7 +274,13 @@ test.describe("Overlay ergonomics on a phone", () => {
  */
 const COMPOSER = "Jeroen Tel & Charles Deenen";
 
-const writeComposerSid = (directory: string, flags: number) => {
+const writeComposerSid = (
+  directory: string,
+  flags: number,
+  file = "composer-links.sid",
+  author = COMPOSER,
+  released = "",
+) => {
   const bytes = Buffer.alloc(0x7c + 4, 0x60);
   bytes.fill(0, 0, 0x7c);
   bytes.write("PSID", 0, "latin1");
@@ -280,10 +292,11 @@ const writeComposerSid = (directory: string, flags: number) => {
   bytes.writeUInt16BE(3, 0x0e);
   bytes.writeUInt16BE(1, 0x10);
   bytes.write("Composer Links", 0x16, "latin1");
-  bytes.write(COMPOSER, 0x36, "latin1");
+  bytes.write(author, 0x36, "latin1");
+  bytes.write(released, 0x56, "latin1");
   bytes.writeUInt16BE(flags, 0x76);
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(path.join(directory, "composer-links.sid"), bytes);
+  fs.writeFileSync(path.join(directory, file), bytes);
 };
 
 type HitReport = { width: number; height: number; takenBy: string[] };
@@ -374,7 +387,7 @@ test.describe("Now playing links on a phone", () => {
       await expect(page.getByRole("dialog")).toBeHidden();
       await activeSlot(page)
         .getByTestId("playlist-item")
-        .filter({ hasText: "composer-links.sid" })
+        .filter({ hasText: /^composer.links/i })
         .getByRole("button", { name: "Play" })
         .click();
 
@@ -413,6 +426,7 @@ test.describe("Now playing links on a phone", () => {
       ];
       for (const neighbor of neighbors) {
         const label = (await neighbor.getAttribute("data-testid")) ?? (await neighbor.getAttribute("aria-label"));
+        await neighbor.evaluate((element) => element.scrollIntoView({ block: "center" }));
         const report = await hitTestTarget(neighbor);
         expect(report.takenBy, `${label}: controls that take taps inside its own box`).toEqual([]);
         if (await neighbor.isDisabled()) continue;
@@ -422,6 +436,60 @@ test.describe("Now playing links on a phone", () => {
       }
     });
   }
+});
+
+test.describe("Transport position while skipping on a phone", () => {
+  let server: Awaited<ReturnType<typeof createMockC64Server>>;
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    disableTraceAssertions(testInfo, "Layout-only coverage; trace assertions disabled.");
+    server = await createMockC64Server();
+    await seedUiMocks(page, server.baseUrl);
+  });
+
+  test.afterEach(async () => {
+    await server.close();
+  });
+
+  test("the transport buttons stay put when the next tune has longer credits @layout", async ({ page }, testInfo) => {
+    await page.addInitScript((override) => {
+      localStorage.setItem("c64u_display_profile_override", override);
+    }, DISPLAY_PROFILE_VIEWPORTS.compact.override);
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    const folder = testInfo.outputPath("credits-heights");
+    writeComposerSid(folder, 0x0014, "a-short.sid", "Rob Hubbard", "1985 Ocean");
+    writeComposerSid(folder, 0x003c, "b-long.sid", "Jeroen Tel & Charles Deenen", "1990 Maniacs of Noise and Friends");
+
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page, "compact");
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+    await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
+    await page.locator('input[type="file"][webkitdirectory]').setInputFiles([folder]);
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    const transportOffsetFromTitle = async (rowIndex: number, title: string, authorText: string) => {
+      await activeSlot(page).getByTestId("playlist-item").nth(rowIndex).getByRole("button", { name: "Play" }).click();
+      await expect(activeSlot(page).getByTestId("playback-current-title")).toHaveText(title, { timeout: 20_000 });
+      const credits = activeSlot(page).getByTestId("playback-current-credits");
+      await expect(credits).toContainText(authorText, { timeout: 20_000 });
+      const creditsHeight = await credits.evaluate((element) => element.getBoundingClientRect().height);
+      const offset = await activeSlot(page)
+        .getByTestId("playback-transport-row")
+        .evaluate((row) => {
+          const title = document.querySelector('[data-slot-active="true"] [data-testid="playback-current-title"]');
+          return row.getBoundingClientRect().top - (title?.getBoundingClientRect().top ?? 0);
+        });
+      return { creditsHeight, offset };
+    };
+
+    const short = await transportOffsetFromTitle(0, "A-Short", "Rob Hubbard");
+    const long = await transportOffsetFromTitle(1, "B-Long", "Charles Deenen");
+    expect(
+      long.creditsHeight,
+      "the second tune must have taller credits for this test to mean anything",
+    ).toBeGreaterThan(short.creditsHeight);
+    expect(long.offset, "transport distance from the tune title").toBe(short.offset);
+  });
 });
 
 test.describe("Large display chosen on a phone", () => {
@@ -507,9 +575,10 @@ test.describe("Large display chosen on a phone", () => {
       await settle(page, "expanded");
       await openSection(page, "home-section-toggle-drives");
       for (const key of ["a", "b"]) {
-        const title = await visibleTitle(page, `home-section-toggle-drive-${key}`);
-        expect(title.text, `Home drive ${key} title`).toBe(`Drive ${key.toUpperCase()}`);
-        expect(title.width, `Home drive ${key} title width`).toBeGreaterThanOrEqual(title.needed - 0.5);
+        const link = activeSlot(page).getByTestId(`home-drive-link-${key}`);
+        await expect(link, `Home drive ${key} summary`).toHaveText(new RegExp(`^${key.toUpperCase()}\\s·`));
+        const clipped = await link.evaluate((element) => element.scrollHeight > element.clientHeight + 1);
+        expect(clipped, `Home drive ${key} summary is drawn whole`).toBe(false);
       }
     });
   }

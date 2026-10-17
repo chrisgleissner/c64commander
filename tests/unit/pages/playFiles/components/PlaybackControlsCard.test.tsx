@@ -51,6 +51,7 @@ const shownTime = (display: Partial<PlaybackTimeDisplay>): PlaybackTimeline => {
     remainingLabel: "0:00",
     totalLabel: "0:00",
     remainingTotalLabel: "0:00",
+    playlistCountersShown: true,
     ...Object.fromEntries(Object.entries(display).filter(([, value]) => value !== undefined)),
   };
   return { playbackTime: createPlaybackTimeStore(), display: () => shown };
@@ -224,7 +225,7 @@ describe("PlaybackControlsCard", () => {
   // assertions with it: the metadata line now names one SID model per chip, which states the chip
   // count and says which chips they are, so a badge repeating the count would be the same fact twice
   // on the one line that was specified to carry the title and the ranking actions and nothing else.
-  // The badge is untouched on the playlist rows and in Liked Tunes, where there is no metadata line.
+  // The badge is untouched on the playlist rows and in Liked tunes, where there is no metadata line.
   it("gives the title a row to itself, with nothing beside it", () => {
     render(
       <PlaybackControlsCard
@@ -564,6 +565,22 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-rendered-ahead")).toHaveAttribute("data-rendered-percent", "30");
   });
 
+  it.each([
+    ["nothing rendered yet", { renderedPercent: 0 }],
+    ["a tune rendered in part", { renderedPercent: 40 }],
+    ["a tune that is fully rendered", { renderedPercent: 100 }],
+    ["no render figure at all", {}],
+  ])("draws the empty track of the seek bar for %s", (_name, extra) => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 0, onSeekToFraction: () => {}, ...extra })}
+      />,
+    );
+    const track = screen.getByTestId("playback-track");
+    expect(track).toHaveClass("bg-secondary");
+    expect(track.parentElement).toContainElement(screen.getByTestId("playback-progress"));
+  });
+
   it("names the progress bar Playback progress, on the seekable bar and on the plain indicator", () => {
     const { unmount } = render(
       <PlaybackControlsCard
@@ -576,6 +593,44 @@ describe("PlaybackControlsCard", () => {
     render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, progressPercent: 40 })} />);
     expect(screen.queryByTestId("playback-progress-seek")).toBeNull();
     expect(screen.getByRole("progressbar", { name: "Playback progress" })).toBeInTheDocument();
+  });
+
+  describe("the seek bar on the keypad", () => {
+    const renderSeekBar = (onSeekToFraction = vi.fn()) => {
+      render(
+        <PlaybackControlsCard
+          {...buildProps({
+            hasCurrentItem: true,
+            progressPercent: 50,
+            seekDurationMs: 100_000,
+            onSeekToFraction,
+          })}
+        />,
+      );
+      return { onSeekToFraction, bar: screen.getByTestId("playback-progress-seek") };
+    };
+
+    it("moves five seconds on a Left or Right press and fifteen on a repeat", () => {
+      const { onSeekToFraction, bar } = renderSeekBar();
+
+      fireEvent.keyDown(bar, { key: "ArrowRight" });
+      fireEvent.keyDown(bar, { key: "ArrowLeft" });
+      fireEvent.keyDown(bar, { key: "ArrowRight", repeat: true });
+
+      expect(onSeekToFraction.mock.calls.map(([fraction]) => Math.round(fraction * 1000) / 10)).toEqual([55, 45, 65]);
+    });
+
+    it("keeps Up and Down for the focus ring", () => {
+      const { onSeekToFraction, bar } = renderSeekBar();
+      fireEvent.keyDown(bar, { key: "ArrowDown" });
+      expect(onSeekToFraction).not.toHaveBeenCalled();
+    });
+
+    it("keeps Left and Right away from the focus ring and names OK as Adjust", () => {
+      const { bar } = renderSeekBar();
+      expect(bar).toHaveAttribute("data-key-nav-horizontal");
+      expect(bar).toHaveAttribute("data-key-nav-verb", "Adjust");
+    });
   });
 
   it("omits the fill once the whole tune is rendered, since there is nothing left to report", () => {
@@ -607,6 +662,7 @@ describe("PlaybackControlsCard pending seek", () => {
     etaSeconds: 4,
     almostReady: false,
     targetLabel: "0:27",
+    markerLabel: "Waiting to continue at 0:27, 68% ready",
     statusText: "Preparing audio for 0:27 · 68% · about 4 s",
     liveText: "Rendering audio for position 27 seconds. 68 percent ready. About 4 seconds remaining.",
     ...overrides,
@@ -633,6 +689,17 @@ describe("PlaybackControlsCard pending seek", () => {
     expect(status).toHaveAttribute("data-pending-progress", "68");
     // Not a `title` anywhere: there is no hover on the device this runs on.
     expect(status).not.toHaveAttribute("title");
+  });
+
+  it("names the marker after the seek when the worker is replaying the tune", () => {
+    renderPending({
+      markerLabel: "Seeking to 19:23",
+      statusText: "Seeking to 19:23 · about 1 min 40 s",
+      liveText: "Seeking to position 1163 seconds. About 1 min 40 s remaining.",
+    });
+
+    expect(screen.getByTestId("playback-awaited-marker")).toHaveAccessibleName("Seeking to 19:23");
+    expect(screen.getByTestId("playback-pending-status")).toHaveTextContent("Seeking to 19:23 · about 1 min 40 s");
   });
 
   it("gives the target marker a cap, the requested time and a name of its own", () => {

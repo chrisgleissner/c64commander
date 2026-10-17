@@ -167,7 +167,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
           {STAT_FIELDS.map((field) => (
             <div key={field.key} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
+              <div className="text-xs text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-stat-${field.testid}`}>
                 {fmtMs(stats[field.key])}
               </div>
@@ -222,7 +222,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             ] as const
           ).map((field) => (
             <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
+              <div className="text-xs text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-lat-${field.testid}`}>
                 {fmtLatency(field.last)}
               </div>
@@ -331,7 +331,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
                 ] as const
               ).map((field) => (
                 <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
+                  <div className="text-xs text-muted-foreground">{field.label}</div>
                   <div className="text-sm font-semibold tabular-nums" data-testid={`av-tone-ladder-${field.testid}`}>
                     {field.value}
                   </div>
@@ -357,7 +357,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
               data-testid="av-tone-ladder-notes"
             >
               <table className="w-full text-xs tabular-nums">
-                <thead className="sticky top-0 bg-muted/80 text-xs uppercase tracking-wide text-muted-foreground">
+                <thead className="sticky top-0 bg-muted/80 text-xs text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1 text-left font-medium">Note</th>
                     <th className="px-2 py-1 text-left font-medium">Color</th>

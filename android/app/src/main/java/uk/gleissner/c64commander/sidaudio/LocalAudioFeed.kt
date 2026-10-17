@@ -167,6 +167,7 @@ internal class LocalAudioFeed(
     val history = ArrayDeque<ByteArray>()
     var historyFrames = 0L
     var silentSeconds = 0.0
+    var sourceSilentSeconds = 0.0
     var lastWriteNanos = 0L
     var missing = 0
     @Volatile var stats: FeedSessionStats? = null
@@ -327,6 +328,7 @@ internal class LocalAudioFeed(
   fun resetSilence(serial: Int) = post {
     sessions[serial]?.let {
       it.silentSeconds = 0.0
+      it.sourceSilentSeconds = 0.0
       publish(it)
     }
   }
@@ -683,6 +685,7 @@ internal class LocalAudioFeed(
       head.startFrame += got
       head.frames -= got
       if (head.frames <= 0) session.queue.removeFirst()
+      session.sourceSilentSeconds = observeSilentSeconds(session.sourceSilentSeconds, scratch, got, session.settings.sampleRate)
       if (!head.processed) {
         applyFade(session, got)
         mixTail(session, got, ownAudio = true)
@@ -793,6 +796,11 @@ internal class LocalAudioFeed(
   }
 
   private fun observeSilence(session: Session, slice: ByteArray, frames: Int) {
+    session.silentSeconds = observeSilentSeconds(session.silentSeconds, slice, frames, session.settings.sampleRate)
+  }
+
+  /** The run of silence so far, extended by this slice or ended by it. */
+  private fun observeSilentSeconds(runSeconds: Double, slice: ByteArray, frames: Int, sampleRate: Int): Double {
     var lo = Int.MAX_VALUE
     var hi = Int.MIN_VALUE
     // Music settles the question within a few samples, so the scan stops as soon as it is answered.
@@ -802,8 +810,7 @@ internal class LocalAudioFeed(
       if (v > hi) hi = v
       if (hi - lo >= SILENCE_PEAK_TO_PEAK) break
     }
-    if (frames > 0 && hi - lo >= SILENCE_PEAK_TO_PEAK) session.silentSeconds = 0.0
-    else session.silentSeconds += frames.toDouble() / session.settings.sampleRate
+    return if (frames > 0 && hi - lo >= SILENCE_PEAK_TO_PEAK) 0.0 else runSeconds + frames.toDouble() / sampleRate
   }
 
   /** Nothing to write. Watch for a track that holds audio and has stopped playing it. */
@@ -863,7 +870,9 @@ internal class LocalAudioFeed(
             queuedFrames = session.queuedFrames(),
             underruns = if (active) current.underruns() else 0,
             silentSeconds = session.silentSeconds,
-            silentFault = session.silentSeconds - queuedSec >= SILENCE_TOLERANCE_SECONDS,
+            silentFault =
+                session.silentSeconds - queuedSec >= SILENCE_TOLERANCE_SECONDS &&
+                    session.sourceSilentSeconds < SILENCE_TOLERANCE_SECONDS,
             reopens = reopens,
             active = active,
             superseded = isSuperseded(session) || session.closed,

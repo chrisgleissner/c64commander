@@ -591,6 +591,19 @@ describe("RemoteInputSheet — Game Mode", () => {
     });
   });
 
+  describe("orientation label", () => {
+    it("keeps the Orientation label on one line and lets the buttons wrap below it", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+
+      const row = screen.getByTestId("remote-input-rotation-override");
+      expect(row.className).toContain("flex-wrap");
+      expect(screen.getByText("Orientation").className).toContain("whitespace-nowrap");
+    });
+  });
+
   describe("GM-14: reaching everything with the controls hidden", () => {
     it("`#` shows the quick keys and the Live View switches over the picture", () => {
       mirrorState.videoState = "live";
@@ -662,11 +675,11 @@ describe("RemoteInputSheet — Game Mode", () => {
   describe("the compact display profile", () => {
     // 320 CSS px across. "Game Mode" shares its row with the size stepper, and the two do
     // not fit; the shorter face is compact-only.
-    it("calls it Game, on the way in and on the heading", () => {
+    it("offers Game Mode as an icon button, and calls it Game on the heading", () => {
       renderSheetAtProfile("compact");
       const enter = screen.getByTestId("remote-input-immersive-toggle");
-      expect(enter).toHaveTextContent("Game");
-      expect(enter.textContent).not.toContain("Game Mode");
+      expect(enter).toHaveAccessibleName("Game Mode");
+      expect(enter.textContent).toBe("");
 
       enterGameMode();
       summonChrome();
@@ -690,6 +703,48 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(screen.getByTestId("remote-input-joystick-options")).toHaveAttribute("aria-expanded", "true");
       expect(screen.getByTestId("remote-input-size-stepper")).toBeInTheDocument();
       expect(screen.getByTestId("remote-input-movement-style-toggle")).toBeInTheDocument();
+    });
+
+    it("keeps the mode choice, Options, Game Mode and Release all on one toolbar row of icon buttons", () => {
+      renderSheetAtProfile("compact");
+      const modeToggle = screen.getByTestId("remote-input-output-mode-toggle");
+      const row = modeToggle.parentElement as HTMLElement;
+      for (const id of [
+        "remote-input-joystick-options",
+        "remote-input-immersive-toggle",
+        "remote-input-panic-button",
+      ]) {
+        expect(row).toContainElement(screen.getByTestId(id));
+      }
+      expect(screen.getByTestId("remote-input-panic-button")).toHaveAccessibleName("Release all");
+      expect(screen.getByTestId("remote-input-panic-button").textContent).toBe("");
+      expect(screen.getByTestId("remote-input-joystick-options")).toHaveAccessibleName("Options");
+    });
+
+    it("places the port choice beside FIRE instead of on a row of its own", () => {
+      renderSheetAtProfile("compact");
+      const fireColumn = screen.getByTestId("remote-input-fire-button").parentElement as HTMLElement;
+      expect(fireColumn).toContainElement(screen.getByTestId("remote-input-port-toggle"));
+    });
+
+    it("shows the live preview as a thin strip on compact so the controls keep their room", () => {
+      mirrorState.videoState = "live";
+      renderSheetAtProfile("compact");
+      expect(screen.getByTestId("av-mirror-immersive")).toHaveClass("h-[10dvh]");
+      expect(screen.queryByTestId("av-mirror-immersive-controls")).toBeNull();
+    });
+
+    it("keeps the full-size preview with its controls on a standard display", () => {
+      mirrorState.videoState = "live";
+      renderSheetAtProfile("medium");
+      expect(screen.getByTestId("av-mirror-immersive")).not.toHaveClass("h-[10dvh]");
+    });
+
+    it("keeps the text labels on Release all and Options on a standard display", () => {
+      renderSheetAtProfile("medium");
+      expect(screen.getByTestId("remote-input-panic-button")).toHaveTextContent("Release all");
+      const port = screen.getByTestId("remote-input-port-toggle");
+      expect(screen.getByTestId("remote-input-fire-button").parentElement).not.toContainElement(port);
     });
 
     it("shows the size and movement style directly on a standard display", () => {

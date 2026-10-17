@@ -65,6 +65,8 @@ export interface AvMirrorImmersiveProps {
   rotation?: DeviceRotation;
   /** Take all the height available instead of sizing to the frame's aspect. */
   fill?: boolean;
+  /** A thin glanceable preview: the control cluster is left out because it cannot fit. */
+  strip?: boolean;
   /**
    * What the app is asserting on the joystick right now, when the player is steering with the
    * app rather than with something plugged into the C64. Used only to break ties between
@@ -148,7 +150,7 @@ const haptic = () => {
  * using them is looking at the phone rather than at the game.
  */
 export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImmersiveProps>(function AvMirrorImmersive(
-  { session, onModeChange, rotation = 0, fill = false, heldJoystickInputs, className },
+  { session, onModeChange, rotation = 0, fill = false, strip = false, heldJoystickInputs, className },
   ref,
 ) {
   const { videoLive, video } = useAvMirror(session, { frameRate: true });
@@ -463,13 +465,16 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
             full sentence stays as the accessible name, and the colour and the icon carry
             the same distinction visually. */}
         <div
-          className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2"
+          className={cn(
+            "pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2",
+            strip && !videoLive && "hidden",
+          )}
           data-testid="av-mirror-status-row"
         >
           <span className="flex items-center gap-1">
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-media-on-scrim shadow",
+                "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium text-media-on-scrim shadow",
                 adjust ? "bg-amber-500" : "bg-primary",
               )}
               role="status"
@@ -483,7 +488,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
                 users go looking for, and the keypad edition has no touchscreen at all, so the
                 two routes into it are spelled out in the same status row that reports the
                 result. It disappears the moment there is a lock to report instead. */}
-            {(follow || adjust) && !lockLabel && controlsVisible && (
+            {(follow || adjust) && !lockLabel && controlsVisible && !strip && (
               <span
                 className="inline-flex items-center gap-1 rounded-full bg-media-scrim/60 px-2 py-0.5 text-xs text-media-on-scrim/90 shadow"
                 data-testid="av-immersive-lock-hint"
@@ -514,7 +519,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
               </button>
             )}
           </span>
-          {showBadges && videoLive && video.fps > 0 && (
+          {showBadges && videoLive && !strip && video.fps > 0 && (
             <span
               className="rounded-sm bg-media-scrim/60 px-1.5 py-0.5 text-xs leading-tight text-media-on-scrim/80"
               data-testid="av-mirror-immersive-fps"
@@ -615,7 +620,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       )}
 
       {/* Auto-hiding control cluster. */}
-      {videoLive && (controlsVisible || adjust) && (
+      {videoLive && !strip && (controlsVisible || adjust) && (
         <div
           className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-media-scrim/55 p-1 backdrop-blur"
           data-testid="av-mirror-immersive-controls"

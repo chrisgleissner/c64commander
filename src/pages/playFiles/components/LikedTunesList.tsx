@@ -19,14 +19,14 @@ import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 
 export type LikedTunesListProps = {
-  /** Play the (finite) Liked Tunes list starting at the tapped tune. */
+  /** Play the (finite) Liked tunes list starting at the tapped tune. */
   onPlay: (items: PlaylistItem[], startIndex: number) => void;
   /** Predicate to prefer an installed HVSC path when a md5_48 maps to several (D14). */
   isInstalled?: (virtualPath: string) => boolean;
 };
 
 /**
- * Browsable, playable Liked Tunes collection (spec §5.5). A **finite list**, not
+ * Browsable, playable Liked tunes collection (spec §5.5). A **finite list**, not
  * a radio: `onPlay` routes through the existing `startPlaylist`, so normal
  * Shuffle/Repeat apply. Rows can be un-liked (drops from the list *and* stops
  * steering); tunes not in the installed HVSC are greyed, not dropped (§2.5).

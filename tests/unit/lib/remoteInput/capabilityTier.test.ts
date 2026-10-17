@@ -11,6 +11,7 @@ import {
   REMOTE_INPUT_AUTH_REQUIRED_HINT,
   REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT,
   REMOTE_INPUT_NO_JOYSTICK_RELAY_HINT,
+  REMOTE_INPUT_PROBE_UNANSWERED_HINT,
   resolveJoystickUnavailableHint,
   remoteInputSupportsJoystick,
   resolveRemoteInputTier,
@@ -65,6 +66,7 @@ describe("resolveJoystickUnavailableHint", () => {
     ["kernal-fallback", "hardware-unavailable", REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
     ["kernal-fallback", null, REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT],
     ["auth-required", "auth-required", REMOTE_INPUT_AUTH_REQUIRED_HINT],
+    ["kernal-fallback", "error", REMOTE_INPUT_PROBE_UNANSWERED_HINT],
   ] as const)("on tier %s with probe status %s names the cause the user can act on", (tier, status, hint) => {
     expect(resolveJoystickUnavailableHint(tier, status)).toBe(hint);
   });

@@ -28,7 +28,7 @@ import {
 } from "@/lib/navigation/swipeNavigationModel";
 import { subscribePageReset } from "@/lib/navigation/pageReset";
 import { forgetPagePosition } from "@/lib/navigation/pagePositions";
-import { PageSlotBody } from "@/components/swipeNavigation/PageSlotBody";
+import { PageSlotBody, warmPageChunks } from "@/components/swipeNavigation/PageSlotBody";
 import { useSettingsPageStaleness } from "@/components/swipeNavigation/useSettingsPageStaleness";
 import { rememberedSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 
@@ -197,6 +197,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     },
     [resetContainerScroll],
   );
+
+  useEffect(() => warmPageChunks(), []);
 
   useEffect(() => {
     const handleSettingsUpdate = (event: Event) => {

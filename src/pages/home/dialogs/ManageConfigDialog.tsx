@@ -19,7 +19,6 @@ import {
   AppSheetBody,
   AppSheetContent,
   AppSheetDescription,
-  AppSheetFooter,
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
@@ -82,17 +81,12 @@ export function ManageConfigDialog({ open, onOpenChange, configs, onRename, onDe
               )}
             </div>
           </AppSheetBody>
-          <AppSheetFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-          </AppSheetFooter>
         </AppSheetContent>
       </AppSheet>
 
       <AppDialog open={Boolean(renameTarget)} onOpenChange={(nextOpen) => !nextOpen && setRenameTarget(null)}>
         <AppDialogContent data-testid="manage-configs-rename-dialog">
-          <AppDialogHeader>
+          <AppDialogHeader hideClose>
             <AppDialogTitle>Rename config</AppDialogTitle>
             <AppDialogDescription>Update the saved configuration name.</AppDialogDescription>
           </AppDialogHeader>
@@ -118,7 +112,7 @@ export function ManageConfigDialog({ open, onOpenChange, configs, onRename, onDe
 
       <AppDialog open={Boolean(deleteTarget)} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
         <AppDialogContent data-testid="manage-configs-delete-dialog">
-          <AppDialogHeader>
+          <AppDialogHeader hideClose>
             <AppDialogTitle>Delete config?</AppDialogTitle>
             <AppDialogDescription>
               {deleteTarget ? `Remove "${deleteTarget.name}" from saved app configs.` : "Remove this saved app config."}

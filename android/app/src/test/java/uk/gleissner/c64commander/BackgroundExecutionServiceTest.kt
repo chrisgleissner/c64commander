@@ -162,7 +162,13 @@ class BackgroundExecutionServiceTest {
         return field.getInt(null)
     }
 
+    private fun flushNotificationCoalesceWindow() {
+        ShadowLooper.shadowMainLooper()
+                .idleFor(BackgroundExecutionService.NOTIFICATION_COALESCE_MS, TimeUnit.MILLISECONDS)
+    }
+
     private fun currentNotificationText(): String? {
+        flushNotificationCoalesceWindow()
         val manager = service.getSystemService(android.app.NotificationManager::class.java)
         val notification =
                 Shadows.shadowOf(manager).getNotification(notificationId())
@@ -643,6 +649,23 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun repeatedDueAtClearsLogTheClearOnlyOnce() {
+        controller.create()
+        startService()
+        val set = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
+        set.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, System.currentTimeMillis() + 30_000L)
+        service.onStartCommand(set, 0, 1)
+        ShadowLooper.shadowMainLooper().idle()
+        ShadowLog.clear()
+
+        repeat(3) { service.onStartCommand(Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT), 0, 1) }
+        ShadowLooper.shadowMainLooper().idle()
+
+        val cleared = ShadowLog.getLogs().count { it.msg.contains("Cleared dueAtMs watchdog") }
+        assertEquals("Only the set-to-cleared transition may be logged", 1, cleared)
+    }
+
+    @Test
     fun updateDueAtInternalFiresBroadcastWhenDueIsInPast() {
         controller.create()
         startService()
@@ -819,8 +842,12 @@ class BackgroundExecutionServiceTest {
         setPlaybackState(paused = true)
 
         setPlaybackState(paused = false, startId = 2)
-        ShadowLooper.shadowMainLooper()
-                .idleFor(BackgroundExecutionService.PAUSED_GRACE_PERIOD_MS * 2, TimeUnit.MILLISECONDS)
+        // A playing session is only kept alive by its web layer's heartbeats (issue 504).
+        val step = PlaybackLiveness.HEARTBEAT_TIMEOUT_MS / 3
+        repeat((BackgroundExecutionService.PAUSED_GRACE_PERIOD_MS * 2 / step).toInt()) {
+            ShadowLooper.shadowMainLooper().idleFor(step, TimeUnit.MILLISECONDS)
+            BackgroundExecutionService.noteHeartbeat()
+        }
 
         assertFalse(
                 "A resumed session must not be stopped by the pause it already left",
@@ -910,7 +937,8 @@ class BackgroundExecutionServiceTest {
         service.onStartCommand(intent, 0, startId)
     }
 
-    private fun currentNotification(): android.app.Notification? {
+    private fun currentNotification(flushCoalesceWindow: Boolean = true): android.app.Notification? {
+        if (flushCoalesceWindow) flushNotificationCoalesceWindow()
         val manager = service.getSystemService(android.app.NotificationManager::class.java)
         return Shadows.shadowOf(manager).getNotification(notificationId())
                 ?: Shadows.shadowOf(service).lastForegroundNotification
@@ -961,6 +989,37 @@ class BackgroundExecutionServiceTest {
                 "Jeroen Tel",
                 notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)
                         ?.toString(),
+        )
+    }
+
+    @Test
+    fun aBurstOfTrackChangesPostsOnlyTheLatestNotificationAfterTheCoalesceWindow() {
+        // Skipping quickly posted one notification per track; Android sheds updates above about
+        // five per second, so the notification could end up naming an earlier tune.
+        controller.create()
+        startService()
+        flushNotificationCoalesceWindow()
+        setNowPlaying("Tune 0", "Artist", 100_000L)
+        flushNotificationCoalesceWindow()
+
+        for (index in 1..10) {
+            setNowPlaying("Tune $index", "Artist", 100_000L)
+        }
+
+        assertEquals(
+                "No update is posted inside the coalesce window",
+                "Tune 0",
+                currentNotification(flushCoalesceWindow = false)?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+        )
+        flushNotificationCoalesceWindow()
+        assertEquals(
+                "Tune 10",
+                currentNotification()?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+        )
+        assertEquals(
+                "The session metadata is not delayed",
+                "Tune 10",
+                RecordingMediaSessionShadow.lastMetadata?.getString(MediaMetadata.METADATA_KEY_TITLE),
         )
     }
 

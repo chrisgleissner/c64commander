@@ -7,6 +7,7 @@
  */
 
 import { LocalSidChunkScheduler } from "./localSidChunkScheduler";
+import type { LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngineTypes";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { toEngineSidModel } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
@@ -58,6 +59,7 @@ import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
+import { SEEK_COST_FLOOR_MS_PER_SECOND, seekAckTimeoutMs } from "./workerSeekCost";
 import { traceLocalSid } from "./localSidTrace";
 import { localSidPlaybackSupported } from "./localSidSupport";
 
@@ -73,7 +75,8 @@ const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
 export const CUT_DECLICK_MS = 10;
 /** A Web Audio sink is closed this long after its declick has finished, so the fade is heard whole. */
 const CUT_CLOSE_MARGIN_MS = 30;
-import { playbackSidEmulation, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { playbackSidEmulation, prerenderSecondsFor, RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
+import { RenderRateWindow } from "./renderRateWindow";
 import { beginLocalPlayOut, endLocalPlayOut, playOutSeconds } from "./localPlayOut";
 
 /**
@@ -170,25 +173,6 @@ const AUDIO_STALL_TIMEOUT_MS = 5000;
  * *ahead of the audio clock*, which dips fractionally between chunks even when perfectly healthy.
  */
 const STARVED_BUFFER_SECONDS = 0.05;
-
-/**
- * How long to wait for the worker to acknowledge a seek before reopening the audio gate.
- *
- * `seekPending` suppresses every rendered chunk so the audio from the position just left is never
- * scheduled. That is correct while a seek is genuinely in flight and ruinous the moment it is not:
- * an unacknowledged seek would discard chunks for as long as the tune lasts. Generous next to a
- * seek that lands, so this only fires when the reply is genuinely never coming.
- *
- * Generous because a seek is not a quick acknowledgement: the worker serialises it behind the
- * renders already queued, and then renders and discards everything between the current position
- * and the target, so seeking deep into a long tune is real emulation work. Cutting it short would
- * only trade a slow seek for a wrong one, and this is a recovery rather than a failure — the gate
- * reopens and playback carries on from wherever the engine actually is.
- */
-const SEEK_ACK_TIMEOUT_MS = 20_000;
-
-/** A worker seek's cost per second of tune replayed, until measured: 115 s took 42 s on a busy Pixel 4. */
-const SEEK_COST_FLOOR_MS_PER_SECOND = 400;
 const HANDOFF_MARGIN_SECONDS = 5;
 
 /**
@@ -224,6 +208,7 @@ const releaseAudioOwnership = (engine: object): void => {
 export const __hasLocalSidAudioOwner = (): boolean => phoneAudioOwner() !== null;
 
 export { LocalSidUnavailableError };
+export type { LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngineTypes";
 
 export interface LocalSidEngineOptions {
   /** One factory for every renderer and role; tests use it to inject a fake worker. */
@@ -239,57 +224,6 @@ export interface LocalSidEngineOptions {
   sampleRate?: number;
   /** Render with this one whatever Settings says, with no fallback: the device probe's choice. */
   renderer?: SidEmulationEngine;
-}
-
-export interface LocalSidPlayCallbacks {
-  /** Playback position in seconds, emitted as chunks are scheduled/drain. */
-  onPosition?: (seconds: number) => void;
-  /** The tune reached its natural end and all audio drained. */
-  onEnded?: () => void;
-  /** A fatal engine error during playback. */
-  onError?: (error: Error) => void;
-  /**
-   * The engine has given up on this tune and no further audio is coming.
-   *
-   * Distinct from {@link onEnded}, which means the tune finished normally. This fires when a stall
-   * could not be repaired, so the caller can move on rather than leave a track that will produce
-   * nothing for the rest of its length.
-   */
-  onUnrecoverable?: () => void;
-}
-
-export interface LocalSidPlayResult {
-  /**
-   * True when the tune needs C64 ROMs we cannot ship (spec §12.2). Playback is
-   * NOT started; the caller (LE2) routes it to "Play on C64" instead.
-   */
-  romRequired: boolean;
-  /** False when `romRequired` — no audio was started. */
-  started: boolean;
-  sampleRate: number;
-  channels: number;
-  tuneInfo: Record<string, unknown> | null;
-}
-
-export interface LocalSidStats {
-  /** Average ms to render one second of audio (≥ 4× realtime ⇒ < 250, §12.6). */
-  renderMsPerSec: number;
-  /**
-   * p99 of the per-chunk render rate — the aggregation the §12.6 budget is
-   * pinned on. The running average converges and hides the spikes that
-   * actually cause underruns, so the HIL asserts this instead.
-   */
-  renderMsPerSecP99: number;
-  /** Worst-case ms/sec seen this session. */
-  peakRenderMsPerSec: number;
-  /** Audible gaps in the gapless schedule (target 0 over a 3-min PSID). */
-  audioUnderruns: number;
-  /** Seconds currently buffered ahead of the audio clock. */
-  bufferedSeconds: number;
-  /** Playback position in seconds. */
-  positionSeconds: number;
-  /** Chunks scheduled so far. */
-  chunksScheduled: number;
 }
 
 interface OpenPending {
@@ -405,7 +339,8 @@ export class LocalSidEngine {
   private currentTune: { bytes: ArrayBuffer; songIndex: number } | null = null;
   /** Bumped per seek so chunks rendered for a superseded position are dropped. */
   private seekEpoch = 0;
-  private seekPending: { id: number; resolve: () => void } | null = null;
+  /** `awaited` is set only for a seek the listener asked for, so the lead-in hand-off shows no status. */
+  private seekPending: { id: number; resolve: () => void; awaited?: PendingSeekState } | null = null;
   /** Seeks the worker is still inside. A stop reopens the gate but cannot call a seek off. */
   private seeksInFlight = 0;
   private deferredHandoffSeconds: number | null = null;
@@ -565,7 +500,7 @@ export class LocalSidEngine {
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
   /** Per-chunk render rates (ms per rendered second), newest wins once full. */
-  private renderRates: number[] = [];
+  private readonly renderRates = new RenderRateWindow(RENDER_RATE_SAMPLES);
 
   constructor(options: LocalSidEngineOptions = {}) {
     const injected = options.workerFactory;
@@ -1076,7 +1011,13 @@ export class LocalSidEngine {
         // so no further "prerender-chunk" can ever arrive. Left outstanding, the target latches the
         // engine into a silence the stall watchdog is deliberately forbidden to judge, and the tune
         // never reports its end either. Dragging into the closing seconds of a tune reaches this.
-        this.resolvePendingSeekAgainstCompletedRender(pcm, message.sampleRate, message.channels, message.seconds);
+        this.resolvePendingSeekAgainstCompletedRender(
+          pcm,
+          message.sampleRate,
+          message.channels,
+          message.seconds,
+          partial,
+        );
         // Playback was following this render as it grew. It has stopped growing, so whatever is in
         // hand is now all there will be — which means the flag comes off here unconditionally. A
         // render that finished with nothing to show for it is the case that matters: leaving the
@@ -1402,8 +1343,6 @@ export class LocalSidEngine {
       return;
     }
     if (!this.worker || !this.scheduler) return;
-    const id = this.nextId;
-    this.nextId += 1;
 
     this.seekEpoch += 1;
     const epoch = this.seekEpoch;
@@ -1429,6 +1368,10 @@ export class LocalSidEngine {
     // given is queued ahead of the speaker and would keep playing the old position.
     this.audio?.flush?.();
     this.emitPosition();
+
+    // A deeper worker seek still waiting is superseded by this one; its long timeout must not keep the gate shut.
+    this.seekPending?.resolve();
+    this.seekPending = null;
 
     // A tune rendered in full answers the seek as a buffer offset, with no engine round-trip:
     // libsidplayfp cannot rewind, so the engine pays ~150 ms of CPU per second it replays.
@@ -1457,7 +1400,8 @@ export class LocalSidEngine {
     // worker seek, which re-renders from the start with the audio gated (15-20 s on a Pixel 4).
     this.cached = null;
     this.cachedCursor = 0;
-    if (this.prerenderingForThisRenderer(this.currentKey)) {
+    const targetIsBeyondTheLeadIn = this.prerenderPartialSeconds !== null && target >= this.prerenderPartialSeconds;
+    if (this.prerenderingForThisRenderer(this.currentKey) && !targetIsBeyondTheLeadIn) {
       this.pendingSeek = {
         targetSeconds: target,
         renderedAtRequestSeconds: rendered?.durationSeconds ?? 0,
@@ -1475,6 +1419,17 @@ export class LocalSidEngine {
       return;
     }
 
+    await this.seekThroughWorker(target, epoch, audibleAtRequest);
+  }
+
+  /**
+   * Seek by asking the worker's live renderer to go there, which re-renders the tune from its start
+   * with the audio gated. Used when no render of the tune covers the target and none is on its way
+   * there.
+   */
+  private async seekThroughWorker(target: number, epoch: number, audibleAtSeconds: number): Promise<void> {
+    const id = this.nextId;
+    this.nextId += 1;
     await new Promise<void>((resolve) => {
       // Hand the slot over rather than overwrite it: the `seeked` handler only resolves the current
       // id, so a dropped resolver never settles, and `seekPending` gates every chunk — a leaked entry
@@ -1484,6 +1439,7 @@ export class LocalSidEngine {
       // chunk is discarded, so a reply that never comes would silence the tune indefinitely. Give
       // up on the reply and reopen the gate rather than wait for it forever — the worst case is a
       // seek that does not land, which is a great deal better than a track that plays nothing.
+      const ackTimeoutMs = seekAckTimeoutMs(target, this.renderRateP99());
       const timer = setTimeout(() => {
         if (this.seekPending?.id !== id) return;
         this.seekPending = null;
@@ -1493,12 +1449,20 @@ export class LocalSidEngine {
         });
         resolve();
         this.pump();
-      }, SEEK_ACK_TIMEOUT_MS);
+      }, ackTimeoutMs);
       this.seekPending = {
         id,
         resolve: () => {
           clearTimeout(timer);
           resolve();
+        },
+        awaited: {
+          targetSeconds: target,
+          renderedAtRequestSeconds: 0,
+          audibleAtRequestSeconds: audibleAtSeconds,
+          generation: epoch,
+          trackInstanceId: this.trackInstanceId,
+          replayStartedAtMs: Date.now(),
         },
       };
       if (this.worker) this.seeksInFlight += 1;
@@ -1549,6 +1513,12 @@ export class LocalSidEngine {
     return pending;
   }
 
+  /** The listener's seek the worker is replaying towards, or null; see {@link seekPending}. */
+  private get activeWorkerSeek(): PendingSeekState | null {
+    const awaited = this.seekPending?.awaited;
+    return awaited && !this.isStalePendingSeek(awaited) ? awaited : null;
+  }
+
   /**
    * Settle a seek that was still waiting when the pre-render finished.
    *
@@ -1567,6 +1537,7 @@ export class LocalSidEngine {
     sampleRate: number,
     channels: number,
     seconds: number,
+    partial: boolean,
   ): void {
     const pending = this.pendingSeek;
     if (!pending) return;
@@ -1588,6 +1559,17 @@ export class LocalSidEngine {
         seconds: pending.targetSeconds,
       });
       this.pump();
+      return;
+    }
+    if (partial) {
+      // Only the opening of the tune was rendered, so a target beyond it is not the end of the tune.
+      // The live renderer has to go there.
+      addLog("debug", "Local SID awaited seek is beyond the lead-in; seeking through the live renderer", {
+        service: "local-sid",
+        seconds: pending.targetSeconds,
+        renderedSeconds: seconds,
+      });
+      void this.seekThroughWorker(pending.targetSeconds, this.seekEpoch, pending.audibleAtRequestSeconds);
       return;
     }
     addLog("debug", "Local SID awaited seek landed at or past the end of the tune", {
@@ -1829,16 +1811,12 @@ export class LocalSidEngine {
     this.totalRenderMs += renderMs;
     this.totalRenderedSeconds += seconds;
     this.peakRenderMsPerSec = Math.max(this.peakRenderMsPerSec, rate);
-    if (this.renderRates.length >= RENDER_RATE_SAMPLES) this.renderRates.shift();
-    this.renderRates.push(rate);
+    this.renderRates.record(rate);
   }
 
   /** p99 of the recorded per-chunk render rates (0 before the first chunk). */
   private renderRateP99(): number {
-    if (this.renderRates.length === 0) return 0;
-    const sorted = [...this.renderRates].sort((a, b) => a - b);
-    const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.99) - 1);
-    return sorted[Math.max(0, index)];
+    return this.renderRates.p99();
   }
 
   private onWorkerError(code: string, message: string, id?: number): void {
@@ -1973,6 +1951,7 @@ export class LocalSidEngine {
     // chunk is discarded, so a reply that never arrives would silence the rest of the tune. Giving up
     // on the reply reopens the gate; the worst case is playing on from wherever the worker actually
     // is, which is a great deal better than playing nothing.
+    const ackTimeoutMs = seekAckTimeoutMs(seconds, this.renderRateP99());
     const timer = setTimeout(() => {
       if (this.seekPending?.id !== id) return;
       this.seekPending = null;
@@ -1981,7 +1960,7 @@ export class LocalSidEngine {
         seconds,
       });
       this.pump();
-    }, SEEK_ACK_TIMEOUT_MS);
+    }, ackTimeoutMs);
     this.seekPending = {
       id,
       resolve: () => {
@@ -2247,7 +2226,7 @@ export class LocalSidEngine {
    * caller holding on to it cannot see the engine's own record change underneath them.
    */
   getPendingSeek(): PendingSeekState | null {
-    const pending = this.activePendingSeek;
+    const pending = this.activePendingSeek ?? this.activeWorkerSeek;
     return pending ? { ...pending } : null;
   }
 
@@ -2319,6 +2298,8 @@ export class LocalSidEngine {
     this.prerenderId += 1;
     this.prerenderKey = key;
     this.prerenderFraction = 0;
+    const renderSeconds = prerenderSecondsFor(seconds);
+    this.prerenderPartialSeconds = renderSeconds < seconds ? renderSeconds : null;
     this.releaseIfUnused(this.prerenderPcm.reset());
     const renderer = this.fixedRenderer ?? playbackSidEmulation();
     this.prerenderRenderer = renderer;
@@ -2331,7 +2312,7 @@ export class LocalSidEngine {
         sidBytes,
         songIndex,
         sampleRate: this.requestedSampleRate,
-        seconds,
+        seconds: renderSeconds,
         roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
         engine: renderer,
@@ -2466,6 +2447,6 @@ export class LocalSidEngine {
     this.totalRenderMs = 0;
     this.totalRenderedSeconds = 0;
     this.peakRenderMsPerSec = 0;
-    this.renderRates = [];
+    this.renderRates.clear();
   }
 }

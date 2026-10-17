@@ -33,7 +33,7 @@ import {
 export const LETTER_BUBBLE_IDLE_MS = 700;
 
 /** Frames to wait for a virtualised row to render after a jump before giving up on focusing it. */
-const ROW_RENDER_FRAMES = 30;
+const ROW_RENDER_FRAMES = 120;
 
 const ROW_TITLE_SELECTOR = '[data-row-title="true"]';
 

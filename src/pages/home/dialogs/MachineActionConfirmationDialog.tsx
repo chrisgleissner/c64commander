@@ -44,7 +44,7 @@ export function MachineActionConfirmationDialog({
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
       <AppDialogContent data-testid="machine-action-confirmation">
-        <AppDialogHeader>
+        <AppDialogHeader hideClose>
           <AppDialogTitle>{action ? `${action.actionName}?` : "Confirm action?"}</AppDialogTitle>
           <AppDialogDescription>
             {action ? `Confirm ${action.actionName}${onDevice}.` : `Confirm the selected machine action${onDevice}.`}

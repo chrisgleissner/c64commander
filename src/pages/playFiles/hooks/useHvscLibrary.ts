@@ -47,6 +47,8 @@ import {
   type HvscStatus,
 } from "@/lib/hvsc";
 import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import { applyHvscStageEvent } from "@/lib/hvsc/hvscStageMetrics";
+import { stageDetailLabel } from "@/lib/hvsc/hvscStageDetail";
 import { logHvscPreparationTransition } from "@/lib/hvsc/hvscPreparationTransitionLog";
 import { usePageActivity } from "@/hooks/usePageActivity";
 import { subscribeHvscDemoLibraryRemoved } from "@/lib/hvsc/hvscDemoLibraryCleanup";
@@ -67,6 +69,8 @@ export type HvscLibraryState = {
   hvscPreparationErrorReason: string | null;
   hvscPreparationFailedPhase: HvscPreparationPhase;
   hvscPreparationThroughputLabel: string | null;
+  /** The library is ready to use while the pass that reads every tune again is still running. */
+  hvscAnalyzing: boolean;
   hvscReadySongCount: number;
   hvscStatusSummary: HvscStatusSummary;
   hvscRoot: ReturnType<typeof loadHvscRoot>;
@@ -454,6 +458,9 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         if (event.currentFile) setHvscCurrentFile(event.currentFile);
       }
       if (event.errorCause) setHvscErrorMessage(event.errorCause);
+      if (shouldUpdateSummary || event.statusToken === "done" || event.statusToken === "error") {
+        updateHvscSummary((prev) => ({ ...prev, stages: applyHvscStageEvent(prev.stages, event, nowMs) }));
+      }
       // Archive discovery counts archives, not files: a download that failed showed "Files extracted: 1".
       const countsFiles = HVSC_EXTRACTION_STAGES.has(event.stage ?? "");
       if (countsFiles && (typeof event.processedCount === "number" || typeof event.totalCount === "number")) {
@@ -1344,49 +1351,30 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const hvscStageStep =
     stepForStage(hvscStage) ??
     (hvscStatusSummary.metadata.status === "in-progress"
-      ? "details"
+      ? "analyze"
       : hvscStatusSummary.extraction.status === "in-progress"
         ? "unpack"
         : hvscStatusSummary.download.status === "in-progress"
           ? "download"
           : null);
+  const hvscStageMeasurement = hvscStageStep ? hvscStatusSummary.stages?.[hvscStageStep] : undefined;
   const [hvscStageDone, hvscStageTotal] =
     hvscStageStep === "download"
       ? [hvscDownloadBytes, hvscDownloadTotalBytes]
       : hvscStageStep === "unpack"
         ? [hvscSummaryFilesExtracted ?? null, hvscExtractionTotalFiles]
-        : hvscStageStep === "scan" || hvscStageStep === "details"
+        : hvscStageStep === "analyze"
           ? [hvscStatusSummary.metadata.processedSongs ?? null, hvscStatusSummary.metadata.totalSongs ?? null]
-          : [null, null];
+          : hvscStageStep === "scan" || hvscStageStep === "details"
+            ? [hvscStageMeasurement?.processed ?? null, hvscStageMeasurement?.total ?? null]
+            : [null, null];
 
   // NOTE: there is deliberately no single install-wide percentage here. Two attempts at one both
   // failed on hardware, because the stage counters are in different units and disappear at each
   // handover, so any single figure has to be guessed across them — it read 73%, fell to 58%, froze,
   // and vanished without reaching 100%. The UI shows the four named stages instead; see
   // `lib/hvsc/hvscStageModel`.
-  const hvscPreparationThroughputLabel = (() => {
-    if (hvscPreparationSnapshot.state === "DOWNLOADING" && hvscDownloadBytes && hvscDownloadElapsedMs) {
-      const mbPerSecond = hvscDownloadBytes / 1024 / 1024 / Math.max(hvscDownloadElapsedMs / 1000, 0.001);
-      return `${mbPerSecond >= 10 ? mbPerSecond.toFixed(0) : mbPerSecond.toFixed(1)} MB/s`;
-    }
-
-    if (hvscPreparationSnapshot.state === "INGESTING") {
-      const processedItems =
-        hvscStatusSummary.metadata.status === "in-progress"
-          ? hvscStatusSummary.metadata.processedSongs
-          : hvscSummaryFilesExtracted;
-      const elapsedMs =
-        hvscStatusSummary.metadata.status === "in-progress"
-          ? (hvscStatusSummary.metadata.durationMs ?? hvscExtractionElapsedMs)
-          : hvscExtractionElapsedMs;
-      if (processedItems && elapsedMs) {
-        const itemsPerSecond = processedItems / Math.max(elapsedMs / 1000, 0.001);
-        return `${Math.max(1, Math.round(itemsPerSecond)).toLocaleString()} items/s`;
-      }
-    }
-
-    return null;
-  })();
+  const hvscPreparationThroughputLabel = stageDetailLabel(hvscStageStep, hvscStageMeasurement, hvscElapsedNow);
 
   const hvscVisibleFolders = useMemo(() => {
     if (!hvscFolderFilter) return hvscFolders;
@@ -1398,11 +1386,13 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     if (hvscStateKnown) logHvscPreparationTransition(hvscPreparationSnapshot);
   }, [hvscPreparationSnapshot, hvscStateKnown]);
 
+  const hvscAnalyzing = hvscStatusSummary.metadata.status === "in-progress" && hvscStage === "sid_metadata_hydration";
+  const hvscClockRunning = hvscInProgress || hvscAnalyzing;
   useEffect(() => {
-    if (!hvscInProgress) return;
+    if (!hvscClockRunning) return;
     const timer = window.setInterval(() => setHvscElapsedNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [hvscInProgress]);
+  }, [hvscClockRunning]);
 
   useEffect(() => {
     if (hvscStatusSummary.download.status === "in-progress") {
@@ -1451,6 +1441,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscPreparationErrorReason: hvscPreparationSnapshot.errorReason,
     hvscPreparationFailedPhase: hvscPreparationSnapshot.failedPhase,
     hvscPreparationThroughputLabel,
+    hvscAnalyzing,
     hvscReadySongCount,
     hvscStatusSummary,
     hvscRoot,

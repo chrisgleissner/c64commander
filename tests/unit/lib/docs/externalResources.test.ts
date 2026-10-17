@@ -24,7 +24,7 @@ describe("external resource links", () => {
     ]);
     expect(getSettingsDocumentationLink("c64commander")).toEqual(
       expect.objectContaining({
-        label: "Ultimate REST API Documentation",
+        label: "Ultimate REST API documentation",
         href: "https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html",
       }),
     );

@@ -127,10 +127,12 @@ describe("SID Radio collections in the launcher", () => {
     expect(screen.queryByTestId("sid-radio-collections")).toBeNull();
   });
 
-  it("says what separates a collection from a mood", () => {
+  it("separates moods from collections by heading alone, without a sentence repeating each heading", () => {
     renderLauncher();
-    expect(screen.getByText("Tunes that sound like the mood you pick.")).toBeInTheDocument();
-    expect(screen.getByText("Only tunes from the collection, as listed in the HVSC tune notes.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Moods" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Collections" })).toBeInTheDocument();
+    expect(screen.queryByText("Tunes that sound like the mood you pick.")).toBeNull();
+    expect(screen.queryByText("Only tunes from the collection, as listed in the HVSC tune notes.")).toBeNull();
   });
 
   it("names each collection by its label and falls back to the id", () => {
@@ -183,6 +185,7 @@ describe("SID Radio chip for a collection", () => {
 
   it.each([
     [{ seedKind: "song", seedLabel: "Commando" }, "Similar to Commando"],
+    [{ seedKind: "song", seedLabel: "Monty_on_the_Run.sid" }, "Similar to Monty on the Run"],
     [{ seedKind: "style", seedLabel: "Melodic" }, "Matches Melodic"],
     [{ seedKind: "taste", seedLabel: "Tunes you like" }, "From tunes you like"],
     [{ seedKind: "collection", seedLabel: "Classical" }, "In the Classical collection"],

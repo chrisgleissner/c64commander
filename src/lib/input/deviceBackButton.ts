@@ -17,6 +17,48 @@ export const dispatchDeviceBackKey = (target: EventTarget): KeyboardEvent => {
   return event;
 };
 
+const CLOSING_OVERLAY_SELECTOR =
+  '[data-state="closed"][role="dialog"],[data-state="closed"][role="alertdialog"],[data-state="closed"][role="menu"],[data-state="closed"][role="listbox"]';
+const CLOSING_POLL_MS = 16;
+const CLOSING_WAIT_LIMIT_MS = 600;
+
+type QueuedBack = { run: () => void; deadlineMs: number };
+const queuedBacks: QueuedBack[] = [];
+let queuePolling = false;
+
+const drainQueuedBacks = () => {
+  queuePolling = false;
+  const next = queuedBacks[0];
+  if (!next) return;
+  if (document.querySelector(CLOSING_OVERLAY_SELECTOR) === null || Date.now() >= next.deadlineMs) {
+    queuedBacks.shift();
+    next.run();
+  }
+  if (queuedBacks.length > 0) {
+    queuePolling = true;
+    window.setTimeout(drainQueuedBacks, CLOSING_POLL_MS);
+  }
+};
+
+/**
+ * Runs a Back press once any overlay still playing its close animation has left the DOM.
+ *
+ * Radix keeps a closing layer on its stack until the exit animation ends, so a second Back about
+ * 50 ms after the first reached the closing layer and was absorbed; the dialog beneath it stayed
+ * open. Presses wait their turn, in order, for at most {@link CLOSING_WAIT_LIMIT_MS} each.
+ */
+export const runBackWhenOverlaysSettled = (run: () => void): void => {
+  if (queuedBacks.length === 0 && document.querySelector(CLOSING_OVERLAY_SELECTOR) === null) {
+    run();
+    return;
+  }
+  queuedBacks.push({ run, deadlineMs: Date.now() + CLOSING_WAIT_LIMIT_MS });
+  if (!queuePolling) {
+    queuePolling = true;
+    window.setTimeout(drainQueuedBacks, CLOSING_POLL_MS);
+  }
+};
+
 /**
  * Turn Android's hardware Back key into a key event the app can act on.
  *
@@ -34,12 +76,14 @@ export const installDeviceBackButton = (onUnhandled: () => void): (() => void) =
   let removed = false;
   let remove: (() => Promise<void>) | null = null;
 
-  void App.addListener("backButton", () => {
-    // An overlay the key closed is the whole answer, whether or not it cancelled the event.
-    const overlayWasOpen = isAnyOverlayOpen();
-    const event = dispatchDeviceBackKey(document.activeElement ?? document);
-    if (!event.defaultPrevented && !overlayWasOpen) onUnhandled();
-  })
+  void App.addListener("backButton", () =>
+    runBackWhenOverlaysSettled(() => {
+      // An overlay the key closed is the whole answer, whether or not it cancelled the event.
+      const overlayWasOpen = isAnyOverlayOpen();
+      const event = dispatchDeviceBackKey(document.activeElement ?? document);
+      if (!event.defaultPrevented && !overlayWasOpen) onUnhandled();
+    }),
+  )
     .then((handle) => {
       if (removed) void handle.remove();
       else remove = () => handle.remove();

@@ -24,7 +24,6 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.File
 import java.io.IOException
-import java.io.InputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
@@ -286,7 +285,8 @@ open class HvscIngestionPlugin : Plugin() {
       db.beginTransaction()
       try {
         db.delete("hvsc_song_index", null, null)
-        for (row in deferredUpserts) {
+        emitSongIndexProgress(0, deferredUpserts.size)
+        for ((index, row) in deferredUpserts.withIndex()) {
           val cv =
                   ContentValues().apply {
                     put("virtual_path", row.virtualPath)
@@ -297,6 +297,9 @@ open class HvscIngestionPlugin : Plugin() {
                     put("updated_at_ms", updatedAt)
                   }
           db.insertWithOnConflict("hvsc_song_index", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+          if ((index + 1) % songIndexProgressStep == 0 || index + 1 == deferredUpserts.size) {
+            emitSongIndexProgress(index + 1, deferredUpserts.size)
+          }
         }
         db.setTransactionSuccessful()
       } finally {
@@ -366,6 +369,12 @@ open class HvscIngestionPlugin : Plugin() {
     return DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM hvsc_song_index", null)
   }
 
+  private val songIndexProgressStep = 1000
+
+  /** Progress of writing the song index to the database, in rows. */
+  private fun emitSongIndexProgress(written: Int, total: Int) =
+          emitProgress("database_insertion", "Writing the song index…", written, total, null, written, 0)
+
   private fun emitProgress(
           stage: String,
           message: String,
@@ -374,48 +383,19 @@ open class HvscIngestionPlugin : Plugin() {
           currentFile: String?,
           songsIngested: Int,
           songsDeleted: Int,
-  ) {
-    val payload = JSObject()
-    payload.put("stage", stage)
-    payload.put("message", message)
-    payload.put("processedCount", processedCount)
-    payload.put("songsUpserted", songsIngested)
-    payload.put("songsDeleted", songsDeleted)
-    if (totalCount != null && totalCount > 0) {
-      payload.put("totalCount", totalCount)
-      payload.put("percent", ((processedCount.toDouble() / totalCount.toDouble()) * 100.0).toInt())
-    }
-    if (!currentFile.isNullOrBlank()) payload.put("currentFile", currentFile)
-    notifyListeners("hvscProgress", payload)
-  }
-
-  private fun readFully(
-          entryName: String,
-          stream: InputStream,
-          maxBytes: Int = 2 * 1024 * 1024
-  ): ByteArray {
-    val chunks = ArrayList<ByteArray>()
-    var total = 0
-    val buffer = ByteArray(8 * 1024)
-    while (true) {
-      val read = stream.read(buffer)
-      if (read <= 0) break
-      total += read
-      if (total > maxBytes) {
-        throw IllegalStateException(
-                "Entry $entryName exceeds allowed metadata read size ($maxBytes bytes)"
-        )
-      }
-      chunks.add(buffer.copyOf(read))
-    }
-    val combined = ByteArray(total)
-    var offset = 0
-    chunks.forEach {
-      it.copyInto(combined, offset)
-      offset += it.size
-    }
-    return combined
-  }
+  ) =
+          notifyListeners(
+                  "hvscProgress",
+                  hvscProgressPayload(
+                          stage,
+                          message,
+                          processedCount,
+                          totalCount,
+                          currentFile,
+                          songsIngested,
+                          songsDeleted,
+                  ),
+          )
 
   private data class IngestionResult(
           val totalEntries: Int,
@@ -568,7 +548,7 @@ open class HvscIngestionPlugin : Plugin() {
                                   ) {
                                     lastReportedProgress = progress.processedEntries
                                     emitProgress(
-                                            stage = "sid_metadata_parsing",
+                                            stage = "archive_extraction",
                                             message = "Processing HVSC archive…",
                                             processedCount = progress.processedEntries,
                                             totalCount = progress.totalEntries,
@@ -576,6 +556,9 @@ open class HvscIngestionPlugin : Plugin() {
                                             songsIngested = progress.songsExtracted,
                                             songsDeleted = 0,
                                     )
+                                    if (progress.processedEntries == progress.totalEntries) {
+                                      emitProgress("sid_enumeration", "Organizing the extracted files…", 0, null, null, progress.songsExtracted, 0)
+                                    }
                                     if (debugHeapLogging) {
                                       val runtime = Runtime.getRuntime()
                                       val used = runtime.totalMemory() - runtime.freeMemory()
@@ -593,11 +576,16 @@ open class HvscIngestionPlugin : Plugin() {
                 val pendingUpserts = toSongUpsertRows(extractionResult.extractedSongs)
                 var metadataUpserts = 0
                 if (!resetLibrary) {
+                  val upsertTotal = pendingUpserts.size
+                  var upsertsWritten = 0
+                  emitSongIndexProgress(0, upsertTotal)
                   while (pendingUpserts.isNotEmpty()) {
                     val batchCount = minOf(pendingUpserts.size, dbBatchSize.coerceAtLeast(1))
                     val nextBatch = pendingUpserts.subList(0, batchCount).toMutableList()
                     metadataUpserts += flushSongBatch(writableDb, nextBatch)
                     pendingUpserts.subList(0, batchCount).clear()
+                    upsertsWritten += batchCount
+                    emitSongIndexProgress(upsertsWritten, upsertTotal)
                   }
                 }
 

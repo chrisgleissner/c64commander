@@ -118,6 +118,20 @@ variants:
       # physical keys must be right without configuration: the four keys around
       # `8`, with `8` itself as fire. The general edition keeps classic T9.
       default_joystick_key_layout: diamond8
+      # The handset has no keys labelled Back or Menu: it has two soft keys under the screen and
+      # a D-pad. These names appear in the in-app guide and the manual; the caps and words are
+      # what the guidance bar prints. Every field is optional; see docs/variants.md.
+      key_labels:
+        left_soft: Left Soft Key
+        center: D-pad Center / OK
+        right_soft: Right Soft Key
+        left_cap: Back
+        center_cap: OK
+        right_cap: Menu
+        back_word: Back
+        close_word: Close
+        menu_word: Menu
+        delete_word: Delete
       # Launching a game on a keypad handset should end in the playing state
       # without a further keystroke. Off elsewhere, where a sheet opening by
       # itself would be a surprise.

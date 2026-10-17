@@ -26,11 +26,11 @@ describe("SidRadioChip", () => {
     expect(screen.getByTestId("sid-radio-chip")).toHaveTextContent("Radio: Commando");
     rerender(
       <SidRadioChip
-        station={{ ...songStation, seedKind: "style", seedLabel: "Fast-Paced", styleBit: 0 }}
+        station={{ ...songStation, seedKind: "style", seedLabel: "Fast-paced", styleBit: 0 }}
         onStop={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("sid-radio-chip")).toHaveTextContent("Fast-Paced Radio");
+    expect(screen.getByTestId("sid-radio-chip")).toHaveTextContent("Fast-paced Radio");
   });
 
   it("stops the station via the stop control", () => {

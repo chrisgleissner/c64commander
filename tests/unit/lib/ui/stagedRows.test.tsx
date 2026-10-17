@@ -8,7 +8,13 @@
 
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetStagedRowsForTests, setStagedRowsEnabled, useStagedRows } from "@/lib/ui/stagedRows";
+import { mountAllWaiting } from "@/lib/ui/progressiveMount";
+import {
+  buildStagedRowsFirstIn,
+  resetStagedRowsForTests,
+  setStagedRowsEnabled,
+  useStagedRows,
+} from "@/lib/ui/stagedRows";
 
 const ROWS = 40;
 
@@ -152,10 +158,10 @@ describe("useStagedRows", () => {
     vi.useFakeTimers({ toFake: [...FAKED] });
     setStagedRowsEnabled(true);
     placeMarkersAt(5000);
-    // The first task builds 8 rows, which is exactly what Ahead still lacks, so Behind gets none in it.
+    // The first task builds 6 rows, which is exactly what Ahead still lacks, so Behind gets none in it.
     render(
       <>
-        <List name="Ahead" rows={20} />
+        <List name="Ahead" rows={18} />
         <List name="Behind" />
       </>,
     );
@@ -164,10 +170,62 @@ describe("useStagedRows", () => {
 
     act(() => vi.advanceTimersToNextFrame());
     act(() => vi.advanceTimersToNextTimer());
-    expect(builtIn("Ahead")).toBe(20);
+    expect(builtIn("Ahead")).toBe(18);
     expect(builtIn("Behind")).toBe(0);
 
     act(() => vi.runAllTimers());
     expect(builtIn("Behind")).toBe(ROWS);
+  });
+
+  it("does not build the rows staged inside a card when a key asks to mount it without completing rows", () => {
+    vi.useFakeTimers({ toFake: [...FAKED] });
+    setStagedRowsEnabled(true);
+    placeMarkersAt(5000);
+    render(
+      <div data-testid="card">
+        <List name="Card" rows={200} />
+      </div>,
+    );
+    expect(builtIn("Card")).toBe(12);
+
+    act(() => {
+      mountAllWaiting(screen.getByTestId("card"), { completeRows: false });
+    });
+    expect(builtIn("Card")).toBe(12);
+
+    act(() => {
+      mountAllWaiting(screen.getByTestId("card"));
+    });
+    expect(builtIn("Card")).toBe(200);
+  });
+
+  it("builds the lists of the card a key is in before the lists ahead of it", () => {
+    vi.useFakeTimers({ toFake: [...FAKED] });
+    setStagedRowsEnabled(true);
+    placeMarkersAt(5000);
+    render(
+      <>
+        <List name="Ahead" rows={200} />
+        <div data-testid="card">
+          <List name="Card" rows={200} />
+        </div>
+      </>,
+    );
+    buildStagedRowsFirstIn(screen.getByTestId("card"));
+
+    act(() => vi.advanceTimersToNextFrame());
+    act(() => vi.advanceTimersToNextTimer());
+    expect(builtIn("Card")).toBeGreaterThan(0);
+    expect(builtIn("Ahead")).toBe(12);
+  });
+
+  it("builds at most 8 ms worth of rows in one background task", () => {
+    vi.useFakeTimers({ toFake: [...FAKED] });
+    setStagedRowsEnabled(true);
+    placeMarkersAt(5000);
+    render(<List name="Long" rows={200} />);
+    act(() => vi.advanceTimersToNextFrame());
+    act(() => vi.advanceTimersToNextTimer());
+    expect(builtIn("Long") - 12).toBeLessThanOrEqual(6);
   });
 });

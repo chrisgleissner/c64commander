@@ -453,7 +453,7 @@ test.describe("display profiles", () => {
 
       await page.goto("/settings", { waitUntil: "domcontentloaded" });
       await applyDisplayProfileViewport(page, profileId);
-      await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+      await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
       await expectDialogPresentationMode(diagnosticsDialog, "sheet");
@@ -526,7 +526,7 @@ test.describe("display profiles", () => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await applyDisplayProfileViewport(page, "compact");
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
 
@@ -566,7 +566,7 @@ test.describe("display profiles", () => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await applyDisplayProfileViewport(page, "compact");
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
 
@@ -660,7 +660,7 @@ test.describe("display profiles", () => {
     const session = await setBrowserZoom(page, 1.5);
     try {
       const diagnosticsSection = page.getByTestId("settings-middle-layout");
-      const diagnosticsButton = page.getByRole("button", { name: "Diagnostics", exact: true });
+      const diagnosticsButton = page.getByRole("button", { name: "Open diagnostics", exact: true });
       await diagnosticsSection.evaluate((element) => {
         element.scrollIntoView({ block: "center", inline: "nearest" });
       });

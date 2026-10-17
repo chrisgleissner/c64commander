@@ -9,7 +9,14 @@
 import { Play } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/pages/playFiles/playFilesUtils";
 import { useFileTunes } from "@/pages/playFiles/hooks/useFileTunes";
@@ -50,14 +57,14 @@ export const TuneListSheet = ({
   const { tunes } = useFileTunes({ virtualPath, tuneCount, enabled: open });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex flex-col" data-testid="tune-list-sheet">
-        <SheetHeader className="pb-0">
-          <SheetTitle className="text-base">Tunes in this file</SheetTitle>
-          <SheetDescription className="truncate">{fileLabel}</SheetDescription>
-        </SheetHeader>
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="overflow-hidden p-0" data-testid="tune-list-sheet">
+        <AppSheetHeader>
+          <AppSheetTitle>Tunes in this file</AppSheetTitle>
+          <AppSheetDescription className="not-sr-only truncate">{fileLabel}</AppSheetDescription>
+        </AppSheetHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+        <AppSheetBody className="px-3 pt-2 pb-[calc(0.5rem+var(--safe-area-inset-bottom))]">
           {/* Same spacing as the search results, because these are the same kind of row and one
               tap does the same kind of thing. */}
           <ul className="flex flex-col gap-2">
@@ -106,8 +113,8 @@ export const TuneListSheet = ({
               );
             })}
           </ul>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };

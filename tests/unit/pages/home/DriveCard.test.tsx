@@ -82,7 +82,6 @@ describe("DriveCard", () => {
 
   it("renders name and status", () => {
     render(<DriveCard {...defaultProps} />);
-    expect(screen.getByText("Drive 8")).toBeInTheDocument();
     expect(screen.getByTestId("home-drive-status-d8")).toHaveTextContent("OK");
   });
 
@@ -96,7 +95,8 @@ describe("DriveCard", () => {
         onMountedPathClick={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("home-drive-toggle-d8")).toHaveTextContent("…");
+    expect(screen.getByTestId("home-drive-toggle-d8")).toHaveAttribute("aria-label", "Drive 8 power: …");
+    expect(screen.getByTestId("home-drive-toggle-d8")).not.toBeChecked();
     expect(screen.getByTestId("home-drive-toggle-d8")).toBeDisabled();
     expect(screen.getByTestId("home-drive-mounted-d8")).toHaveTextContent("…");
     expect(screen.getByTestId("home-drive-mounted-d8")).toBeDisabled();
@@ -105,12 +105,43 @@ describe("DriveCard", () => {
     expect(screen.queryByText("No disk mounted")).toBeNull();
   });
 
-  it("shows ON/OFF based on enabled prop", () => {
+  it("draws one summary line that opens the Disks page", () => {
+    const onOpenDisks = vi.fn();
+    render(
+      <DriveCard
+        {...defaultProps}
+        name="Drive A"
+        typeValue="1541"
+        typeOptions={["1541"]}
+        mountedPath="/Usb0/games/Elite.d64"
+        onOpenDisks={onOpenDisks}
+      />,
+    );
+    const link = screen.getByTestId("home-drive-link-d8");
+    expect(link).toHaveTextContent(/^A\s·\s#8\s·\s1541\s·\sElite\.d64$/);
+    expect(link).toHaveAccessibleName("Drive A, #8, 1541, Elite.d64");
+    fireEvent.click(link);
+    expect(onOpenDisks).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps bus, type, disk and status behind a details toggle that does not navigate", () => {
+    const onOpenDisks = vi.fn();
+    render(<DriveCard {...defaultProps} defaultOpen={false} onOpenDisks={onOpenDisks} />);
+    expect(screen.queryByTestId("home-drive-bus-d8")).not.toBeInTheDocument();
+    const toggle = screen.getByTestId("home-drive-details-toggle-d8");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("home-drive-bus-d8")).toBeInTheDocument();
+    expect(onOpenDisks).not.toHaveBeenCalled();
+  });
+
+  it("renders the power control as a switch that follows the enabled prop", () => {
     const { rerender } = render(<DriveCard {...defaultProps} enabled={true} />);
-    expect(screen.getByTestId("home-drive-toggle-d8")).toHaveTextContent("ON");
+    expect(screen.getByRole("switch", { name: "Drive 8 power: on" })).toBeChecked();
 
     rerender(<DriveCard {...defaultProps} enabled={false} />);
-    expect(screen.getByTestId("home-drive-toggle-d8")).toHaveTextContent("OFF");
+    expect(screen.getByRole("switch", { name: "Drive 8 power: off" })).not.toBeChecked();
   });
 
   it("hides mounted path section when neither mountedPath nor pathValue is set", () => {

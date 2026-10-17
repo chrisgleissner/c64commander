@@ -75,13 +75,13 @@ describe("NowPlayingRanking", () => {
   });
 
   it("shows both states by shape as well as colour", async () => {
-    const { container } = render(<NowPlayingRanking md5={MD5} enabled />);
+    render(<NowPlayingRanking md5={MD5} enabled />);
     const like = screen.getByTestId("now-playing-like");
     const notForMe = screen.getByTestId("now-playing-notforme");
 
-    // At rest: an outline heart and a bare ✕ (no ring around it).
+    // At rest: an outline heart and an outline thumbs-down.
     expect(like.querySelector("svg")).not.toHaveClass("fill-current");
-    expect(notForMe.querySelector("circle")).toBeNull();
+    expect(notForMe.querySelector("svg")).not.toHaveClass("fill-current");
 
     fireEvent.click(like);
     await waitFor(() => expect(getRanking(MD5)).toBe("like"));
@@ -90,8 +90,8 @@ describe("NowPlayingRanking", () => {
 
     fireEvent.click(notForMe);
     await waitFor(() => expect(getRanking(MD5)).toBe("notForMe"));
-    // Not-for-me: the ✕ gains a ring, and the surface fills.
-    expect(container.querySelector('[data-testid="now-playing-notforme"] circle')).not.toBeNull();
+    // Not-for-me: the thumbs-down fills in, and the surface fills.
+    expect(notForMe.querySelector("svg")).toHaveClass("fill-current");
     expect(screen.getByTestId("now-playing-notforme")).toHaveClass("bg-accent");
   });
 

@@ -91,7 +91,7 @@ test.describe("Settings sections", () => {
     // chapter's accessible name rather than drawn, and a reader who wants it back turns on
     // Settings -> Appearance -> Card descriptions.
     await expect(page.getByRole("button", { name: /Appearance.*Theme/s })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Play and Disk.*Live View/s })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Play and disk.*Live View/s })).toBeVisible();
   });
 
   test("opening a chapter reveals exactly the controls it always held", async ({ page }) => {

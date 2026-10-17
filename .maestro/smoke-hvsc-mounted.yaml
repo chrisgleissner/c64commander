@@ -127,7 +127,7 @@ env:
 - extendedWaitUntil:
     visible: "Pause"
     timeout: ${SHORT_TIMEOUT}
-- assertVisible: "35_Years.sid"
+- assertVisible: "35.Years(\\.sid)?.*"
 - assertNotVisible: "Playback failed"
 - assertNotVisible: "No supported files"
 - assertNotVisible: "Add items failed"

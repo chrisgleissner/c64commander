@@ -100,13 +100,7 @@ export function KeyExplorerPopup({ open, onClose }: { open: boolean; onClose: ()
   }, [observations]);
 
   return (
-    <AnalyticPopup
-      open={open}
-      onClose={onClose}
-      title="Key Explorer"
-      contentClassName="h-auto max-h-[min(72dvh,38rem)]"
-      data-testid="key-explorer-popup"
-    >
+    <AnalyticPopup open={open} onClose={onClose} title="Key explorer" data-testid="key-explorer-popup">
       <div className="space-y-3 p-4">
         <p className="text-sm text-muted-foreground">
           Press any key on this device. The last {KEY_OBSERVATION_LIMIT} are listed newest first, with what the app

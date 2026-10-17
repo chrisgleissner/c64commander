@@ -99,7 +99,12 @@ const resolveDeviceHealthSummary = (
   device: { lastSuccessfulConnectionAt?: string | null },
   isSelected: boolean,
 ) => {
-  const switchPrefix = switchStatusLabel && switchStatusLabel !== "Selected" ? `${switchStatusLabel} selection` : null;
+  const badgeStatesIt =
+    (switchStatusLabel === "Verifying" && snapshot?.running) ||
+    (switchStatusLabel === "Offline" &&
+      !snapshot?.running &&
+      (snapshot?.error || snapshot?.latestResult?.connectivity === "Offline"));
+  const switchPrefix = switchStatusLabel === "Selected" || badgeStatesIt ? null : switchStatusLabel;
   const lastSeenAt = snapshot?.lastObservedAt ?? snapshot?.lastCompletedAt ?? device.lastSuccessfulConnectionAt ?? null;
 
   if (!snapshot) {
@@ -248,9 +253,7 @@ function PickerHealthStatusBadge({
         aria-hidden="true"
       >
         <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
-          <span className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-            {badgeText.leadingLabel}
-          </span>
+          <span className="truncate text-xs font-semibold text-foreground">{badgeText.leadingLabel}</span>
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
             {" "}
           </span>
@@ -270,9 +273,7 @@ function PickerHealthStatusBadge({
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
                 {" "}
               </span>
-              <span className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-                {badgeText.trailingLabel}
-              </span>
+              <span className="truncate text-xs font-semibold text-foreground">{badgeText.trailingLabel}</span>
             </>
           ) : null}
         </span>
@@ -481,7 +482,7 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const glyph = HEALTH_GLYPHS[state];
   const mirror = useAvMirror();
-  const LiveMarkIcon = mirror.videoLive ? Tv : Volume2;
+  const LiveMarkIcon = mirror.videoLive || mirror.videoReconnecting ? Tv : Volume2;
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
   const guidanceLabel = getBadgeGuidanceLabel(
     state,
@@ -656,13 +657,13 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const statusTail = (
     <>
-      {mirror.anyLive ? (
+      {mirror.anyLive || mirror.videoReconnecting ? (
         <>
           <LiveMarkIcon
-            className="h-3.5 w-3.5 shrink-0 text-success"
+            className={cn("h-3.5 w-3.5 shrink-0", mirror.videoReconnecting ? "text-warning" : "text-success")}
             aria-hidden
             data-testid="unified-health-badge-live"
-            data-live-stream={mirror.videoLive ? "video" : "audio"}
+            data-live-stream={mirror.videoReconnecting ? "video-reconnecting" : mirror.videoLive ? "video" : "audio"}
           />
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
             {" "}
@@ -701,7 +702,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                   means and the header decides what it has room to draw.
                 */}
           <span
-            className="app-chrome-badge-status truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+            className="app-chrome-badge-status truncate text-xs font-semibold text-foreground"
             data-overlay-critical="badge"
           >
             {badgeText.trailingLabel}
@@ -717,7 +718,13 @@ export function UnifiedHealthBadge({ className }: Props) {
         ref={badgeRef}
         type="button"
         role="button"
-        aria-label={mirror.anyLive ? `${ariaLabel}, Live View on` : ariaLabel}
+        aria-label={
+          mirror.videoReconnecting
+            ? `${ariaLabel}, video lost, reconnecting`
+            : mirror.anyLive
+              ? `${ariaLabel}, Live View on`
+              : ariaLabel
+        }
         data-guidance-label={guidanceLabel}
         data-testid="unified-health-badge"
         data-diagnostics-open-trigger="true"
@@ -795,7 +802,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                 // sign that nothing real is connected.
                 <>
                   <span
-                    className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                    className="shrink-0 text-xs font-semibold text-foreground"
                     data-overlay-critical="badge"
                     data-testid="unified-health-badge-demo"
                   >
@@ -809,7 +816,7 @@ export function UnifiedHealthBadge({ className }: Props) {
               {narrowHeader ? null : (
                 <>
                   <span
-                    className="app-chrome-badge-host truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                    className="app-chrome-badge-host truncate text-xs font-semibold text-foreground"
                     data-overlay-critical="badge"
                   >
                     {badgeText.leadingLabel}
@@ -858,6 +865,14 @@ export function UnifiedHealthBadge({ className }: Props) {
                 ? "verifying"
                 : (resolveDeviceSwitchStatusFromHealth(healthSnapshot) ?? getSavedDeviceSwitchStatus(device.id));
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
+              const statusBadge = (
+                <PickerHealthStatusBadge snapshot={healthSnapshot} testId={`switch-device-status-${device.id}`} />
+              );
+              const statusSummary = (
+                <span className="text-xs text-muted-foreground">
+                  {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
+                </span>
+              );
               const isExpanded = expandedDeviceIdSet.has(device.id);
               const sameDeviceNote = describeSameDeviceEntry(device.id, savedDevices);
 
@@ -883,21 +898,16 @@ export function UnifiedHealthBadge({ className }: Props) {
                       }}
                       data-testid={`switch-device-row-${device.id}`}
                       data-badge-layout={pickerBadgeOwnLine ? "stacked" : "inline"}
+                      aria-current={isSelected ? "true" : undefined}
                     >
                       <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="min-w-0 break-words text-sm font-medium text-foreground">
                             {buildSavedDevicePrimaryLabel(device, verified)}
                           </span>
-                          {statusLabel ? (
-                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              {statusLabel}
-                            </span>
-                          ) : null}
+                          {pickerBadgeOwnLine ? statusBadge : null}
                         </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
-                        </span>
+                        <span className="mt-1 block">{statusSummary}</span>
                         {sameDeviceNote ? (
                           <span
                             className="mt-1 block text-xs text-muted-foreground"
@@ -907,19 +917,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                           </span>
                         ) : null}
                       </span>
-                      {pickerBadgeOwnLine ? (
-                        <span className="flex min-w-0 max-w-full items-start">
-                          <PickerHealthStatusBadge
-                            snapshot={healthSnapshot}
-                            testId={`switch-device-status-${device.id}`}
-                          />
-                        </span>
-                      ) : (
-                        <PickerHealthStatusBadge
-                          snapshot={healthSnapshot}
-                          testId={`switch-device-status-${device.id}`}
-                        />
-                      )}
+                      {pickerBadgeOwnLine ? null : statusBadge}
                     </button>
                     <Button
                       type="button"

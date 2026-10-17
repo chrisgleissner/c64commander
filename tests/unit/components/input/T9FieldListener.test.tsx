@@ -65,6 +65,26 @@ describe("T9FieldListener", () => {
     expect(field).toHaveAttribute("inputmode", "none");
   });
 
+  it("withholds the input method before a programmatic focus() of a field, whoever calls it", () => {
+    render(
+      <>
+        <T9FieldListener />
+        <button>Before</button>
+        <SearchField />
+      </>,
+    );
+    const field = screen.getByLabelText("Search");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Before" }), { key: "ArrowDown", keyCode: 40 });
+    let modeWhenFocused: string | null = "unset";
+    field.addEventListener("focus", () => {
+      modeWhenFocused = field.getAttribute("inputmode");
+    });
+
+    field.focus();
+
+    expect(modeWhenFocused).toBe("none");
+  });
+
   it("asks a text field for no platform input method once a hardware keypad has navigated", () => {
     render(
       <>

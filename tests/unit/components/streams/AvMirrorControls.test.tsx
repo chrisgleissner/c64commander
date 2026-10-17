@@ -77,6 +77,16 @@ describe("AvMirrorControls", () => {
     expect(mirror.adoptSender).toHaveBeenCalledWith("192.0.2.148");
   });
 
+  it("shows the reconnecting message in the warning color while the lost video is being restarted", () => {
+    mirror.state.video = { state: "error", error: "Video lost, reconnecting…", reconnecting: true } as never;
+    render(<AvMirrorControls />);
+
+    const message = screen.getByTestId("av-mirror-error");
+    expect(message).toHaveTextContent("Video lost, reconnecting…");
+    expect(message).toHaveClass("text-warning");
+    expect(message).not.toHaveClass("text-destructive");
+  });
+
   it("offers no recovery when no sender mismatch was diagnosed", () => {
     mirror.state.video = { state: "error", error: "The video stream stopped arriving.", senderMismatch: null };
     render(<AvMirrorControls />);

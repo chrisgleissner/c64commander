@@ -6,7 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
+import { useIsExternallyOpen, type ExternalOpenState } from "@/hooks/useExternalOpenState";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { LikedTunesList } from "@/pages/playFiles/components/LikedTunesList";
 
@@ -16,24 +24,33 @@ export type LikedTunesSheetProps = {
   onPlay: (items: PlaylistItem[], startIndex: number) => void;
 };
 
-/** The Liked Tunes collection in a bottom sheet (spec §5.5). */
+/** The Liked tunes collection in a bottom sheet (spec §5.5). */
 export const LikedTunesSheet = ({ open, onOpenChange, onPlay }: LikedTunesSheetProps) => (
-  <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="overflow-y-auto" data-testid="liked-tunes-sheet">
-      <SheetHeader>
-        <SheetTitle>Liked Tunes</SheetTitle>
-        <SheetDescription>
+  <AppSheet open={open} onOpenChange={onOpenChange}>
+    <AppSheetContent className="overflow-hidden p-0" data-testid="liked-tunes-sheet">
+      <AppSheetHeader>
+        <AppSheetTitle>Liked tunes</AppSheetTitle>
+        <AppSheetDescription>
           Everything you have ♥-liked. Plays as a normal list — Shuffle and Repeat apply.
-        </SheetDescription>
-      </SheetHeader>
-      <div className="pt-3">
+        </AppSheetDescription>
+      </AppSheetHeader>
+      <AppSheetBody className="px-3 pt-3 pb-[calc(0.75rem+var(--safe-area-inset-bottom))]">
         <LikedTunesList
           onPlay={(items, startIndex) => {
             onOpenChange(false);
             onPlay(items, startIndex);
           }}
         />
-      </div>
-    </SheetContent>
-  </Sheet>
+      </AppSheetBody>
+    </AppSheetContent>
+  </AppSheet>
 );
+
+/** The sheet with its open flag in an external state, so opening it does not render the page that holds the button. */
+export const LikedTunesSheetHost = ({
+  state,
+  onPlay,
+}: {
+  state: ExternalOpenState;
+  onPlay: LikedTunesSheetProps["onPlay"];
+}) => <LikedTunesSheet open={useIsExternallyOpen(state)} onOpenChange={state.set} onPlay={onPlay} />;

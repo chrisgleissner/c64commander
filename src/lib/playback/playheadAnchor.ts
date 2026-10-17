@@ -138,3 +138,23 @@ export const resolvePlayheadAnchor = (input: PlayheadAnchorInput): PlayheadAncho
     stalled: frozen && !input.awaitingSeek,
   };
 };
+
+/** A seek in progress keeps its deadline at least this far ahead; closer than this, it is moved. */
+export const SEEK_DEADLINE_MARGIN_MS = 10_000;
+
+/**
+ * Whether the auto-advance deadline should be recomputed from the playhead on this tick.
+ *
+ * A seek the worker is still rendering holds the playhead at its target, so the anchor reports no
+ * drift and the deadline set before the seek runs down to the tune's end while nothing has been
+ * heard. The deadline is kept ahead of the clock for as long as the seek is outstanding.
+ */
+export const shouldRefreshDeadline = (
+  anchor: Pick<PlayheadAnchorResult, "drifted" | "stalled">,
+  awaitingSeek: boolean,
+  msUntilDue: number,
+): boolean => !anchor.stalled && (anchor.drifted || (awaitingSeek && msUntilDue < SEEK_DEADLINE_MARGIN_MS));
+
+/** While a seek is outstanding, a new deadline is at least twice the margin away, so it is rewritten about every ten seconds and not every tick. */
+export const seekAwareDelayMs = (delayMs: number, awaitingSeek: boolean): number =>
+  awaitingSeek ? Math.max(delayMs, 2 * SEEK_DEADLINE_MARGIN_MS) : delayMs;

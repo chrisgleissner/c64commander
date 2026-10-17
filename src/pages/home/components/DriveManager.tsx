@@ -7,6 +7,7 @@
  */
 
 import { useRef, useState, useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { HardDrive } from "lucide-react";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -21,6 +22,7 @@ import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAd
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { buildDiskMountType, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
@@ -79,14 +81,14 @@ const buildDriveTelnetActions = (
     case "PHYSICAL_DRIVE_B":
       return enabled
         ? []
-        : [{ actionId: "driveBTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-drive-b-turn-on" }];
+        : [{ actionId: "driveBTurnOn", label: "Turn on", loadingLabel: "Turning on…", testId: "home-drive-b-turn-on" }];
     case "SOFT_IEC_DRIVE":
       return enabled
         ? [
             { actionId: "iecReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-softiec-reset" },
             { actionId: "iecSetDir", label: "Set Dir", loadingLabel: "Setting…", testId: "home-softiec-setdir" },
           ]
-        : [{ actionId: "iecTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-softiec-turn-on" }];
+        : [{ actionId: "iecTurnOn", label: "Turn on", loadingLabel: "Turning on…", testId: "home-softiec-turn-on" }];
     default:
       return [];
   }
@@ -125,7 +127,7 @@ export function DriveManager({
   getTelnetActionSupport,
 }: DriveManagerProps) {
   const { profile } = useDisplayProfile();
-  const requestedDriveColumns = profile === "expanded" ? 3 : profile === "compact" ? 1 : 2;
+  const requestedDriveColumns = profile === "expanded" ? 3 : 1;
   const { ref: drivesGridRef, columns: driveColumns } = useFittingColumns(
     requestedDriveColumns,
     "0.5rem",
@@ -133,7 +135,9 @@ export function DriveManager({
     WIDE_DRIVE_CARD_MIN_WIDTH,
   );
   const wideDriveCards = profile === "expanded" && driveColumns === requestedDriveColumns;
+  const lastDriveIndex = DRIVE_CONTROL_SPECS.length - 1;
   const api = getC64API();
+  const navigate = useStableNavigate();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
   const { status: connectionStatus } = useC64Connection();
@@ -333,7 +337,7 @@ export function DriveManager({
     >
       <div
         ref={drivesGridRef}
-        className="grid gap-2"
+        className={cn("grid items-start gap-2", profile === "compact" && "-mx-2")}
         style={{ gridTemplateColumns: `repeat(${driveColumns}, minmax(0, 1fr))` }}
         data-testid="home-drives-group"
       >
@@ -446,6 +450,11 @@ export function DriveManager({
           return (
             <DriveCard
               key={spec.class}
+              className={
+                driveColumns > 1 && index === lastDriveIndex && lastDriveIndex % driveColumns === 0
+                  ? "col-span-full"
+                  : undefined
+              }
               wide={wideDriveCards}
               name={label}
               loading={drivesLoading}
@@ -506,9 +515,7 @@ export function DriveManager({
               pathPending={pathPending}
               isConnected={isConnected}
               testIdSuffix={testIdSuffix}
-              // Only the primary drive is open on a first visit. Drive B and the Soft IEC drive are
-              // there when they are needed and cost a screen each when they are not.
-              defaultOpen={testIdSuffix === "a"}
+              onOpenDisks={() => navigate("/disks")}
               focusId={`home-drive-toggle-${testIdSuffix}`}
               focusOrder={310 + index * 10}
               footer={

@@ -16,7 +16,7 @@ import { usePageActivity } from "@/hooks/usePageActivity";
 const isLive = (state: string) => state === "connecting" || state === "live";
 
 /** The fields surfaces show. The session also publishes packet and frame counters about ten times a second. */
-const SHOWN_FIELDS = ["state", "error", "senderMismatch", "foreignSenderNotice"] as const;
+const SHOWN_FIELDS = ["state", "error", "senderMismatch", "foreignSenderNotice", "reconnecting"] as const;
 const FRAME_RATE_FIELDS = [...SHOWN_FIELDS, "fps", "standard"] as const;
 
 const showsTheSame = (fields: readonly string[], a: AvMirrorSnapshot, b: AvMirrorSnapshot) =>
@@ -53,6 +53,7 @@ export const useAvMirror = (session: AvMirrorSession = avMirrorSession, options:
       audioLive: isLive(snapshot.audio.state),
       videoLive: isLive(snapshot.video.state),
       anyLive: isLive(snapshot.audio.state) || isLive(snapshot.video.state),
+      videoReconnecting: snapshot.video.reconnecting === true,
       anyStoppable: snapshot.audio.state !== "off" || snapshot.video.state !== "off",
       toggleAudio,
       toggleVideo,

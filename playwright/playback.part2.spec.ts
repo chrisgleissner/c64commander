@@ -221,7 +221,7 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(songlengthsPath).toContainText("songlengths.md5");
 
     const list = page.getByTestId("playlist-list");
-    await expect(list).toContainText("demo.sid");
+    await expect(list).toContainText(/demo/i);
     await expect(list).toContainText("0:30");
     await snap(page, testInfo, "songlengths-loaded");
   });
@@ -240,7 +240,7 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(songlengthsPath).toContainText("songlengths.txt");
 
     const list = page.getByTestId("playlist-list");
-    await expect(list).toContainText("demo.sid");
+    await expect(list).toContainText(/demo/i);
     await expect(list).toContainText("0:25");
     await snap(page, testInfo, "songlengths-txt-loaded");
   });
@@ -270,7 +270,10 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const row = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
+    const row = page
+      .getByTestId("playlist-item")
+      .filter({ hasText: /^demo\s?SID/i })
+      .first();
     await row.getByRole("button", { name: "Item actions" }).click();
     const sizeItem = page.getByRole("menuitem", { name: /Size:/i });
     const dateItem = page.getByRole("menuitem", { name: /Date:/i });
@@ -680,10 +683,10 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-scan-overlay");
     await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
     const playlistList = page.getByTestId("playlist-list");
-    await expect(playlistList).toContainText("demo.sid");
+    await expect(playlistList).toContainText(/demo/i);
     await expect(playlistList).toContainText("launch.prg");
     await expect(playlistList).toContainText("disk.d64");
-    await expect(playlistList).toContainText("deep.sid");
+    await expect(playlistList).toContainText(/deep/i);
     await snap(page, testInfo, "playlist-with-local-files");
   });
 
@@ -811,15 +814,15 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-populated");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     const playlistList = page.getByTestId("playlist-list");
     await expect(playlistList.getByTestId("playlist-item-header").filter({ hasText: "/local-play/" })).toBeVisible();
-    await expect(playlistList.getByText("/local-play/demo.sid")).toHaveCount(1);
+    await expect(playlistList.getByTestId("playlist-item").filter({ hasText: /^demo\s?SID/i })).toHaveCount(1);
 
     const resetBefore = server.requests.filter((req) => req.url.startsWith("/v1/machine:reset")).length;
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" })
+      .filter({ hasText: /^demo\s?SID/i })
       .getByRole("button", { name: "Play" })
       .click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
@@ -845,11 +848,11 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo2.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo2/i);
     await snap(page, testInfo, "songlengths-playlist");
 
-    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" });
+    const demoRow = page.getByTestId("playlist-item").filter({ hasText: /^demo\s?SID/i });
     await demoRow.getByRole("button", { name: "Item actions" }).click();
     await expect(page.getByRole("menuitem", { name: /Duration: 0:20/ })).toBeVisible();
     await snap(page, testInfo, "songlengths-duration");
@@ -863,7 +866,7 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" });
+    const demoRow = page.getByTestId("playlist-item").filter({ hasText: /^demo\s?SID/i });
     await demoRow.getByRole("button", { name: "Play" }).click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
@@ -887,7 +890,10 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
+    const demoRow = page
+      .getByTestId("playlist-item")
+      .filter({ hasText: /^demo\s?SID/i })
+      .first();
     await demoRow.getByRole("button", { name: "Play" }).click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
@@ -906,7 +912,7 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "local-source-added");
 
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await expect(page.getByText("demo.txt")).toHaveCount(0);
     await snap(page, testInfo, "local-source-filtered");
   });
@@ -946,7 +952,7 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await waitForRealConnectionBadge(page);
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playlist-populated");
   });
 
@@ -1559,7 +1565,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" })
+      .filter({ hasText: /^demo\s?SID/i })
       .getByRole("button", { name: "Play" })
       .click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
@@ -1604,7 +1610,7 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
 
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await expect.poll(() => server.sidplayRequests.length).toBe(0);
     await snap(page, testInfo, "no-autoplay");
   });
@@ -1740,11 +1746,11 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playlist-saved");
 
     await page.reload();
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playlist-restored");
   });
 
@@ -1757,7 +1763,7 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
 
     await page.addInitScript(() => {
       const seen: string[] = [];
@@ -1768,7 +1774,7 @@ test.describe("Playback file browser (part 2)", () => {
       }).observe(document, { subtree: true, childList: true, characterData: true });
     });
     await page.reload();
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
 
     await page.waitForTimeout(1_000);
     const seen = await page.evaluate(() => (window as unknown as { playlistTextsSeen: string[] }).playlistTextsSeen);
@@ -1783,13 +1789,13 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playlist-before-navigation");
 
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await page.goto("/play");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playlist-after-navigation");
   });
 
@@ -1815,7 +1821,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" })
+      .filter({ hasText: /^demo\s?SID/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect.poll(() => sidplayCalls).toBeGreaterThan(0);

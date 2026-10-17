@@ -258,6 +258,47 @@ const normalizeReleaseAbis = (variantId, value) => {
   return abis;
 };
 
+// Names of the physical keys, and the words the guidance bar prints for them. The defaults
+// are the generic set of the broad edition; the keypad edition lists its own in variants.yaml.
+export const DEFAULT_KEY_LABELS = Object.freeze({
+  left_soft: "Back key",
+  center: "OK",
+  right_soft: "Menu key",
+  left_cap: "Back",
+  center_cap: "OK",
+  right_cap: "Menu",
+  back_word: "Back",
+  close_word: "Close",
+  menu_word: "Menu",
+  delete_word: "Delete",
+});
+export const MAX_KEY_LABEL_LENGTH = 24;
+
+const camelCase = (snake) => snake.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+
+const normalizeKeyLabels = (rawKeyLabels, variantId) => {
+  const label = `variants.${variantId}.runtime.key_labels`;
+  const raw = rawKeyLabels ?? {};
+  requireMapping(raw, label);
+  Object.keys(raw).forEach((key) => {
+    if (!(key in DEFAULT_KEY_LABELS)) {
+      fail(
+        `${label} contains unsupported key "${key}"; allowed keys are ${Object.keys(DEFAULT_KEY_LABELS).join(", ")}`,
+      );
+    }
+  });
+  return Object.fromEntries(
+    Object.keys(DEFAULT_KEY_LABELS).map((key) => {
+      if (raw[key] === undefined) return [camelCase(key), DEFAULT_KEY_LABELS[key]];
+      const value = requireNonEmptyString(raw[key], `${label}.${key}`).trim();
+      if (value.length > MAX_KEY_LABEL_LENGTH) {
+        fail(`${label}.${key} must be at most ${MAX_KEY_LABEL_LENGTH} characters, got ${value.length}`);
+      }
+      return [camelCase(key), value];
+    }),
+  );
+};
+
 const normalizeVariant = (repoRoot, variantId, raw) => {
   if (!VARIANT_ID_PATTERN.test(variantId)) {
     fail(`variant id "${variantId}" must match ${VARIANT_ID_PATTERN}`);
@@ -461,6 +502,7 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       defaultJoystickKeyLayout,
       defaultGameModeOnLaunch,
       defaultGameModeJoystick,
+      keyLabels: normalizeKeyLabels(runtime.key_labels, variantId),
       endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
     },
   };
@@ -530,12 +572,32 @@ export const validateVariantConfig = (raw, { repoRoot = REPO_ROOT } = {}) => {
   };
 };
 
-export const parseVariantSource = (source, { repoRoot = REPO_ROOT } = {}) => {
+export const KEY_LABELS_FILE_ENV = "APP_KEY_LABELS_FILE";
+
+// A downstream build can relabel keys without editing variants.yaml: the file named by
+// APP_KEY_LABELS_FILE maps a variant id to key_labels entries that replace the ones in variants.yaml.
+const applyKeyLabelsFile = (raw, filePath) => {
+  const overlay = parseYamlFile(filePath, `${KEY_LABELS_FILE_ENV} file ${filePath}`);
+  requireMapping(overlay, `${KEY_LABELS_FILE_ENV} file ${filePath}`);
+  for (const [variantId, labels] of Object.entries(overlay)) {
+    const variant = raw?.variants?.[variantId];
+    if (!variant) {
+      fail(`${KEY_LABELS_FILE_ENV} file ${filePath} names unknown variant "${variantId}"`);
+    }
+    requireMapping(labels, `${KEY_LABELS_FILE_ENV} file ${filePath} ${variantId}`);
+    variant.runtime = { ...(variant.runtime ?? {}), key_labels: { ...(variant.runtime?.key_labels ?? {}), ...labels } };
+  }
+};
+
+export const parseVariantSource = (source, { repoRoot = REPO_ROOT, env = process.env } = {}) => {
   let raw;
   try {
     raw = yaml.load(source);
   } catch (error) {
     fail(`failed to parse variants/variants.yaml: ${error.message}`);
+  }
+  if (env[KEY_LABELS_FILE_ENV]) {
+    applyKeyLabelsFile(raw, env[KEY_LABELS_FILE_ENV]);
   }
   return validateVariantConfig(raw, { repoRoot });
 };

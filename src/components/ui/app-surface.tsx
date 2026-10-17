@@ -295,7 +295,7 @@ const AppSheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("text-base font-semibold leading-tight tracking-tight line-clamp-2 break-words", className)}
     {...props}
   />
 ));
@@ -395,7 +395,7 @@ const AppDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElem
 const AppDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pb-4 pt-3 sm:flex-row sm:justify-end",
+      "flex shrink-0 flex-row flex-wrap justify-end gap-2 border-t border-border px-4 pb-3 pt-2 [&>*]:flex-auto sm:[&>*]:flex-none",
       className,
     )}
     {...props}
@@ -408,7 +408,7 @@ const AppDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("text-base font-semibold leading-tight tracking-tight line-clamp-2 break-words", className)}
     {...props}
   />
 ));

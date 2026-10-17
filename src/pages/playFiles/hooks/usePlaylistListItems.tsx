@@ -9,16 +9,15 @@
 import { useLatestCallback } from "@/hooks/useLatestCallback";
 import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SidChipBadge } from "@/components/playback/SidChipBadge";
 import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { describeConfigOrigin, describeConfigOutcome, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
+import { LOCAL_DEVICE_LABEL, connectedDeviceLabel, describeContentSource } from "@/lib/sourceNavigation/sourceTerms";
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
-import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import { formatPlayCategoryTag, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistRowSubtitle } from "@/pages/playFiles/playlistRowSubtitle";
 
@@ -173,6 +172,13 @@ export const usePlaylistListItems = ({
               : configUiState === "declined"
                 ? "No CFG"
                 : null;
+      const titleSuffix = [
+        formatPlayCategoryTag(item.category),
+        durationLabel,
+        item.status === "unavailable" ? "Unavailable" : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
       const menuItems: ActionListMenuItem[] = [
         { type: "label", label: "Details" },
         {
@@ -181,9 +187,8 @@ export const usePlaylistListItems = ({
           value: formatPlayCategory(item.category),
         },
         { type: "info", label: "Duration", value: durationLabel },
-        // Always here, because the row itself shows the path only when it has nothing more useful
-        // to say: on the tunes of an expanded file every row has the same path, and which tune it
-        // is takes its place. See `buildPlaylistRowSubtitle`.
+        { type: "info", label: "Source", value: describeContentSource(item.request.source) },
+        // The row may show something more useful than the path (see `buildPlaylistRowSubtitle`).
         { type: "info", label: "Path", value: item.path },
         {
           type: "info",
@@ -272,38 +277,8 @@ export const usePlaylistListItems = ({
         titleClassName: "whitespace-normal break-words block",
         subtitle: buildPlaylistRowSubtitle(item),
         subtitleClassName: "truncate block",
-        meta: (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <FileOriginIcon
-              origin={
-                item.request.source === "ultimate"
-                  ? "ultimate"
-                  : item.request.source === "hvsc"
-                    ? "hvsc"
-                    : item.request.source === "commoserve"
-                      ? "commoserve"
-                      : "local"
-              }
-              className="h-3.5 w-3.5 shrink-0 opacity-60"
-            />
-            {display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : null}
-            <span>{formatPlayCategory(item.category)}</span>
-            <span>•</span>
-            <span>{durationLabel}</span>
-            {configStatusLabel ? (
-              <>
-                <span>•</span>
-                <span>{configStatusLabel}</span>
-              </>
-            ) : null}
-            {item.status === "unavailable" ? (
-              <>
-                <span>•</span>
-                <span>Unavailable</span>
-              </>
-            ) : null}
-          </div>
-        ),
+        titleSuffix,
+        meta: display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : undefined,
         selected,
         isPlaying,
         onSelectToggle: (nextSelected) => handlePlaylistSelect(item, nextSelected),

@@ -451,7 +451,14 @@ test.describe("Small screen layout integrity", () => {
    * Radix marks everything behind an open dialog `aria-hidden`, and the audit skips
    * hidden surfaces, so with a dialog open it is the dialog that gets measured.
    */
-  const DIALOGS: ReadonlyArray<{ name: string; route: string; open: (page: Page) => Promise<void> }> = [
+  const SOURCE_PICKER_COVERAGE_FLOOR: LayoutCoverageFloor = { minLeaves: 2, minWords: 3 };
+
+  const DIALOGS: ReadonlyArray<{
+    name: string;
+    route: string;
+    open: (page: Page) => Promise<void>;
+    floor?: LayoutCoverageFloor;
+  }> = [
     {
       name: "Home / Backup",
       route: "/",
@@ -483,6 +490,9 @@ test.describe("Small screen layout integrity", () => {
     {
       name: "Play / Add items",
       route: "/play",
+      // The three source buttons keep their label in an aria-hidden span (the button carries the
+      // aria-label), which the audit skips. Only the title and Cancel are measured.
+      floor: SOURCE_PICKER_COVERAGE_FLOOR,
       open: async (page) => {
         await page
           .locator('[data-slot-active="true"]')
@@ -494,6 +504,7 @@ test.describe("Small screen layout integrity", () => {
     {
       name: "Disks / Add disks",
       route: "/disks",
+      floor: SOURCE_PICKER_COVERAGE_FLOOR,
       open: async (page) => {
         await page
           .locator('[data-slot-active="true"]')
@@ -513,7 +524,7 @@ test.describe("Small screen layout integrity", () => {
       name: "Settings / Diagnostics",
       route: "/settings",
       open: async (page) => {
-        await page.getByRole("button", { name: "Diagnostics", exact: true }).first().click();
+        await page.getByRole("button", { name: "Open diagnostics", exact: true }).first().click();
       },
     },
   ];
@@ -531,9 +542,9 @@ test.describe("Small screen layout integrity", () => {
 
       // Radix marks the page behind an open dialog `aria-hidden`, and the audit skips that
       // subtree, so these two cases measure the dialog alone and use the smaller floor.
-      await auditAndAssert(page, `${dialog.name} (as it opens)`, DIALOG_COVERAGE_FLOOR);
+      await auditAndAssert(page, `${dialog.name} (as it opens)`, dialog.floor ?? DIALOG_COVERAGE_FLOOR);
       await expandAllSections(surface, page);
-      await auditAndAssert(page, `${dialog.name} (every section open)`, DIALOG_COVERAGE_FLOOR);
+      await auditAndAssert(page, `${dialog.name} (every section open)`, dialog.floor ?? DIALOG_COVERAGE_FLOOR);
     });
   }
 

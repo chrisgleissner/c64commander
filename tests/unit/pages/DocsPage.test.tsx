@@ -136,6 +136,16 @@ describe("DocsPage", () => {
     localStorage.clear();
   });
 
+  it("puts the contents before the tour card and names no chapter ambiguously", () => {
+    render(<DocsPage />);
+
+    const contents = screen.getByTestId("docs-card-contents");
+    const tour = screen.getByTestId("docs-tour-card");
+    expect(contents.compareDocumentPosition(tour) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("docs-contents-link-audio-output")).toHaveTextContent("Listen here or on C64");
+    expect(screen.queryByText("Here or C64")).toBeNull();
+  });
+
   it("renders the docs shell, a contents list, and every chapter closed until asked for", () => {
     render(<DocsPage />);
 

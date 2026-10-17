@@ -115,7 +115,7 @@ describe("the guidance bar's Game Mode hint", () => {
     modality: "key-navigation",
     hasCurrent: true,
     currentKind: "button",
-    breadcrumb: ["Quick Actions"],
+    breadcrumb: ["Quick actions"],
     atRoot: true,
     fieldEngaged: false,
     layerOpen: false,
@@ -136,7 +136,7 @@ describe("the guidance bar's Game Mode hint", () => {
   it("does not disturb the soft-key labels", () => {
     const labels = resolveGuidanceLabels(state());
     expect(labels.left).toBe("Back");
-    expect(labels.center).toBe("Activate");
+    expect(labels.center).toBe("Press");
     expect(labels.right).toBeNull();
   });
 });

@@ -102,9 +102,27 @@ export interface VideoMirrorSnapshot {
    * one-tap recovery adopts.
    */
   senderMismatch: SenderMismatch | null;
+  /** The stream was lost and the session is restarting it; the error text says so. */
+  reconnecting?: boolean;
 }
 
+/** What is known about a stream that went silent, for the log and for the restart decision. */
+export interface VideoStreamLossInfo {
+  silentMs: number;
+  liveForMs: number;
+  lastFps: number;
+  framesPresented: number;
+  framesLost: number;
+  droppedPackets: number;
+  pageHidden: boolean;
+}
+
+export const VIDEO_RECONNECTING_MESSAGE = "Video lost, reconnecting…";
+export const VIDEO_STOPPED_ARRIVING_MESSAGE = "The video stream stopped arriving.";
+
 export interface VideoMirrorDeps {
+  /** Called when a live stream went silent. Returns true when the owner is restarting it. */
+  onStreamLost?: (info: VideoStreamLossInfo) => boolean;
   createReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
   startStream: (name: "video", destination: string) => Promise<unknown>;
   stopStream: (name: "video") => Promise<unknown>;
@@ -243,6 +261,7 @@ export class VideoMirrorController {
   }
 
   private lastEmitMs = -Infinity;
+  private liveSinceMs = 0;
 
   private update(patch: Partial<VideoMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
@@ -360,6 +379,7 @@ export class VideoMirrorController {
     this.update({
       state: "connecting",
       error: null,
+      reconnecting: false,
       senderMismatch: null,
       fps: 0,
       droppedPackets: 0,
@@ -384,6 +404,7 @@ export class VideoMirrorController {
     receiver.onStateChange((connection) => {
       if (this.receiver !== receiver) return;
       if (connection === "open") {
+        this.liveSinceMs = this.now();
         this.update({ state: "live" });
         this.arrivalWatchdog.start();
       } else if (connection === "error") {
@@ -467,13 +488,31 @@ export class VideoMirrorController {
    */
   private reportStreamWentSilent(silentMs: number): void {
     if (this.snapshot.state !== "live") return;
-    addLog("warn", "Video Mirror: no video arrived for long enough to call the stream lost", {
+    const info: VideoStreamLossInfo = {
       silentMs: Math.round(silentMs),
+      liveForMs: Math.round(this.now() - this.liveSinceMs),
+      lastFps: this.snapshot.fps,
+      framesPresented: this.presented,
+      framesLost: this.snapshot.framesLost,
+      droppedPackets: this.snapshot.droppedPackets,
+      pageHidden: typeof document !== "undefined" && document.visibilityState === "hidden",
+    };
+    addLog("warn", "Video Mirror: no video arrived for long enough to call the stream lost", { ...info });
+    const reconnecting = this.deps.onStreamLost?.(info) === true;
+    this.update({
+      state: "error",
+      error: reconnecting ? VIDEO_RECONNECTING_MESSAGE : VIDEO_STOPPED_ARRIVING_MESSAGE,
+      reconnecting,
     });
-    this.update({ state: "error", error: "The video stream stopped arriving." });
     // Reported first, diagnosed second: the plugin read crosses the bridge, and a call that never
     // answers must not be able to leave the silence unreported.
     void this.diagnoseSilence();
+  }
+
+  /** No restart will follow a lost stream: replace "reconnecting" with the plain fact. */
+  abandonReconnect(): void {
+    if (this.snapshot.state !== "error" || !this.snapshot.reconnecting) return;
+    this.update({ reconnecting: false, error: VIDEO_STOPPED_ARRIVING_MESSAGE });
   }
 
   /**
@@ -488,6 +527,11 @@ export class VideoMirrorController {
     // The mirror was restarted or stopped while the read was in flight; whatever this says is about
     // a socket nobody is listening to any more.
     if (this.receiver !== receiver || this.snapshot.state !== "error") return;
+    addLog("info", "Video Mirror: sender filter state after the stream went silent", {
+      senders: diagnostics?.senders ?? null,
+      rejectedPackets: diagnostics?.rejectedPackets ?? null,
+      expectedSource: diagnostics?.expectedSource ?? null,
+    });
     const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
     if (!mismatch) return;
     addLog("warn", "Video Mirror: the stream is arriving from an address the sender filter refuses", {
@@ -574,6 +618,7 @@ export class VideoMirrorController {
       renderResidenceMs: 0,
       maxResidenceMs: 0,
       error: null,
+      reconnecting: false,
       senderMismatch: null,
     });
   }

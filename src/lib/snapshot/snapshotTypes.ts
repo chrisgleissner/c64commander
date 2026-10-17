@@ -164,25 +164,25 @@ export type SnapshotTypeConfig = {
 export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   {
     type: "program",
-    label: "Program Snapshot",
+    label: "Program snapshot",
     rangeDisplay: "$0000–$00FF, $0200–$FFFF",
     filePrefix: "program",
   },
   {
     type: "basic",
-    label: "Basic Snapshot",
+    label: "BASIC snapshot",
     rangeDisplay: "$002B–$0038, $0801–$9FFF",
     filePrefix: "basic",
   },
   {
     type: "screen",
-    label: "Screen Snapshot",
+    label: "Screen snapshot",
     rangeDisplay: "VICBANK, $D000–$D02E, $D800–$DBFF, $DD00–$DD01",
     filePrefix: "screen",
   },
   {
     type: "custom",
-    label: "Custom Snapshot",
+    label: "Custom snapshot",
     rangeDisplay: "User-defined",
     filePrefix: "custom",
   },

@@ -101,9 +101,11 @@ const createSummary = (
     download: Record<string, unknown>;
     extraction: Record<string, unknown>;
     metadata: Record<string, unknown>;
+    stages: Record<string, unknown>;
     lastUpdatedAt: string | null;
   }> = {},
 ) => ({
+  stages: { ...overrides.stages },
   download: {
     status: "idle" as SummaryStatus,
     startedAt: null,
@@ -254,16 +256,24 @@ describe("useHvscLibrary preparation state coverage", () => {
     expect(result.current.hvscStagePercent).toBeNull();
   });
 
-  it("computes MB/s throughput label when DOWNLOADING with bytes and elapsed time", async () => {
-    // 5 MB downloaded in 2 seconds = 2.5 MB/s
+  it("computes MB/s throughput label from the download step's own measurement", async () => {
+    // 50 MB of 100 MB in the 10 seconds since the download step started = 5 MB/s, 10 s left.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         download: {
           status: "in-progress",
-          downloadedBytes: 5 * 1024 * 1024,
+          downloadedBytes: 50 * 1024 * 1024,
           totalBytes: 100 * 1024 * 1024,
           startedAt: null,
-          durationMs: 2000,
+          durationMs: null,
+        },
+        stages: {
+          download: {
+            startedAtMs: Date.now() - 10_000,
+            finishedAtMs: null,
+            processed: 50 * 1024 * 1024,
+            total: 100 * 1024 * 1024,
+          },
         },
         lastUpdatedAt: new Date().toISOString(),
       }),
@@ -272,19 +282,27 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
-    expect(result.current.hvscPreparationThroughputLabel).toMatch(/MB\/s/);
+    expect(result.current.hvscPreparationThroughputLabel).toMatch(/^5\.0 MB\/s · about \d+ s left$/);
   });
 
   it("formats throughput as integer MB/s when speed is >= 10 MB/s", async () => {
-    // 20 MB downloaded in 1 second = 20 MB/s → formatted as "20 MB/s"
+    // 200 MB of 400 MB in 10 seconds = 20 MB/s, formatted without a decimal.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         download: {
           status: "in-progress",
-          downloadedBytes: 20 * 1024 * 1024,
-          totalBytes: 100 * 1024 * 1024,
+          downloadedBytes: 200 * 1024 * 1024,
+          totalBytes: 400 * 1024 * 1024,
           startedAt: null,
-          durationMs: 1000,
+          durationMs: null,
+        },
+        stages: {
+          download: {
+            startedAtMs: Date.now() - 10_000,
+            finishedAtMs: null,
+            processed: 200 * 1024 * 1024,
+            total: 400 * 1024 * 1024,
+          },
         },
         lastUpdatedAt: new Date().toISOString(),
       }),
@@ -293,7 +311,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
-    expect(result.current.hvscPreparationThroughputLabel).toBe("20 MB/s");
+    expect(result.current.hvscPreparationThroughputLabel).toMatch(/^20 MB\/s/);
   });
 
   it("returns null throughput label when DOWNLOADING but no bytes or elapsed data", async () => {
@@ -352,7 +370,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
   });
 
-  it("computes items/s throughput label when INGESTING with metadata in-progress and processedSongs", async () => {
+  it("computes songs/s throughput label from the analysis step's own measurement", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         metadata: {
@@ -361,6 +379,9 @@ describe("useHvscLibrary preparation state coverage", () => {
           durationMs: 2000,
           percent: 40,
         },
+        stages: {
+          analyze: { startedAtMs: Date.now() - 10_000, finishedAtMs: null, processed: 4000, total: 10_000 },
+        },
       }),
     );
 
@@ -368,11 +389,10 @@ describe("useHvscLibrary preparation state coverage", () => {
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     const label = result.current.hvscPreparationThroughputLabel;
-    expect(label).not.toBeNull();
-    expect(label).toMatch(/items\/s/);
+    expect(label).toMatch(/^\d+ songs\/s · about \d+ s left$/);
   });
 
-  it("computes items/s throughput label when INGESTING with extraction filesExtracted and elapsed time", async () => {
+  it("computes files/s throughput label from the unpack step's own measurement", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         extraction: {
@@ -382,6 +402,9 @@ describe("useHvscLibrary preparation state coverage", () => {
           startedAt: null,
           durationMs: 3000,
         },
+        stages: {
+          unpack: { startedAtMs: Date.now() - 10_000, finishedAtMs: null, processed: 3000, total: 10_000 },
+        },
         lastUpdatedAt: new Date().toISOString(),
       }),
     );
@@ -390,8 +413,7 @@ describe("useHvscLibrary preparation state coverage", () => {
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
     const label = result.current.hvscPreparationThroughputLabel;
-    expect(label).not.toBeNull();
-    expect(label).toMatch(/items\/s/);
+    expect(label).toMatch(/^\d+ files\/s · about \d+ s left$/);
   });
 
   it("returns null throughput label when INGESTING but no processedSongs or elapsed data", async () => {

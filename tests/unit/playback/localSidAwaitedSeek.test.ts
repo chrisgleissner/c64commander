@@ -160,16 +160,71 @@ describe("a seek waiting for the pre-render to reach it", () => {
     expect(flushes).toBeGreaterThan(0);
   });
 
+  it("goes straight to the live renderer for a target beyond the lead-in the pre-render will stop at", async () => {
+    // A 20-minute tune is pre-rendered only as far as its lead-in, so a pre-render can never reach a
+    // target at 19:23. Waiting for it ended in silence: on a Pixel 4 the seek waited 12 s for 4:00 to
+    // be rendered and then gave up on the tune.
+    const engine = makeEngine();
+    const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await Promise.resolve();
+    worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+    engine.prerender("tune#0", new ArrayBuffer(8), 0, 1200);
+
+    const seek = engine.seekTo(1163);
+    await Promise.resolve();
+
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 1163, replayStartedAtMs: expect.any(Number) });
+    expect(worker.ofType("seek")).toMatchObject([{ positionSeconds: 1163 }]);
+    worker.emit({ type: "seeked", id: (worker.ofType("seek")[0] as { id: number }).id } as never);
+    await seek;
+  });
+
+  it("does not end the tune when the lead-in it waited for finished short of the target", async () => {
+    const onEnded = vi.fn();
+    const engine = makeEngine();
+    const play = engine.play(new ArrayBuffer(8), 0, { onEnded }, "tune#0");
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await Promise.resolve();
+    worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+    engine.prerender("tune#0", new ArrayBuffer(8), 0, 1200);
+    await engine.seekTo(200);
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 200 });
+
+    prerenderWorker.emit({
+      type: "prerender-chunk",
+      id: prerenderId(engine),
+      pcm: pcmOf(100, 1234),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: 100,
+    } as never);
+    prerenderWorker.emit({
+      type: "prerendered",
+      id: prerenderId(engine),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: 100,
+    } as never);
+    await Promise.resolve();
+
+    // The lead-in stopped at 100 s, short of 200 s, which is not the end of a 20-minute tune.
+    expect(onEnded).not.toHaveBeenCalled();
+    expect(worker.ofType("seek")).toMatchObject([{ positionSeconds: 200 }]);
+  });
+
   it("keeps the last heard position when a second seek replaces one still waiting", async () => {
     const engine = makeEngine();
     await openWithPrerenderRunning(engine);
     await engine.seekTo(200);
     const heard = engine.getPendingSeek()!.audibleAtRequestSeconds;
 
-    await engine.seekTo(250);
+    await engine.seekTo(230);
 
     // The first target was never played, so the clock must not jump to it while the second waits.
-    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 250, audibleAtRequestSeconds: heard });
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 230, audibleAtRequestSeconds: heard });
     expect(heard).toBeLessThan(200);
   });
 
@@ -444,7 +499,7 @@ describe("a seek waiting for the pre-render to reach it", () => {
     });
 
     it("is true while the worker is re-rendering towards a seek", async () => {
-      // No pre-render running, so the seek falls through to the worker: nothing on screen says so.
+      // No pre-render running, so the seek falls through to the worker and is reported as a replay.
       const engine = makeEngine();
       const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
       worker.emit({ type: "ready", moduleLoadMs: 1 });
@@ -455,7 +510,7 @@ describe("a seek waiting for the pre-render to reach it", () => {
       void engine.seekTo(120);
       await Promise.resolve();
 
-      expect(engine.getPendingSeek()).toBeNull();
+      expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 120, replayStartedAtMs: expect.any(Number) });
       expect(engine.isSeeking()).toBe(true);
     });
 
@@ -474,6 +529,50 @@ describe("a seek waiting for the pre-render to reach it", () => {
       await seek;
 
       expect(engine.isSeeking()).toBe(false);
+    });
+
+    it("drops a deep worker seek that is still outstanding when a later seek is answered another way", async () => {
+      const engine = makeEngine();
+      const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+      await Promise.resolve();
+      worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+      await play;
+      void engine.seekTo(1163);
+      await Promise.resolve();
+      const internals = engine as unknown as {
+        seekPending: unknown;
+        prerenderingForThisRenderer: () => boolean;
+      };
+      expect(internals.seekPending).not.toBeNull();
+
+      internals.prerenderingForThisRenderer = () => true;
+      void engine.seekTo(10);
+      await Promise.resolve();
+
+      expect(internals.seekPending).toBeNull();
+    });
+
+    it("stays true past twenty seconds when the seek is deep enough that the worker needs longer", async () => {
+      vi.useFakeTimers();
+      try {
+        const engine = makeEngine();
+        const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+        worker.emit({ type: "ready", moduleLoadMs: 1 });
+        await Promise.resolve();
+        worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+        await play;
+
+        void engine.seekTo(1163);
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(21_000);
+        expect(engine.isSeeking()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(1163 * 600 + 1_000);
+        expect(engine.isSeeking()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

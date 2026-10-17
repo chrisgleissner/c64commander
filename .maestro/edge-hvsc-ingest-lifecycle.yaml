@@ -45,8 +45,8 @@ env:
     id: hvsc-download
 # The card shows three status labels across an install, and they come from
 # `resolveHvscPreparationSnapshot`: "Downloading", then "Indexing", then "Ready". There is no
-# "Extracting" label — unpacking is one of the four steps inside the indexing phase, and the step
-# labels ("Download", "Unpack", "Find songs", "Song details") are on screen the whole time, so
+# "Extracting" label — unpacking is one of the five steps inside the indexing phase, and the step
+# labels ("Fetch", "Unpack", "Find songs", "Song details", "Analyze") are on screen the whole time, so
 # waiting for one proves nothing about progress. `maestroFlowContracts` pins these three strings.
 - extendedWaitUntil:
     visible: "Downloading"

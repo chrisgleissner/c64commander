@@ -376,7 +376,7 @@ test.describe("Home page app config management", () => {
     await page.getByTestId("home-section-toggle-audio").click();
     await expect(sidGroup.locator("h2").filter({ hasText: "Audio" })).toBeVisible();
     await expect(sidGroup).toContainText("SID Socket 1");
-    await expect(sidGroup).toContainText("ON");
+    await expect(sidGroup.getByTestId("home-sid-toggle-socket1")).toBeChecked();
     await expect(sidGroup).toContainText("SID Socket 2");
     await expect(sidGroup).toContainText("UltiSID 1");
     await expect(sidGroup).toContainText("UltiSID 2");

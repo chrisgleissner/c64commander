@@ -82,6 +82,50 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "items-shown-unfiltered");
   });
 
+  layoutTest(
+    "selecting the first playlist item does not move the list @layout",
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await page.goto("/play");
+      await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+      const rows = page.getByTestId("playlist-item");
+      await expect(rows).toHaveCount(2);
+      const remove = page.getByTestId("playlist-list-remove-selected");
+      await expect(remove, "the action keeps its place while nothing is selected").toBeHidden();
+
+      const selectAll = page.getByTestId("playlist-list-toggle-select-all");
+      const measure = async () => {
+        const [list, toggle, row, firstRow] = await Promise.all([
+          page.getByTestId("playlist-list").boundingBox(),
+          selectAll.boundingBox(),
+          selectAll.locator("xpath=../..").boundingBox(),
+          rows.first().boundingBox(),
+        ]);
+        return {
+          listBelowSelectAll: list!.y - toggle!.y,
+          firstItemBelowSelectAll: firstRow!.y - toggle!.y,
+          rowHeight: row!.height,
+        };
+      };
+      const before = await measure();
+      await rows.first().getByRole("checkbox").click();
+      await expect(remove).toBeVisible();
+      const after = await measure();
+      expect(after.listBelowSelectAll, "the list stays where it was when the action appears").toBeCloseTo(
+        before.listBelowSelectAll,
+        0,
+      );
+      expect(after.firstItemBelowSelectAll, "the first item does not move").toBeCloseTo(
+        before.firstItemBelowSelectAll,
+        0,
+      );
+      expect(after.rowHeight, "the header row keeps its height").toBeCloseTo(before.rowHeight, 0);
+      expect(before.rowHeight, "the header row is one line").toBeLessThan(52);
+      expect((await remove.boundingBox())!.width, "the action is a 44 px target").toBeGreaterThanOrEqual(43.5);
+      await expect(remove).toHaveAccessibleName("Remove selected items");
+      await snap(page, testInfo, "first-item-selected");
+    },
+  );
+
   test("shuffle mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
@@ -163,7 +207,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(1);
     await expect(page.getByTestId("playlist-list")).toContainText("demo.d64");
-    await expect(page.getByTestId("playlist-list")).not.toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).not.toContainText(/demo\s?SID/i);
   });
 
   test("repeat mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -258,7 +302,7 @@ test.describe("Playlist controls and advanced features", () => {
     await clearTraces(page);
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "multi.sid" })
+      .filter({ hasText: /^multi/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore);

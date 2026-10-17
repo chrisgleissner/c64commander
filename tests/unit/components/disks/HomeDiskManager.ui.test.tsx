@@ -186,8 +186,8 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     render(<HomeDiskManager />);
 
-    const toggleBtn = screen.getByTestId("drive-power-toggle-a");
-    expect(toggleBtn).toHaveTextContent("Turn Off");
+    const toggleBtn = screen.getByTestId("drive-status-toggle-a");
+    expect(toggleBtn).toBeChecked();
 
     // Mock error
     mockApi.driveOff.mockRejectedValueOnce(new Error("Power error"));
@@ -202,7 +202,7 @@ describe("HomeDiskManager UI & Interactions", () => {
           title: "Drive power toggle failed",
         }),
       );
-      // Should revert to 'Turn Off' visually after error?
+      // Should revert to 'Turn off' visually after error?
       // The state optimistic update happens, then catch block reverts it.
       expect(toggleBtn).not.toBeDisabled();
     });
@@ -219,6 +219,21 @@ describe("HomeDiskManager UI & Interactions", () => {
         }),
       );
     });
+  });
+
+  it("lists where each disk lives in its details, because compact rows hide the location icon", () => {
+    (useDiskLibrary as any).mockReturnValue({
+      disks: [
+        createMockDisk({ id: "d-local", name: "l.d64", location: "local" }),
+        createMockDisk({ id: "d-ultimate", name: "u.d64", location: "ultimate" }),
+      ],
+      runtimeFiles: {},
+      removeDisk: mockRemoveDisk,
+    });
+    render(<HomeDiskManager />);
+    const locationRow = (id: string) => within(screen.getByTestId(`menu-${id}`)).getByText("Location").parentElement;
+    expect(locationRow("d-local")).toHaveTextContent("LocationLocal");
+    expect(locationRow("d-ultimate")).toHaveTextContent("LocationC64U");
   });
 
   it("clears a stale mounted override when reset refresh shows no disk", async () => {
@@ -637,12 +652,12 @@ describe("HomeDiskManager UI & Interactions", () => {
     });
 
     render(<HomeDiskManager />);
-    expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn On");
+    expect(screen.getByTestId("drive-status-toggle-a")).not.toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Mount" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
-    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
+    await waitFor(() => expect(screen.getByTestId("drive-status-toggle-a")).toBeChecked());
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
   });
@@ -661,14 +676,14 @@ describe("HomeDiskManager UI & Interactions", () => {
     const view = render(<HomeDiskManager />);
     fireEvent.click(screen.getByRole("button", { name: "Mount" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /Drive A/i }));
-    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
+    await waitFor(() => expect(screen.getByTestId("drive-status-toggle-a")).toBeChecked());
 
     routingEpochRef.current = 1;
     drivesResult = { data: undefined, dataUpdatedAt: 0 };
     view.rerender(<HomeDiskManager />);
 
-    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toBeDisabled());
-    expect(screen.getByTestId("drive-power-toggle-a")).not.toHaveTextContent("Turn Off");
+    await waitFor(() => expect(screen.getByTestId("drive-status-toggle-a")).toBeDisabled());
+    expect(screen.getByTestId("drive-status-toggle-a")).not.toBeChecked();
     routingEpochRef.current = 0;
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
@@ -684,12 +699,12 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     const view = render(<HomeDiskManager />);
 
-    const toggleBtn = screen.getByTestId("drive-power-toggle-a");
+    const toggleBtn = screen.getByTestId("drive-status-toggle-a");
     fireEvent.click(toggleBtn);
 
     await waitFor(() => {
       expect(mockApi.driveOff).toHaveBeenCalledWith("a");
-      expect(toggleBtn).toHaveTextContent("Turn On");
+      expect(toggleBtn).not.toBeChecked();
     });
 
     drivesResult = {
@@ -699,7 +714,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     view.rerender(<HomeDiskManager />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off");
+      expect(screen.getByTestId("drive-status-toggle-a")).toBeChecked();
     });
   });
 

@@ -73,16 +73,16 @@ export const isTest = (file) =>
  * Sorted longest first, which is also the order they are worth splitting in.
  */
 export const GRANDFATHERED = new Map([
-  ["src/pages/SettingsPage.tsx", 3495],
+  ["src/pages/SettingsPage.tsx", 3473],
   ["src/lib/c64api.ts", 3468],
   ["src/pages/PlayFilesPage.tsx", 3165],
-  ["src/components/disks/HomeDiskManager.tsx", 2773],
-  ["src/lib/playback/localSidEngine.ts", 2449],
+  ["src/components/disks/HomeDiskManager.tsx", 2761],
+  ["src/lib/playback/localSidEngine.ts", 2452],
   ["src/pages/playFiles/hooks/usePlaybackController.ts", 2438],
   ["src/pages/HomePage.tsx", 2197],
   ["src/lib/diagnostics/healthCheckEngine.ts", 2153],
   ["src/components/diagnostics/DiagnosticsDialog.tsx", 1991],
-  ["src/components/lighting/LightingStudioDialog.tsx", 1628],
+  ["src/components/lighting/LightingStudioDialog.tsx", 1611],
   ["src/lib/connection/connectionManager.ts", 1497],
   ["src/pages/playFiles/hooks/useHvscLibrary.ts", 1488],
   ["src/lib/hvsc/hvscIngestionRuntime.ts", 1410],

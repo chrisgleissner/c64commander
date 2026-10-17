@@ -62,10 +62,10 @@ test.describe("Home quick actions RAM folder display", () => {
     await snap(page, testInfo, "home-open");
 
     // "Quick Config" no longer exists as a single wrapper - it dissolved into separate
-    // collapsible cards (CPU & RAM, Ports, Video, ...). Quick Actions itself remains the
+    // collapsible cards (CPU & RAM, Ports, Video, ...). Quick actions itself remains the
     // sanity check that the page rendered; the RAM folder row assertion below is the one
     // this test is actually about.
-    await expect(page.getByText("Quick Actions")).toBeVisible();
+    await expect(page.getByText("Quick actions")).toBeVisible();
     await expect(page.getByTestId("home-drive-summary")).toHaveCount(0);
 
     // Not on the page itself any more.

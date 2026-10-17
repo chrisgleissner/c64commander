@@ -109,10 +109,22 @@ export interface RenderedTune {
 export const DEFAULT_MAX_TUNES = 3;
 
 /**
- * Total PCM the cache may hold. 128 MB covers three tunes of ~3.5 minutes; past
- * that the oldest is dropped rather than risking the WebView being killed.
+ * Total PCM the cache may hold: one tune of the longest pre-rendered length (`MAX_PRERENDER_SECONDS`)
+ * and room for lead-ins; past that the oldest is dropped. It matches the largest budget the native PCM
+ * store keeps on the Java heap, so the cache never refers to a buffer the store has already dropped.
  */
-export const DEFAULT_MAX_BYTES = 128 * 1024 * 1024;
+export const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * The longest stretch of a tune that is pre-rendered. The native PCM store keeps it on the Java heap,
+ * where 240 s of 48 kHz stereo is 46 MB and fits the smallest budget the store gives itself (48 MB).
+ * A longer tune is cached as a lead-in and played on by the live renderer. Rendering a tune of twenty
+ * minutes whole needed 230 MB and ended in an out-of-memory crash.
+ */
+export const MAX_PRERENDER_SECONDS = 240;
+
+export const prerenderSecondsFor = (requestedSeconds: number): number =>
+  Math.min(requestedSeconds, MAX_PRERENDER_SECONDS);
 
 export class RenderedTuneCache {
   /** Insertion order is LRU order: re-reading a key moves it to the end. */

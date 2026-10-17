@@ -144,7 +144,7 @@ export const PlaybackConfigOverrideEditor = ({ item, onChangeOverrides }: Playba
             .sort(([left], [right]) => left.localeCompare(right))
             .map(([category, overrides]) => (
               <div key={category} className="rounded-md border border-border px-3 py-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{category}</div>
+                <div className="text-xs font-medium text-muted-foreground">{category}</div>
                 <div className="mt-2 space-y-2">
                   {overrides.map((override) => (
                     <div

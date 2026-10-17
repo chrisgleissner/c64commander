@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
@@ -119,7 +120,7 @@ export const PlaylistPanel = ({
         emptyLabel={playlistLoading ? "Loading playlist…" : "No tracks in playlist yet."}
         selectAllLabel="Select all"
         deselectAllLabel="Deselect all"
-        removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}
+        removeSelectedLabel="Remove selected items"
         selectedCount={selectedCount}
         allSelected={allSelected}
         onToggleSelectAll={onToggleSelectAll}
@@ -150,8 +151,10 @@ export const PlaylistPanel = ({
               aria-label="Add items to playlist"
               id="add-items-to-playlist"
               data-testid="add-items-to-playlist"
+              className="min-h-11 flex-auto whitespace-nowrap px-2"
             >
-              {hasPlaylist ? "Add more items" : "Add items"}
+              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+              Add
             </Button>
             {hasPlaylist ? (
               <Button
@@ -160,9 +163,10 @@ export const PlaylistPanel = ({
                 size="sm"
                 onClick={() => setClearConfirmOpen(true)}
                 aria-label="Clear playlist"
-                className="text-destructive hover:text-destructive"
+                className="min-h-11 flex-auto whitespace-nowrap px-2 text-destructive hover:text-destructive"
               >
-                Clear playlist
+                <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" />
+                Clear
               </Button>
             ) : null}
           </div>

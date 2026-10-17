@@ -56,7 +56,7 @@ import { loadKeymapOverrides } from "@/lib/input/keymapOverrideFiles";
 
 const press = (init: KeyboardEventInit) => fireEvent.keyDown(window, init);
 
-describe("Key Explorer", () => {
+describe("Key explorer", () => {
   beforeEach(() => {
     localStorage.clear();
     emitKeyInputDiagnostics.mockClear();
@@ -71,6 +71,13 @@ describe("Key Explorer", () => {
     render(<KeyExplorerPopup open onClose={() => undefined} />);
     press({ code: "F1", key: "F1", keyCode: 112 });
     expect(screen.getByTestId("key-explorer-list").textContent).toContain("code=F1");
+  });
+
+  it("covers the sheet beneath it instead of sizing itself to its content", () => {
+    render(<KeyExplorerPopup open onClose={() => undefined} />);
+    const sheet = screen.getByTestId("key-explorer-popup");
+    expect(sheet.className).not.toMatch(/\bh-auto\b/);
+    expect(sheet.className).not.toContain("max-h-");
   });
 
   it("shows what a key resolves to, and says so when it resolves to nothing", () => {

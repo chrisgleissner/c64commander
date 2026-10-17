@@ -111,10 +111,12 @@ test.describe("Playback auto advance", () => {
       .toBe(3);
 
     await expect(page.getByTestId("playback-current-track")).toContainText("Track-3");
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-3.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "true",
-    );
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^track.3/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "true");
     await snap(page, testInfo, "auto-advance-three-song-sequence");
   });
 
@@ -190,10 +192,12 @@ test.describe("Playback auto advance", () => {
       .toBe(4);
 
     await expect(page.getByTestId("playback-current-track")).toContainText("Loop-1");
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "loop-1.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "true",
-    );
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^loop.1/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "true");
     expect(server.sidplayRequests.at(-1)?.url).toContain("loop-1.sid");
 
     const stopButton = page.getByTestId("playlist-play");

@@ -113,4 +113,13 @@ class PcmStoreTest {
     assertEquals(now, first.lastTouchedNanos)
     assertEquals(true, second.lastTouchedNanos < first.lastTouchedNanos)
   }
+
+  @Test
+  fun `the retained budget is a quarter of the heap limit, between 48 and 64 MB`() {
+    val mb = 1024L * 1024
+    assertEquals(48 * mb, PcmStore.retainedBudgetFor(128 * mb))
+    assertEquals(64 * mb, PcmStore.retainedBudgetFor(256 * mb))
+    assertEquals(64 * mb, PcmStore.retainedBudgetFor(4096 * mb))
+    assertEquals(48 * mb, PcmStore.retainedBudgetFor(16 * mb))
+  }
 }

@@ -80,4 +80,20 @@ describe("ConfigDriftView", () => {
       expect(screen.getByTestId("config-drift-error")).toHaveTextContent("drift unavailable");
     });
   });
+
+  it("shows the firmware-unavailable message without error styling", async () => {
+    computeConfigDriftMock.mockResolvedValue({
+      timestamp: "2025-01-01T00:00:00.000Z",
+      error: "Persisted-config comparison is unavailable on this firmware.",
+      unavailable: true,
+      driftItems: [],
+    });
+
+    render(<ConfigDriftView onBack={vi.fn()} />);
+
+    const note = await screen.findByTestId("config-drift-unavailable");
+    expect(note).toHaveTextContent("unavailable on this firmware");
+    expect(note.className).not.toContain("destructive");
+    expect(screen.queryByTestId("config-drift-error")).toBeNull();
+  });
 });

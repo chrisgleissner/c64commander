@@ -18,7 +18,7 @@
  * trimmed, and "Manage" on the Config card needed 61.7px.
  *
  * This sweeps the profile x width x Text size matrix and measures every action tile on Home,
- * Quick Actions and Config actions alike. It runs with the machine paused for one configuration,
+ * Quick actions and Config actions alike. It runs with the machine paused for one configuration,
  * because "Resume" only exists in that state and is the longest label the Pause tile can take.
  */
 import { expect, test, type Page } from "@playwright/test";
@@ -153,13 +153,13 @@ test.describe("Action tile labels are drawn whole", () => {
    * Live tile and prints the reason under it. That reason used to be the full sentence "This model
    * cannot stream picture or sound" — 41 characters in a tile about 68 px wide. It wrapped to six
    * lines of one word each, and because a grid row is as tall as its tallest tile, the whole top
-   * row of Quick Actions measured 204 px on a cartridge against 91 px on a C64 Ultimate.
+   * row of Quick actions measured 204 px on a cartridge against 91 px on a C64 Ultimate.
    *
    * The sweep above would not have caught it: wrapped text is not clipped text. The row height is,
    * so it is what this measures. 140 px is above the 114 px the fixed short caption produces at
    * this profile and width, and far below the 204 px the defect produced.
    */
-  test("a device that cannot stream does not stretch the Quick Actions row @layout", async ({ page }) => {
+  test("a device that cannot stream does not stretch the Quick actions row @layout", async ({ page }) => {
     // No `core_version` and no "Data Streams" category is what a real Ultimate-II+L answers, and
     // between them they are what `deriveDeviceCapabilities` reads to decide the device does not
     // stream. The config signal is the more precise of the two and overrides the other, so both are
@@ -197,7 +197,7 @@ test.describe("Action tile labels are drawn whole", () => {
           ),
         ),
       );
-      expect(tallest, `tallest Quick Actions tile on a cartridge: ${Math.round(tallest)}px`).toBeLessThan(140);
+      expect(tallest, `tallest Quick actions tile on a cartridge: ${Math.round(tallest)}px`).toBeLessThan(140);
 
       await expect(live).toHaveText(/No streaming/);
       expectNoClippedLabel(await sweepTileLabels(page), "cartridge at 393px");

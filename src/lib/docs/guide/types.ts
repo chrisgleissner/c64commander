@@ -30,7 +30,7 @@ export interface GuideChapter {
   /** Also the CollapsibleSection id in scope `docs`, so search entries can address it. */
   readonly id: string;
   readonly title: string;
-  /** The chapter's name in the contents list, short enough for half a 320 px row. */
+  /** The chapter's name in the contents list, one line on a 320 px row. */
   readonly navLabel: string;
   readonly icon: LucideIcon;
   readonly blocks: readonly GuideBlock[];

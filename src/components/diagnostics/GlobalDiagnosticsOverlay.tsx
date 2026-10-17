@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
@@ -19,7 +19,6 @@ import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from "@/lib/log
 import { collectHvscPerfTimings } from "@/lib/hvsc/hvscPerformance";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
-import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import {
@@ -56,6 +55,12 @@ import {
   type DiagnosticsOverlaySeedState,
 } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { resolveDiagnosticsPanelFromPath } from "@/lib/diagnostics/diagnosticsOverlayRoutes";
+
+import { LazyDialogBoundary } from "@/components/diagnostics/LazyDialogBoundary";
+
+const DiagnosticsDialog = lazy(() =>
+  import("@/components/diagnostics/DiagnosticsDialog").then((module) => ({ default: module.DiagnosticsDialog })),
+);
 
 export const validateTarget = async (host: string, port: number) => {
   // HARD18-027: host may already carry its own embedded port (e.g. a stored
@@ -603,6 +608,9 @@ export const GlobalDiagnosticsOverlay = () => {
     [handleRunHealthCheck],
   );
 
+  const diagnosticsEverOpened = useRef(false);
+  if (overlayOpen) diagnosticsEverOpened.current = true;
+
   const connectionCallbacks: ConnectionActionsCallbacks = useMemo(
     () => ({
       onRetryConnection: handleRetryConnectionAsync,
@@ -612,32 +620,42 @@ export const GlobalDiagnosticsOverlay = () => {
   );
 
   return (
-    <DiagnosticsDialog
-      open={overlayOpen}
-      onOpenChange={handleOpenChange}
-      onFirstVisible={handleDiagnosticsFirstVisible}
-      healthState={healthState}
-      logs={logs}
-      errorLogs={errorLogs}
-      traceEvents={traceEvents}
-      actionSummaries={actionSummaries}
-      onShareAll={() => withDiagnosticsTraceOverride(handleShareAll)}
-      onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFiltered(entries))}
-      onClearAll={handleClearAll}
-      onRetryConnection={handleRetryConnection}
-      connectionCallbacks={connectionCallbacks}
-      deviceInfo={deviceInfo}
-      healthCheckRunning={healthCheckState.running}
-      lastHealthCheckResult={healthCheckState.latestResult}
-      liveHealthCheckProbes={healthCheckState.liveProbes}
-      healthHistory={overlayOpen ? getHealthHistorySnapshot() : []}
-      requestedPanel={requestedPanel}
-      repairRunning={repairRunning}
-      onRepair={handleRepair}
-      onRunHealthCheck={() => {
-        void handleRunHealthCheck();
-      }}
-    />
+    <LazyDialogBoundary
+      operation="DIAGNOSTICS_LOAD"
+      title="Diagnostics could not be opened"
+      description="Its code did not load. Reload the app and try again."
+    >
+      <Suspense fallback={null}>
+        {diagnosticsEverOpened.current ? (
+          <DiagnosticsDialog
+            open={overlayOpen}
+            onOpenChange={handleOpenChange}
+            onFirstVisible={handleDiagnosticsFirstVisible}
+            healthState={healthState}
+            logs={logs}
+            errorLogs={errorLogs}
+            traceEvents={traceEvents}
+            actionSummaries={actionSummaries}
+            onShareAll={() => withDiagnosticsTraceOverride(handleShareAll)}
+            onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFiltered(entries))}
+            onClearAll={handleClearAll}
+            onRetryConnection={handleRetryConnection}
+            connectionCallbacks={connectionCallbacks}
+            deviceInfo={deviceInfo}
+            healthCheckRunning={healthCheckState.running}
+            lastHealthCheckResult={healthCheckState.latestResult}
+            liveHealthCheckProbes={healthCheckState.liveProbes}
+            healthHistory={overlayOpen ? getHealthHistorySnapshot() : []}
+            requestedPanel={requestedPanel}
+            repairRunning={repairRunning}
+            onRepair={handleRepair}
+            onRunHealthCheck={() => {
+              void handleRunHealthCheck();
+            }}
+          />
+        ) : null}
+      </Suspense>
+    </LazyDialogBoundary>
   );
 };
 

@@ -84,12 +84,25 @@ describe("KeypadGuidanceBar", () => {
     expect(breadcrumb()).toHaveTextContent("Settings");
     // A plain button → OK activates it; at the page root the left soft key is Back;
     // no context menu → the Menu slot is hidden.
-    expect(actionText("keypad-guidance-center")).toBe("Activate");
+    expect(actionText("keypad-guidance-center")).toBe("Press");
     // The left cap already reads "Back", so the word beside it is dropped rather than repeated —
-    // on a 320 px screen "Back Back" pushed the row past the viewport and truncated "Activate".
+    // on a 320 px screen "Back Back" pushed the row past the viewport and truncated the next word.
     expect(screen.getByTestId("keypad-guidance-left")).toHaveTextContent("Back");
     expect(actionText("keypad-guidance-left")).toBe("");
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
+  it("shows a control's own verb on the OK key", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button data-key-nav-verb="Seek">Seek within the tune</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(actionText("keypad-guidance-center")).toBe("Seek");
   });
 
   it("names what OK does on a card whose only control is its header: collapse, not open", () => {
@@ -125,7 +138,7 @@ describe("KeypadGuidanceBar", () => {
     expect(actionText("keypad-guidance-center")).toBe("Open");
   });
 
-  it("names a control by its short guidance label, and drops 'Activate' on the compact screen only", () => {
+  it("names a control by its short guidance label, and keeps the OK word on the compact screen", () => {
     render(
       <FocusNavigationProvider enabled>
         <button>Home</button>
@@ -136,13 +149,13 @@ describe("KeypadGuidanceBar", () => {
     );
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(breadcrumb()).toHaveTextContent("c64u: healthy");
-    expect(actionText("keypad-guidance-center")).toBe("Activate");
+    expect(actionText("keypad-guidance-center")).toBe("Press");
 
     document.documentElement.dataset.displayProfile = "compact";
     try {
       fireEvent.keyDown(document.body, { code: "ArrowUp" });
       fireEvent.keyDown(document.body, { code: "ArrowDown" });
-      expect(actionText("keypad-guidance-center")).toBe("");
+      expect(actionText("keypad-guidance-center")).toBe("Press");
       expect(screen.getByTestId("keypad-guidance-center")).not.toHaveAttribute("hidden");
     } finally {
       delete document.documentElement.dataset.displayProfile;
@@ -190,6 +203,26 @@ describe("KeypadGuidanceBar", () => {
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
 
     expect(bar()).toHaveAttribute("data-visible", "false");
+  });
+
+  it("names Close and Open while the search overlay has focus in its field", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <div role="dialog" aria-label="Search" data-key-nav-skip="true" data-key-nav-search-overlay="true">
+          <input data-testid="search-field" aria-label="Search the app" />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("search-field").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Search");
+    expect(actionText("keypad-guidance-left")).toBe("Close");
+    expect(actionText("keypad-guidance-center")).toBe("Open");
+    expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
   });
 
   it("names Close and Menu, and no OK action, while a dialog that drives its own keys offers a menu", () => {

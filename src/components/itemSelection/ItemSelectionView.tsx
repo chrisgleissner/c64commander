@@ -13,7 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PathWrap } from "@/components/PathWrap";
 import { getInputModality } from "@/lib/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { cn } from "@/lib/utils";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 /** The folder being shown, as its own name, with "…/" standing for the folders above it. */
@@ -159,9 +158,9 @@ export const ItemSelectionView = ({
             className="h-11 w-11 shrink-0"
             onClick={onRefresh}
             disabled={isLoading}
-            aria-label={isLoading ? "Loading…" : "Refresh"}
+            aria-label="Refresh"
           >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            <RefreshCw className="h-4 w-4" />
           </Button>
           {pathLabel}
         </div>
@@ -183,7 +182,7 @@ export const ItemSelectionView = ({
             </Button>
             <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
               <RefreshCw className="h-4 w-4 mr-1" />
-              {isLoading ? "Loading…" : "Refresh"}
+              Refresh
             </Button>
           </div>
           {pathLabel}
@@ -191,7 +190,7 @@ export const ItemSelectionView = ({
       )}
 
       <div className="space-y-2">
-        {entries.length === 0 && <p className="text-xs text-muted-foreground">{emptyLabel}</p>}
+        {entries.length === 0 && !isLoading && <p className="text-xs text-muted-foreground">{emptyLabel}</p>}
         {entries.map((entry) => {
           const isSelected = selection.has(entry.path);
           const canSelect = entry.type === "file" || showFolderSelect;

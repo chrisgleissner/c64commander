@@ -43,7 +43,7 @@ import {
   type AddItemsProgressState,
 } from "@/components/itemSelection/AddItemsProgressOverlay";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
-import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { SOURCE_LABELS, describeContentSource } from "@/lib/sourceNavigation/sourceTerms";
 import { toast } from "@/hooks/use-toast";
 import {
   getC64DrivesQueryKey,
@@ -89,7 +89,7 @@ import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDepende
 import { forgetUploadMount } from "@/lib/disks/uploadMountRegistry";
 import { bindCallsToDevice } from "@/lib/disks/deviceBoundCalls";
 import * as mountSupport from "@/components/disks/driveMountSupport";
-import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
+import { Switch } from "@/components/ui/switch";
 import {
   createDiskEntry,
   getDiskFolderPath,
@@ -99,7 +99,7 @@ import {
   normalizeDiskPath,
   type DiskEntry,
 } from "@/lib/disks/diskTypes";
-import { assignDiskGroupsByPrefix, orderDisksInGroup } from "@/lib/disks/diskGrouping";
+import { assignDiskGroupsByPrefix, groupRepeatsFolder, orderDisksInGroup } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
@@ -118,7 +118,7 @@ import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import {
-  describeConfigOrigin,
+  describeAttachedConfigRows,
   resolvePlaybackConfigUiState,
   resolveStoredConfigOrigin,
 } from "@/lib/config/playbackConfig";
@@ -145,6 +145,8 @@ import {
   getCategoryConfigValue,
   getStatusMessageColorClass,
   INLINE_META_SELECT_CLASS,
+  DriveField,
+  driveFieldsClass,
   LocationIcon,
   ROW1_CONTROL_CLASS,
   SOFT_IEC_BUS_ID_DEFAULTS,
@@ -247,6 +249,21 @@ const FocusableDiskButton = ({
   });
 
   return <Button ref={focusRef} disabled={disabled} {...props} />;
+};
+
+const FocusableDiskSwitch = ({
+  focusId,
+  focusOrder,
+  disabled,
+  ...props
+}: ComponentProps<typeof Switch> & { focusId: string; focusOrder: number }) => {
+  const focusRef = useFocusItem<HTMLButtonElement>({
+    id: focusId,
+    order: focusOrder,
+    group: "disks-drive-controls",
+    disabled: Boolean(disabled),
+  });
+  return <Switch ref={focusRef} disabled={disabled} {...props} />;
 };
 
 // Every drive config item whose Bus ID range / Drive Type choices must be sourced from the device.
@@ -1740,12 +1757,19 @@ export const HomeDiskManager = () => {
       });
       return [
         { type: "label", label: "Details" },
+        {
+          type: "info",
+          label: "Location",
+          value: describeContentSource(disk.location === "local" ? "local" : "ultimate"),
+        },
         { type: "info", label: "Size", value: formatBytes(disk.sizeBytes) },
         { type: "info", label: "Date", value: formatDate(detailsDate) },
         { type: "separator" },
         { type: "label", label: "Config" },
-        { type: "info", label: "Attached", value: disk.configRef?.fileName ?? "None" },
-        { type: "info", label: "Origin", value: describeConfigOrigin(disk.configOrigin ?? "none") },
+        ...describeAttachedConfigRows(disk.configRef?.fileName, disk.configOrigin).map((row) => ({
+          type: "info" as const,
+          ...row,
+        })),
         {
           type: "info",
           label: "Status",
@@ -1845,14 +1869,15 @@ export const HomeDiskManager = () => {
                 : configUiState === "declined"
                   ? "No CFG"
                   : null;
-        const groupMeta = disk.group ? (
-          <span className="flex items-center gap-1 min-w-0">
-            <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
-            <span className={cn(groupColor?.text, "break-words min-w-0")}>
-              Group: <NameWrap name={disk.group} />
+        const groupMeta =
+          disk.group && !groupRepeatsFolder(disk.group, folderPath) ? (
+            <span className="flex items-center gap-1 min-w-0">
+              <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
+              <span className={cn(groupColor?.text, "break-words min-w-0")}>
+                Group: <NameWrap name={disk.group} />
+              </span>
             </span>
-          </span>
-        ) : null;
+          ) : null;
         acc.push({
           id: disk.id,
           title: disk.name,
@@ -1896,7 +1921,6 @@ export const HomeDiskManager = () => {
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === "boolean";
-    const powerLabel = powerEnabled ? "Turn Off" : "Turn On";
     const powerTarget = !powerEnabled;
     const powerPending = Boolean(drivePowerPending[key]);
     const mountedDiskId = resolveMountedDiskId(key);
@@ -1927,7 +1951,6 @@ export const HomeDiskManager = () => {
       driveTypeOptions,
       powerEnabled,
       hasPowerState,
-      powerLabel,
       powerTarget,
       powerPending,
       configPending: Boolean(driveConfigPending[key]),
@@ -1950,7 +1973,7 @@ export const HomeDiskManager = () => {
   const softIecMountedLabel = softIecDevice?.imageFile ?? NO_DISK_LABEL;
   const softIecPowerEnabled = drivePowerOverride.softiec ?? softIecDevice?.enabled ?? false;
   const softIecHasPowerState = typeof softIecPowerEnabled === "boolean";
-  const softIecPowerLabel = softIecPowerEnabled ? "Turn Off" : "Turn On";
+  const softIecPowerLabel = softIecPowerEnabled ? "Turn off" : "Turn on";
   const softIecPowerTarget = !softIecPowerEnabled;
   const softIecResetPending = Boolean(driveResetPending.softiec);
   const softIecPowerPending = Boolean(drivePowerPending.softiec);
@@ -1984,7 +2007,6 @@ export const HomeDiskManager = () => {
                 driveTypeOptions,
                 powerEnabled,
                 hasPowerState,
-                powerLabel,
                 powerTarget,
                 powerPending,
                 configPending,
@@ -2008,18 +2030,15 @@ export const HomeDiskManager = () => {
                   // holds a disk, are the two things worth seeing and changing without opening it.
                   actions={
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <FocusableDiskButton
+                      <FocusableDiskSwitch
                         focusId={`disks-drive-${key}-status-toggle`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 0)}
-                        variant="outline"
-                        size="sm"
-                        className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(powerEnabled))}
-                        onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
+                        checked={powerEnabled}
+                        onCheckedChange={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                         disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                         data-testid={`drive-status-toggle-${key}`}
-                      >
-                        {powerEnabled ? "ON" : "OFF"}
-                      </FocusableDiskButton>
+                        aria-label={`${driveLabel} power`}
+                      />
                       <FocusableDiskButton
                         focusId={`disks-drive-${key}-mount-toggle`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 10)}
@@ -2042,80 +2061,67 @@ export const HomeDiskManager = () => {
                     </div>
                   }
                 >
-                  <div
-                    className={cn(
-                      "min-w-0 overflow-hidden text-xs text-muted-foreground",
-                      profile === "compact"
-                        ? "grid gap-2 whitespace-normal"
-                        : // flex-wrap: each label/control pair stays whole (whitespace-nowrap) but
-                          // the row moves them onto a second line instead of running past the card
-                          // and the viewport, which it did by 53 px at the largest text size.
-                          "flex flex-wrap items-center gap-1 whitespace-nowrap",
-                    )}
-                  >
-                    <span className="shrink-0">Bus ID</span>
-                    <Select
-                      value={String(busId)}
-                      onValueChange={(value) =>
-                        void handleDriveConfigUpdate(
-                          key,
-                          DRIVE_BUS_ID_ITEM,
-                          Number(value),
-                          "Drive Bus ID updated",
-                          `${driveLabel} now uses device #${value}.`,
-                        )
-                      }
-                      disabled={!status.isConnected || configPending}
-                    >
-                      <SelectTrigger
-                        className={cn(INLINE_META_SELECT_CLASS, "w-[4.75rem] min-w-[4.75rem]")}
-                        aria-label={`${driveLabel} Bus ID`}
-                        data-testid={`drive-bus-select-${key}`}
+                  <div className={driveFieldsClass(profile === "compact")}>
+                    <DriveField label="Bus ID" compact={profile === "compact"}>
+                      <Select
+                        value={String(busId)}
+                        onValueChange={(value) =>
+                          void handleDriveConfigUpdate(
+                            key,
+                            DRIVE_BUS_ID_ITEM,
+                            Number(value),
+                            "Drive Bus ID updated",
+                            `${driveLabel} now uses device #${value}.`,
+                          )
+                        }
+                        disabled={!status.isConnected || configPending}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {busOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            #{option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {profile === "compact" ? null : (
-                      <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
-                        •
-                      </span>
-                    )}
-                    <span className="shrink-0">Drive Type</span>
-                    <Select
-                      value={driveType}
-                      onValueChange={(value) =>
-                        void handleDriveConfigUpdate(
-                          key,
-                          DRIVE_TYPE_ITEM,
-                          value,
-                          "Drive Type updated",
-                          `${driveLabel} switched to ${value} mode.`,
-                        )
-                      }
-                      disabled={!status.isConnected || configPending}
-                    >
-                      <SelectTrigger
-                        className={cn(INLINE_META_SELECT_CLASS, "w-[80px] min-w-[80px]")}
-                        aria-label={`${driveLabel} Drive Type`}
-                        data-testid={`drive-type-select-${key}`}
+                        <SelectTrigger
+                          className={cn(INLINE_META_SELECT_CLASS, "w-[4.75rem] min-w-[4.75rem]")}
+                          aria-label={`${driveLabel} Bus ID`}
+                          data-testid={`drive-bus-select-${key}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {busOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              #{option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </DriveField>
+                    <DriveField label="Drive Type" compact={profile === "compact"}>
+                      <Select
+                        value={driveType}
+                        onValueChange={(value) =>
+                          void handleDriveConfigUpdate(
+                            key,
+                            DRIVE_TYPE_ITEM,
+                            value,
+                            "Drive Type updated",
+                            `${driveLabel} switched to ${value} mode.`,
+                          )
+                        }
+                        disabled={!status.isConnected || configPending}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {driveTypeOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger
+                          className={cn(INLINE_META_SELECT_CLASS, "w-[80px] min-w-[80px]")}
+                          aria-label={`${driveLabel} Drive Type`}
+                          data-testid={`drive-type-select-${key}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {driveTypeOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </DriveField>
                   </div>
 
                   <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -2180,18 +2186,6 @@ export const HomeDiskManager = () => {
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
                       </FocusableDiskButton>
-                      <FocusableDiskButton
-                        focusId={`disks-drive-${key}-power-toggle`}
-                        focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 50)}
-                        variant="default"
-                        size="sm"
-                        className="h-11 px-3 text-xs"
-                        onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
-                        disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
-                        data-testid={`drive-power-toggle-${key}`}
-                      >
-                        {powerLabel}
-                      </FocusableDiskButton>
                     </div>
                   </div>
 
@@ -2241,13 +2235,11 @@ export const HomeDiskManager = () => {
               defaultOpen={false}
               actions={
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <FocusableDiskButton
+                  <FocusableDiskSwitch
                     focusId="disks-soft-iec-status-toggle"
                     focusOrder={300}
-                    variant="outline"
-                    size="sm"
-                    className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(softIecPowerEnabled))}
-                    onClick={() =>
+                    checked={softIecPowerEnabled}
+                    onCheckedChange={() =>
                       void handleSoftIecConfigUpdate(
                         "IEC Drive",
                         softIecPowerEnabled ? "Disabled" : "Enabled",
@@ -2257,9 +2249,8 @@ export const HomeDiskManager = () => {
                     }
                     disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
                     data-testid="drive-status-toggle-soft-iec"
-                  >
-                    {softIecPowerEnabled ? "ON" : "OFF"}
-                  </FocusableDiskButton>
+                    aria-label="Soft IEC drive power"
+                  />
                   <FocusableDiskButton
                     focusId="disks-soft-iec-mount-toggle"
                     focusOrder={310}
@@ -2276,66 +2267,56 @@ export const HomeDiskManager = () => {
                 </div>
               }
             >
-              <div
-                className={cn(
-                  "min-w-0 overflow-hidden text-xs text-muted-foreground",
-                  profile === "compact"
-                    ? "grid gap-2 whitespace-normal"
-                    : "flex flex-wrap items-center gap-1 whitespace-nowrap",
-                )}
-              >
-                <span className="shrink-0">Bus ID</span>
-                <Select
-                  value={String(softIecBusId)}
-                  onValueChange={(value) =>
-                    void handleSoftIecConfigUpdate(
-                      "Soft Drive Bus ID",
-                      Number(value),
-                      "Soft IEC bus ID updated",
-                      `Soft IEC now uses device #${value}.`,
-                    )
-                  }
-                  disabled={!status.isConnected || softIecConfigPending}
-                >
-                  <SelectTrigger
-                    className={cn(INLINE_META_SELECT_CLASS, "w-[4.75rem] min-w-[4.75rem]")}
-                    data-testid="drive-bus-select-soft-iec"
+              <div className={driveFieldsClass(profile === "compact")}>
+                <DriveField label="Bus ID" compact={profile === "compact"}>
+                  <Select
+                    value={String(softIecBusId)}
+                    onValueChange={(value) =>
+                      void handleSoftIecConfigUpdate(
+                        "Soft Drive Bus ID",
+                        Number(value),
+                        "Soft IEC bus ID updated",
+                        `Soft IEC now uses device #${value}.`,
+                      )
+                    }
+                    disabled={!status.isConnected || softIecConfigPending}
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {softIecBusOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        #{option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {profile === "compact" ? null : (
-                  <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
-                    •
-                  </span>
-                )}
-                <span className="shrink-0">Default Path</span>
-                <FocusableDiskButton
-                  focusId="disks-soft-iec-default-path"
-                  focusOrder={320}
-                  variant="ghost"
-                  size="sm"
-                  className="h-11 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
-                  onClick={() => setSoftIecDirectoryBrowserOpen(true)}
-                  disabled={
-                    !status.isConnected || softIecConfigPending || !isSoftIecDefaultPathConfigurable(softIecConfig)
-                  }
-                  data-testid="drive-default-path-select-soft-iec"
-                  aria-label="Select directory for Soft IEC Default Path"
-                >
-                  {/* Wraps rather than truncating: the path is arbitrary and on a 320 px screen
+                    <SelectTrigger
+                      className={cn(INLINE_META_SELECT_CLASS, "w-[4.75rem] min-w-[4.75rem]")}
+                      data-testid="drive-bus-select-soft-iec"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {softIecBusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          #{option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </DriveField>
+                <DriveField label="Default Path" compact={profile === "compact"}>
+                  <FocusableDiskButton
+                    focusId="disks-soft-iec-default-path"
+                    focusOrder={320}
+                    variant="ghost"
+                    size="sm"
+                    className="h-11 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
+                    onClick={() => setSoftIecDirectoryBrowserOpen(true)}
+                    disabled={
+                      !status.isConnected || softIecConfigPending || !isSoftIecDefaultPathConfigurable(softIecConfig)
+                    }
+                    data-testid="drive-default-path-select-soft-iec"
+                    aria-label="Select directory for Soft IEC Default Path"
+                  >
+                    {/* Wraps rather than truncating: the path is arbitrary and on a 320 px screen
                       "Select directory (/Temp/)" needed 270 px of the 241 available. `break-words`
                       rather than `break-all`, which split "/USB0/" across two lines inside a 240 px
                       column although the whole path fits on one. */}
-                  <span className="line-clamp-2 break-words">Select directory ({softIecDefaultPath})</span>
-                </FocusableDiskButton>
+                    <span className="line-clamp-2 break-words">Select directory ({softIecDefaultPath})</span>
+                  </FocusableDiskButton>
+                </DriveField>
               </div>
 
               <div
@@ -2423,7 +2404,6 @@ export const HomeDiskManager = () => {
           <div className="bg-card border border-border rounded-panel p-4 space-y-4">
             <SelectableActionList
               title="Disk list"
-              selectionLabel="items"
               stackTitleProfiles={["compact", "medium"]}
               items={buildDiskListItems(sortedDisks, {
                 onMount: (entry) => {
@@ -2441,14 +2421,14 @@ export const HomeDiskManager = () => {
               emptyLabel="No disks in the collection yet."
               selectAllLabel="Select all"
               deselectAllLabel="Deselect all"
-              removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}
+              removeSelectedLabel="Remove selected items"
               selectedCount={selectedCount}
               allSelected={allSelected}
               onToggleSelectAll={toggleSelectAll}
               onRemoveSelected={() => setBulkDeleteOpen(true)}
               maxVisible={listPreviewLimit}
               viewAllTitle="All disks"
-              filterPlaceholder="Filter disks..."
+              filterPlaceholder="Filter disks"
               listTestId="disk-list"
               rowTestId="disk-row"
               viewAllMode="non-empty"
@@ -2654,7 +2634,7 @@ export const HomeDiskManager = () => {
 
       <Dialog open={Boolean(groupDialogDisk)} onOpenChange={(open) => !open && setGroupDialogDisk(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Set group</DialogTitle>
             <DialogDescription>Assign a group label for disk rotation.</DialogDescription>
           </DialogHeader>
@@ -2703,6 +2683,9 @@ export const HomeDiskManager = () => {
             </div>
           </div>
           <DialogFooter>
+            <Button variant="outline" onClick={() => setGroupDialogDisk(null)}>
+              Cancel
+            </Button>
             <Button
               variant="default"
               onClick={() => {
@@ -2714,21 +2697,21 @@ export const HomeDiskManager = () => {
             >
               {groupName.trim() ? "Create & assign" : "Clear group"}
             </Button>
-            <Button variant="ghost" onClick={() => setGroupDialogDisk(null)}>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(renameDialogDisk)} onOpenChange={(open) => !open && setRenameDialogDisk(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Rename disk</DialogTitle>
             <DialogDescription>Update the display name for this disk.</DialogDescription>
           </DialogHeader>
           <Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
           <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameDialogDisk(null)}>
+              Cancel
+            </Button>
             <Button
               variant="default"
               onClick={() => {
@@ -2739,24 +2722,24 @@ export const HomeDiskManager = () => {
             >
               Save
             </Button>
-            <Button variant="ghost" onClick={() => setRenameDialogDisk(null)}>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(deleteDialogDisk)} onOpenChange={(open) => !open && setDeleteDialogDisk(null)}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Remove disk?</DialogTitle>
             <DialogDescription>
               This removes the disk from your collection. The original file is not deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogDisk(null)} data-open-focus>
+              Cancel
+            </Button>
             <Button
-              variant="outline"
+              variant="destructive"
               onClick={() => {
                 if (!deleteDialogDisk) return;
                 void handleDeleteDisk(deleteDialogDisk);
@@ -2765,16 +2748,13 @@ export const HomeDiskManager = () => {
             >
               Remove
             </Button>
-            <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)} data-open-focus>
-              Cancel
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Remove selected disks?</DialogTitle>
             <DialogDescription>
               {selectedCount
@@ -2783,11 +2763,11 @@ export const HomeDiskManager = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
-              Remove
-            </Button>
-            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} data-open-focus>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)} data-open-focus>
               Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
+              Remove
             </Button>
           </DialogFooter>
         </DialogContent>

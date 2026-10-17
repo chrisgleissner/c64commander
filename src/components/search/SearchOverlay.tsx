@@ -19,7 +19,13 @@ import { useSearchResults, useRequirementContext, entrySubtitle, entryTitle } fr
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { useSearchTier2 } from "@/hooks/useSearchTier2";
 import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
-import { SKIP_ATTR, isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
+import {
+  SEARCH_OVERLAY_ATTR,
+  SKIP_ATTR,
+  isDeviceBackKey,
+  resolveInputProfile,
+  resolveSemanticAction,
+} from "@/lib/input";
 import { t } from "@/lib/i18n";
 import { resolveSearchHandler } from "@/lib/search/handlers";
 import { recordPickedEntry, recordRecentQuery, loadRecentQueries } from "@/lib/search/history";
@@ -372,9 +378,12 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
       aria-modal="true"
       aria-label={t("search.title", "Search")}
       data-testid={SEARCH_OVERLAY_TESTID}
-      {...{ [SKIP_ATTR]: "true" }}
+      {...{ [SKIP_ATTR]: "true", [SEARCH_OVERLAY_ATTR]: "true" }}
       className="fixed inset-0 z-[70] flex flex-col bg-background"
-      style={{ paddingTop: "var(--safe-area-inset-top, 0px)", paddingBottom: "var(--safe-area-inset-bottom, 0px)" }}
+      style={{
+        paddingTop: "var(--safe-area-inset-top, 0px)",
+        paddingBottom: "calc(var(--safe-area-inset-bottom, 0px) + var(--keypad-guidance-reserved-height, 0px))",
+      }}
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
@@ -394,7 +403,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
           }}
           onKeyDown={onKeyDown}
           data-testid="search-input"
-          className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none"
         />
         <Button
           variant="ghost"

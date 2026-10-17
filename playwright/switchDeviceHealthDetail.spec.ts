@@ -157,6 +157,30 @@ test.describe("Switch device health detail on a 320x427 screen", () => {
     if (settledAt !== -1) expect(readMemoryAt, events.join(", ")).toBeLessThan(settledAt);
   });
 
+  test("each saved device card states its status once, with its badge beside the name, without cutting anything off @layout", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const sheet = await openSwitcher(page);
+    for (const id of ["device-reachable", "device-silent"]) {
+      const row = sheet.getByTestId(`switch-device-row-${id}`);
+      const badge = sheet.getByTestId(`switch-device-status-${id}`);
+      const measured = await row.evaluate((element) => {
+        const clipped = Array.from(element.querySelectorAll("*")).filter(
+          (node) => node instanceof HTMLElement && node.scrollWidth > node.clientWidth + 1 && node.clientWidth > 0,
+        );
+        const pill = element.querySelector(".rounded-full.border");
+        return { height: element.getBoundingClientRect().height, clipped: clipped.length, pill: pill !== null };
+      });
+      expect(measured.clipped, `${id}: nothing in the card is cut off`).toBe(0);
+      expect(measured.pill, `${id}: no separate status pill`).toBe(false);
+      expect(measured.height, `${id}: card height`).toBeLessThanOrEqual(125);
+      const [rowBox, badgeBox] = await Promise.all([row.boundingBox(), badge.boundingBox()]);
+      expect(badgeBox!.y - rowBox!.y, `${id}: the badge sits beside the name or directly under it`).toBeLessThan(70);
+    }
+  });
+
   test("explains skipped checks behind a 44 px info button instead of repeating technical text", async ({ page }) => {
     test.setTimeout(90_000);
     await page.goto("/", { waitUntil: "domcontentloaded" });

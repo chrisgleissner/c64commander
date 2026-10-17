@@ -17,6 +17,7 @@ import { createNumericSliderDomain, useDeviceBoundSlider } from "@/hooks/useDevi
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useSidData } from "../hooks/useSidData";
 import { SidCard } from "../SidCard";
+import { SidAudioReadState } from "./SidAudioReadState";
 import { silenceSidTargets } from "@/lib/sid/sidSilence";
 import { buildSidEnablement } from "@/lib/config/sidVolumeControl";
 import { AUDIO_MIXER_MASTER_VOLUME_ITEM } from "@/lib/config/configItems";
@@ -86,7 +87,7 @@ function MasterVolumeControl({
   return (
     <div className="rounded-panel border border-border bg-card p-3 space-y-2" data-testid="home-sid-master-volume">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">Master Vol</p>
+        <p className="text-xs font-semibold text-primary">Master Vol</p>
         <span className="text-xs text-muted-foreground" data-testid="home-sid-master-volume-value">
           {formatValue(slider.sliderValue)}
         </span>
@@ -130,6 +131,8 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
 
   const {
     sidAudioMissing,
+    sidAudioStatus,
+    refetchSidAudio,
     sidControlEntries,
     sidSilenceTargets,
     sidAddressingCategory,
@@ -275,6 +278,8 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
     );
   });
 
+  const sidReady = sidAudioStatus !== "loading" && sidAudioStatus !== "error";
+
   return (
     <CollapsibleSection
       scope="home"
@@ -299,7 +304,10 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
             Not available on this device. Its audio settings are on the Config page.
           </p>
         ) : null}
-        {hasMasterVolume ? (
+        {sidAudioStatus === "loading" || sidAudioStatus === "error" ? (
+          <SidAudioReadState status={sidAudioStatus} onRetry={refetchSidAudio} />
+        ) : null}
+        {sidReady && hasMasterVolume ? (
           <MasterVolumeControl
             isConnected={isConnected}
             value={masterVolumeSliderValue}
@@ -311,7 +319,7 @@ export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachi
             formatValue={masterVolumeValueFormatter}
           />
         ) : null}
-        {sidControlEntries.map((entry) => {
+        {(sidReady ? sidControlEntries : []).map((entry) => {
           const addressKey = buildConfigKey("SID Addressing", entry.addressItem);
 
           const statusValue = sidStatusMap.get(entry.key);

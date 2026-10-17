@@ -27,6 +27,8 @@ export interface SenderFilterDiagnostics {
   rejectedPackets: number;
   lastRejectedSource?: string;
   expectedSource?: string;
+  /** Distinct source addresses seen on the stream's group; more than one is a second sender. */
+  senders?: string[];
 }
 
 /** A stream arriving from an address the filter is not accepting. */

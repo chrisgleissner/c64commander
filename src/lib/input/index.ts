@@ -79,6 +79,7 @@ export { FocusDiscoveryEngine } from "./focusDiscovery";
 
 export type { FocusKind, GuidanceState, GuidanceLabels } from "./guidance";
 export {
+  CENTER_VERB_ATTR,
   CONTEXT_MENU_SELECTOR,
   MAX_BREADCRUMB_SEGMENTS,
   resolveGuidanceLabels,
@@ -89,8 +90,10 @@ export {
   findContextMenuTrigger,
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
+  resolveSearchOverlayLabels,
   resolveSoftKeyMenuOverlayLabels,
   resolveSoftKeyMenuPanelLabels,
+  SEARCH_OVERLAY_ATTR,
   SOFT_KEY_MENU_ATTR,
   SOFT_KEY_MENU_PANEL_ATTR,
 } from "./guidance";

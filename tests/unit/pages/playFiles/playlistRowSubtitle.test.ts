@@ -22,8 +22,8 @@ const item = (overrides: Partial<PlaylistItem> & { songNr?: number }): PlaylistI
   }) as unknown as PlaylistItem;
 
 describe("buildPlaylistRowSubtitle", () => {
-  it("shows the path for an ordinary single-tune row", () => {
-    expect(buildPlaylistRowSubtitle(item({}))).toBe("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
+  it("shows no second line for an ordinary single-tune row: the file name is on the details menu", () => {
+    expect(buildPlaylistRowSubtitle(item({}))).toBeNull();
   });
 
   it("shows which tune it is once a file has been expanded", () => {
@@ -37,11 +37,8 @@ describe("buildPlaylistRowSubtitle", () => {
     );
   });
 
-  it("keeps the path on a single-tune file even when a song number is set", () => {
-    // "Tune 1 of 1" distinguishes nothing, so the path remains the more useful line.
-    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 1 }))).toBe(
-      "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
-    );
+  it("treats a single-tune file as an ordinary row even when a song number is set", () => {
+    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 1 }))).toBeNull();
   });
 
   it("ignores a blank title rather than leaving a dangling separator", () => {

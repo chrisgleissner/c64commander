@@ -19,6 +19,15 @@ import { buildSidControlEntries } from "@/lib/config/sidDetails";
 import { buildConfigKey } from "../utils/HomeConfigUtils";
 import { buildSidSilenceTargets } from "@/lib/sid/sidSilence";
 
+export type SidAudioStatus = "loading" | "error" | "ready";
+
+// Controls built from a category that has not answered would be empty selects, so Audio renders only once all four have data.
+export function resolveSidAudioStatus(reads: readonly { data: unknown; isError?: boolean }[]): SidAudioStatus {
+  const unanswered = reads.filter((read) => read.data === undefined);
+  if (unanswered.length === 0) return "ready";
+  return unanswered.some((read) => read.isError) ? "error" : "loading";
+}
+
 export function useSidData(isConnected: boolean, configOverrides: Record<string, string | number>) {
   // An Ultimate-II+ lists no Audio Mixer: its SIDs are emulated under Audio Output Settings instead.
   // The previous device's list stands in while this one's loads, so it is not taken as this device's answer.
@@ -26,30 +35,43 @@ export function useSidData(isConnected: boolean, configOverrides: Record<string,
   const sidAudioMissing =
     isConnected && !isPlaceholderData && Boolean(categoryList) && !categoryList?.categories?.includes("Audio Mixer");
   const readSidAudio = isConnected && !sidAudioMissing;
-  const { data: sidSocketsCategory } = useC64ConfigItems(
+  const sidSocketsQuery = useC64ConfigItems(
     "SID Sockets Configuration",
     [...HOME_SID_SOCKET_ITEMS],
     readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: ultiSidCategory } = useC64ConfigItems(
+  const ultiSidQuery = useC64ConfigItems(
     "UltiSID Configuration",
     [...HOME_ULTISID_ITEMS],
     readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: sidAddressingCategory } = useC64ConfigItems(
+  const sidAddressingQuery = useC64ConfigItems(
     "SID Addressing",
     [...HOME_SID_ADDRESSING_ITEMS],
     readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: audioMixerCategory } = useC64ConfigItems(
+  const audioMixerQuery = useC64ConfigItems(
     "Audio Mixer",
     [...SID_AUDIO_ITEMS],
     readSidAudio,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
+  const sidSocketsCategory = sidSocketsQuery.data;
+  const ultiSidCategory = ultiSidQuery.data;
+  const sidAddressingCategory = sidAddressingQuery.data;
+  const audioMixerCategory = audioMixerQuery.data;
+
+  const sidAudioReads = [sidSocketsQuery, ultiSidQuery, sidAddressingQuery, audioMixerQuery];
+  const sidAudioStatus: SidAudioStatus =
+    sidAudioMissing || !isConnected ? "ready" : resolveSidAudioStatus(sidAudioReads);
+  const refetchSidAudio = () => {
+    sidAudioReads.forEach((read) => {
+      if (read.data === undefined) void read.refetch();
+    });
+  };
 
   const sidControlEntries = useMemo(() => {
     if (sidAudioMissing) return [];
@@ -71,6 +93,8 @@ export function useSidData(isConnected: boolean, configOverrides: Record<string,
 
   return {
     sidAudioMissing,
+    sidAudioStatus,
+    refetchSidAudio,
     sidSocketsCategory,
     ultiSidCategory,
     sidAddressingCategory,

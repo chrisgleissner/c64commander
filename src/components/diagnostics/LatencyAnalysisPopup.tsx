@@ -8,6 +8,7 @@
 
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AppSheet,
   AppSheetBody,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/diagnostics/latencyTracker";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMemo, useState } from "react";
+import { formatTickMinute, uniqueMinuteTicks } from "@/lib/diagnostics/latencyTicks";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { BarChart2, Filter } from "lucide-react";
 
@@ -101,8 +103,8 @@ type FilterToggleProps = {
 };
 
 const FilterToggle = ({ label, checked, onChange }: FilterToggleProps) => (
-  <label className="flex items-center gap-2 text-sm">
-    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4" />
+  <label className="flex min-h-11 items-center gap-2 text-sm">
+    <Checkbox checked={checked} onCheckedChange={(next) => onChange(next === true)} />
     <span>{label}</span>
   </label>
 );
@@ -176,7 +178,7 @@ const FilterEditorSurface = ({
         <AppSheetBody className="px-4 py-4">
           <div className="space-y-5">
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+              <p className="text-xs font-semibold text-muted-foreground">Scope</p>
               <FilterToggle
                 label="All call types"
                 checked={filters.allCallTypes}
@@ -191,7 +193,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
+              <p className="text-xs font-semibold text-muted-foreground">Transport</p>
               {TRANSPORT_FAMILIES.map((transport) => (
                 <FilterToggle
                   key={transport}
@@ -203,7 +205,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
+              <p className="text-xs font-semibold text-muted-foreground">Endpoint</p>
               {ENDPOINT_CLASSES.map((endpoint) => (
                 <FilterToggle
                   key={endpoint}
@@ -264,13 +266,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
 
   return (
     <>
-      <AnalyticPopup
-        open={open}
-        onClose={onClose}
-        title="Latency"
-        contentClassName={isEmpty ? "h-auto max-h-[min(72dvh,38rem)]" : undefined}
-        data-testid="latency-analysis-popup"
-      >
+      <AnalyticPopup open={open} onClose={onClose} title="Latency" data-testid="latency-analysis-popup">
         <div className="flex min-h-0 flex-1 flex-col p-4">
           <div
             className="flex items-center gap-2 overflow-hidden rounded-full border border-border/70 bg-card px-3 py-2 text-xs"
@@ -350,10 +346,8 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                   <XAxis
                     dataKey="time"
-                    tickFormatter={(v: string) => {
-                      const d = new Date(v);
-                      return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-                    }}
+                    ticks={uniqueMinuteTicks(timePoints.map((point) => point.time))}
+                    tickFormatter={formatTickMinute}
                     tick={{ fontSize: CHART_TEXT_PX }}
                     className="text-muted-foreground"
                   />

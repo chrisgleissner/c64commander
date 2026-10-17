@@ -62,6 +62,7 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useOnOpen } from "@/hooks/useOnOpen";
 import { DEMO_MODE_CONNECTION_LABEL } from "@/lib/connection/demoModeLabels";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
+import { humanizeActionName } from "@/lib/diagnostics/actionTitle";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
@@ -297,7 +298,7 @@ const getActionPrimaryEffect = (summary: ActionSummary) => {
 
 const buildActionTitle = (summary: ActionSummary) => {
   const primary = getActionPrimaryEffect(summary);
-  if (!primary) return summary.actionName;
+  if (!primary) return humanizeActionName(summary.actionName);
   if (primary.type === "TELNET") {
     return primary.menuPath
       ? `${primary.actionLabel} · ${primary.menuPath[0]} → ${primary.menuPath[1]}`
@@ -704,7 +705,7 @@ const FilterEditorSurface = ({
           <div className="space-y-3">
             {showDeviceFilter ? (
               <section className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
+                <p className="text-xs font-semibold text-muted-foreground">Device</p>
                 <div className="flex flex-wrap gap-1.5">
                   <FilterToggleChip
                     label="All devices"
@@ -730,7 +731,7 @@ const FilterEditorSurface = ({
             ) : null}
 
             <section className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
+              <p className="text-xs font-semibold text-muted-foreground">Activity types</p>
               <div className="flex flex-wrap gap-1.5">
                 {EVIDENCE_ORDER.map((type) => (
                   <FilterToggleChip
@@ -744,12 +745,12 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+              <p className="text-xs font-semibold text-muted-foreground">Contributor</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
                   <FilterToggleChip
                     key={option}
-                    label={option}
+                    label={option === "TELNET" ? "Telnet" : option}
                     checked={contributor === option}
                     onChange={(checked) => {
                       if (!checked) return;
@@ -761,7 +762,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+              <p className="text-xs font-semibold text-muted-foreground">Severity</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
                   <FilterToggleChip
@@ -778,7 +779,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5 border-t border-border/70 pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <p className="text-xs font-semibold text-muted-foreground">Quick filters</p>
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   type="button"
@@ -1515,7 +1516,7 @@ export function DiagnosticsDialog({
 
   const overflowPanelContent = (
     <>
-      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
+      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-muted-foreground">Views</p>
       <button
         type="button"
         className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
@@ -1581,7 +1582,7 @@ export function DiagnosticsDialog({
         }}
         data-testid="open-key-explorer-screen"
       >
-        Key Explorer
+        Key explorer
       </button>
       <button
         type="button"
@@ -1669,7 +1670,7 @@ export function DiagnosticsDialog({
             </button>
           </AlertDialogTrigger>
           <AlertDialogContent surface="confirmation">
-            <AlertDialogHeader>
+            <AlertDialogHeader hideClose>
               <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
               <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
             </AlertDialogHeader>
@@ -1723,7 +1724,7 @@ export function DiagnosticsDialog({
     >
       {profile === "compact" ? (
         <div
-          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-elev-2"
+          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] scroll-pb-[9.5rem] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-elev-2"
           style={
             overflowPanelTop === null
               ? undefined
@@ -1756,7 +1757,7 @@ export function DiagnosticsDialog({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 opacity-70"
+                  className="h-11 w-11 p-0 opacity-70"
                   // Keep the trigger clickable while the menu's DismissableLayer disables outside
                   // pointer events, so a repeat tap routes to onClick and toggles the menu shut.
                   style={overflowOpen ? { pointerEvents: "auto" } : undefined}
@@ -1907,9 +1908,6 @@ export function DiagnosticsDialog({
             <section className="mt-2 shrink-0" data-testid="evidence-panel">
               <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
-              </p>
-              <p className="mb-2 text-xs text-muted-foreground" data-testid="activity-kinds-line">
-                Problems, actions, logs, and traces across App, REST, FTP, and Telnet
               </p>
               <div
                 className="max-h-72 space-y-1.5 overflow-y-auto"

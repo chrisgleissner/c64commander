@@ -7,7 +7,6 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
   armTimed,
   describeSleepTimer,
@@ -85,23 +84,20 @@ export const SleepTimerControl = ({ mode, onChange, nowMs, isPlaying }: SleepTim
     <div className="space-y-2" data-testid="sleep-timer">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-xs text-muted-foreground">Sleep timer</p>
-        {/* Always stated, never implied by a highlighted button alone: playback stopping on its own
-            is otherwise indistinguishable from playback breaking. */}
-        <p
-          className={cn("text-xs tabular-nums", armed ? "font-medium text-foreground" : "text-muted-foreground")}
-          data-testid="sleep-timer-state"
-        >
-          {describeSleepTimer(mode, nowMs)}
-        </p>
+        {armed ? (
+          <p className="text-xs font-medium tabular-nums text-foreground" data-testid="sleep-timer-state">
+            {describeSleepTimer(mode, nowMs)}
+          </p>
+        ) : null}
       </div>
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sleep timer">
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6" role="group" aria-label="Sleep timer">
         {options.map((option) => (
           <Button
             key={option.key}
             type="button"
             size="sm"
             variant={option.active ? "default" : "outline"}
-            className="h-8 px-2.5 text-xs"
+            className="h-8 px-2 text-xs"
             aria-pressed={option.active}
             aria-label={option.name}
             disabled={option.disabled ?? false}

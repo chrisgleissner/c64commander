@@ -390,9 +390,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-header")).toBeVisible();
     expect(screen.getByTestId("evidence-panel")).toBeVisible();
     expect(screen.getByTestId("evidence-heading")).toHaveTextContent("Activity");
-    expect(screen.getByTestId("activity-kinds-line")).toHaveTextContent(
-      "Problems, actions, logs, and traces across App, REST, FTP, and Telnet",
-    );
+    expect(screen.queryByTestId("activity-kinds-line")).toBeNull();
     expect(screen.getByTestId("filters-collapsed-bar")).toBeVisible();
     expect(screen.queryByText(/in view/i)).toBeNull();
     expect(screen.queryByTestId("filters-editor-surface")).toBeNull();
@@ -465,7 +463,7 @@ describe("DiagnosticsDialog", () => {
     });
 
     fireEvent.click(screen.getByTestId("open-filters-editor"));
-    expect(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "TELNET" })).toBeVisible();
+    expect(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "Telnet" })).toBeVisible();
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("Save Debug Log");
     expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/ago/i);
   });
@@ -1025,6 +1023,7 @@ describe("DiagnosticsDialog", () => {
     const panel = screen.getByTestId("diagnostics-overflow-panel");
     expect(panel.className).toContain("fixed");
     expect(panel.className).toContain("inset-x-4");
+    expect(panel.className).toContain("scroll-pb-[9.5rem]");
     expect(panel).toHaveTextContent("Health history");
   });
 
@@ -1623,7 +1622,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("evidence-detail-trace-trace-ftp-list")).toHaveTextContent('"requestPayload"');
     expect(screen.getByTestId("evidence-detail-trace-trace-ftp-list")).toHaveTextContent('"responsePayload"');
 
-    fireEvent.click(within(contributorSection).getByRole("button", { name: "TELNET" }));
+    fireEvent.click(within(contributorSection).getByRole("button", { name: "Telnet" }));
 
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("Health check TELNET probe");
     expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("FTP LIST /");
@@ -1660,5 +1659,34 @@ describe("DiagnosticsDialog", () => {
 
     expect(screen.queryByTestId("evidence-row-action-health-check")).toBeNull();
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("No matching activity.");
+  });
+
+  it("titles an activity row without effects by what was tapped and keeps the raw name in its details", () => {
+    setViewportWidth(600);
+    const now = Date.now();
+
+    renderDialog({
+      errorLogs: [],
+      logs: [],
+      traceEvents: [],
+      actionSummaries: [
+        {
+          correlationId: "toggle-action",
+          actionName: "click settings-section-toggle-diagnostics",
+          origin: "user" as const,
+          originalOrigin: "user" as const,
+          startTimestamp: new Date(now).toISOString(),
+          endTimestamp: new Date(now + 5).toISOString(),
+          durationMs: 5,
+          outcome: "success" as const,
+          startRelativeMs: 0,
+          effects: [],
+        },
+      ],
+    });
+
+    const row = screen.getByTestId("evidence-row-action-toggle-action");
+    expect(row).toHaveTextContent("Tapped settings section diagnostics");
+    expect(row).toHaveTextContent("click settings-section-toggle-diagnostics");
   });
 });
