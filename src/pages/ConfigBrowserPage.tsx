@@ -19,7 +19,7 @@ import {
   useC64SetConfig,
   useC64Connection,
   useConnectionRoutingEpoch,
-  VISIBLE_C64_QUERY_OPTIONS,
+  CONFIG_BROWSER_C64_QUERY_OPTIONS,
 } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
@@ -139,7 +139,7 @@ function configListItemsEqual(a: ConfigListItem[], b: ConfigListItem[]): boolean
 const CONFIG_CATEGORY_FOCUS_ORDER_BASE = 100;
 const CONFIG_CATEGORY_FOCUS_ORDER_STEP = 10;
 const CONFIG_BROWSER_QUERY_OPTIONS = {
-  ...VISIBLE_C64_QUERY_OPTIONS,
+  ...CONFIG_BROWSER_C64_QUERY_OPTIONS,
   timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS,
 };
 
@@ -237,12 +237,6 @@ const CategorySection = memo(function CategorySection({
   // out-of-band device change reconciles instead of being masked (BUG-033).
   const resyncPendingRef = useRef(false);
   const soloSnapshotKey = "c64u_audio_mixer_solo_snapshot";
-
-  useEffect(() => {
-    if (isOpen) {
-      void refetch();
-    }
-  }, [isOpen, refetch]);
 
   useEffect(() => {
     onOpenChange(isOpen);

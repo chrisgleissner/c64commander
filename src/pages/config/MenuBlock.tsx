@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from "react";
-import { useC64Category, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
+import { useC64Category, CONFIG_BROWSER_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import type { AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
 import { BACKGROUND_REQUEST_TIMEOUT_MS } from "@/lib/c64api";
 import type { ConfigCategory, ConfigResponse } from "@/lib/c64api";
@@ -16,7 +16,7 @@ import { ConfigLeafRow } from "./ConfigLeafRow";
 import { useStagedConfigRows } from "./stagedConfigRows";
 import { DHCP_STATIC_FIELDS, type MenuBlockSpec } from "./menuBlocks";
 
-const BLOCK_QUERY_OPTIONS = { ...VISIBLE_C64_QUERY_OPTIONS, timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS };
+const BLOCK_QUERY_OPTIONS = { ...CONFIG_BROWSER_C64_QUERY_OPTIONS, timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS };
 
 const readCategoryItems = (data: ConfigResponse | undefined, category: string) => {
   if (!data) return {} as Record<string, ReturnType<typeof normalizeConfigItem>>;

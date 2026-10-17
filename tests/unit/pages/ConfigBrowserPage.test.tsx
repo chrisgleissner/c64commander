@@ -83,6 +83,7 @@ vi.mock("@/components/UnifiedHealthBadge", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  CONFIG_BROWSER_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: false },
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",

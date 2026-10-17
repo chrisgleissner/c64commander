@@ -50,6 +50,14 @@ export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
   refetchOnMount: "always",
 };
 
+export const CONFIG_READ_STALE_TIME_MS = 300_000;
+
+export const CONFIG_BROWSER_C64_QUERY_OPTIONS: C64QueryOptions = {
+  intent: "user",
+  refetchOnMount: false,
+  staleTime: CONFIG_READ_STALE_TIME_MS,
+};
+
 export const CONFIG_RETRY_DELAY_MS = (attempt: number) => Math.min(1000 * 2 ** attempt, 8000);
 const HEALTH_CHECK_INTERVAL_MS = 60_000;
 const BACKGROUND_QUERY_PREFIXES = [
@@ -401,7 +409,7 @@ export function useC64Categories(options: C64QueryOptions = {}) {
       return api.getCategories({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
     enabled: queryActive && connectionActive,
-    staleTime: 60000,
+    staleTime: options.staleTime ?? 60000,
     refetchOnMount: options.refetchOnMount,
     placeholderData: (previousData) => previousData,
   });

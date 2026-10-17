@@ -51,6 +51,7 @@ const categoryData = { Big: Object.fromEntries(itemNames.map((name) => [name, "O
 
 vi.mock("@/hooks/useC64Connection", () => ({
   VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
+  CONFIG_BROWSER_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: false },
   useC64Connection: () => ({ status: { isConnected: true }, runtimeBaseUrl: "http://c64u" }),
   useConnectionRoutingEpoch: () => 0,
   useC64Categories: () => ({ data: { categories: ["Big"] }, isLoading: false, isError: false, refetch: vi.fn() }),

@@ -107,6 +107,7 @@ vi.mock("@/hooks/useC64Connection", () => {
   };
   return {
     VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
+    CONFIG_BROWSER_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: false },
     useC64Connection: () =>
       memo("connection", () => ({
         status: { isConnected: true, deviceInfo: { product: "C64 Ultimate", firmware_version: "1.1.0", errors: [] } },
