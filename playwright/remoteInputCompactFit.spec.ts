@@ -143,7 +143,9 @@ test.describe("Remote Input sheet on the compact display profile", () => {
           id: el.getAttribute("data-testid") ?? "",
           px: Math.min(
             ...Array.from(el.querySelectorAll("span"))
-              .filter((span) => (span.textContent ?? "").trim().length > 0 && span.getAttribute("aria-hidden") !== "true")
+              .filter(
+                (span) => (span.textContent ?? "").trim().length > 0 && span.getAttribute("aria-hidden") !== "true",
+              )
               .map((span) => parseFloat(getComputedStyle(span).fontSize)),
           ),
         })),

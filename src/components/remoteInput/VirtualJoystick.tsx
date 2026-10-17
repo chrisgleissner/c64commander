@@ -79,6 +79,7 @@ const BASE_FIRE_PX = 92;
 const ACTION_ZONE_GAP_PX = 16;
 const ACTION_ZONE_PADDING_PX = 8;
 const PORT_CHOICE_HEIGHT_PX = 44;
+const PORT_FIRE_STACK_GAP_PX = 4;
 const PORT_GROUP_MIN_WIDTH_PX = 144;
 const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
 // Game mode anchors the movement control and FIRE near the bottom edge. Kept low so that with
@@ -159,7 +160,9 @@ export const VirtualJoystick = ({
       });
   const controlPx = fitted.controlPx;
   const thumbPx = Math.round(Math.max(40, controlPx * 0.36));
-  const firePx = portBesideFire ? Math.min(fitted.firePx, controlPx - PORT_CHOICE_HEIGHT_PX - 4) : fitted.firePx;
+  const firePx = portBesideFire
+    ? Math.min(fitted.firePx, controlPx - PORT_CHOICE_HEIGHT_PX - PORT_FIRE_STACK_GAP_PX)
+    : fitted.firePx;
   // Game mode: the action controls are absolute (edge-anchored) so they don't size their container.
   // Reserve exactly their height here — the zone is shrink-0 at this height — so the controls are
   // fully contained and the Live View picture (a flex sibling above) fits ABOVE them, never hidden
@@ -314,6 +317,12 @@ export const VirtualJoystick = ({
         releaseAllEpoch={releaseAllEpoch}
       />
     );
+
+  const fireStackGapPx = immersive
+    ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX
+    : portBesideFire
+      ? PORT_FIRE_STACK_GAP_PX
+      : ACTION_CONTROL_STACK_GAP_PX;
 
   const fireButton = (
     <Button
@@ -478,7 +487,7 @@ export const VirtualJoystick = ({
           <div
             className={cn("flex flex-col items-center", portBesideFire && "justify-between self-stretch")}
             style={{
-              gap: immersive ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX : portBesideFire ? 4 : ACTION_CONTROL_STACK_GAP_PX,
+              gap: fireStackGapPx,
             }}
           >
             {portBesideFire ? portToggle : null}
