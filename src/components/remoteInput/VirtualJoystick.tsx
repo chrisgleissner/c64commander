@@ -299,7 +299,7 @@ export const VirtualJoystick = ({
     >
       {/* HARD16-008: the same horizontal Switch + label pattern as the Port
           toggle, so the two read as siblings (the card + rate slider stay). */}
-      <label className="flex items-center gap-2 text-sm font-semibold">
+      <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
         <Switch
           checked={autofireEnabled}
           onCheckedChange={onAutofireEnabledChange}
@@ -327,7 +327,7 @@ export const VirtualJoystick = ({
   );
 
   const portToggle = (
-    <label className="flex items-center gap-2 text-sm" data-testid="remote-input-port-toggle">
+    <label className="flex min-h-11 items-center gap-2 text-sm" data-testid="remote-input-port-toggle">
       <Switch
         checked={port === 2}
         onCheckedChange={(checked) => onSetPort(checked ? 2 : 1)}
