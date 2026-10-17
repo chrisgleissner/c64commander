@@ -11,6 +11,7 @@ import { addLog } from "@/lib/logging";
 
 export type SidRadioNotice =
   | "no-radio-for-tune"
+  | "no-radio-for-tune-in-style"
   | "no-radio"
   | "no-radio-for-style"
   | "no-hvsc"
@@ -23,6 +24,7 @@ export type SidRadioNotice =
 
 export const SID_RADIO_NOTICE_TEXT: Record<SidRadioNotice, string> = {
   "no-radio-for-tune": "No radio for this tune yet — try a style or your likes.",
+  "no-radio-for-tune-in-style": "No tunes like this one match that mood — try All moods or another mood.",
   "no-radio": "No radio available yet — like a few tunes to seed one.",
   "no-radio-for-style": "No tunes found for this style — try another style or your likes.",
   "no-hvsc": "No HVSC music is installed yet. Install HVSC, then any station will play.",

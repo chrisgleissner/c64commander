@@ -579,7 +579,7 @@ describe("useHomeConfigRefresh", () => {
 
     await advance(HOME_CONFIG_REFRESH_TIMEOUT_MS - HOME_CONFIG_REFRESH_INTERVAL_MS / 2);
     expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
+      "info",
       "Home config refresh timed out; releasing the single-flight slot",
       expect.objectContaining({ timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS }),
     );
@@ -614,6 +614,7 @@ describe("useHomeConfigRefresh", () => {
     expect(requestTimesSeconds).toEqual([10, 30, 70, 130, 190]);
     const failureLogs = addLogMock.mock.calls.filter(([, message]) => message === "Home config refresh failed");
     expect(failureLogs.map(([, , detail]) => detail.nextIntervalMs)).toEqual([20_000, 40_000, 60_000, 60_000, 60_000]);
+    expect(failureLogs.map(([level]) => level)).toEqual(["info", "warn", "warn", "warn", "warn"]);
 
     fakeApi.wildcard = null;
     await advance(HOME_CONFIG_REFRESH_INTERVAL_MS * 6);

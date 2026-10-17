@@ -79,6 +79,7 @@ export { FocusDiscoveryEngine } from "./focusDiscovery";
 
 export type { FocusKind, GuidanceState, GuidanceLabels } from "./guidance";
 export {
+  CENTER_VERB_ATTR,
   CONTEXT_MENU_SELECTOR,
   MAX_BREADCRUMB_SEGMENTS,
   resolveGuidanceLabels,

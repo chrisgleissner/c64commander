@@ -89,6 +89,7 @@ export function NewDiskDialog({
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
   const [deviceFolder, setDeviceFolder] = useState<string | null>(null);
+  const [foldersUnavailable, setFoldersUnavailable] = useState(false);
   const initialFolder = defaultFolder ?? deviceFolder ?? "";
   const [chosenFolder, setChosenFolder] = useState<string | null>(null);
   const folder = chosenFolder ?? initialFolder;
@@ -104,11 +105,13 @@ export function NewDiskDialog({
     if (!open || defaultFolder !== undefined) return undefined;
     let cancelled = false;
     setDeviceFolder(null);
+    setFoldersUnavailable(false);
     listStorageRoots()
       .then((roots) => {
         if (!cancelled) setDeviceFolder(pickNewDiskFolder(roots));
       })
       .catch((err) => {
+        if (!cancelled) setFoldersUnavailable(true);
         addLog("warn", "New Disk: could not list the device's storage folders", {
           error: (err as Error).message,
           stack: (err as Error).stack,
@@ -139,6 +142,8 @@ export function NewDiskDialog({
       return (err as Error).message;
     }
   }, [args, name]);
+
+  const lookingUpFolder = defaultFolder === undefined && deviceFolder === null && !foldersUnavailable;
 
   const reset = () => {
     setKind("d64");
@@ -182,7 +187,7 @@ export function NewDiskDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent surface="confirmation">
+      <DialogContent surface="confirmation" className="flex flex-col gap-0 overflow-hidden">
         <DialogHeader hideClose>
           <DialogTitle className="flex items-center gap-2">
             <HardDriveDownload className="h-5 w-5" aria-hidden />
@@ -191,7 +196,7 @@ export function NewDiskDialog({
           <DialogDescription>Create a formatted blank image on the device, then mount it.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3" data-testid="new-disk-body">
           <div className="space-y-2">
             <Label htmlFor="new-disk-type">Type</Label>
             <Select value={kind} onValueChange={(value) => setKind(value as CreateDiskKind)}>
@@ -259,7 +264,7 @@ export function NewDiskDialog({
               data-testid="new-disk-folder"
               data-t9-mode="hostname"
               value={folder}
-              placeholder="/USB0"
+              placeholder={lookingUpFolder ? "Looking up device storage…" : "/USB0"}
               onChange={(event) => setChosenFolder(event.target.value)}
               autoComplete="off"
             />
@@ -275,7 +280,7 @@ export function NewDiskDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t border-border pt-2">
           <Button
             variant="outline"
             onClick={() => {

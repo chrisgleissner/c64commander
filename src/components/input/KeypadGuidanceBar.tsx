@@ -36,6 +36,7 @@ import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
   accessibleLabelFor,
   guidanceLabelFor,
+  CENTER_VERB_ATTR,
   classifyFocusKind,
   getInputModality,
   hasContextMenu,
@@ -77,15 +78,16 @@ const buildGuidanceState = (
   // OK on a card with a single control presses that control, so the bar names what it does.
   const children = current && isGroup ? focus.enabledChildrenOf(current.id) : [];
   const onlyControl = children.length === 1 && !focus.hasEnabledChildren(children[0].id) ? children[0] : null;
-  const currentKind = onlyControl
-    ? classifyFocusKind(engine.elementForId(onlyControl.id), false)
-    : classifyFocusKind(currentElement, isGroup);
+  const kindElement = onlyControl ? engine.elementForId(onlyControl.id) : currentElement;
+  const currentKind = classifyFocusKind(kindElement, onlyControl ? false : isGroup);
+  const centerVerb = kindElement?.getAttribute(CENTER_VERB_ATTR) ?? null;
 
   return {
     enabled,
     modality: getInputModality(),
     hasCurrent: current !== null,
     currentKind,
+    centerVerb,
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),

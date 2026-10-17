@@ -579,6 +579,44 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByRole("progressbar", { name: "Playback progress" })).toBeInTheDocument();
   });
 
+  describe("the seek bar on the keypad", () => {
+    const renderSeekBar = (onSeekToFraction = vi.fn()) => {
+      render(
+        <PlaybackControlsCard
+          {...buildProps({
+            hasCurrentItem: true,
+            progressPercent: 50,
+            seekDurationMs: 100_000,
+            onSeekToFraction,
+          })}
+        />,
+      );
+      return { onSeekToFraction, bar: screen.getByTestId("playback-progress-seek") };
+    };
+
+    it("moves five seconds on a Left or Right press and fifteen on a repeat", () => {
+      const { onSeekToFraction, bar } = renderSeekBar();
+
+      fireEvent.keyDown(bar, { key: "ArrowRight" });
+      fireEvent.keyDown(bar, { key: "ArrowLeft" });
+      fireEvent.keyDown(bar, { key: "ArrowRight", repeat: true });
+
+      expect(onSeekToFraction.mock.calls.map(([fraction]) => Math.round(fraction * 1000) / 10)).toEqual([55, 45, 65]);
+    });
+
+    it("keeps Up and Down for the focus ring", () => {
+      const { onSeekToFraction, bar } = renderSeekBar();
+      fireEvent.keyDown(bar, { key: "ArrowDown" });
+      expect(onSeekToFraction).not.toHaveBeenCalled();
+    });
+
+    it("keeps Left and Right away from the focus ring and names OK as Seek", () => {
+      const { bar } = renderSeekBar();
+      expect(bar).toHaveAttribute("data-key-nav-horizontal");
+      expect(bar).toHaveAttribute("data-key-nav-verb", "Seek");
+    });
+  });
+
   it("omits the fill once the whole tune is rendered, since there is nothing left to report", () => {
     render(
       <PlaybackControlsCard

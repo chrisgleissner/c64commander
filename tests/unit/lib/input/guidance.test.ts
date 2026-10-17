@@ -96,6 +96,10 @@ describe("resolveGuidanceLabels — center / OK key", () => {
     expect(resolveGuidanceLabels(state({ currentKind: kind })).center).toBe(label);
   });
 
+  it("names a control's own verb in place of its kind's label", () => {
+    expect(resolveGuidanceLabels(state({ currentKind: "button", centerVerb: "Seek" })).center).toBe("Seek");
+  });
+
   it("offers no OK action on a status, such as a page that is still loading", () => {
     expect(resolveGuidanceLabels(state({ currentKind: "status" })).center).toBeNull();
   });
