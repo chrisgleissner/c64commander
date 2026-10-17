@@ -126,7 +126,7 @@ describe("usePlaylistListItems", () => {
     listItems.forEach((entry) => {
       const sourceInfo = entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source");
       expect(sourceInfo).toBeUndefined();
-      expect(entry.subtitle).not.toContain("/");
+      expect(entry.subtitle ?? "").not.toContain("/");
       const { unmount } = render(<>{entry.meta}</>);
       expect(screen.getByTestId("file-origin-icon")).toBeInTheDocument();
       unmount();

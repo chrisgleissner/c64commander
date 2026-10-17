@@ -23,7 +23,13 @@ const item = (overrides: Partial<PlaylistItem> & { songNr?: number }): PlaylistI
 
 describe("buildPlaylistRowSubtitle", () => {
   it("shows the file name, not the folder, when the title is something else", () => {
-    expect(buildPlaylistRowSubtitle(item({}), "Commando")).toBe("Commando.sid");
+    expect(buildPlaylistRowSubtitle(item({}), "Commando (title screen)")).toBe("Commando.sid");
+  });
+
+  it("shows no second line when the title is the file name without its extension or with spaces for underscores", () => {
+    expect(buildPlaylistRowSubtitle(item({}), "Commando")).toBeNull();
+    const underscored = item({ path: "/A/SYS64738_Days.sid" });
+    expect(buildPlaylistRowSubtitle(underscored, "SYS64738 Days")).toBeNull();
   });
 
   it("shows no second line when the title already is the file name", () => {
@@ -42,7 +48,9 @@ describe("buildPlaylistRowSubtitle", () => {
   });
 
   it("treats a single-tune file as an ordinary row even when a song number is set", () => {
-    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 1 }), "Commando")).toBe("Commando.sid");
+    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 1 }), "Commando (title screen)")).toBe(
+      "Commando.sid",
+    );
   });
 
   it("ignores a blank title rather than leaving a dangling separator", () => {

@@ -19,13 +19,22 @@ const fileNameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
  * exception: nineteen rows then carry the same name, and the two facts that tell them apart are
  * which tune this is and what STIL calls it where it has a name. The full path is on the details menu.
  */
+const nameKey = (value: string) =>
+  value
+    .replace(/\.[A-Za-z0-9]{1,4}$/, "")
+    .replace(/[_\s]+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const sameNameIgnoringExtension = (fileName: string, title: string) => nameKey(fileName) === nameKey(title);
+
 export const buildPlaylistRowSubtitle = (item: PlaylistItem, displayTitle: string): string | null => {
   const songNr = item.request.songNr;
   const tuneCount = item.subsongCount ?? 0;
   const isOneOfMany = typeof songNr === "number" && songNr > 0 && tuneCount > 1;
   if (!isOneOfMany) {
     const fileName = fileNameOf(item.path);
-    return fileName === displayTitle ? null : fileName;
+    return sameNameIgnoringExtension(fileName, displayTitle) ? null : fileName;
   }
 
   const segments = [`Tune ${songNr} of ${tuneCount}`];
