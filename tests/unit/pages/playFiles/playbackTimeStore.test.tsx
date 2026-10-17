@@ -82,7 +82,18 @@ describe("describePlaybackTime", () => {
       remainingLabel: "-1:30",
       totalLabel: "5:00",
       remainingTotalLabel: "4:30",
+      playlistCountersShown: true,
     });
+  });
+
+  it("hides the playlist counters when the playlist is only the current tune", () => {
+    const single = { ...inputs, playlistTotalsAt: () => ({ total: 120_000, remaining: 90_000 }) };
+    expect(describePlaybackTime(single, 30_000).playlistCountersShown).toBe(false);
+  });
+
+  it("hides the playlist counters when the playlist length is unknown", () => {
+    const unknown = { ...inputs, playlistTotalsAt: () => ({}) };
+    expect(describePlaybackTime(unknown, 30_000).playlistCountersShown).toBe(false);
   });
 
   it("shows no remaining time for a tune of unknown length", () => {

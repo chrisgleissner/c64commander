@@ -33,7 +33,12 @@ import {
 } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { TuneDetails } from "./TuneDetails";
-import { readShownPlaybackTime, ShownPlaybackProgress, ShownPlaybackTime } from "./ShownPlaybackTime";
+import {
+  readShownPlaybackTime,
+  ShownPlaybackCounters,
+  ShownPlaybackProgress,
+  ShownPlaybackTime,
+} from "./ShownPlaybackTime";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -805,17 +810,11 @@ export const PlaybackControlsCard = ({
               longer fit one row, and the break landed inside the duration itself: an em dash is a
               break opportunity, so "—:—" was drawn as "—:" then "—". Stacking them keeps each
               reading as one value. */}
-          <div
+          <ShownPlaybackCounters
+            timeline={timeline}
             className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
             data-testid="playback-counters"
-          >
-            <span className="whitespace-nowrap">
-              Total: <ShownPlaybackTime timeline={timeline} field="totalLabel" />
-            </span>
-            <span className="whitespace-nowrap">
-              Remaining: <ShownPlaybackTime timeline={timeline} field="remainingTotalLabel" />
-            </span>
-          </div>
+          />
         </div>
         {volumeControls}
         {/* The whole order row goes while a station drives the queue — removed, not greyed.
