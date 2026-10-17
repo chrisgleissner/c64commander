@@ -439,7 +439,7 @@ not-connected / empty / single-device).
   **Details** and **Config** blocks (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then
   Attached, Status, Origin, Candidates, Overrides, and Location when a config is attached). Each detail row
   (`action-list-item-sheet-detail-row`) is one keypad stop, so a block taller than the sheet is read row by row.
-  The sheet opens on its first action. Back closes the sheet and returns focus and the selection to ⋮. In the menu
+  The sheet opens on the play button, or on its first action when play is unavailable. Back closes the sheet and returns focus and the selection to ⋮. In the menu
   the actions come first and the detail rows follow as menu items the arrow keys stop on; OK on one does nothing and
   leaves the menu open.
 - Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
