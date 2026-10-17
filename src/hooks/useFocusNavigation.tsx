@@ -73,6 +73,7 @@ import {
 } from "@/lib/input/eventTargets";
 import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { holdsRingOnLoadingPage } from "@/lib/input/pageLoadingStop";
 import { DefaultStopFollower } from "@/lib/input/defaultStopFollower";
 import {
   dispatchDeviceBackKey,
@@ -739,6 +740,12 @@ export const FocusNavigationProvider = ({
         activeElement !== ringElementFor(controller.focus.current()?.id ?? "") &&
         !(getInputModality() === "key-navigation" && engineRef.current?.isRingStop(activeElement))
       ) {
+        return;
+      }
+      if (holdsRingOnLoadingPage(controller.focus.current()?.id, action)) {
+        setInputModality("key-navigation");
+        notifyRing();
+        event.preventDefault();
         return;
       }
       // Seamless pointer → key hand-off: start the move from where the user is.
