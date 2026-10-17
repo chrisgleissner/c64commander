@@ -1003,7 +1003,7 @@ jobs:
           # ThreadSanitizer cannot map its shadow memory with the 32 bits of mmap randomisation
           # the runner kernel uses by default.
           sudo sysctl -w vm.mmap_rnd_bits=28
-          python3 -m pip install numpy
+          python3 -m pip install numpy scipy
           python="$(command -v python3)"
           cd android
           ./gradlew :app:testLibSidplayEzNative :app:checkSidRendererEquivalence -PsidEnginesPython="$python"

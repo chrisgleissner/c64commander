@@ -22,20 +22,36 @@ import sys
 import wave
 
 import numpy as np
-from scipy.signal import butter, sosfiltfilt
+from scipy.signal import butter, sosfilt, sosfilt_zi
 
 SPEAKER_BAND = (300.0, 6000.0)
 
 
-def per_second_levels_db(samples: np.ndarray, rate: int) -> np.ndarray:
+BLOCK_SECONDS = 60
+
+
+def stream_levels_db(blocks, rate: int) -> np.ndarray:
+    """Per-second band-limited level of consecutive sample blocks, each a whole number of seconds long.
+
+    The filter state carries across blocks, so a four-hour recording is processed without holding it
+    in memory. Causal filtering is enough here: only the level per second matters, not the phase.
+    """
     sos = butter(4, SPEAKER_BAND, btype="band", fs=rate, output="sos")
-    band = sosfiltfilt(sos, samples)
-    seconds = len(band) // rate
-    levels = np.empty(seconds)
-    for index in range(seconds):
-        chunk = band[index * rate : (index + 1) * rate]
-        levels[index] = 20 * np.log10(np.sqrt(np.mean(chunk**2)) + 1e-9)
-    return levels
+    state = None
+    levels: list[float] = []
+    for block in blocks:
+        if state is None:
+            state = sosfilt_zi(sos) * block[0]
+        band, state = sosfilt(sos, block, zi=state)
+        for index in range(len(band) // rate):
+            chunk = band[index * rate : (index + 1) * rate]
+            levels.append(20 * np.log10(np.sqrt(np.mean(chunk**2)) + 1e-9))
+    return np.array(levels)
+
+
+def per_second_levels_db(samples: np.ndarray, rate: int) -> np.ndarray:
+    step = BLOCK_SECONDS * rate
+    return stream_levels_db((samples[start : start + step] for start in range(0, len(samples), step)), rate)
 
 
 def silent_runs(levels: np.ndarray, below_db: float, min_seconds: int) -> list[tuple[int, int]]:
@@ -56,16 +72,28 @@ def silent_runs(levels: np.ndarray, below_db: float, min_seconds: int) -> list[t
     return runs
 
 
-def read_wav(path: str) -> tuple[np.ndarray, int]:
-    with wave.open(path) as wav:
-        if wav.getsampwidth() != 2:
-            raise ValueError(f"{path}: expected 16-bit samples, got {8 * wav.getsampwidth()}-bit")
-        rate = wav.getframerate()
-        channels = wav.getnchannels()
-        data = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16).astype(float) / 32768.0
-    if channels > 1:
-        data = data.reshape(-1, channels).mean(axis=1)
-    return data, rate
+def read_wav_blocks(path: str):
+    """Yield (rate, blocks): mono float blocks of BLOCK_SECONDS seconds, the last one possibly shorter."""
+    wav = wave.open(path)
+    if wav.getsampwidth() != 2:
+        width = 8 * wav.getsampwidth()
+        wav.close()
+        raise ValueError(f"{path}: expected 16-bit samples, got {width}-bit")
+    rate = wav.getframerate()
+    channels = wav.getnchannels()
+
+    def blocks():
+        try:
+            while True:
+                raw = wav.readframes(BLOCK_SECONDS * rate)
+                if not raw:
+                    return
+                data = np.frombuffer(raw, dtype=np.int16).astype(float) / 32768.0
+                yield data.reshape(-1, channels).mean(axis=1) if channels > 1 else data
+        finally:
+            wav.close()
+
+    return rate, blocks()
 
 
 def main() -> int:
@@ -76,8 +104,8 @@ def main() -> int:
     parser.add_argument("--start-offset", type=int, default=0, help="seconds to ignore at the start (before playback began)")
     args = parser.parse_args()
 
-    samples, rate = read_wav(args.file)
-    levels = per_second_levels_db(samples, rate)
+    rate, blocks = read_wav_blocks(args.file)
+    levels = stream_levels_db(blocks, rate)
     runs = [(start, length) for start, length in silent_runs(levels, args.below_db, args.min_seconds) if start >= args.start_offset]
     print(f"{args.file}: {len(levels)} s, p90 {np.percentile(levels, 90):.1f} dBFS, {len(runs)} silent run(s) of {args.min_seconds} s or more")
     for start, length in runs:
