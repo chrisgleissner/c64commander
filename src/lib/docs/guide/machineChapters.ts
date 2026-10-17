@@ -14,7 +14,7 @@ import type { GuideBlock, GuideChapter, GuideContext } from "@/lib/docs/guide/ty
 export const diskChapter = ({ variantId, flags }: GuideContext): GuideChapter => ({
   id: "disks",
   title: "Mount and run a disk",
-  navLabel: "Disks",
+  navLabel: "Mount a disk",
   icon: Disc,
   blocks: [
     {
@@ -209,7 +209,7 @@ export const liveViewChapter = ({ variantId }: GuideContext): GuideChapter => ({
 export const configChapter = (): GuideChapter => ({
   id: "config",
   title: "Change a setting in Config",
-  navLabel: "Config",
+  navLabel: "Change a setting",
   icon: Sliders,
   blocks: [
     {

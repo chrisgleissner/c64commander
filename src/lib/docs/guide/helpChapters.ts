@@ -64,7 +64,7 @@ export const gettingStartedChapter = ({ variantId, flags }: GuideContext): Guide
 export const devicesChapter = ({ variantId }: GuideContext): GuideChapter => ({
   id: "devices",
   title: "Connect, switch and add devices",
-  navLabel: "Devices",
+  navLabel: "Connect devices",
   icon: MonitorSmartphone,
   blocks: [
     {
