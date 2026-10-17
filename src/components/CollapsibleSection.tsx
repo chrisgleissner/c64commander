@@ -481,7 +481,7 @@ export const CollapsibleSection = ({
             </span>
           </button>
           {stackActions || !actions ? null : (
-            <div ref={fitRefs.actions} className="flex shrink-0 items-center">
+            <div ref={fitRefs.actions} className="flex shrink-0 items-center py-1">
               {actions}
             </div>
           )}

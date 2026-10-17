@@ -373,6 +373,26 @@ describe("CollapsibleSection", () => {
     expect(screen.getByTestId("test-section-a")).toHaveAttribute("data-section-label", "LED Strip");
   });
 
+  it("keeps a margin above and below actions so a full-height button does not touch the card edge", () => {
+    render(
+      <CollapsibleSection
+        scope="test"
+        id="drives"
+        title="Drives"
+        icon={Radio}
+        actions={
+          <button type="button" data-testid="home-drives-reset">
+            Reset
+          </button>
+        }
+      >
+        <p>Drive A</p>
+      </CollapsibleSection>,
+    );
+
+    expect(screen.getByTestId("home-drives-reset").parentElement).toHaveClass("py-1");
+  });
+
   it("renders actions beside the toggle, reachable while the section is closed", () => {
     const onReset = vi.fn();
     render(
