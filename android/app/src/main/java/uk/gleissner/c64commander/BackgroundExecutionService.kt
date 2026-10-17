@@ -422,6 +422,7 @@ class BackgroundExecutionService : Service() {
     private fun updatePlaybackStateInternal(paused: Boolean) {
         val wasStale = livenessStale
         livenessStale = false
+        if (wasStale) mediaSession?.setSessionActivity(null)
         liveness.onHeartbeat(SystemClock.elapsedRealtime())
         if (paused == isPausedState && !wasStale) return
         isPausedState = paused
@@ -468,8 +469,7 @@ class BackgroundExecutionService : Service() {
 
     /**
      * Nothing can play without the web layer, so the lock screen must stop saying it does. The wake
-     * lock goes too, since there is nothing to keep awake, and the grace period starts so the
-     * notification does not outlive its usefulness.
+     * lock goes too, and the grace period starts so the notification does not outlive its usefulness.
      */
     private fun markLivenessStale() {
         livenessStale = true

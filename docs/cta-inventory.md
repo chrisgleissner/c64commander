@@ -1564,7 +1564,7 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 
 **Archive source** (`ArchiveSelectionView`) — search-first rather than folder-first.
 
-- About this archive — button — `archive-about-toggle` — opens the source, host and the licence
+- About this archive — button — `archive-about-toggle` — opens the source, host and the license
   sentence (`archive-legal-notice`); closed by default, so the sheet footer holds only Cancel and
   Add
 - Search — button — `archive-search-button` — disabled until the composed query has at

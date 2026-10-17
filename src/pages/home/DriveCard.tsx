@@ -127,6 +127,7 @@ export function DriveCard({
   const shownPath = loading ? LOADING_LABEL : (mountedPath ?? pathValue);
   const [detailsOpen, setDetailsOpen] = React.useState(defaultOpen);
   const detailsId = `home-drive-details-${testIdSuffix}`;
+  const summaryColorClass = statusSeverity === "INFO" ? "" : getDiagnosticsColorClassForDisplaySeverity(statusSeverity);
   const summaryLine = buildDriveSummaryLine({
     name,
     busId: busIdValue,
@@ -148,14 +149,22 @@ export function DriveCard({
           <button
             type="button"
             onClick={onOpenDisks}
-            className="min-h-11 min-w-0 flex-1 break-words text-left text-sm font-medium leading-tight hover:underline line-clamp-2"
+            className={cn(
+              "min-h-11 min-w-0 flex-1 break-words text-left text-sm font-medium leading-tight hover:underline line-clamp-2",
+              summaryColorClass,
+            )}
             data-testid={`home-drive-link-${testIdSuffix}`}
             aria-label={[name, ...summaryLine.split(SUMMARY_SEPARATOR).slice(1)].join(", ")}
           >
             {summaryLine}
           </button>
         ) : (
-          <span className="min-w-0 flex-1 break-words py-3 text-sm font-medium leading-tight line-clamp-2">
+          <span
+            className={cn(
+              "min-w-0 flex-1 break-words py-3 text-sm font-medium leading-tight line-clamp-2",
+              summaryColorClass,
+            )}
+          >
             {summaryLine}
           </span>
         )}
@@ -297,7 +306,7 @@ export function DriveCard({
             </div>
           </div>
 
-          {/* Row 3: Status (always shown) */}
+          {/* Row 3: Status */}
           <div className="flex items-center gap-2 text-xs">
             <span className="text-muted-foreground whitespace-nowrap">Status</span>
             <button

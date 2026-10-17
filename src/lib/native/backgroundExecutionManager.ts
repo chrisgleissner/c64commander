@@ -125,8 +125,10 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
     addLog("error", "Background execution start failed", buildFailureDetails(error, logContext));
     throw buildOperationError("start", error);
   }
-  keepPageAwake(true);
-  startHeartbeat();
+  if (!publishedPaused) {
+    keepPageAwake(true);
+    startHeartbeat();
+  }
   // The service is new and carries no metadata, and an update the page issued while this start was
   // in flight was dropped by the native side (metadata must never start a service on its own). So
   // this publish is not deduped against that dropped attempt.

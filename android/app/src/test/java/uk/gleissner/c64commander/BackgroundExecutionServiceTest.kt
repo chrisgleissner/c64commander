@@ -45,6 +45,14 @@ import java.util.concurrent.TimeUnit
 class RecordingMediaSessionShadow {
     companion object {
         @JvmStatic var lastMetadata: MediaMetadata? = null
+        @JvmStatic var lastSessionActivity: android.app.PendingIntent? = null
+        @JvmStatic var sessionActivityCalls = 0
+    }
+
+    @Implementation
+    protected fun setSessionActivity(intent: android.app.PendingIntent?) {
+        lastSessionActivity = intent
+        sessionActivityCalls++
     }
 
     @Implementation
@@ -77,6 +85,8 @@ class BackgroundExecutionServiceTest {
     @Before
     fun setUp() {
         RecordingMediaSessionShadow.lastMetadata = null
+        RecordingMediaSessionShadow.lastSessionActivity = null
+        RecordingMediaSessionShadow.sessionActivityCalls = 0
         setIsRunning(false)
         setRunningInstance(null)
         setCompanionField("commandGeneration", 0L)
@@ -854,6 +864,25 @@ class BackgroundExecutionServiceTest {
                 Shadows.shadowOf(service).isStoppedBySelf,
         )
         assertTrue(BackgroundExecutionService.isRunning)
+    }
+
+    @Test
+    fun recoveringFromAStaleSessionClearsTheResumeActivityFromTheMediaSession() {
+        controller.create()
+        startService()
+        setPlaybackState(paused = false, startId = 2)
+        ShadowLooper.shadowMainLooper().idleFor(PlaybackLiveness.HEARTBEAT_TIMEOUT_MS * 2, TimeUnit.MILLISECONDS)
+        assertNotNull(
+                "A silent web layer must leave the resume activity on the session",
+                RecordingMediaSessionShadow.lastSessionActivity,
+        )
+
+        setPlaybackState(paused = false, startId = 3)
+
+        assertNull(
+                "A returning web layer must take the resume request off the session",
+                RecordingMediaSessionShadow.lastSessionActivity,
+        )
     }
 
     @Test

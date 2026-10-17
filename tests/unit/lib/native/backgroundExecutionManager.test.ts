@@ -95,6 +95,19 @@ describe("backgroundExecutionManager", () => {
     }
   });
 
+  it("keeps the page free to sleep when playback was paused while the start was still in flight", async () => {
+    let finishStart: () => void = () => undefined;
+    mocks.start.mockReturnValue(new Promise<void>((resolve) => (finishStart = resolve)));
+    mocks.setPlaybackState.mockResolvedValue(undefined);
+    const starting = startBackgroundExecution({});
+    await setBackgroundExecutionPaused(true, {});
+    keepAlive.start.mockClear();
+    finishStart();
+    await starting;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(keepAlive.start).not.toHaveBeenCalled();
+  });
+
   it("HARD27-040: publishes the tune a start was issued for, which was named before the session existed", async () => {
     // The page names the track in the commit before the one that starts playback, so a manager
     // that only published while a session was live would leave the lock screen naming the app.

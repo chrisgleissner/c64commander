@@ -2033,7 +2033,7 @@ export const HomeDiskManager = () => {
                       <FocusableDiskSwitch
                         focusId={`disks-drive-${key}-status-toggle`}
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 0)}
-                        checked={powerEnabled}
+                        checked={powerEnabled ?? false}
                         onCheckedChange={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                         disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                         data-testid={`drive-status-toggle-${key}`}

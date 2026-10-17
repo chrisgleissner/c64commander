@@ -105,6 +105,14 @@ describe("DriveCard", () => {
     expect(screen.queryByText("No disk mounted")).toBeNull();
   });
 
+  it("colors the closed card's summary line by the drive's severity so a failing drive is visible without opening it", () => {
+    const summaryClass = () => screen.getByTestId("home-drive-row-d8").querySelector("span.flex-1")!.className;
+    const { rerender } = render(<DriveCard {...defaultProps} defaultOpen={false} statusSeverity="ERROR" />);
+    const failing = summaryClass();
+    rerender(<DriveCard {...defaultProps} defaultOpen={false} statusSeverity="INFO" />);
+    expect(summaryClass()).not.toBe(failing);
+  });
+
   it("draws one summary line that opens the Disks page", () => {
     const onOpenDisks = vi.fn();
     render(
