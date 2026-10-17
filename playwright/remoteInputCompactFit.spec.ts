@@ -11,9 +11,11 @@ import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
+import { installLiveViewStreamStub } from "./liveViewStreamStub";
 
 const { width: WIDTH, height: HEIGHT } = DISPLAY_PROFILE_VIEWPORTS.compact.viewport;
 const NAVIGATION_BAR_PX = 48;
+const WATCH_ON_BOTTOM_INSET_PX = 0;
 const MIN_TARGET_PX = 44;
 const MIN_TEXT_PX = 14;
 
@@ -25,11 +27,11 @@ const boxOf = async (page: Page, testId: string): Promise<Box> => {
   return box as Box;
 };
 
-const expectInsideViewport = (name: string, box: Box) => {
+const expectInsideViewport = (name: string, box: Box, navigationBarPx = NAVIGATION_BAR_PX) => {
   expect(box.x, `${name} left edge`).toBeGreaterThanOrEqual(-0.5);
   expect(box.y, `${name} top edge`).toBeGreaterThanOrEqual(-0.5);
   expect(box.x + box.width, `${name} right edge`).toBeLessThanOrEqual(WIDTH + 0.5);
-  expect(box.y + box.height, `${name} bottom edge`).toBeLessThanOrEqual(HEIGHT - NAVIGATION_BAR_PX + 0.5);
+  expect(box.y + box.height, `${name} bottom edge`).toBeLessThanOrEqual(HEIGHT - navigationBarPx + 0.5);
 };
 
 test.describe("Remote Input sheet on the compact display profile", () => {
@@ -40,14 +42,15 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
     await page.setViewportSize({ width: WIDTH, height: HEIGHT });
-    await page.addInitScript(() => {
+    const bottomInsetPx = testInfo.titlePath.includes("with Watch on") ? WATCH_ON_BOTTOM_INSET_PX : NAVIGATION_BAR_PX;
+    await page.addInitScript((bottom) => {
       document.addEventListener("DOMContentLoaded", () => {
         const style = document.createElement("style");
-        style.textContent =
-          ":root { --safe-area-inset-top: 30px !important; --safe-area-inset-bottom: 48px !important; }";
+        style.textContent = `:root { --safe-area-inset-top: 30px !important; --safe-area-inset-bottom: ${bottom}px !important; }`;
         document.head.append(style);
       });
-    });
+    }, bottomInsetPx);
+    await installLiveViewStreamStub(page);
     await page.goto("/");
     await page.getByTestId("home-machine-inline-openRemoteInput").first().click();
     await expect(page.getByTestId("remote-input-sheet")).toBeVisible();
@@ -153,5 +156,45 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     for (const face of faces.filter((entry) => Number.isFinite(entry.px))) {
       expect(face.px, `${face.id} label size`).toBeGreaterThanOrEqual(MIN_TEXT_PX);
     }
+  });
+  test.describe("with Watch on", () => {
+    const MAX_PREVIEW_PX = 80;
+    const MIN_KEY_SCROLLER_PX = 120;
+
+    const turnWatchOn = async (page: Page) => {
+      await page.getByTestId("remote-input-mirror-controls").getByTestId("av-video-toggle").click();
+      await expect(page.getByTestId("av-mirror-immersive")).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    };
+
+    test("joystick mode keeps the stick, FIRE and toolbar visible below a thin preview", async ({ page }) => {
+      await turnWatchOn(page);
+      const preview = await boxOf(page, "av-mirror-immersive");
+      expect(preview.height, "the preview is a thin strip").toBeLessThanOrEqual(MAX_PREVIEW_PX);
+      for (const id of [
+        "remote-input-mode-joystick",
+        "remote-input-panic-button",
+        "remote-input-stick-zone",
+        "remote-input-stick-thumb",
+        "remote-input-fire-button",
+        "remote-input-port-1",
+        "remote-input-port-2",
+      ]) {
+        expectInsideViewport(id, await boxOf(page, id), WATCH_ON_BOTTOM_INSET_PX);
+      }
+      const body = page.locator('[data-testid="remote-input-sheet"] [data-surface-body="true"]');
+      expect(await body.evaluate((el) => el.scrollTop), "the body has not scrolled").toBe(0);
+    });
+
+    test("keys mode leaves the keyboard at least three key rows of height above the footer", async ({ page }) => {
+      await turnWatchOn(page);
+      await page.getByTestId("remote-input-mode-type").click();
+      await page.waitForTimeout(500);
+      const scroller = await boxOf(page, "remote-input-keyboard-scroll");
+      const footer = await boxOf(page, "remote-input-mirror-controls");
+      expect(scroller.height, "the key scroller height").toBeGreaterThanOrEqual(MIN_KEY_SCROLLER_PX);
+      expect(scroller.y + scroller.height, "the scroller ends above the footer").toBeLessThanOrEqual(footer.y + 0.5);
+      expectInsideViewport("the footer", footer, WATCH_ON_BOTTOM_INSET_PX);
+    });
   });
 });

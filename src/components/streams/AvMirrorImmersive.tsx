@@ -65,6 +65,8 @@ export interface AvMirrorImmersiveProps {
   rotation?: DeviceRotation;
   /** Take all the height available instead of sizing to the frame's aspect. */
   fill?: boolean;
+  /** A thin glanceable preview: the control cluster is left out because it cannot fit. */
+  strip?: boolean;
   /**
    * What the app is asserting on the joystick right now, when the player is steering with the
    * app rather than with something plugged into the C64. Used only to break ties between
@@ -148,7 +150,7 @@ const haptic = () => {
  * using them is looking at the phone rather than at the game.
  */
 export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImmersiveProps>(function AvMirrorImmersive(
-  { session, onModeChange, rotation = 0, fill = false, heldJoystickInputs, className },
+  { session, onModeChange, rotation = 0, fill = false, strip = false, heldJoystickInputs, className },
   ref,
 ) {
   const { videoLive, video } = useAvMirror(session, { frameRate: true });
@@ -615,7 +617,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       )}
 
       {/* Auto-hiding control cluster. */}
-      {videoLive && (controlsVisible || adjust) && (
+      {videoLive && !strip && (controlsVisible || adjust) && (
         <div
           className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-media-scrim/55 p-1 backdrop-blur"
           data-testid="av-mirror-immersive-controls"

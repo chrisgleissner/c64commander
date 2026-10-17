@@ -727,6 +727,19 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(fireColumn).toContainElement(screen.getByTestId("remote-input-port-toggle"));
     });
 
+    it("shows the live preview as a thin strip on compact so the controls keep their room", () => {
+      mirrorState.videoState = "live";
+      renderSheetAtProfile("compact");
+      expect(screen.getByTestId("av-mirror-immersive")).toHaveClass("h-[10dvh]");
+      expect(screen.queryByTestId("av-mirror-immersive-controls")).toBeNull();
+    });
+
+    it("keeps the full-size preview with its controls on a standard display", () => {
+      mirrorState.videoState = "live";
+      renderSheetAtProfile("medium");
+      expect(screen.getByTestId("av-mirror-immersive")).not.toHaveClass("h-[10dvh]");
+    });
+
     it("keeps the text labels on Release all and Options on a standard display", () => {
       renderSheetAtProfile("medium");
       expect(screen.getByTestId("remote-input-panic-button")).toHaveTextContent("Release all");

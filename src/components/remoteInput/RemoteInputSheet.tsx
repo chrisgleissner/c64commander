@@ -154,6 +154,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const gameMode = joystickAvailable && session.outputMode === "joystick" && immersive;
   const foldJoystickOptions = isCompactDisplay && !gameMode;
   const iconOnlyToolbar = foldJoystickOptions;
+  const compactPreviewStrip = foldJoystickOptions && showMirrorScreen;
   // Longer than the mirror's own floating cluster: this is a whole toolbar the user asked
   // for, with Watch, Listen, the orientation control and the way out on it, and it is
   // re-armed by every interaction — so it stays while it is being used.
@@ -725,7 +726,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         <AppSheetBody
           className={cn(
             "flex flex-col gap-4",
-            iconOnlyToolbar && "gap-2",
+            iconOnlyToolbar && "gap-1",
             // The sheet itself clears the navigation bar in normal mode (see its className).
             showFooterActions && "pb-3",
           )}
@@ -739,9 +740,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 ref={mirrorRef}
                 onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
                 rotation={frameRotation}
-                fill={gameMode}
+                fill={gameMode || compactPreviewStrip}
+                strip={compactPreviewStrip}
                 heldJoystickInputs={session.heldJoystickInputs}
-                className={gameMode ? undefined : "mx-4"}
+                className={cn(!gameMode && "mx-4", compactPreviewStrip && "h-[10dvh] min-h-0 flex-none")}
               />
               {/* `#` puts RETURN, SPACE, the other quick keys and the Live View switches over
                   the bottom of the picture — the route to both that survives a handset with no
@@ -811,7 +813,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             )
           ) : (
             <TypeKeyboard
-              className="min-h-0 flex-1"
+              className={cn("min-h-0 flex-1", iconOnlyToolbar && "min-h-32")}
               onChar={session.sendChar}
               onKey={session.sendKeyboardInputs}
               onCursor={session.sendCursor}

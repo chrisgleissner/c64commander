@@ -264,6 +264,12 @@ describe("AvMirrorImmersive", () => {
     expect(screen.getByTestId("av-mirror-immersive-controls")).toBeInTheDocument();
   });
 
+  it("leaves the control cluster out of a thin preview strip but keeps the mode chip", () => {
+    render(<AvMirrorImmersive strip />);
+    expect(screen.queryByTestId("av-mirror-immersive-controls")).toBeNull();
+    expect(screen.getByTestId("av-mirror-mode-chip")).toBeInTheDocument();
+  });
+
   it("keeps the mode chip and the frame-rate readout on one status row", () => {
     mirror.video = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
     render(<AvMirrorImmersive />);
