@@ -134,18 +134,15 @@ const PagePosition = ({ pageIndex }: { pageIndex: number }) => {
 };
 
 /*
- * A kept page keeps its own scroll offset. Its position is still noted when it is left, while it is on screen, for
- * the rare rebuild of a kept page (Settings after a setting changed elsewhere), which then opens where it was left.
+ * A kept page keeps its own scroll offset. Its position is noted only when the page is torn down, for the rare
+ * rebuild of a kept page (Settings after a setting changed elsewhere), which then opens where it was left. Noting it
+ * on every tab switch measured the cards of a page that had just been hidden, which laid it out again: 80 to 120 ms.
  */
-const CachedPagePosition = ({ pageIndex, active }: { pageIndex: number; active: boolean }) => {
+const CachedPagePosition = ({ pageIndex }: { pageIndex: number }) => {
   useLayoutEffect(() => {
     restorePagePosition(pageIndex, slotFor(pageIndex));
+    return () => rememberPagePosition(pageIndex, slotFor(pageIndex));
   }, [pageIndex]);
-  const wasActive = useRef(active);
-  useLayoutEffect(() => {
-    if (wasActive.current && !active) rememberPagePosition(pageIndex, slotFor(pageIndex));
-    wasActive.current = active;
-  }, [active, pageIndex]);
   return null;
 };
 
@@ -182,11 +179,7 @@ export const PageSlotBody = React.memo(function PageSlotBody({
   return (
     <PageErrorBoundary active={isActive}>
       <Suspense fallback={<PageLoadingFallback />}>
-        {cached ? (
-          <CachedPagePosition pageIndex={pageIndex} active={isActive} />
-        ) : (
-          <PagePosition pageIndex={pageIndex} />
-        )}
+        {cached ? <CachedPagePosition pageIndex={pageIndex} /> : <PagePosition pageIndex={pageIndex} />}
         <ScreenActivityProvider active={isActive}>
           <LocationWhileActive active={isActive}>{page}</LocationWhileActive>
         </ScreenActivityProvider>

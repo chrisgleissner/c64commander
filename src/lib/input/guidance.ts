@@ -291,7 +291,7 @@ const tidyLabel = (raw: string): string => {
  * Key caps and hidden glyphs are lines of their own in a flex row and never the control's name:
  * the Quick menu's "6 Docs" entry read "6", and its close button read "×".
  */
-const renderedFirstLine = (element: Element): string | null => {
+const firstLineOf = (element: Element): string | null => {
   const rendered = element instanceof HTMLElement ? element.innerText : undefined;
   const text = typeof rendered === "string" ? rendered : element.textContent;
   const decorations = new Set(
@@ -301,6 +301,21 @@ const renderedFirstLine = (element: Element): string | null => {
   return (
     lines.find((line) => line.length > 0 && !decorations.has(line)) ?? lines.find((line) => line.length > 0) ?? null
   );
+};
+
+/*
+ * `innerText` lays the page out, and the bar asks for the selected control's name after every ring scan. A scan
+ * that finds the same text under the same element reuses the answer: 91 ms on the keypad phone for a tall card.
+ */
+const firstLineCache = new WeakMap<Element, { content: string; line: string | null }>();
+
+const renderedFirstLine = (element: Element): string | null => {
+  const content = `${element.ownerDocument.documentElement.dataset.displayProfile ?? ""}|${element.textContent ?? ""}`;
+  const cached = firstLineCache.get(element);
+  if (cached?.content === content) return cached.line;
+  const line = firstLineOf(element);
+  firstLineCache.set(element, { content, line });
+  return line;
 };
 
 const nonBlank = (value: string | null | undefined): string | null => (value && value.trim() ? value : null);

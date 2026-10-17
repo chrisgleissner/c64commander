@@ -211,6 +211,7 @@ const ItemDetailsSheet = ({
  */
 export const ActionListItemMenu = ({ item, testId, presentation }: ActionListItemMenuProps) => {
   const [open, setOpen] = useState(false);
+  const [sheetBuilt, setSheetBuilt] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   if (presentation === "sheet") {
@@ -228,6 +229,7 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
           disabled={item.disableActions}
           onClick={(event) => {
             event.stopPropagation();
+            setSheetBuilt(true);
             setOpen(true);
           }}
           id={testId}
@@ -235,7 +237,9 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
         >
           <MoreVertical className="h-4 w-4" />
         </Button>
-        <ItemDetailsSheet item={item} open={open} onOpenChange={setOpen} returnFocusTo={triggerRef} />
+        {sheetBuilt ? (
+          <ItemDetailsSheet item={item} open={open} onOpenChange={setOpen} returnFocusTo={triggerRef} />
+        ) : null}
       </>
     );
   }
