@@ -674,7 +674,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "multi.sid" })
+      .filter({ hasText: /^multi/i })
       .first()
       .getByRole("button", { name: "Play" })
       .click();

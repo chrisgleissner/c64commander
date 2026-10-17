@@ -122,13 +122,13 @@ const topRowTitle = (page: Page) =>
     const top = node.getBoundingClientRect().top;
     const rows = [...node.querySelectorAll("[data-row-id]")].filter((row) => row.querySelector("[data-row-title]"));
     const first = rows.find((row) => row.getBoundingClientRect().bottom > top + 1);
-    return first?.querySelector("[data-row-title]")?.textContent?.trim() ?? null;
+    return first?.querySelector("[data-row-title]")?.firstElementChild?.textContent?.trim() ?? null;
   });
 
 const focusedTitle = (page: Page) =>
   page.evaluate(() =>
     document.activeElement?.getAttribute("data-row-title") === "true"
-      ? (document.activeElement.textContent?.trim() ?? null)
+      ? (document.activeElement.firstElementChild?.textContent?.trim() ?? null)
       : null,
   );
 
@@ -137,7 +137,7 @@ const playingTitle = (page: Page) =>
     () =>
       document
         .querySelector('[data-virtuoso-scroller="true"] [data-playing="true"] [data-row-title]')
-        ?.textContent?.trim() ?? null,
+        ?.firstElementChild?.textContent?.trim() ?? null,
   );
 
 /**

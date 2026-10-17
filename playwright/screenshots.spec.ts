@@ -2955,7 +2955,7 @@ test.describe("App screenshots", () => {
     await page.goto("/play");
     await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
-    await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText("intro.sid");
+    await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText(/intro/i);
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "play/01-overview.png");

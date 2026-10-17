@@ -702,8 +702,8 @@ test.describe("Playback file browser", () => {
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await snap(page, testInfo, "local-playlist-ready");
 
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo2.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo2/i);
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
     await page.getByTestId("playlist-play").click();
@@ -845,7 +845,7 @@ test.describe("Playback file browser", () => {
     }
 
     // Verify list is populated
-    await expect(page.getByText("Track_0001.sid").first()).toBeVisible();
+    await expect(page.getByText(/Track.0001/i).first()).toBeVisible();
 
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     await expect
@@ -862,7 +862,7 @@ test.describe("Playback file browser", () => {
             node.scrollTop = node.scrollHeight;
           });
           return page
-            .getByText("Track_2700.sid")
+            .getByText(/Track.2700/i)
             .first()
             .isVisible()
             .catch(() => false);
@@ -910,13 +910,13 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "play-open");
 
     const list = page.getByTestId("playlist-list");
-    await expect(list).toContainText("Alpha.sid");
+    await expect(list).toContainText(/Alpha/);
 
     const filter = page.getByTestId("list-filter-input");
     await filter.fill("Beta");
     await snap(page, testInfo, "inline-filtered");
-    await expect(list).toContainText("Beta.sid");
-    await expect(list).not.toContainText("Alpha.sid");
+    await expect(list).toContainText(/Beta/);
+    await expect(list).not.toContainText(/Alpha/);
 
     await filter.fill("");
     await page.getByRole("button", { name: "View all" }).click();
@@ -926,8 +926,8 @@ test.describe("Playback file browser", () => {
     const viewAllFilter = page.getByTestId("view-all-filter-input");
     await viewAllFilter.fill("Gamma");
     await snap(page, testInfo, "view-all-filtered");
-    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText("Gamma.sid");
-    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText("Alpha.sid");
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText(/Gamma/);
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText(/Alpha/);
   });
 
   test('play add button uses "Add items" label and opens dialog', async ({
@@ -1105,7 +1105,7 @@ test.describe("Playback file browser", () => {
     ]);
 
     await page.goto("/play");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     const playButton = page.getByTestId("playlist-play");
     await playButton.click();
     await expect(playButton).toHaveAttribute("aria-label", "Stop");
@@ -1389,10 +1389,12 @@ test.describe("Playback file browser", () => {
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
     await expect(page.getByTestId("playback-current-track")).toContainText("Track-2");
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "true",
-    );
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^track.2/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "true");
 
     await page.waitForTimeout(2000);
     expect(server.sidplayRequests.length).toBe(2);
@@ -1560,26 +1562,34 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-1.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "true",
-    );
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "false",
-    );
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^track.1/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "true");
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^track.2/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "false");
 
     await page.getByTestId("playlist-next").click();
     await expect.poll(() => page.getByTestId("playlist-play").getAttribute("aria-label")).toBe("Play");
     await expect(page.getByText("Playback next failed", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-1.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "false",
-    );
-    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
-      "data-playing",
-      "false",
-    );
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^track.1/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "false");
+    await expect(
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^track.2/i })
+        .first(),
+    ).toHaveAttribute("data-playing", "false");
     await snap(page, testInfo, "playing-row-cleared-on-failure");
   });
 
@@ -1594,7 +1604,7 @@ test.describe("Playback file browser", () => {
     ]);
 
     await page.goto("/play");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     const playButton = page.getByTestId("playlist-play");
     await playButton.click();
     await expect(playButton).toHaveAttribute("aria-label", "Stop");
@@ -1606,7 +1616,7 @@ test.describe("Playback file browser", () => {
     await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
     const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
-      .getByText("demo.sid", { exact: false })
+      .getByText(/demo/i)
       .isVisible()
       .catch(() => false);
     if (!hasDemoAfter) {
@@ -1625,13 +1635,16 @@ test.describe("Playback file browser", () => {
         localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+      await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     }
     const playButtonAfter = page.getByTestId("playlist-play");
     const playLabelAfter = await playButtonAfter.getAttribute("aria-label");
     let playbackStarted = playLabelAfter === "Stop";
     if (!playbackStarted) {
-      const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
+      const demoRow = page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^demo\s?SID/i })
+        .first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
       }
@@ -1649,7 +1662,7 @@ test.describe("Playback file browser", () => {
     if (playbackStarted) {
       await expect(page.getByTestId("playback-current-track")).toContainText("Demo");
     } else {
-      await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+      await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     }
     await snap(page, testInfo, "playback-persists-navigation");
   });
@@ -1667,7 +1680,7 @@ test.describe("Playback file browser", () => {
     ]);
 
     await page.goto("/play");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     const playButton = page.getByTestId("playlist-play");
     const played = page.getByTestId("playback-elapsed");
     await playButton.click();
@@ -1687,7 +1700,7 @@ test.describe("Playback file browser", () => {
     await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
     const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
-      .getByText("demo.sid", { exact: false })
+      .getByText(/demo/i)
       .isVisible()
       .catch(() => false);
     if (!hasDemoAfter) {
@@ -1706,12 +1719,15 @@ test.describe("Playback file browser", () => {
         localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       });
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+      await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     }
     const playButtonAfter = page.getByTestId("playlist-play");
     const playLabelAfter = await playButtonAfter.textContent();
     if (!playLabelAfter || !playLabelAfter.toLowerCase().includes("stop")) {
-      const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
+      const demoRow = page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^demo\s?SID/i })
+        .first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
       }
@@ -1720,7 +1736,7 @@ test.describe("Playback file browser", () => {
         await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
       }
     }
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playback-persists-after-settings");
   });
 
@@ -1770,12 +1786,12 @@ test.describe("Playback file browser", () => {
 
     await page.goto("/play");
     const list = page.getByTestId("playlist-list");
-    await expect(list).toContainText("demo.sid");
+    await expect(list).toContainText(/demo\s?SID/i);
     await expect(list).toContainText("demo.prg");
 
     await page.getByTestId("list-filter-input").fill("demo.sid");
     await snap(page, testInfo, "playlist-filtered");
-    await expect(list).toContainText("demo.sid");
+    await expect(list).toContainText(/demo\s?SID/i);
     await expect(list).not.toContainText("demo.prg");
   });
 

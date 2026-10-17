@@ -380,7 +380,7 @@ test.describe("Now playing links on a phone", () => {
       await expect(page.getByRole("dialog")).toBeHidden();
       await activeSlot(page)
         .getByTestId("playlist-item")
-        .filter({ hasText: "composer-links.sid" })
+        .filter({ hasText: /^composer.links/i })
         .getByRole("button", { name: "Play" })
         .click();
 

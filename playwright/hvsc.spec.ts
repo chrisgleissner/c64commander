@@ -832,7 +832,7 @@ test.describe("HVSC Play page", () => {
     await addHvscDemoTrackToPlaylist(page);
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "10_Orbyte.sid" })
+      .filter({ hasText: /^10.Orbyte/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect(page.getByText("Playlist", { exact: true })).toBeVisible();
@@ -855,7 +855,7 @@ test.describe("HVSC Play page", () => {
     await addHvscDemoTrackToPlaylist(page);
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "10_Orbyte.sid" })
+      .filter({ hasText: /^10.Orbyte/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect(page.getByText("Playlist", { exact: true })).toBeVisible();
@@ -958,7 +958,7 @@ test.describe("HVSC Play page", () => {
     await addHvscDemoTrackToPlaylist(page);
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "10_Orbyte.sid" })
+      .filter({ hasText: /^10.Orbyte/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect(page.getByText("Playlist", { exact: true })).toBeVisible();
@@ -985,7 +985,7 @@ test.describe("HVSC Play page", () => {
     await snap(page, testInfo, "hvsc-list");
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "10_Orbyte.sid" })
+      .filter({ hasText: /^10.Orbyte/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect(page.getByText("Playlist", { exact: true })).toBeVisible();
@@ -1081,7 +1081,7 @@ test.describe("HVSC Play page", () => {
 
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "Multi_Track.sid" })
+      .filter({ hasText: /^Multi.Track/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", /Stop/i);

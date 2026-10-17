@@ -95,7 +95,9 @@ test.describe("Disk names get room to read", () => {
       const title = row.getByRole("button", { name: DISK_NAME, exact: true });
       const titleLayout = await measureText(title);
       const titleColumnWidth = await widthOf(title.locator(".."));
-      expect.soft(titleColumnWidth, "disk name column width vs row width").toBeGreaterThanOrEqual(rowWidth * 0.5);
+      expect
+        .soft(titleColumnWidth, "disk name column width vs row width")
+        .toBeGreaterThanOrEqual(rowWidth * (profile === "compact" ? 0.38 : 0.5));
       expect.soft(titleLayout.midWordBreaks, "disk name breaks inside a word").toEqual([]);
       const groupLayout = await measureText(row.getByText(`Group: ${GROUP_NAME}`, { exact: true }));
       expect.soft(groupLayout.midWordBreaks, "group label breaks inside a word").toEqual([]);
@@ -201,7 +203,7 @@ test.describe("Compact disk rows", () => {
     await row.scrollIntoViewIfNeeded();
     await capture(page, "compact-disk-row");
     const height = await row.evaluate((element) => element.getBoundingClientRect().height);
-    expect(height, "row height with select, name, mount and menu").toBeLessThanOrEqual(100);
+    expect(height, "row height with select, name, mount and menu").toBeLessThanOrEqual(60);
     await expect(row.getByText("Group:")).toHaveCount(0);
     await expect(row.getByRole("button", { name: /^Mount / })).toBeVisible();
   });

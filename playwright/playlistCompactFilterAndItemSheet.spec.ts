@@ -125,8 +125,12 @@ test.describe("Playlist filter and item actions on the smallest screen", () => {
       });
       return { height: box.height, right: box.right, text: element.textContent ?? "", controls };
     });
-    expect(measured.height, "row height (was 150 to 165 px)").toBeLessThanOrEqual(100);
+    expect(measured.height, "row height (was 150 to 165 px)").toBeLessThanOrEqual(60);
     expect(measured.text, "the folder is on the group header only").not.toContain("Long_Directory_Name");
+    expect(measured.text, "the file name is on the details menu only").not.toMatch(/\.sid/i);
+    const second = await active(page).getByTestId("playlist-item").nth(1).boundingBox();
+    const first = await row.boundingBox();
+    expect(second!.y - first!.y, "distance from one row to the next").toBeLessThanOrEqual(60);
     for (const control of measured.controls) {
       expect(control.width).toBeGreaterThanOrEqual(43.5);
       expect(control.height).toBeGreaterThanOrEqual(43.5);

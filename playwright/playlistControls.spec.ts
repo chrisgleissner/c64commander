@@ -163,7 +163,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(1);
     await expect(page.getByTestId("playlist-list")).toContainText("demo.d64");
-    await expect(page.getByTestId("playlist-list")).not.toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).not.toContainText(/demo\s?SID/i);
   });
 
   test("repeat mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -258,7 +258,7 @@ test.describe("Playlist controls and advanced features", () => {
     await clearTraces(page);
     await page
       .getByTestId("playlist-item")
-      .filter({ hasText: "multi.sid" })
+      .filter({ hasText: /^multi/i })
       .getByRole("button", { name: "Play" })
       .click();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore);
