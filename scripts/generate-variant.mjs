@@ -572,12 +572,32 @@ export const validateVariantConfig = (raw, { repoRoot = REPO_ROOT } = {}) => {
   };
 };
 
-export const parseVariantSource = (source, { repoRoot = REPO_ROOT } = {}) => {
+export const KEY_LABELS_FILE_ENV = "APP_KEY_LABELS_FILE";
+
+// A downstream build can relabel keys without editing variants.yaml: the file named by
+// APP_KEY_LABELS_FILE maps a variant id to key_labels entries that replace the ones in variants.yaml.
+const applyKeyLabelsFile = (raw, filePath) => {
+  const overlay = parseYamlFile(filePath, `${KEY_LABELS_FILE_ENV} file ${filePath}`);
+  requireMapping(overlay, `${KEY_LABELS_FILE_ENV} file ${filePath}`);
+  for (const [variantId, labels] of Object.entries(overlay)) {
+    const variant = raw?.variants?.[variantId];
+    if (!variant) {
+      fail(`${KEY_LABELS_FILE_ENV} file ${filePath} names unknown variant "${variantId}"`);
+    }
+    requireMapping(labels, `${KEY_LABELS_FILE_ENV} file ${filePath} ${variantId}`);
+    variant.runtime = { ...(variant.runtime ?? {}), key_labels: { ...(variant.runtime?.key_labels ?? {}), ...labels } };
+  }
+};
+
+export const parseVariantSource = (source, { repoRoot = REPO_ROOT, env = process.env } = {}) => {
   let raw;
   try {
     raw = yaml.load(source);
   } catch (error) {
     fail(`failed to parse variants/variants.yaml: ${error.message}`);
+  }
+  if (env[KEY_LABELS_FILE_ENV]) {
+    applyKeyLabelsFile(raw, env[KEY_LABELS_FILE_ENV]);
   }
   return validateVariantConfig(raw, { repoRoot });
 };

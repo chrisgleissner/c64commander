@@ -416,6 +416,29 @@ describe("generate-variant", () => {
       expect(config.variants.c64commander.runtime.keyLabels.leftSoft).toBe("Back key");
     });
 
+    it("lets the file named by APP_KEY_LABELS_FILE replace labels per variant, and validates them", () => {
+      const repoRoot = createTempDir("variant-config-");
+      writeRepoFixtures(repoRoot);
+      const overlayPath = path.join(repoRoot, "labels.yaml");
+      writeFileSync(overlayPath, "c64u-remote:\n  left_soft: Lower Left\n  delete_word: Erase\n");
+      const config = parseVariantSource(buildVariantsYaml({}), {
+        repoRoot,
+        env: { APP_KEY_LABELS_FILE: overlayPath },
+      }) as any;
+      expect(config.variants["c64u-remote"].runtime.keyLabels.leftSoft).toBe("Lower Left");
+      expect(config.variants["c64u-remote"].runtime.keyLabels.deleteWord).toBe("Erase");
+      expect(config.variants.c64commander.runtime.keyLabels.leftSoft).toBe("Back key");
+
+      writeFileSync(overlayPath, "nonesuch:\n  left_soft: X\n");
+      expect(() =>
+        parseVariantSource(buildVariantsYaml({}), { repoRoot, env: { APP_KEY_LABELS_FILE: overlayPath } }),
+      ).toThrow(/unknown variant "nonesuch"/);
+      writeFileSync(overlayPath, "c64u-remote:\n  left_soft: ''\n");
+      expect(() =>
+        parseVariantSource(buildVariantsYaml({}), { repoRoot, env: { APP_KEY_LABELS_FILE: overlayPath } }),
+      ).toThrow(/key_labels\.left_soft/);
+    });
+
     it("rejects a label name it does not recognise", () => {
       expect(() => parseWithKeyLabels(["middle_soft: Nope"])).toThrow(
         /key_labels contains unsupported key "middle_soft"/,
