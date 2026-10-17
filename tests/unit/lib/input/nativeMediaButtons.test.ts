@@ -100,6 +100,22 @@ describe("native media buttons", () => {
       cleanup();
     });
 
+    it("is acted on once when the app installs the handler again, as native hands the request over only once", async () => {
+      mocks.takeLaunchCommand.mockResolvedValueOnce({ command: "play" }).mockResolvedValue({ command: null });
+      const navigate = vi.fn();
+      const first = await installAndCaptureListener(navigate, () => "/");
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+      expect(transportCommandBus.takePending()).toBe("play");
+
+      const second = await installAndCaptureListener(navigate, () => "/");
+      await vi.waitFor(() => expect(mocks.takeLaunchCommand).toHaveBeenCalledTimes(2));
+
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(transportCommandBus.takePending()).toBeNull();
+      first.cleanup();
+      second.cleanup();
+    });
+
     it("does nothing when the activity was not launched with a request", async () => {
       const navigate = vi.fn();
       const { cleanup } = await installAndCaptureListener(navigate, () => "/");
